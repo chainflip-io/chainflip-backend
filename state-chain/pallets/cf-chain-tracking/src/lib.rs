@@ -10,7 +10,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainState};
 use cf_traits::{Chainflip, GetBlockHeight};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, sp_runtime::traits::Zero,
@@ -19,6 +19,8 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
+
+const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
@@ -62,22 +64,10 @@ pub mod pallet {
 		}
 	}
 
-	#[derive(
-		PartialEqNoBound,
-		EqNoBound,
-		CloneNoBound,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		DebugNoBound,
-	)]
-	pub struct ChainState<C: Chain> {
-		pub block_height: C::ChainBlockNumber,
-		pub tracked_data: C::TrackedData,
-	}
-
 	/// The tracked state of the external chain.
+	/// It is safe to unwrap() this value. We set it at genesis and it is only ever updated
+	/// by chain tracking, never removed. We use OptionQuery here so we don't need to
+	/// impl Default for ChainState.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_state)]
 	#[allow(clippy::type_complexity)]
@@ -95,6 +85,31 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The submitted data is too old.
 		StaleDataSubmitted,
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub init_chain_state: ChainState<T::TargetChain>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			CurrentChainState::<T, I>::put(self.init_chain_state.clone());
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			use sp_runtime::traits::Zero;
+			Self {
+				init_chain_state: ChainState {
+					block_height: <T::TargetChain as Chain>::ChainBlockNumber::zero(),
+					tracked_data: <T::TargetChain as Chain>::TrackedData::default(),
+				},
+			}
+		}
 	}
 
 	#[pallet::call]
@@ -115,15 +130,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
-				if let Some(previous_chain_state) = maybe_previous {
-					ensure!(
-						new_chain_state.block_height > previous_chain_state.block_height,
-						Error::<T, I>::StaleDataSubmitted
-					)
-				}
-
-				*maybe_previous = Some(new_chain_state.clone());
+			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
+				ensure!(
+					new_chain_state.block_height >
+						previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
+					Error::<T, I>::StaleDataSubmitted
+				);
+				*previous_chain_state = Some(new_chain_state.clone());
 
 				Ok(())
 			})?;
@@ -136,8 +149,6 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
-		CurrentChainState::<T, I>::get()
-			.map(|state| state.block_height)
-			.unwrap_or(Zero::zero())
+		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
 	}
 }

@@ -3,7 +3,7 @@ use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
 	btc::{rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
-	dot::{self, http_rpc::DotHttpRpcClient, DotBroadcaster},
+	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{
 		self, broadcaster::EthBroadcaster, build_broadcast_channel, ethers_rpc::EthersRpcClient,
 	},
@@ -128,8 +128,6 @@ async fn start(
 
 	let (epoch_start_sender, [epoch_start_receiver_1]) = build_broadcast_channel(10);
 
-	let (dot_epoch_start_sender, [dot_epoch_start_receiver_1]) = build_broadcast_channel(10);
-
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
 			settings.signing.db_file.as_path(),
@@ -228,15 +226,6 @@ async fn start(
 	)
 	.await?;
 
-	dot::witnessing::start(
-		scope,
-		state_chain_client.clone(),
-		&settings.dot,
-		dot_epoch_start_receiver_1,
-		state_chain_stream.cache().block_hash,
-	)
-	.await?;
-
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -249,7 +238,6 @@ async fn start(
 		peer_update_sender,
 		epoch_start_sender,
 		eth_address_to_monitor,
-		dot_epoch_start_sender,
 	));
 
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);

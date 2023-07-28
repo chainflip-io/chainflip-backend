@@ -323,10 +323,11 @@ fn deposit_witnesses(
 						amount: *amount,
 						deposit_details: (),
 					});
-				}
-
-				if from == our_vault || to == our_vault {
-					tracing::info!("Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+				} else if from == our_vault {
+					tracing::info!("Transfer from our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+					extrinsic_indices.insert(*extrinsic_index);
+				} else if to == our_vault {
+					tracing::info!("Transfer to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 					extrinsic_indices.insert(*extrinsic_index);
 				}
 			}
