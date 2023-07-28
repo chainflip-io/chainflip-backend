@@ -1,7 +1,7 @@
 pub mod builder;
 pub mod continuous;
+pub mod deposit_addresses;
 pub mod egress_items;
-pub mod ingress_addresses;
 
 use cf_chains::Chain;
 use futures_util::StreamExt;

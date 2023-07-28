@@ -44,32 +44,6 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Sen
 	}
 }
 
-pub struct VaultRpc<T> {
-	inner_vault: Vault<Provider<T>>,
-}
-
-impl<T: JsonRpcClient> VaultRpc<T> {
-	pub fn new(provider: Arc<Provider<T>>, vault_contract_address: H160) -> Self {
-		let inner_vault = Vault::new(vault_contract_address, provider);
-		Self { inner_vault }
-	}
-}
-
-#[async_trait::async_trait]
-pub trait VaultApi {
-	async fn fetched_native_events(&self, block_hash: H256) -> Result<Vec<FetchedNativeFilter>>;
-}
-
-#[async_trait::async_trait]
-impl<T: JsonRpcClient + 'static> VaultApi for VaultRpc<T> {
-	async fn fetched_native_events(&self, block_hash: H256) -> Result<Vec<FetchedNativeFilter>> {
-		let fetched_native_events =
-			self.inner_vault.event::<FetchedNativeFilter>().at_block_hash(block_hash);
-
-		Ok(fetched_native_events.query().await?)
-	}
-}
-
 pub enum CallFromEventError {
 	Network(anyhow::Error),
 	Decode(String),
