@@ -99,15 +99,6 @@ async fn start(
 		)
 		.await?;
 
-	let _expected_chain_id = U256::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-				state_chain_stream.cache().block_hash,
-			)
-			.await
-			.context("Failed to get EthereumChainId from state chain")?,
-	);
-
 	let btc_rpc_client =
 		BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
 
