@@ -5,7 +5,7 @@ use crate::{
 	dot::{
 		BalancesCall, PolkadotAccountIdLookup, PolkadotChargeTransactionPayment,
 		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotRuntimeCall, PolkadotSignature,
-		PolkadotSignedExtra, PolkadotTransactionData, PolkadotUncheckedExtrinsic,
+		PolkadotSignedExtra, PolkadotTransactionData, PolkadotUncheckedExtrinsic, RuntimeVersion,
 	},
 };
 
@@ -99,6 +99,9 @@ impl BenchmarkValue for TxId {
 
 impl BenchmarkValue for PolkadotTrackedData {
 	fn benchmark_value() -> Self {
-		PolkadotTrackedData { median_tip: 2 }
+		PolkadotTrackedData {
+			median_tip: 2,
+			runtime_version: RuntimeVersion { spec_version: 17, transaction_version: 16 },
+		}
 	}
 }
