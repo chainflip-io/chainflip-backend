@@ -47,8 +47,8 @@ macro_rules! define_erc20 {
 	};
 }
 
-define_erc20!(flip, Flip, FlipEvents, "eth-contract-abis/perseverance-rc17/IFLIP.json");
-define_erc20!(usdc, Usdc, UsdcEvents, "eth-contract-abis/IUSDC.json");
+define_erc20!(flip, Flip, FlipEvents, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IFLIP.json");
+define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub async fn erc20_deposits<StateChainClient, EthRetryRpcClient, Events>(
