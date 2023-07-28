@@ -123,14 +123,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 														.into_iter()
 														.map(|(to_addr, value)| {
 															pallet_cf_ingress_egress::DepositWitness {
-													deposit_address: to_addr,
-													asset: eth::Asset::Eth,
-													amount:
-														value
-														.try_into()
-														.expect("Ingress witness transfer value should fit u128"),
-													deposit_details: (),
-												}
+																deposit_address: to_addr,
+																asset: eth::Asset::Eth,
+																amount:
+																	value
+																	.try_into()
+																	.expect("Ingress witness transfer value should fit u128"),
+																deposit_details: (),
+															}
 														})
 														.collect(),
 													block_height: header.index,
