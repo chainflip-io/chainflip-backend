@@ -114,7 +114,7 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
@@ -212,8 +212,17 @@ pub struct EpochStartData {
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PolkadotTrackedData {
 	pub median_tip: PolkadotBalance,
+	pub runtime_version: RuntimeVersion,
+}
+
+impl Default for PolkadotTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.")
+	}
 }
 
 impl Chain for Polkadot {
