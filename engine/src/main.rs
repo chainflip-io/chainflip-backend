@@ -76,7 +76,10 @@ async fn main() -> anyhow::Result<()> {
 
 			let mut cfe_status = CfeStatus::Idle;
 
+			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
 			loop {
+				poll_interval.tick().await;
+
 				let runtime_compatibility_version: SemVer = ws_rpc_client
 					.request("cf_current_compatibility_version", Vec::<()>::new())
 					.await
@@ -107,8 +110,6 @@ async fn main() -> anyhow::Result<()> {
 							cfe_status = CfeStatus::Active(handle);
 						},
 				}
-
-				tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 			}
 		}
 		.boxed()
