@@ -54,11 +54,15 @@ mod test_all_batch {
 	use super::*;
 	use crate::{
 		eth::{
+			self,
 			api::{abi::load_abi, EthereumReplayProtection, EthereumTransactionBuilder},
-			SchnorrVerificationComponents,
+			EthereumFetchId, SchnorrVerificationComponents,
 		},
-		ApiCall,
+		AllBatch, ApiCall, FetchAssetParams,
 	};
+	use cf_primitives::chains::assets;
+
+	use super::{EthEnvironmentProvider, EthereumApi};
 
 	#[test]
 	fn test_payload() {
@@ -154,6 +158,77 @@ mod test_all_batch {
 					dummy_transfer_asset_params.tokenize(),
 				])
 				.unwrap()
+		);
+	}
+
+	struct MockEnvironment;
+
+	const CHAIN_ID: u64 = 1337;
+	const NONCE: u64 = 54321;
+	const CHANNEL_ID: u64 = 12345;
+
+	impl EthEnvironmentProvider for MockEnvironment {
+		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
+			Some(eth::Address::from_low_u64_be(asset as u64))
+		}
+
+		fn contract_address(contract: super::EthereumContract) -> eth::Address {
+			eth::Address::from_low_u64_be(contract as u64)
+		}
+
+		fn chain_id() -> super::EthereumChainId {
+			CHAIN_ID
+		}
+
+		fn next_nonce() -> u64 {
+			NONCE
+		}
+	}
+
+	#[test]
+	fn batch_all_fetches() {
+		let all_batch: EthereumApi<MockEnvironment> = AllBatch::new_unsigned(
+			vec![
+				FetchAssetParams {
+					deposit_fetch_id: EthereumFetchId::Fetch(eth::Address::from_low_u64_be(
+						CHANNEL_ID,
+					)),
+					asset: assets::eth::Asset::Usdc,
+				},
+				FetchAssetParams {
+					deposit_fetch_id: EthereumFetchId::DeployAndFetch(CHANNEL_ID),
+					asset: assets::eth::Asset::Eth,
+				},
+				FetchAssetParams {
+					deposit_fetch_id: EthereumFetchId::NotRequired,
+					asset: assets::eth::Asset::Eth,
+				},
+			],
+			vec![],
+		)
+		.unwrap();
+
+		assert!(matches!(all_batch, EthereumApi::AllBatch(..)));
+		let tx_builder = match all_batch {
+			EthereumApi::AllBatch(tx_builder) => tx_builder,
+			_ => unreachable!(),
+		};
+		assert_eq!(tx_builder.chain_id(), CHAIN_ID);
+		assert_eq!(tx_builder.replay_protection().nonce, NONCE);
+
+		assert_eq!(
+			tx_builder.call,
+			super::AllBatch {
+				fetch_deploy_params: vec![EncodableFetchDeployAssetParams {
+					channel_id: CHANNEL_ID,
+					asset: eth::Address::from_low_u64_be(assets::eth::Asset::Eth as u64),
+				}],
+				fetch_params: vec![EncodableFetchAssetParams {
+					contract_address: eth::Address::from_low_u64_be(CHANNEL_ID),
+					asset: eth::Address::from_low_u64_be(assets::eth::Asset::Usdc as u64),
+				}],
+				transfer_params: vec![],
+			}
 		);
 	}
 }
