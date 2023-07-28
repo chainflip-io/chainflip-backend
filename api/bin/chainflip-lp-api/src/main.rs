@@ -45,6 +45,13 @@ pub mod rpc_types {
 		}
 	}
 
+	#[derive(Serialize, Deserialize)]
+	pub struct RangeOrder {
+		pub tick_1: i32,
+		pub tick_2: i32,
+		pub liquidity: u128,
+	}
+
 	/// Range Orders can be specified in terms of either asset amounts or pool liquidity.
 	///
 	/// If `AssetAmounts` is specified, the order requires desired and minimum amounts of the assets
@@ -137,7 +144,7 @@ pub trait Rpc {
 	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<(i32, i32, u128)>>, Error>;
+	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -202,9 +209,27 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<(i32, i32, u128)>>, Error> {
+	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error> {
 		lp::get_range_orders(&self.state_chain_settings)
 			.await
+			.map(|orders| {
+				orders
+					.into_iter()
+					.map(|(asset, orders)| {
+						(
+							asset,
+							orders
+								.into_iter()
+								.map(|(t1, t2, l)| rpc_types::RangeOrder {
+									tick_1: t1.into(),
+									tick_2: t2.into(),
+									liquidity: l.into(),
+								})
+								.collect::<Vec<rpc_types::RangeOrder>>(),
+						)
+					})
+					.collect::<HashMap<Asset, Vec<rpc_types::RangeOrder>>>()
+			})
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 

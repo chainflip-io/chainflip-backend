@@ -1302,7 +1302,6 @@ name = "chainflip-lp-api"
 version = "0.9.0"
 dependencies = [
  "anyhow",
- "cf-primitives",
  "chainflip-api",
  "clap 3.2.25",
  "hex",
