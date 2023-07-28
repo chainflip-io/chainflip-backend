@@ -3,7 +3,7 @@ use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
 	lp::{
-		self, BurnLimitOrderReturn, BurnRageOrderReturn, BuyOrSellOrder, MintLimitOrderReturn,
+		self, BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSellOrder, MintLimitOrderReturn,
 		MintRangeOrderReturn, Tick,
 	},
 	primitives::{AccountRole, Asset, ForeignChain},
@@ -47,8 +47,8 @@ pub mod rpc_types {
 
 	#[derive(Serialize, Deserialize)]
 	pub struct RangeOrder {
-		pub tick_1: i32,
-		pub tick_2: i32,
+		pub lower_tick: i32,
+		pub upper_tick: i32,
 		pub liquidity: u128,
 	}
 
@@ -117,7 +117,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		amount: NumberOrHex,
-	) -> Result<BurnRageOrderReturn, Error>;
+	) -> Result<BurnRangeOrderReturn, Error>;
 
 	#[method(name = "mintLimitOrder")]
 	async fn mint_limit_order(
@@ -216,9 +216,9 @@ impl RpcServer for RpcServerImpl {
 							asset,
 							orders
 								.into_iter()
-								.map(|(tick_1, tick_2, liquidity)| rpc_types::RangeOrder {
-									tick_1,
-									tick_2,
+								.map(|(lower_tick, upper_tick, liquidity)| rpc_types::RangeOrder {
+									lower_tick,
+									upper_tick,
 									liquidity,
 								})
 								.collect::<Vec<rpc_types::RangeOrder>>(),
@@ -260,7 +260,7 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		amount: NumberOrHex,
-	) -> Result<BurnRageOrderReturn, Error> {
+	) -> Result<BurnRangeOrderReturn, Error> {
 		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}

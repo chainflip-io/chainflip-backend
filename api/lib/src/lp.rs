@@ -236,7 +236,7 @@ pub async fn mint_range_order(
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BurnRageOrderReturn {
+pub struct BurnRangeOrderReturn {
 	assets_credited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
@@ -246,7 +246,7 @@ pub async fn burn_range_order(
 	asset: Asset,
 	range: Range<Tick>,
 	amount: AssetAmount,
-) -> Result<BurnRageOrderReturn> {
+) -> Result<BurnRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
@@ -288,7 +288,7 @@ pub async fn burn_range_order(
 							collected_fees,
 							..
 						},
-					) => Some(BurnRageOrderReturn { assets_credited, collected_fees }),
+					) => Some(BurnRangeOrderReturn { assets_credited, collected_fees }),
 					_ => None,
 				})
 				.expect("RangeOrderBurned must have been generated"))

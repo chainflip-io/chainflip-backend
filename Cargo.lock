@@ -1308,7 +1308,6 @@ dependencies = [
  "jsonrpsee 0.16.2",
  "serde",
  "serde_json",
- "sp-core 7.0.0",
  "sp-rpc",
  "tokio",
  "tracing",
