@@ -34,7 +34,7 @@ unzip -u ${ZIP_FILE} \
     'IKeyManager.json' \
     'Deposit_bytecode.json' \
     'IAddressChecker.json' \
-    'CFReceiverMock.json' \
+    'CFTester.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}

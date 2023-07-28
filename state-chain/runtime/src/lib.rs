@@ -329,6 +329,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
 	type NetworkFee = NetworkFee;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = ();
 }
 
