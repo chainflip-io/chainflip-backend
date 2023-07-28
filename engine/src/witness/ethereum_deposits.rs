@@ -151,7 +151,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-#[allow(unused)]
 pub fn eth_ingresses_at_block(
 	addresses: Vec<H160>,
 	previous_block_balances: Vec<U256>,
