@@ -119,7 +119,7 @@ async function testSwapViaContract(
 }
 
 async function testAll() {
-  let observing = true;
+  let stopObserving = false;
   const observingBroadcastAborted = observeEvent(
     ':BroadcastAborted',
     await getChainflipApi(),
@@ -128,7 +128,7 @@ async function testAll() {
         `Unexpected event emited ${event.name.section}:${event.name.method} with broadcastId ${event.data.broadcastId}`,
       );
     },
-    () => observing,
+    () => stopObserving,
   );
 
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
@@ -243,7 +243,7 @@ async function testAll() {
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
 
   // Gracefully exit the broadcast abort observer
-  observing = false;
+  stopObserving = true;
   await observingBroadcastAborted;
 }
 

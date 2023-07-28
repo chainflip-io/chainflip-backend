@@ -155,12 +155,13 @@ export async function observeEvent(
   eventName: string,
   api: ApiPromise,
   eventQuery?: EventQuery,
-  observing?: () => boolean,
+  stopObserveEvent?: () => boolean,
 ): Promise<Event> {
   let result: Event | undefined;
+  let eventFound = false;
 
   const query = eventQuery ?? (() => true);
-  let observe = observing ?? (() => true);
+  const stopObserve = stopObserveEvent ?? (() => false);
 
   const [expectedSection, expectedMethod] = eventName.split(':');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,7 +171,7 @@ export async function observeEvent(
     events.forEach((record, index) => {
       const { event } = record;
       if (
-        observe() &&
+        !eventFound &&
         event.section.includes(expectedSection) &&
         event.method.includes(expectedMethod)
       ) {
@@ -181,13 +182,13 @@ export async function observeEvent(
           event_index: index,
         };
         if (query(result)) {
-          observe = () => false;
+          eventFound = true;
           unsubscribe();
         }
       }
     });
   });
-  while (observe()) {
+  while (!eventFound && !stopObserve()) {
     await sleep(1000);
   }
   return result as Event;
