@@ -50,8 +50,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 							!sharing_participants.is_empty() && !receiving_participants.is_empty()
 						);
 
-						assert_ne!(Self::status(), AsyncResult::Pending);
-
 						let ceremony_id = Self::increment_ceremony_id();
 
 						// from the SC's perspective, we don't care what set they're in, they get
