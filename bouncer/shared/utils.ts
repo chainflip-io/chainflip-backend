@@ -12,6 +12,7 @@ import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
+import { newFlipAddress } from './new_flip_address';
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -195,9 +196,11 @@ export async function getAddress(
   let rawAddress;
 
   switch (asset) {
+    case 'FLIP':
+      rawAddress = await newFlipAddress(seed);
+      break;
     case 'ETH':
     case 'USDC':
-    case 'FLIP':
       rawAddress = newEthAddress(seed);
       break;
     case 'DOT':
@@ -348,7 +351,7 @@ export function handleSubstrateError(api: any) {
       let error;
       if (dispatchError.isModule) {
         const { docs, name, section } = api.registry.findMetaError(dispatchError.asModule);
-        error = section + '.' + name + ' ' + docs;
+        error = section + '.' + name + ': ' + docs;
       } else {
         error = dispatchError.toString();
       }

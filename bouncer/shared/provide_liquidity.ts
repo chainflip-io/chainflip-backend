@@ -29,7 +29,7 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
       )
     ).toJSON() === null
   ) {
-    let emergencyAddress = await getAddress(ccy, 'LP_1');
+    let emergencyAddress = await getAddress(assetToChain(ccy).toUpperCase() as Asset, 'LP_1');
     emergencyAddress =
       ccy === 'DOT' ? decodeDotAddressForContract(emergencyAddress) : emergencyAddress;
 
