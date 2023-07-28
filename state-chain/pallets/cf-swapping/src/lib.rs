@@ -521,18 +521,12 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if let Some(CcmDepositMetadata { gas_budget, .. }) = message_metadata {
+			if message_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
 				ensure!(
 					ForeignChain::Ethereum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
-
-				// Ensures the gas budget is above minimum allowed
-				ensure!(
-					gas_budget >= MinimumCcmGasBudget::<T>::get(source_asset),
-					Error::<T>::CcmGasBudgetBelowMinimum,
-				)
 			}
 
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(

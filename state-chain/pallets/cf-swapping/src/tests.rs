@@ -1100,64 +1100,6 @@ fn swap_by_deposit_happy_path() {
 }
 
 #[test]
-fn cannot_register_ccm_deposit_below_minimum_gas_budget() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
-		let from: Asset = Asset::Eth;
-		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			message: vec![0x01],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
-		};
-
-		// Set minimum gas budget to be above gas amount
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(
-			RuntimeOrigin::root(),
-			from,
-			gas_budget + 1
-		));
-
-		// Register CCM via Swap deposit
-		assert_noop!(
-			Swapping::request_swap_deposit_address(
-				RuntimeOrigin::signed(ALICE),
-				from,
-				to,
-				EncodedAddress::Eth(Default::default()),
-				0,
-				Some(ccm.clone())
-			),
-			Error::<Test>::CcmGasBudgetBelowMinimum
-		);
-
-		// Lower the minimum gas budget.
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), from, gas_budget));
-		CollectedRejectedFunds::<Test>::set(from, 0);
-
-		assert_ok!(Swapping::request_swap_deposit_address(
-			RuntimeOrigin::signed(ALICE),
-			from,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			0,
-			Some(ccm)
-		));
-
-		// Verify the CCM is reigstered
-		assert_eq!(System::current_block_number() + SwapTTL::<Test>::get(), 6);
-		assert_events_match!(
-			Test,
-			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
-				expiry_block: 6,
-				..
-			}) => ()
-		);
-	});
-}
-
-#[test]
 fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
