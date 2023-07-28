@@ -1,9 +1,12 @@
+pub mod address_checker;
+
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 
-use crate::settings;
-use anyhow::{anyhow, Ok, Result};
+use crate::{constants::SYNC_POLL_INTERVAL, settings};
+use anyhow::{anyhow, Context, Ok, Result};
 use std::{str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
+use utilities::make_periodic_tick;
 
 use utilities::read_clean_and_decode_hex_str_file;
 
@@ -14,8 +17,6 @@ struct NonceInfo {
 	next_nonce: U256,
 	requested_at: std::time::Instant,
 }
-
-use super::rpc::EthWsRpcClient;
 
 #[derive(Clone)]
 pub struct EthersRpcClient {
@@ -180,19 +181,41 @@ pub trait ReconnectSubscribeApi {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream>;
 }
 
-use crate::eth::{rpc::EthWsRpcApi, ConscientiousEthWebsocketBlockHeaderStream};
+use crate::eth::ConscientiousEthWebsocketBlockHeaderStream;
 
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
-		let web3_ws_client =
-			EthWsRpcClient::new(&self.ws_node_endpoint, Some(self.chain_id)).await?;
+		let web3 = web3::Web3::new(web3::transports::WebSocket::new(&self.ws_node_endpoint).await?);
 
-		let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
-			stream: Some(web3_ws_client.subscribe_new_heads().await?),
-		};
+		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
-		Ok(header_stream)
+		while let web3::types::SyncState::Syncing(info) =
+			web3.eth().syncing().await.context("Failure while syncing WS Eth client")?
+		{
+			tracing::info!(
+				"Waiting for ETH node to sync. Sync state is: {info:?}. Checking again in {:?} ...",
+				poll_interval.period(),
+			);
+			poll_interval.tick().await;
+		}
+
+		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
+		if self.chain_id != client_chain_id {
+			Err(anyhow!(
+				"Expected chain id {}, eth ws client returned {client_chain_id}.",
+				self.chain_id
+			))
+		} else {
+			Ok(ConscientiousEthWebsocketBlockHeaderStream {
+				stream: Some(
+					web3.eth_subscribe()
+						.subscribe_new_heads()
+						.await
+						.context("Failed to subscribe to new heads with WS Client")?,
+				),
+			})
+		}
 	}
 }
 

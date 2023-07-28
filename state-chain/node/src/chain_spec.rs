@@ -1,10 +1,16 @@
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
-	eth,
+	dot::{PolkadotAccountId, PolkadotHash},
+	eth, ChainState,
 };
 use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount};
 
+use cf_chains::{
+	btc::{BitcoinFeeInfo, BitcoinTrackedData},
+	dot::{PolkadotTrackedData, RuntimeVersion},
+	eth::EthereumTrackedData,
+	Bitcoin, Ethereum, Polkadot,
+};
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
@@ -16,11 +22,12 @@ use sp_core::{
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, EmissionsConfig,
-	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
-	FundingConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
-	ValidatorConfig, WASM_BINARY,
+	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
+	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumThresholdSignerConfig,
+	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GenesisConfig, GovernanceConfig,
+	GrandpaConfig, PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
+	ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig, ValidatorConfig,
+	WASM_BINARY,
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
@@ -117,6 +124,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
 		Err(_) => defaults.dot_vault_account_id,
 	};
+
 	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
 		Ok(s) => s.parse().unwrap(),
 		Err(_) => defaults.dot_runtime_version.spec_version,
@@ -230,7 +238,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					ethereum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
-					polkadot_runtime_version: dot_runtime_version,
 					bitcoin_network: BitcoinNetwork::Regtest,
 				},
 				eth_init_agg_key,
@@ -252,6 +259,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 				common::SWAP_TTL,
 				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
+				dot_runtime_version,
 			)
 		},
 		// Bootnodes
@@ -341,7 +349,6 @@ macro_rules! network_spec {
 								ethereum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								polkadot_runtime_version: dot_runtime_version,
 								bitcoin_network: BITCOIN_NETWORK,
 							},
 							eth_init_agg_key,
@@ -363,6 +370,7 @@ macro_rules! network_spec {
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 							SWAP_TTL,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
+							dot_runtime_version,
 						)
 					},
 					// Bootnodes
@@ -418,6 +426,7 @@ fn testnet_genesis(
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
+	dot_runtime_version: RuntimeVersion,
 ) -> GenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -590,6 +599,31 @@ fn testnet_genesis(
 			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
 			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
 			supply_update_interval,
+		},
+		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
+		ethereum_chain_tracking: EthereumChainTrackingConfig {
+			init_chain_state: ChainState::<Ethereum> {
+				block_height: 0,
+				tracked_data: EthereumTrackedData {
+					base_fee: 1000000u32.into(),
+					priority_fee: 100u32.into(),
+				},
+			},
+		},
+		polkadot_chain_tracking: PolkadotChainTrackingConfig {
+			init_chain_state: ChainState::<Polkadot> {
+				block_height: 0,
+				tracked_data: PolkadotTrackedData {
+					median_tip: 0,
+					runtime_version: dot_runtime_version,
+				},
+			},
+		},
+		bitcoin_chain_tracking: BitcoinChainTrackingConfig {
+			init_chain_state: ChainState::<Bitcoin> {
+				block_height: 0,
+				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
+			},
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),

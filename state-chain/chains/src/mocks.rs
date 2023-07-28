@@ -87,6 +87,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct MockTrackedData {
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,

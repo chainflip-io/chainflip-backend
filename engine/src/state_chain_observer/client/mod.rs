@@ -1,4 +1,5 @@
 pub mod base_rpc_api;
+pub mod chain_api;
 pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
@@ -22,6 +23,7 @@ use utilities::{
 
 use self::{
 	base_rpc_api::BaseRpcClient,
+	chain_api::ChainApi,
 	extrinsic_api::signed::{signer, SignedExtrinsicApi},
 };
 
@@ -345,10 +347,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	pub fn genesis_hash(&self) -> state_chain_runtime::Hash {
 		self.genesis_hash
 	}
-
-	pub fn latest_finalized_hash(&self) -> state_chain_runtime::Hash {
-		*self.latest_block_hash_watcher.borrow()
-	}
 }
 
 #[async_trait]
@@ -491,11 +489,23 @@ impl<
 	}
 }
 
+#[async_trait]
+impl<
+		BaseRpcApi: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: Send + Sync + 'static,
+	> ChainApi for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
+{
+	fn latest_finalized_hash(&self) -> state_chain_runtime::Hash {
+		*self.latest_block_hash_watcher.borrow()
+	}
+}
+
 #[cfg(test)]
 pub mod mocks {
 	use crate::state_chain_observer::client::{
 		extrinsic_api::{signed::SignedExtrinsicApi, unsigned::UnsignedExtrinsicApi},
 		storage_api::StorageApi,
+		ChainApi,
 	};
 	use async_trait::async_trait;
 	use frame_support::storage::types::QueryKindTrait;
@@ -540,6 +550,10 @@ pub mod mocks {
 			) -> H256
 			where
 				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
+		}
+		#[async_trait]
+		impl ChainApi for StateChainClient {
+			fn latest_finalized_hash(&self) -> state_chain_runtime::Hash;
 		}
 		#[async_trait]
 		impl StorageApi for StateChainClient {
