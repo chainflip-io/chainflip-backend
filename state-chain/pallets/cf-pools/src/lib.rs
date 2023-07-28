@@ -41,7 +41,11 @@ pub mod pallet {
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-	pub struct Pool<LiquidityProvider: Ord> {
+	#[cfg_attr(
+		feature = "std",
+		serde(bound = "LiquidityProvider: Clone + Ord + Serialize + serde::de::DeserializeOwned")
+	)]
+	pub struct Pool<LiquidityProvider> {
 		pub enabled: bool,
 		pub pool_state: PoolState<LiquidityProvider>,
 	}

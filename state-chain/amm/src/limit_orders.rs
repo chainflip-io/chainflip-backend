@@ -274,13 +274,45 @@ pub struct FixedPool {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-pub struct PoolState<LiquidityProvider: Ord> {
+#[cfg_attr(feature = "std", derive(Deserialize))]
+#[cfg_attr(
+	feature = "std",
+	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
+)]
+pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
+
+#[cfg(feature = "std")]
+impl<L: Serialize + Clone> Serialize for PoolState<L> {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		use serde::ser::SerializeStruct;
+		let mut state = serializer.serialize_struct("PoolState", 4)?;
+		state.serialize_field("fee_hundredth_pips", &self.fee_hundredth_pips)?;
+		state.serialize_field("next_pool_instance", &self.next_pool_instance)?;
+		state.serialize_field("fixed_pools", &self.fixed_pools)?;
+		state.serialize_field(
+			"positions",
+			&self
+				.positions
+				.clone()
+				.map(|_side, positions| positions.into_iter().collect::<Vec<_>>()),
+		)?;
+		state.end()
+	}
+}
+
+// #[cfg(feature = "std")]
+// impl<L: for<'de> Deserialize<'de>> Deserialize<'de> for PoolState<L> {
+// 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+// 	where
+// 		D: serde::Deserializer<'de>,
+// 	{
+// 	}
+// }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity.

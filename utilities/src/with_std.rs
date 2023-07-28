@@ -47,6 +47,29 @@ pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], anyhow::Er
 	clean_hex_address(dirty_dot_address).context("Failed to parse Polkadot address.")
 }
 
+pub mod serde_map_as_seq {
+	use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
+	use std::collections::BTreeMap;
+
+	pub fn serialize<K, V, S>(map: &BTreeMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		K: Serialize,
+		V: Serialize,
+		S: Serializer,
+	{
+		serializer.collect_seq(map)
+	}
+
+	pub fn deserialize<'de, K, V, D>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
+	where
+		K: DeserializeOwned + Ord,
+		V: DeserializeOwned,
+		D: Deserializer<'de>,
+	{
+		Ok(BTreeMap::deserialize(deserializer)?)
+	}
+}
+
 #[test]
 fn cleans_eth_address() {
 	// fail too short

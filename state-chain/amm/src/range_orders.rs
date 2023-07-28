@@ -116,7 +116,11 @@ pub struct TickDelta {
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-pub struct PoolState<LiquidityProvider: Ord> {
+#[cfg_attr(
+	feature = "std",
+	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
+)]
+pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
@@ -124,6 +128,7 @@ pub struct PoolState<LiquidityProvider: Ord> {
 	current_liquidity: Liquidity,
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
 	liquidity_map: BTreeMap<Tick, TickDelta>,
+	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_map_as_seq"))]
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 

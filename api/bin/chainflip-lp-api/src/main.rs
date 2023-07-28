@@ -14,7 +14,7 @@ use chainflip_api::{
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error},
+	core::{async_trait, Error, __reexports::serde_json},
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
@@ -356,32 +356,27 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		task_scope(|scope| {
-			async move {
-				let api =
-					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
-						.await?;
-				api.get_pools(None, Some(asset)).await
-			}
-			.boxed()
-		})
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		get_pools(&self.state_chain_settings, Some(asset)).await
 	}
 
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		task_scope(|scope| {
-			async move {
-				let api =
-					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
-						.await?;
-				api.get_pools(None, None).await
-			}
-			.boxed()
-		})
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		get_pools(&self.state_chain_settings, None).await
 	}
+}
+
+async fn get_pools(
+	state_chain_settings: &StateChain,
+	asset: Option<Asset>,
+) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+	Ok(task_scope(|scope| {
+		async move {
+			let api =
+				chainflip_api::queries::QueryApi::connect(scope, state_chain_settings).await?;
+			api.get_pools(None, asset).await
+		}
+		.boxed()
+	})
+	.await?)
 }
 
 #[derive(Parser, Debug, Clone, Default)]
