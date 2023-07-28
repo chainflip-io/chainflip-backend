@@ -1,5 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
+use anyhow::Context;
 use cf_chains::Ethereum;
 use cf_primitives::chains::assets;
 use ethers::types::{Bloom, H160};
@@ -47,7 +48,12 @@ macro_rules! define_erc20 {
 	};
 }
 
-define_erc20!(flip, Flip, FlipEvents, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IFLIP.json");
+define_erc20!(
+	flip,
+	Flip,
+	FlipEvents,
+	"$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IFLIP.json"
+);
 define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
