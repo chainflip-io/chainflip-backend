@@ -789,13 +789,19 @@ pub mod pallet {
 				.map_err(|_| bundle_input)?;
 
 			for swap in swaps {
-				let swap_output = multiply_by_rational_with_rounding(
-					swap.swap_amount(direction).unwrap_or_default(),
-					bundle_output,
-					bundle_input,
-					Rounding::Down,
-				)
-				.expect("bundle_input >= swap_amount ∴ result can't overflow");
+				let swap_output = if bundle_input > 0 {
+					multiply_by_rational_with_rounding(
+						swap.swap_amount(direction).unwrap_or_default(),
+						bundle_output,
+						bundle_input,
+						Rounding::Down,
+					)
+					.expect(
+						"bundle_input >= swap_amount && bundle_input != 0 ∴ result can't overflow",
+					)
+				} else {
+					0
+				};
 
 				swap.update_swap_result(direction, swap_output);
 
