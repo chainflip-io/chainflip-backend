@@ -77,13 +77,10 @@ async fn main() -> anyhow::Result<()> {
 			let mut cfe_status = CfeStatus::Idle;
 
 			loop {
-				let runtime_compatibility_version = {
-					let bytes: Vec<u8> = ws_rpc_client
-						.request("cf_current_compatibility_version", Vec::<()>::new())
-						.await
-						.unwrap();
-					SemVer::decode(&mut bytes.as_slice()).unwrap()
-				};
+				let runtime_compatibility_version: SemVer = ws_rpc_client
+					.request("cf_current_compatibility_version", Vec::<()>::new())
+					.await
+					.unwrap();
 
 				let compatible =
 					is_compatible_with_runtime(&cfe_version, &runtime_compatibility_version);
