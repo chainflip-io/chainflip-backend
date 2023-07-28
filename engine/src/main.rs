@@ -31,11 +31,20 @@ use utilities::{
 };
 use web3::types::U256;
 
-const COMPATIBLE_RUNTIME_VERSION: SemVer = SemVer { major: 0, minor: 9, patch: 0 };
+fn get_cfe_version() -> SemVer {
+	SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	}
+}
 
-fn is_compatible_with_runtime(version: SemVer) -> bool {
-	version.major == COMPATIBLE_RUNTIME_VERSION.major &&
-		version.minor == COMPATIBLE_RUNTIME_VERSION.minor
+fn is_compatible_with_runtime(
+	cfe_version: &SemVer,
+	runtime_compatibility_version: &SemVer,
+) -> bool {
+	cfe_version.major == runtime_compatibility_version.major &&
+		cfe_version.minor == runtime_compatibility_version.minor
 }
 
 enum CfeStatus {
@@ -53,6 +62,8 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
+	let cfe_version = get_cfe_version();
+
 	task_scope(|scope| {
 		async move {
 			utilities::init_json_logger(scope).await;
@@ -66,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
 			let mut cfe_status = CfeStatus::Idle;
 
 			loop {
-				let current_runtime_version = {
+				let runtime_compatibility_version = {
 					let bytes: Vec<u8> = ws_rpc_client
 						.request("cf_current_compatibility_version", Vec::<()>::new())
 						.await
@@ -74,13 +85,14 @@ async fn main() -> anyhow::Result<()> {
 					SemVer::decode(&mut bytes.as_slice()).unwrap()
 				};
 
-				let compatible = is_compatible_with_runtime(current_runtime_version);
+				let compatible =
+					is_compatible_with_runtime(&cfe_version, &runtime_compatibility_version);
 
 				match cfe_status {
 					CfeStatus::Active(_) =>
 						if !compatible {
 							tracing::info!(
-								"Runtime version ({current_runtime_version:?}) is no longer compatible, shutting down the engine!"
+								"Runtime version ({runtime_compatibility_version:?}) is no longer compatible, shutting down the engine!"
 							);
 							// This will exit the scope, dropping the handle and thus terminating
 							// the main task
@@ -88,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
 						},
 					CfeStatus::Idle =>
 						if compatible {
-							tracing::info!("Runtime version ({current_runtime_version:?}) is compatible, starting the engine!");
+							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
 							let handle = scope.spawn_with_handle({
 								let settings = settings.clone();
@@ -141,11 +153,7 @@ async fn start(
 
 	state_chain_client
 		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
-			new_version: SemVer {
-				major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-				minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-				patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-			},
+			new_version: get_cfe_version(),
 		})
 		.await
 		.until_finalized()
