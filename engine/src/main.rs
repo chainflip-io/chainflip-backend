@@ -27,7 +27,6 @@ use utilities::{
 	task_scope::{self, task_scope},
 	CachedStream,
 };
-use web3::types::U256;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
