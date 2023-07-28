@@ -153,3 +153,18 @@ mod test_derive {
 		});
 	}
 }
+
+/// Logs if running in release, panics if running in test.
+#[macro_export]
+macro_rules! log_or_panic {
+    ($($arg:tt)*) => {
+        #[cfg(not(test))]
+        {
+			log::warn!($($arg)*);
+        }
+        #[cfg(test)]
+        {
+			panic!($($arg)*);
+        };
+    };
+}
