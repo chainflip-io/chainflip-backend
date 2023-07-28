@@ -677,7 +677,7 @@ pub trait DepositApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
-	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
+	fn expire_channel(address: C::ChainAccount);
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
