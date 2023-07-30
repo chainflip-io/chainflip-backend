@@ -1,6 +1,7 @@
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
+use cf_test_utilities::TestExternalities;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -15,7 +16,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Percent,
+	Percent,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -153,15 +154,15 @@ impl pallet_cf_swapping::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> TestExternalities<Test, AllPalletsWithSystem> {
 	let config = GenesisConfig {
 		system: Default::default(),
 		swapping: SwappingConfig { swap_ttl: 5, minimum_swap_amounts: vec![] },
 	};
 
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+	let mut ext = TestExternalities::<Test, AllPalletsWithSystem>::new(config);
 
-	ext.execute_with(|| {
+	ext = ext.execute_with(|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
 		System::set_block_number(1);
 		System::set_block_number(1);

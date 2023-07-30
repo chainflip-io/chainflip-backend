@@ -1778,124 +1778,111 @@ fn ccm_swaps_emits_events() {
 
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
-	new_test_ext().execute_with(|| {
-		let eth_address = ForeignChainAddress::Eth(Default::default());
-		let ccm = CcmDepositMetadata {
-			message: vec![],
-			gas_budget: 1,
-			cf_parameters: vec![],
-			source_address: eth_address.clone(),
-		};
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			let eth_address = ForeignChainAddress::Eth(Default::default());
+			let ccm = CcmDepositMetadata {
+				message: vec![],
+				gas_budget: 1,
+				cf_parameters: vec![],
+				source_address: eth_address.clone(),
+			};
 
-		Swapping::on_ccm_deposit(
-			Asset::Usdc,
-			101,
-			Asset::Eth,
-			eth_address,
-			ccm,
-			SwapOrigin::Vault { tx_hash: Default::default() },
-		);
+			Swapping::on_ccm_deposit(
+				Asset::Usdc,
+				101,
+				Asset::Eth,
+				eth_address,
+				ccm,
+				SwapOrigin::Vault { tx_hash: Default::default() },
+			);
 
-		// Change the swap rate so swap output will be 0
-		SwapRate::set(0.01f64);
-		System::reset_events();
+			// Change the swap rate so swap output will be 0
+			SwapRate::set(0.01f64);
+			System::reset_events();
+		})
+		.then_execute_with(|_| {
+			// Swap outputs are zero
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					swap_id: 1,
+					source_asset: Asset::Usdc,
+					deposit_amount: 100,
+					destination_asset: Asset::Eth,
+					egress_amount: 0,
+					intermediate_amount: None,
+				}),
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					swap_id: 2,
+					source_asset: Asset::Usdc,
+					destination_asset: Asset::Eth,
+					deposit_amount: 1,
+					egress_amount: 0,
+					intermediate_amount: None,
+				})
+			);
 
-		Swapping::on_finalize(1);
+			// CCM are processed and egressed even if principal output is zero.
+			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
+			assert_eq!(SwapQueue::<Test>::decode_len(), None);
 
-		// Swap outputs are zero
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_id: 1,
-				source_asset: Asset::Usdc,
-				deposit_amount: 100,
-				destination_asset: Asset::Eth,
-				egress_amount: 0,
-				intermediate_amount: None,
-			}),
-			RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_id: 2,
-				source_asset: Asset::Usdc,
-				destination_asset: Asset::Eth,
-				deposit_amount: 1,
-				egress_amount: 0,
-				intermediate_amount: None,
-			})
-		);
-
-		// Swaps are processed even if the output is 0
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-
-		assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
-
-		// Zero gas budget are not stored.
-		assert_eq!(CcmGasBudget::<Test>::get(1), None);
-	});
+			// Zero gas budget are not stored.
+			assert_eq!(CcmGasBudget::<Test>::get(1), None);
+		});
 }
 
 #[test]
 fn can_handle_swaps_with_zero_outputs() {
-	new_test_ext().execute_with(|| {
-		let eth_address = ForeignChainAddress::Eth(Default::default());
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			let eth_address = ForeignChainAddress::Eth(Default::default());
 
-		Swapping::schedule_swap_from_channel(
-			eth_address.clone(),
-			Asset::Usdc,
-			Asset::Eth,
-			100,
-			eth_address.clone(),
-			Default::default(),
-			0,
-			0,
-		);
-		Swapping::schedule_swap_from_channel(
-			eth_address.clone(),
-			Asset::Usdc,
-			Asset::Eth,
-			1,
-			eth_address,
-			Default::default(),
-			0,
-			0,
-		);
+			Swapping::schedule_swap_from_channel(
+				eth_address.clone(),
+				Asset::Usdc,
+				Asset::Eth,
+				100,
+				eth_address.clone(),
+				Default::default(),
+				0,
+				0,
+			);
+			Swapping::schedule_swap_from_channel(
+				eth_address.clone(),
+				Asset::Usdc,
+				Asset::Eth,
+				1,
+				eth_address,
+				Default::default(),
+				0,
+				0,
+			);
 
-		// Change the swap rate so swap output will be 0
-		SwapRate::set(0.01f64);
-		System::reset_events();
+			// Change the swap rate so swap output will be 0
+			SwapRate::set(0.01f64);
+			System::reset_events();
+		})
+		.then_execute_with(|_| {
+			// Swap outputs are zero
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					swap_id: 1,
+					destination_asset: Asset::Eth,
+					egress_amount: 0,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					swap_id: 2,
+					destination_asset: Asset::Eth,
+					egress_amount: 0,
+					..
+				}),
+			);
 
-		Swapping::on_finalize(1);
-
-		// Swap outputs are zero
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_id: 1,
-				destination_asset: Asset::Eth,
-				egress_amount: 0,
-				..
-			}),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 1,
-				asset: Asset::Eth,
-				amount: 0,
-				..
-			}),
-			RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_id: 2,
-				destination_asset: Asset::Eth,
-				egress_amount: 0,
-				..
-			}),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 2,
-				asset: Asset::Eth,
-				amount: 0,
-				..
-			}),
-		);
-
-		// Swaps are processed even if the output is 0
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 2);
-	});
+			// Swaps are not egressed when output is 0.
+			assert_eq!(SwapQueue::<Test>::decode_len(), None);
+			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 0);
+		});
 }
