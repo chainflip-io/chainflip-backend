@@ -159,7 +159,7 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -369,6 +369,8 @@ pub mod pallet {
 		CcmGasBudgetBelowMinimum,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
+		/// Swap deposits are disabled due to Safe Mode.
+		DepositsDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -517,6 +519,7 @@ pub mod pallet {
 			broker_commission_bps: BasisPoints,
 			message_metadata: Option<CcmDepositMetadata>,
 		) -> DispatchResult {
+			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
