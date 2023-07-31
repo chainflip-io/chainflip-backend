@@ -329,6 +329,7 @@ pub mod pallet {
 			gas_swap_id: Option<u64>,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
+			message_metadata: CcmDepositMetadata,
 		},
 		MinimumSwapAmountSet {
 			asset: Asset,
@@ -1081,6 +1082,7 @@ pub mod pallet {
 				gas_swap_id,
 				deposit_amount,
 				destination_address: encoded_destination_address,
+				message_metadata: message_metadata.clone(),
 			});
 
 			// If no swap is required, egress the CCM.
