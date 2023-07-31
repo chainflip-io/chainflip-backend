@@ -118,7 +118,7 @@ async function testSwapViaContract(
   await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
-async function testSwapAssetWitnessing(sourceAsset: Asset, destAsset: Asset) {
+async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
@@ -131,8 +131,7 @@ async function testSwapAssetWitnessing(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, fee, tag);
 
   await doPerformSwap(swapParams, tag, undefined, true);
-  // Ensure that the Deposit contract has been deployed fetching the funds. It is assumed that
-  // the funds will be fetched straight away.
+  // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   observeFetch(sourceAsset, swapParams.depositAddress);
   await doPerformSwap(swapParams, tag, undefined, true);
 }
@@ -271,12 +270,12 @@ async function testAll() {
     }),
   ]);
 
-  const witnessingSwaps = Promise.all([
-    testSwapAssetWitnessing('ETH', 'DOT'),
-    testSwapAssetWitnessing('FLIP', 'BTC'),
+  const depositTestSwaps = Promise.all([
+    testDepositEthereum('ETH', 'DOT'),
+    testDepositEthereum('FLIP', 'BTC'),
   ]);
 
-  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps, witnessingSwaps]);
+  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps, depositTestSwaps]);
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
