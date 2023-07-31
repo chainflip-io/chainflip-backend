@@ -71,7 +71,7 @@ where
 			}
 		})
 		.chunk_by_vault(epoch_source.vaults().await)
-		.ingress_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
 			let state_chain_client = state_chain_client.clone();

@@ -1,4 +1,3 @@
-use cf_chains::btc::BlockNumber;
 use thiserror::Error;
 
 use reqwest::Client;
@@ -9,7 +8,7 @@ use serde_json::json;
 
 use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
 
-use crate::{settings, witnesser::LatestBlockNumber};
+use crate::settings;
 
 use anyhow::{Context, Result};
 
@@ -108,10 +107,6 @@ impl BtcRpcClient {
 		} else {
 			Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
 		}
-	}
-
-	async fn block_count(&self) -> anyhow::Result<BlockNumber> {
-		Ok(self.call_rpc("getblockcount", vec![]).await?)
 	}
 }
 
@@ -224,15 +219,6 @@ impl BtcRpcApi for BtcRpcClient {
 	}
 }
 
-#[async_trait::async_trait]
-impl LatestBlockNumber for BtcRpcClient {
-	type BlockNumber = BlockNumber;
-
-	async fn latest_block_number(&self) -> Result<BlockNumber> {
-		self.block_count().await
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -247,11 +233,7 @@ mod tests {
 		})
 		.unwrap();
 
-		let block_count = client.block_count().await.unwrap();
-
-		println!("block_count: {:?}", block_count);
-
-		let block_hash_zero = client.block_hash(block_count).await.unwrap();
+		let block_hash_zero = client.block_hash(0).await.unwrap();
 
 		println!("block_hash_zero: {:?}", block_hash_zero);
 

@@ -150,16 +150,18 @@ export function getBtcClient(): Client {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventQuery = (data: any) => boolean;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Event = { data: any; block: number; event_index: number };
+type Event = { name: any; data: any; block: number; event_index: number };
 export async function observeEvent(
   eventName: string,
   api: ApiPromise,
   eventQuery?: EventQuery,
+  stopObserveEvent?: () => boolean,
 ): Promise<Event> {
   let result: Event | undefined;
-  let waiting = true;
+  let eventFound = false;
 
   const query = eventQuery ?? (() => true);
+  const stopObserve = stopObserveEvent ?? (() => false);
 
   const [expectedSection, expectedMethod] = eventName.split(':');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,23 +170,45 @@ export async function observeEvent(
     const events: any[] = await api.query.system.events.at(header.hash);
     events.forEach((record, index) => {
       const { event } = record;
-      if (waiting && event.section === expectedSection && event.method === expectedMethod) {
+      if (
+        !eventFound &&
+        event.section.includes(expectedSection) &&
+        event.method.includes(expectedMethod)
+      ) {
         result = {
+          name: { section: event.section, method: event.method },
           data: event.toHuman().data,
           block: header.number.toNumber(),
           event_index: index,
         };
         if (query(result)) {
-          waiting = false;
+          eventFound = true;
           unsubscribe();
         }
       }
     });
   });
-  while (waiting) {
+  while (!eventFound && !stopObserve()) {
     await sleep(1000);
   }
   return result as Event;
+}
+
+// Make sure the stopObserveEvent returns true before the end of the test
+export async function observeBadEvents(
+  eventName: string,
+  stopObserveEvent: () => boolean,
+  eventQuery?: EventQuery,
+) {
+  const event = await observeEvent(
+    eventName,
+    await getChainflipApi(),
+    eventQuery,
+    stopObserveEvent,
+  );
+  if (event) {
+    throw new Error(`Unexpected event emited ${event.name.section}:${event.name.method}`);
+  }
 }
 
 export async function getAddress(

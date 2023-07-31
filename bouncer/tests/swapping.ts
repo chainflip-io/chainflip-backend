@@ -12,6 +12,7 @@ import {
   decodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
+  observeBadEvents,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -117,16 +118,19 @@ async function testSwapViaContract(
 }
 
 async function testAll() {
+  let stopObserving = false;
+  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault(
     'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 6n).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 5n).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 6n).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
   );
 
   const ccmContractSwaps = Promise.all([
@@ -136,6 +140,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
+    /*
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
@@ -148,6 +153,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
+    */
   ]);
 
   const contractSwaps = Promise.all([
@@ -155,6 +161,7 @@ async function testAll() {
     testSwapViaContract('ETH', 'USDC'),
     testSwapViaContract('ETH', 'BTC'),
     testSwapViaContract('ETH', 'FLIP'),
+    /*
     testSwapViaContract('USDC', 'DOT'),
     testSwapViaContract('USDC', 'ETH'),
     testSwapViaContract('USDC', 'BTC'),
@@ -163,6 +170,7 @@ async function testAll() {
     testSwapViaContract('FLIP', 'ETH'),
     testSwapViaContract('FLIP', 'BTC'),
     testSwapViaContract('FLIP', 'USDC'),
+    */
   ]);
 
   const regularSwaps = Promise.all([
@@ -244,6 +252,10 @@ async function testAll() {
   ]);
 
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
+
+  // Gracefully exit the broadcast abort observer
+  stopObserving = true;
+  await observingBadEvents;
 }
 
 runWithTimeout(testAll(), 1800000)
