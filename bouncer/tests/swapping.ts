@@ -137,21 +137,21 @@ async function testAll() {
     testSwapViaContract('ETH', 'USDC', {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gasBudget: 5000000,
-      cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+      sourceAddress: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     /*
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
-      cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      sourceAddress: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     testSwapViaContract('FLIP', 'ETH', {
       message: getAbiEncodedMessage(),
       gasBudget: 10000000000000000,
-      cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      sourceAddress: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     */
   ]);
@@ -196,8 +196,8 @@ async function testAll() {
     testSwap('BTC', 'ETH', undefined, {
       message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
       gasBudget: 1000000,
-      cf_parameters: '',
-      source_address: {
+      cfParameters: '',
+      sourceAddress: {
         BTC: {
           P2PKH: await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
             encodeBtcAddressForContract(btcAddress);
@@ -208,8 +208,8 @@ async function testAll() {
     testSwap('BTC', 'USDC', undefined, {
       message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
       gasBudget: 600000,
-      cf_parameters: getAbiEncodedMessage(['uint256']),
-      source_address: {
+      cfParameters: getAbiEncodedMessage(['uint256']),
+      sourceAddress: {
         BTC: {
           P2SH: await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
             encodeBtcAddressForContract(btcAddress);
@@ -220,8 +220,8 @@ async function testAll() {
     testSwap('DOT', 'ETH', undefined, {
       message: getAbiEncodedMessage(['string', 'address']),
       gasBudget: 1000000,
-      cf_parameters: getAbiEncodedMessage(['string', 'string']),
-      source_address: {
+      cfParameters: getAbiEncodedMessage(['string', 'string']),
+      sourceAddress: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
           decodeDotAddressForContract(dotAddress);
         }),
@@ -230,8 +230,8 @@ async function testAll() {
     testSwap('DOT', 'FLIP', undefined, {
       message: getAbiEncodedMessage(),
       gasBudget: 1000000,
-      cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
-      source_address: {
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+      sourceAddress: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
           decodeDotAddressForContract(dotAddress);
         }),
@@ -240,14 +240,14 @@ async function testAll() {
     testSwap('USDC', 'ETH', undefined, {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
-      cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      sourceAddress: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     testSwap('ETH', 'USDC', undefined, {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gasBudget: 5000000,
-      cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+      sourceAddress: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
   ]);
 

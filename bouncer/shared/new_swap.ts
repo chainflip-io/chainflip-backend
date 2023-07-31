@@ -12,9 +12,9 @@ import {
 export interface CcmDepositMetadata {
   message: string;
   gasBudget: number;
-  cf_parameters: string;
+  cfParameters: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  source_address: any;
+  sourceAddress: any;
 }
 
 export async function newSwap(
