@@ -3,10 +3,8 @@ use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
 	btc::{rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
-	dot::{self, http_rpc::DotHttpRpcClient, DotBroadcaster},
-	eth::{
-		self, broadcaster::EthBroadcaster, build_broadcast_channel, ethers_rpc::EthersRpcClient,
-	},
+	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
+	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -29,7 +27,6 @@ use utilities::{
 	task_scope::{self, task_scope},
 	CachedStream,
 };
-use web3::types::U256;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -101,15 +98,6 @@ async fn start(
 		)
 		.await?;
 
-	let expected_chain_id = U256::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-				state_chain_stream.cache().block_hash,
-			)
-			.await
-			.context("Failed to get EthereumChainId from state chain")?,
-	);
-
 	let btc_rpc_client =
 		BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
 
@@ -125,10 +113,6 @@ async fn start(
 		.until_finalized()
 		.await
 		.context("Failed to submit version to state chain")?;
-
-	let (epoch_start_sender, [epoch_start_receiver_1]) = build_broadcast_channel(10);
-
-	let (dot_epoch_start_sender, [dot_epoch_start_receiver_1]) = build_broadcast_channel(10);
 
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
@@ -217,39 +201,16 @@ async fn start(
 	)
 	.await?;
 
-	let eth_address_to_monitor = eth::witnessing::start(
-		scope,
-		&settings.eth,
-		state_chain_client.clone(),
-		expected_chain_id,
-		state_chain_stream.cache().block_hash,
-		epoch_start_receiver_1,
-		db.clone(),
-	)
-	.await?;
-
-	dot::witnessing::start(
-		scope,
-		state_chain_client.clone(),
-		&settings.dot,
-		dot_epoch_start_receiver_1,
-		state_chain_stream.cache().block_hash,
-	)
-	.await?;
-
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
+		EthBroadcaster::new(EthRpcClient::new(&settings.eth).await?),
 		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
 		BtcBroadcaster::new(btc_rpc_client.clone()),
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,
 		peer_update_sender,
-		epoch_start_sender,
-		eth_address_to_monitor,
-		dot_epoch_start_sender,
 	));
 
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);

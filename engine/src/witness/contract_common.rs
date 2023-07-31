@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::eth::retry_rpc::EthersRetryRpcApi;
 
-use super::chain_source::{ChainClient, Header};
+use super::chain_source::Header;
 use anyhow::{anyhow, Result};
 use sp_core::{H160, H256, U256};
 
@@ -54,7 +54,7 @@ pub async fn events_at_block<EventParameters, EthRpcClient>(
 ) -> Result<Vec<Event<EventParameters>>>
 where
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EthRpcClient: EthersRetryRpcApi + ChainClient,
+	EthRpcClient: EthersRetryRpcApi,
 {
 	let mut contract_bloom = Bloom::default();
 	contract_bloom.accrue(BloomInput::Raw(&contract_address.0));

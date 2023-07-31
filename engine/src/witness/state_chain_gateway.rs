@@ -16,7 +16,10 @@ use super::{
 	contract_common::events_at_block,
 };
 
-abigen!(StateChainGateway, "eth-contract-abis/perseverance-rc17/IStateChainGateway.json");
+abigen!(
+	StateChainGateway,
+	"$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IStateChainGateway.json"
+);
 
 use anyhow::Result;
 

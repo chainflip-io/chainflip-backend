@@ -122,7 +122,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const nonce = await getNextEthNonce();
+  const nonce = await getNextEthNonce(true);
   return approveVault(
     {
       amount,

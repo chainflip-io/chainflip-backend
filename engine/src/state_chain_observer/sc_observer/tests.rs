@@ -5,8 +5,7 @@ use crate::{
 	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
 use cf_chains::{
-	dot::PolkadotAccountId,
-	eth::{Ethereum, SchnorrVerificationComponents, Transaction},
+	eth::{SchnorrVerificationComponents, Transaction},
 	ChainCrypto,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
@@ -15,12 +14,9 @@ use futures::{FutureExt, StreamExt};
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_broadcast::BroadcastAttemptId;
-use pallet_cf_environment::PolkadotVaultAccountId;
-use pallet_cf_validator::{CurrentEpoch, HistoricalActiveEpochs};
-use pallet_cf_vaults::{Vault, Vaults};
 use sp_runtime::{AccountId32, Digest};
 
-use crate::eth::ethers_rpc::MockEthersRpcApi;
+use crate::eth::rpc::MockEthRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
@@ -34,7 +30,6 @@ use crate::{
 	eth::broadcaster::EthBroadcaster,
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
-	witnesser::EpochStart,
 };
 use multisig::{
 	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
@@ -43,7 +38,7 @@ use multisig::{
 };
 use utilities::task_scope::task_scope;
 
-use super::{crypto_compat::CryptoCompat, EthAddressToMonitorSender};
+use super::crypto_compat::CryptoCompat;
 
 fn test_header(number: u32) -> Header {
 	Header {
@@ -58,28 +53,15 @@ fn test_header(number: u32) -> Header {
 const MOCK_ETH_TRANSACTION_OUT_ID: SchnorrVerificationComponents =
 	SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [1; 20] };
 
-async fn start_sc_observer_and_get_epoch_start_events<
+async fn start_sc_observer<
 	BlockStream: crate::state_chain_observer::client::StateChainStreamApi,
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
-	eth_rpc: MockEthersRpcApi,
-) -> Vec<EpochStart<Ethereum>> {
+	eth_rpc: MockEthRpcApi,
+) {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
-
-	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
-
-	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
-	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
-	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
-	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
 	sc_observer::start(
 		Arc::new(state_chain_client),
@@ -91,720 +73,9 @@ async fn start_sc_observer_and_get_epoch_start_events<
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
-		epoch_start_sender,
-		EthAddressToMonitorSender {
-			eth: eth_monitor_command_sender,
-			flip: eth_monitor_flip_command_sender,
-			usdc: eth_monitor_usdc_command_sender,
-		},
-		dot_epoch_start_sender,
 	)
 	.await
 	.unwrap_err();
-
-	epoch_start_receiver.collect().await
-}
-
-#[tokio::test]
-async fn starts_witnessing_when_current_authority() {
-	let initial_epoch = 3;
-	let initial_epoch_from_block_eth = 30;
-	let initial_block_hash = H256::default();
-	let account_id = AccountId::new([0; 32]);
-
-	let mut state_chain_client = MockStateChainClient::new();
-
-	state_chain_client.expect_account_id().return_once({
-		let account_id = account_id.clone();
-		|| account_id
-	});
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id))
-		.once()
-		.return_once(move |_, _| Ok(vec![initial_epoch]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(initial_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	// No blocks in the stream
-	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
-		StreamCache { block_hash: Default::default(), block_number: Default::default() },
-		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
-			StreamCache { block_hash: *block_hash, block_number: block_header.number }
-		},
-	);
-
-	let epoch_start_events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		MockEthersRpcApi::new(),
-	)
-	.await;
-
-	assert_eq!(
-		epoch_start_events,
-		vec![EpochStart::<Ethereum> {
-			epoch_index: initial_epoch,
-			block_number: initial_epoch_from_block_eth,
-			current: true,
-			participant: true,
-			data: ()
-		}]
-	);
-}
-
-#[tokio::test]
-async fn starts_witnessing_when_historic_on_startup() {
-	let active_epoch = 3;
-	let active_epoch_from_block_eth = 30;
-	let current_epoch = 4;
-	let current_epoch_from_block_eth = 40;
-
-	let current_epoch_from_block_dot = 80;
-
-	let initial_block_hash = H256::default();
-	let account_id = AccountId::new([0; 32]);
-
-	let mut state_chain_client = MockStateChainClient::new();
-
-	state_chain_client.expect_account_id().once().return_once({
-		let account_id = account_id.clone();
-		|| account_id
-	});
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id))
-		.once()
-		.return_once(move |_, _| Ok(vec![active_epoch]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(current_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(active_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: active_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(active_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: current_epoch_from_block_dot,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(current_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: current_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(current_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: current_epoch_from_block_dot,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	// No blocks in the stream
-	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
-		StreamCache { block_hash: initial_block_hash, block_number: 20 },
-		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
-			StreamCache { block_hash: *block_hash, block_number: block_header.number }
-		},
-	);
-
-	let epoch_start_events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		MockEthersRpcApi::new(),
-	)
-	.await;
-
-	assert_eq!(
-		epoch_start_events,
-		vec![
-			EpochStart::<Ethereum> {
-				epoch_index: active_epoch,
-				block_number: active_epoch_from_block_eth,
-				current: false,
-				participant: true,
-				data: ()
-			},
-			EpochStart::<Ethereum> {
-				epoch_index: current_epoch,
-				block_number: current_epoch_from_block_eth,
-				current: true,
-				participant: false,
-				data: ()
-			}
-		]
-	);
-}
-
-#[tokio::test]
-async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
-	let initial_epoch = 3;
-	let initial_epoch_from_block_eth = 30;
-	let initial_block_hash = H256::default();
-	let account_id = AccountId::new([0; 32]);
-
-	let mut state_chain_client = MockStateChainClient::new();
-
-	state_chain_client.expect_account_id().return_once({
-		let account_id = account_id.clone();
-		|| account_id
-	});
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id))
-		.once()
-		.return_once(move |_, _| Ok(vec![]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(initial_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(3))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(3))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
-		StreamCache { block_hash: initial_block_hash, block_number: 20 },
-		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
-			StreamCache { block_hash: *block_hash, block_number: block_header.number }
-		},
-	);
-
-	let epoch_start_events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		MockEthersRpcApi::new(),
-	)
-	.await;
-
-	assert_eq!(
-		epoch_start_events,
-		vec![EpochStart::<Ethereum> {
-			epoch_index: initial_epoch,
-			block_number: initial_epoch_from_block_eth,
-			current: true,
-			participant: false,
-			data: (),
-		}]
-	);
-}
-
-#[tokio::test]
-async fn current_authority_to_current_authority_on_new_epoch_event() {
-	let initial_epoch = 4;
-	let initial_epoch_from_block_eth = 40;
-
-	let initial_epoch_from_block_dot = 72;
-
-	let new_epoch = 5;
-	let new_epoch_from_block = 50;
-	let initial_block_hash = H256::default();
-	let account_id = AccountId::new([0; 32]);
-
-	let mut state_chain_client = MockStateChainClient::new();
-
-	state_chain_client.expect_account_id().return_once({
-		let account_id = account_id.clone();
-		|| account_id
-	});
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _| Ok(vec![initial_epoch]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(initial_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_dot,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	let empty_block_header = test_header(20);
-	let new_epoch_block_header = test_header(21);
-	let new_epoch_block_header_hash = new_epoch_block_header.hash();
-	let sc_block_stream =
-		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()])
-			.map(|block_header| (block_header.hash(), block_header))
-			.make_cached(
-				StreamCache { block_hash: initial_block_hash, block_number: 19 },
-				|(block_hash, block_header): &(
-					state_chain_runtime::Hash,
-					state_chain_runtime::Header,
-				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
-			);
-	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(empty_block_header.hash()))
-		.once()
-		.return_once(move |_| Ok(vec![]));
-	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(new_epoch_block_header_hash))
-		.once()
-		.return_once(move |_| {
-			Ok(vec![Box::new(frame_system::EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RuntimeEvent::Validator(pallet_cf_validator::Event::NewEpoch(new_epoch)),
-				topics: vec![H256::default()],
-			})])
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: new_epoch_from_block,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_dot,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(new_epoch_block_header_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
-		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _, _| Ok(Some(1)));
-
-	let epoch_start_events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		MockEthersRpcApi::new(),
-	)
-	.await;
-
-	assert_eq!(
-		epoch_start_events,
-		vec![
-			EpochStart::<Ethereum> {
-				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block_eth,
-				current: true,
-				participant: true,
-				data: ()
-			},
-			EpochStart::<Ethereum> {
-				epoch_index: new_epoch,
-				block_number: new_epoch_from_block,
-				current: true,
-				participant: true,
-				data: ()
-			}
-		]
-	);
-}
-
-#[tokio::test]
-async fn not_historical_to_authority_on_new_epoch() {
-	let initial_epoch = 3;
-	let initial_epoch_from_block_eth = 30;
-	let new_epoch = 4;
-	let new_epoch_from_block = 40;
-	let initial_block_hash = H256::default();
-	let account_id = AccountId::new([0; 32]);
-
-	let mut state_chain_client = MockStateChainClient::new();
-
-	state_chain_client.expect_account_id().once().return_once({
-		let account_id = account_id.clone();
-		|| account_id
-	});
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _| Ok(vec![]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(initial_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	let empty_block_header = test_header(20);
-	let new_epoch_block_header = test_header(21);
-	let new_epoch_block_header_hash = new_epoch_block_header.hash();
-	let sc_block_stream =
-		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()])
-			.map(|block_header| (block_header.hash(), block_header))
-			.make_cached(
-				StreamCache { block_hash: initial_block_hash, block_number: 19 },
-				|(block_hash, block_header): &(
-					state_chain_runtime::Hash,
-					state_chain_runtime::Header,
-				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
-			);
-	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(empty_block_header.hash()))
-		.once()
-		.return_once(move |_| Ok(vec![]));
-	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(new_epoch_block_header_hash))
-		.once()
-		.return_once(move |_| {
-			Ok(vec![Box::new(frame_system::EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RuntimeEvent::Validator(pallet_cf_validator::Event::NewEpoch(new_epoch)),
-				topics: vec![H256::default()],
-			})])
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: new_epoch_from_block,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(new_epoch_block_header_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _, _| Ok(Some(1)));
-
-	let epoch_start_events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		MockEthersRpcApi::new(),
-	)
-	.await;
-
-	assert_eq!(
-		epoch_start_events,
-		vec![
-			EpochStart::<Ethereum> {
-				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block_eth,
-				current: true,
-				participant: false,
-				data: ()
-			},
-			EpochStart::<Ethereum> {
-				epoch_index: new_epoch,
-				block_number: new_epoch_from_block,
-				current: true,
-				participant: true,
-				data: ()
-			}
-		]
-	);
-}
-
-#[tokio::test]
-async fn current_authority_to_historical_on_new_epoch_event() {
-	let initial_epoch = 3;
-	let initial_epoch_from_block_eth = 30;
-	let new_epoch = 4;
-	let new_epoch_from_block = 40;
-	let initial_block_hash = H256::default();
-	let account_id = AccountId::new([0; 32]);
-
-	let mut state_chain_client = MockStateChainClient::new();
-
-	state_chain_client.expect_account_id().once().return_once({
-		let account_id = account_id.clone();
-		|| account_id
-	});
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _| Ok(vec![initial_epoch]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(initial_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(3))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	let empty_block_header = test_header(20);
-	let new_epoch_block_header = test_header(21);
-	let new_epoch_block_header_hash = new_epoch_block_header.hash();
-	let sc_block_stream =
-		tokio_stream::iter([empty_block_header.clone(), new_epoch_block_header.clone()])
-			.map(|block_header| (block_header.hash(), block_header))
-			.make_cached(
-				StreamCache { block_hash: initial_block_hash, block_number: 19 },
-				|(block_hash, block_header): &(
-					state_chain_runtime::Hash,
-					state_chain_runtime::Header,
-				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
-			);
-
-	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(empty_block_header.hash()))
-		.once()
-		.return_once(move |_| Ok(vec![]));
-	state_chain_client
-		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(new_epoch_block_header_hash))
-		.once()
-		.return_once(move |_| {
-			Ok(vec![Box::new(frame_system::EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: RuntimeEvent::Validator(pallet_cf_validator::Event::NewEpoch(new_epoch)),
-				topics: vec![H256::default()],
-			})])
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: new_epoch_from_block,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(new_epoch_block_header_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
-		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _, _| Ok(None));
-
-	let epoch_start_events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		MockEthersRpcApi::new(),
-	)
-	.await;
-
-	assert_eq!(
-		epoch_start_events,
-		vec![
-			EpochStart::<Ethereum> {
-				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block_eth,
-				current: true,
-				participant: true,
-				data: ()
-			},
-			EpochStart::<Ethereum> {
-				epoch_index: new_epoch,
-				block_number: new_epoch_from_block,
-				current: true,
-				participant: false,
-				data: ()
-			}
-		]
-	);
 }
 
 // TODO: We should test that this works for historical epochs too. We should be able to sign for
@@ -820,44 +91,6 @@ async fn only_encodes_and_signs_when_specified() {
 		let account_id = account_id.clone();
 		|| account_id
 	});
-
-	let initial_epoch = 3;
-	let initial_epoch_from_block_eth = 30;
-
-	state_chain_client
-		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
-		.with(eq(initial_block_hash), eq(account_id.clone()))
-		.once()
-		.return_once(move |_, _| Ok(vec![initial_epoch]));
-	state_chain_client
-		.expect_storage_value::<CurrentEpoch<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(initial_epoch));
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_eth,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-		});
-
-	state_chain_client
-		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	let block_header = test_header(21);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()])
@@ -903,25 +136,20 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let mut ethers_rpc_mock = MockEthersRpcApi::new();
+	let mut eth_rpc_mock = MockEthRpcApi::new();
 	// when we are selected to sign we must estimate gas and sign
 	// NB: We only do this once, since we are only selected to sign once
-	ethers_rpc_mock
+	eth_rpc_mock
 		.expect_estimate_gas()
 		.once()
 		.returning(|_| Ok(ethers::types::U256::from(100_000)));
 
-	ethers_rpc_mock.expect_send_transaction().once().return_once(|tx| {
+	eth_rpc_mock.expect_send_transaction().once().return_once(|tx| {
 		// return some hash
 		Ok(tx.sighash())
 	});
 
-	let _events = start_sc_observer_and_get_epoch_start_events(
-		state_chain_client,
-		sc_block_stream,
-		ethers_rpc_mock,
-	)
-	.await;
+	start_sc_observer(state_chain_client, sc_block_stream, eth_rpc_mock).await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -1285,37 +513,16 @@ async fn run_the_sc_observer() {
 			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
-
-			let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) =
-				async_broadcast::broadcast(10);
-
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(MockEthersRpcApi::new()),
+				EthBroadcaster::new(MockEthRpcApi::new()),
 				DotBroadcaster::new(MockDotRpcApi::new()),
 				BtcBroadcaster::new(MockBtcRpcApi::new()),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				account_peer_mapping_change_sender,
-				epoch_start_sender,
-				EthAddressToMonitorSender {
-					eth: eth_monitor_command_sender,
-					flip: eth_monitor_flip_command_sender,
-					usdc: eth_monitor_usdc_command_sender,
-				},
-				dot_epoch_start_sender,
 			)
 			.await
 			.unwrap_err();

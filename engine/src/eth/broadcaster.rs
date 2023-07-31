@@ -1,4 +1,4 @@
-use crate::eth::EthersRpcApi;
+use crate::eth::EthRpcApi;
 use anyhow::{Context, Result};
 use ethers::{
 	prelude::*,
@@ -9,7 +9,7 @@ use tracing::{info_span, Instrument};
 #[derive(Clone)]
 pub struct EthBroadcaster<EthRpc>
 where
-	EthRpc: EthersRpcApi,
+	EthRpc: EthRpcApi,
 {
 	eth_rpc: EthRpc,
 	pub address: H160,
@@ -17,7 +17,7 @@ where
 
 impl<EthRpc> EthBroadcaster<EthRpc>
 where
-	EthRpc: EthersRpcApi,
+	EthRpc: EthRpcApi,
 {
 	pub fn new(eth_rpc: EthRpc) -> Self {
 		Self { address: eth_rpc.address(), eth_rpc }
