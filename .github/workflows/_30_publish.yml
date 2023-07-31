@@ -91,19 +91,18 @@ jobs:
       - name: Setup aptly
         run: |
           export AWS_SDK_LOAD_CONFIG=1
+          gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys ${{ env.GPG_KEY_ID }}
+          aptly mirror create chainflip-${{ inputs.environment }} https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main
+          aptly mirror update chainflip-${{ inputs.environment }}
+          aptly snapshot create mirror_snapshot from mirror chainflip-${{ inputs.environment }}
           aptly repo create local
           aptly repo add local packages/*.deb
-          aptly snapshot create snap from repo local
+          aptly snapshot create local_snapshot from repo local
+          aptly snapshot merge -no-remove merged_snapshot local_snapshot mirror_snapshot
 
       - name: Publish prod
-        if: inputs.environment == 'prod'
         run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
-
-      - name: Publish dev
-        if: inputs.environment == 'dev'
-        run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
+          aptly publish -gpg-key=${{ env.GPG_KEY_ID }} -distribution=${{ steps.vars.outputs.codename }} snapshot merged_snapshot "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Set Summary Title
         if: inputs.environment == 'prod'
