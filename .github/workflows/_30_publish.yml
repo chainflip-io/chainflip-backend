@@ -78,10 +78,12 @@ jobs:
           if [[ '${{ inputs.environment }}' == 'prod' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
+            echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX={user}:{pass}@" >> $GITHUB_ENV
+            echo "REPO_BASIC_AUTH=flip:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
           fi
 
@@ -92,7 +94,7 @@ jobs:
         run: |
           export AWS_SDK_LOAD_CONFIG=1
           gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys ${{ env.GPG_KEY_ID }}
-          aptly mirror create chainflip-${{ inputs.environment }} https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main
+          aptly mirror create chainflip-${{ inputs.environment }} https://${REPO_BASIC_AUTH}@${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main
           aptly mirror update chainflip-${{ inputs.environment }}
           aptly snapshot create mirror_snapshot from mirror chainflip-${{ inputs.environment }}
           aptly repo create local
@@ -100,7 +102,7 @@ jobs:
           aptly snapshot create local_snapshot from repo local
           aptly snapshot merge -no-remove merged_snapshot local_snapshot mirror_snapshot
 
-      - name: Publish prod
+      - name: Publish packages to chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}
         run: |
           aptly publish -gpg-key=${{ env.GPG_KEY_ID }} -distribution=${{ steps.vars.outputs.codename }} snapshot merged_snapshot "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
