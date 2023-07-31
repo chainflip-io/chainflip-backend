@@ -262,10 +262,16 @@ export async function observeBalanceIncrease(
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
-export async function observeFetch(asset: string, address: string): Promise<void> {
+export async function observeFetch(asset: Asset, address: string): Promise<void> {
   for (let i = 0; i < 120; i++) {
     const balance = Number(await getBalance(asset as Asset, address));
     if (balance === 0) {
+      if (assetToChain(asset) === 'Eth') {
+        const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+        if ((await web3.eth.getCode(address)) === '0x') {
+          throw new Error('Eth address has no bytecode');
+        }
+      }
       return;
     }
     await sleep(1000);
