@@ -252,8 +252,7 @@ mod tests {
 						retry_client,
 						H160::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
 					)
-					.run()
-					.await;
+					.spawn(scope);
 
 				Ok(())
 			}

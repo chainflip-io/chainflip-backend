@@ -48,19 +48,14 @@ where
 
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 
-	let btc_chain_tracking_witnesser = btc_source
+	btc_source
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
-		.run();
-
-	scope.spawn(async move {
-		btc_chain_tracking_witnesser.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	let btc_client = btc_client.clone();
-	let btc_ingress_witnesser = btc_source
+	btc_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
 		.then(move |header| {
@@ -135,12 +130,7 @@ where
 			}
 		})
 		.continuous("Bitcoin".to_string(), db)
-		.run();
-
-	scope.spawn(async move {
-		btc_ingress_witnesser.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	Ok(())
 }

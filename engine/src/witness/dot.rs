@@ -130,17 +130,12 @@ where
 		DotSubClient::new(&settings.ws_node_endpoint),
 	);
 
-	let dot_chain_tracking = DotUnfinalisedSource::new(dot_client.clone())
+	DotUnfinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
-		.run();
-
-	scope.spawn(async move {
-		dot_chain_tracking.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	let epoch_source = epoch_source
 		.filter_map(
@@ -156,7 +151,7 @@ where
 		)
 		.await;
 
-	let dot_ingress_witnessing = DotFinalisedSource::new(dot_client.clone())
+	DotFinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.strictly_monotonic()
 		.then(|header| async move {
@@ -281,12 +276,7 @@ where
 			}
 			)
 			.continuous("Polkadot".to_string(), db)
-		.run();
-
-	scope.spawn(async move {
-		dot_ingress_witnessing.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	Ok(())
 }

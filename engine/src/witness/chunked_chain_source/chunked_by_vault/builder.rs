@@ -1,6 +1,6 @@
 use futures::StreamExt;
 use futures_core::Future;
-use utilities::assert_stream_send;
+use utilities::{assert_stream_send, task_scope::Scope};
 
 use crate::witness::{
 	chain_source::{aliases, Header},
@@ -32,15 +32,21 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		Self { source, parameters }
 	}
 
-	pub async fn run(self) {
-		let stream = assert_stream_send(
-			self.source
-				.stream(self.parameters)
-				.await
-				.into_stream()
-				.flat_map_unordered(None, |(_epoch, chain_stream, _chain_client)| chain_stream),
-		);
-		stream.for_each(|_| futures::future::ready(())).await;
+	pub fn spawn<'env>(self, scope: &Scope<'env, anyhow::Error>)
+	where
+		Inner: 'env,
+	{
+		scope.spawn(async move {
+			let stream = assert_stream_send(
+				self.source
+					.stream(self.parameters)
+					.await
+					.into_stream()
+					.flat_map_unordered(None, |(_epoch, chain_stream, _chain_client)| chain_stream),
+			);
+			stream.for_each(|_| futures::future::ready(())).await;
+			Ok(())
+		});
 	}
 }
 
