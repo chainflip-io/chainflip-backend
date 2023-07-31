@@ -10,7 +10,7 @@ import {
   getEthContractAddress,
   getChainflipApi,
   amountToFineAmount,
-  observeEVMEvent
+  observeEVMEvent,
 } from './utils';
 import gatewayAbi from '../../eth-contract-abis/perseverance-0.9-rc3/IStateChainGateway.json';
 
@@ -43,18 +43,23 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
     network: 'localnet',
     stateChainGatewayContractAddress: getEthContractAddress('GATEWAY'),
   };
-  console.log("Waiting for redemption to be registered");
-  await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), "RedemptionRegistered", [accountIdHex,flipperinoAmount,ethAddress,'*','*']);
+  console.log('Waiting for redemption to be registered');
+  await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), 'RedemptionRegistered', [
+    accountIdHex,
+    flipperinoAmount,
+    ethAddress,
+    '*',
+    '*',
+  ]);
 
-  const delay = (await getRedemptionDelay(options));
+  const delay = await getRedemptionDelay(options);
   console.log(`Waiting for ${delay}s before we can execute redemption`);
   await sleep(delay * 1000);
 
   console.log(`Executing redemption`);
-  
 
   const nonce = await getNextEthNonce();
-  
+
   const redemptionExecutedHandle = observeEvent(
     'funding:RedemptionSettled',
     chainflip,
