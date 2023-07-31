@@ -132,19 +132,19 @@ async function testAll() {
   const ccmContractSwaps = Promise.all([
     testSwapViaContract('ETH', 'USDC', {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-      gas_budget: 5000000,
+      gasBudget: 5000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
-      gas_budget: 5000000,
+      gasBudget: 5000000,
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     testSwapViaContract('FLIP', 'ETH', {
       message: getAbiEncodedMessage(),
-      gas_budget: 10000000000000000,
+      gasBudget: 10000000000000000,
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
@@ -187,7 +187,7 @@ async function testAll() {
   const ccmSwaps = Promise.all([
     testSwap('BTC', 'ETH', undefined, {
       message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
-      gas_budget: 1000000,
+      gasBudget: 1000000,
       cf_parameters: '',
       source_address: {
         BTC: {
@@ -199,7 +199,7 @@ async function testAll() {
     }),
     testSwap('BTC', 'USDC', undefined, {
       message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
-      gas_budget: 600000,
+      gasBudget: 600000,
       cf_parameters: getAbiEncodedMessage(['uint256']),
       source_address: {
         BTC: {
@@ -211,7 +211,7 @@ async function testAll() {
     }),
     testSwap('DOT', 'ETH', undefined, {
       message: getAbiEncodedMessage(['string', 'address']),
-      gas_budget: 1000000,
+      gasBudget: 1000000,
       cf_parameters: getAbiEncodedMessage(['string', 'string']),
       source_address: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
@@ -221,7 +221,7 @@ async function testAll() {
     }),
     testSwap('DOT', 'FLIP', undefined, {
       message: getAbiEncodedMessage(),
-      gas_budget: 1000000,
+      gasBudget: 1000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
@@ -231,13 +231,13 @@ async function testAll() {
     }),
     testSwap('USDC', 'ETH', undefined, {
       message: getAbiEncodedMessage(),
-      gas_budget: 5000000,
+      gasBudget: 5000000,
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
     testSwap('ETH', 'USDC', undefined, {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-      gas_budget: 5000000,
+      gasBudget: 5000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),

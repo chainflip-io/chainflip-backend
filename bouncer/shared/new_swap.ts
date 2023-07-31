@@ -11,7 +11,7 @@ import {
 
 export interface CcmDepositMetadata {
   message: string;
-  gas_budget: number;
+  gasBudget: number;
   cf_parameters: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   source_address: any;
