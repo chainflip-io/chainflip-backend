@@ -1,8 +1,8 @@
 use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
-	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumCcmGasBudget, MinimumSwapAmount,
-	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapOrigin, SwapQueue, SwapTTL, SwapType,
+	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumSwapAmount, Pallet, PendingCcms,
+	Swap, SwapChannelExpiries, SwapOrigin, SwapQueue, SwapTTL, SwapType,
 };
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -939,25 +939,6 @@ fn can_set_minimum_swap_amount() {
 }
 
 #[test]
-fn can_set_minimum_ccm_gas_budget() {
-	new_test_ext().execute_with(|| {
-		let asset = Asset::Eth;
-		let amount = 1_000u128;
-		assert_eq!(MinimumCcmGasBudget::<Test>::get(asset), 0);
-
-		// Set the new minimum ccm gas budget
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), asset, amount));
-
-		assert_eq!(MinimumCcmGasBudget::<Test>::get(asset), amount);
-
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumCcmGasBudgetSet {
-			asset,
-			amount,
-		}));
-	});
-}
-
-#[test]
 fn swap_by_witnesser_happy_path() {
 	new_test_ext().execute_with(|| {
 		let from = Asset::Eth;
@@ -1095,77 +1076,6 @@ fn swap_by_deposit_happy_path() {
 		}));
 
 		// Confiscated fund is unchanged
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
-	});
-}
-
-#[test]
-fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
-		let deposit_amount = 10_000;
-		let from: Asset = Asset::Eth;
-		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			message: vec![0x01],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
-		};
-
-		// Set minimum gas budget to be above gas amount
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(
-			RuntimeOrigin::root(),
-			from,
-			gas_budget + 1
-		));
-
-		// Process CCM via extrinsics
-		assert_ok!(Swapping::ccm_deposit(
-			RuntimeOrigin::root(),
-			from,
-			deposit_amount,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			ccm.clone(),
-			Default::default(),
-		));
-
-		// Verify the CCM failed
-		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
-			reason: CcmFailReason::GasBudgetBelowMinimum,
-			destination_address: EncodedAddress::Eth(Default::default()),
-			message_metadata: ccm.clone(),
-		}));
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), deposit_amount);
-
-		// Lower the minimum gas budget.
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), from, gas_budget));
-		CollectedRejectedFunds::<Test>::set(from, 0);
-
-		// Process CCM via extrinsics
-		assert_ok!(Swapping::ccm_deposit(
-			RuntimeOrigin::root(),
-			from,
-			deposit_amount,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			ccm,
-			Default::default(),
-		));
-
-		// Verify the CCM succeeded
-		assert_eq!(SwapQueue::<Test>::decode_len(), Some(1));
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
-			ccm_id: 1,
-			principal_swap_id: Some(1),
-			gas_swap_id: None,
-			deposit_amount,
-			destination_address: EncodedAddress::Eth(Default::default()),
-		}));
-
-		// The funds are not confiscated.
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
 }
@@ -1336,13 +1246,11 @@ fn ccm_without_principal_swaps_are_accepted() {
 			eth,
 			principal_amount + 1,
 		));
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), eth, gas_budget));
 		assert_ok!(Swapping::set_minimum_swap_amount(
 			RuntimeOrigin::root(),
 			flip,
 			principal_amount + 1,
 		));
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), flip, gas_budget));
 		System::reset_events();
 
 		// Ccm with principal asset = 0
@@ -1420,7 +1328,6 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 
 		// Set minimum swap and gas budget.
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), flip, gas_budget + 1,));
-		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), flip, gas_budget));
 		System::reset_events();
 
 		// Even if gas amount is below minimum swap amount, it is allowed.
