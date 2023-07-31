@@ -132,7 +132,7 @@ async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
 
   await doPerformSwap(swapParams, tag, undefined, true);
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  observeFetch(sourceAsset, swapParams.depositAddress);
+  await observeFetch(sourceAsset, swapParams.depositAddress);
   await doPerformSwap(swapParams, tag, undefined, true);
 }
 
