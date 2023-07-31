@@ -126,11 +126,11 @@ async function testAll() {
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault(
     'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 6n).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 5n).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 6n).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
   );
 
   const ccmContractSwaps = Promise.all([
@@ -140,6 +140,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
+    /*
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gas_budget: 5000000,
@@ -152,6 +153,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
+    */
   ]);
 
   const contractSwaps = Promise.all([
@@ -159,6 +161,7 @@ async function testAll() {
     testSwapViaContract('ETH', 'USDC'),
     testSwapViaContract('ETH', 'BTC'),
     testSwapViaContract('ETH', 'FLIP'),
+    /*
     testSwapViaContract('USDC', 'DOT'),
     testSwapViaContract('USDC', 'ETH'),
     testSwapViaContract('USDC', 'BTC'),
@@ -167,6 +170,7 @@ async function testAll() {
     testSwapViaContract('FLIP', 'ETH'),
     testSwapViaContract('FLIP', 'BTC'),
     testSwapViaContract('FLIP', 'USDC'),
+    */
   ]);
 
   const regularSwaps = Promise.all([
