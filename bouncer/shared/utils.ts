@@ -262,6 +262,18 @@ export async function observeBalanceIncrease(
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
+export async function observeFetch(asset: string, address: string): Promise<void> {
+  for (let i = 0; i < 120; i++) {
+    const balance = Number(await getBalance(asset as Asset, address));
+    if (balance === 0) {
+      return;
+    }
+    await sleep(1000);
+  }
+
+  throw new Error('Failed to observe the fetch');
+}
+
 export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,

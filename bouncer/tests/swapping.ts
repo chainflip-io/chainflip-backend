@@ -2,7 +2,7 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
-import { performSwap } from '../shared/perform_swap';
+import { performSwap, doPerformSwap, requestNewSwap } from '../shared/perform_swap';
 import {
   newAddress,
   runWithTimeout,
@@ -13,6 +13,7 @@ import {
   amountToFineAmount,
   defaultAssetAmounts,
   observeBadEvents,
+  observeFetch,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -92,7 +93,6 @@ async function testSwap(
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
-  depositViaContract?: boolean,
 ) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
@@ -100,8 +100,7 @@ async function testSwap(
     addressType,
     messageMetadata,
   );
-
-  await performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata, depositViaContract);
+  await performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
 async function testSwapViaContract(
@@ -117,6 +116,25 @@ async function testSwapViaContract(
     ' Contract',
   );
   await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
+}
+
+async function testSwapAssetWitnessing(sourceAsset: Asset, destAsset: Asset) {
+  const { destAddress, tag } = await prepareSwap(
+    sourceAsset,
+    destAsset,
+    undefined,
+    undefined,
+    ' AssetWitnessingTest',
+  );
+  const fee = 100;
+
+  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, fee, tag);
+
+  await doPerformSwap(swapParams, tag, undefined, true);
+  // Ensure that the Deposit contract has been deployed fetching the funds. It is assumed that
+  // the funds will be fetched straight away.
+  observeFetch(sourceAsset, swapParams.depositAddress);
+  await doPerformSwap(swapParams, tag, undefined, true);
 }
 
 async function testAll() {
@@ -176,84 +194,89 @@ async function testAll() {
   ]);
 
   const regularSwaps = Promise.all([
-    // testSwap('DOT', 'BTC', 'P2PKH'),
-    // testSwap('ETH', 'BTC', 'P2SH'),
-    // testSwap('USDC', 'BTC', 'P2WPKH'),
-    // testSwap('DOT', 'BTC', 'P2WSH'),
-    // testSwap('FLIP', 'BTC', 'P2SH'),
-    // testSwap('BTC', 'DOT'),
-    // testSwap('DOT', 'USDC'),
-    // testSwap('DOT', 'ETH'),
-    // testSwap('BTC', 'ETH'),
-    // testSwap('BTC', 'USDC'),
-    testSwap('ETH', 'DOT', undefined, undefined, true),
-    // testSwap('FLIP', 'DOT', undefined, undefined, true),
-    // testSwap('BTC', 'FLIP'),
+    testSwap('DOT', 'BTC', 'P2PKH'),
+    testSwap('ETH', 'BTC', 'P2SH'),
+    testSwap('USDC', 'BTC', 'P2WPKH'),
+    testSwap('DOT', 'BTC', 'P2WSH'),
+    testSwap('FLIP', 'BTC', 'P2SH'),
+    testSwap('BTC', 'DOT'),
+    testSwap('DOT', 'USDC'),
+    testSwap('DOT', 'ETH'),
+    testSwap('BTC', 'ETH'),
+    testSwap('BTC', 'USDC'),
+    testSwap('ETH', 'USDC'),
+    testSwap('FLIP', 'DOT'),
+    testSwap('BTC', 'FLIP'),
   ]);
 
   // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
   // all ccm swaps have the same destination address (cfTester) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
-    // testSwap('BTC', 'ETH', undefined, {
-    //   message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
-    //   gasBudget: 1000000,
-    //   cfParameters: '',
-    //   sourceAddress: {
-    //     BTC: {
-    //       P2PKH: await newAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
-    //         encodeBtcAddressForContract(btcAddress);
-    //       }),
-    //     },
-    //   },
-    // }),
-    // testSwap('BTC', 'USDC', undefined, {
-    //   message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
-    //   gasBudget: 600000,
-    //   cfParameters: getAbiEncodedMessage(['uint256']),
-    //   sourceAddress: {
-    //     BTC: {
-    //       P2SH: await newAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
-    //         encodeBtcAddressForContract(btcAddress);
-    //       }),
-    //     },
-    //   },
-    // }),
-    // testSwap('DOT', 'ETH', undefined, {
-    //   message: getAbiEncodedMessage(['string', 'address']),
-    //   gasBudget: 1000000,
-    //   cfParameters: getAbiEncodedMessage(['string', 'string']),
-    //   sourceAddress: {
-    //     DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-    //       decodeDotAddressForContract(dotAddress);
-    //     }),
-    //   },
-    // }),
-    // testSwap('DOT', 'FLIP', undefined, {
-    //   message: getAbiEncodedMessage(),
-    //   gasBudget: 1000000,
-    //   cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    //   sourceAddress: {
-    //     DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-    //       decodeDotAddressForContract(dotAddress);
-    //     }),
-    //   },
-    // }),
-    // testSwap('USDC', 'ETH', undefined, {
-    //   message: getAbiEncodedMessage(),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-    //   sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
-    // }),
-    // testSwap('ETH', 'USDC', undefined, {
-    //   message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    //   sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
-    // }),
+    testSwap('BTC', 'ETH', undefined, {
+      message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
+      gasBudget: 1000000,
+      cfParameters: '',
+      sourceAddress: {
+        BTC: {
+          P2PKH: await newAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
+            encodeBtcAddressForContract(btcAddress);
+          }),
+        },
+      },
+    }),
+    testSwap('BTC', 'USDC', undefined, {
+      message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
+      gasBudget: 600000,
+      cfParameters: getAbiEncodedMessage(['uint256']),
+      sourceAddress: {
+        BTC: {
+          P2SH: await newAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
+            encodeBtcAddressForContract(btcAddress);
+          }),
+        },
+      },
+    }),
+    testSwap('DOT', 'ETH', undefined, {
+      message: getAbiEncodedMessage(['string', 'address']),
+      gasBudget: 1000000,
+      cfParameters: getAbiEncodedMessage(['string', 'string']),
+      sourceAddress: {
+        DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
+          decodeDotAddressForContract(dotAddress);
+        }),
+      },
+    }),
+    testSwap('DOT', 'FLIP', undefined, {
+      message: getAbiEncodedMessage(),
+      gasBudget: 1000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+      sourceAddress: {
+        DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
+          decodeDotAddressForContract(dotAddress);
+        }),
+      },
+    }),
+    testSwap('USDC', 'ETH', undefined, {
+      message: getAbiEncodedMessage(),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
+    }),
+    testSwap('ETH', 'USDC', undefined, {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
+    }),
   ]);
 
-  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
+  const witnessingSwaps = Promise.all([
+    testSwapAssetWitnessing('ETH', 'DOT'),
+    testSwapAssetWitnessing('FLIP', 'BTC'),
+  ]);
+
+  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps, witnessingSwaps]);
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
