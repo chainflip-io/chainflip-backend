@@ -38,7 +38,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BrokerCcmDepositMetadata {
+pub struct BrokerCcmChannelMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
 	cf_parameters: Option<String>,
@@ -61,7 +61,7 @@ mod test {
 	}
 }
 
-impl TryInto<CcmChannelMetadata> for BrokerCcmDepositMetadata {
+impl TryInto<CcmChannelMetadata> for BrokerCcmChannelMetadata {
 	type Error = anyhow::Error;
 
 	fn try_into(self) -> Result<CcmChannelMetadata, Self::Error> {
@@ -95,7 +95,7 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		deposit_metadata: Option<BrokerCcmDepositMetadata>,
+		channel_metadata: Option<BrokerCcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error>;
 }
 
@@ -116,15 +116,16 @@ impl RpcServer for RpcServerImpl {
 			.await
 			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
+
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		deposit_metadata: Option<BrokerCcmDepositMetadata>,
+		channel_metadata: Option<BrokerCcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error> {
-		let deposit_metadata = deposit_metadata.map(TryInto::try_into).transpose()?;
+		let channel_metadata = channel_metadata.map(TryInto::try_into).transpose()?;
 
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
@@ -132,7 +133,7 @@ impl RpcServer for RpcServerImpl {
 			destination_asset,
 			clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 			broker_commission_bps,
-			deposit_metadata,
+			channel_metadata,
 		)
 		.await?)
 		.map(BrokerSwapDepositAddress::from)

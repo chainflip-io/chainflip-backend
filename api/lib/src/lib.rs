@@ -361,7 +361,7 @@ pub async fn request_swap_deposit_address(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission_bps: BasisPoints,
-	deposit_metadata: Option<CcmChannelMetadata>,
+	channel_metadata: Option<CcmChannelMetadata>,
 ) -> Result<SwapDepositAddress> {
 	let (events, block_number) = connect_submit_and_get_events(
 		state_chain_settings,
@@ -370,7 +370,7 @@ pub async fn request_swap_deposit_address(
 			destination_asset,
 			destination_address,
 			broker_commission_bps,
-			deposit_metadata,
+			channel_metadata,
 		},
 		AccountRole::None,
 	)

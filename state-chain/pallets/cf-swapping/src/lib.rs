@@ -515,14 +515,14 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
-			deposit_metadata: Option<CcmChannelMetadata>,
+			channel_metadata: Option<CcmChannelMetadata>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if let Some(CcmChannelMetadata { gas_budget, .. }) = deposit_metadata {
+			if let Some(CcmChannelMetadata { gas_budget, .. }) = channel_metadata {
 				// Currently only Ethereum supports CCM.
 				ensure!(
 					ForeignChain::Ethereum == destination_asset.into(),
@@ -542,7 +542,7 @@ pub mod pallet {
 				destination_address_internal,
 				broker_commission_bps,
 				broker,
-				deposit_metadata,
+				channel_metadata,
 			)?;
 
 			let expiry_block = frame_system::Pallet::<T>::current_block_number()
