@@ -272,7 +272,7 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
-			broker_fee: BasisPoints,
+			broker_fee_rate: BasisPoints,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -283,6 +283,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 			swap_type: SwapType,
+			broker_swap_fee: Option<AssetAmount>,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -557,7 +558,7 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				channel_id,
-				broker_fee: broker_commission_bps,
+				broker_fee_rate: broker_commission_bps,
 			});
 
 			Ok(())
@@ -633,6 +634,7 @@ pub mod pallet {
 					destination_address,
 					origin: SwapOrigin::Vault { tx_hash },
 					swap_type: SwapType::Swap(destination_address_internal),
+					broker_swap_fee: None,
 				});
 			}
 			Ok(())
@@ -969,6 +971,7 @@ pub mod pallet {
 						channel_id,
 					},
 					swap_type: SwapType::Swap(destination_address),
+					broker_swap_fee: Some(fee),
 				});
 			}
 		}
@@ -1049,6 +1052,7 @@ pub mod pallet {
 						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
+						broker_swap_fee: None,
 					});
 					Some(swap_id)
 				};
@@ -1073,6 +1077,7 @@ pub mod pallet {
 					destination_address: encoded_destination_address.clone(),
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
+					broker_swap_fee: None,
 				});
 				Some(swap_id)
 			};
