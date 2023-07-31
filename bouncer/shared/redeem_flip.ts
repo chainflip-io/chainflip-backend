@@ -19,6 +19,7 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   const flipWallet = keyring.createFromUri('//' + flipSeed);
+  const accountIdHex = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
   const ethWallet = new Wallet(
     process.env.ETH_USDC_WHALE ??
@@ -42,16 +43,15 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
     network: 'localnet',
     stateChainGatewayContractAddress: getEthContractAddress('GATEWAY'),
   };
+  console.log("Waiting for redemption to be registered");
+  await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), "RedemptionRegistered", [accountIdHex,flipperinoAmount,ethAddress,'*','*']);
 
-  await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), "RedemptionRegistered", ['*','*','*','*','*']);
-/*
-  // Add 30 seconds extra to guard against any race conditions
-  const delay = (await getRedemptionDelay(options)) + 30;
+  const delay = (await getRedemptionDelay(options));
   console.log(`Waiting for ${delay}s before we can execute redemption`);
   await sleep(delay * 1000);
-*/
+
   console.log(`Executing redemption`);
-  const accountIdHex = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
+  
 
   const nonce = await getNextEthNonce();
 

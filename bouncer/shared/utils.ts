@@ -266,7 +266,6 @@ export async function observeEVMEvent(
         toBlock: currentBlockNumber,
       });
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
-        console.log(events[j]);
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (
