@@ -211,7 +211,7 @@ export async function observeBadEvents(
   }
 }
 
-export async function getAddress(
+export async function newAddress(
   asset: Asset,
   seed: string,
   type?: BtcAddressType,
@@ -219,9 +219,9 @@ export async function getAddress(
   let rawAddress;
 
   switch (asset) {
+    case 'FLIP':
     case 'ETH':
     case 'USDC':
-    case 'FLIP':
       rawAddress = newEthAddress(seed);
       break;
     case 'DOT':
@@ -275,7 +275,7 @@ export async function observeEVMEvent(
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
 
   // Gets all the event parameter as an array
-  const eventAbi = cfTesterAbi.find((item) => item.type === 'event' && item.name === eventName)!;
+  const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
 
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
@@ -370,7 +370,7 @@ export function handleSubstrateError(api: any) {
       let error;
       if (dispatchError.isModule) {
         const { docs, name, section } = api.registry.findMetaError(dispatchError.asModule);
-        error = section + '.' + name + ' ' + docs;
+        error = section + '.' + name + ': ' + docs;
       } else {
         error = dispatchError.toString();
       }

@@ -7,7 +7,7 @@ import {
   runWithTimeout,
   sleep,
   hexStringToBytesArray,
-  getAddress,
+  newAddress,
   observeEvent,
 } from '../shared/utils';
 
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
 
   // Register Emergency Withdrawal Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
-    Eth: hexStringToBytesArray(await getAddress('ETH', 'LP_1')),
+    Eth: hexStringToBytesArray(await newAddress('ETH', 'LP_1')),
   });
   await chainflip.tx.liquidityProvider
     .registerEmergencyWithdrawalAddress(encodedEthAddr)
