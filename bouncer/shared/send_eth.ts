@@ -4,9 +4,9 @@ import { amountToFineAmount, ethNonceMutex } from './utils';
 
 let nextNonce: number | undefined;
 
-export async function getNextEthNonce(): Promise<number> {
+export async function getNextEthNonce(forceQuery?: boolean): Promise<number> {
   return ethNonceMutex.runExclusive(async () => {
-    if (nextNonce === undefined) {
+    if (nextNonce === undefined || forceQuery) {
       const ethEndpoint = process.env.ETH_ENDPOINT || 'http://127.0.0.1:8545';
       const web3 = new Web3(ethEndpoint);
       const whaleKey =

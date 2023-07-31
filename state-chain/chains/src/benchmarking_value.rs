@@ -103,14 +103,14 @@ impl BenchmarkValue for EncodedAddress {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EthereumFetchId {
 	fn benchmark_value() -> Self {
-		Self::Undeployed(1)
+		Self::DeployAndFetch(1)
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for EthereumFetchId {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		Self::Undeployed(id as u64)
+		Self::DeployAndFetch(id as u64)
 	}
 }
 

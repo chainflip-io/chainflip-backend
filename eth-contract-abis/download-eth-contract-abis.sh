@@ -35,6 +35,7 @@ unzip -u ${ZIP_FILE} \
     'Deposit_bytecode.json' \
     'IAddressChecker.json' \
     'CFTester.json' \
+    'IFLIP.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}
