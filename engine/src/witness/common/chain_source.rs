@@ -1,3 +1,4 @@
+pub mod and_then;
 pub mod extension;
 pub mod lag_safety;
 pub mod shared;
@@ -6,7 +7,7 @@ pub mod then;
 
 use std::pin::Pin;
 
-use futures_core::Stream;
+use futures_core::{Future, Stream};
 
 pub mod aliases {
 	use codec::FullCodec;
@@ -34,11 +35,53 @@ pub struct Header<Index, Hash, Data> {
 	pub data: Data,
 }
 impl<Index: aliases::Index, Hash: aliases::Hash, Data: aliases::Data> Header<Index, Hash, Data> {
-	pub fn map_data<MappedData, F: FnOnce(Self) -> MappedData>(
+	pub fn map_data<T, F: FnOnce(Self) -> T>(self, f: F) -> Header<Index, Hash, T> {
+		Header { index: self.index, hash: self.hash, parent_hash: self.parent_hash, data: f(self) }
+	}
+
+	pub async fn then_data<Fut: Future, F: FnOnce(Self) -> Fut>(
 		self,
 		f: F,
-	) -> Header<Index, Hash, MappedData> {
-		Header { index: self.index, hash: self.hash, parent_hash: self.parent_hash, data: f(self) }
+	) -> Header<Index, Hash, Fut::Output> {
+		Header {
+			index: self.index,
+			hash: self.hash,
+			parent_hash: self.parent_hash,
+			data: f(self).await,
+		}
+	}
+}
+impl<Index, Hash, Data, Error> Header<Index, Hash, Result<Data, Error>>
+where
+	Index: aliases::Index,
+	Hash: aliases::Hash,
+	Data: aliases::Data,
+	Error: aliases::Data,
+{
+	pub async fn and_then_data<
+		T: aliases::Data,
+		Fut: Future<Output = Result<T, Error>>,
+		F: FnOnce(Header<Index, Hash, Data>) -> Fut,
+	>(
+		self,
+		f: F,
+	) -> Header<Index, Hash, Fut::Output> {
+		Header {
+			index: self.index,
+			hash: self.hash,
+			parent_hash: self.parent_hash,
+			data: match self.data {
+				Ok(data) =>
+					f(Header {
+						index: self.index,
+						hash: self.hash,
+						parent_hash: self.parent_hash,
+						data,
+					})
+					.await,
+				Err(error) => Err(error),
+			},
+		}
 	}
 }
 

@@ -10,22 +10,21 @@ use crate::witness::common::{
 
 use super::{then::ThenClient, ChunkedChainSource};
 
-pub struct LatestThen<Inner, ThenFn> {
+pub struct LatestThen<Inner, F> {
 	inner: Inner,
-	then_fn: ThenFn,
+	f: F,
 }
-impl<Inner, ThenFn> LatestThen<Inner, ThenFn> {
-	pub fn new(inner: Inner, then_fn: ThenFn) -> Self {
-		Self { inner, then_fn }
+impl<Inner, F> LatestThen<Inner, F> {
+	pub fn new(inner: Inner, f: F) -> Self {
+		Self { inner, f }
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChunkedChainSource, Output, Fut, ThenFn> ChunkedChainSource
-	for LatestThen<Inner, ThenFn>
+impl<Inner: ChunkedChainSource, Output, Fut, F> ChunkedChainSource for LatestThen<Inner, F>
 where
 	Output: aliases::Data,
 	Fut: Future<Output = Output> + Send,
-	ThenFn: Fn(
+	F: Fn(
 			Epoch<Inner::Info, Inner::HistoricInfo>,
 			Header<Inner::Index, Inner::Hash, Inner::Data>,
 		) -> Fut
@@ -40,7 +39,7 @@ where
 	type Hash = Inner::Hash;
 	type Data = Output;
 
-	type Client = ThenClient<Inner, ThenFn>;
+	type Client = ThenClient<Inner, F>;
 
 	type Chain = Inner::Chain;
 
@@ -63,15 +62,8 @@ where
 								async move {
 									let apply_then = |header: Header<_, _, _>| {
 										let epoch = epoch.clone();
-										async move {
-											Header {
-												index: header.index,
-												hash: header.hash,
-												parent_hash: header.parent_hash,
-												data: (self.then_fn)(epoch, header).await,
-											}
-										}
-										.boxed()
+										#[allow(clippy::redundant_async_block)]
+										header.then_data(move |header| async move { (self.f)(epoch, header).await }).boxed()
 									};
 
 									let (
@@ -120,7 +112,7 @@ where
 							},
 						)
 						.into_box(),
-						ThenClient::new(chain_client, self.then_fn.clone(), epoch),
+						ThenClient::new(chain_client, self.f.clone(), epoch),
 					)
 				}
 			})

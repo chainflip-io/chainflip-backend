@@ -9,25 +9,24 @@ use crate::witness::common::{
 
 use super::ChunkedChainSource;
 
-pub struct Then<Inner, F> {
+pub struct AndThen<Inner, F> {
 	inner: Inner,
 	f: F,
 }
-impl<Inner, F> Then<Inner, F> {
+impl<Inner, F> AndThen<Inner, F> {
 	pub fn new(inner: Inner, f: F) -> Self {
 		Self { inner, f }
 	}
 }
 #[async_trait::async_trait]
-impl<Inner, Output, Fut, F> ChunkedChainSource for Then<Inner, F>
+impl<Inner, Input, Output, Error, Fut, F> ChunkedChainSource for AndThen<Inner, F>
 where
+	Input: aliases::Data,
 	Output: aliases::Data,
-	Inner: ChunkedChainSource,
-	Fut: Future<Output = Output> + Send,
-	F: Fn(
-			Epoch<Inner::Info, Inner::HistoricInfo>,
-			Header<Inner::Index, Inner::Hash, Inner::Data>,
-		) -> Fut
+	Error: aliases::Data,
+	Inner: ChunkedChainSource<Data = Result<Input, Error>>,
+	Fut: Future<Output = Result<Output, Error>> + Send,
+	F: Fn(Epoch<Inner::Info, Inner::HistoricInfo>, Header<Inner::Index, Inner::Hash, Input>) -> Fut
 		+ Send
 		+ Sync
 		+ Clone,
@@ -37,9 +36,9 @@ where
 
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
-	type Data = Output;
+	type Data = Fut::Output;
 
-	type Client = ThenClient<Inner, F>;
+	type Client = AndThenClient<Inner, F>;
 
 	type Chain = Inner::Chain;
 
@@ -61,13 +60,13 @@ where
 							move |header| {
 								let epoch = epoch.clone();
 								#[allow(clippy::redundant_async_block)]
-								header.then_data(move |header| async move {
+								header.and_then_data(move |header| async move {
 									(self.f)(epoch, header).await
 								})
 							}
 						})
 						.into_box(),
-					ThenClient::new(chain_client, self.f.clone(), epoch),
+					AndThenClient::new(chain_client, self.f.clone(), epoch),
 				)
 			})
 			.await
@@ -75,13 +74,13 @@ where
 	}
 }
 
-pub struct ThenClient<Inner: ChunkedChainSource, F> {
+pub struct AndThenClient<Inner: ChunkedChainSource, F> {
 	inner_client: Inner::Client,
 	f: F,
 	epoch: Epoch<Inner::Info, Inner::HistoricInfo>,
 }
 
-impl<Inner: ChunkedChainSource, F: Clone> Clone for ThenClient<Inner, F> {
+impl<Inner: ChunkedChainSource, F: Clone> Clone for AndThenClient<Inner, F> {
 	fn clone(&self) -> Self {
 		Self {
 			inner_client: self.inner_client.clone(),
@@ -91,7 +90,7 @@ impl<Inner: ChunkedChainSource, F: Clone> Clone for ThenClient<Inner, F> {
 	}
 }
 
-impl<Inner: ChunkedChainSource, F> ThenClient<Inner, F> {
+impl<Inner: ChunkedChainSource, F> AndThenClient<Inner, F> {
 	pub fn new(
 		inner_client: Inner::Client,
 		f: F,
@@ -101,22 +100,21 @@ impl<Inner: ChunkedChainSource, F> ThenClient<Inner, F> {
 	}
 }
 #[async_trait::async_trait]
-impl<
-		Output: aliases::Data,
-		Inner: ChunkedChainSource,
-		Fut: Future<Output = Output> + Send,
-		F: Fn(
-				Epoch<Inner::Info, Inner::HistoricInfo>,
-				Header<Inner::Index, Inner::Hash, Inner::Data>,
-			) -> Fut
-			+ Send
-			+ Sync
-			+ Clone,
-	> ChainClient for ThenClient<Inner, F>
+impl<Input, Output, Error, Inner, Fut, F> ChainClient for AndThenClient<Inner, F>
+where
+	Input: aliases::Data,
+	Output: aliases::Data,
+	Error: aliases::Data,
+	Inner: ChunkedChainSource<Data = Result<Input, Error>>,
+	Fut: Future<Output = Result<Output, Error>> + Send,
+	F: Fn(Epoch<Inner::Info, Inner::HistoricInfo>, Header<Inner::Index, Inner::Hash, Input>) -> Fut
+		+ Send
+		+ Sync
+		+ Clone,
 {
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
-	type Data = Output;
+	type Data = Result<Output, Error>;
 
 	async fn header_at_index(
 		&self,
@@ -125,7 +123,7 @@ impl<
 		self.inner_client
 			.header_at_index(index)
 			.await
-			.then_data(move |header| (self.f)(self.epoch.clone(), header))
+			.and_then_data(move |header| (self.f)(self.epoch.clone(), header))
 			.await
 	}
 }

@@ -1,91 +1,88 @@
-use super::{aliases, BoxChainStream, ChainSource, Header};
+use super::{aliases, BoxChainStream, ChainSource, ChainStream, Header};
 
 use futures::Future;
 use futures_util::StreamExt;
 
 use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
-pub struct Then<InnerSource, ThenFn> {
+pub struct Then<InnerSource, F> {
 	inner_source: InnerSource,
-	then_fn: ThenFn,
+	f: F,
 }
 
-impl<InnerSource, ThenFn> Then<InnerSource, ThenFn> {
-	pub fn new(inner_source: InnerSource, then_fn: ThenFn) -> Self {
-		Self { inner_source, then_fn }
+impl<InnerSource, F> Then<InnerSource, F> {
+	pub fn new(inner_source: InnerSource, f: F) -> Self {
+		Self { inner_source, f }
 	}
 }
 
 #[async_trait::async_trait]
 impl<
-		InnerSource: ChainSource,
 		Output: aliases::Data,
+		InnerSource: ChainSource,
 		Fut: Future<Output = Output> + Send,
-		ThenFn: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> Fut
+		F: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
-	> ChainSource for Then<InnerSource, ThenFn>
+	> ChainSource for Then<InnerSource, F>
 {
 	type Index = InnerSource::Index;
 	type Hash = InnerSource::Hash;
 	type Data = Output;
 
-	type Client = MappedClient<InnerSource::Client, ThenFn>;
+	type Client = ThenClient<InnerSource::Client, F>;
 
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		let (inner_stream, inner_client) = self.inner_source.stream_and_client().await;
 
-		let mapped_stream = inner_stream.then(move |header| async move {
-			Header {
-				index: header.index,
-				hash: header.hash,
-				parent_hash: header.parent_hash,
-				data: (self.then_fn)(header).await,
-			}
-		});
-
-		(Box::pin(mapped_stream), MappedClient::new(inner_client, self.then_fn.clone()))
+		#[allow(clippy::redundant_async_block)]
+		(
+			inner_stream
+				.then(move |header| async move { header.then_data(&self.f).await })
+				.into_box(),
+			ThenClient::new(inner_client, self.f.clone()),
+		)
 	}
 }
 
 impl<
-		InnerSource: ExternalChainSource,
 		Output: aliases::Data,
+		InnerSource: ExternalChainSource,
 		Fut: Future<Output = Output> + Send,
-		ThenFn: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> Fut
+		F: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
-	> ExternalChainSource for Then<InnerSource, ThenFn>
+	> ExternalChainSource for Then<InnerSource, F>
 {
 	type Chain = InnerSource::Chain;
 }
 
 #[derive(Clone)]
-pub struct MappedClient<InnerClient, ThenFn> {
+pub struct ThenClient<InnerClient, F> {
 	inner_client: InnerClient,
-	then_fn: ThenFn,
+	f: F,
 }
 
-impl<InnerClient, ThenFn> MappedClient<InnerClient, ThenFn> {
-	pub fn new(inner_client: InnerClient, then_fn: ThenFn) -> Self {
-		Self { inner_client, then_fn }
+impl<InnerClient, F> ThenClient<InnerClient, F> {
+	pub fn new(inner_client: InnerClient, f: F) -> Self {
+		Self { inner_client, f }
 	}
 }
 
 #[async_trait::async_trait]
 impl<
-		InnerClient: ChainClient,
 		Output: aliases::Data,
+		InnerClient: ChainClient,
 		Fut: Future<Output = Output> + Send,
-		ThenFn: Fn(Header<InnerClient::Index, InnerClient::Hash, InnerClient::Data>) -> Fut
+		F: Fn(Header<InnerClient::Index, InnerClient::Hash, InnerClient::Data>) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
-	> ChainClient for MappedClient<InnerClient, ThenFn>
+	> ChainClient for ThenClient<InnerClient, F>
 {
 	type Index = InnerClient::Index;
 	type Hash = InnerClient::Hash;
@@ -95,13 +92,6 @@ impl<
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
-		let header = self.inner_client.header_at_index(index).await;
-
-		Header {
-			index: header.index,
-			hash: header.hash,
-			parent_hash: header.parent_hash,
-			data: (self.then_fn)(header).await,
-		}
+		self.inner_client.header_at_index(index).await.then_data(&self.f).await
 	}
 }

@@ -11,20 +11,32 @@ use crate::witness::common::{
 };
 
 use super::{
-	aliases, lag_safety::LagSafety, shared::SharedSource, strictly_monotonic::StrictlyMonotonic,
-	then::Then, ChainSource, Header,
+	aliases, and_then::AndThen, lag_safety::LagSafety, shared::SharedSource,
+	strictly_monotonic::StrictlyMonotonic, then::Then, ChainSource, Header,
 };
 
 #[async_trait::async_trait]
 pub trait ChainSourceExt: ChainSource {
-	fn then<Output, Fut, ThenFn>(self, then_fn: ThenFn) -> Then<Self, ThenFn>
+	fn then<Output, Fut, F>(self, f: F) -> Then<Self, F>
 	where
 		Self: Sized,
 		Output: aliases::Data,
 		Fut: Future<Output = Output> + Send,
-		ThenFn: Fn(Header<Self::Index, Self::Hash, Self::Data>) -> Fut + Send + Sync + Clone,
+		F: Fn(Header<Self::Index, Self::Hash, Self::Data>) -> Fut + Send + Sync + Clone,
 	{
-		Then::new(self, then_fn)
+		Then::new(self, f)
+	}
+
+	fn and_then<Input, Output, Error, Fut, F>(self, f: F) -> AndThen<Self, F>
+	where
+		Self: Sized + ChainSource<Data = Result<Input, Error>>,
+		Input: aliases::Data,
+		Output: aliases::Data,
+		Error: aliases::Data,
+		Fut: Future<Output = Result<Output, Error>> + Send,
+		F: Fn(Header<Self::Index, Self::Hash, Input>) -> Fut + Send + Sync + Clone,
+	{
+		AndThen::new(self, f)
 	}
 
 	fn lag_safety(self, margin: usize) -> LagSafety<Self>
