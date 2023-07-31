@@ -159,7 +159,9 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled);
+impl_pallet_safe_mode! {
+	PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled, broker_registration_enabled,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -371,6 +373,8 @@ pub mod pallet {
 		WithdrawalsDisabled,
 		/// Swap deposits are disabled due to Safe Mode.
 		DepositsDisabled,
+		/// Broker registration is disabled due to Safe Mode.
+		BrokerRegistrationDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -673,6 +677,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_as_broker())]
 		pub fn register_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
+
+			ensure!(
+				T::SafeMode::get().broker_registration_enabled,
+				Error::<T>::BrokerRegistrationDisabled,
+			);
 
 			T::AccountRoleRegistry::register_as_broker(&account_id)?;
 
