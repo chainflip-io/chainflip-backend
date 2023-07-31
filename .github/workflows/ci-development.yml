@@ -45,7 +45,7 @@ jobs:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: test/ # CHANGE
+      version: ci/0004e4376603758ceff5ba841d4f86d10972c1af/ CHANGE
       environment: dev
     secrets: inherit
   merge-commit-summary:
