@@ -1,7 +1,7 @@
 import { encodeAddress } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli';
 import { newSwap } from './new_swap';
-import { send } from './send';
+import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
   getChainflipApi,
@@ -85,6 +85,7 @@ export async function doPerformSwap(
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
+  depositViaContract?: boolean,
 ) {
   const chainflipApi = await getChainflipApi();
 
@@ -106,7 +107,10 @@ export async function doPerformSwap(
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
 
-  await send(sourceAsset, depositAddress);
+  await (depositViaContract
+    ? sendViaCfTester(sourceAsset, depositAddress)
+    : send(sourceAsset, depositAddress));
+
   console.log(`${tag} Funded the address`);
 
   await swapScheduledHandle;
@@ -131,6 +135,7 @@ export async function performSwap(
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
+  depositViaContract?: boolean,
 ) {
   const fee = 100;
 
@@ -150,5 +155,5 @@ export async function performSwap(
     tag,
     messageMetadata,
   );
-  await doPerformSwap(swapParams, tag, messageMetadata);
+  await doPerformSwap(swapParams, tag, messageMetadata, depositViaContract);
 }
