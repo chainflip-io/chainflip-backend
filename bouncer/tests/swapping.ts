@@ -144,22 +144,22 @@ async function testAll() {
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
-  // await approveTokenVault(
-  //   'USDC',
-  //   (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 5n).toString(),
-  // );
-  // await approveTokenVault(
-  //   'FLIP',
-  //   (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
-  // );
+  await approveTokenVault(
+    'USDC',
+    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 5n).toString(),
+  );
+  await approveTokenVault(
+    'FLIP',
+    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
+  );
 
   const ccmContractSwaps = Promise.all([
-    // testSwapViaContract('ETH', 'USDC', {
-    //   message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    //   sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
-    // }),
+    testSwapViaContract('ETH', 'USDC', {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
+    }),
     /*
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
@@ -177,10 +177,10 @@ async function testAll() {
   ]);
 
   const contractSwaps = Promise.all([
-    // testSwapViaContract('ETH', 'DOT'),
-    // testSwapViaContract('ETH', 'USDC'),
-    // testSwapViaContract('ETH', 'BTC'),
-    // testSwapViaContract('ETH', 'FLIP'),
+    testSwapViaContract('ETH', 'DOT'),
+    testSwapViaContract('ETH', 'USDC'),
+    testSwapViaContract('ETH', 'BTC'),
+    testSwapViaContract('ETH', 'FLIP'),
     /*
     testSwapViaContract('USDC', 'DOT'),
     testSwapViaContract('USDC', 'ETH'),
