@@ -14,9 +14,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChannelLifecycleHooks,
-	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
-	TransferAssetParams,
+	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -127,7 +127,7 @@ pub mod pallet {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			message_metadata: CcmDepositMetadata,
+			channel_metadata: CcmChannelMetadata,
 		},
 	}
 
@@ -626,13 +626,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
-				message_metadata,
+				channel_metadata,
 			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
 				amount.into(),
 				destination_asset,
 				destination_address,
-				message_metadata,
+				CcmDepositMetadata {
+					source_chain: asset.into(),
+					source_address: None,
+					channel_metadata,
+				},
 				SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
 						deposit_address.clone().into(),
@@ -791,15 +795,15 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		destination_address: ForeignChainAddress,
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
-		message_metadata: Option<CcmDepositMetadata>,
+		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
-			match message_metadata {
+			match channel_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
-					message_metadata: msg,
+					channel_metadata: msg,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,

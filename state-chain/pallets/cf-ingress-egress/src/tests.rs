@@ -424,14 +424,15 @@ fn can_process_ccm_deposit() {
 		let from_asset = eth::Asset::Flip;
 		let to_asset = Asset::Eth;
 		let destination_address = ForeignChainAddress::Eth(Default::default());
+		let channel_metadata = CcmChannelMetadata {
+			message: vec![0x00, 0x01, 0x02],
+			gas_budget: 1_000,
+			cf_parameters: vec![],
+		};
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00, 0x01, 0x02],
-				gas_budget: 1_000,
-				cf_parameters: vec![],
-			},
+			source_address: None,
+			channel_metadata: channel_metadata.clone(),
 		};
 		let amount = 5_000;
 
@@ -442,7 +443,7 @@ fn can_process_ccm_deposit() {
 			destination_address.clone(),
 			0,
 			1,
-			Some(ccm.clone()),
+			Some(channel_metadata),
 		));
 
 		// CCM action is stored.
@@ -464,7 +465,7 @@ fn can_process_ccm_deposit() {
 				deposit_amount: amount,
 				destination_asset: to_asset,
 				destination_address,
-				message_metadata: ccm,
+				deposit_metadata: ccm,
 				origin: SwapOrigin::DepositChannel {
 					deposit_address: MockAddressConverter::to_encoded_address(
 						deposit_address.into()

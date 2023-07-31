@@ -95,7 +95,7 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		message_metadata: Option<BrokerCcmDepositMetadata>,
+		deposit_metadata: Option<BrokerCcmDepositMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error>;
 }
 
@@ -122,9 +122,9 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		message_metadata: Option<BrokerCcmDepositMetadata>,
+		deposit_metadata: Option<BrokerCcmDepositMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error> {
-		let message_metadata = message_metadata.map(TryInto::try_into).transpose()?;
+		let deposit_metadata = deposit_metadata.map(TryInto::try_into).transpose()?;
 
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
@@ -132,7 +132,7 @@ impl RpcServer for RpcServerImpl {
 			destination_asset,
 			clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 			broker_commission_bps,
-			message_metadata,
+			deposit_metadata,
 		)
 		.await?)
 		.map(BrokerSwapDepositAddress::from)

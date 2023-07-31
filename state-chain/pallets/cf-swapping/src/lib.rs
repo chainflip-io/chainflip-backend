@@ -536,19 +536,13 @@ pub mod pallet {
 				)
 			}
 
-			let maybe_ccm_metadata = deposit_metadata.map(|metadata| CcmDepositMetadata {
-				source_chain: source_asset.into(),
-				source_address: None,
-				channel_metadata: metadata,
-			});
-
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
 				destination_asset,
 				destination_address_internal,
 				broker_commission_bps,
 				broker,
-				maybe_ccm_metadata,
+				deposit_metadata,
 			)?;
 
 			let expiry_block = frame_system::Pallet::<T>::current_block_number()

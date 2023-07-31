@@ -333,7 +333,7 @@ fn swap_expires() {
 			destination_address: ForeignChainAddress::Eth(Default::default()),
 			broker_commission_bps: 0,
 			broker_id: ALICE,
-			message_metadata: None,
+			channel_metadata: None,
 		};
 
 		assert_eq!(
