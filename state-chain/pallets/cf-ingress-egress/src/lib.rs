@@ -14,9 +14,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChainOrAddress,
-	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChannelLifecycleHooks,
+	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -63,8 +63,9 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub amount: C::ChainAmount,
 	pub destination_address: C::ChainAccount,
 	pub message: Vec<u8>,
-	// The sender of the deposit transaction. Can be a Chain or an Address.
-	pub source_address: ChainOrAddress,
+	// The sender of the deposit transaction.
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
 }
@@ -545,6 +546,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.destination_address,
 				},
+				ccm.source_chain,
 				ccm.source_address,
 				ccm.message,
 			) {
@@ -737,14 +739,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(CcmDepositMetadata { message, cf_parameters, source_address, .. }) =>
+			Some(CcmDepositMetadata { source_chain, source_address, channel_metadata }) =>
 				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 					egress_id,
 					asset,
 					amount,
 					destination_address: destination_address.clone(),
-					message,
-					cf_parameters,
+					message: channel_metadata.message,
+					cf_parameters: channel_metadata.cf_parameters,
+					source_chain,
 					source_address,
 				}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<

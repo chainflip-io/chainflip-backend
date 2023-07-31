@@ -1,9 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{
-		AccountRole, Asset, BasisPoints, BlockNumber, ChannelId, RequestDepositCcmMetadata,
-	},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -63,10 +61,10 @@ mod test {
 	}
 }
 
-impl TryInto<RequestDepositCcmMetadata> for BrokerCcmDepositMetadata {
+impl TryInto<CcmChannelMetadata> for BrokerCcmDepositMetadata {
 	type Error = anyhow::Error;
 
-	fn try_into(self) -> Result<RequestDepositCcmMetadata, Self::Error> {
+	fn try_into(self) -> Result<CcmChannelMetadata, Self::Error> {
 		let gas_budget = self
 			.gas_budget
 			.try_into()
@@ -81,7 +79,7 @@ impl TryInto<RequestDepositCcmMetadata> for BrokerCcmDepositMetadata {
 			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
 			.unwrap_or_default();
 
-		Ok(RequestDepositCcmMetadata { gas_budget, message, cf_parameters })
+		Ok(CcmChannelMetadata { gas_budget, message, cf_parameters })
 	}
 }
 

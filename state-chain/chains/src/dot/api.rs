@@ -117,7 +117,8 @@ where
 	fn new_unsigned(
 		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Polkadot>,
-		_source_address: ChainOrAddress,
+		_source_chain: ForeignChain,
+		_source_address: Option<ForeignChainAddress>,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Not implemented"))

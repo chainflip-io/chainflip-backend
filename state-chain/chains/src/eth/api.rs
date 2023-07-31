@@ -407,7 +407,8 @@ where
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Ethereum>,
-		source_address: ChainOrAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
@@ -421,6 +422,7 @@ where
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				egress_id,
 				transfer_param,
+				source_chain,
 				source_address,
 				message,
 			),

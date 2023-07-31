@@ -289,7 +289,8 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		source_address: ChainOrAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
@@ -310,49 +311,24 @@ pub enum SwapOrigin {
 	Vault { tx_hash: TransactionHash },
 }
 
-/// Metadata as part of a Cross Chain Message.
+/// Deposit channel Metadata for Cross-Chain-Message.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmChannelMetadata {
+	/// Call data used after the message is egressed.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
+	pub message: Vec<u8>,
+	/// User funds designated to be used for gas.
+	pub gas_budget: AssetAmount,
+	/// Additonal parameters for the cross chain message.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
+	pub cf_parameters: Vec<u8>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct CcmDepositMetadata {
-	/// Call data used after the message is egressed.
-	pub message: Vec<u8>,
-	/// User funds designated to be used for gas.
-	pub gas_budget: AssetAmount,
-	/// Additonal parameters for the cross chain message.
-	pub cf_parameters: Vec<u8>,
-	/// The source of the deposit, can be either a chain or a chain address.
-	pub source_address: ChainOrAddress,
-}
-
-/// CCM metadata wihtout `source_address` field.
-/// Only used when initiating CCM via deposit channel.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct RequestDepositCcmMetadata {
-	/// Call data used after the message is egressed.
-	pub message: Vec<u8>,
-	/// User funds designated to be used for gas.
-	pub gas_budget: AssetAmount,
-	/// Additonal parameters for the cross chain message.
-	pub cf_parameters: Vec<u8>,
-}
-
-impl RequestDepositCcmMetadata {
-	/// Builds `CcmDepositMetadata` with a Chain as the `source_address`.
-	pub fn into_ccm_metadata_with_chain(self, chain: ForeignChain) -> CcmDepositMetadata {
-		CcmDepositMetadata {
-			message: self.message,
-			gas_budget: self.gas_budget,
-			cf_parameters: self.cf_parameters,
-			source_address: ChainOrAddress::Chain(chain),
-		}
-	}
-}
-
-/// Enum that contains a ForeignChain or a ForeignChainAddress.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ChainOrAddress {
-	Chain(ForeignChain),
-	Address(ForeignChainAddress),
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
+	pub channel_metadata: CcmChannelMetadata,
 }

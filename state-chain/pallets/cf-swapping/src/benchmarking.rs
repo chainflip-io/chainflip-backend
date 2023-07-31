@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue, ChainOrAddress};
+use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
@@ -20,7 +20,7 @@ benchmarks! {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
 			broker_commission_bps: 0,
-			message_metadata: None,
+			deposit_metadata: None,
 		};
 	} : { call.dispatch_bypass_filter(origin.into())?; }
 
@@ -87,17 +87,20 @@ benchmarks! {
 
 		let origin = T::EnsureWitnessed::successful_origin();
 		let metadata = CcmDepositMetadata {
-			message: vec![0x00],
-			gas_budget: 1,
-			cf_parameters: vec![],
-			source_address: ChainOrAddress::Address(ForeignChainAddress::benchmark_value()),
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::benchmark_value()),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00],
+				gas_budget: 1,
+				cf_parameters: vec![],
+			}
 		};
 		let call = Call::<T>::ccm_deposit{
 			source_asset: Asset::Usdc,
 			deposit_amount: 1_000,
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			message_metadata: metadata,
+			deposit_metadata: metadata,
 			tx_hash: Default::default(),
 		};
 	}: {
@@ -132,7 +135,7 @@ benchmarks! {
 				destination_asset: Asset::Eth,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				broker_commission_bps: Default::default(),
-				message_metadata: None,
+				deposit_metadata: None,
 			};
 			call.dispatch_bypass_filter(origin.clone().into())?;
 		}

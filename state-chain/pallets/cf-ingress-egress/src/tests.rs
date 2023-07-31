@@ -5,7 +5,7 @@ use crate::{
 	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, eth::EthereumFetchId, ChainOrAddress, DepositChannel,
+	address::AddressConverter, eth::EthereumFetchId, CcmChannelMetadata, DepositChannel,
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -88,10 +88,13 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
 		let ccm = CcmDepositMetadata {
-			message: vec![0x00, 0x01, 0x02],
-			gas_budget: 1_000,
-			cf_parameters: vec![],
-			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00, 0x01, 0x02],
+				gas_budget: 1_000,
+				cf_parameters: vec![],
+			},
 		};
 
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
@@ -116,9 +119,10 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 				asset,
 				amount: 1_000,
 				destination_address: ALICE_ETH_ADDRESS.into(),
-				message: ccm.message.clone(),
+				message: ccm.channel_metadata.message.clone(),
+				source_chain: ForeignChain::Ethereum,
 				source_address: ccm.source_address.clone(),
-				cf_parameters: ccm.cf_parameters,
+				cf_parameters: ccm.channel_metadata.cf_parameters,
 			}]
 		);
 
@@ -421,10 +425,13 @@ fn can_process_ccm_deposit() {
 		let to_asset = Asset::Eth;
 		let destination_address = ForeignChainAddress::Eth(Default::default());
 		let ccm = CcmDepositMetadata {
-			message: vec![0x00, 0x01, 0x02],
-			gas_budget: 1_000,
-			cf_parameters: vec![],
-			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00, 0x01, 0x02],
+				gas_budget: 1_000,
+				cf_parameters: vec![],
+			},
 		};
 		let amount = 5_000;
 
@@ -475,10 +482,13 @@ fn can_egress_ccm() {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
 		let ccm = CcmDepositMetadata {
-			message: vec![0x00, 0x01, 0x02],
-			gas_budget: 1_000,
-			cf_parameters: vec![],
-			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00, 0x01, 0x02],
+				gas_budget: 1_000,
+				cf_parameters: vec![],
+			}
 		};
 		let amount = 5_000;
 		let egress_id = IngressEgress::schedule_egress(
@@ -495,9 +505,10 @@ fn can_egress_ccm() {
 				asset: destination_asset,
 				amount,
 				destination_address,
-				message: ccm.message.clone(),
+				message: ccm.channel_metadata.message.clone(),
 				cf_parameters: vec![],
-				source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
+				source_chain: ForeignChain::Ethereum,
+				source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -520,8 +531,9 @@ fn can_egress_ccm() {
 				amount,
 				to: destination_address
 			},
-			ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
-			ccm.message,
+			ccm.source_chain,
+			ccm.source_address,
+			ccm.channel_metadata.message,
 		).unwrap()]);
 
 		// Storage should be cleared
