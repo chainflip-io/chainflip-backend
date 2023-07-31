@@ -2,7 +2,7 @@ use super::*;
 use cf_chains::{address::ToHumanreadableAddress, Chain};
 use cf_primitives::chains::assets::any;
 use chainflip_engine::state_chain_observer::client::{
-	storage_api::StorageApi, StateChainStreamApi,
+	chain_api::ChainApi, storage_api::StorageApi, StateChainStreamApi,
 };
 pub use pallet_cf_pools::Pool;
 use serde::Deserialize;
