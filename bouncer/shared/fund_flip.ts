@@ -1,14 +1,18 @@
 import Web3 from 'web3';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { HexString } from '@polkadot/util/types';
+import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEthNonce } from './send_eth';
-import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
+import {
+  getEthContractAddress,
+  hexPubkeyToFlipAddress,
+  decodeFlipAddressForContract,
+} from './utils';
 import erc20abi from '../../eth-contract-abis/IERC20.json';
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 
-export async function fundFlip(pubkey: HexString, flipAmount: string) {
+export async function fundFlip(address: string, flipAmount: string) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
@@ -66,9 +70,17 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
     nonce: await getNextEthNonce(),
   };
 
-  console.log('Funding ' + flipAmount + ' FLIP to ' + pubkey);
-
-  const receipt2 = await fundStateChainAccount(pubkey, flipperinoAmount, options);
+  console.log('Funding ' + flipAmount + ' FLIP to ' + address);
+  let pubkey = address;
+  try {
+    pubkey = decodeFlipAddressForContract(address);
+  } catch {
+    // ignore error
+  }
+  if (pubkey.substr(0, 2) !== '0x') {
+    pubkey = '0x' + pubkey;
+  }
+  const receipt2 = await fundStateChainAccount(pubkey as HexString, flipperinoAmount, options);
 
   console.log(
     'Transaction complete, tx_hash: ' +

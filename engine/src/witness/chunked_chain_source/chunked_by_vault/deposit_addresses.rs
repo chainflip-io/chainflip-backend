@@ -267,7 +267,7 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn ingress_addresses<'env, StateChainStream, StateChainClient>(
+	pub async fn deposit_addresses<'env, StateChainStream, StateChainClient>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
