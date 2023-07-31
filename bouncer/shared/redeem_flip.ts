@@ -54,15 +54,14 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
   
 
   const nonce = await getNextEthNonce();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await executeRedemption(accountIdHex as any, { nonce, ...options });
-
+  
   const redemptionExecutedHandle = observeEvent(
     'funding:RedemptionSettled',
     chainflip,
     (event) => event.data[0] === flipWallet.address,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await executeRedemption(accountIdHex as any, { nonce, ...options });
   await redemptionExecutedHandle;
 }
