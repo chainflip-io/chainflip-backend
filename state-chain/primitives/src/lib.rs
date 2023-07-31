@@ -168,3 +168,27 @@ pub struct SemVer {
 	pub minor: u8,
 	pub patch: u8,
 }
+
+/// The network environment, used to determine which chains the Chainflip network is connected to.
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum NetworkEnvironment {
+	/// Chainflip is connected to public mainnet chains.
+	Mainnet,
+	/// Chainflip is connected to public testnet chains.
+	Testnet,
+	/// Chainflip is connected to a local development chains.
+	#[default]
+	Development,
+}
+
+#[cfg(feature = "std")]
+impl core::fmt::Display for NetworkEnvironment {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			NetworkEnvironment::Mainnet => write!(f, "Mainnet"),
+			NetworkEnvironment::Testnet => write!(f, "Testnet"),
+			NetworkEnvironment::Development => write!(f, "Development"),
+		}
+	}
+}

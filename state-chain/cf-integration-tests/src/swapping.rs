@@ -544,7 +544,7 @@ fn failed_swaps_are_rolled_back() {
 			Asset::Eth,
 			Asset::Btc,
 			1_000,
-			EncodedAddress::Btc("1JmRyKDGoGKu8dj1VAJZgMqWKa3muTyacB".as_bytes().to_vec()),
+			EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
 		);
 		witness_swap_ingress(
 			Asset::Btc,
