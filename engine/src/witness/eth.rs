@@ -1,6 +1,7 @@
 mod contract_common;
 mod erc20_deposits;
 mod eth_chain_tracking;
+mod eth_source;
 mod ethereum_deposits;
 mod key_manager;
 mod state_chain_gateway;
@@ -25,10 +26,10 @@ use crate::{
 };
 
 use super::common::{
-	chain_source::{eth_source::EthSource, extension::ChainSourceExt},
-	epoch_source::EpochSourceBuilder,
+	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
 	STATE_CHAIN_CONNECTION,
 };
+use eth_source::EthSource;
 use vault::EthAssetApi;
 
 use anyhow::{Context, Result};

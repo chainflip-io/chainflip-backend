@@ -6,15 +6,13 @@ use crate::{
 		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEthWebsocketBlockHeaderStream,
 	},
 	witness::common::{
-		chain_source::{ChainClient, ChainSource},
+		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChainSource,
 	},
 };
 use futures::stream::StreamExt;
 use futures_util::stream;
 use std::time::Duration;
-
-use super::{BoxChainStream, Header};
 
 #[derive(Clone)]
 pub struct EthSource<C> {

@@ -1,4 +1,5 @@
 mod btc_chain_tracking;
+mod btc_source;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -24,11 +25,9 @@ use crate::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
 };
+use btc_source::BtcSource;
 
-use super::common::{
-	chain_source::{btc_source::BtcSource, extension::ChainSourceExt},
-	epoch_source::EpochSourceBuilder,
-};
+use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 
 use anyhow::Result;
 

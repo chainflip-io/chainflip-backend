@@ -10,11 +10,13 @@ use crate::{
 		retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
 		rpc::PolkadotHeader,
 	},
-	witness::common::ExternalChainSource,
+	witness::common::{
+		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
+		ExternalChainSource,
+	},
 };
 use futures::{stream::StreamExt, Stream};
 
-use super::{BoxChainStream, ChainClient, ChainSource, Header};
 use anyhow::Result;
 use subxt::{self, config::Header as SubxtHeader};
 

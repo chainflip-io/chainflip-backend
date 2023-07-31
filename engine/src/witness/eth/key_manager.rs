@@ -187,6 +187,8 @@ mod tests {
 	use sp_core::H160;
 	use utilities::task_scope::task_scope;
 
+	use super::super::eth_source::EthSource;
+
 	use crate::{
 		eth::{
 			retry_rpc::EthersRetryRpcClient,
@@ -194,10 +196,7 @@ mod tests {
 		},
 		settings::{self},
 		state_chain_observer::client::StateChainClient,
-		witness::common::{
-			chain_source::{eth_source::EthSource, extension::ChainSourceExt},
-			epoch_source::EpochSource,
-		},
+		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
 
 	#[ignore = "requires connection to live network"]

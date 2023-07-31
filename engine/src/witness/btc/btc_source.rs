@@ -4,10 +4,12 @@ use bitcoin::BlockHash;
 use futures_util::stream;
 use utilities::make_periodic_tick;
 
-use super::{ChainClient, ChainSource, Header};
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
-	witness::common::{chain_source::BoxChainStream, ExternalChainSource},
+	witness::common::{
+		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
+		ExternalChainSource,
+	},
 };
 
 #[derive(Clone)]

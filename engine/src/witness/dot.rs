@@ -1,4 +1,5 @@
 mod dot_chain_tracking;
+mod dot_source;
 
 use cf_chains::{
 	dot::{
@@ -31,15 +32,12 @@ use crate::{
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
-	witness::common::chain_source::{dot_source::DotUnfinalisedSource, extension::ChainSourceExt},
+	witness::common::chain_source::extension::ChainSourceExt,
 };
-
 use anyhow::Result;
+use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
-use super::common::{
-	chain_source::dot_source::DotFinalisedSource, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
-};
+use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
 /// This event represents a rotation of the agg key. We have handed over control of the vault
 /// to the new aggregrate at this event.
