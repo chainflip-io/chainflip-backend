@@ -2,15 +2,15 @@
 // INSTRUCTIONS
 //
 // This command takes one argument
-// It will take the provided seed turn it into a new chainflip address and return the address
-// For example: ./commands/new_flip_address.ts foobar
+// It will take the provided seed turn it into a new state-chain address and return the address
+// For example: ./commands/new_statechain_address.ts foobar
 // returns: cFKRncCLfqn54fHG16d22ZMyGWgPgiShZehW7B2C65sYS5dff
 
-import { newFlipAddress } from '../shared/new_flip_address';
+import { newStatechainAddress } from '../shared/new_statechain_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '0';
-  const address = await newFlipAddress(seed);
+  const address = await newStatechainAddress(seed);
   console.log(address);
   process.exit(0);
 }

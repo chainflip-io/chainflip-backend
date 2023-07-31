@@ -11,7 +11,6 @@ import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import { newFlipAddress } from './new_flip_address';
 import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
 
 export const lpMutex = new Mutex();
@@ -188,7 +187,7 @@ export async function observeEvent(
   return result as Event;
 }
 
-export async function getAddress(
+export async function newAddress(
   asset: Asset,
   seed: string,
   type?: BtcAddressType,
@@ -197,8 +196,6 @@ export async function getAddress(
 
   switch (asset) {
     case 'FLIP':
-      rawAddress = await newFlipAddress(seed);
-      break;
     case 'ETH':
     case 'USDC':
       rawAddress = newEthAddress(seed);
@@ -254,7 +251,7 @@ export async function observeEVMEvent(
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
 
   // Gets all the event parameter as an array
-  const eventAbi = cfTesterAbi.find((item) => item.type === 'event' && item.name === eventName)!;
+  const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
 
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
@@ -269,6 +266,7 @@ export async function observeEVMEvent(
         toBlock: currentBlockNumber,
       });
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
+        console.log(events[j]);
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (

@@ -4,7 +4,7 @@ import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { performSwap } from '../shared/perform_swap';
 import {
-  getAddress,
+  newAddress,
   runWithTimeout,
   chainFromAsset,
   getEthContractAddress,
@@ -79,7 +79,7 @@ export async function prepareSwap(
     destAddress = getEthContractAddress('CFTESTER');
     console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
-    destAddress = await getAddress(destAsset, seed, addressType);
+    destAddress = await newAddress(destAsset, seed, addressType);
     console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
 
@@ -132,13 +132,13 @@ async function testAll() {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gas_budget: 5000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      source_address: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gas_budget: 5000000,
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      source_address: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
   ]);
 
@@ -174,7 +174,7 @@ async function testAll() {
       cf_parameters: '',
       source_address: {
         BTC: {
-          P2PKH: await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
+          P2PKH: await newAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
             encodeBtcAddressForContract(btcAddress);
           }),
         },
@@ -186,7 +186,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['uint256']),
       source_address: {
         BTC: {
-          P2SH: await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
+          P2SH: await newAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
             encodeBtcAddressForContract(btcAddress);
           }),
         },
@@ -197,7 +197,7 @@ async function testAll() {
       gas_budget: 1000000,
       cf_parameters: getAbiEncodedMessage(['string', 'string']),
       source_address: {
-        DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
+        DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
           decodeDotAddressForContract(dotAddress);
         }),
       },
@@ -207,7 +207,7 @@ async function testAll() {
       gas_budget: 1000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: {
-        DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
+        DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
           decodeDotAddressForContract(dotAddress);
         }),
       },
@@ -216,13 +216,13 @@ async function testAll() {
       message: getAbiEncodedMessage(),
       gas_budget: 5000000,
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      source_address: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
     testSwap('ETH', 'USDC', undefined, {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gas_budget: 5000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
-      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+      source_address: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
   ]);
 

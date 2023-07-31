@@ -3,7 +3,7 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
 import {
   observeEvent,
-  getAddress,
+  newAddress,
   getChainflipApi,
   decodeDotAddressForContract,
   handleSubstrateError,
@@ -29,7 +29,7 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
       )
     ).toJSON() === null
   ) {
-    let emergencyAddress = await getAddress(assetToChain(ccy).toUpperCase() as Asset, 'LP_1');
+    let emergencyAddress = await newAddress(assetToChain(ccy).toUpperCase() as Asset, 'LP_1');
     emergencyAddress =
       ccy === 'DOT' ? decodeDotAddressForContract(emergencyAddress) : emergencyAddress;
 
