@@ -20,7 +20,7 @@ benchmarks! {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
 			broker_commission_bps: 0,
-			deposit_metadata: None,
+			channel_metadata: None,
 		};
 	} : { call.dispatch_bypass_filter(origin.into())?; }
 
@@ -135,7 +135,7 @@ benchmarks! {
 				destination_asset: Asset::Eth,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				broker_commission_bps: Default::default(),
-				deposit_metadata: None,
+				channel_metadata: None,
 			};
 			call.dispatch_bypass_filter(origin.clone().into())?;
 		}
