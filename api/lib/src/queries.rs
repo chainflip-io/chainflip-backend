@@ -124,4 +124,47 @@ impl QueryApi {
 				.collect::<BTreeMap<_, _>>()
 		})
 	}
+
+	/// Get the
+	pub async fn get_range_orders(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, anyhow::Error> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		Ok(self
+			.state_chain_client
+			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+			.await?
+			.into_iter()
+			.map(|(asset, pool)| {
+				(
+					asset,
+					pool.pool_state
+						.range_orders
+						.positions()
+						.into_iter()
+						.filter_map(|((owner, upper_tick, lower_tick), liquidity)| {
+							if owner == account_id {
+								Some(RangeOrderPosition { upper_tick, lower_tick, liquidity })
+							} else {
+								None
+							}
+						})
+						.collect(),
+				)
+			})
+			.collect())
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RangeOrderPosition {
+	pub upper_tick: i32,
+	pub lower_tick: i32,
+	#[serde(with = "utilities::serde_helpers::number_or_hex")]
+	pub liquidity: u128,
 }

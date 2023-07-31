@@ -7,7 +7,7 @@ use chainflip_api::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain,
 	},
-	queries::Pool,
+	queries::{Pool, QueryApi, RangeOrderPosition},
 	settings::StateChain,
 	AccountId32,
 };
@@ -145,7 +145,10 @@ pub trait Rpc {
 	async fn asset_balances(&self) -> Result<String, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<String, Error>;
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error>;
 
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
@@ -222,13 +225,19 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<String, Error> {
-		lp::get_range_orders(&self.state_chain_settings)
-			.await
-			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output range orders as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error> {
+		Ok(task_scope(|scope| {
+			async move {
+				let api = QueryApi::connect(scope, &self.state_chain_settings).await?;
+				let range_orders = api.get_range_orders(None, account_id).await?;
+				Ok(range_orders)
+			}
+			.boxed()
+		})
+		.await?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -334,9 +343,7 @@ impl RpcServer for RpcServerImpl {
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
 		task_scope(|scope| {
 			async move {
-				let api =
-					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
-						.await?;
+				let api = QueryApi::connect(scope, &self.state_chain_settings).await?;
 
 				tokio::try_join!(
 					api.get_open_swap_channels::<Ethereum>(None),
@@ -370,8 +377,7 @@ async fn get_pools(
 ) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
 	Ok(task_scope(|scope| {
 		async move {
-			let api =
-				chainflip_api::queries::QueryApi::connect(scope, state_chain_settings).await?;
+			let api = QueryApi::connect(scope, state_chain_settings).await?;
 			api.get_pools(None, asset).await
 		}
 		.boxed()

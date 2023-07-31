@@ -144,42 +144,6 @@ pub async fn get_balances(
 	.await
 }
 
-pub async fn get_range_orders(
-	state_chain_settings: &settings::StateChain,
-) -> Result<HashMap<Asset, Vec<(Tick, Tick, Liquidity)>>> {
-	task_scope(|scope| {
-		async {
-			let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::LiquidityProvider,
-				false,
-			)
-			.await?;
-
-			futures::future::join_all(Asset::all().iter().map(|asset| async {
-				Ok((
-					*asset,
-					state_chain_client
-						.base_rpc_client
-						.pool_minted_positions(
-							state_chain_client.account_id(),
-							*asset,
-							state_chain_stream.cache().block_hash,
-						)
-						.await?,
-				))
-			}))
-			.await
-			.into_iter()
-			.collect()
-		}
-		.boxed()
-	})
-	.await
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MintRangeOrderReturn {
 	assets_debited: SideMap<AssetAmount>,
