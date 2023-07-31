@@ -131,14 +131,6 @@ impl WeightInfo for MockWeightInfo {
 	fn set_minimum_swap_amount() -> Weight {
 		Weight::from_ref_time(100)
 	}
-
-	fn set_minimum_ccm_gas_budget() -> Weight {
-		Weight::from_ref_time(100)
-	}
-}
-
-parameter_types! {
-	pub GasPrice: AssetAmount = 1_000;
 }
 
 impl pallet_cf_swapping::Config for Test {
