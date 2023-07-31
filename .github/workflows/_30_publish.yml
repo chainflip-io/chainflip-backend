@@ -94,17 +94,22 @@ jobs:
         run: |
           export AWS_SDK_LOAD_CONFIG=1
           gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys ${{ env.GPG_KEY_ID }}
-          aptly mirror create chainflip-${{ inputs.environment }} https://${REPO_BASIC_AUTH}@${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main
-          aptly mirror update chainflip-${{ inputs.environment }}
-          aptly snapshot create mirror_snapshot from mirror chainflip-${{ inputs.environment }}
           aptly repo create local
           aptly repo add local packages/*.deb
           aptly snapshot create local_snapshot from repo local
-          aptly snapshot merge -no-remove merged_snapshot local_snapshot mirror_snapshot
+          if aptly mirror create chainflip-${{ inputs.environment }} https://${REPO_BASIC_AUTH}@${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main; then
+            echo "Mirror created successfully"
+            aptly mirror update chainflip-${{ inputs.environment }}
+            aptly snapshot create mirror_snapshot from mirror chainflip-${{ inputs.environment }}
+            aptly snapshot merge -no-remove new_snapshot local_snapshot mirror_snapshot
+          else
+            echo "Mirror does not exist"
+            aptly snapshot create new_snapshot from snapshot local_snapshot
+          fi
 
       - name: Publish packages to chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}
         run: |
-          aptly publish -gpg-key=${{ env.GPG_KEY_ID }} -distribution=${{ steps.vars.outputs.codename }} snapshot merged_snapshot "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
+          aptly publish -gpg-key=${{ env.GPG_KEY_ID }} -distribution=${{ steps.vars.outputs.codename }} snapshot new_snapshot "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Set Summary Title
         if: inputs.environment == 'prod'
