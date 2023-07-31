@@ -1,3 +1,5 @@
+mod dot_chain_tracking;
+
 use cf_chains::{
 	dot::{
 		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotProxyType,
@@ -29,14 +31,14 @@ use crate::{
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
-	witness::chain_source::{dot_source::DotUnfinalisedSource, extension::ChainSourceExt},
+	witness::common::chain_source::{dot_source::DotUnfinalisedSource, extension::ChainSourceExt},
 };
 
 use anyhow::Result;
 
-use super::{
-	chain_source::dot_source::DotFinalisedSource, common::STATE_CHAIN_CONNECTION,
-	epoch_source::EpochSourceBuilder,
+use super::common::{
+	chain_source::dot_source::DotFinalisedSource, epoch_source::EpochSourceBuilder,
+	STATE_CHAIN_CONNECTION,
 };
 
 /// This event represents a rotation of the agg key. We have handed over control of the vault

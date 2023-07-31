@@ -1,13 +1,13 @@
 use futures_core::Future;
 use utilities::task_scope::Scope;
 
-use crate::witness::{
+use crate::witness::common::{
 	chunked_chain_source::{
 		chunked_by_time::{builder::ChunkedByTimeBuilder, ChunkByTime},
 		chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkByVault},
 	},
-	common::{ExternalChainSource, RuntimeHasChain},
 	epoch_source::{EpochSource, VaultSource},
+	ExternalChainSource, RuntimeHasChain,
 };
 
 use super::{

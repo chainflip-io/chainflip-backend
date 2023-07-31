@@ -14,7 +14,7 @@ use futures_util::stream;
 use state_chain_runtime::PalletInstanceAlias;
 use utilities::task_scope::Scope;
 
-use super::common::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
+use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 
 #[derive(Clone)]
 pub struct Epoch<Info, HistoricInfo> {

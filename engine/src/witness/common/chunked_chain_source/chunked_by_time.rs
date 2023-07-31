@@ -3,10 +3,10 @@ pub mod chain_tracking;
 
 use futures_util::StreamExt;
 
-use crate::witness::{
+use crate::witness::common::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
-	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource},
 	epoch_source::{Epoch, EpochSource},
+	BoxActiveAndFuture, ExternalChain, ExternalChainSource,
 };
 
 use super::ChunkedChainSource;

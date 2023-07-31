@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::witness::chain_source::{ChainClient, ChainStream};
 use cf_chains::ChainState;
 use frame_support::CloneNoBound;
 use futures::FutureExt;
@@ -17,9 +16,9 @@ use utilities::{
 
 use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
-	witness::{
-		chain_source::Header,
-		common::{RuntimeHasChain, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION},
+	witness::common::{
+		chain_source::{ChainClient, ChainStream, Header},
+		RuntimeHasChain, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
 	},
 };
 

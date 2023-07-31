@@ -1,10 +1,10 @@
 use futures_core::Future;
 use futures_util::StreamExt;
 
-use crate::witness::{
+use crate::witness::common::{
 	chain_source::{aliases, ChainClient, ChainStream, Header},
-	common::BoxActiveAndFuture,
 	epoch_source::Epoch,
+	BoxActiveAndFuture,
 };
 
 use super::ChunkedChainSource;

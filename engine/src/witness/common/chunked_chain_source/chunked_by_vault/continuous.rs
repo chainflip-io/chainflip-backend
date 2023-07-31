@@ -1,14 +1,15 @@
-use crate::witness::chunked_chain_source::chunked_by_vault::builder::ChunkedByVaultBuilder;
+use crate::witness::common::chunked_chain_source::chunked_by_vault::{
+	builder::ChunkedByVaultBuilder, ChunkedByVault,
+};
 use cf_primitives::EpochIndex;
 use core::iter::Step;
 use futures_util::stream;
 use std::sync::Arc;
 use utilities::{future_map::FutureMap, loop_select, rle_bitmap::RleBitmap};
 
-use super::ChunkedByVault;
 use crate::{
 	db::PersistentKeyDB,
-	witness::chain_source::{ChainClient, ChainStream},
+	witness::common::chain_source::{ChainClient, ChainStream},
 };
 use futures::{FutureExt, StreamExt};
 use serde::{de::DeserializeOwned, Serialize};

@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
 use utilities::{assert_stream_send, task_scope::Scope};
 
-use crate::witness::{
+use crate::witness::common::{
 	chain_source::{aliases, Header},
 	chunked_chain_source::{latest_then::LatestThen, then::Then, ChunkedChainSource},
 	epoch_source::Epoch,

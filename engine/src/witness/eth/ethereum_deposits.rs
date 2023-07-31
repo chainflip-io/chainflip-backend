@@ -12,7 +12,7 @@ use sp_core::H256;
 use state_chain_runtime::EthereumInstance;
 use std::sync::Arc;
 
-use crate::witness::vault::VaultEvents;
+use crate::witness::eth::vault::VaultEvents;
 
 use std::collections::BTreeMap;
 
@@ -22,13 +22,12 @@ use sp_core::U256;
 
 use crate::eth::rpc::address_checker::*;
 
-use crate::witness::{
-	chain_source::Header, contract_common::events_at_block, vault::FetchedNativeFilter,
-};
+use super::{contract_common::events_at_block, vault::FetchedNativeFilter};
+use crate::witness::common::chain_source::Header;
 
-use super::{
+use super::super::common::{
 	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
-	common::STATE_CHAIN_CONNECTION,
+	STATE_CHAIN_CONNECTION,
 };
 use crate::eth::retry_rpc::EthersRetryRpcApi;
 
@@ -208,15 +207,15 @@ mod tests {
 			rpc::{EthRpcClient, ReconnectSubscriptionClient},
 		},
 		settings::Settings,
-		witness::{chain_source::Header, contract_common::events_at_block},
+		witness::common::chain_source::Header,
 	};
 
-	use super::*;
+	use super::{super::contract_common::events_at_block, *};
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
 	use utilities::{assert_panics, task_scope};
 
-	use crate::witness::vault::VaultEvents;
+	use super::super::vault::VaultEvents;
 
 	#[test]
 	fn block_empty_lists() {

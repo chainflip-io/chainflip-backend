@@ -6,10 +6,10 @@ pub mod egress_items;
 use cf_chains::Chain;
 use futures_util::StreamExt;
 
-use crate::witness::{
+use crate::witness::common::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
-	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource, RuntimeHasChain},
 	epoch_source::{Vault, VaultSource},
+	BoxActiveAndFuture, ExternalChain, ExternalChainSource, RuntimeHasChain,
 };
 
 use super::ChunkedChainSource;

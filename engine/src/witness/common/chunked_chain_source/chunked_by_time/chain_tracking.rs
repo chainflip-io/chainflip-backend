@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cf_chains::ChainState;
 use state_chain_runtime::PalletInstanceAlias;
 
-use crate::witness::chain_source::Header;
+use crate::witness::common::chain_source::Header;
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,

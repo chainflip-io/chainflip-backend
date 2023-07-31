@@ -5,8 +5,8 @@ pub mod then;
 
 use super::{
 	chain_source::{aliases, BoxChainStream, ChainClient},
-	common::{BoxActiveAndFuture, ExternalChain},
 	epoch_source::Epoch,
+	BoxActiveAndFuture, ExternalChain,
 };
 
 #[async_trait::async_trait]

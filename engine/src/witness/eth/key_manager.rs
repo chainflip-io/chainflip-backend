@@ -13,8 +13,10 @@ use state_chain_runtime::EthereumInstance;
 use tracing::{info, trace};
 
 use super::{
-	chain_source::ChainClient,
-	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
+	super::common::{
+		chain_source::ChainClient,
+		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
+	},
 	contract_common::events_at_block,
 };
 use crate::{
@@ -192,7 +194,7 @@ mod tests {
 		},
 		settings::{self},
 		state_chain_observer::client::StateChainClient,
-		witness::{
+		witness::common::{
 			chain_source::{eth_source::EthSource, extension::ChainSourceExt},
 			epoch_source::EpochSource,
 		},

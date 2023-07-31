@@ -3,7 +3,7 @@ use std::{collections::VecDeque, iter::Step};
 use futures::stream;
 use futures_util::StreamExt;
 
-use crate::witness::{chain_source::ChainClient, common::ExternalChainSource};
+use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
 use super::{BoxChainStream, ChainSource, Header};
 

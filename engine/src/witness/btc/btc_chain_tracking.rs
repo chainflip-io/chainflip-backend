@@ -3,7 +3,7 @@ use bitcoin::BlockHash;
 use crate::btc::retry_rpc::BtcRetryRpcApi;
 use cf_chains::btc::{BitcoinFeeInfo, BitcoinTrackedData};
 
-use super::{
+use super::super::common::{
 	chain_source::Header, chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData,
 };
 

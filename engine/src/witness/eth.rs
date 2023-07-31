@@ -1,3 +1,11 @@
+mod contract_common;
+mod erc20_deposits;
+mod eth_chain_tracking;
+mod ethereum_deposits;
+mod key_manager;
+mod state_chain_gateway;
+pub mod vault;
+
 use std::sync::Arc;
 
 use utilities::task_scope::Scope;
@@ -13,15 +21,15 @@ use crate::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witness::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::{
+use super::common::{
 	chain_source::{eth_source::EthSource, extension::ChainSourceExt},
-	common::STATE_CHAIN_CONNECTION,
 	epoch_source::EpochSourceBuilder,
-	vault::EthAssetApi,
+	STATE_CHAIN_CONNECTION,
 };
+use vault::EthAssetApi;
 
 use anyhow::{Context, Result};
 

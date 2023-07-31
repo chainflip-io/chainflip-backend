@@ -1,6 +1,6 @@
 use crate::{
 	dot::PolkadotConfig,
-	witness::chain_source::{ChainClient, Header},
+	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
 	dot::{PolkadotHash, RuntimeVersion},

@@ -5,9 +5,9 @@ use crate::{
 	eth::{
 		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEthWebsocketBlockHeaderStream,
 	},
-	witness::{
+	witness::common::{
 		chain_source::{ChainClient, ChainSource},
-		common::ExternalChainSource,
+		ExternalChainSource,
 	},
 };
 use futures::stream::StreamExt;

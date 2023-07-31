@@ -1,3 +1,5 @@
+mod btc_chain_tracking;
+
 use std::{collections::HashMap, sync::Arc};
 
 use bitcoin::Transaction;
@@ -23,7 +25,7 @@ use crate::{
 	},
 };
 
-use super::{
+use super::common::{
 	chain_source::{btc_source::BtcSource, extension::ChainSourceExt},
 	epoch_source::EpochSourceBuilder,
 };

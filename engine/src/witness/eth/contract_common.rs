@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use crate::eth::retry_rpc::EthersRetryRpcApi;
 
-use super::chain_source::Header;
+use super::super::common::chain_source::Header;
 use anyhow::{anyhow, Result};
 use sp_core::{H160, H256, U256};
 

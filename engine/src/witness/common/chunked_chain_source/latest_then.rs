@@ -2,10 +2,10 @@ use futures_core::Future;
 use futures_util::{stream, FutureExt, StreamExt};
 use utilities::loop_select;
 
-use crate::witness::{
+use crate::witness::common::{
 	chain_source::{aliases, ChainStream, Header},
-	common::BoxActiveAndFuture,
 	epoch_source::Epoch,
+	BoxActiveAndFuture,
 };
 
 use super::{then::ThenClient, ChunkedChainSource};

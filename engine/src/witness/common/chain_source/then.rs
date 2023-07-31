@@ -3,7 +3,7 @@ use super::{aliases, BoxChainStream, ChainSource, Header};
 use futures::Future;
 use futures_util::StreamExt;
 
-use crate::witness::{chain_source::ChainClient, common::ExternalChainSource};
+use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
 pub struct Then<InnerSource, ThenFn> {
 	inner_source: InnerSource,

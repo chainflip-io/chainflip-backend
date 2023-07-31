@@ -1,10 +1,10 @@
-use crate::{eth::retry_rpc::EthersRetryRpcApi, witness::chain_source::Header};
+use crate::{eth::retry_rpc::EthersRetryRpcApi, witness::common::chain_source::Header};
 use cf_chains::eth::EthereumTrackedData;
 use ethers::types::Bloom;
 use sp_core::U256;
 use utilities::context;
 
-use super::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
+use super::super::common::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
 use ethers::types::H256;
 
 #[async_trait::async_trait]

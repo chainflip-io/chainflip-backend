@@ -16,9 +16,11 @@ use crate::{
 };
 
 use super::{
-	chain_source::Header,
-	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
-	common::STATE_CHAIN_CONNECTION,
+	super::common::{
+		chain_source::Header,
+		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
+		STATE_CHAIN_CONNECTION,
+	},
 	contract_common::events_at_block,
 };
 

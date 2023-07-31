@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::witness::chain_source::{ChainClient, ChainStream};
+use crate::witness::common::chain_source::{ChainClient, ChainStream};
 use frame_support::CloneNoBound;
 use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
@@ -9,10 +9,7 @@ use utilities::{loop_select, task_scope::Scope, UnendingStream};
 
 use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
-	witness::{
-		chain_source::Header,
-		common::{RuntimeHasChain, STATE_CHAIN_CONNECTION},
-	},
+	witness::common::{chain_source::Header, RuntimeHasChain, STATE_CHAIN_CONNECTION},
 };
 
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
