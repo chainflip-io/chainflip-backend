@@ -25,7 +25,7 @@ tracing = { version = "0.1", optional = true}
 tracing-subscriber = {version = "0.3", features = ["json", "env-filter"], optional = true}
 pin-project = {version = "1.0.12", optional = true}
 warp = {version = "0.3.5", optional = true}
-sp-rpc = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true}
+sp-rpc = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", optional = true}
 num-traits = {version = "0.2", optional = true}
 
 [dev-dependencies]

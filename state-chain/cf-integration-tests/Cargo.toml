@@ -26,7 +26,7 @@ cf-primitives = { path = '../primitives' }
 cf-test-utilities = { path = '../test-utilities' }
 cf-traits = { path = '../traits'}
 chainflip-node = { path = '../node'}
-pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles'}
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast'}
 pallet-cf-emissions = { path = '../pallets/cf-emissions'}
@@ -43,33 +43,33 @@ pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature'}
 pallet-cf-validator = { path = '../pallets/cf-validator'}
 pallet-cf-vaults = { path = '../pallets/cf-vaults'}
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser'}
-pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", features = ['historical'] }
+pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", features = ['historical'] }
 state-chain-runtime = { path = '../runtime'}
 
 # Substrate dependencies
 codec = { package = "parity-scale-codec", version = "3.1.1", features = ["derive"] }
 scale-info = { version = "2.1.1", features = ["derive"] }
 
-frame-executive = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+frame-executive = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
 
-pallet-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-pallet-randomness-collective-flip = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-pallet-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+pallet-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+pallet-randomness-collective-flip = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+pallet-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
 
-sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
 
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
