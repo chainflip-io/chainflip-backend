@@ -20,31 +20,28 @@ use chainflip_engine::{
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
-use codec::Decode;
 use futures::FutureExt;
 use jsonrpsee_subxt::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
+	make_periodic_tick,
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };
 use web3::types::U256;
 
-fn get_cfe_version() -> SemVer {
-	SemVer {
+lazy_static::lazy_static! {
+	static ref CFE_VERSION: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-	}
+	};
 }
 
-fn is_compatible_with_runtime(
-	cfe_version: &SemVer,
-	runtime_compatibility_version: &SemVer,
-) -> bool {
-	cfe_version.major == runtime_compatibility_version.major &&
-		cfe_version.minor == runtime_compatibility_version.minor
+fn is_compatible_with_runtime(runtime_compatibility_version: &SemVer) -> bool {
+	CFE_VERSION.major == runtime_compatibility_version.major &&
+		CFE_VERSION.minor == runtime_compatibility_version.minor
 }
 
 enum CfeStatus {
@@ -62,8 +59,6 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	let cfe_version = get_cfe_version();
-
 	task_scope(|scope| {
 		async move {
 			utilities::init_json_logger(scope).await;
@@ -76,17 +71,17 @@ async fn main() -> anyhow::Result<()> {
 
 			let mut cfe_status = CfeStatus::Idle;
 
+			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
 			loop {
-				let runtime_compatibility_version = {
-					let bytes: Vec<u8> = ws_rpc_client
-						.request("cf_current_compatibility_version", Vec::<()>::new())
-						.await
-						.unwrap();
-					SemVer::decode(&mut bytes.as_slice()).unwrap()
-				};
+				poll_interval.tick().await;
+
+				let runtime_compatibility_version: SemVer = ws_rpc_client
+					.request("cf_current_compatibility_version", Vec::<()>::new())
+					.await
+					.unwrap();
 
 				let compatible =
-					is_compatible_with_runtime(&cfe_version, &runtime_compatibility_version);
+					is_compatible_with_runtime(&runtime_compatibility_version);
 
 				match cfe_status {
 					CfeStatus::Active(_) =>
@@ -102,16 +97,14 @@ async fn main() -> anyhow::Result<()> {
 						if compatible {
 							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
-							let handle = scope.spawn_with_handle({
-								let settings = settings.clone();
+							let settings = settings.clone();
+							let handle = scope.spawn_with_handle(
 								task_scope(|scope| start(scope, settings).boxed())
-							});
+							);
 
 							cfe_status = CfeStatus::Active(handle);
 						},
 				}
-
-				tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 			}
 		}
 		.boxed()
@@ -153,7 +146,7 @@ async fn start(
 
 	state_chain_client
 		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
-			new_version: get_cfe_version(),
+			new_version: *CFE_VERSION,
 		})
 		.await
 		.until_finalized()
