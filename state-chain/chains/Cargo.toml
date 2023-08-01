@@ -64,6 +64,7 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'hex/std',
+  'hex/serde',
   'libsecp256k1/std',
   'log/std',
   'rlp/std',

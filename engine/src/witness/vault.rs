@@ -20,7 +20,7 @@ use super::{
 };
 
 use anyhow::{anyhow, Result};
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
+use cf_chains::{address::EncodedAddress, CcmChannelMetadata, CcmDepositMetadata};
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use ethers::prelude::*;
 
@@ -142,11 +142,14 @@ where
 				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
-			message_metadata: CcmDepositMetadata {
-				message: message.to_vec(),
-				gas_budget: try_into_primitive(gas_amount)?,
-				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: sender.into(),
+			deposit_metadata: CcmDepositMetadata {
+				source_chain: ForeignChain::Ethereum,
+				source_address: Some(sender.into()),
+				channel_metadata: CcmChannelMetadata {
+					message: message.to_vec(),
+					gas_budget: try_into_primitive(gas_amount)?,
+					cf_parameters: cf_parameters.0.to_vec(),
+				},
 			},
 			tx_hash: event.tx_hash.into(),
 		}),
@@ -176,11 +179,14 @@ where
 				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
-			message_metadata: CcmDepositMetadata {
-				message: message.to_vec(),
-				gas_budget: try_into_primitive(gas_amount)?,
-				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: sender.into(),
+			deposit_metadata: CcmDepositMetadata {
+				source_chain: ForeignChain::Ethereum,
+				source_address: Some(sender.into()),
+				channel_metadata: CcmChannelMetadata {
+					message: message.to_vec(),
+					gas_budget: try_into_primitive(gas_amount)?,
+					cf_parameters: cf_parameters.0.to_vec(),
+				},
 			},
 			tx_hash: event.tx_hash.into(),
 		}),
