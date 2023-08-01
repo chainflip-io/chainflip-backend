@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
 
 							cfe_status = CfeStatus::Active(handle);
 						} else {
-							tracing::info!("Current runtime is not compatible with this CFE version ({:?})", cfe_version);
+							tracing::info!("Current runtime is not compatible with this CFE version ({:?})", *CFE_VERSION);
 						}
 				}
 			}
