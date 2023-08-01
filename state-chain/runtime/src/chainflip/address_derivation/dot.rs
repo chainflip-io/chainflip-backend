@@ -24,10 +24,9 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
 		// Because we re-use addresses, we don't expect to hit this case in the wild.
-		// TODO: investigate this claim - we don't re-use addresses for Polkadot.
 		if channel_id > u16::MAX.into() {
 			return Err(DispatchError::Other(
-				"Intent ID too large. Polkadot can only support up to u16 addresses",
+				"Channel ID too large. Polkadot can only support up to u16::MAX addresses",
 			))
 		}
 

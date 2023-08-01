@@ -5,17 +5,17 @@ use rand::SeedableRng;
 use state_chain_runtime::constants::common::MAX_AUTHORITIES;
 
 use crate::{
-	bitcoin::BtcCryptoScheme,
+	bitcoin::BtcSigning,
 	client::{
 		common::{
 			BroadcastVerificationMessage, DelayDeserialization, KeygenStageName,
 			PreProcessStageDataCheck,
 		},
-		helpers::{gen_dummy_keygen_comm1, get_dummy_hash_comm},
+		helpers::{gen_dummy_keygen_comm3, get_dummy_hash_comm},
 		keygen::{BlameResponse8, Complaints6, KeygenData, PubkeyShares0, SecretShare5},
 	},
 	crypto::Rng,
-	eth::{EvmCryptoScheme, Point},
+	eth::{EthSigning, Point},
 };
 
 /// ==========================
@@ -47,7 +47,7 @@ pub fn gen_keygen_data_verify_hash_comm2(participant_count: AuthorityCount) -> K
 
 fn gen_keygen_data_coeff_comm3(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::CoeffComm3(DelayDeserialization::new(&gen_dummy_keygen_comm1::<Point>(
+	KeygenData::CoeffComm3(DelayDeserialization::new(&gen_dummy_keygen_comm3::<Point>(
 		&mut rng,
 		participant_count,
 	)))
@@ -55,7 +55,8 @@ fn gen_keygen_data_coeff_comm3(participant_count: AuthorityCount) -> KeygenData<
 
 fn gen_keygen_data_verify_coeff_comm4(
 	participant_count_outer: AuthorityCount,
-	participant_count_inner: AuthorityCount,
+	participant_count_inner_first_half: AuthorityCount,
+	participant_count_inner_second_half: AuthorityCount,
 ) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
 	KeygenData::VerifyCoeffComm4(BroadcastVerificationMessage {
@@ -63,9 +64,14 @@ fn gen_keygen_data_verify_coeff_comm4(
 			.map(|i| {
 				(
 					i as AuthorityCount,
-					Some(DelayDeserialization::new(&gen_dummy_keygen_comm1::<Point>(
+					Some(DelayDeserialization::new(&gen_dummy_keygen_comm3::<Point>(
 						&mut rng,
-						participant_count_inner,
+						// Use a 2 different sizes for a more complex test
+						if i <= participant_count_outer / 2 {
+							participant_count_inner_first_half
+						} else {
+							participant_count_inner_second_half
+						},
 					))),
 				)
 			})
@@ -84,15 +90,18 @@ fn gen_keygen_data_complaints6(participant_count: AuthorityCount) -> KeygenData<
 
 fn gen_keygen_data_verify_complaints7(
 	participant_count_outer: AuthorityCount,
-	participant_count_inner: AuthorityCount,
+	participant_count_inner_first_half: AuthorityCount,
+	participant_count_inner_second_half: AuthorityCount,
 ) -> KeygenData<Point> {
 	KeygenData::VerifyComplaints7(BroadcastVerificationMessage {
 		data: (1..=participant_count_outer)
 			.map(|i| {
-				(
-					i as AuthorityCount,
-					Some(Complaints6(BTreeSet::from_iter(1..=participant_count_inner))),
-				)
+				let inner_count = if i <= participant_count_outer / 2 {
+					participant_count_inner_first_half
+				} else {
+					participant_count_inner_second_half
+				};
+				(i as AuthorityCount, Some(Complaints6(BTreeSet::from_iter(1..=inner_count))))
 			})
 			.collect(),
 	})
@@ -109,17 +118,20 @@ fn gen_keygen_data_blame_response8(participant_count: AuthorityCount) -> KeygenD
 
 fn gen_keygen_data_verify_blame_response9(
 	outer_len: AuthorityCount,
-	inner_len: AuthorityCount,
+	inner_len_first_half: AuthorityCount,
+	inner_len_second_half: AuthorityCount,
 ) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
 	KeygenData::VerifyBlameResponses9(BroadcastVerificationMessage {
 		data: (0..outer_len)
 			.map(|i| {
+				let inner_count =
+					if i <= outer_len / 2 { inner_len_first_half } else { inner_len_second_half };
 				(
 					i as AuthorityCount,
 					// Create a nested collection with a changing size
 					Some(BlameResponse8(
-						(0..inner_len)
+						(0..inner_count)
 							.map(|i| (i, SecretShare5::create_random(&mut rng)))
 							.collect(),
 					)),
@@ -142,129 +154,134 @@ fn check_data_size_pubkey_shares0() {
 
 	// Should pass with the correct data length
 	assert!(gen_keygen_data_pubkey_shares0(max_expected_len)
-		.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
+		.is_initial_stage_data_size_valid::<BtcSigning>());
 
 	// Should pass with an empty message (This is expected behaviour for non-sharing parties)
-	assert!(gen_keygen_data_pubkey_shares0(0).initial_stage_data_size_is_valid::<BtcCryptoScheme>());
+	assert!(gen_keygen_data_pubkey_shares0(0).is_initial_stage_data_size_valid::<BtcSigning>());
 
 	// Should fail on sizes larger than expected
 	assert!(!gen_keygen_data_pubkey_shares0(max_expected_len + 1)
-		.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
+		.is_initial_stage_data_size_valid::<BtcSigning>());
 }
 
 #[test]
 fn check_data_size_verify_hash_comm2() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass with the correct data length
-	assert!(gen_keygen_data_verify_hash_comm2(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(
+		gen_keygen_data_verify_hash_comm2(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, None)
+	);
 
 	// Should fail on sizes larger or smaller than expected
-	assert!(!gen_keygen_data_verify_hash_comm2(expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(!gen_keygen_data_verify_hash_comm2(expected_len - 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_hash_comm2(PARTIES + 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(!gen_keygen_data_verify_hash_comm2(PARTIES - 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_coeff_comm3() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_coeff_comm3(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(gen_keygen_data_coeff_comm3(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	assert!(!gen_keygen_data_coeff_comm3(MAX_AUTHORITIES + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_verify_coeff_comm4() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass when both collections are the correct size
-	assert!(gen_keygen_data_verify_coeff_comm4(expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(gen_keygen_data_verify_coeff_comm4(PARTIES, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// Should fail if the outer collection is larger than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len + 1, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES + 1, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// Should fail if the outer collection is smaller than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len - 1, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES - 1, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
-	// The nested collection should fail if larger than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, MAX_AUTHORITIES + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	// The nested collection should fail if any of its elements are larger than the max size
+	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES, PARTIES, MAX_AUTHORITIES + 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_complaints6() {
-	let expected_len: AuthorityCount = 4;
+	const NUM_OF_PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_complaints6(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(gen_keygen_data_complaints6(0).data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(gen_keygen_data_complaints6(NUM_OF_PARTIES)
+		.is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, None));
+	assert!(gen_keygen_data_complaints6(0).is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, None));
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_complaints6(expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_complaints6(NUM_OF_PARTIES + 1)
+		.is_data_size_valid::<EthSigning>(NUM_OF_PARTIES, None));
 }
 
 #[test]
 fn check_data_size_verify_complaints7() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass when both collections are the correct size
-	assert!(gen_keygen_data_verify_complaints7(expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(gen_keygen_data_verify_complaints7(expected_len, 0)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, 0)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// The outer collection should fail if larger or smaller than expected
-	assert!(!gen_keygen_data_verify_complaints7(expected_len + 1, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(!gen_keygen_data_verify_complaints7(expected_len - 1, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_complaints7(PARTIES + 1, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(!gen_keygen_data_verify_complaints7(PARTIES - 1, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// The nested collection should fail if larger than expected
-	assert!(!gen_keygen_data_verify_complaints7(expected_len, expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES + 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES - 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_blame_response8() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_blame_response8(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(gen_keygen_data_blame_response8(0).data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(
+		gen_keygen_data_blame_response8(PARTIES).is_data_size_valid::<EthSigning>(PARTIES, None)
+	);
+	assert!(gen_keygen_data_blame_response8(0).is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_blame_response8(expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_blame_response8(PARTIES + 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_verify_blame_responses9() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass when both collections are the correct size
-	assert!(gen_keygen_data_verify_blame_response9(expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(gen_keygen_data_verify_blame_response9(expected_len, 0)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, 0)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// The outer collection should fail if larger or smaller than expected
-	assert!(!gen_keygen_data_verify_blame_response9(expected_len + 1, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
-	assert!(!gen_keygen_data_verify_blame_response9(expected_len - 1, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_blame_response9(PARTIES + 1, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(!gen_keygen_data_verify_blame_response9(PARTIES - 1, PARTIES, PARTIES)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 
 	// The nested collection should fail if larger than expected
-	assert!(!gen_keygen_data_verify_blame_response9(expected_len, expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len));
+	assert!(!gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES + 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
+	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES - 1)
+		.is_data_size_valid::<EthSigning>(PARTIES, None));
 }
 
 #[test]
@@ -280,12 +297,12 @@ fn should_delay_correct_data_for_stage() {
 		gen_keygen_data_hash_comm1(),
 		gen_keygen_data_verify_hash_comm2(default_length),
 		gen_keygen_data_coeff_comm3(default_length),
-		gen_keygen_data_verify_coeff_comm4(default_length, default_length),
+		gen_keygen_data_verify_coeff_comm4(default_length, default_length, default_length),
 		gen_keygen_secret_shares5(),
 		gen_keygen_data_complaints6(default_length),
-		gen_keygen_data_verify_complaints7(default_length, default_length),
+		gen_keygen_data_verify_complaints7(default_length, default_length, default_length),
 		gen_keygen_data_blame_response8(default_length),
-		gen_keygen_data_verify_blame_response9(default_length, default_length),
+		gen_keygen_data_verify_blame_response9(default_length, default_length, default_length),
 	];
 
 	assert_eq!(stage_names.len(), stage_data.len());

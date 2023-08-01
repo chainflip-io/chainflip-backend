@@ -19,7 +19,7 @@ pub struct CcmRequest {
 	pub deposit_amount: AssetAmount,
 	pub destination_asset: Asset,
 	pub destination_address: ForeignChainAddress,
-	pub message_metadata: CcmDepositMetadata,
+	pub deposit_metadata: CcmDepositMetadata,
 	pub origin: SwapOrigin,
 }
 
@@ -35,7 +35,7 @@ impl CcmHandler for MockCcmHandler {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		message_metadata: CcmDepositMetadata,
+		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 	) {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
@@ -48,7 +48,7 @@ impl CcmHandler for MockCcmHandler {
 					deposit_amount,
 					destination_asset,
 					destination_address,
-					message_metadata,
+					deposit_metadata,
 					origin,
 				});
 			})

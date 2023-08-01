@@ -41,6 +41,8 @@ To connect to a remote network such as a Devnet, you need to set the following e
  export POLKADOT_ENDPOINT=
  export BTC_ENDPOINT=
  export ETH_ENDPOINT=
+ export BROKER_ENDPOINT=
+ ...
 ```
 
 The values for your network can be found in the `eth-contracts` vault in 1Password.

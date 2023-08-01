@@ -61,6 +61,18 @@ impl Chain for MockEthereum {
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
 	type DepositChannelState = MockLifecycleHooks;
+	type DepositDetails = [u8; 4];
+}
+
+impl ToHumanreadableAddress for u64 {
+	type Humanreadable = u64;
+
+	fn to_humanreadable(
+		&self,
+		_network_environment: cf_primitives::NetworkEnvironment,
+	) -> Self::Humanreadable {
+		*self
+	}
 }
 
 impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
@@ -86,6 +98,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct MockTrackedData {
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
@@ -167,8 +180,6 @@ impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
 impl_default_benchmark_value!(MockTransaction);
 
 pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
-
-pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionInId = [0xbc; 4];
 
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };

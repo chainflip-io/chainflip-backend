@@ -115,7 +115,7 @@ impl SubmissionHolder {
 	}
 }
 
-const MAX_DELAY_TIME_MILLIS: Duration = Duration::from_secs(60 * 20);
+const MAX_DELAY_TIME_MILLIS: Duration = Duration::from_secs(10 * 60);
 
 fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Duration {
 	min(MAX_DELAY_TIME_MILLIS, initial_request_timeout.saturating_mul(2u32.saturating_pow(attempt)))

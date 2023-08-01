@@ -1,12 +1,4 @@
-use std::{
-	ops::{Deref, DerefMut},
-	time::Duration,
-};
-
-use futures::Future;
-use tracing::log;
-
-use crate::witnesser::{epoch_process_runner::EpochProcessRunnerError, EpochStart};
+use std::ops::{Deref, DerefMut};
 
 struct MutexStateAndPoisonFlag<T> {
 	poisoned: bool,
@@ -93,99 +85,6 @@ mod tests {
 			.unwrap();
 		}
 		mutex.lock().await;
-	}
-}
-
-/// Starts a task and restarts if it fails.
-/// If it succeeds it will terminate, and not attempt a restart.
-/// The `StaticState` is used to allow for state to be shared between restarts.
-/// Such as a Receiver a task might need to continue to receive data from some other task,
-/// despite the fact it has been restarted.
-pub async fn start_with_restart_on_failure<TaskFut, C: cf_chains::Chain>(
-	task_generator: impl Fn(Option<EpochStart<C>>) -> TaskFut,
-) where
-	TaskFut: Future<Output = Result<(), EpochProcessRunnerError<C>>> + Send + 'static,
-{
-	let mut resume_at = None;
-
-	// Spawn with handle and then wait for future to finish
-	loop {
-		match task_generator(resume_at.clone()).await {
-			Ok(_) => {
-				log::info!("Task finished successfully");
-				break
-			},
-			Err(EpochProcessRunnerError::WitnesserError(epoch_start)) => {
-				log::info!("Witnesser aborted, resuming at {:?}", epoch_start);
-				resume_at.replace(epoch_start);
-			},
-			Err(EpochProcessRunnerError::Other(e)) => {
-				log::info!("Restarting failed task. Error: {:?}", e);
-			},
-		}
-		tokio::time::sleep(Duration::from_secs(2)).await;
-	}
-}
-
-#[cfg(test)]
-mod test_restart_on_failure {
-
-	use cf_chains::Ethereum;
-
-	use super::*;
-
-	#[tokio::test(start_paused = true)]
-	async fn test_restart_on_failure() {
-		use std::sync::{Arc, Mutex};
-		let restart_count = Arc::new(Mutex::new(0));
-		let restart_count_to_move = restart_count.clone();
-
-		const TARGET: usize = 6;
-
-		fn make_epoch_start(n: u32) -> EpochStart<Ethereum> {
-			EpochStart {
-				epoch_index: n,
-				block_number: Default::default(),
-				current: Default::default(),
-				participant: Default::default(),
-				data: Default::default(),
-			}
-		}
-
-		let start_up_some_loop = move |epoch_start: Option<EpochStart<Ethereum>>| {
-			let restart_count = restart_count_to_move.clone();
-			async move {
-				let mut restart_count = restart_count.lock().unwrap();
-				*restart_count += 1;
-
-				let epoch_start =
-					epoch_start.unwrap_or_else(|| make_epoch_start(*restart_count as u32));
-
-				if *restart_count == TARGET {
-					return Ok(())
-				}
-
-				for i in 0..10 {
-					if i == 4 {
-						return Err(().into())
-					}
-					if i == 5 {
-						return Err(EpochProcessRunnerError::WitnesserError(epoch_start))
-					}
-					if i == 6 {
-						assert_eq!(epoch_start.epoch_index, *restart_count as u32 - 1)
-					} else {
-						assert_eq!(epoch_start.epoch_index, *restart_count as u32)
-					}
-				}
-
-				panic!("Should not reach here");
-			}
-		};
-
-		start_with_restart_on_failure(start_up_some_loop).await;
-
-		assert_eq!(*restart_count.lock().unwrap(), TARGET);
 	}
 }
 

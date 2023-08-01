@@ -38,7 +38,6 @@ pub trait WeightInfo {
 	fn on_initialize(a: u32, ) -> Weight;
 	fn set_swap_ttl() -> Weight;
 	fn set_minimum_swap_amount() -> Weight;
-	fn set_minimum_ccm_gas_budget() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -125,9 +124,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn set_minimum_swap_amount() -> Weight {
 		Weight::from_ref_time(1_000_000)
 	}
-	fn set_minimum_ccm_gas_budget() -> Weight {
-		Weight::from_ref_time(1_000_000)
-	}
 }
 
 // For backwards compatibility and tests
@@ -210,9 +206,6 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	fn set_minimum_swap_amount() -> Weight {
-		Weight::from_ref_time(1_000_000)
-	}
-	fn set_minimum_ccm_gas_budget() -> Weight {
 		Weight::from_ref_time(1_000_000)
 	}
 }

@@ -1,6 +1,6 @@
 use crate::{
 	dot::PolkadotConfig,
-	witness::chain_source::{ChainClient, Header},
+	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
 	dot::{PolkadotHash, RuntimeVersion},
@@ -10,11 +10,7 @@ use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
 use futures_core::Stream;
 use std::pin::Pin;
-use subxt::{
-	config::Header as SubxtHeader,
-	events::Events,
-	rpc::types::{ChainBlockExtrinsic, ChainBlockResponse},
-};
+use subxt::{config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic};
 use utilities::task_scope::Scope;
 
 use crate::retrier::RetrierClient;
@@ -62,9 +58,7 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>>;
-
-	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>>;
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
 
 	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
 
@@ -84,20 +78,15 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>> {
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic> {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.block(block_hash).await })
-			}))
-			.await
-	}
-
-	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>> {
-		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.extrinsics(block_hash).await })
+				Box::pin(async move {
+					client.extrinsics(block_hash).await?.ok_or(anyhow::anyhow!(
+						"Block not found when querying for extrinsics at block hash {block_hash}"
+					))
+				})
 			}))
 			.await
 	}
@@ -235,7 +224,7 @@ mod tests {
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);
 
-				let extrinsics = dot_retry_rpc_client.extrinsics(hash).await.unwrap();
+				let extrinsics = dot_retry_rpc_client.extrinsics(hash).await;
 				println!("extrinsics: {:?}", extrinsics);
 
 				let events = dot_retry_rpc_client.events(hash).await;

@@ -14,8 +14,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
-	Ethereum, Polkadot, SwapOrigin,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChainCrypto, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -668,11 +668,11 @@ pub trait DepositApi<C: Chain> {
 		destination_address: ForeignChainAddress,
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
-		message_metadata: Option<CcmDepositMetadata>,
+		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
-	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
+	fn expire_channel(address: C::ChainAccount);
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -776,16 +776,16 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait DepositHandler<C: ChainCrypto> {
+pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
-		_tx_id: <C as ChainCrypto>::TransactionInId,
-		_amount: <C as Chain>::ChainAmount,
-		_address: <C as Chain>::ChainAccount,
-		_asset: <C as Chain>::ChainAsset,
+		_deposit_details: C::DepositDetails,
+		_amount: C::ChainAmount,
+		_address: C::ChainAccount,
+		_asset: C::ChainAsset,
 	) {
 	}
 	fn on_channel_opened(
-		_address: <C as Chain>::ChainAccount,
+		_address: C::ChainAccount,
 		_channel_id: ChannelId,
 	) -> Result<(), DispatchError> {
 		Ok(())
@@ -800,7 +800,7 @@ pub trait CcmHandler {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		message_metadata: CcmDepositMetadata,
+		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 	);
 }
@@ -811,7 +811,7 @@ impl CcmHandler for () {
 		_deposit_amount: AssetAmount,
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
-		_message_metadata: CcmDepositMetadata,
+		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
 	) {
 	}

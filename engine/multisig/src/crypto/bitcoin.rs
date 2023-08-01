@@ -38,7 +38,6 @@ impl SignatureToThresholdSignature<Bitcoin> for Vec<BtcSchnorrSignature> {
 	}
 }
 
-/// Bitcoin crypto scheme (as defined by BIP 340)
 #[derive(Clone, Debug, PartialEq)]
 pub struct BtcSigning {}
 
@@ -56,7 +55,9 @@ impl AsRef<[u8]> for SigningPayload {
 		&self.0
 	}
 }
+
 #[derive(Clone, Debug, PartialEq)]
+/// Bitcoin crypto scheme (as defined by BIP 340)
 pub struct BtcCryptoScheme;
 
 impl ChainSigning for BtcSigning {
@@ -64,6 +65,10 @@ impl ChainSigning for BtcSigning {
 	type Chain = cf_chains::Bitcoin;
 	const NAME: &'static str = "Bitcoin";
 	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
+
+	/// The window is smaller for bitcoin because its block time is a lot longer and it supports
+	/// multiple signing payloads
+	const CEREMONY_ID_WINDOW: u64 = 1500;
 }
 
 impl CryptoScheme for BtcCryptoScheme {

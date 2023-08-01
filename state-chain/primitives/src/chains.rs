@@ -1,5 +1,5 @@
 use super::*;
-use frame_support::traits::Get;
+pub use frame_support::traits::Get;
 use sp_std::str::FromStr;
 
 pub mod assets;
@@ -18,6 +18,12 @@ macro_rules! chains {
 
 			impl Get<ForeignChain> for $chain {
 				fn get() -> ForeignChain {
+					ForeignChain::$chain
+				}
+			}
+
+			impl From<$chain> for ForeignChain {
+				fn from(_: $chain) -> ForeignChain {
 					ForeignChain::$chain
 				}
 			}
