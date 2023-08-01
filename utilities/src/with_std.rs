@@ -317,7 +317,7 @@ macro_rules! print_starting {
 /// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
+pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
@@ -337,61 +337,66 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 		reload_handle
 	};
 
-	scope.spawn_weak(async move {
-		const PATH: &str = "tracing";
-		const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
-		const PORT: u16 = 36079;
+	|scope| {
+		scope.spawn_weak(async move {
+			const PATH: &str = "tracing";
+			const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
+			const PORT: u16 = 36079;
 
-		let change_filter = warp::post()
-			.and(warp::path(PATH))
-			.and(warp::path::end())
-			.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
-			.and(warp::body::json())
-			.then({
-				let reload_handle = reload_handle.clone();
-				move |filter: String| {
-					futures::future::ready(
-						match EnvFilter::builder()
-							.with_default_directive(LevelFilter::INFO.into())
-							.parse(filter)
-						{
-							Ok(env_filter) => match reload_handle.reload(env_filter) {
-								Ok(_) => warp::reply().into_response(),
+			let change_filter = warp::post()
+				.and(warp::path(PATH))
+				.and(warp::path::end())
+				.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
+				.and(warp::body::json())
+				.then({
+					let reload_handle = reload_handle.clone();
+					move |filter: String| {
+						futures::future::ready(
+							match EnvFilter::builder()
+								.with_default_directive(LevelFilter::INFO.into())
+								.parse(filter)
+							{
+								Ok(env_filter) => match reload_handle.reload(env_filter) {
+									Ok(_) => warp::reply().into_response(),
+									Err(error) => warp::reply::with_status(
+										warp::reply::json(&error.to_string()),
+										warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+									)
+									.into_response(),
+								},
 								Err(error) => warp::reply::with_status(
 									warp::reply::json(&error.to_string()),
-									warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+									warp::http::StatusCode::BAD_REQUEST,
 								)
 								.into_response(),
 							},
-							Err(error) => warp::reply::with_status(
-								warp::reply::json(&error.to_string()),
-								warp::http::StatusCode::BAD_REQUEST,
-							)
-							.into_response(),
-						},
-					)
-				}
-			});
+						)
+					}
+				});
 
-		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
-			futures::future::ready({
-				let (status, message) =
-					match reload_handle.with_current(|env_filter| env_filter.to_string()) {
-						Ok(reply) => (warp::http::StatusCode::OK, reply),
-						Err(error) =>
-							(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
-					};
+			let get_filter =
+				warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
+					futures::future::ready({
+						let (status, message) = match reload_handle
+							.with_current(|env_filter| env_filter.to_string())
+						{
+							Ok(reply) => (warp::http::StatusCode::OK, reply),
+							Err(error) =>
+								(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+						};
 
-				warp::reply::with_status(warp::reply::json(&message), status).into_response()
-			})
+						warp::reply::with_status(warp::reply::json(&message), status)
+							.into_response()
+					})
+				});
+
+			warp::serve(change_filter.or(get_filter))
+				.run((std::net::Ipv4Addr::LOCALHOST, PORT))
+				.await;
+
+			Ok(())
 		});
-
-		warp::serve(change_filter.or(get_filter))
-			.run((std::net::Ipv4Addr::LOCALHOST, PORT))
-			.await;
-
-		Ok(())
-	});
+	}
 }
 
 // We use PathBuf because the value must be Sized, Path is not Sized

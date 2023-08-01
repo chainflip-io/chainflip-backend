@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			utilities::init_json_logger(scope).await;
+			let mut start_logger_server_fn = Some(utilities::init_json_logger().await);
 
 			// Note that we use jsonrpsee ^0.16 to prevent unwanted
 			// warning when this ws client is disconnected
@@ -95,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
 						},
 					CfeStatus::Idle =>
 						if compatible {
+							start_logger_server_fn.take().expect("only called once")(scope);
 							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
 							let settings = settings.clone();
@@ -103,7 +104,9 @@ async fn main() -> anyhow::Result<()> {
 							);
 
 							cfe_status = CfeStatus::Active(handle);
-						},
+						} else {
+							tracing::info!("Current runtime is not compatible with this CFE version ({:?})", cfe_version);
+						}
 				}
 			}
 		}
