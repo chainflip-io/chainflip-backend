@@ -240,7 +240,7 @@ impl<
 		HistoricInfo: Clone + Send + Sync + 'static,
 	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
-	/// Only keep the eopchs where the given account is participating in that epoch as an authority.
+	/// Only keep the epochs where the given account is participating in that epoch as an authority.
 	pub async fn participating(
 		self,
 		account_id: AccountId,
