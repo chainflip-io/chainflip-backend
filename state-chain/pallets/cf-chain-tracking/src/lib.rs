@@ -122,6 +122,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [Error::StaleDataSubmitted]
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_chain_state())]
 		pub fn update_chain_state(
 			origin: OriginFor<T>,

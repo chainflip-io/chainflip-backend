@@ -208,6 +208,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_current_authority_emission_inflation())]
 		pub fn update_current_authority_emission_inflation(
 			origin: OriginFor<T>,
@@ -228,6 +229,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_backup_node_emission_inflation())]
 		pub fn update_backup_node_emission_inflation(
 			origin: OriginFor<T>,
@@ -248,6 +250,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::update_supply_update_interval())]
 		pub fn update_supply_update_interval(
 			origin: OriginFor<T>,

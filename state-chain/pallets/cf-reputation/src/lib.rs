@@ -220,6 +220,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_accrual_ratio())]
 		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
@@ -245,6 +246,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [MissedHeartbeatPenaltyUpdated](Event::MissedHeartbeatPenaltyUpdated)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
@@ -265,6 +267,7 @@ pub mod pallet {
 		}
 
 		/// Set the [Penalty] for an [Offence].
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_penalty())]
 		pub fn set_penalty(
 			origin: OriginFor<T>,
@@ -297,6 +300,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId =

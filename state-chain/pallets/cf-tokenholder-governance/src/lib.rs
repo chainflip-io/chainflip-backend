@@ -201,6 +201,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientLiquidity)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
 		pub fn submit_proposal(
 			origin: OriginFor<T>,
@@ -230,6 +231,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [ProposalDoesntExist](Error::ProposalDoesntExist)
 		/// - [AlreadyBacked](Error::AlreadyBacked)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(
 			origin: OriginFor<T>,

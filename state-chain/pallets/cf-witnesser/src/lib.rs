@@ -229,6 +229,7 @@ pub mod pallet {
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[allow(clippy::boxed_local)]
+		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
@@ -312,6 +313,7 @@ pub mod pallet {
 		/// checkpointing issues or similar.
 		///
 		/// Note this does not protect against replays, so should be used with care.
+		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn force_witness(
 			origin: OriginFor<T>,

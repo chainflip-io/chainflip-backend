@@ -519,6 +519,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](sp_runtime::traits::InvalidCeremonyId)
 		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::Weights::signature_success())]
 		pub fn signature_success(
 			origin: OriginFor<T>,
@@ -571,6 +572,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidRespondent](Error::InvalidRespondent)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
@@ -622,6 +624,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::Weights::set_threshold_signature_timeout())]
 		pub fn set_threshold_signature_timeout(
 			origin: OriginFor<T>,

@@ -361,6 +361,7 @@ pub mod pallet {
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
 		/// - [InvalidSigner](Error::InvalidSigner)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::transaction_signing_failure())]
 		pub fn transaction_signing_failure(
 			origin: OriginFor<T>,
@@ -416,6 +417,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [Error::ThresholdSignatureUnavailable]
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::on_signature_ready())]
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,
@@ -464,6 +466,7 @@ pub mod pallet {
 		/// - [InvalidPayload](Event::InvalidPayload)
 		/// - [InvalidBroadcastAttemptId](Event::InvalidBroadcastAttemptId)
 		#[pallet::weight(T::WeightInfo::transaction_succeeded())]
+		#[pallet::call_index(2)]
 		pub fn transaction_succeeded(
 			origin: OriginFor<T>,
 			tx_out_id: TransactionOutIdFor<T, I>,
@@ -521,6 +524,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		#[pallet::call_index(3)]
 		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
 			ensure_root(origin)?;
 

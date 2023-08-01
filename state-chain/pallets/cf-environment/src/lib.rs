@@ -226,6 +226,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
@@ -263,6 +264,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
+		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
@@ -297,6 +299,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
+		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
@@ -321,6 +324,7 @@ pub mod pallet {
 		/// Can only be dispatched from the governance origin.
 		///
 		/// See [SafeModeUpdate] for the different options.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_safe_mode())]
 		pub fn update_safe_mode(origin: OriginFor<T>, update: SafeModeUpdate<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -350,6 +354,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
 		pub fn set_next_compatibility_version(
 			origin: OriginFor<T>,
