@@ -160,9 +160,9 @@ macro_rules! log_or_panic {
     ($($arg:tt)*) => {
         #[cfg(not(test))]
         {
-			log::warn!($($arg)*);
+			log::error!($($arg)*);
         }
-        #[cfg(test)]
+        #[cfg(debug_assertions)]
         {
 			panic!($($arg)*);
         };
