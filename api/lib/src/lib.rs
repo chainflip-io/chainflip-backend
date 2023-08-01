@@ -353,6 +353,7 @@ pub struct SwapDepositAddress {
 	pub expiry_block: state_chain_runtime::BlockNumber,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
+	pub broker_fee_rate: BasisPoints,
 }
 
 pub async fn request_swap_deposit_address(
@@ -381,6 +382,7 @@ pub async fn request_swap_deposit_address(
 			deposit_address,
 			expiry_block,
 			channel_id,
+			broker_fee_rate,
 			..
 		},
 	)) = events.iter().find(|event| {
@@ -396,6 +398,7 @@ pub async fn request_swap_deposit_address(
 			expiry_block: *expiry_block,
 			issued_block: block_number,
 			channel_id: *channel_id,
+			broker_fee_rate: *broker_fee_rate,
 		})
 	} else {
 		panic!("SwapDepositAddressReady must have been generated");
