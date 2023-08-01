@@ -20,7 +20,7 @@ benchmarks! {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
 			broker_commission_bps: 0,
-			message_metadata: None,
+			channel_metadata: None,
 		};
 	} : { call.dispatch_bypass_filter(origin.into())?; }
 
@@ -87,17 +87,20 @@ benchmarks! {
 
 		let origin = T::EnsureWitnessed::successful_origin();
 		let metadata = CcmDepositMetadata {
-			message: vec![0x00],
-			gas_budget: 1,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::benchmark_value(),
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::benchmark_value()),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00],
+				gas_budget: 1,
+				cf_parameters: vec![],
+			}
 		};
 		let call = Call::<T>::ccm_deposit{
 			source_asset: Asset::Usdc,
 			deposit_amount: 1_000,
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			message_metadata: metadata,
+			deposit_metadata: metadata,
 			tx_hash: Default::default(),
 		};
 	}: {
@@ -132,7 +135,7 @@ benchmarks! {
 				destination_asset: Asset::Eth,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				broker_commission_bps: Default::default(),
-				message_metadata: None,
+				channel_metadata: None,
 			};
 			call.dispatch_bypass_filter(origin.clone().into())?;
 		}
@@ -166,19 +169,6 @@ benchmarks! {
 		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
 	} verify {
 		assert_eq!(crate::MinimumSwapAmount::<T>::get(asset), amount);
-	}
-
-	set_minimum_ccm_gas_budget {
-		let asset = Asset::Eth;
-		let amount = 1_000;
-		let call = Call::<T>::set_minimum_ccm_gas_budget {
-			asset,
-			amount,
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
-	} verify {
-		assert_eq!(crate::MinimumCcmGasBudget::<T>::get(asset), amount);
 	}
 
 	impl_benchmark_test_suite!(

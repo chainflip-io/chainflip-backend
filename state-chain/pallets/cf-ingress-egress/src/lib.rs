@@ -14,13 +14,14 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChannelLifecycleHooks,
-	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
-	TransferAssetParams,
+	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
 	EgressApi, GetBlockHeight, SwapDepositHandler,
@@ -64,7 +65,8 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub destination_address: C::ChainAccount,
 	pub message: Vec<u8>,
 	// The sender of the deposit transaction.
-	pub source_address: ForeignChainAddress,
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
 }
@@ -126,7 +128,7 @@ pub mod pallet {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			message_metadata: CcmDepositMetadata,
+			channel_metadata: CcmChannelMetadata,
 		},
 	}
 
@@ -545,6 +547,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.destination_address,
 				},
+				ccm.source_chain,
 				ccm.source_address,
 				ccm.message,
 			) {
@@ -624,13 +627,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
-				message_metadata,
+				channel_metadata,
 			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
 				amount.into(),
 				destination_asset,
 				destination_address,
-				message_metadata,
+				CcmDepositMetadata {
+					source_chain: asset.into(),
+					source_address: None,
+					channel_metadata,
+				},
 				SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
 						deposit_address.clone().into(),
@@ -716,10 +723,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
 			}
 		} else {
-			#[cfg(test)]
-			panic!("Tried to close an unknown channel.");
-			#[cfg(not(test))]
-			log::error!("Tried to close an unknown channel.")
+			log_or_panic!("Tried to close an unknown channel.");
 		}
 	}
 }
@@ -737,14 +741,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(CcmDepositMetadata { message, cf_parameters, source_address, .. }) =>
+			Some(CcmDepositMetadata { source_chain, source_address, channel_metadata }) =>
 				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 					egress_id,
 					asset,
 					amount,
 					destination_address: destination_address.clone(),
-					message,
-					cf_parameters,
+					message: channel_metadata.message,
+					cf_parameters: channel_metadata.cf_parameters,
+					source_chain,
 					source_address,
 				}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
@@ -788,15 +793,15 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		destination_address: ForeignChainAddress,
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
-		message_metadata: Option<CcmDepositMetadata>,
+		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
-			match message_metadata {
+			match channel_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
-					message_metadata: msg,
+					channel_metadata: msg,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,
