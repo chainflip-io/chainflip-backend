@@ -62,8 +62,9 @@ mod test_rotate_vault_proxy {
 			PolkadotReplayProtection { nonce: NONCE_2, genesis_hash: Default::default() },
 			Some(keypair_old_proxy.public_key()),
 			keypair_new_proxy.public_key(),
-			PolkadotAccountId::from_ss58check("5D58KA25o2KcL9EiBJckjScGzvH5nUEiKJBrgAjsSfRuGJkc")
-				.unwrap(),
+			PolkadotAccountId(hex_literal::hex!(
+				"2c8e8fde289aa5739f1b5a390404a4bdbc6a0588dce3f329d16f8a0ef6fa6bb7"
+			)),
 		);
 
 		let payload = builder.get_signature_payload(

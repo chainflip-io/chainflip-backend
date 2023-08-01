@@ -1,15 +1,11 @@
 extern crate alloc;
 
-use crate::{
-	btc::{BitcoinNetwork, ScriptPubkey},
-	dot::PolkadotAccountId,
-	Chain,
-};
-use cf_primitives::{ChannelId, EthereumAddress, ForeignChain};
+use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, Chain};
+use cf_primitives::{ChannelId, EthereumAddress, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_core::H160;
 use sp_runtime::DispatchError;
 use sp_std::{fmt::Debug, vec::Vec};
@@ -192,22 +188,23 @@ impl EncodedAddress {
 	}
 }
 
-pub fn to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
+pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	address: ForeignChainAddress,
-	bitcoin_network: GetBitcoinNetwork,
+	network_environment: GetNetwork,
 ) -> EncodedAddress {
 	match address {
 		ForeignChainAddress::Eth(address) => EncodedAddress::Eth(address),
 		ForeignChainAddress::Dot(address) => EncodedAddress::Dot(*address.aliased_ref()),
-		ForeignChainAddress::Btc(script_pubkey) =>
-			EncodedAddress::Btc(script_pubkey.to_address(&bitcoin_network()).as_bytes().to_vec()),
+		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(
+			script_pubkey.to_address(&network_environment().into()).as_bytes().to_vec(),
+		),
 	}
 }
 
 #[allow(clippy::result_unit_err)]
-pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
+pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	encoded_address: EncodedAddress,
-	bitcoin_network: GetBitcoinNetwork,
+	network_environment: GetNetwork,
 ) -> Result<ForeignChainAddress, ()> {
 	match encoded_address {
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
@@ -216,10 +213,84 @@ pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
 			ScriptPubkey::try_from_address(
 				sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
-				&bitcoin_network(),
+				&network_environment().into(),
 			)
 			.map_err(|_| ())?,
 		)),
+	}
+}
+
+pub trait ToHumanreadableAddress {
+	#[cfg(feature = "std")]
+	/// A type that serializes the address in a human-readable way.
+	type Humanreadable: Serialize + DeserializeOwned + Send + Sync + Debug + Clone;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable;
+}
+
+impl ToHumanreadableAddress for ScriptPubkey {
+	#[cfg(feature = "std")]
+	type Humanreadable = String;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.to_address(&network_environment.into())
+	}
+}
+
+impl ToHumanreadableAddress for EthereumAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = crate::eth::Address;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.into()
+	}
+}
+
+impl ToHumanreadableAddress for crate::eth::Address {
+	#[cfg(feature = "std")]
+	type Humanreadable = crate::eth::Address;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		*self
+	}
+}
+
+impl ToHumanreadableAddress for PolkadotAccountId {
+	#[cfg(feature = "std")]
+	type Humanreadable = crate::dot::SubstrateNetworkAddress;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		crate::dot::SubstrateNetworkAddress::polkadot(*self.aliased_ref())
+	}
+}
+
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ForeignChainAddressHumanreadable {
+	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
+	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
+	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
+}
+
+impl ToHumanreadableAddress for ForeignChainAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = ForeignChainAddressHumanreadable;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		match self {
+			ForeignChainAddress::Eth(address) =>
+				ForeignChainAddressHumanreadable::Eth(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Dot(address) =>
+				ForeignChainAddressHumanreadable::Dot(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Btc(address) =>
+				ForeignChainAddressHumanreadable::Btc(address.to_humanreadable(network_environment)),
+		}
 	}
 }
 
@@ -227,7 +298,7 @@ pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 fn encode_and_decode_address() {
 	#[track_caller]
 	fn test(address: &str, case_sensitive: bool) {
-		let network = || BitcoinNetwork::Mainnet;
+		let network = || NetworkEnvironment::Mainnet;
 		let encoded_addr = EncodedAddress::Btc(address.as_bytes().to_vec());
 		let foreign_chain_addr = try_from_encoded_address(encoded_addr.clone(), network).unwrap();
 		let recovered_addr = to_encoded_address(foreign_chain_addr, network);

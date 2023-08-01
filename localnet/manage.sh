@@ -141,6 +141,12 @@ build-localnet-in-ci() {
   echo "🚧 Waiting for chainflip-node to start"
   check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
 
+  echo "🕺 Starting Broker API ..."
+  ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARIES_LOCATION
+
+  echo "🤑 Starting LP API ..."
+  ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARIES_LOCATION
+
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
   echo "🚗 Waiting for chainflip-engine to start"
   while true; do

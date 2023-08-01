@@ -35,6 +35,7 @@ itertools = { version = '0.10.0', default-features = false }
 arrayref = '0.3.6'
 
 # Substrate packages
+ss58-registry = { version = '1.41', optional = true }
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = [
   'derive',
 ] }
@@ -63,6 +64,7 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'hex/std',
+  'hex/serde',
   'libsecp256k1/std',
   'log/std',
   'rlp/std',
@@ -70,6 +72,8 @@ std = [
   'sp-runtime/std',
   'sp-std/std',
   'sp-core/std',
+  'sp-core/full_crypto',
+  'ss58-registry',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
