@@ -508,6 +508,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
 			origin: OriginFor<T>,
@@ -564,6 +565,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [WithdrawalRequested](Event::WithdrawalRequested)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw())]
 		pub fn withdraw(
 			origin: OriginFor<T>,
@@ -601,6 +603,7 @@ pub mod pallet {
 		///
 		/// - [SwapScheduled](Event::SwapScheduled)
 		/// - [SwapAmountTooLow](Event::SwapAmountTooLow)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::schedule_swap_from_contract())]
 		pub fn schedule_swap_from_contract(
 			origin: OriginFor<T>,
@@ -638,6 +641,7 @@ pub mod pallet {
 		}
 
 		/// Process the deposit of a CCM swap.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::ccm_deposit())]
 		pub fn ccm_deposit(
 			origin: OriginFor<T>,
@@ -668,6 +672,7 @@ pub mod pallet {
 		/// Register the account as a Broker.
 		///
 		/// Account roles are immutable once registered.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::register_as_broker())]
 		pub fn register_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
@@ -689,6 +694,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::SwapTtlSet)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
 		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -705,6 +711,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::MinimumSwapAmountSet)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_minimum_swap_amount())]
 		pub fn set_minimum_swap_amount(
 			origin: OriginFor<T>,

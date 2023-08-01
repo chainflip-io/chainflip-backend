@@ -480,6 +480,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::ValidatorWeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
@@ -540,6 +541,7 @@ pub mod pallet {
 		///
 		/// The weight is related to the number of bidders. Getting that number is quite expensive
 		/// so we use 2 * authority_count as an approximation.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
 			<Pallet<T> as EpochInfo>::current_authority_count().saturating_mul(2)
 		))]
@@ -570,6 +572,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Session Pallet](pallet_session::Config)
+		#[pallet::call_index(3)]
 		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
 		pub fn set_keys(
 			origin: OriginFor<T>,
@@ -598,6 +601,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
@@ -668,6 +672,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(
 			origin: OriginFor<T>,
@@ -710,6 +715,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::ValidatorWeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -722,6 +728,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;

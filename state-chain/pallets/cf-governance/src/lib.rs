@@ -229,6 +229,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [NotMember](Error::NotMember)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
@@ -259,6 +260,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -280,6 +282,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [UpgradeConditionsNotMet](Error::UpgradeConditionsNotMet)
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn chainflip_runtime_upgrade(
 			origin: OriginFor<T>,
@@ -303,6 +306,7 @@ pub mod pallet {
 		/// - [NotMember](Error::NotMember)
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(
 			origin: OriginFor<T>,
@@ -327,6 +331,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(clippy::boxed_local)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
@@ -349,6 +354,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
 		pub fn set_whitelisted_call_hash(
 			origin: OriginFor<T>,
@@ -372,6 +378,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,

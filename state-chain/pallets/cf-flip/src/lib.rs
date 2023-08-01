@@ -191,6 +191,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [EnsureGovernance]
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(origin: OriginFor<T>, slashing_rate: Permill) -> DispatchResult {
 			// Ensure the extrinsic was executed by the governance

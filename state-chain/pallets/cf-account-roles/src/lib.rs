@@ -89,6 +89,7 @@ pub mod pallet {
 		// If they have been enabled, it's possible accounts have already registered as Brokers or
 		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
 		// Governance can bypass this by calling `gov_register_account_role`.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::enable_swapping())]
 		pub fn enable_swapping(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -99,6 +100,7 @@ pub mod pallet {
 		// TODO: Remove this function after swapping is deployed and stabilised.
 		/// Bypass the Swapping Enabled check. This allows governance to enable swapping
 		/// features for some controlled accounts.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::gov_register_account_role())]
 		pub fn gov_register_account_role(
 			origin: OriginFor<T>,

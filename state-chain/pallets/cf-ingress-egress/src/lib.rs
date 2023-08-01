@@ -355,6 +355,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Callback for when a signature is accepted by the chain.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
 		pub fn finalise_ingress(
 			origin: OriginFor<T>,
@@ -384,6 +385,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::AssetEgressStatusChanged)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
 		pub fn enable_or_disable_egress(
 			origin: OriginFor<T>,
@@ -416,6 +418,7 @@ pub mod pallet {
 		/// Called when funds have been deposited into the given address.
 		///
 		/// Requires `EnsureWitnessed` origin.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
 		pub fn process_deposits(
 			origin: OriginFor<T>,
@@ -444,6 +447,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [on_success](Event::MinimumDepositSet)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
 		pub fn set_minimum_deposit(
 			origin: OriginFor<T>,
@@ -465,6 +469,7 @@ pub mod pallet {
 		///
 		/// - [on_success](Event::VaultTransferFailed)
 		#[pallet::weight(T::WeightInfo::vault_transfer_failed())]
+		#[pallet::call_index(4)]
 		pub fn vault_transfer_failed(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,

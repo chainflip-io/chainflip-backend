@@ -518,6 +518,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
@@ -536,6 +537,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
 		pub fn report_key_handover_outcome(
 			origin: OriginFor<T>,
@@ -565,6 +567,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [ThresholdSignatureUnavailable](Error::ThresholdSignatureUnavailable)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::on_keygen_verification_result())]
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
@@ -617,6 +620,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Epoch Info Trait](EpochInfo)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
@@ -650,6 +654,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Epoch Info Trait](EpochInfo)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vault_key_rotated_externally())]
 		pub fn vault_key_rotated_externally(
 			origin: OriginFor<T>,
@@ -668,6 +673,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
 		pub fn set_keygen_response_timeout(
 			origin: OriginFor<T>,
@@ -683,6 +689,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
 		pub fn set_keygen_slash_rate(
 			origin: OriginFor<T>,

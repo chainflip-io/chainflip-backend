@@ -278,6 +278,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_buy_interval())]
 		pub fn update_buy_interval(
 			origin: OriginFor<T>,
@@ -301,6 +302,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_pool_enabled())]
 		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
@@ -330,6 +332,7 @@ pub mod pallet {
 		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
 		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
 		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
 			origin: OriginFor<T>,
@@ -395,6 +398,7 @@ pub mod pallet {
 		/// - [BelowMinimumAmount](pallet_cf_lp::Error::BelowMinimumAmount)
 		/// - [DesiredBelowMinimumAmount](pallet_cf_lp::Error::DesiredBelowMinimumAmount)
 		/// - [MintingRangeOrderDisabled](pallet_cf_lp::Error::MintingRangeOrderDisabled)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_range_order())]
 		pub fn collect_and_mint_range_order(
 			origin: OriginFor<T>,
@@ -507,6 +511,7 @@ pub mod pallet {
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [PositionLacksLiquidity](pallet_cf_pools::Error::PositionLacksLiquidity)
 		/// - [BurningRangeOrderDisabled](pallet_cf_lp::Error::BurningRangeOrderDisabled)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::collect_and_burn_range_order())]
 		pub fn collect_and_burn_range_order(
 			origin: OriginFor<T>,
@@ -572,6 +577,7 @@ pub mod pallet {
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [MaximumGrossLiquidity](pallet_cf_pools::Error::MaximumGrossLiquidity)
 		/// - [MintingLimitOrderDisabled](pallet_cf_lp::Error::MintingLimitOrderDisabled)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_limit_order())]
 		pub fn collect_and_mint_limit_order(
 			origin: OriginFor<T>,
@@ -644,6 +650,7 @@ pub mod pallet {
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [PositionLacksLiquidity](pallet_cf_pools::Error::PositionLacksLiquidity)
 		/// - [BurningLimitOrderDisabled](pallet_cf_lp::Error::BurningLimitOrderDisabled)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::collect_and_burn_limit_order())]
 		pub fn collect_and_burn_limit_order(
 			origin: OriginFor<T>,

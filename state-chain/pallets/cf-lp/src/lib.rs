@@ -193,6 +193,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
 		/// Generates a new deposit address for the user to posit their assets.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_liquidity_deposit_address())]
 		pub fn request_liquidity_deposit_address(
 			origin: OriginFor<T>,
@@ -236,6 +237,7 @@ pub mod pallet {
 
 		/// For when the user wants to withdraw their free balances out of the chain.
 		/// Requires a valid foreign chain address.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
 		pub fn withdraw_asset(
 			origin: OriginFor<T>,
@@ -283,6 +285,7 @@ pub mod pallet {
 
 		/// Register the account as a Liquidity Provider.
 		/// Account roles are immutable once registered.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::register_lp_account())]
 		pub fn register_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
@@ -299,6 +302,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::LpTtlSet)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
 		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -314,6 +318,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On Success](Event::EmergencyWithdrawalAddressRegistered)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::register_emergency_withdrawal_address())]
 		pub fn register_emergency_withdrawal_address(
 			origin: OriginFor<T>,

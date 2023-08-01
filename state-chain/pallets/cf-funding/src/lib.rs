@@ -307,6 +307,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::funded())]
 		pub fn funded(
 			origin: OriginFor<T>,
@@ -354,6 +355,7 @@ pub mod pallet {
 		/// - [PendingRedemption](Error::PendingRedemption)
 		/// - [AuctionPhase](Error::AuctionPhase)
 		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
+		#[pallet::call_index(1)]
 		#[pallet::weight({ if matches!(amount, RedemptionAmount::Exact(_)) { T::WeightInfo::redeem() } else { T::WeightInfo::redeem_all() }})]
 		pub fn redeem(
 			origin: OriginFor<T>,
@@ -475,6 +477,7 @@ pub mod pallet {
 		///
 		/// - [NoPendingRedemption](Error::NoPendingRedemption)
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::redeemed())]
 		pub fn redeemed(
 			origin: OriginFor<T>,
@@ -507,6 +510,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::redemption_expired())]
 		pub fn redemption_expired(
 			origin: OriginFor<T>,
@@ -539,6 +543,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
@@ -569,6 +574,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AlreadyBidding](Error::AlreadyBidding)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
@@ -588,6 +594,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::update_minimum_funding())]
 		pub fn update_minimum_funding(
 			origin: OriginFor<T>,
@@ -613,6 +620,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32))]
 		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
@@ -645,6 +653,7 @@ pub mod pallet {
 		///
 		/// - [AccountAlreadyBound](Error::AccountAlreadyBound)
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::bind_redeem_address())]
 		pub fn bind_redeem_address(
 			origin: OriginFor<T>,
@@ -664,6 +673,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::RedemptionTaxAmountUpdated)
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
 		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Amount) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
