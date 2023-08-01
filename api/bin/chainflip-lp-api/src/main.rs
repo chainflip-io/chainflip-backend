@@ -1,13 +1,17 @@
 use anyhow::anyhow;
-use cf_utilities::{task_scope::task_scope, try_parse_number_or_hex};
+use cf_utilities::{
+	task_scope::{task_scope, Scope},
+	try_parse_number_or_hex,
+};
 use chainflip_api::{
 	self,
-	lp::{self, BuyOrSellOrder, MintRangeOrderReturn, Tick},
+	lp::{BuyOrSellOrder, LpApi, MintRangeOrderReturn, Tick},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain,
 	},
 	settings::StateChain,
+	OperatorApi, StateChainApi,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -19,6 +23,7 @@ use jsonrpsee::{
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
 use std::{ops::Range, path::PathBuf};
+use tracing::log;
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -148,13 +153,20 @@ pub trait Rpc {
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
 }
+
 pub struct RpcServerImpl {
-	state_chain_settings: StateChain,
+	api: StateChainApi,
 }
 
 impl RpcServerImpl {
-	pub fn new(LPOptions { ws_endpoint, signing_key_file, .. }: LPOptions) -> Self {
-		Self { state_chain_settings: StateChain { ws_endpoint, signing_key_file } }
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		LPOptions { ws_endpoint, signing_key_file, .. }: LPOptions,
+	) -> Result<Self, anyhow::Error> {
+		Ok(Self {
+			api: StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
+				.await?,
+		})
 	}
 }
 
@@ -162,7 +174,9 @@ impl RpcServerImpl {
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
-		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
+		self.api
+			.lp_api()
+			.request_liquidity_deposit_address(asset)
 			.await
 			.map(|address| address.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
@@ -175,7 +189,9 @@ impl RpcServer for RpcServerImpl {
 	) -> Result<String, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
 			.map_err(|e| Error::Custom(e.to_string()))?;
-		lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
+		self.api
+			.lp_api()
+			.register_emergency_withdrawal_address(ewa_address)
 			.await
 			.map(|tx_hash| tx_hash.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
@@ -192,20 +208,19 @@ impl RpcServer for RpcServerImpl {
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(
-			&self.state_chain_settings,
-			try_parse_number_or_hex(amount)?,
-			asset,
-			destination_address,
-		)
-		.await
-		.map(|(_, id)| id.to_string())
-		.map_err(|e| Error::Custom(e.to_string()))
+		self.api
+			.lp_api()
+			.withdraw_asset(try_parse_number_or_hex(amount)?, asset, destination_address)
+			.await
+			.map(|(_, id)| id.to_string())
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns a list of all assets and their free balance in json format
 	async fn asset_balances(&self) -> Result<String, Error> {
-		lp::get_balances(&self.state_chain_settings)
+		self.api
+			.query_api()
+			.get_balances(None)
 			.await
 			.map(|balances| {
 				serde_json::to_string(&balances).expect("Should output balances as json")
@@ -215,12 +230,7 @@ impl RpcServer for RpcServerImpl {
 
 	/// Returns a list of all assets and their range order positions in json format
 	async fn get_range_orders(&self) -> Result<String, Error> {
-		lp::get_range_orders(&self.state_chain_settings)
-			.await
-			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output range orders as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+		Err(anyhow!("Not implemented").into())
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -236,14 +246,15 @@ impl RpcServer for RpcServerImpl {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
-		lp::mint_range_order(
-			&self.state_chain_settings,
-			asset,
-			Range { start, end },
-			order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
-		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		self.api
+			.lp_api()
+			.mint_range_order(
+				asset,
+				Range { start, end },
+				order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
+			)
+			.await
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Removes liquidity from a range order.
@@ -259,15 +270,12 @@ impl RpcServer for RpcServerImpl {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
-		lp::burn_range_order(
-			&self.state_chain_settings,
-			asset,
-			Range { start, end },
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		self.api
+			.lp_api()
+			.burn_range_order(asset, Range { start, end }, try_parse_number_or_hex(amount)?)
+			.await
+			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Creates or adds liquidity to a limit order.
@@ -279,16 +287,12 @@ impl RpcServer for RpcServerImpl {
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<String, Error> {
-		lp::mint_limit_order(
-			&self.state_chain_settings,
-			asset,
-			order,
-			price,
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		self.api
+			.lp_api()
+			.mint_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.await
+			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Removes liquidity from a limit order.
@@ -300,50 +304,32 @@ impl RpcServer for RpcServerImpl {
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<String, Error> {
-		lp::burn_limit_order(
-			&self.state_chain_settings,
-			asset,
-			order,
-			price,
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		self.api
+			.lp_api()
+			.burn_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.await
+			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns the tx hash that the account role was set
 	async fn register_account(&self) -> Result<String, Error> {
-		chainflip_api::register_account_role(
-			AccountRole::LiquidityProvider,
-			&self.state_chain_settings,
-		)
-		.await
-		.map(|tx_hash| format!("{tx_hash:#x}"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		self.api
+			.operator_api()
+			.register_account_role(AccountRole::LiquidityProvider)
+			.await
+			.map(|tx_hash| format!("{tx_hash:#x}"))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
-		task_scope(|scope| {
-			async move {
-				let api =
-					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
-						.await?;
-
-				tokio::try_join!(
-					api.get_open_swap_channels::<Ethereum>(None),
-					api.get_open_swap_channels::<Bitcoin>(None),
-					api.get_open_swap_channels::<Polkadot>(None),
-				)
-				.map(|(ethereum, bitcoin, polkadot)| OpenSwapChannels {
-					ethereum,
-					bitcoin,
-					polkadot,
-				})
-			}
-			.boxed()
-		})
-		.await
+		let api = self.api.query_api();
+		tokio::try_join!(
+			api.get_open_swap_channels::<Ethereum>(None),
+			api.get_open_swap_channels::<Bitcoin>(None),
+			api.get_open_swap_channels::<Polkadot>(None),
+		)
+		.map(|(ethereum, bitcoin, polkadot)| OpenSwapChannels { ethereum, bitcoin, polkadot })
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 }
@@ -385,13 +371,18 @@ async fn main() -> anyhow::Result<()> {
 		opts.signing_key_file.to_string_lossy()
 	);
 
-	let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
-	let server_addr = server.local_addr()?;
-	let server = server.start(RpcServerImpl::new(opts).into_rpc())?;
+	task_scope(|scope| {
+		async move {
+			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
+			let server_addr = server.local_addr()?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
-	println!("🎙 Server is listening on {server_addr}.");
+			log::info!("🎙 Server is listening on {server_addr}.");
 
-	server.stopped().await;
-
-	Ok(())
+			server.stopped().await;
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
 }
