@@ -1,3 +1,5 @@
+pub mod address_checker;
+
 use ethers::{
 	prelude::*,
 	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
@@ -6,22 +8,22 @@ use ethers::{
 use utilities::task_scope::Scope;
 
 use crate::{
-	eth::ethers_rpc::EthersRpcApi,
+	eth::rpc::EthRpcApi,
 	retrier::RetrierClient,
-	witness::chain_source::{ChainClient, Header},
+	witness::common::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
 
 use super::{
-	ethers_rpc::{EthersRpcClient, ReconnectSubscriptionClient},
+	rpc::{EthRpcClient, ReconnectSubscriptionClient},
 	ConscientiousEthWebsocketBlockHeaderStream,
 };
-use crate::eth::ethers_rpc::ReconnectSubscribeApi;
+use crate::eth::rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
 
 #[derive(Clone)]
 pub struct EthersRetryRpcClient {
-	rpc_retry_client: RetrierClient<EthersRpcClient>,
+	rpc_retry_client: RetrierClient<EthRpcClient>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
@@ -31,20 +33,19 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 impl EthersRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		ethers_client: EthersRpcClient,
-		ws_node_endpoint: String,
-		chain_id: web3::types::U256,
+		eth_rpc_client: EthRpcClient,
+		sub_client: ReconnectSubscriptionClient,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
-				ethers_client,
+				eth_rpc_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
-				ReconnectSubscriptionClient::new(ws_node_endpoint, chain_id),
+				sub_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -233,13 +234,14 @@ mod tests {
 		task_scope(|scope| {
 			async move {
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRpcClient::new(&settings.eth).await.unwrap();
 
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					client,
-					settings.eth.ws_node_endpoint,
-					web3::types::U256::from(1337),
+					EthRpcClient::new(&settings.eth).await.unwrap(),
+					ReconnectSubscriptionClient::new(
+						settings.eth.ws_node_endpoint,
+						web3::types::U256::from(1337),
+					),
 				);
 
 				let chain_id = retry_client.chain_id().await;

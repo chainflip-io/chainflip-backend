@@ -3,13 +3,12 @@
 use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
-use address::AddressDerivationApi;
 pub use address::ForeignChainAddress;
+use address::{AddressDerivationApi, ToHumanreadableAddress};
 use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	traits::Get,
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
 	StorageHasher,
 };
@@ -30,6 +29,7 @@ use sp_std::{
 };
 
 pub use cf_primitives::chains::*;
+pub use frame_support::traits::Get;
 
 pub mod benchmarking_value;
 
@@ -108,9 +108,12 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ Debug
+		+ Ord
+		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
 		+ Into<ForeignChainAddress>
-		+ Unpin;
+		+ Unpin
+		+ ToHumanreadableAddress;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -280,10 +283,12 @@ pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[derive(Debug)]
 pub enum AllBatchError {
 	NotRequired,
 	Other,
 }
+
 #[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
@@ -297,7 +302,8 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		source_address: ForeignChainAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
@@ -312,24 +318,32 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-/// Metadata as part of a Cross Chain Message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CcmDepositMetadata {
-	/// Call data used after the message is egressed.
-	pub message: Vec<u8>,
-	/// User funds designated to be used for gas.
-	pub gas_budget: AssetAmount,
-	/// The address refunds will go to.
-	pub cf_parameters: Vec<u8>,
-	/// The address the deposit was sent from.
-	pub source_address: ForeignChainAddress,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: address::EncodedAddress, channel_id: ChannelId },
 	Vault { tx_hash: TransactionHash },
+}
+
+/// Deposit channel Metadata for Cross-Chain-Message.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmChannelMetadata {
+	/// Call data used after the message is egressed.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
+	pub message: Vec<u8>,
+	/// User funds designated to be used for gas.
+	pub gas_budget: AssetAmount,
+	/// Additonal parameters for the cross chain message.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
+	pub cf_parameters: Vec<u8>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmDepositMetadata {
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
+	pub channel_metadata: CcmChannelMetadata,
 }
 
 #[derive(
