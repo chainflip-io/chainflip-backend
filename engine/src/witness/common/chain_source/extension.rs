@@ -17,7 +17,7 @@ use super::{
 
 #[async_trait::async_trait]
 pub trait ChainSourceExt: ChainSource {
-	/// Map the data of each header when the data with an async closure.
+	/// Map the data of each header with an async closure.
 	fn then<Output, Fut, F>(self, f: F) -> Then<Self, F>
 	where
 		Self: Sized,
