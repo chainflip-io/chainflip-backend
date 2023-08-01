@@ -1,7 +1,7 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
+use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
 
@@ -9,8 +9,7 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
-
-pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
+pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("8437f6b8BCACb632cC4dD627bA3a8E6E3326A418"),

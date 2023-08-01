@@ -1,13 +1,13 @@
 #!/usr/bin/env -S pnpm tsx
 import { requestNewSwap, performSwap, doPerformSwap } from '../shared/perform_swap';
-import { getAddress, getChainflipApi, observeEvent } from '../shared/utils';
+import { newAddress, getChainflipApi, observeEvent } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function rotatesThroughBtcSwap() {
   const chainflip = await getChainflipApi();
 
   const tag = `BTC -> DOT (through rotation)`;
-  const address = await getAddress('DOT', 'foo');
+  const address = await newAddress('DOT', 'foo');
 
   console.log('Generated DOT address: ' + address);
 
@@ -25,7 +25,7 @@ async function swapAfterRotation() {
   const sourceAsset = 'DOT';
   const destAsset = 'BTC';
 
-  const address = await getAddress(destAsset, 'bar');
+  const address = await newAddress(destAsset, 'bar');
   const tag = `${sourceAsset} -> ${destAsset} (after rotation)`;
 
   await performSwap(sourceAsset, destAsset, address, tag);

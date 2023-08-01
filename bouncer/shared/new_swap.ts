@@ -6,14 +6,15 @@ import {
   decodeDotAddressForContract,
   handleSubstrateError,
   brokerMutex,
+  assetToChain,
 } from './utils';
 
 export interface CcmDepositMetadata {
   message: string;
-  gas_budget: number;
-  cf_parameters: string;
+  gasBudget: number;
+  cfParameters: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  source_address: any;
+  sourceAddress: any;
 }
 
 export async function newSwap(
@@ -37,7 +38,7 @@ export async function newSwap(
       .requestSwapDepositAddress(
         sourceAsset,
         destAsset,
-        { [destAsset === 'USDC' ? 'ETH' : destAsset]: destinationAddress },
+        { [assetToChain(destAsset)]: destinationAddress },
         fee,
         messageMetadata ?? null,
       )

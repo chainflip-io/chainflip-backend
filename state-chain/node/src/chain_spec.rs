@@ -1,9 +1,8 @@
 use cf_chains::{
-	btc::BitcoinNetwork,
 	dot::{PolkadotAccountId, PolkadotHash},
 	eth, ChainState,
 };
-use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount};
+use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment};
 
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
@@ -13,7 +12,8 @@ use cf_chains::{
 };
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
-use sc_service::{ChainType, Properties};
+pub use sc_service::{ChainType, Properties};
+use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
@@ -238,7 +238,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					ethereum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
-					bitcoin_network: BitcoinNetwork::Regtest,
+					network_environment: NetworkEnvironment::Development,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -271,7 +271,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Fork ID
 		None,
 		// Properties
-		None,
+		Some(chainflip_properties()),
 		// Extensions
 		None,
 	))
@@ -349,7 +349,7 @@ macro_rules! network_spec {
 								ethereum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								bitcoin_network: BITCOIN_NETWORK,
+								network_environment: NETWORK_ENVIRONMENT,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -633,16 +633,15 @@ fn testnet_genesis(
 }
 
 pub fn chainflip_properties() -> Properties {
-	let mut properties = Properties::new();
-	properties.insert(
-		"ss58Format".into(),
-		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
-	);
-	properties.insert("tokenDecimals".into(), 18.into());
-	properties.insert("tokenSymbol".into(), "FLIP".into());
-	properties.insert("color".into(), "#61CFAA".into());
-
-	properties
+	json!({
+		"ss58Format": state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX,
+		"tokenDecimals": 18,
+		"tokenSymbol": "FLIP",
+		"color": "#61CFAA",
+	})
+	.as_object()
+	.unwrap()
+	.clone()
 }
 
 /// Sets global that ensures SC AccountId's are printed correctly

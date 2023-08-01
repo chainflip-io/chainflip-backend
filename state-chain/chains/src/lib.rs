@@ -3,13 +3,12 @@
 use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
-use address::AddressDerivationApi;
 pub use address::ForeignChainAddress;
+use address::{AddressDerivationApi, ToHumanreadableAddress};
 use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	traits::Get,
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
 	StorageHasher,
 };
@@ -30,6 +29,7 @@ use sp_std::{
 };
 
 pub use cf_primitives::chains::*;
+pub use frame_support::traits::Get;
 
 pub mod benchmarking_value;
 
@@ -108,9 +108,12 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ Debug
+		+ Ord
+		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
 		+ Into<ForeignChainAddress>
-		+ Unpin;
+		+ Unpin
+		+ ToHumanreadableAddress;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -280,10 +283,12 @@ pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[derive(Debug)]
 pub enum AllBatchError {
 	NotRequired,
 	Other,
 }
+
 #[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(

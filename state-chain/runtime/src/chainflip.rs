@@ -443,7 +443,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				}
 			}
 
-			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+			fn expire_channel(address: ForeignChainAddress) {
 				if address.chain() == ForeignChain::Bitcoin {
 					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
 				}
@@ -451,7 +451,6 @@ macro_rules! impl_deposit_api_for_anychain {
 					$(
 						ForeignChain::$chain => {
 							<$pallet as DepositApi<$chain>>::expire_channel(
-								channel_id,
 								address.try_into().expect("Checked for address compatibility")
 							);
 						},
@@ -546,13 +545,13 @@ pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
 	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress {
-		to_encoded_address(address, Environment::bitcoin_network)
+		to_encoded_address(address, Environment::network_environment)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
+		try_from_encoded_address(encoded_address, Environment::network_environment)
 	}
 }
 

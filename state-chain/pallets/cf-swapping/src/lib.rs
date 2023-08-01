@@ -156,10 +156,11 @@ pub enum CcmFailReason {
 	UnsupportedForTargetChain,
 	InsufficientDepositAmount,
 	PrincipalSwapAmountTooLow,
-	GasBudgetBelowMinimum,
 }
 
-impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled);
+impl_pallet_safe_mode! {
+	PalletSafeMode; swaps_enabled, withdrawals_enabled, deposits_enabled, broker_registration_enabled,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -251,11 +252,6 @@ pub mod pallet {
 	pub type MinimumSwapAmount<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Minimum gas budget allowed for Cross chain messages.
-	#[pallet::storage]
-	pub type MinimumCcmGasBudget<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
-
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
 	pub type CollectedRejectedFunds<T: Config> =
@@ -334,10 +330,6 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 		},
-		MinimumCcmGasBudgetSet {
-			asset: Asset,
-			amount: AssetAmount,
-		},
 		SwapAmountTooLow {
 			asset: Asset,
 			amount: AssetAmount,
@@ -365,10 +357,12 @@ pub mod pallet {
 		InvalidDestinationAddress,
 		/// The swap amount is below the minimum required.
 		SwapAmountTooLow,
-		/// The CCM's gas budget is below the minimum allowed.
-		CcmGasBudgetBelowMinimum,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
+		/// Swap deposits are disabled due to Safe Mode.
+		DepositsDisabled,
+		/// Broker registration is disabled due to Safe Mode.
+		BrokerRegistrationDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -402,7 +396,7 @@ pub mod pallet {
 			let expired = SwapChannelExpiries::<T>::take(n);
 			let expired_count = expired.len();
 			for (channel_id, address) in expired {
-				T::DepositHandler::expire_channel(channel_id, address.clone());
+				T::DepositHandler::expire_channel(address.clone());
 				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
 					deposit_address: T::AddressConverter::to_encoded_address(address),
 					channel_id,
@@ -449,21 +443,22 @@ pub mod pallet {
 						});
 						// Handle swap completion logic.
 						match &swap.swap_type {
-							SwapType::Swap(destination_address) => {
-								let egress_id = T::EgressHandler::schedule_egress(
-									swap.to,
-									egress_amount,
-									destination_address.clone(),
-									None,
-								);
+							SwapType::Swap(destination_address) =>
+								if !egress_amount.is_zero() {
+									let egress_id = T::EgressHandler::schedule_egress(
+										swap.to,
+										egress_amount,
+										destination_address.clone(),
+										None,
+									);
 
-								Self::deposit_event(Event::<T>::SwapEgressScheduled {
-									swap_id: swap.swap_id,
-									egress_id,
-									asset: swap.to,
-									amount: egress_amount,
-								});
-							},
+									Self::deposit_event(Event::<T>::SwapEgressScheduled {
+										swap_id: swap.swap_id,
+										egress_id,
+										asset: swap.to,
+										amount: egress_amount,
+									});
+								},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(
 									*ccm_id,
@@ -516,23 +511,18 @@ pub mod pallet {
 			broker_commission_bps: BasisPoints,
 			message_metadata: Option<CcmDepositMetadata>,
 		) -> DispatchResult {
+			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if let Some(CcmDepositMetadata { gas_budget, .. }) = message_metadata {
+			if message_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
 				ensure!(
 					ForeignChain::Ethereum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
-
-				// Ensures the gas budget is above minimum allowed
-				ensure!(
-					gas_budget >= MinimumCcmGasBudget::<T>::get(source_asset),
-					Error::<T>::CcmGasBudgetBelowMinimum,
-				)
 			}
 
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
@@ -670,6 +660,11 @@ pub mod pallet {
 		pub fn register_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
 
+			ensure!(
+				T::SafeMode::get().broker_registration_enabled,
+				Error::<T>::BrokerRegistrationDisabled,
+			);
+
 			T::AccountRoleRegistry::register_as_broker(&account_id)?;
 
 			Ok(())
@@ -708,26 +703,6 @@ pub mod pallet {
 			MinimumSwapAmount::<T>::insert(asset, amount);
 
 			Self::deposit_event(Event::<T>::MinimumSwapAmountSet { asset, amount });
-			Ok(())
-		}
-
-		/// Sets the Minimum gas budget for CCMs.
-		///
-		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::MinimumCcmGasBudgetSet)
-		#[pallet::weight(T::WeightInfo::set_minimum_ccm_gas_budget())]
-		pub fn set_minimum_ccm_gas_budget(
-			origin: OriginFor<T>,
-			asset: Asset,
-			amount: AssetAmount,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			MinimumCcmGasBudget::<T>::insert(asset, amount);
-
-			Self::deposit_event(Event::<T>::MinimumCcmGasBudgetSet { asset, amount });
 			Ok(())
 		}
 	}
@@ -789,17 +764,23 @@ pub mod pallet {
 				.map_err(|_| bundle_input)?;
 
 			for swap in swaps {
-				let swap_output = multiply_by_rational_with_rounding(
-					swap.swap_amount(direction).unwrap_or_default(),
-					bundle_output,
-					bundle_input,
-					Rounding::Down,
-				)
-				.expect("bundle_input >= swap_amount ∴ result can't overflow");
-
-				if swap_output > 0 {
-					swap.update_swap_result(direction, swap_output);
+				let swap_output = if bundle_input > 0 {
+					multiply_by_rational_with_rounding(
+						swap.swap_amount(direction).unwrap_or_default(),
+						bundle_output,
+						bundle_input,
+						Rounding::Down,
+					)
+					.expect(
+						"bundle_input >= swap_amount && bundle_input != 0 ∴ result can't overflow",
+					)
 				} else {
+					0
+				};
+
+				swap.update_swap_result(direction, swap_output);
+
+				if swap_output == 0 && matches!(swap.swap_type, SwapType::Swap(_)) {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
 					// zero when we do the division.
@@ -868,8 +849,10 @@ pub mod pallet {
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
 			let gas_asset = ForeignChain::from(ccm_swap.destination_asset).gas_asset();
-			// Insert gas budget into storage.
-			CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
+			// If gas is non-zero, insert gas budget into storage.
+			if !ccm_output_gas.is_zero() {
+				CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
+			}
 
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
@@ -884,14 +867,6 @@ pub mod pallet {
 					egress_id,
 					asset: ccm_swap.destination_asset,
 					amount: ccm_output_principal,
-				});
-			}
-			if let Some(swap_id) = ccm_swap.gas_swap_id {
-				Self::deposit_event(Event::<T>::SwapEgressScheduled {
-					swap_id,
-					egress_id,
-					asset: gas_asset,
-					amount: ccm_output_gas,
 				});
 			}
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
@@ -999,9 +974,6 @@ pub mod pallet {
 				// If the CCM's principal requires a swap and is non-zero,
 				// then the principal swap amount must be above minimum swap amount required.
 				Some(CcmFailReason::PrincipalSwapAmountTooLow)
-			} else if message_metadata.gas_budget < MinimumCcmGasBudget::<T>::get(source_asset) {
-				// The gas budget must be above the minimum allowed
-				Some(CcmFailReason::GasBudgetBelowMinimum)
 			} else {
 				None
 			};
@@ -1051,28 +1023,29 @@ pub mod pallet {
 				};
 
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
-			let gas_swap_id = if source_asset == output_gas_asset {
-				// Deposit can be used as gas directly
-				swap_output.gas = Some(message_metadata.gas_budget);
-				None
-			} else {
-				let swap_id = Self::schedule_swap(
-					source_asset,
-					output_gas_asset,
-					message_metadata.gas_budget,
-					SwapType::CcmGas(ccm_id),
-				);
-				Self::deposit_event(Event::<T>::SwapScheduled {
-					swap_id,
-					source_asset,
-					deposit_amount: message_metadata.gas_budget,
-					destination_asset: output_gas_asset,
-					destination_address: encoded_destination_address.clone(),
-					origin,
-					swap_type: SwapType::CcmGas(ccm_id),
-				});
-				Some(swap_id)
-			};
+			let gas_swap_id =
+				if source_asset == output_gas_asset || message_metadata.gas_budget.is_zero() {
+					// Deposit can be used as gas directly
+					swap_output.gas = Some(message_metadata.gas_budget);
+					None
+				} else {
+					let swap_id = Self::schedule_swap(
+						source_asset,
+						output_gas_asset,
+						message_metadata.gas_budget,
+						SwapType::CcmGas(ccm_id),
+					);
+					Self::deposit_event(Event::<T>::SwapScheduled {
+						swap_id,
+						source_asset,
+						deposit_amount: message_metadata.gas_budget,
+						destination_asset: output_gas_asset,
+						destination_address: encoded_destination_address.clone(),
+						origin,
+						swap_type: SwapType::CcmGas(ccm_id),
+					});
+					Some(swap_id)
+				};
 
 			Self::deposit_event(Event::<T>::CcmDepositReceived {
 				ccm_id,
