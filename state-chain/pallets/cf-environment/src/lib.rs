@@ -12,7 +12,9 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthereumAddress, SemVer};
+use cf_primitives::{
+	chains::assets::eth::Asset as EthAsset, EthereumAddress, NetworkEnvironment, SemVer,
+};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
@@ -52,10 +54,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{
-		btc::{ScriptPubkey, Utxo},
-		dot::RuntimeVersion,
-	};
+	use cf_chains::btc::{ScriptPubkey, Utxo};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 
@@ -91,8 +90,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
-		/// Polkadot runtime version is lower than the currently stored version.
-		InvalidPolkadotRuntimeVersion,
 	}
 
 	#[pallet::pallet]
@@ -150,20 +147,10 @@ pub mod pallet {
 	/// Current Nonce of the current Polkadot Proxy Account
 	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn polkadot_runtime_version)]
-	pub type PolkadotRuntimeVersion<T> = StorageValue<_, RuntimeVersion, ValueQuery>;
-
 	// BITCOIN CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn bitcoin_network)]
-	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
-	/// currently supports.
-	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
 
 	#[pallet::storage]
 	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
@@ -181,6 +168,11 @@ pub mod pallet {
 	/// If this storage is set, a new version of Chainflip is available for upgrade.
 	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn network_environment)]
+	/// Contains the network environment for this runtime.
+	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -190,8 +182,6 @@ pub mod pallet {
 		UpdatedEthAsset(EthAsset, EthereumAddress),
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
-		/// The Polkadot Runtime Version stored on chain was updated.
-		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
 		/// The starting block number for the new Bitcoin vault was set
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
@@ -327,27 +317,6 @@ pub mod pallet {
 			Ok(dispatch_result)
 		}
 
-		#[pallet::weight(T::WeightInfo::update_polkadot_runtime_version())]
-		pub fn update_polkadot_runtime_version(
-			origin: OriginFor<T>,
-			runtime_version: RuntimeVersion,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// If the `transaction_version` is bumped, the `spec_version` must also be bumped.
-			// So we only need to check the `spec_version` here.
-			// https://paritytech.github.io/substrate/master/sp_version/struct.RuntimeVersion.html#structfield.transaction_version
-			ensure!(
-				runtime_version.spec_version > PolkadotRuntimeVersion::<T>::get().spec_version,
-				Error::<T>::InvalidPolkadotRuntimeVersion
-			);
-
-			PolkadotRuntimeVersion::<T>::put(runtime_version);
-			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
-
-			Ok(())
-		}
-
 		/// Update the current safe mode status.
 		///
 		/// Can only be dispatched from the governance origin.
@@ -409,8 +378,7 @@ pub mod pallet {
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-		pub polkadot_runtime_version: RuntimeVersion,
-		pub bitcoin_network: BitcoinNetwork,
+		pub network_environment: NetworkEnvironment,
 	}
 
 	/// Sets the genesis config
@@ -428,11 +396,11 @@ pub mod pallet {
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id);
-			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
-			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
+
+			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 		}
 	}
 }

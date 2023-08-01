@@ -56,14 +56,15 @@ benchmarks_instance_pallet! {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
 			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-			let new = DepositChannelDetails {
+			let mut channel = DepositChannelDetails {
 				opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
 				deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
 					1,
 					source_asset,
 				).unwrap()
 			};
-			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), new);
+			channel.deposit_channel.state.on_fetch_scheduled();
+			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
 			addresses.push(deposit_address);
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }

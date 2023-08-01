@@ -49,6 +49,7 @@ impl Chain for Ethereum {
 	type EpochStartData = ();
 	type DepositFetchId = EthereumFetchId;
 	type DepositChannelState = DeploymentStatus;
+	type DepositDetails = ();
 }
 
 impl ChainCrypto for Ethereum {
@@ -77,13 +78,19 @@ impl ChainCrypto for Ethereum {
 	}
 }
 
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[codec(mel_bound())]
 pub struct EthereumTrackedData {
 	pub base_fee: <Ethereum as Chain>::ChainAmount,
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
+}
+
+impl Default for EthereumTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.")
+	}
 }
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -602,11 +609,11 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 			},
 			Self::Deployed => false,
 			Self::Undeployed => {
-				#[cfg(test)]
+				#[cfg(debug_assertions)]
 				{
 					panic!("Cannot finalize fetch to an undeployed address")
 				}
-				#[cfg(not(test))]
+				#[cfg(not(debug_assertions))]
 				{
 					log::error!("Cannot finalize fetch to an undeployed address");
 					*self = Self::Deployed;
@@ -629,16 +636,24 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EthereumFetchId {
-	Deployed(Address),
-	Undeployed(ChannelId),
+	/// If the contract is not yet deployed, we need to deploy and fetch using the channel id.
+	DeployAndFetch(ChannelId),
+	/// Once the contract is deployed, we can fetch from the address.
+	Fetch(Address),
+	/// Fetching is not required for Ethereum deposits into a deployed contract.
+	NotRequired,
 }
 
 impl From<&DepositChannel<Ethereum>> for EthereumFetchId {
 	fn from(channel: &DepositChannel<Ethereum>) -> Self {
 		match channel.state {
-			DeploymentStatus::Undeployed => EthereumFetchId::Undeployed(channel.channel_id),
-			DeploymentStatus::Pending => EthereumFetchId::Deployed(channel.address),
-			DeploymentStatus::Deployed => EthereumFetchId::Deployed(channel.address),
+			DeploymentStatus::Undeployed => EthereumFetchId::DeployAndFetch(channel.channel_id),
+			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+				if channel.asset == assets::eth::Asset::Eth {
+					EthereumFetchId::NotRequired
+				} else {
+					EthereumFetchId::Fetch(channel.address)
+				},
 		}
 	}
 }
@@ -780,12 +795,31 @@ mod verification_tests {
 #[cfg(test)]
 mod lifecycle_tests {
 	use super::*;
+	const ETH: assets::eth::Asset = assets::eth::Asset::Eth;
+	const USDC: assets::eth::Asset = assets::eth::Asset::Usdc;
+
+	macro_rules! expect_deposit_state {
+		( $state:expr, $asset:expr, $pat:pat ) => {
+			assert!(matches!(
+				DepositChannel::<Ethereum> {
+					channel_id: Default::default(),
+					address: Default::default(),
+					asset: $asset,
+					state: $state,
+				}
+				.fetch_id(),
+				$pat
+			));
+		};
+	}
 	#[test]
 	fn eth_deposit_address_lifecycle() {
 		// Initial state is undeployed.
 		let mut state = DeploymentStatus::default();
 		assert_eq!(state, DeploymentStatus::Undeployed);
 		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::DeployAndFetch(..));
+		expect_deposit_state!(state, USDC, EthereumFetchId::DeployAndFetch(..));
 
 		// Pending channels can't be fetched from.
 		assert!(state.on_fetch_scheduled());
@@ -801,12 +835,17 @@ mod lifecycle_tests {
 		assert!(state.on_fetch_completed());
 		assert_eq!(state, DeploymentStatus::Deployed);
 		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
 
 		// Channel is now in its final deployed state and be fetched from at any time.
 		assert!(!state.on_fetch_scheduled());
 		assert!(state.can_fetch());
 		assert!(!state.on_fetch_completed());
 		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
+
 		assert_eq!(state, DeploymentStatus::Deployed);
 		assert!(!state.on_fetch_scheduled());
 	}

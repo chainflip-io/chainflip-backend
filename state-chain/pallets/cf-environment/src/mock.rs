@@ -3,7 +3,7 @@
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},
-	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
+	dot::api::CreatePolkadotVault,
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
@@ -193,8 +193,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			eth_usdc_address: [0x2; 20],
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
-			polkadot_runtime_version: TEST_RUNTIME_VERSION,
-			bitcoin_network: Default::default(),
+			network_environment: Default::default(),
 		},
 	};
 

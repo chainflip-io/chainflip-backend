@@ -29,7 +29,7 @@ pub fn start_client<C: ChainSigning>(
 	let multisig_client_backend_future = {
 		use multisig::client::ceremony_manager::CeremonyManager;
 
-		let ceremony_manager = CeremonyManager::<C::CryptoScheme>::new(
+		let ceremony_manager = CeremonyManager::<C>::new(
 			my_account_id,
 			outgoing_p2p_message_sender.0,
 			latest_ceremony_id,

@@ -8,14 +8,15 @@
 // For example: ./commands/send_flip.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 5.5
 // will send 5.5 FLIP to the account with address 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, getEthContractAddress } from '../shared/utils';
 import { sendErc20 } from '../shared/send_erc20';
 
 async function main(): Promise<void> {
   const ethereumAddress = process.argv[2];
   const flipAmount = process.argv[3].trim();
 
-  await sendErc20(ethereumAddress, 'FLIP', flipAmount);
+  const contractAddress = getEthContractAddress('FLIP');
+  await sendErc20(ethereumAddress, contractAddress, flipAmount);
 
   process.exit(0);
 }

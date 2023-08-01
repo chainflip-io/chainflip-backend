@@ -68,26 +68,36 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
-	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
+	AwaitingKeygenVerification {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// Keygen verification is complete for key
-	KeygenVerificationComplete { new_public_key: AggKeyFor<T, I> },
+	KeygenVerificationComplete {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	AwaitingKeyHandover {
 		ceremony_id: CeremonyId,
 		response_status: KeyHandoverResponseStatus<T, I>,
-		// NB: This is NOT the key handed over. It is the new key for the *next* epoch.
 		new_public_key: AggKeyFor<T, I>,
 	},
 	KeyHandoverComplete {
-		// NB: This is NOT the key handed over. It is the new key for the *next* epoch.
 		new_public_key: AggKeyFor<T, I>,
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
-	AwaitingActivation { new_public_key: AggKeyFor<T, I> },
+	AwaitingActivation {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
 	Complete,
 	/// The rotation has failed at one of the above stages.
-	Failed { offenders: BTreeSet<T::ValidatorId> },
+	Failed {
+		offenders: BTreeSet<T::ValidatorId>,
+	},
+	KeyHandoverFailed {
+		new_public_key: AggKeyFor<T, I>,
+		offenders: BTreeSet<T::ValidatorId>,
+	},
 }
 
 impl<T: Config<I>, I: 'static> cf_traits::CeremonyIdProvider for Pallet<T, I> {
@@ -203,13 +213,11 @@ pub mod pallet {
 					weight += Self::progress_rotation::<
 						KeygenSuccessVoters<T, I>,
 						KeygenFailureVoters<T, I>,
-						_,
 						KeygenResolutionPendingSince<T, I>,
 					>(
 						response_status,
 						ceremony_id,
 						current_block,
-						PalletOffence::FailedKeygen,
 						|new_public_key| {
 							Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 							Self::trigger_keygen_verification(
@@ -219,28 +227,45 @@ pub mod pallet {
 								new_epoch_index,
 							);
 						},
+						|offenders| {
+							Self::terminate_rotation(
+								offenders.into_iter().collect::<Vec<_>>().as_slice(),
+								Event::KeygenFailure(ceremony_id),
+							);
+						},
 					);
 				},
 				Some(VaultRotationStatus::<T, I>::AwaitingKeyHandover {
 					ceremony_id,
 					response_status,
-					new_public_key: _,
+					new_public_key,
 				}) => {
 					weight += Self::progress_rotation::<
 						KeyHandoverSuccessVoters<T, I>,
 						KeyHandoverFailureVoters<T, I>,
-						_,
 						KeyHandoverResolutionPendingSince<T, I>,
 					>(
 						response_status,
 						ceremony_id,
 						current_block,
-						PalletOffence::FailedKeyHandover,
 						|new_public_key| {
 							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
 							PendingVaultRotation::<T, I>::put(
 								VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
 							);
+						},
+						|offenders| {
+							T::OffenceReporter::report_many(
+								PalletOffence::FailedKeyHandover,
+								offenders.iter().cloned().collect::<Vec<_>>().as_slice(),
+							);
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::KeyHandoverFailed {
+									new_public_key,
+									offenders,
+								},
+							);
+							Self::deposit_event(Event::KeyHandoverFailure { ceremony_id });
 						},
 					);
 				},
@@ -396,6 +421,10 @@ pub mod pallet {
 		/// chain via governance.
 		AwaitingGovernanceActivation {
 			new_public_key: <T::Chain as ChainCrypto>::AggKey,
+		},
+		/// Key handover has failed
+		KeyHandoverFailure {
+			ceremony_id: CeremonyId,
 		},
 	}
 
@@ -564,7 +593,6 @@ pub mod pallet {
 				},
 				Err(offenders) => Self::terminate_rotation(
 					&offenders[..],
-					PalletOffence::FailedKeygen,
 					Event::KeygenVerificationFailure { keygen_ceremony_id },
 				),
 			};
@@ -701,15 +729,14 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn progress_rotation<SuccessVoters, FailureVoters, ResolutionSuccessFn, PendingSince>(
+	fn progress_rotation<SuccessVoters, FailureVoters, PendingSince>(
 		response_status: ResponseStatus<T, SuccessVoters, FailureVoters, I>,
 		ceremony_id: CeremonyId,
 		current_block: BlockNumberFor<T>,
-		offence: PalletOffence,
-		on_resolution_success: ResolutionSuccessFn,
+		on_success_outcome: impl FnOnce(AggKeyFor<T, I>),
+		on_failure_outcome: impl FnOnce(BTreeSet<T::ValidatorId>),
 	) -> Weight
 	where
-		ResolutionSuccessFn: FnOnce(AggKeyFor<T, I>),
 		T: Config<I>,
 		I: 'static,
 		SuccessVoters: frame_support::StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
@@ -739,22 +766,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					remaining_candidate_count, 0,
 					"Can't have success unless all candidates responded"
 				);
-				on_resolution_success(new_public_key);
+				on_success_outcome(new_public_key);
 				T::WeightInfo::on_initialize_success()
 			},
 			Err(offenders) => {
 				let offenders_len = offenders.len();
-				Self::terminate_rotation(
-					&if (offenders_len as AuthorityCount) <
-						utilities::failure_threshold_from_share_count(candidate_count)
-					{
-						offenders.into_iter().collect::<Vec<_>>()
-					} else {
-						Vec::default()
-					},
-					offence,
-					Event::KeygenFailure(ceremony_id),
-				);
+				let offenders = if (offenders_len as AuthorityCount) <
+					utilities::failure_threshold_from_share_count(candidate_count)
+				{
+					offenders
+				} else {
+					Default::default()
+				};
+				on_failure_outcome(offenders);
 				T::WeightInfo::on_initialize_failure(offenders_len as u32)
 			},
 		};
@@ -806,12 +830,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id
 	}
 
-	fn terminate_rotation(
-		offenders: &[T::ValidatorId],
-		offence: PalletOffence,
-		event: Event<T, I>,
-	) {
-		T::OffenceReporter::report_many(offence, offenders);
+	fn terminate_rotation(offenders: &[T::ValidatorId], event: Event<T, I>) {
+		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		for offender in offenders {
 			T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
 		}

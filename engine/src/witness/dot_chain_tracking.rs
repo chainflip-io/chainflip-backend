@@ -1,13 +1,12 @@
 use cf_chains::dot::{PolkadotHash, PolkadotTrackedData};
 use subxt::events::Phase;
 
-use crate::dot::{
-	retry_rpc::DotRetryRpcApi,
-	witnesser::{EventWrapper, TransactionFeePaid},
-};
+use crate::dot::retry_rpc::DotRetryRpcApi;
 
 use super::{
-	chain_source::Header, chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData,
+	chain_source::Header,
+	chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData,
+	dot::{EventWrapper, TransactionFeePaid},
 };
 
 #[async_trait::async_trait]
@@ -22,8 +21,10 @@ impl<T: DotRetryRpcApi + Send + Sync + Clone>
 			Vec<(Phase, EventWrapper)>,
 		>,
 	) -> Result<<cf_chains::Polkadot as cf_chains::Chain>::TrackedData, anyhow::Error> {
+		let events = &header.data;
+
 		let mut tips = Vec::new();
-		for (phase, wrapped_event) in header.data.iter() {
+		for (phase, wrapped_event) in events.iter() {
 			if let Phase::ApplyExtrinsic(_) = phase {
 				if let EventWrapper::TransactionFeePaid(TransactionFeePaid { tip, .. }) =
 					wrapped_event
@@ -38,6 +39,7 @@ impl<T: DotRetryRpcApi + Send + Sync + Clone>
 				tips.sort();
 				tips.get(tips.len().saturating_sub(1) / 2).cloned().unwrap_or_default()
 			},
+			runtime_version: self.current_runtime_version().await,
 		})
 	}
 }

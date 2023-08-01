@@ -3,16 +3,10 @@ mod crypto_compat;
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{
-	btc::{self, PreviousOrCurrent},
-	dot::{self, PolkadotAccountId, PolkadotSignature},
-	eth::Ethereum,
-	Bitcoin, Polkadot,
-};
+use cf_chains::btc::{self, PreviousOrCurrent};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
-use sp_core::{H160, H256};
 use sp_runtime::AccountId32;
 use state_chain_runtime::{AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance};
 use std::{
@@ -29,7 +23,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcApi},
+	eth::{broadcaster::EthBroadcaster, rpc::EthRpcApi},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
@@ -39,7 +33,6 @@ use crate::{
 		storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witnesser::{EpochStart, MonitorCommand},
 };
 use multisig::{
 	bitcoin::BtcCryptoScheme, client::MultisigClientApi, eth::EvmCryptoScheme,
@@ -47,14 +40,6 @@ use multisig::{
 	SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
-
-pub type EthMonitorCommandSender = UnboundedSender<MonitorCommand<H160>>;
-
-pub struct EthAddressToMonitorSender {
-	pub eth: EthMonitorCommandSender,
-	pub flip: EthMonitorCommandSender,
-	pub usdc: EthMonitorCommandSender,
-}
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
@@ -247,21 +232,10 @@ pub async fn start<
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
-	eth_address_to_monitor_sender: EthAddressToMonitorSender,
-	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
-		MonitorCommand<PolkadotAccountId>,
-	>,
-	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<
-		MonitorCommand<PolkadotSignature>,
-	>,
-	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
-	EthRpc: EthersRpcApi + Send + Sync + 'static,
+	EthRpc: EthRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
@@ -277,98 +251,6 @@ where
             use frame_support::traits::TypedGet;
             <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
-
-        let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
-            let eth_epoch_start_sender = &eth_epoch_start_sender;
-            let dot_epoch_start_sender = &dot_epoch_start_sender;
-            let btc_epoch_start_sender = &btc_epoch_start_sender;
-            let state_chain_client = &state_chain_client;
-
-            async move {
-                eth_epoch_start_sender.broadcast(EpochStart::<Ethereum> {
-                    epoch_index: index,
-                    block_number: state_chain_client
-                        .storage_map_entry::<pallet_cf_vaults::Vaults<
-                            state_chain_runtime::Runtime,
-                            state_chain_runtime::EthereumInstance,
-                        >>(block_hash, &index)
-                        .await
-                        .unwrap()
-                        .unwrap()
-                        .active_from_block,
-                    current,
-                    participant,
-                    data: (),
-                }).await.unwrap();
-
-                // It is possible for there not to be a Polkadot vault.
-                // At genesis there is no Polkadot vault, so we want to check that the vault exists
-                // before we start witnessing.
-                if let Some(vault) = state_chain_client
-                .storage_map_entry::<pallet_cf_vaults::Vaults<
-                    state_chain_runtime::Runtime,
-                    state_chain_runtime::PolkadotInstance,
-                >>(block_hash, &index)
-                .await
-                .unwrap() {
-                    dot_epoch_start_sender.broadcast(EpochStart::<Polkadot> {
-                        epoch_index: index,
-                        block_number: vault.active_from_block,
-                        current,
-                        participant,
-                        data: dot::EpochStartData {
-                            vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
-                        }
-                    }).await.unwrap();
-                }
-
-                // It is possible for there not to be a Bitcoin vault.
-                // At genesis there is no Bitcoin vault, so we want to check that the vault exists
-                // before we start witnessing.
-                if let Some(vault) = state_chain_client
-                .storage_map_entry::<pallet_cf_vaults::Vaults<
-                    state_chain_runtime::Runtime,
-                    BitcoinInstance,
-                >>(block_hash, &index)
-                .await
-                .unwrap() {
-
-                    let change_pubkey = vault.public_key;
-
-                    btc_epoch_start_sender.broadcast(EpochStart::<Bitcoin> {
-                        epoch_index: index,
-                        block_number: vault.active_from_block,
-                        current,
-                        participant,
-                        data: btc::EpochStartData {
-                            change_pubkey
-                        },
-                    }).await.unwrap();
-                }
-            }
-        };
-
-        {
-            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
-                sc_block_stream.cache().block_hash,
-                &account_id
-            ).await.unwrap());
-
-            let current_epoch = state_chain_client
-                .storage_value::<pallet_cf_validator::CurrentEpoch<
-                    state_chain_runtime::Runtime,
-                >>(sc_block_stream.cache().block_hash)
-                .await
-                .unwrap();
-
-            if let Some(earliest_historical_active_epoch) = historical_active_epochs.iter().next() {
-                for epoch in *earliest_historical_active_epoch..current_epoch {
-                    start_epoch(sc_block_stream.cache().block_hash, epoch, false, historical_active_epochs.contains(&epoch)).await;
-                }
-            }
-
-            start_epoch(sc_block_stream.cache().block_hash, current_epoch, true, historical_active_epochs.contains(&current_epoch)).await;
-        }
 
         // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
         // liveness
@@ -411,15 +293,6 @@ where
                         Ok(events) => {
                             for event_record in events {
                                 match_event! {event_record.event, {
-                                    state_chain_runtime::RuntimeEvent::Validator(
-                                        pallet_cf_validator::Event::NewEpoch(new_epoch),
-                                    ) => {
-                                        start_epoch(current_block_hash, new_epoch, true, state_chain_client.storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
-                                            current_block_hash,
-                                            &new_epoch,
-                                            &account_id
-                                        ).await.unwrap().is_some()).await;
-                                    }
                                     state_chain_runtime::RuntimeEvent::Validator(
                                         pallet_cf_validator::Event::PeerIdRegistered(
                                             account_id,
@@ -650,10 +523,9 @@ where
                                             broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
-                                            transaction_out_id,
+                                            transaction_out_id: _,
                                         },
                                     ) => {
-                                        dot_monitor_signature_sender.send(MonitorCommand::Add(transaction_out_id)).unwrap();
                                         if nominee == account_id {
                                             match dot_broadcaster.send(transaction_payload.encoded_extrinsic).await {
                                                 Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
@@ -676,11 +548,9 @@ where
                                             broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
-                                            transaction_out_id,
+                                            transaction_out_id: _,
                                         },
                                     ) => {
-                                        btc_tx_hash_sender.send(MonitorCommand::Add(transaction_out_id)).unwrap();
-
                                         if nominee == account_id {
                                             match btc_broadcaster.send(transaction_payload.encoded_transaction).await {
                                                 Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
@@ -697,69 +567,6 @@ where
                                                 }
                                             }
                                         }
-                                    }
-                                    state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
-                                        pallet_cf_broadcast::Event::BroadcastSuccess { broadcast_id: _, transaction_out_id }
-                                    ) => {
-                                        btc_tx_hash_sender.send(MonitorCommand::Remove(transaction_out_id)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            deposit_address,
-                                            source_asset,
-                                            ..
-                                        }
-                                    ) => {
-                                        use cf_primitives::chains::assets::eth;
-                                        match source_asset {
-                                            eth::Asset::Eth => {
-                                                &eth_address_to_monitor_sender.eth
-                                            }
-                                            eth::Asset::Flip => {
-                                                &eth_address_to_monitor_sender.flip
-                                            }
-                                            eth::Asset::Usdc => {
-                                                &eth_address_to_monitor_sender.usdc
-                                            }
-                                        }.send(MonitorCommand::Add(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            deposit_address,
-                                            source_asset
-                                        }
-                                    ) => {
-                                        use cf_primitives::chains::assets::eth;
-                                        match source_asset {
-                                            eth::Asset::Eth => {
-                                                &eth_address_to_monitor_sender.eth
-                                            }
-                                            eth::Asset::Flip => {
-                                                &eth_address_to_monitor_sender.flip
-                                            }
-                                            eth::Asset::Usdc => {
-                                                &eth_address_to_monitor_sender.usdc
-                                            }
-                                        }.send(MonitorCommand::Remove(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            deposit_address,
-                                            source_asset,
-                                            ..
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_command_sender.send(MonitorCommand::Add(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            deposit_address,
-                                            source_asset
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

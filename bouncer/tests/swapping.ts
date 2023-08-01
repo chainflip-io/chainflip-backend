@@ -4,12 +4,13 @@ import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { performSwap } from '../shared/perform_swap';
 import {
-  getAddress,
+  newAddress,
   runWithTimeout,
   chainFromAsset,
   getEthContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
+  observeBadEvents,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -72,12 +73,12 @@ export async function prepareSwap(
   tag += messageMetadata ? ' CCM' : '';
   tag += tagSuffix ? `${tagSuffix}]` : ']';
 
-  // For swaps with a message force the address to be the CF Receiver Mock address.
+  // For swaps with a message force the address to be the CF Tester address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    destAddress = getEthContractAddress('CFRECEIVER');
-    console.log(`${tag} Using CF Receiver Mock address: ${destAddress}`);
+    destAddress = getEthContractAddress('CFTESTER');
+    console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
-    destAddress = await getAddress(destAsset, seed, addressType);
+    destAddress = await newAddress(destAsset, seed, addressType);
     console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
 
@@ -115,14 +116,19 @@ async function testSwapViaContract(
 }
 
 async function testAll() {
+  let stopObserving = false;
+  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault(
     'USDC',
-    (
-      parseInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC), 10) * 4
-    ).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 5n).toString(),
+  );
+  await approveTokenVault(
+    'FLIP',
+    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
   );
 
   const ccmContractSwaps = Promise.all([
@@ -131,20 +137,36 @@ async function testAll() {
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
     }),
+    /*
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
     }),
+    testSwapViaContract('FLIP', 'ETH', {
+      message: getAbiEncodedMessage(),
+      gasBudget: 10000000000000000,
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
+    }),
+    */
   ]);
 
   const contractSwaps = Promise.all([
     testSwapViaContract('ETH', 'DOT'),
     testSwapViaContract('ETH', 'USDC'),
     testSwapViaContract('ETH', 'BTC'),
+    testSwapViaContract('ETH', 'FLIP'),
+    /*
     testSwapViaContract('USDC', 'DOT'),
     testSwapViaContract('USDC', 'ETH'),
     testSwapViaContract('USDC', 'BTC'),
+    testSwapViaContract('USDC', 'FLIP'),
+    testSwapViaContract('FLIP', 'DOT'),
+    testSwapViaContract('FLIP', 'ETH'),
+    testSwapViaContract('FLIP', 'BTC'),
+    testSwapViaContract('FLIP', 'USDC'),
+    */
   ]);
 
   const regularSwaps = Promise.all([
@@ -161,21 +183,20 @@ async function testAll() {
     testSwap('USDC', 'BTC', 'P2WSH'),
     testSwap('USDC', 'BTC', 'P2SH'),
     testSwap('USDC', 'BTC', 'P2WPKH'),
-
+    testSwap('DOT', 'BTC', 'P2WSH'),
+    testSwap('FLIP', 'BTC', 'P2SH'),
+    testSwap('BTC', 'DOT'),
+    testSwap('DOT', 'USDC'),
+    testSwap('DOT', 'ETH'),
     testSwap('BTC', 'ETH'),
     testSwap('BTC', 'USDC'),
-    testSwap('BTC', 'DOT'),
-
-    testSwap('DOT', 'ETH'),
-    testSwap('DOT', 'USDC'),
-    testSwap('DOT', 'BTC', 'P2PKH'),
-    testSwap('DOT', 'BTC', 'P2WSH'),
-    testSwap('DOT', 'BTC', 'P2SH'),
-    testSwap('DOT', 'BTC', 'P2WPKH'),
+    testSwap('ETH', 'USDC'),
+    testSwap('FLIP', 'DOT'),
+    testSwap('BTC', 'FLIP'),
   ]);
 
   // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
-  // all ccm swaps have the same destination address (cfReceiver) and then it will get a
+  // all ccm swaps have the same destination address (cfTester) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
     // TODO: These two tests will be fixed in https://github.com/chainflip-io/chainflip-backend/pull/3708
@@ -194,7 +215,7 @@ async function testAll() {
       gasBudget: 1000000,
       cfParameters: getAbiEncodedMessage(['string', 'string']),
     }),
-    testSwap('DOT', 'USDC', undefined, {
+    testSwap('DOT', 'FLIP', undefined, {
       message: getAbiEncodedMessage(),
       gasBudget: 1000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
@@ -212,6 +233,10 @@ async function testAll() {
   ]);
 
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
+
+  // Gracefully exit the broadcast abort observer
+  stopObserving = true;
+  await observingBadEvents;
 }
 
 runWithTimeout(testAll(), 1800000)

@@ -146,6 +146,5 @@ export async function performSwap(
     tag,
     messageMetadata,
   );
-
   await doPerformSwap(swapParams, tag, messageMetadata);
 }

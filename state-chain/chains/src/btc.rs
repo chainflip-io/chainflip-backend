@@ -14,7 +14,7 @@ use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
+	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
@@ -87,15 +87,22 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
 	pub btc_fee_info: BitcoinFeeInfo,
 }
 
+impl Default for BitcoinTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.");
+	}
+}
+
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BitcoinFeeInfo {
 	pub fee_per_input_utxo: BtcAmount,
 	pub fee_per_output_utxo: BtcAmount,
@@ -156,6 +163,7 @@ impl Chain for Bitcoin {
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = ();
+	type DepositDetails = UtxoId;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -173,9 +181,7 @@ impl ChainCrypto for Bitcoin {
 	// The response from a threshold signing ceremony over multiple payloads
 	// is multiple signatures
 	type ThresholdSignature = Vec<Signature>;
-
-	type TransactionInId = UtxoId;
-
+	type TransactionInId = Hash;
 	type TransactionOutId = Hash;
 
 	type GovKey = Self::AggKey;
@@ -346,10 +352,20 @@ fn to_varint(value: u64) -> Vec<u8> {
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
-	#[default]
 	Mainnet,
 	Testnet,
+	#[default]
 	Regtest,
+}
+
+impl From<NetworkEnvironment> for BitcoinNetwork {
+	fn from(env: NetworkEnvironment) -> Self {
+		match env {
+			NetworkEnvironment::Mainnet => BitcoinNetwork::Mainnet,
+			NetworkEnvironment::Testnet => BitcoinNetwork::Testnet,
+			NetworkEnvironment::Development => BitcoinNetwork::Regtest,
+		}
+	}
 }
 
 impl BitcoinNetwork {

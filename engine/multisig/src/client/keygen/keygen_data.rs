@@ -13,7 +13,7 @@ use crate::{
 		PreProcessStageDataCheck,
 	},
 	crypto::ECPoint,
-	CryptoScheme,
+	ChainSigning,
 };
 
 use super::keygen_detail::{ShamirShare, MAX_COEFF_COMM_3_SIZE};
@@ -61,7 +61,7 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
-	fn is_data_size_valid<C: CryptoScheme>(
+	fn is_data_size_valid<Chain: ChainSigning>(
 		&self,
 		num_of_parties: AuthorityCount,
 		_num_of_payloads: Option<usize>,
@@ -69,7 +69,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 		let num_of_parties = num_of_parties as usize;
 		match self {
 			KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_) =>
-				self.is_initial_stage_data_size_valid::<C>(),
+				self.is_initial_stage_data_size_valid::<Chain>(),
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
 			KeygenData::CoeffComm3(message) => message.payload.len() <= MAX_COEFF_COMM_3_SIZE,
 			KeygenData::VerifyCoeffComm4(message) =>
@@ -100,7 +100,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 		}
 	}
 
-	fn is_initial_stage_data_size_valid<C: CryptoScheme>(&self) -> bool {
+	fn is_initial_stage_data_size_valid<Chain: ChainSigning>(&self) -> bool {
 		match self {
 			KeygenData::PubkeyShares0(message) => message.0.len() <= MAX_AUTHORITIES as usize,
 			KeygenData::HashComm1(_) => true,
