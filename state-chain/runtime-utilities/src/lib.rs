@@ -158,7 +158,7 @@ mod test_derive {
 #[macro_export]
 macro_rules! log_or_panic {
     ($($arg:tt)*) => {
-        #[cfg(not(test))]
+        #[cfg(not(debug_assertions))]
         {
 			log::error!($($arg)*);
         }
