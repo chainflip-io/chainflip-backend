@@ -157,14 +157,14 @@ mod test_derive {
 /// Logs if running in release, panics if running in test.
 #[macro_export]
 macro_rules! log_or_panic {
-    ($($arg:tt)*) => {
-        #[cfg(not(debug_assertions))]
-        {
+	($($arg:tt)*) => {
+		#[cfg(not(debug_assertions))]
+		{
 			log::error!($($arg)*);
-        }
-        #[cfg(debug_assertions)]
-        {
+		}
+		#[cfg(debug_assertions)]
+		{
 			panic!($($arg)*);
-        };
-    };
+		};
+	};
 }
