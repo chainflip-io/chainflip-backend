@@ -22,5 +22,5 @@ export async function sendErc20(
 
   console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);
 
-  await signAndSendTxEth(contractAddress, txData);
+  await signAndSendTxEth(contractAddress, '0', txData);
 }

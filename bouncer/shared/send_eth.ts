@@ -20,7 +20,7 @@ export async function getNextEthNonce(forceQuery?: boolean): Promise<number> {
   });
 }
 
-export async function signAndSendTxEth(to: string, data?: string, value?: string, gas?: number) {
+export async function signAndSendTxEth(to: string, value?: string, data?: string, gas = 2000000) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const web3 = new Web3(ethEndpoint);
 
@@ -29,7 +29,7 @@ export async function signAndSendTxEth(to: string, data?: string, value?: string
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
   const nonce = await getNextEthNonce();
-  const tx = { to, data, gas: gas || 2000000, nonce, value };
+  const tx = { to, data, gas, nonce, value };
 
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
   const receipt = await web3.eth.sendSignedTransaction(
@@ -53,5 +53,5 @@ export async function signAndSendTxEth(to: string, data?: string, value?: string
 
 export async function sendEth(ethereumAddress: string, ethAmount: string) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals.ETH);
-  await signAndSendTxEth(ethereumAddress, undefined, weiAmount);
+  await signAndSendTxEth(ethereumAddress, weiAmount);
 }

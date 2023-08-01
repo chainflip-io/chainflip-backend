@@ -2,7 +2,7 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
-import { performSwap, doPerformSwap, requestNewSwap } from '../shared/perform_swap';
+import { performSwap, doPerformSwap, requestNewSwap, SenderType } from '../shared/perform_swap';
 import {
   newAddress,
   runWithTimeout,
@@ -130,10 +130,10 @@ async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
 
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, fee, tag);
 
-  await doPerformSwap(swapParams, tag, undefined, true);
+  await doPerformSwap(swapParams, tag, undefined, SenderType.Contract);
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   await observeFetch(sourceAsset, swapParams.depositAddress);
-  await doPerformSwap(swapParams, tag, undefined, true);
+  await doPerformSwap(swapParams, tag, undefined, SenderType.Contract);
 }
 
 async function testAll() {

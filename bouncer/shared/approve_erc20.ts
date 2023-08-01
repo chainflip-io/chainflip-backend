@@ -21,5 +21,5 @@ export async function approveErc20(asset: Asset, toAddress: string, amount: stri
 
   console.log('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
 
-  await signAndSendTxEth(tokenContractAddress, txData);
+  await signAndSendTxEth(tokenContractAddress, '0', txData);
 }
