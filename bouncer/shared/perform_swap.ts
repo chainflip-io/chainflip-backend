@@ -89,7 +89,7 @@ export async function doPerformSwap(
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
-  depositMethod = SenderType.Address,
+  senderType = SenderType.Address,
 ) {
   const chainflipApi = await getChainflipApi();
 
@@ -111,7 +111,7 @@ export async function doPerformSwap(
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
 
-  await (depositMethod === SenderType.Address
+  await (senderType === SenderType.Address
     ? send(sourceAsset, depositAddress)
     : sendViaCfTester(sourceAsset, depositAddress));
 
@@ -139,7 +139,7 @@ export async function performSwap(
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
-  depositMethod = DepositMethod.address,
+  senderType = SenderType.Address,
 ) {
   const tag = swapTag ?? '';
 
@@ -156,5 +156,5 @@ export async function performSwap(
     tag,
     messageMetadata,
   );
-  await doPerformSwap(swapParams, tag, messageMetadata, depositMethod);
+  await doPerformSwap(swapParams, tag, messageMetadata, senderType);
 }
