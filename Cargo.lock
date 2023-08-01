@@ -38,11 +38,42 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "aead"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc95d1bdb8e6666b2b217308eeeb09f2d6728d104be3e31916cc74d15420331"
+dependencies = [
+ "generic-array 0.14.7",
+]
+
+[[package]]
+name = "aead"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b613b8e1e3cf911a086f53f03bf286f52fd7a7258e4fa606f0ef220d39d8877"
 dependencies = [
  "generic-array 0.14.7",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "aead"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
+dependencies = [
+ "crypto-common",
+ "generic-array 0.14.7",
+]
+
+[[package]]
+name = "aes"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884391ef1066acaa41e766ba8f596341b96e93ce34f9a43e7d24bf0a0eaf0561"
+dependencies = [
+ "aes-soft",
+ "aesni",
+ "cipher 0.2.5",
 ]
 
 [[package]]
@@ -74,12 +105,46 @@ version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df5f85a83a7d8b0442b6aa7b504b8212c1733da07b98aae43d4bc21b2cb3cdf6"
 dependencies = [
- "aead",
+ "aead 0.4.3",
  "aes 0.7.5",
  "cipher 0.3.0",
  "ctr 0.8.0",
- "ghash",
+ "ghash 0.4.4",
  "subtle",
+]
+
+[[package]]
+name = "aes-gcm"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "209b47e8954a928e1d72e86eca7000ebb6655fe1436d33eefc2201cad027e237"
+dependencies = [
+ "aead 0.5.2",
+ "aes 0.8.2",
+ "cipher 0.4.4",
+ "ctr 0.9.2",
+ "ghash 0.5.0",
+ "subtle",
+]
+
+[[package]]
+name = "aes-soft"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be14c7498ea50828a38d0e24a765ed2effe92a705885b57d029cd67d45744072"
+dependencies = [
+ "cipher 0.2.5",
+ "opaque-debug 0.3.0",
+]
+
+[[package]]
+name = "aesni"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea2e11f5e94c2f7d386164cc2aa1f97823fed6f259e486940a71c174dd01b0ce"
+dependencies = [
+ "cipher 0.2.5",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
@@ -88,6 +153,18 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
 dependencies = [
+ "getrandom 0.2.9",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
+name = "ahash"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c99f64d1e06488f620f932677e24bc6e2897582980441ae90a671415bd7ec2f"
+dependencies = [
+ "cfg-if",
  "getrandom 0.2.9",
  "once_cell",
  "version_check",
@@ -200,6 +277,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
+
+[[package]]
 name = "array-bytes"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -233,6 +316,73 @@ dependencies = [
 ]
 
 [[package]]
+name = "asn1-rs"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ff05a702273012438132f449575dbc804e27b2f3cbe3069aa237d26c98fa33"
+dependencies = [
+ "asn1-rs-derive 0.1.0",
+ "asn1-rs-impl",
+ "displaydoc",
+ "nom",
+ "num-traits",
+ "rusticata-macros",
+ "thiserror",
+ "time 0.3.21",
+]
+
+[[package]]
+name = "asn1-rs"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6fd5ddaf0351dff5b8da21b2fb4ff8e08ddd02857f0bf69c47639106c0fff0"
+dependencies = [
+ "asn1-rs-derive 0.4.0",
+ "asn1-rs-impl",
+ "displaydoc",
+ "nom",
+ "num-traits",
+ "rusticata-macros",
+ "thiserror",
+ "time 0.3.21",
+]
+
+[[package]]
+name = "asn1-rs-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db8b7511298d5b7784b40b092d9e9dcd3a627a5707e4b5e507931ab0d44eeebf"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+ "synstructure",
+]
+
+[[package]]
+name = "asn1-rs-derive"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "726535892e8eae7e70657b4c8ea93d26b8553afb1ce617caee529ef96d7dee6c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+ "synstructure",
+]
+
+[[package]]
+name = "asn1-rs-impl"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2777730b2039ac0f95f093556e61b6d26cebed5393ca6f152717777cec3a42ed"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "asn1_der"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -258,35 +408,6 @@ dependencies = [
  "concurrent-queue",
  "event-listener",
  "futures-core",
-]
-
-[[package]]
-name = "async-executor"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fa3dc5f2a8564f07759c008b9109dc0d39de92a88d5588b8a5036d286383afb"
-dependencies = [
- "async-lock",
- "async-task",
- "concurrent-queue",
- "fastrand",
- "futures-lite",
- "slab",
-]
-
-[[package]]
-name = "async-global-executor"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1b6f5d7df27bd294849f8eec66ecfc63d11814df7a4f5d74168a2394467b776"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-io",
- "async-lock",
- "blocking",
- "futures-lite",
- "once_cell",
 ]
 
 [[package]]
@@ -317,72 +438,6 @@ checksum = "fa24f727524730b077666307f2734b4a1a1c57acb79193127dcc8914d5242dd7"
 dependencies = [
  "event-listener",
 ]
-
-[[package]]
-name = "async-process"
-version = "1.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a9d28b1d97e08915212e2e45310d47854eafa69600756fc735fb788f75199c9"
-dependencies = [
- "async-io",
- "async-lock",
- "autocfg",
- "blocking",
- "cfg-if",
- "event-listener",
- "futures-lite",
- "rustix 0.37.19",
- "signal-hook",
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "async-std"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62565bb4402e926b29953c785397c6dc0391b7b446e45008b0049eb43cec6f5d"
-dependencies = [
- "async-channel",
- "async-global-executor",
- "async-io",
- "async-lock",
- "async-process",
- "crossbeam-utils",
- "futures-channel",
- "futures-core",
- "futures-io",
- "futures-lite",
- "gloo-timers",
- "kv-log-macro",
- "log",
- "memchr",
- "once_cell",
- "pin-project-lite 0.2.9",
- "pin-utils",
- "slab",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "async-std-resolver"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba50e24d9ee0a8950d3d03fc6d0dd10aa14b5de3b101949b4e160f7fee7c723"
-dependencies = [
- "async-std",
- "async-trait",
- "futures-io",
- "futures-util",
- "pin-utils",
- "socket2",
- "trust-dns-resolver",
-]
-
-[[package]]
-name = "async-task"
-version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecc7ab41815b3c653ccd2978ec3255c81349336702dfdf62ee6f7069b12a3aae"
 
 [[package]]
 name = "async-trait"
@@ -694,7 +749,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 dependencies = [
- "block-padding",
+ "block-padding 0.1.5",
  "byte-tools",
  "byteorder",
  "generic-array 0.12.4",
@@ -719,6 +774,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-modes"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57a0e8073e8baa88212fb5823574c02ebccb395136ba9a164ab89379ec6072f0"
+dependencies = [
+ "block-padding 0.2.1",
+ "cipher 0.2.5",
+]
+
+[[package]]
 name = "block-padding"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -728,19 +793,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "blocking"
-version = "1.3.1"
+name = "block-padding"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77231a1c8f801696fc0123ec6150ce92cffb8e164a02afb9c8ddee0e9b65ad65"
-dependencies = [
- "async-channel",
- "async-lock",
- "async-task",
- "atomic-waker",
- "fastrand",
- "futures-lite",
- "log",
-]
+checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "bs58"
@@ -876,6 +932,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 dependencies = [
  "jobserver",
+]
+
+[[package]]
+name = "ccm"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aca1a8fbc20b50ac9673ff014abfb2b5f4085ee1a850d408f14a159c5853ac7"
+dependencies = [
+ "aead 0.3.2",
+ "cipher 0.2.5",
+ "subtle",
 ]
 
 [[package]]
@@ -1119,7 +1186,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a18446b09be63d457bbec447509e85f662f32952b035ce892290396bc0b0cff5"
 dependencies = [
- "aead",
+ "aead 0.4.3",
  "chacha20",
  "cipher 0.3.0",
  "poly1305",
@@ -1162,7 +1229,7 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-finality-grandpa",
  "state-chain-runtime",
- "tiny-bip39 1.0.0",
+ "tiny-bip39",
  "tokio",
  "tracing",
  "utilities",
@@ -1294,7 +1361,7 @@ dependencies = [
  "utilities",
  "warp",
  "web3",
- "x25519-dalek",
+ "x25519-dalek 1.1.1",
  "zeroize",
  "zmq",
 ]
@@ -1394,9 +1461,18 @@ checksum = "f6ed9c8b2d17acb8110c46f1da5bf4a696d745e1474a16db0cd2b49cd0249bf2"
 dependencies = [
  "core2",
  "multibase",
- "multihash",
+ "multihash 0.16.3",
  "serde",
  "unsigned-varint",
+]
+
+[[package]]
+name = "cipher"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f8e7987cbd042a63249497f41aed09f8e65add917ea6566effbc56578d6801"
+dependencies = [
+ "generic-array 0.14.7",
 ]
 
 [[package]]
@@ -1796,6 +1872,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "crc"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86ec7a15cbe22e59248fc7eadb1907dab5ba09372595da4d73dd805ed4417dfe"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cace84e55f07e7301bae1c519df89cdad8cc3cd868413d3fdbdeca9ff3db484"
+
+[[package]]
 name = "crc32fast"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1884,6 +1975,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
 dependencies = [
  "generic-array 0.14.7",
+ "rand_core 0.6.4",
  "typenum",
 ]
 
@@ -2169,6 +2261,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a467a65c5e759bce6e65eaf91cc29f466cdc57cb65777bd646872a8a1fd4de"
 dependencies = [
  "const-oid",
+ "pem-rfc7468",
  "zeroize",
 ]
 
@@ -2183,10 +2276,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "der-parser"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe398ac75057914d7d07307bf67dc7f3f574a26783b4fc7805a20ffa9f506e82"
+dependencies = [
+ "asn1-rs 0.3.1",
+ "displaydoc",
+ "nom",
+ "num-bigint",
+ "num-traits",
+ "rusticata-macros",
+]
+
+[[package]]
+name = "der-parser"
+version = "8.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbd676fbbab537128ef0278adb5576cf363cff6aa22a7b24effe97347cfab61e"
+dependencies = [
+ "asn1-rs 0.5.2",
+ "displaydoc",
+ "nom",
+ "num-bigint",
+ "num-traits",
+ "rusticata-macros",
+]
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "derive-syn-parse"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e79116f119dd1dba1abf1f3405f03b9b0e79a27a3883864bfebded8a3dc768cd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2200,10 +2332,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2658621297f2cf68762a6f7dc0bb7e1ff2cfd6583daef8ee0fed6f7ec468ec0"
 dependencies = [
  "darling 0.10.2",
- "derive_builder_core",
+ "derive_builder_core 0.9.0",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_builder"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d07adf7be193b71cc36b193d0f5fe60b918a3a9db4dad0449f57bcfd519704a3"
+dependencies = [
+ "derive_builder_macro",
 ]
 
 [[package]]
@@ -2215,6 +2356,28 @@ dependencies = [
  "darling 0.10.2",
  "proc-macro2",
  "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_builder_core"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f91d4cfa921f1c05904dc3c57b4a32c38aed3340cce209f3a6fd1478babafc4"
+dependencies = [
+ "darling 0.14.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_builder_macro"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f0314b72bed045f3a68671b3c86328386762c93f82d98c65c3cb5e5f573dd68"
+dependencies = [
+ "derive_builder_core 0.11.2",
  "syn 1.0.109",
 ]
 
@@ -2325,6 +2488,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "displaydoc"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "487585f4d0c6655fe74905e2504d8ad6908e4db67f744eb140876906c2f3175d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
+
+[[package]]
 name = "dlv-list"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2340,16 +2514,6 @@ dependencies = [
  "libc",
  "socket2",
  "winapi",
-]
-
-[[package]]
-name = "dns-parser"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4d33be9473d06f75f58220f71f7a9317aca647dc061dbd3c361b0bef505fbea"
-dependencies = [
- "byteorder",
- "quick-error",
 ]
 
 [[package]]
@@ -2474,7 +2638,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c24f403d068ad0b359e577a77f92392118be3f3c927538f2bb544a5ecd828c6"
 dependencies = [
  "curve25519-dalek 3.2.0",
- "hashbrown",
+ "hashbrown 0.12.3",
  "hex",
  "rand_core 0.6.4",
  "sha2 0.9.9",
@@ -2500,6 +2664,9 @@ dependencies = [
  "ff 0.12.1",
  "generic-array 0.14.7",
  "group 0.12.1",
+ "hkdf",
+ "pem-rfc7468",
+ "pkcs8 0.9.0",
  "rand_core 0.6.4",
  "sec1 0.3.0",
  "subtle",
@@ -2603,19 +2770,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
@@ -2690,7 +2844,7 @@ dependencies = [
  "sha2 0.10.6",
  "sha3",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -3242,7 +3396,7 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 [[package]]
 name = "fork-tree"
 version = "3.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -3265,7 +3419,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 [[package]]
 name = "frame-benchmarking"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -3288,7 +3442,7 @@ dependencies = [
 [[package]]
 name = "frame-benchmarking-cli"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "Inflector",
  "array-bytes",
@@ -3300,16 +3454,13 @@ dependencies = [
  "frame-system",
  "gethostname",
  "handlebars",
- "hash-db",
  "itertools",
- "kvdb",
  "lazy_static",
  "linked-hash-map",
  "log",
- "memory-db 0.30.0",
  "parity-scale-codec",
  "rand 0.8.5",
- "rand_pcg 0.3.1",
+ "rand_pcg",
  "sc-block-builder",
  "sc-cli",
  "sc-client-api",
@@ -3319,7 +3470,6 @@ dependencies = [
  "sc-sysinfo",
  "serde",
  "serde_json",
- "serde_nanos",
  "sp-api",
  "sp-blockchain",
  "sp-core 7.0.0",
@@ -3332,7 +3482,6 @@ dependencies = [
  "sp-std 5.0.0",
  "sp-storage 7.0.0",
  "sp-trie 7.0.0",
- "tempfile",
  "thiserror",
  "thousands",
 ]
@@ -3340,7 +3489,7 @@ dependencies = [
 [[package]]
 name = "frame-executive"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -3367,9 +3516,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-remote-externalities"
+version = "0.10.0-dev"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
+dependencies = [
+ "futures",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "sp-core 7.0.0",
+ "sp-io 7.0.0",
+ "sp-runtime 7.0.0",
+ "substrate-rpc-client",
+ "tokio",
+]
+
+[[package]]
 name = "frame-support"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "bitflags",
  "frame-metadata",
@@ -3395,16 +3560,18 @@ dependencies = [
  "sp-std 5.0.0",
  "sp-tracing 6.0.0",
  "sp-weights 4.0.0",
+ "static_assertions",
  "tt-call",
 ]
 
 [[package]]
 name = "frame-support-procedural"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "Inflector",
  "cfg-expr",
+ "derive-syn-parse",
  "frame-support-procedural-tools",
  "itertools",
  "proc-macro2",
@@ -3415,7 +3582,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support-procedural-tools-derive",
  "proc-macro-crate",
@@ -3427,7 +3594,7 @@ dependencies = [
 [[package]]
 name = "frame-support-procedural-tools-derive"
 version = "3.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3437,7 +3604,7 @@ dependencies = [
 [[package]]
 name = "frame-system"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "log",
@@ -3455,7 +3622,7 @@ dependencies = [
 [[package]]
 name = "frame-system-benchmarking"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -3470,7 +3637,7 @@ dependencies = [
 [[package]]
 name = "frame-system-rpc-runtime-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -3479,7 +3646,7 @@ dependencies = [
 [[package]]
 name = "frame-try-runtime"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -3603,7 +3770,7 @@ checksum = "d2411eed028cdf8c8034eaf21f9915f956b6c3abec4d4c7949ee67f0721127bd"
 dependencies = [
  "futures-io",
  "rustls 0.20.8",
- "webpki",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -3712,10 +3879,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.9.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3738,7 +3903,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1583cc1656d7839fd3732b80cf4f38850336cdb9b8ded1cd399ca62958de3c99"
 dependencies = [
  "opaque-debug 0.3.0",
- "polyval",
+ "polyval 0.5.3",
+]
+
+[[package]]
+name = "ghash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d930750de5717d2dd0b8c0d42c076c0e884c81a73e6cab859bbd2339c71e3e40"
+dependencies = [
+ "opaque-debug 0.3.0",
+ "polyval 0.6.1",
 ]
 
 [[package]]
@@ -3898,8 +4073,14 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 
 [[package]]
 name = "hashers"
@@ -3985,6 +4166,15 @@ name = "hex_lit"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3011d1213f159867b13cfd6ac92d2cd5f1345762c63be3554e84092d85a50bbd"
+
+[[package]]
+name = "hkdf"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "791a029f6b9fc27657f6f188ec6e5e43f6911f6f878e0dc5501396e09809d437"
+dependencies = [
+ "hmac 0.12.1",
+]
 
 [[package]]
 name = "hmac"
@@ -4075,6 +4265,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-range-header"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "add0ab9360ddbd88cfeb3bd9574a1d85cfdfa14db10b3e21d3700dbc4328758f"
+
+[[package]]
 name = "httparse"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4151,7 +4347,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6eea26c5d0b6ab9d72219f65000af310f042a740926f7b2fa3553e774036e2e7"
 dependencies = [
- "derive_builder",
+ "derive_builder 0.9.0",
  "dns-lookup",
  "hyper",
  "tokio",
@@ -4245,9 +4441,9 @@ dependencies = [
 
 [[package]]
 name = "if-watch"
-version = "2.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065c008e570a43c00de6aed9714035e5ea6a498c255323db9091722af6ee67dd"
+checksum = "a9465340214b296cd17a0009acdb890d6160010b8adf8f78a00d0d7ab270f79f"
 dependencies = [
  "async-io",
  "core-foundation",
@@ -4258,6 +4454,7 @@ dependencies = [
  "log",
  "rtnetlink",
  "system-configuration",
+ "tokio",
  "windows 0.34.0",
 ]
 
@@ -4321,7 +4518,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
- "hashbrown",
+ "hashbrown 0.12.3",
  "serde",
 ]
 
@@ -4350,6 +4547,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "276ec31bcb4a9ee45f58bec6f9ec700ae4cf4f4f8f2fa7e06cb406bd5ffdd770"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "interceptor"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8a11ae2da61704edada656798b61c94b35ecac2c58eb955156987d5e6be90b"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "log",
+ "rand 0.8.5",
+ "rtcp",
+ "rtp",
+ "thiserror",
+ "tokio",
+ "waitgroup",
+ "webrtc-srtp",
+ "webrtc-util",
 ]
 
 [[package]]
@@ -4845,45 +5061,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "kv-log-macro"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f"
-dependencies = [
- "log",
-]
-
-[[package]]
 name = "kvdb"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "585089ceadba0197ffe9af6740ab350b325e3c1f5fccfbc3522e0250c750409b"
+checksum = "e7d770dcb02bf6835887c3a979b5107a04ff4bbde97a5f0928d27404a155add9"
 dependencies = [
- "parity-util-mem",
  "smallvec",
 ]
 
 [[package]]
 name = "kvdb-memorydb"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40d109c87bfb7759edd2a49b2649c1afe25af785d930ad6a38479b4dc70dd873"
+checksum = "bf7a85fe66f9ff9cd74e169fdd2c94c6e1e74c412c99a73b4df3200b5d3760b2"
 dependencies = [
  "kvdb",
- "parity-util-mem",
  "parking_lot 0.12.1",
 ]
 
 [[package]]
 name = "kvdb-rocksdb"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c076cc2cdbac89b9910c853a36c957d3862a779f31c2661174222cefb49ee597"
+checksum = "2182b8219fee6bd83aacaab7344e840179ae079d5216aa4e249b4d704646a844"
 dependencies = [
  "kvdb",
- "log",
  "num_cpus",
- "parity-util-mem",
  "parking_lot 0.12.1",
  "regex",
  "rocksdb",
@@ -4966,17 +5169,16 @@ checksum = "f7012b1bbb0719e1097c47611d3898568c546d597c2e74d66f6087edd5233ff4"
 
 [[package]]
 name = "libp2p"
-version = "0.49.0"
+version = "0.50.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec878fda12ebec479186b3914ebc48ff180fa4c51847e11a1a68bf65249e02c1"
+checksum = "9c7b0104790be871edcf97db9bd2356604984e623a08d825c3f27852290266b8"
 dependencies = [
  "bytes",
  "futures",
  "futures-timer",
  "getrandom 0.2.9",
  "instant",
- "lazy_static",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-dns",
  "libp2p-identify",
  "libp2p-kad",
@@ -4985,14 +5187,15 @@ dependencies = [
  "libp2p-mplex",
  "libp2p-noise",
  "libp2p-ping",
+ "libp2p-quic",
  "libp2p-request-response",
  "libp2p-swarm",
- "libp2p-swarm-derive",
  "libp2p-tcp",
  "libp2p-wasm-ext",
+ "libp2p-webrtc",
  "libp2p-websocket",
  "libp2p-yamux",
- "multiaddr",
+ "multiaddr 0.16.0",
  "parking_lot 0.12.1",
  "pin-project",
  "smallvec",
@@ -5000,9 +5203,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-core"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "799676bb0807c788065e57551c6527d461ad572162b0519d1958946ff9e0539d"
+checksum = "b6a8fcd392ff67af6cc3f03b1426c41f7f26b6b9aff2dc632c1c56dd649e571f"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -5012,17 +5215,18 @@ dependencies = [
  "futures",
  "futures-timer",
  "instant",
- "lazy_static",
  "log",
- "multiaddr",
- "multihash",
+ "multiaddr 0.16.0",
+ "multihash 0.16.3",
  "multistream-select",
+ "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "prost",
  "prost-build",
  "rand 0.8.5",
  "rw-stream-sink",
+ "sec1 0.3.0",
  "sha2 0.10.6",
  "smallvec",
  "thiserror",
@@ -5032,14 +5236,41 @@ dependencies = [
 ]
 
 [[package]]
-name = "libp2p-dns"
-version = "0.37.0"
+name = "libp2p-core"
+version = "0.39.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2322c9fb40d99101def6a01612ee30500c89abbbecb6297b3cd252903a4c1720"
+checksum = "3c1df63c0b582aa434fb09b2d86897fa2b419ffeccf934b36f87fcedc8e835c2"
 dependencies = [
- "async-std-resolver",
+ "either",
+ "fnv",
  "futures",
- "libp2p-core",
+ "futures-timer",
+ "instant",
+ "libp2p-identity",
+ "log",
+ "multiaddr 0.17.1",
+ "multihash 0.17.0",
+ "multistream-select",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "pin-project",
+ "quick-protobuf",
+ "rand 0.8.5",
+ "rw-stream-sink",
+ "smallvec",
+ "thiserror",
+ "unsigned-varint",
+ "void",
+]
+
+[[package]]
+name = "libp2p-dns"
+version = "0.38.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e42a271c1b49f789b92f7fc87749fa79ce5c7bdc88cbdfacb818a4bca47fec5"
+dependencies = [
+ "futures",
+ "libp2p-core 0.38.0",
  "log",
  "parking_lot 0.12.1",
  "smallvec",
@@ -5048,14 +5279,14 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identify"
-version = "0.40.0"
+version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf9a121f699e8719bda2e6e9e9b6ddafc6cff4602471d6481c1067930ccb29b"
+checksum = "c052d0026f4817b44869bfb6810f4e1112f43aec8553f2cb38881c524b563abf"
 dependencies = [
  "asynchronous-codec",
  "futures",
  "futures-timer",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-swarm",
  "log",
  "lru",
@@ -5068,10 +5299,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "libp2p-kad"
-version = "0.41.0"
+name = "libp2p-identity"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6721c200e2021f6c3fab8b6cf0272ead8912d871610ee194ebd628cecf428f22"
+checksum = "9e2d584751cecb2aabaa56106be6be91338a60a0f4e420cf2af639204f596fc1"
+dependencies = [
+ "bs58",
+ "ed25519-dalek",
+ "log",
+ "multiaddr 0.17.1",
+ "multihash 0.17.0",
+ "quick-protobuf",
+ "rand 0.8.5",
+ "sha2 0.10.6",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
+name = "libp2p-kad"
+version = "0.42.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2766dcd2be8c87d5e1f35487deb22d765f49c6ae1251b3633efe3b25698bd3d2"
 dependencies = [
  "arrayvec 0.7.2",
  "asynchronous-codec",
@@ -5081,7 +5330,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "instant",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-swarm",
  "log",
  "prost",
@@ -5097,31 +5346,31 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mdns"
-version = "0.41.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "761704e727f7d68d58d7bc2231eafae5fc1b9814de24290f126df09d4bd37a15"
+checksum = "04f378264aade9872d6ccd315c0accc18be3a35d15fc1b9c36e5b6f983b62b5b"
 dependencies = [
- "async-io",
  "data-encoding",
- "dns-parser",
  "futures",
  "if-watch",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-swarm",
  "log",
  "rand 0.8.5",
  "smallvec",
  "socket2",
+ "tokio",
+ "trust-dns-proto 0.22.0",
  "void",
 ]
 
 [[package]]
 name = "libp2p-metrics"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ee31b08e78b7b8bfd1c4204a9dd8a87b4fcdf6dafc57eb51701c1c264a81cb9"
+checksum = "5ad8a64f29da86005c86a4d2728b8a0719e9b192f4092b609fd8790acb9dec55"
 dependencies = [
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-identify",
  "libp2p-kad",
  "libp2p-ping",
@@ -5131,14 +5380,14 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mplex"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692664acfd98652de739a8acbb0a0d670f1d67190a49be6b4395e22c37337d89"
+checksum = "03805b44107aa013e7cbbfa5627b31c36cbedfdfb00603c0311998882bc4bace"
 dependencies = [
  "asynchronous-codec",
  "bytes",
  "futures",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "log",
  "nohash-hasher",
  "parking_lot 0.12.1",
@@ -5149,36 +5398,37 @@ dependencies = [
 
 [[package]]
 name = "libp2p-noise"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "048155686bd81fe6cb5efdef0c6290f25ad32a0a42e8f4f72625cf6a505a206f"
+checksum = "a978cb57efe82e892ec6f348a536bfbd9fee677adbe5689d7a93ad3a9bffbf2e"
 dependencies = [
  "bytes",
  "curve25519-dalek 3.2.0",
  "futures",
- "lazy_static",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "log",
+ "once_cell",
  "prost",
  "prost-build",
  "rand 0.8.5",
  "sha2 0.10.6",
  "snow",
  "static_assertions",
- "x25519-dalek",
+ "thiserror",
+ "x25519-dalek 1.1.1",
  "zeroize",
 ]
 
 [[package]]
 name = "libp2p-ping"
-version = "0.40.1"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7228b9318d34689521349a86eb39a3c3a802c9efc99a0568062ffb80913e3f91"
+checksum = "929fcace45a112536e22b3dcfd4db538723ef9c3cb79f672b98be2cc8e25f37f"
 dependencies = [
  "futures",
  "futures-timer",
  "instant",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-swarm",
  "log",
  "rand 0.8.5",
@@ -5186,16 +5436,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "libp2p-request-response"
-version = "0.22.1"
+name = "libp2p-quic"
+version = "0.7.0-alpha"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8827af16a017b65311a410bb626205a9ad92ec0473967618425039fa5231adc1"
+checksum = "01e7c867e95c8130667b24409d236d37598270e6da69b3baf54213ba31ffca59"
+dependencies = [
+ "bytes",
+ "futures",
+ "futures-timer",
+ "if-watch",
+ "libp2p-core 0.38.0",
+ "libp2p-tls",
+ "log",
+ "parking_lot 0.12.1",
+ "quinn-proto",
+ "rand 0.8.5",
+ "rustls 0.20.8",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "libp2p-request-response"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3236168796727bfcf4927f766393415361e2c644b08bedb6a6b13d957c9a4884"
 dependencies = [
  "async-trait",
  "bytes",
  "futures",
  "instant",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "libp2p-swarm",
  "log",
  "rand 0.8.5",
@@ -5205,29 +5476,31 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm"
-version = "0.40.1"
+version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46d13df7c37807965d82930c0e4b04a659efcb6cca237373b206043db5398ecf"
+checksum = "b2a35472fe3276b3855c00f1c032ea8413615e030256429ad5349cdf67c6e1a0"
 dependencies = [
  "either",
  "fnv",
  "futures",
  "futures-timer",
  "instant",
- "libp2p-core",
+ "libp2p-core 0.38.0",
+ "libp2p-swarm-derive",
  "log",
  "pin-project",
  "rand 0.8.5",
  "smallvec",
  "thiserror",
+ "tokio",
  "void",
 ]
 
 [[package]]
 name = "libp2p-swarm-derive"
-version = "0.30.1"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0eddc4497a8b5a506013c40e8189864f9c3a00db2b25671f428ae9007f3ba32"
+checksum = "9d527d5827582abd44a6d80c07ff8b50b4ee238a8979e05998474179e79dc400"
 dependencies = [
  "heck",
  "quote",
@@ -5236,44 +5509,94 @@ dependencies = [
 
 [[package]]
 name = "libp2p-tcp"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9839d96761491c6d3e238e70554b856956fca0ab60feb9de2cd08eed4473fa92"
+checksum = "b4b257baf6df8f2df39678b86c578961d48cc8b68642a12f0f763f56c8e5858d"
 dependencies = [
- "async-io",
  "futures",
  "futures-timer",
  "if-watch",
  "libc",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "log",
  "socket2",
+ "tokio",
+]
+
+[[package]]
+name = "libp2p-tls"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff08d13d0dc66e5e9ba6279c1de417b84fa0d0adc3b03e5732928c180ec02781"
+dependencies = [
+ "futures",
+ "futures-rustls",
+ "libp2p-core 0.39.2",
+ "libp2p-identity",
+ "rcgen 0.10.0",
+ "ring",
+ "rustls 0.20.8",
+ "thiserror",
+ "webpki 0.22.0",
+ "x509-parser 0.14.0",
+ "yasna",
 ]
 
 [[package]]
 name = "libp2p-wasm-ext"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a17b5b8e7a73e379e47b1b77f8a82c4721e97eca01abcd18e9cd91a23ca6ce97"
+checksum = "1bb1a35299860e0d4b3c02a3e74e3b293ad35ae0cee8a056363b0c862d082069"
 dependencies = [
  "futures",
  "js-sys",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "parity-send-wrapper",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
 
 [[package]]
-name = "libp2p-websocket"
-version = "0.39.0"
+name = "libp2p-webrtc"
+version = "0.4.0-alpha"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3758ae6f89b2531a24b6d9f5776bda6a626b60a57600d7185d43dfa75ca5ecc4"
+checksum = "cdb6cd86dd68cba72308ea05de1cebf3ba0ae6e187c40548167955d4e3970f6a"
+dependencies = [
+ "async-trait",
+ "asynchronous-codec",
+ "bytes",
+ "futures",
+ "futures-timer",
+ "hex",
+ "if-watch",
+ "libp2p-core 0.38.0",
+ "libp2p-noise",
+ "log",
+ "multihash 0.16.3",
+ "prost",
+ "prost-build",
+ "prost-codec",
+ "rand 0.8.5",
+ "rcgen 0.9.3",
+ "serde",
+ "stun",
+ "thiserror",
+ "tinytemplate",
+ "tokio",
+ "tokio-util 0.7.8",
+ "webrtc",
+]
+
+[[package]]
+name = "libp2p-websocket"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d705506030d5c0aaf2882437c70dab437605f21c5f9811978f694e6917a3b54"
 dependencies = [
  "either",
  "futures",
  "futures-rustls",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "log",
  "parking_lot 0.12.1",
  "quicksink",
@@ -5285,12 +5608,12 @@ dependencies = [
 
 [[package]]
 name = "libp2p-yamux"
-version = "0.41.1"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d6874d66543c4f7e26e3b8ca9a6bead351563a13ab4fafd43c7927f7c0d6c12"
+checksum = "4f63594a0aa818642d9d4915c791945053877253f08a3626f13416b5cd928a29"
 dependencies = [
  "futures",
- "libp2p-core",
+ "libp2p-core 0.38.0",
  "log",
  "parking_lot 0.12.1",
  "thiserror",
@@ -5432,9 +5755,6 @@ name = "log"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "518ef76f2f87365916b142844c16d8fefd85039bc5699050210a7778ee1cd1de"
-dependencies = [
- "value-bag",
-]
 
 [[package]]
 name = "lru"
@@ -5442,7 +5762,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6e8aaa3f231bb4bd57b84b2d5dc3ae7f350265df8aa96492e0bc394a1571909"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -5576,23 +5896,12 @@ dependencies = [
 
 [[package]]
 name = "memory-db"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ac11bb793c28fa095b7554466f53b3a60a2cd002afdac01bcf135cbd73a269"
-dependencies = [
- "hash-db",
- "hashbrown",
- "parity-util-mem",
-]
-
-[[package]]
-name = "memory-db"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e0c7cba9ce19ac7ffd2053ac9f49843bbd3f4318feedfd74e85c19d5fb0ba66"
 dependencies = [
  "hash-db",
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -5722,15 +6031,34 @@ dependencies = [
 
 [[package]]
 name = "multiaddr"
-version = "0.14.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c580bfdd8803cce319b047d239559a22f809094aaea4ac13902a1fdcfcd4261"
+checksum = "a4aebdb21e90f81d13ed01dc84123320838e53963c2ca94b60b305d3fa64f31e"
 dependencies = [
  "arrayref",
- "bs58",
  "byteorder",
  "data-encoding",
- "multihash",
+ "multibase",
+ "multihash 0.16.3",
+ "percent-encoding 2.2.0",
+ "serde",
+ "static_assertions",
+ "unsigned-varint",
+ "url 2.3.1",
+]
+
+[[package]]
+name = "multiaddr"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b36f567c7099511fa8612bbbb52dda2419ce0bdbacf31714e3a5ffdb766d3bd"
+dependencies = [
+ "arrayref",
+ "byteorder",
+ "data-encoding",
+ "log",
+ "multibase",
+ "multihash 0.17.0",
  "percent-encoding 2.2.0",
  "serde",
  "static_assertions",
@@ -5763,6 +6091,17 @@ dependencies = [
  "multihash-derive",
  "sha2 0.10.6",
  "sha3",
+ "unsigned-varint",
+]
+
+[[package]]
+name = "multihash"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835d6ff01d610179fbce3de1694d007e500bf33a7f29689838941d6bf783ae40"
+dependencies = [
+ "core2",
+ "multihash-derive",
  "unsigned-varint",
 ]
 
@@ -5968,11 +6307,11 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6471bf08e7ac0135876a9581bf3217ef0333c191c128d34878079f42ee150411"
 dependencies = [
- "async-io",
  "bytes",
  "futures",
  "libc",
  "log",
+ "tokio",
 ]
 
 [[package]]
@@ -5999,6 +6338,7 @@ dependencies = [
  "bitflags",
  "cfg-if",
  "libc",
+ "memoffset 0.6.5",
 ]
 
 [[package]]
@@ -6144,7 +6484,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
 dependencies = [
  "crc32fast",
- "hashbrown",
+ "hashbrown 0.12.3",
  "indexmap",
  "memchr",
 ]
@@ -6156,6 +6496,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea86265d3d3dcb6a27fc51bd29a4bf387fae9d2986b823079d4986af253eb439"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "oid-registry"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38e20717fa0541f39bd146692035c37bedfa532b3e5071b35761082407546b2a"
+dependencies = [
+ "asn1-rs 0.3.1",
+]
+
+[[package]]
+name = "oid-registry"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bedf36ffb6ba96c2eb7144ef6270557b52e54b20c0a8e1eb2ff99a6c6959bff"
+dependencies = [
+ "asn1-rs 0.5.2",
 ]
 
 [[package]]
@@ -6252,7 +6610,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccd746e37177e1711c20dd619a1620f34f5c8b569c53590a72dedd5344d8924a"
 dependencies = [
  "dlv-list",
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -6268,6 +6626,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
+name = "p256"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51f44edd08f51e2ade572f141051021c5af22677e42b7dd28a88155151c33594"
+dependencies = [
+ "ecdsa 0.14.8",
+ "elliptic-curve 0.12.3",
+ "sha2 0.10.6",
+]
+
+[[package]]
+name = "p384"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfc8c5bf642dde52bb9e87c0ecd8ca5a76faac2eeed98dedb7c717997e1080aa"
+dependencies = [
+ "ecdsa 0.14.8",
+ "elliptic-curve 0.12.3",
+ "sha2 0.10.6",
+]
+
+[[package]]
 name = "packed_simd_2"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6280,7 +6660,7 @@ dependencies = [
 [[package]]
 name = "pallet-aura"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6296,7 +6676,7 @@ dependencies = [
 [[package]]
 name = "pallet-authorship"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6703,7 +7083,7 @@ dependencies = [
 [[package]]
 name = "pallet-grandpa"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -6726,7 +7106,7 @@ dependencies = [
 [[package]]
 name = "pallet-randomness-collective-flip"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6740,7 +7120,7 @@ dependencies = [
 [[package]]
 name = "pallet-session"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6761,7 +7141,7 @@ dependencies = [
 [[package]]
 name = "pallet-timestamp"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -6779,7 +7159,7 @@ dependencies = [
 [[package]]
 name = "pallet-transaction-payment"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -6795,9 +7175,9 @@ dependencies = [
 [[package]]
 name = "pallet-transaction-payment-rpc"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
@@ -6811,7 +7191,7 @@ dependencies = [
 [[package]]
 name = "pallet-transaction-payment-rpc-runtime-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -6872,33 +7252,6 @@ name = "parity-send-wrapper"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9777aa91b8ad9dd5aaa04a9b6bcb02c7f1deb952fca5a66034d5e63afc5c6f"
-
-[[package]]
-name = "parity-util-mem"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d32c34f4f5ca7f9196001c0aba5a1f9a5a12382c8944b8b0f90233282d1e8f8"
-dependencies = [
- "cfg-if",
- "hashbrown",
- "impl-trait-for-tuples",
- "parity-util-mem-derive",
- "parking_lot 0.12.1",
- "primitive-types 0.12.1",
- "smallvec",
- "winapi",
-]
-
-[[package]]
-name = "parity-util-mem-derive"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f557c32c6d268a07c921471619c0295f5efad3a0e76d4f97a05c091a51d110b2"
-dependencies = [
- "proc-macro2",
- "syn 1.0.109",
- "synstructure",
-]
 
 [[package]]
 name = "parity-wasm"
@@ -6991,15 +7344,6 @@ checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 
 [[package]]
 name = "pbkdf2"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216eaa586a190f0a738f2f918511eecfa90f13295abec0e457cdebcceda80cbd"
-dependencies = [
- "crypto-mac 0.8.0",
-]
-
-[[package]]
-name = "pbkdf2"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d95f5254224e617595d2cc3cc73ff0a5eaf2637519e25f03388154e9378b6ffa"
@@ -7034,6 +7378,24 @@ name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
+
+[[package]]
+name = "pem"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8835c273a76a90455d7344889b0964598e3316e2a79ede8e36f16bdcf2228b8"
+dependencies = [
+ "base64 0.13.1",
+]
+
+[[package]]
+name = "pem-rfc7468"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24d159833a9105500e0398934e205e0773f0b27529557134ecfc51c27646adac"
+dependencies = [
+ "base64ct",
+]
 
 [[package]]
 name = "percent-encoding"
@@ -7262,7 +7624,7 @@ checksum = "048aeb476be11a4b6ca432ca569e375810de9294ae78f4774e78ea98a9246ede"
 dependencies = [
  "cpufeatures",
  "opaque-debug 0.3.0",
- "universal-hash",
+ "universal-hash 0.4.1",
 ]
 
 [[package]]
@@ -7274,7 +7636,19 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "opaque-debug 0.3.0",
- "universal-hash",
+ "universal-hash 0.4.1",
+]
+
+[[package]]
+name = "polyval"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d52cff9d1d4dee5fe6d03729099f4a310a41179e0a10dbf542039873f2e826fb"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "opaque-debug 0.3.0",
+ "universal-hash 0.5.1",
 ]
 
 [[package]]
@@ -7480,9 +7854,9 @@ dependencies = [
 
 [[package]]
 name = "prost-codec"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "011ae9ff8359df7915f97302d591cdd9e0e27fbd5a4ddc5bd13b71079bb20987"
+checksum = "0dc34979ff898b6e141106178981ce2596c387ea6e62533facfc61a37fc879c0"
 dependencies = [
  "asynchronous-codec",
  "bytes",
@@ -7550,6 +7924,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
+name = "quick-protobuf"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d6da84cc204722a989e01ba2f6e1e276e190f22263d0cb6ce8526fcdb0d2e1f"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "quickcheck"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7580,6 +7963,24 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "pin-project-lite 0.1.12",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f31999cfc7927c4e212e60fd50934ab40e8e8bfd2d493d6095d2d306bc0764d9"
+dependencies = [
+ "bytes",
+ "rand 0.8.5",
+ "ring",
+ "rustc-hash",
+ "rustls 0.20.8",
+ "slab",
+ "thiserror",
+ "tinyvec",
+ "tracing",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -7624,7 +8025,6 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
- "rand_pcg 0.2.1",
 ]
 
 [[package]]
@@ -7697,15 +8097,6 @@ dependencies = [
 
 [[package]]
 name = "rand_pcg"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_pcg"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
@@ -7739,6 +8130,31 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6413f3de1edee53342e6138e75b56d32e7bc6e332b3bd62d497b1929d4cfbcdd"
+dependencies = [
+ "pem",
+ "ring",
+ "time 0.3.21",
+ "x509-parser 0.13.2",
+ "yasna",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
+dependencies = [
+ "pem",
+ "ring",
+ "time 0.3.21",
+ "yasna",
 ]
 
 [[package]]
@@ -7833,23 +8249,6 @@ name = "regex-syntax"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "436b050e76ed2903236f032a59761c1eb99e1b0aead2c257922771dab1fc8c78"
-
-[[package]]
-name = "remote-externalities"
-version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
-dependencies = [
- "env_logger 0.9.3",
- "log",
- "parity-scale-codec",
- "serde",
- "serde_json",
- "sp-core 7.0.0",
- "sp-io 7.0.0",
- "sp-runtime 7.0.0",
- "sp-version",
- "substrate-rpc-client",
-]
 
 [[package]]
 name = "reqwest"
@@ -8003,18 +8402,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtcp"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1919efd6d4a6a85d13388f9487549bb8e359f17198cc03ffd72f79b553873691"
+dependencies = [
+ "bytes",
+ "thiserror",
+ "webrtc-util",
+]
+
+[[package]]
 name = "rtnetlink"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "322c53fd76a18698f1c27381d58091de3a043d356aa5bd0d510608b565f469a0"
 dependencies = [
- "async-global-executor",
  "futures",
  "log",
  "netlink-packet-route",
  "netlink-proto",
  "nix",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -8025,6 +8435,20 @@ checksum = "034e22c514f5c0cb8a10ff341b9b048b5ceb21591f31c8f44c43b960f9b3524a"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "rtp"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2a095411ff00eed7b12e4c6a118ba984d113e1079582570d56a5ee723f11f80"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "rand 0.8.5",
+ "serde",
+ "thiserror",
+ "webrtc-util",
 ]
 
 [[package]]
@@ -8074,6 +8498,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusticata-macros"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faf0c4a6ece9950b9abdb62b1cfcf2a68b3b67a10ba445b3bb85be2a293d0632"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "rustix"
 version = "0.35.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8103,14 +8536,27 @@ dependencies = [
 
 [[package]]
 name = "rustls"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35edb675feee39aec9c99fa5ff985081995a06d594114ae14cbe797ad7b7a6d7"
+dependencies = [
+ "base64 0.13.1",
+ "log",
+ "ring",
+ "sct 0.6.1",
+ "webpki 0.21.4",
+]
+
+[[package]]
+name = "rustls"
 version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fff78fc74d175294f4e83b28343315ffcfb114b156f0185e9741cb5570f50e2f"
 dependencies = [
  "log",
  "ring",
- "sct",
- "webpki",
+ "sct 0.7.0",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -8122,7 +8568,7 @@ dependencies = [
  "log",
  "ring",
  "rustls-webpki",
- "sct",
+ "sct 0.7.0",
 ]
 
 [[package]]
@@ -8209,7 +8655,7 @@ dependencies = [
 [[package]]
 name = "sc-allocator"
 version = "4.1.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "log",
  "sp-core 7.0.0",
@@ -8220,7 +8666,7 @@ dependencies = [
 [[package]]
 name = "sc-basic-authorship"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "futures",
  "futures-timer",
@@ -8243,7 +8689,7 @@ dependencies = [
 [[package]]
 name = "sc-block-builder"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "sc-client-api",
@@ -8259,11 +8705,9 @@ dependencies = [
 [[package]]
 name = "sc-chain-spec"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "impl-trait-for-tuples",
  "memmap2",
- "parity-scale-codec",
  "sc-chain-spec-derive",
  "sc-network-common",
  "sc-telemetry",
@@ -8276,7 +8720,7 @@ dependencies = [
 [[package]]
 name = "sc-chain-spec-derive"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -8287,7 +8731,7 @@ dependencies = [
 [[package]]
 name = "sc-cli"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "chrono",
@@ -8298,7 +8742,7 @@ dependencies = [
  "log",
  "names",
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.5",
  "regex",
  "rpassword",
  "sc-client-api",
@@ -8320,18 +8764,17 @@ dependencies = [
  "sp-runtime 7.0.0",
  "sp-version",
  "thiserror",
- "tiny-bip39 0.8.2",
+ "tiny-bip39",
  "tokio",
 ]
 
 [[package]]
 name = "sc-client-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "fnv",
  "futures",
- "hash-db",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8348,14 +8791,13 @@ dependencies = [
  "sp-runtime 7.0.0",
  "sp-state-machine 0.13.0",
  "sp-storage 7.0.0",
- "sp-trie 7.0.0",
  "substrate-prometheus-endpoint",
 ]
 
 [[package]]
 name = "sc-client-db"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "hash-db",
  "kvdb",
@@ -8368,6 +8810,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "sc-client-api",
  "sc-state-db",
+ "schnellru",
  "sp-arithmetic 6.0.0",
  "sp-blockchain",
  "sp-core 7.0.0",
@@ -8380,13 +8823,14 @@ dependencies = [
 [[package]]
 name = "sc-consensus"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
  "futures-timer",
  "libp2p",
  "log",
+ "mockall",
  "parking_lot 0.12.1",
  "sc-client-api",
  "sc-utils",
@@ -8404,7 +8848,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-aura"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
@@ -8433,7 +8877,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-slots"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
@@ -8451,15 +8895,13 @@ dependencies = [
  "sp-inherents",
  "sp-runtime 7.0.0",
  "sp-state-machine 0.13.0",
- "thiserror",
 ]
 
 [[package]]
 name = "sc-executor"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "lazy_static",
  "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8468,7 +8910,6 @@ dependencies = [
  "sc-executor-wasmtime",
  "sp-api",
  "sp-core 7.0.0",
- "sp-core-hashing-proc-macro",
  "sp-externalities 0.13.0",
  "sp-io 7.0.0",
  "sp-panic-handler 5.0.0",
@@ -8483,13 +8924,10 @@ dependencies = [
 [[package]]
 name = "sc-executor-common"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "environmental",
- "parity-scale-codec",
  "sc-allocator",
  "sp-maybe-compressed-blob",
- "sp-sandbox",
  "sp-wasm-interface 7.0.0",
  "thiserror",
  "wasm-instrument",
@@ -8499,14 +8937,12 @@ dependencies = [
 [[package]]
 name = "sc-executor-wasmi"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "log",
- "parity-scale-codec",
  "sc-allocator",
  "sc-executor-common",
  "sp-runtime-interface 7.0.0",
- "sp-sandbox",
  "sp-wasm-interface 7.0.0",
  "wasmi",
 ]
@@ -8514,19 +8950,16 @@ dependencies = [
 [[package]]
 name = "sc-executor-wasmtime"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "cfg-if",
  "libc",
  "log",
  "once_cell",
- "parity-scale-codec",
- "parity-wasm",
  "rustix 0.35.13",
  "sc-allocator",
  "sc-executor-common",
  "sp-runtime-interface 7.0.0",
- "sp-sandbox",
  "sp-wasm-interface 7.0.0",
  "wasmtime",
 ]
@@ -8534,9 +8967,9 @@ dependencies = [
 [[package]]
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "array-bytes",
  "async-trait",
  "dyn-clone",
@@ -8552,7 +8985,6 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
- "sc-keystore",
  "sc-network",
  "sc-network-common",
  "sc-network-gossip",
@@ -8575,18 +9007,17 @@ dependencies = [
 [[package]]
 name = "sc-finality-grandpa-rpc"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "finality-grandpa",
  "futures",
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "log",
  "parity-scale-codec",
  "sc-client-api",
  "sc-finality-grandpa",
  "sc-rpc",
  "serde",
- "serde_json",
  "sp-blockchain",
  "sp-core 7.0.0",
  "sp-runtime 7.0.0",
@@ -8596,16 +9027,14 @@ dependencies = [
 [[package]]
 name = "sc-informant"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "ansi_term",
  "futures",
  "futures-timer",
  "log",
- "parity-util-mem",
  "sc-client-api",
  "sc-network-common",
- "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime 7.0.0",
 ]
@@ -8613,7 +9042,7 @@ dependencies = [
 [[package]]
 name = "sc-keystore"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "async-trait",
@@ -8628,30 +9057,25 @@ dependencies = [
 [[package]]
 name = "sc-network"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "async-trait",
  "asynchronous-codec",
- "bitflags",
+ "backtrace",
  "bytes",
- "cid",
  "either",
  "fnv",
- "fork-tree",
  "futures",
  "futures-timer",
  "ip_network",
  "libp2p",
- "linked-hash-map",
- "linked_hash_set",
  "log",
  "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
- "prost",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
@@ -8675,7 +9099,7 @@ dependencies = [
 [[package]]
 name = "sc-network-bitswap"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "cid",
  "futures",
@@ -8689,13 +9113,12 @@ dependencies = [
  "sp-runtime 7.0.0",
  "thiserror",
  "unsigned-varint",
- "void",
 ]
 
 [[package]]
 name = "sc-network-common"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "bitflags",
@@ -8721,9 +9144,9 @@ dependencies = [
 [[package]]
 name = "sc-network-gossip"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "futures",
  "futures-timer",
  "libp2p",
@@ -8739,7 +9162,7 @@ dependencies = [
 [[package]]
 name = "sc-network-light"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "futures",
@@ -8760,7 +9183,7 @@ dependencies = [
 [[package]]
 name = "sc-network-sync"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "async-trait",
@@ -8785,23 +9208,24 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-finality-grandpa",
  "sp-runtime 7.0.0",
+ "substrate-prometheus-endpoint",
  "thiserror",
 ]
 
 [[package]]
 name = "sc-network-transactions"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "futures",
- "hex",
  "libp2p",
  "log",
  "parity-scale-codec",
  "pin-project",
  "sc-network-common",
  "sc-peerset",
+ "sc-utils",
  "sp-consensus",
  "sp-runtime 7.0.0",
  "substrate-prometheus-endpoint",
@@ -8810,7 +9234,7 @@ dependencies = [
 [[package]]
 name = "sc-offchain"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "bytes",
@@ -8824,7 +9248,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-client-api",
  "sc-network-common",
  "sc-peerset",
@@ -8840,7 +9264,7 @@ dependencies = [
 [[package]]
 name = "sc-peerset"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "futures",
  "libp2p",
@@ -8853,7 +9277,7 @@ dependencies = [
 [[package]]
 name = "sc-proposer-metrics"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "log",
  "substrate-prometheus-endpoint",
@@ -8862,11 +9286,10 @@ dependencies = [
 [[package]]
 name = "sc-rpc"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "futures",
- "hash-db",
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8887,18 +9310,16 @@ dependencies = [
  "sp-runtime 7.0.0",
  "sp-session",
  "sp-version",
+ "tokio",
 ]
 
 [[package]]
 name = "sc-rpc-api"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "futures",
- "jsonrpsee 0.15.1",
- "log",
+ "jsonrpsee 0.16.2",
  "parity-scale-codec",
- "parking_lot 0.12.1",
  "sc-chain-spec",
  "sc-transaction-pool-api",
  "scale-info",
@@ -8907,7 +9328,6 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-rpc",
  "sp-runtime 7.0.0",
- "sp-tracing 6.0.0",
  "sp-version",
  "thiserror",
 ]
@@ -8915,53 +9335,60 @@ dependencies = [
 [[package]]
 name = "sc-rpc-server"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "futures",
- "jsonrpsee 0.15.1",
+ "http",
+ "jsonrpsee 0.16.2",
  "log",
  "serde_json",
  "substrate-prometheus-endpoint",
  "tokio",
+ "tower",
+ "tower-http",
 ]
 
 [[package]]
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
+ "array-bytes",
  "futures",
+ "futures-util",
  "hex",
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
+ "log",
  "parity-scale-codec",
+ "parking_lot 0.12.1",
  "sc-chain-spec",
+ "sc-client-api",
  "sc-transaction-pool-api",
  "serde",
  "sp-api",
  "sp-blockchain",
  "sp-core 7.0.0",
  "sp-runtime 7.0.0",
+ "sp-version",
  "thiserror",
+ "tokio-stream",
 ]
 
 [[package]]
 name = "sc-service"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "directories",
  "exit-future",
  "futures",
  "futures-timer",
- "hash-db",
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "log",
  "parity-scale-codec",
- "parity-util-mem",
  "parking_lot 0.12.1",
  "pin-project",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
@@ -8989,19 +9416,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-api",
- "sp-application-crypto 7.0.0",
- "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-core 7.0.0",
  "sp-externalities 0.13.0",
- "sp-inherents",
  "sp-keystore 0.13.0",
  "sp-runtime 7.0.0",
  "sp-session",
  "sp-state-machine 0.13.0",
  "sp-storage 7.0.0",
- "sp-tracing 6.0.0",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
  "sp-trie 7.0.0",
@@ -9018,27 +9441,24 @@ dependencies = [
 [[package]]
 name = "sc-state-db"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "log",
  "parity-scale-codec",
- "parity-util-mem",
- "parity-util-mem-derive",
  "parking_lot 0.12.1",
- "sc-client-api",
  "sp-core 7.0.0",
 ]
 
 [[package]]
 name = "sc-sysinfo"
 version = "6.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "futures",
  "libc",
  "log",
- "rand 0.7.3",
- "rand_pcg 0.2.1",
+ "rand 0.8.5",
+ "rand_pcg",
  "regex",
  "sc-telemetry",
  "serde",
@@ -9051,7 +9471,7 @@ dependencies = [
 [[package]]
 name = "sc-telemetry"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "chrono",
  "futures",
@@ -9059,7 +9479,8 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "pin-project",
- "rand 0.7.3",
+ "rand 0.8.5",
+ "sc-utils",
  "serde",
  "serde_json",
  "thiserror",
@@ -9069,7 +9490,7 @@ dependencies = [
 [[package]]
 name = "sc-tracing"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "ansi_term",
  "atty",
@@ -9100,7 +9521,7 @@ dependencies = [
 [[package]]
 name = "sc-tracing-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -9111,15 +9532,15 @@ dependencies = [
 [[package]]
 name = "sc-transaction-pool"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
  "futures-timer",
  "linked-hash-map",
  "log",
+ "num-traits",
  "parity-scale-codec",
- "parity-util-mem",
  "parking_lot 0.12.1",
  "sc-client-api",
  "sc-transaction-pool-api",
@@ -9138,7 +9559,7 @@ dependencies = [
 [[package]]
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
@@ -9152,8 +9573,9 @@ dependencies = [
 [[package]]
 name = "sc-utils"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
+ "backtrace",
  "futures",
  "futures-timer",
  "lazy_static",
@@ -9238,6 +9660,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "schnellru"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "772575a524feeb803e5b0fcbc6dd9f367e579488197c94c6e4023aad2305774d"
+dependencies = [
+ "ahash 0.8.3",
+ "cfg-if",
+ "hashbrown 0.13.2",
+]
+
+[[package]]
 name = "schnorrkel"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9287,12 +9720,34 @@ dependencies = [
 
 [[package]]
 name = "sct"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b362b83898e0e69f38515b82ee15aa80636befe47c3b6d3d89a911e78fc228ce"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
+name = "sct"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d53dcdb7c9f8158937a7981b48accfd39a43af418591a5d008c7b22b5e1b7ca4"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "sdp"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d22a5ef407871893fd72b4562ee15e4742269b173959db4b8df6f538c414e13"
+dependencies = [
+ "rand 0.8.5",
+ "substring",
+ "thiserror",
+ "url 2.3.1",
 ]
 
 [[package]]
@@ -9489,15 +9944,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_nanos"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae801b7733ca8d6a2b580debe99f67f36826a0f5b8a36055dc6bc40f8d6bc71"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_spanned"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9604,16 +10050,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
 
 [[package]]
-name = "signal-hook"
-version = "0.3.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "732768f1176d21d09e076c23a93123d40bba92d50c4058da34d45c8de8e682b9"
-dependencies = [
- "libc",
- "signal-hook-registry",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9693,7 +10129,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ccba027ba85743e09d15c03296797cad56395089b832b48b5a5217880f57733"
 dependencies = [
- "aes-gcm",
+ "aes-gcm 0.9.4",
  "blake2",
  "chacha20poly1305",
  "curve25519-dalek 4.0.0-rc.1",
@@ -9748,7 +10184,7 @@ dependencies = [
 [[package]]
 name = "sp-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "hash-db",
  "log",
@@ -9766,7 +10202,7 @@ dependencies = [
 [[package]]
 name = "sp-api-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "blake2",
  "proc-macro-crate",
@@ -9778,7 +10214,7 @@ dependencies = [
 [[package]]
 name = "sp-application-crypto"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9805,14 +10241,13 @@ dependencies = [
 [[package]]
 name = "sp-arithmetic"
 version = "6.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-debug-derive 5.0.0",
  "sp-std 5.0.0",
  "static_assertions",
 ]
@@ -9835,7 +10270,7 @@ dependencies = [
 [[package]]
 name = "sp-authorship"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
@@ -9847,7 +10282,7 @@ dependencies = [
 [[package]]
 name = "sp-block-builder"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
@@ -9859,7 +10294,7 @@ dependencies = [
 [[package]]
 name = "sp-blockchain"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "futures",
  "log",
@@ -9877,11 +10312,10 @@ dependencies = [
 [[package]]
 name = "sp-consensus"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
- "futures-timer",
  "log",
  "parity-scale-codec",
  "sp-core 7.0.0",
@@ -9896,7 +10330,7 @@ dependencies = [
 [[package]]
 name = "sp-consensus-aura"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
@@ -9914,13 +10348,11 @@ dependencies = [
 [[package]]
 name = "sp-consensus-slots"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-arithmetic 6.0.0",
- "sp-runtime 7.0.0",
  "sp-std 5.0.0",
  "sp-timestamp",
 ]
@@ -9928,13 +10360,12 @@ dependencies = [
 [[package]]
 name = "sp-core"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "array-bytes",
  "base58",
  "bitflags",
  "blake2",
- "byteorder",
  "dyn-clonable",
  "ed25519-zebra",
  "futures",
@@ -9945,11 +10376,10 @@ dependencies = [
  "libsecp256k1",
  "log",
  "merlin",
- "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "primitive-types 0.12.1",
- "rand 0.7.3",
+ "rand 0.8.5",
  "regex",
  "scale-info",
  "schnorrkel",
@@ -9965,8 +10395,7 @@ dependencies = [
  "ss58-registry",
  "substrate-bip39",
  "thiserror",
- "tiny-bip39 0.8.2",
- "wasmi",
+ "tiny-bip39",
  "zeroize",
 ]
 
@@ -10009,14 +10438,14 @@ dependencies = [
  "ss58-registry",
  "substrate-bip39",
  "thiserror",
- "tiny-bip39 1.0.0",
+ "tiny-bip39",
  "zeroize",
 ]
 
 [[package]]
 name = "sp-core-hashing"
 version = "5.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "blake2",
  "byteorder",
@@ -10045,7 +10474,7 @@ dependencies = [
 [[package]]
 name = "sp-core-hashing-proc-macro"
 version = "5.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10056,7 +10485,7 @@ dependencies = [
 [[package]]
 name = "sp-database"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "kvdb",
  "parking_lot 0.12.1",
@@ -10065,7 +10494,7 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "5.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10086,7 +10515,7 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.13.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -10109,7 +10538,7 @@ dependencies = [
 [[package]]
 name = "sp-finality-grandpa"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "finality-grandpa",
  "log",
@@ -10127,7 +10556,7 @@ dependencies = [
 [[package]]
 name = "sp-inherents"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "impl-trait-for-tuples",
@@ -10141,16 +10570,15 @@ dependencies = [
 [[package]]
 name = "sp-io"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "bytes",
+ "ed25519",
  "ed25519-dalek",
  "futures",
- "hash-db",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "parking_lot 0.12.1",
  "secp256k1 0.24.3",
  "sp-core 7.0.0",
  "sp-externalities 0.13.0",
@@ -10160,7 +10588,6 @@ dependencies = [
  "sp-std 5.0.0",
  "sp-tracing 6.0.0",
  "sp-trie 7.0.0",
- "sp-wasm-interface 7.0.0",
  "tracing",
  "tracing-core",
 ]
@@ -10194,7 +10621,7 @@ dependencies = [
 [[package]]
 name = "sp-keyring"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "lazy_static",
  "sp-core 7.0.0",
@@ -10205,7 +10632,7 @@ dependencies = [
 [[package]]
 name = "sp-keystore"
 version = "0.13.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures",
@@ -10239,7 +10666,7 @@ dependencies = [
 [[package]]
 name = "sp-maybe-compressed-blob"
 version = "4.1.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "thiserror",
  "zstd",
@@ -10248,7 +10675,7 @@ dependencies = [
 [[package]]
 name = "sp-offchain"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "sp-api",
  "sp-core 7.0.0",
@@ -10258,7 +10685,7 @@ dependencies = [
 [[package]]
 name = "sp-panic-handler"
 version = "5.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -10279,7 +10706,7 @@ dependencies = [
 [[package]]
 name = "sp-rpc"
 version = "6.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -10289,16 +10716,15 @@ dependencies = [
 [[package]]
 name = "sp-runtime"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "either",
  "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
- "parity-util-mem",
  "paste",
- "rand 0.7.3",
+ "rand 0.8.5",
  "scale-info",
  "serde",
  "sp-application-crypto 7.0.0",
@@ -10335,7 +10761,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "bytes",
  "impl-trait-for-tuples",
@@ -10372,7 +10798,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "6.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "Inflector",
  "proc-macro-crate",
@@ -10395,23 +10821,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-sandbox"
-version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
-dependencies = [
- "log",
- "parity-scale-codec",
- "sp-core 7.0.0",
- "sp-io 7.0.0",
- "sp-std 5.0.0",
- "sp-wasm-interface 7.0.0",
- "wasmi",
-]
-
-[[package]]
 name = "sp-session"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -10425,10 +10837,11 @@ dependencies = [
 [[package]]
 name = "sp-staking"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
+ "sp-core 7.0.0",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
 ]
@@ -10436,14 +10849,13 @@ dependencies = [
 [[package]]
 name = "sp-state-machine"
 version = "0.13.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "hash-db",
  "log",
- "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.8.5",
  "smallvec",
  "sp-core 7.0.0",
  "sp-externalities 0.13.0",
@@ -10452,7 +10864,6 @@ dependencies = [
  "sp-trie 7.0.0",
  "thiserror",
  "tracing",
- "trie-root",
 ]
 
 [[package]]
@@ -10479,7 +10890,7 @@ dependencies = [
 [[package]]
 name = "sp-std"
 version = "5.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 
 [[package]]
 name = "sp-std"
@@ -10490,7 +10901,7 @@ checksum = "af0ee286f98455272f64ac5bb1384ff21ac029fbb669afbaf48477faff12760e"
 [[package]]
 name = "sp-storage"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "impl-serde 0.4.0",
  "parity-scale-codec",
@@ -10517,13 +10928,12 @@ dependencies = [
 [[package]]
 name = "sp-timestamp"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "futures-timer",
  "log",
  "parity-scale-codec",
- "sp-api",
  "sp-inherents",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
@@ -10533,7 +10943,7 @@ dependencies = [
 [[package]]
 name = "sp-tracing"
 version = "6.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "sp-std 5.0.0",
@@ -10558,7 +10968,7 @@ dependencies = [
 [[package]]
 name = "sp-transaction-pool"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "sp-api",
  "sp-runtime 7.0.0",
@@ -10567,7 +10977,7 @@ dependencies = [
 [[package]]
 name = "sp-transaction-storage-proof"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
  "log",
@@ -10583,14 +10993,14 @@ dependencies = [
 [[package]]
 name = "sp-trie"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "hash-db",
- "hashbrown",
+ "hashbrown 0.12.3",
  "lazy_static",
  "lru",
- "memory-db 0.30.0",
+ "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -10609,12 +11019,12 @@ version = "11.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db085f134cb444e52ca569a442d12c84bd17667532613d78dd6f568942632da4"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "hash-db",
- "hashbrown",
+ "hashbrown 0.12.3",
  "lazy_static",
  "lru",
- "memory-db 0.31.0",
+ "memory-db",
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -10630,7 +11040,7 @@ dependencies = [
 [[package]]
 name = "sp-version"
 version = "5.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "impl-serde 0.4.0",
  "parity-scale-codec",
@@ -10647,7 +11057,7 @@ dependencies = [
 [[package]]
 name = "sp-version-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "parity-scale-codec",
  "proc-macro2",
@@ -10658,7 +11068,7 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "7.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "impl-trait-for-tuples",
  "log",
@@ -10685,9 +11095,8 @@ dependencies = [
 [[package]]
 name = "sp-weights"
 version = "4.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10927,6 +11336,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "stun"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7e94b1ec00bad60e6410e058b52f1c66de3dc5fe4d62d09b3e52bb7d3b73e25"
+dependencies = [
+ "base64 0.13.1",
+ "crc",
+ "lazy_static",
+ "md-5",
+ "rand 0.8.5",
+ "ring",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "url 2.3.1",
+ "webrtc-util",
+]
+
+[[package]]
 name = "substrate-bip39"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10942,7 +11370,7 @@ dependencies = [
 [[package]]
 name = "substrate-build-script-utils"
 version = "3.0.0"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "platforms 2.0.0",
 ]
@@ -10950,17 +11378,15 @@ dependencies = [
 [[package]]
 name = "substrate-frame-rpc-system"
 version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "frame-system-rpc-runtime-api",
  "futures",
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "log",
  "parity-scale-codec",
- "sc-client-api",
  "sc-rpc-api",
  "sc-transaction-pool-api",
- "serde_json",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -10971,9 +11397,8 @@ dependencies = [
 [[package]]
 name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
- "futures-util",
  "hyper",
  "log",
  "prometheus",
@@ -10984,10 +11409,10 @@ dependencies = [
 [[package]]
 name = "substrate-rpc-client"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "async-trait",
- "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "log",
  "sc-rpc-api",
  "serde",
@@ -10997,7 +11422,7 @@ dependencies = [
 [[package]]
 name = "substrate-wasm-builder"
 version = "5.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "ansi_term",
  "build-helper",
@@ -11009,6 +11434,15 @@ dependencies = [
  "toml 0.5.11",
  "walkdir",
  "wasm-opt",
+]
+
+[[package]]
+name = "substring"
+version = "1.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42ee6433ecef213b2e72f587ef64a2f5943e7cd16fbd82dbe8bc07486c534c86"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
@@ -11305,8 +11739,10 @@ version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f3403384eaacbca9923fa06940178ac13e4edb725486d70e8e15881d0c836cc"
 dependencies = [
+ "itoa",
  "serde",
  "time-core",
+ "time-macros",
 ]
 
 [[package]]
@@ -11316,22 +11752,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7300fbefb4dadc1af235a9cef3737cea692a9d97e1b9cbcd4ebdae6f8868e6fb"
 
 [[package]]
-name = "tiny-bip39"
-version = "0.8.2"
+name = "time-macros"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc59cb9dfc85bb312c3a78fd6aa8a8582e310b0fa885d5bb877f6dcc601839d"
+checksum = "372950940a5f07bf38dbe211d7283c9e6d7327df53794992d293e534c733d09b"
 dependencies = [
- "anyhow",
- "hmac 0.8.1",
- "once_cell",
- "pbkdf2 0.4.0",
- "rand 0.7.3",
- "rustc-hash",
- "sha2 0.9.9",
- "thiserror",
- "unicode-normalization",
- "wasm-bindgen",
- "zeroize",
+ "time-core",
 ]
 
 [[package]]
@@ -11360,6 +11786,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
 dependencies = [
  "crunchy",
+]
+
+[[package]]
+name = "tinytemplate"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -11425,7 +11861,7 @@ checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
  "rustls 0.20.8",
  "tokio",
- "webpki",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -11568,6 +12004,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower-http"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f873044bf02dd1e8239e9c1293ea39dad76dc594ec16185d0a1bf31d8dc8d858"
+dependencies = [
+ "bitflags",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-range-header",
+ "pin-project-lite 0.2.9",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "tower-layer"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11697,7 +12151,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
 dependencies = [
  "hash-db",
- "hashbrown",
+ "hashbrown 0.12.3",
  "log",
  "rustc-hex",
  "smallvec",
@@ -11785,8 +12239,10 @@ dependencies = [
  "lazy_static",
  "rand 0.8.5",
  "smallvec",
+ "socket2",
  "thiserror",
  "tinyvec",
+ "tokio",
  "tracing",
  "url 2.3.1",
 ]
@@ -11806,6 +12262,7 @@ dependencies = [
  "resolv-conf",
  "smallvec",
  "thiserror",
+ "tokio",
  "tracing",
  "trust-dns-proto 0.22.0",
 ]
@@ -11819,22 +12276,26 @@ checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 [[package]]
 name = "try-runtime-cli"
 version = "0.10.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12+2#8b93ab66bbe6b7567dbef19d1bd36d7685837743"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-07#2bc6d24d9354b22c412d8c69ec2c23e8dc0c760e"
 dependencies = [
  "clap 4.3.0",
+ "frame-remote-externalities",
  "frame-try-runtime",
+ "hex",
  "log",
  "parity-scale-codec",
- "remote-externalities",
- "sc-chain-spec",
  "sc-cli",
  "sc-executor",
  "sc-service",
  "serde",
+ "serde_json",
+ "sp-api",
  "sp-core 7.0.0",
+ "sp-debug-derive 5.0.0",
  "sp-externalities 0.13.0",
  "sp-io 7.0.0",
  "sp-keystore 0.13.0",
+ "sp-rpc",
  "sp-runtime 7.0.0",
  "sp-state-machine 0.13.0",
  "sp-version",
@@ -11886,7 +12347,26 @@ dependencies = [
  "thiserror",
  "url 2.3.1",
  "utf-8",
- "webpki",
+ "webpki 0.22.0",
+]
+
+[[package]]
+name = "turn"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4712ee30d123ec7ae26d1e1b218395a16c87cdbaf4b3925d170d684af62ea5e8"
+dependencies = [
+ "async-trait",
+ "base64 0.13.1",
+ "futures",
+ "log",
+ "md-5",
+ "rand 0.8.5",
+ "ring",
+ "stun",
+ "thiserror",
+ "tokio",
+ "webrtc-util",
 ]
 
 [[package]]
@@ -11978,6 +12458,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "universal-hash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
+dependencies = [
+ "crypto-common",
+ "subtle",
+]
+
+[[package]]
 name = "unsigned-varint"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12064,16 +12554,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
+dependencies = [
+ "getrandom 0.2.9",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
-
-[[package]]
-name = "value-bag"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4d330786735ea358f3bc09eea4caa098569c1c93f342d9aca0514915022fe7e"
 
 [[package]]
 name = "vcpkg"
@@ -12092,6 +12585,15 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
+
+[[package]]
+name = "waitgroup"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1f50000a783467e6c0200f9d10642f4bc424e39efc1b770203e88b488f79292"
+dependencies = [
+ "atomic-waker",
+]
 
 [[package]]
 name = "waker-fn"
@@ -12570,6 +13072,16 @@ dependencies = [
 
 [[package]]
 name = "webpki"
+version = "0.21.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8e38c0608262c46d4a56202ebabdeb094cef7e560ca7a226c6bf055188aa4ea"
+dependencies = [
+ "ring",
+ "untrusted",
+]
+
+[[package]]
+name = "webpki"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
@@ -12584,7 +13096,7 @@ version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c71e40d7d2c34a5106301fb632274ca37242cd0c9d3e64dbece371a40a2d87"
 dependencies = [
- "webpki",
+ "webpki 0.22.0",
 ]
 
 [[package]]
@@ -12594,6 +13106,215 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b03058f88386e5ff5310d9111d53f48b17d732b401aeb83a8d5190f2ac459338"
 dependencies = [
  "rustls-webpki",
+]
+
+[[package]]
+name = "webrtc"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d3bc9049bdb2cea52f5fd4f6f728184225bdb867ed0dc2410eab6df5bdd67bb"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "hex",
+ "interceptor",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "rcgen 0.9.3",
+ "regex",
+ "ring",
+ "rtcp",
+ "rtp",
+ "rustls 0.19.1",
+ "sdp",
+ "serde",
+ "serde_json",
+ "sha2 0.10.6",
+ "stun",
+ "thiserror",
+ "time 0.3.21",
+ "tokio",
+ "turn",
+ "url 2.3.1",
+ "waitgroup",
+ "webrtc-data",
+ "webrtc-dtls",
+ "webrtc-ice",
+ "webrtc-mdns",
+ "webrtc-media",
+ "webrtc-sctp",
+ "webrtc-srtp",
+ "webrtc-util",
+]
+
+[[package]]
+name = "webrtc-data"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ef36a4d12baa6e842582fe9ec16a57184ba35e1a09308307b67d43ec8883100"
+dependencies = [
+ "bytes",
+ "derive_builder 0.11.2",
+ "log",
+ "thiserror",
+ "tokio",
+ "webrtc-sctp",
+ "webrtc-util",
+]
+
+[[package]]
+name = "webrtc-dtls"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "942be5bd85f072c3128396f6e5a9bfb93ca8c1939ded735d177b7bcba9a13d05"
+dependencies = [
+ "aes 0.6.0",
+ "aes-gcm 0.10.2",
+ "async-trait",
+ "bincode",
+ "block-modes",
+ "byteorder",
+ "ccm",
+ "curve25519-dalek 3.2.0",
+ "der-parser 8.2.0",
+ "elliptic-curve 0.12.3",
+ "hkdf",
+ "hmac 0.12.1",
+ "log",
+ "oid-registry 0.6.1",
+ "p256",
+ "p384",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "rcgen 0.9.3",
+ "ring",
+ "rustls 0.19.1",
+ "sec1 0.3.0",
+ "serde",
+ "sha1",
+ "sha2 0.10.6",
+ "signature 1.6.4",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "webpki 0.21.4",
+ "webrtc-util",
+ "x25519-dalek 2.0.0-pre.1",
+ "x509-parser 0.13.2",
+]
+
+[[package]]
+name = "webrtc-ice"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "465a03cc11e9a7d7b4f9f99870558fe37a102b65b93f8045392fef7c67b39e80"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "crc",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "stun",
+ "thiserror",
+ "tokio",
+ "turn",
+ "url 2.3.1",
+ "uuid 1.4.1",
+ "waitgroup",
+ "webrtc-mdns",
+ "webrtc-util",
+]
+
+[[package]]
+name = "webrtc-mdns"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f08dfd7a6e3987e255c4dbe710dde5d94d0f0574f8a21afa95d171376c143106"
+dependencies = [
+ "log",
+ "socket2",
+ "thiserror",
+ "tokio",
+ "webrtc-util",
+]
+
+[[package]]
+name = "webrtc-media"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f72e1650a8ae006017d1a5280efb49e2610c19ccc3c0905b03b648aee9554991"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "rand 0.8.5",
+ "rtp",
+ "thiserror",
+]
+
+[[package]]
+name = "webrtc-sctp"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d47adcd9427eb3ede33d5a7f3424038f63c965491beafcc20bc650a2f6679c0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "crc",
+ "log",
+ "rand 0.8.5",
+ "thiserror",
+ "tokio",
+ "webrtc-util",
+]
+
+[[package]]
+name = "webrtc-srtp"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6183edc4c1c6c0175f8812eefdce84dfa0aea9c3ece71c2bf6ddd3c964de3da5"
+dependencies = [
+ "aead 0.4.3",
+ "aes 0.7.5",
+ "aes-gcm 0.9.4",
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "ctr 0.8.0",
+ "hmac 0.11.0",
+ "log",
+ "rtcp",
+ "rtp",
+ "sha-1",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "webrtc-util",
+]
+
+[[package]]
+name = "webrtc-util"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f1db1727772c05cf7a2cfece52c3aca8045ca1e176cd517d323489aa3c6d87"
+dependencies = [
+ "async-trait",
+ "bitflags",
+ "bytes",
+ "cc",
+ "ipnet",
+ "lazy_static",
+ "libc",
+ "log",
+ "nix",
+ "rand 0.8.5",
+ "thiserror",
+ "tokio",
+ "winapi",
 ]
 
 [[package]]
@@ -12945,6 +13666,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "x25519-dalek"
+version = "2.0.0-pre.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5da623d8af10a62342bcbbb230e33e58a63255a58012f8653c578e54bab48df"
+dependencies = [
+ "curve25519-dalek 3.2.0",
+ "rand_core 0.6.4",
+ "zeroize",
+]
+
+[[package]]
+name = "x509-parser"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fb9bace5b5589ffead1afb76e43e34cff39cd0f3ce7e170ae0c29e53b88eb1c"
+dependencies = [
+ "asn1-rs 0.3.1",
+ "base64 0.13.1",
+ "data-encoding",
+ "der-parser 7.0.0",
+ "lazy_static",
+ "nom",
+ "oid-registry 0.4.0",
+ "ring",
+ "rusticata-macros",
+ "thiserror",
+ "time 0.3.21",
+]
+
+[[package]]
+name = "x509-parser"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0ecbeb7b67ce215e40e3cc7f2ff902f94a223acf44995934763467e7b1febc8"
+dependencies = [
+ "asn1-rs 0.5.2",
+ "base64 0.13.1",
+ "data-encoding",
+ "der-parser 8.2.0",
+ "lazy_static",
+ "nom",
+ "oid-registry 0.6.1",
+ "rusticata-macros",
+ "thiserror",
+ "time 0.3.21",
+]
+
+[[package]]
 name = "yaml-rust"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12978,6 +13747,15 @@ name = "yap"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fc77f52dc9e9b10d55d3f4462c3b7fc393c4f17975d641542833ab2d3bc26ef"
+
+[[package]]
+name = "yasna"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
+dependencies = [
+ "time 0.3.21",
+]
 
 [[package]]
 name = "zeroize"
