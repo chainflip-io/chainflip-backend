@@ -86,7 +86,7 @@ pub trait ChainSourceExt: ChainSource {
 	}
 
 	/// Chunk the chain source by vault. We specifically want to chunk the chain source from the
-	/// block the epoch stars at for a particular chain. This ensures we don't miss witnesses, and
+	/// block the epoch starts at for a particular chain. This ensures we don't miss witnesses, and
 	/// allows us to only run for those epochs we are interested in.
 	fn chunk_by_vault<
 		ExtraInfo,
