@@ -1,3 +1,6 @@
+mod btc_chain_tracking;
+mod btc_source;
+
 use std::{collections::HashMap, sync::Arc};
 
 use bitcoin::Transaction;
@@ -22,11 +25,9 @@ use crate::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
 };
+use btc_source::BtcSource;
 
-use super::{
-	chain_source::{btc_source::BtcSource, extension::ChainSourceExt},
-	epoch_source::EpochSourceBuilder,
-};
+use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 
 use anyhow::Result;
 
@@ -48,19 +49,14 @@ where
 
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 
-	let btc_chain_tracking_witnesser = btc_source
+	btc_source
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
-		.run();
-
-	scope.spawn(async move {
-		btc_chain_tracking_witnesser.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	let btc_client = btc_client.clone();
-	let btc_ingress_witnesser = btc_source
+	btc_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
 		.then(move |header| {
@@ -135,12 +131,7 @@ where
 			}
 		})
 		.continuous("Bitcoin".to_string(), db)
-		.run();
-
-	scope.spawn(async move {
-		btc_ingress_witnesser.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	Ok(())
 }
