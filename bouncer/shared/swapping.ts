@@ -197,17 +197,16 @@ export async function testAllSwaps() {
   // all ccm swaps have the same destination address (cfTester) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
-    // TODO: These two tests will be fixed in https://github.com/chainflip-io/chainflip-backend/pull/3708
-    // testSwap('BTC', 'ETH', undefined, {
-    //   message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
-    //   gasBudget: 1000000,
-    //   cfParameters: '',
-    // }),
-    // testSwap('BTC', 'USDC', undefined, {
-    //   message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
-    //   gasBudget: 600000,
-    //   cfParameters: getAbiEncodedMessage(['uint256']),
-    // }),
+    testSwap('BTC', 'ETH', undefined, {
+      message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
+      gasBudget: 1000000,
+      cfParameters: '',
+    }),
+    testSwap('BTC', 'USDC', undefined, {
+      message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
+      gasBudget: 600000,
+      cfParameters: getAbiEncodedMessage(['uint256']),
+    }),
     testSwap('DOT', 'ETH', undefined, {
       message: getAbiEncodedMessage(['string', 'address']),
       gasBudget: 1000000,
