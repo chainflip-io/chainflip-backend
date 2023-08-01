@@ -1,3 +1,12 @@
+mod contract_common;
+mod erc20_deposits;
+mod eth_chain_tracking;
+mod eth_source;
+mod ethereum_deposits;
+mod key_manager;
+mod state_chain_gateway;
+pub mod vault;
+
 use std::sync::Arc;
 
 use utilities::task_scope::Scope;
@@ -13,15 +22,15 @@ use crate::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witness::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::{
-	chain_source::{eth_source::EthSource, extension::ChainSourceExt},
-	common::STATE_CHAIN_CONNECTION,
-	epoch_source::EpochSourceBuilder,
-	vault::EthAssetApi,
+use super::common::{
+	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
+	STATE_CHAIN_CONNECTION,
 };
+use eth_source::EthSource;
+use vault::EthAssetApi;
 
 use anyhow::{Context, Result};
 
@@ -81,16 +90,11 @@ where
 
 	let eth_source = EthSource::new(eth_client.clone()).shared(scope);
 
-	let eth_chain_tracking = eth_source
+	eth_source
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), eth_client.clone())
-		.run();
-
-	scope.spawn(async move {
-		eth_chain_tracking.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	let eth_safe_vault_source = eth_source
 		.strictly_monotonic()
@@ -98,18 +102,13 @@ where
 		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await);
 
-	let key_manager_witnesser = eth_safe_vault_source
+	eth_safe_vault_source
 		.clone()
 		.key_manager_witnessing(state_chain_client.clone(), eth_client.clone(), key_manager_address)
 		.continuous("KeyManager".to_string(), db.clone())
-		.run();
+		.spawn(scope);
 
-	scope.spawn(async move {
-		key_manager_witnesser.await;
-		Ok(())
-	});
-
-	let state_chain_gateway_witnesser = eth_safe_vault_source
+	eth_safe_vault_source
 		.clone()
 		.state_chain_gateway_witnessing(
 			state_chain_client.clone(),
@@ -117,14 +116,9 @@ where
 			state_chain_gateway_address,
 		)
 		.continuous("StateChainGateway".to_string(), db.clone())
-		.run();
+		.spawn(scope);
 
-	scope.spawn(async move {
-		state_chain_gateway_witnesser.await;
-		Ok(())
-	});
-
-	let usdc_deposit_witnesser = eth_safe_vault_source
+	eth_safe_vault_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -135,14 +129,9 @@ where
 		)
 		.await?
 		.continuous("USDCDeposits".to_string(), db.clone())
-		.run();
+		.spawn(scope);
 
-	scope.spawn(async move {
-		usdc_deposit_witnesser.await;
-		Ok(())
-	});
-
-	let flip_deposit_witnesser = eth_safe_vault_source
+	eth_safe_vault_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -153,36 +142,21 @@ where
 		)
 		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
-		.run();
+		.spawn(scope);
 
-	scope.spawn(async move {
-		flip_deposit_witnesser.await;
-		Ok(())
-	});
-
-	let ethereum_deposits_witnesser = eth_safe_vault_source
+	eth_safe_vault_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.ethereum_deposits(state_chain_client.clone(), eth_client.clone())
 		.await
 		.continuous("EthereumDeposits".to_string(), db.clone())
-		.run();
+		.spawn(scope);
 
-	scope.spawn(async move {
-		ethereum_deposits_witnesser.await;
-		Ok(())
-	});
-
-	let vault_witnesser = eth_safe_vault_source
+	eth_safe_vault_source
 		.vault_witnessing(state_chain_client.clone(), eth_client.clone(), vault_address)
 		.continuous("Vault".to_string(), db)
-		.run();
-
-	scope.spawn(async move {
-		vault_witnesser.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	Ok(())
 }

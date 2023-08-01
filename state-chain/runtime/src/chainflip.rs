@@ -33,9 +33,9 @@ use cf_chains::{
 		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
-	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
-	TransactionBuilder,
+	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
@@ -427,7 +427,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
-				message_metadata: Option<CcmDepositMetadata>,
+				channel_metadata: Option<CcmChannelMetadata>,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -437,7 +437,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							destination_address,
 							broker_commission_bps,
 							broker_id,
-							message_metadata,
+							channel_metadata,
 						),
 					)+
 				}
@@ -545,13 +545,13 @@ pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
 	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress {
-		to_encoded_address(address, Environment::bitcoin_network)
+		to_encoded_address(address, Environment::network_environment)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
+		try_from_encoded_address(encoded_address, Environment::network_environment)
 	}
 }
 

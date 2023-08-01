@@ -193,7 +193,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			eth_usdc_address: [0x2; 20],
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
-			bitcoin_network: Default::default(),
+			network_environment: Default::default(),
 		},
 	};
 

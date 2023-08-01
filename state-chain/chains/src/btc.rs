@@ -14,7 +14,7 @@ use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
+	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
@@ -352,10 +352,20 @@ fn to_varint(value: u64) -> Vec<u8> {
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
-	#[default]
 	Mainnet,
 	Testnet,
+	#[default]
 	Regtest,
+}
+
+impl From<NetworkEnvironment> for BitcoinNetwork {
+	fn from(env: NetworkEnvironment) -> Self {
+		match env {
+			NetworkEnvironment::Mainnet => BitcoinNetwork::Mainnet,
+			NetworkEnvironment::Testnet => BitcoinNetwork::Testnet,
+			NetworkEnvironment::Development => BitcoinNetwork::Regtest,
+		}
+	}
 }
 
 impl BitcoinNetwork {
