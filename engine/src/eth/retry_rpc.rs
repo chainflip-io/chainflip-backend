@@ -10,7 +10,7 @@ use utilities::task_scope::Scope;
 use crate::{
 	eth::rpc::EthRpcApi,
 	retrier::RetrierClient,
-	witness::chain_source::{ChainClient, Header},
+	witness::common::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
 
