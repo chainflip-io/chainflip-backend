@@ -28,7 +28,7 @@ pub trait ChainSourceExt: ChainSource {
 		Then::new(self, f)
 	}
 
-	/// Map the data of each header when the data is Result::Ok with an async closure.
+	/// Map the data of each header when the data is a Result::Ok with an async closure.
 	fn and_then<Input, Output, Error, Fut, F>(self, f: F) -> AndThen<Self, F>
 	where
 		Self: Sized + ChainSource<Data = Result<Input, Error>>,
