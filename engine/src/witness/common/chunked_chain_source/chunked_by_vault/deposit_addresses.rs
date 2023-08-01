@@ -46,7 +46,7 @@ where
 	// We ensure the index is strictly less than the block height. This is because we need to ensure
 	// that for a particular chain state block height, no more deposit channels can be created with
 	// that opened_at block height.
-    fn is_header_ready(index: Inner::Index, chain_state: &ChainState<Inner::Chain>) -> bool {
+	fn is_header_ready(index: Inner::Index, chain_state: &ChainState<Inner::Chain>) -> bool {
 		index < chain_state.block_height
 	}
 
