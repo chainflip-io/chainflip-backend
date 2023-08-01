@@ -6,8 +6,6 @@ import {
   newAddress,
   chainFromAsset,
   getEthContractAddress,
-  encodeBtcAddressForContract,
-  decodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
   observeBadEvents,
@@ -136,21 +134,19 @@ export async function testAllSwaps() {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
     /*
     testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
     testSwapViaContract('FLIP', 'ETH', {
       message: getAbiEncodedMessage(),
       gasBudget: 10000000000000000,
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
       sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
-      }),
+    }),
     */
   ]);
 
@@ -172,8 +168,18 @@ export async function testAllSwaps() {
   ]);
 
   const regularSwaps = Promise.all([
-    testSwap('DOT', 'BTC', 'P2PKH'),
+    testSwap('ETH', 'DOT'),
+    testSwap('ETH', 'USDC'),
+    testSwap('ETH', 'BTC', 'P2PKH'),
+    testSwap('ETH', 'BTC', 'P2WSH'),
     testSwap('ETH', 'BTC', 'P2SH'),
+    testSwap('ETH', 'BTC', 'P2WPKH'),
+
+    testSwap('USDC', 'DOT'),
+    testSwap('USDC', 'ETH'),
+    testSwap('USDC', 'BTC', 'P2PKH'),
+    testSwap('USDC', 'BTC', 'P2WSH'),
+    testSwap('USDC', 'BTC', 'P2SH'),
     testSwap('USDC', 'BTC', 'P2WPKH'),
     testSwap('DOT', 'BTC', 'P2WSH'),
     testSwap('FLIP', 'BTC', 'P2SH'),
@@ -195,57 +201,31 @@ export async function testAllSwaps() {
       message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
       gasBudget: 1000000,
       cfParameters: '',
-      sourceAddress: {
-        BTC: {
-          P2PKH: await newAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
-            encodeBtcAddressForContract(btcAddress);
-          }),
-        },
-      },
     }),
     testSwap('BTC', 'USDC', undefined, {
       message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
       gasBudget: 600000,
       cfParameters: getAbiEncodedMessage(['uint256']),
-      sourceAddress: {
-        BTC: {
-          P2SH: await newAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
-            encodeBtcAddressForContract(btcAddress);
-          }),
-        },
-      },
     }),
     testSwap('DOT', 'ETH', undefined, {
       message: getAbiEncodedMessage(['string', 'address']),
       gasBudget: 1000000,
       cfParameters: getAbiEncodedMessage(['string', 'string']),
-      sourceAddress: {
-        DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-          decodeDotAddressForContract(dotAddress);
-        }),
-      },
     }),
     testSwap('DOT', 'FLIP', undefined, {
       message: getAbiEncodedMessage(),
       gasBudget: 1000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-      sourceAddress: {
-        DOT: await newAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-          decodeDotAddressForContract(dotAddress);
-        }),
-      },
     }),
     testSwap('USDC', 'ETH', undefined, {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
     testSwap('ETH', 'USDC', undefined, {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
   ]);
 

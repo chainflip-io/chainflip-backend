@@ -34,7 +34,6 @@ export async function requestNewSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  fee: number,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
 ): Promise<SwapParams> {
@@ -61,7 +60,7 @@ export async function requestNewSwap(
       return destAddressMatches && destAssetMatches && sourceAssetMatches;
     },
   );
-  await newSwap(sourceAsset, destAsset, destAddress, fee, messageMetadata);
+  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata);
 
   const res = (await addressPromise).data;
 
@@ -132,12 +131,10 @@ export async function performSwap(
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
 ) {
-  const fee = 100;
-
   const tag = swapTag ?? '';
 
   console.log(
-    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${fee} ${
+    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
       messageMetadata ? `someMessage` : ''
     }`,
   );
@@ -146,7 +143,6 @@ export async function performSwap(
     sourceAsset,
     destAsset,
     destAddress,
-    fee,
     tag,
     messageMetadata,
   );
