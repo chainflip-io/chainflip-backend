@@ -207,7 +207,7 @@ export async function testAllSwaps() {
 
   Object.values(Assets).forEach((assetSource) => {
     Object.values(Assets).forEach((assetDest) => {
-      // DO WE ALLOW SWAPS OF THE SAME CURRENCY???
+      // SDK prevents swaps from the same asset to the same asset
       if (assetSource !== assetDest) {
         appendSwap(regularSwaps, assetSource, assetDest, testSwap);
 
