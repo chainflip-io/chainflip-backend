@@ -23,7 +23,7 @@ use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use pallet_cf_funding::EthTransactionHash;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::Pair;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,

@@ -31,7 +31,7 @@ multisig = {path = "../../engine/multisig"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
 
 [dependencies.rocksdb]
-version = "0.19.0"
+version = "0.21.0"
 # Disabling of default features, and using lz4 compression is primarily to avoid linker issues
 # resulting from the default compression using libs that conflict with the system libs
 # https://github.com/rust-rocksdb/rust-rocksdb/pull/555

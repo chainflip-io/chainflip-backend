@@ -21,7 +21,7 @@ use sp_std::vec::Vec;
 /// As long as both conditions are met, the upgrade `U` will run and then the pallet's stored
 /// version is set to `TO`.
 pub struct VersionedMigration<
-	P: PalletInfoAccess + GetStorageVersion,
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
 	U: OnRuntimeUpgrade,
 	const FROM: u16,
 	const TO: u16,
@@ -109,14 +109,14 @@ mod try_runtime_helpers {
 	}
 }
 
-fn should_upgrade<P: GetStorageVersion, const FROM: u16, const TO: u16>() -> bool {
+fn should_upgrade<P: GetStorageVersion<CurrentStorageVersion = StorageVersion>, const FROM: u16, const TO: u16>() -> bool {
 	<P as GetStorageVersion>::on_chain_storage_version() == FROM &&
 		<P as GetStorageVersion>::current_storage_version() >= TO
 }
 
 impl<P, U, const FROM: u16, const TO: u16> OnRuntimeUpgrade for VersionedMigration<P, U, FROM, TO>
 where
-	P: PalletInfoAccess + GetStorageVersion,
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
 	U: OnRuntimeUpgrade,
 {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -226,6 +226,8 @@ mod test_versioned_upgrade {
 	}
 
 	impl GetStorageVersion for Pallet {
+		type CurrentStorageVersion = StorageVersion;
+
 		fn current_storage_version() -> StorageVersion {
 			PALLET_VERSION
 		}

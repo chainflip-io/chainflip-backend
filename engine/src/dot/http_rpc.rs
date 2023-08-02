@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
-use jsonrpsee_subxt::{
+use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
 	http_client::{HttpClient, HttpClientBuilder},
 };

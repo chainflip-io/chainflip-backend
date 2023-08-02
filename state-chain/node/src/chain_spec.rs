@@ -19,15 +19,15 @@ use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
 	sr25519, Pair, Public,
 };
-use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
 	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
-	ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig, ValidatorConfig,
-	WASM_BINARY,
+	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
+	PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
+	ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
+	ValidatorConfig, WASM_BINARY,
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
@@ -66,7 +66,7 @@ where
 }
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -430,7 +430,7 @@ fn testnet_genesis(
 	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
-) -> GenesisConfig {
+) -> RuntimeGenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
 		assert_eq!(
@@ -493,7 +493,7 @@ fn testnet_genesis(
 		"Found a vanity name for non-genesis account."
 	);
 
-	GenesisConfig {
+	RuntimeGenesisConfig {
 		account_roles: AccountRolesConfig {
 			initial_account_roles: all_accounts
 				.iter()
