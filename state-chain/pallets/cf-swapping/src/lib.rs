@@ -324,6 +324,11 @@ pub mod pallet {
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
 		},
+		/// [DEPRECATED]
+		MinimumCcmGasBudgetSet {
+			asset: Asset,
+			amount: AssetAmount,
+		},
 		MinimumSwapAmountSet {
 			asset: Asset,
 			amount: AssetAmount,
@@ -355,6 +360,8 @@ pub mod pallet {
 		InvalidDestinationAddress,
 		/// The swap amount is below the minimum required.
 		SwapAmountTooLow,
+		/// [DEPRECATED] The CCM's gas budget is below the minimum allowed.
+		CcmGasBudgetBelowMinimum,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 	}

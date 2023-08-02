@@ -25,10 +25,12 @@ use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
 	EgressApi, GetBlockHeight, SwapDepositHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchError, traits::StorageVersion};
 pub use pallet::*;
 use sp_runtime::TransactionOutcome;
 use sp_std::{vec, vec::Vec};
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -131,6 +133,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -317,6 +320,15 @@ pub mod pallet {
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::get::<Self>() == 0 {
+				// Clear any pending operations.
+				let _ = ScheduledEgressCcm::<T, I>::take();
+				let _ = ScheduledEgressFetchOrTransfer::<T, I>::take();
+			}
+			Weight::from_ref_time(0)
 		}
 	}
 
