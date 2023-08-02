@@ -730,7 +730,7 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		// Public agg key
 		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
@@ -739,8 +739,7 @@ mod verification_tests {
 		let signature = agg_key.sign(&msg, &agg_key_secret_key, &sig_nonce);
 
 		// Construct components for verification
-		let sig =
-			SchnorrVerificationComponents { s: signature, k_times_g_address: k_times_g_address.0 };
+		let sig = SchnorrVerificationComponents { s: signature, k_times_g_address };
 
 		// Verify signature
 		assert_ok!(agg_key.verify(&msg, &sig));
@@ -752,8 +751,8 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
-		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address: k_times_g_address.0 };
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k)).0;
+		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
 
 		// This should pass.
 		assert_ok!(agg_key.verify(&MSG_HASH, &sig));
@@ -773,10 +772,7 @@ mod verification_tests {
 		assert!(agg_key
 			.verify(
 				&MSG_HASH,
-				&SchnorrVerificationComponents {
-					s: SIG.map(|i| i + 1),
-					k_times_g_address: k_times_g_address.0
-				}
+				&SchnorrVerificationComponents { s: SIG.map(|i| i + 1), k_times_g_address }
 			)
 			.is_err(),);
 
@@ -786,7 +782,7 @@ mod verification_tests {
 				&MSG_HASH,
 				&SchnorrVerificationComponents {
 					s: SIG,
-					k_times_g_address: k_times_g_address.0.map(|i| i + 1),
+					k_times_g_address: k_times_g_address.map(|i| i + 1),
 				}
 			),
 			AggKeyVerificationError::NoMatch

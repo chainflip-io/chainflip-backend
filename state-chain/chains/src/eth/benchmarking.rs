@@ -24,7 +24,7 @@ impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
 		let sig_nonce = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
 		let private_key = SecretKey::parse(&PRIVATE_KEY).expect("Valid private key");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		let agg_key = AggKey::benchmark_value();
 
@@ -32,7 +32,7 @@ impl BenchmarkValue for SchnorrVerificationComponents {
 			EthereumApi::<()>::benchmark_value().threshold_signature_payload().into();
 		let signature = agg_key.sign(&payload, &private_key, &sig_nonce);
 
-		Self { s: signature, k_times_g_address: k_times_g_address.0 }
+		Self { s: signature, k_times_g_address }
 	}
 }
 
