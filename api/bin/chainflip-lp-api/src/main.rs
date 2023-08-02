@@ -185,10 +185,9 @@ impl RpcServer for RpcServerImpl {
 	) -> Result<String, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
 			.map_err(|e| Error::Custom(e.to_string()))?;
-		lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
+		Ok(lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
 			.await
-			.map(|tx_hash| tx_hash.to_string())
-			.map_err(|e| Error::Custom(e.to_string()))
+			.map(|tx_hash| tx_hash.to_string())?)
 	}
 
 	/// Returns an egress id
@@ -199,49 +198,42 @@ impl RpcServer for RpcServerImpl {
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), Error> {
 		let destination_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
-				.map_err(|e| Error::Custom(e.to_string()))?;
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
 
-		lp::withdraw_asset(
+		Ok(lp::withdraw_asset(
 			&self.state_chain_settings,
 			try_parse_number_or_hex(amount)?,
 			asset,
 			destination_address,
 		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Returns a list of all assets and their free balance in json format
 	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error> {
-		lp::get_balances(&self.state_chain_settings)
-			.await
-			.map_err(|e| Error::Custom(e.to_string()))
+		Ok(lp::get_balances(&self.state_chain_settings).await?)
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
 	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error> {
-		lp::get_range_orders(&self.state_chain_settings)
-			.await
-			.map(|orders| {
-				orders
-					.into_iter()
-					.map(|(asset, orders)| {
-						(
-							asset,
-							orders
-								.into_iter()
-								.map(|(lower_tick, upper_tick, liquidity)| rpc_types::RangeOrder {
-									lower_tick,
-									upper_tick,
-									liquidity,
-								})
-								.collect::<Vec<rpc_types::RangeOrder>>(),
-						)
-					})
-					.collect::<HashMap<Asset, Vec<rpc_types::RangeOrder>>>()
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+		Ok(lp::get_range_orders(&self.state_chain_settings).await.map(|orders| {
+			orders
+				.into_iter()
+				.map(|(asset, orders)| {
+					(
+						asset,
+						orders
+							.into_iter()
+							.map(|(lower_tick, upper_tick, liquidity)| rpc_types::RangeOrder {
+								lower_tick,
+								upper_tick,
+								liquidity,
+							})
+							.collect::<Vec<rpc_types::RangeOrder>>(),
+					)
+				})
+				.collect::<HashMap<Asset, Vec<rpc_types::RangeOrder>>>()
+		})?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -254,17 +246,16 @@ impl RpcServer for RpcServerImpl {
 		order_size: rpc_types::RangeOrderSize,
 	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
-			return Err(Error::Custom("Invalid tick range".to_string()))
+			return Err(anyhow!("Invalid tick range").into())
 		}
 
-		lp::mint_range_order(
+		Ok(lp::mint_range_order(
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
 			order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
 		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Removes liquidity from a range order.
@@ -277,17 +268,16 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 	) -> Result<BurnRangeOrderReturn, Error> {
 		if start >= end {
-			return Err(Error::Custom("Invalid tick range".to_string()))
+			return Err(anyhow!("Invalid tick range").into())
 		}
 
-		lp::burn_range_order(
+		Ok(lp::burn_range_order(
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
 			try_parse_number_or_hex(amount)?,
 		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Creates or adds liquidity to a limit order.
@@ -299,15 +289,14 @@ impl RpcServer for RpcServerImpl {
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<MintLimitOrderReturn, Error> {
-		lp::mint_limit_order(
+		Ok(lp::mint_limit_order(
 			&self.state_chain_settings,
 			asset,
 			order,
 			price,
 			try_parse_number_or_hex(amount)?,
 		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Removes liquidity from a limit order.
@@ -319,30 +308,27 @@ impl RpcServer for RpcServerImpl {
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<BurnLimitOrderReturn, Error> {
-		lp::burn_limit_order(
+		Ok(lp::burn_limit_order(
 			&self.state_chain_settings,
 			asset,
 			order,
 			price,
 			try_parse_number_or_hex(amount)?,
 		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Returns the tx hash that the account role was set
 	async fn register_account(&self) -> Result<Hash, Error> {
-		chainflip_api::register_account_role(
+		Ok(chainflip_api::register_account_role(
 			AccountRole::LiquidityProvider,
 			&self.state_chain_settings,
 		)
-		.await
-		.map(|tx_hash| tx_hash.to_string())
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
-		task_scope(|scope| {
+		Ok(task_scope(|scope| {
 			async move {
 				let api =
 					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
@@ -361,8 +347,7 @@ impl RpcServer for RpcServerImpl {
 			}
 			.boxed()
 		})
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 }
 
