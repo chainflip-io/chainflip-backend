@@ -155,7 +155,7 @@ impl ExtBuilder {
 				blocks_per_epoch: self.blocks_per_epoch,
 				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
 				redemption_period_as_percentage: Percent::from_percent(
-					PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+					REDEMPTION_PERIOD_AS_PERCENTAGE,
 				),
 				backup_reward_node_percentage: Percent::from_percent(34),
 				authority_set_min_size: self.min_authorities,
