@@ -89,6 +89,7 @@ pub mod pallet {
 		pallet_prelude::{OptionQuery, ValueQuery},
 		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
+		StorageHasher,
 	};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
@@ -323,10 +324,32 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
+			#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+			struct DepositAddressDetails<C: Chain> {
+				pub channel_id: ChannelId,
+				pub source_asset: C::ChainAsset,
+				pub opened_at: C::ChainBlockNumber,
+			}
+
 			if StorageVersion::get::<Self>() == 0 {
 				// Clear any pending operations.
 				let _ = ScheduledEgressCcm::<T, I>::take();
 				let _ = ScheduledEgressFetchOrTransfer::<T, I>::take();
+				for (address, _) in ChannelActions::<T, I>::drain() {
+					if let Some(deposit_details) =
+						frame_support::storage::migration::take_storage_value::<
+							DepositAddressDetails<T::TargetChain>,
+						>(
+							Self::module_name().as_bytes(),
+							b"DepositAddressDetailsLookup",
+							Twox64Concat::hash(address.encode().as_slice()).as_slice(),
+						) {
+						Self::deposit_event(Event::<T, I>::StopWitnessing {
+							deposit_address: address,
+							source_asset: deposit_details.source_asset,
+						});
+					}
+				}
 			}
 			Weight::from_ref_time(0)
 		}
