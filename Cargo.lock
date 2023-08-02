@@ -994,9 +994,9 @@ dependencies = [
  "bech32 0.9.1",
  "cf-primitives",
  "cf-test-utilities",
- "ethabi 18.0.0",
+ "ethabi",
  "ethereum",
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "frame-support",
  "frame-system",
  "hex",
@@ -1355,7 +1355,6 @@ dependencies = [
  "rocksdb",
  "sc-rpc-api",
  "scale-info",
- "secp256k1 0.21.3",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -2914,28 +2913,11 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "17.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4966fba78396ff92db3b817ee71143eccd98acf0f876b8d600e585a670c5d1b"
-dependencies = [
- "ethereum-types 0.13.1",
- "hex",
- "once_cell",
- "regex",
- "serde",
- "serde_json",
- "sha3",
- "thiserror",
- "uint",
-]
-
-[[package]]
-name = "ethabi"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
 dependencies = [
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "hex",
  "once_cell",
  "regex",
@@ -2981,7 +2963,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a89fb87a9e103f71b903b80b670200b54cc67a07578f070681f1fffb7396fb7"
 dependencies = [
  "bytes",
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "hash-db 0.15.2",
  "hash256-std-hasher",
  "parity-scale-codec",
@@ -2990,20 +2972,6 @@ dependencies = [
  "serde",
  "sha3",
  "triehash",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2827b94c556145446fcce834ca86b7abf0c39a805883fe20e72c5bfdb5a0dc6"
-dependencies = [
- "ethbloom 0.12.1",
- "fixed-hash 0.7.0",
- "impl-rlp",
- "impl-serde 0.3.2",
- "primitive-types 0.11.1",
- "uint",
 ]
 
 [[package]]
@@ -3017,7 +2985,7 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde 0.4.0",
- "primitive-types 0.12.1",
+ "primitive-types",
  "scale-info",
  "uint",
 ]
@@ -3120,7 +3088,7 @@ dependencies = [
  "cargo_metadata",
  "chrono",
  "elliptic-curve 0.13.5",
- "ethabi 18.0.0",
+ "ethabi",
  "generic-array 0.14.7",
  "hex",
  "k256",
@@ -4147,7 +4115,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util 0.7.8",
+ "tokio-util",
  "tracing",
 ]
 
@@ -4554,6 +4522,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "idna"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
+dependencies = [
+ "unicode-bidi",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "if-addrs"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4872,7 +4850,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.4",
- "tokio-util 0.7.8",
+ "tokio-util",
  "tracing",
  "webpki-roots 0.22.6",
 ]
@@ -4897,7 +4875,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.4",
- "tokio-util 0.7.8",
+ "tokio-util",
  "tracing",
  "webpki-roots 0.22.6",
 ]
@@ -5063,7 +5041,7 @@ dependencies = [
  "soketto",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.8",
+ "tokio-util",
  "tower",
  "tracing",
 ]
@@ -5157,7 +5135,7 @@ dependencies = [
  "soketto",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.8",
+ "tokio-util",
  "tracing",
  "tracing-futures",
 ]
@@ -5681,7 +5659,7 @@ dependencies = [
  "thiserror",
  "tinytemplate",
  "tokio",
- "tokio-util 0.7.8",
+ "tokio-util",
  "webrtc",
 ]
 
@@ -6708,7 +6686,7 @@ dependencies = [
  "arrayvec 0.7.2",
  "auto_impl",
  "bytes",
- "ethereum-types 0.14.1",
+ "ethereum-types",
  "open-fastrlp-derive",
 ]
 
@@ -7867,19 +7845,6 @@ checksum = "3b69d39aab54d069e7f2fe8cb970493e7834601ca2d8c65fd7bbd183578080d1"
 dependencies = [
  "proc-macro2",
  "syn 2.0.28",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28720988bff275df1f51b171e1b2a18c30d194c4d2b61defdacecd625a5d94a"
-dependencies = [
- "fixed-hash 0.7.0",
- "impl-codec",
- "impl-rlp",
- "impl-serde 0.3.2",
- "uint",
 ]
 
 [[package]]
@@ -9914,15 +9879,6 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c42e6f1735c5f00f51e43e28d6634141f2bcad10931b2609ddd74a86d751260"
-dependencies = [
- "secp256k1-sys 0.4.2",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b1629c9c557ef9b293568b338dddfc8208c98a18c59d722a9d53f859d9c9b62"
@@ -9940,15 +9896,6 @@ dependencies = [
  "rand 0.8.5",
  "secp256k1-sys 0.8.1",
  "serde",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957da2573cde917463ece3570eab4a0b3f19de6f1646cde62e6fd3868f566036"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -10529,7 +10476,7 @@ dependencies = [
  "merlin",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "primitive-types 0.12.1",
+ "primitive-types",
  "rand 0.8.5",
  "regex",
  "scale-info",
@@ -10573,7 +10520,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "paste",
- "primitive-types 0.12.1",
+ "primitive-types",
  "rand 0.8.5",
  "regex",
  "scale-info",
@@ -10905,7 +10852,7 @@ dependencies = [
  "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "primitive-types 0.12.1",
+ "primitive-types",
  "sp-externalities 0.15.0",
  "sp-runtime-interface-proc-macro 7.0.0",
  "sp-std 6.0.0",
@@ -10923,7 +10870,7 @@ dependencies = [
  "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "primitive-types 0.12.1",
+ "primitive-types",
  "sp-externalities 0.19.0",
  "sp-runtime-interface-proc-macro 11.0.0",
  "sp-std 8.0.0",
@@ -11350,7 +11297,7 @@ dependencies = [
  "cf-primitives",
  "cf-session-benchmarking",
  "cf-traits",
- "ethabi 18.0.0",
+ "ethabi",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -11624,7 +11571,7 @@ dependencies = [
  "jsonrpsee 0.16.2",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "primitive-types 0.12.1",
+ "primitive-types",
  "scale-bits",
  "scale-decode",
  "scale-info",
@@ -12044,7 +11991,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio",
- "tokio-util 0.7.8",
+ "tokio-util",
 ]
 
 [[package]]
@@ -12072,21 +12019,6 @@ dependencies = [
  "tokio-rustls 0.24.0",
  "tungstenite 0.19.0",
  "webpki-roots 0.23.1",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.6.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36943ee01a6d67977dd3f84a5a1d2efeb4ada3a1ae771cadfaa535d9d9fc6507"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-io",
- "futures-sink",
- "log",
- "pin-project-lite 0.2.9",
- "tokio",
 ]
 
 [[package]]
@@ -12835,7 +12767,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.18.0",
- "tokio-util 0.7.8",
+ "tokio-util",
  "tower-service",
  "tracing",
 ]
@@ -13370,34 +13302,32 @@ dependencies = [
 [[package]]
 name = "web3"
 version = "0.19.0"
-source = "git+https://github.com/tomusdrw/rust-web3.git?rev=8796c88#8796c88c4cb95864bdfeffb40ebb061c283aca74"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5388522c899d1e1c96a4c307e3797e0f697ba7c77dd8e0e625ecba9dd0342937"
 dependencies = [
  "arrayvec 0.7.2",
- "base64 0.13.1",
+ "base64 0.21.2",
  "bytes",
  "derive_more",
- "ethabi 17.2.0",
- "ethereum-types 0.13.1",
+ "ethabi",
+ "ethereum-types",
  "futures",
  "futures-timer",
  "headers",
  "hex",
- "idna 0.2.3",
+ "idna 0.4.0",
  "jsonrpc-core",
  "log",
- "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "reqwest",
  "rlp",
- "secp256k1 0.21.3",
  "serde",
  "serde_json",
  "soketto",
  "tiny-keccak",
  "tokio",
- "tokio-stream",
- "tokio-util 0.6.10",
+ "tokio-util",
  "url 2.3.1",
  "web3-async-native-tls",
 ]
