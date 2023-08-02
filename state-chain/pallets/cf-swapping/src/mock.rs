@@ -101,35 +101,35 @@ pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
 	fn request_swap_deposit_address() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn withdraw() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn schedule_swap_from_contract() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn ccm_deposit() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn register_as_broker() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn on_initialize(_a: u32) -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn set_swap_ttl() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 
 	fn set_minimum_swap_amount() -> Weight {
-		Weight::from_ref_time(100)
+		Weight::ref_time(100)
 	}
 }
 

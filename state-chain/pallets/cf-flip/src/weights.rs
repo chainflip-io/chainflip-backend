@@ -40,14 +40,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip SlashingRate (r:0 w:1)
 	fn set_slashing_rate() -> Weight {
 		// Minimum execution time: 11_000 nanoseconds.
-		Weight::from_ref_time(12_000_000)
+		Weight::ref_time(12_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
 	fn reap_one_account() -> Weight {
 		// Minimum execution time: 16_000 nanoseconds.
-		Weight::from_ref_time(17_000_000)
+		Weight::ref_time(17_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -58,14 +58,14 @@ impl WeightInfo for () {
 	// Storage: Flip SlashingRate (r:0 w:1)
 	fn set_slashing_rate() -> Weight {
 		// Minimum execution time: 11_000 nanoseconds.
-		Weight::from_ref_time(12_000_000)
+		Weight::ref_time(12_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
 	fn reap_one_account() -> Weight {
 		// Minimum execution time: 16_000 nanoseconds.
-		Weight::from_ref_time(17_000_000)
+		Weight::ref_time(17_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}

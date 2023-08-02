@@ -43,20 +43,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_account_role() -> Weight {
 		// Minimum execution time: 30_000 nanoseconds.
-		Weight::from_ref_time(31_000_000)
+		Weight::ref_time(31_000_000)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles SwappingEnabled (r:0 w:1)
 	fn enable_swapping() -> Weight {
 		// Minimum execution time: 5_000 nanoseconds.
-		Weight::from_ref_time(5_000_000)
+		Weight::ref_time(5_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn gov_register_account_role() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
-		Weight::from_ref_time(19_000_000)
+		Weight::ref_time(19_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -69,20 +69,20 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_account_role() -> Weight {
 		// Minimum execution time: 30_000 nanoseconds.
-		Weight::from_ref_time(31_000_000)
+		Weight::ref_time(31_000_000)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles SwappingEnabled (r:0 w:1)
 	fn enable_swapping() -> Weight {
 		// Minimum execution time: 5_000 nanoseconds.
-		Weight::from_ref_time(5_000_000)
+		Weight::ref_time(5_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn gov_register_account_role() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
-		Weight::from_ref_time(19_000_000)
+		Weight::ref_time(19_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}

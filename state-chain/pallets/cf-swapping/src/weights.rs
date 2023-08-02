@@ -55,7 +55,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:0 w:1)
 	fn request_swap_deposit_address() -> Weight {
 		// Minimum execution time: 53_000 nanoseconds.
-		Weight::from_ref_time(55_000_000)
+		Weight::ref_time(55_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(6))
 	}
@@ -68,7 +68,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw() -> Weight {
 		// Minimum execution time: 41_000 nanoseconds.
-		Weight::from_ref_time(42_000_000)
+		Weight::ref_time(42_000_000)
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -76,7 +76,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Swapping SwapQueue (r:1 w:1)
 	fn schedule_swap_from_contract() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
-		Weight::from_ref_time(20_000_000)
+		Weight::ref_time(20_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -87,7 +87,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Swapping PendingCcms (r:0 w:1)
 	fn ccm_deposit() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
-		Weight::from_ref_time(28_000_000)
+		Weight::ref_time(28_000_000)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
@@ -98,9 +98,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(19_428_056)
+		Weight::ref_time(19_428_056)
 			// Standard Error: 30_404
-			.saturating_add(Weight::from_ref_time(14_647_491).saturating_mul(a.into()))
+			.saturating_add(Weight::ref_time(14_647_491).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().reads((2_u64).saturating_mul(a.into())))
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -109,20 +109,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Swapping SwapTTL (r:0 w:1)
 	fn set_swap_ttl() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
-		Weight::from_ref_time(14_000_000)
+		Weight::ref_time(14_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles SwappingEnabled (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_as_broker() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::from_ref_time(22_000_000)
+		Weight::ref_time(22_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 
 	fn set_minimum_swap_amount() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::ref_time(1_000_000)
 	}
 }
 
@@ -140,7 +140,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:0 w:1)
 	fn request_swap_deposit_address() -> Weight {
 		// Minimum execution time: 53_000 nanoseconds.
-		Weight::from_ref_time(55_000_000)
+		Weight::ref_time(55_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(6))
 	}
@@ -153,7 +153,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw() -> Weight {
 		// Minimum execution time: 41_000 nanoseconds.
-		Weight::from_ref_time(42_000_000)
+		Weight::ref_time(42_000_000)
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -161,7 +161,7 @@ impl WeightInfo for () {
 	// Storage: Swapping SwapQueue (r:1 w:1)
 	fn schedule_swap_from_contract() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
-		Weight::from_ref_time(20_000_000)
+		Weight::ref_time(20_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -172,7 +172,7 @@ impl WeightInfo for () {
 	// Storage: Swapping PendingCcms (r:0 w:1)
 	fn ccm_deposit() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
-		Weight::from_ref_time(28_000_000)
+		Weight::ref_time(28_000_000)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
@@ -183,9 +183,9 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(19_428_056)
+		Weight::ref_time(19_428_056)
 			// Standard Error: 30_404
-			.saturating_add(Weight::from_ref_time(14_647_491).saturating_mul(a.into()))
+			.saturating_add(Weight::ref_time(14_647_491).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().reads((2_u64).saturating_mul(a.into())))
 			.saturating_add(RocksDbWeight::get().writes(1))
@@ -194,18 +194,18 @@ impl WeightInfo for () {
 	// Storage: Swapping SwapTTL (r:0 w:1)
 	fn set_swap_ttl() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
-		Weight::from_ref_time(14_000_000)
+		Weight::ref_time(14_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles SwappingEnabled (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_as_broker() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::from_ref_time(22_000_000)
+		Weight::ref_time(22_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	fn set_minimum_swap_amount() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::ref_time(1_000_000)
 	}
 }

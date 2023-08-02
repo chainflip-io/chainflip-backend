@@ -53,7 +53,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance Proposals (r:0 w:1)
 	fn propose_governance_extrinsic() -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(30_000_000)
+		Weight::ref_time(30_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(4))
 	}
@@ -63,21 +63,21 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance ActiveProposals (r:1 w:1)
 	fn approve() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(24_000_000)
+		Weight::ref_time(24_000_000)
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: Governance Members (r:0 w:1)
 	fn new_membership_set() -> Weight {
 		// Minimum execution time: 4_000 nanoseconds.
-		Weight::from_ref_time(4_000_000)
+		Weight::ref_time(4_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a636f6465] (r:0 w:1)
 	fn call_as_sudo() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::ref_time(16_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -87,9 +87,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `b` is `[1, 100]`.
 	fn on_initialize(b: u32, ) -> Weight {
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_ref_time(6_951_927)
+		Weight::ref_time(6_951_927)
 			// Standard Error: 4_941
-			.saturating_add(Weight::from_ref_time(394_899).saturating_mul(b.into()))
+			.saturating_add(Weight::ref_time(394_899).saturating_mul(b.into()))
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -97,7 +97,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance ExecutionPipeline (r:1 w:0)
 	fn on_initialize_best_case() -> Weight {
 		// Minimum execution time: 2_000 nanoseconds.
-		Weight::from_ref_time(3_000_000)
+		Weight::ref_time(3_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
@@ -105,16 +105,16 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `b` is `[1, 100]`.
 	fn expire_proposals(b: u32, ) -> Weight {
 		// Minimum execution time: 2_000 nanoseconds.
-		Weight::from_ref_time(8_763_542)
+		Weight::ref_time(8_763_542)
 			// Standard Error: 13_275
-			.saturating_add(Weight::from_ref_time(2_998_230).saturating_mul(b.into()))
+			.saturating_add(Weight::ref_time(2_998_230).saturating_mul(b.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(b.into())))
 	}
 	// Storage: Governance GovKeyWhitelistedCallHash (r:0 w:1)
 	fn set_whitelisted_call_hash() -> Weight {
 		// Minimum execution time: 11_000 nanoseconds.
-		Weight::from_ref_time(11_000_000)
+		Weight::ref_time(11_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Governance NextGovKeyCallHashNonce (r:1 w:1)
@@ -122,7 +122,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance Members (r:0 w:1)
 	fn submit_govkey_call() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
-		Weight::from_ref_time(21_000_000)
+		Weight::ref_time(21_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -139,7 +139,7 @@ impl WeightInfo for () {
 	// Storage: Governance Proposals (r:0 w:1)
 	fn propose_governance_extrinsic() -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(30_000_000)
+		Weight::ref_time(30_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(4))
 	}
@@ -149,21 +149,21 @@ impl WeightInfo for () {
 	// Storage: Governance ActiveProposals (r:1 w:1)
 	fn approve() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(24_000_000)
+		Weight::ref_time(24_000_000)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: Governance Members (r:0 w:1)
 	fn new_membership_set() -> Weight {
 		// Minimum execution time: 4_000 nanoseconds.
-		Weight::from_ref_time(4_000_000)
+		Weight::ref_time(4_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a636f6465] (r:0 w:1)
 	fn call_as_sudo() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::ref_time(16_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -173,9 +173,9 @@ impl WeightInfo for () {
 	/// The range of component `b` is `[1, 100]`.
 	fn on_initialize(b: u32, ) -> Weight {
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_ref_time(6_951_927)
+		Weight::ref_time(6_951_927)
 			// Standard Error: 4_941
-			.saturating_add(Weight::from_ref_time(394_899).saturating_mul(b.into()))
+			.saturating_add(Weight::ref_time(394_899).saturating_mul(b.into()))
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -183,7 +183,7 @@ impl WeightInfo for () {
 	// Storage: Governance ExecutionPipeline (r:1 w:0)
 	fn on_initialize_best_case() -> Weight {
 		// Minimum execution time: 2_000 nanoseconds.
-		Weight::from_ref_time(3_000_000)
+		Weight::ref_time(3_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
@@ -191,16 +191,16 @@ impl WeightInfo for () {
 	/// The range of component `b` is `[1, 100]`.
 	fn expire_proposals(b: u32, ) -> Weight {
 		// Minimum execution time: 2_000 nanoseconds.
-		Weight::from_ref_time(8_763_542)
+		Weight::ref_time(8_763_542)
 			// Standard Error: 13_275
-			.saturating_add(Weight::from_ref_time(2_998_230).saturating_mul(b.into()))
+			.saturating_add(Weight::ref_time(2_998_230).saturating_mul(b.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(b.into())))
 	}
 	// Storage: Governance GovKeyWhitelistedCallHash (r:0 w:1)
 	fn set_whitelisted_call_hash() -> Weight {
 		// Minimum execution time: 11_000 nanoseconds.
-		Weight::from_ref_time(11_000_000)
+		Weight::ref_time(11_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Governance NextGovKeyCallHashNonce (r:1 w:1)
@@ -208,7 +208,7 @@ impl WeightInfo for () {
 	// Storage: Governance Members (r:0 w:1)
 	fn submit_govkey_call() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
-		Weight::from_ref_time(21_000_000)
+		Weight::ref_time(21_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
