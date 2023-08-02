@@ -83,6 +83,12 @@ where
 		C::activate();
 	}
 
+	fn terminate_rotation_by_safe_mode() {
+		A::terminate_rotation_by_safe_mode();
+		B::terminate_rotation_by_safe_mode();
+		C::terminate_rotation_by_safe_mode();
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		A::set_status(outcome.clone());

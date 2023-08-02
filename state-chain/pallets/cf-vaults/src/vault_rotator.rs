@@ -213,6 +213,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		}
 	}
 
+	fn terminate_rotation_by_safe_mode() {
+		PendingVaultRotation::<T, I>::kill();
+		KeyHandoverResolutionPendingSince::<T, I>::kill();
+		KeygenResolutionPendingSince::<T, I>::kill();
+		Self::deposit_event(Event::<T, I>::VaultRotationTerminatedBySafeMode);
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		match outcome {
