@@ -20,7 +20,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };

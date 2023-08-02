@@ -5,7 +5,7 @@ use cf_chains::{
 	Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};
-use sp_runtime::DispatchError;
+use frame_support::sp_runtime::DispatchError;
 
 use super::AddressDerivation;
 

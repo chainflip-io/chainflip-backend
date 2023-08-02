@@ -11,7 +11,7 @@ use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::AccountId32;
+use frame_support::sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;

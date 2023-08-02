@@ -30,7 +30,7 @@ use frame_support::{
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 };

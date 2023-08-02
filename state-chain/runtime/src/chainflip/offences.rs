@@ -2,7 +2,7 @@ use crate::Runtime;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
 use pallet_cf_reputation::OffenceList;
-use pallet_grandpa::GrandpaEquivocationOffence;
+use pallet_grandpa::EquivocationOffence;
 use scale_info::TypeInfo;
 
 /// Offences that can be reported in this runtime.

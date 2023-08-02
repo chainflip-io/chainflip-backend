@@ -11,7 +11,7 @@ use sc_client_api::BlockBackend;
 use sp_core::{Encode, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;
-use sp_runtime::{OpaqueExtrinsic, SaturatedConversion};
+use frame_support::sp_runtime::{OpaqueExtrinsic, SaturatedConversion};
 use state_chain_runtime as runtime;
 
 use std::{sync::Arc, time::Duration};

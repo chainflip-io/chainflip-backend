@@ -15,7 +15,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
 	DispatchError,
 };

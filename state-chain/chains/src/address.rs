@@ -7,7 +7,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_core::H160;
-use sp_runtime::DispatchError;
+use frame_support::sp_runtime::DispatchError;
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.

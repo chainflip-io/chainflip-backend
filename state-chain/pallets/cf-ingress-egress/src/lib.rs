@@ -28,7 +28,7 @@ use cf_traits::{
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
-use sp_runtime::TransactionOutcome;
+use frame_support::sp_runtime::TransactionOutcome;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.

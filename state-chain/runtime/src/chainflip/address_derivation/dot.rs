@@ -1,7 +1,7 @@
 use crate::Vec;
 use cf_chains::{address::AddressDerivationApi, dot::PolkadotAccountId, Chain, Polkadot};
 use cf_primitives::{chains::assets::dot, ChannelId};
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 	DispatchError,
 };
@@ -49,7 +49,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 fn test_dot_derive() {
 	use crate::Runtime;
 	use pallet_cf_environment::PolkadotVaultAccountId;
-	use sp_runtime::app_crypto::Ss58Codec;
+	use frame_support::sp_runtime::app_crypto::Ss58Codec;
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 		let (account_id, address_format) = sp_runtime::AccountId32::from_ss58check_with_version(

@@ -33,7 +33,7 @@ use state_chain_runtime::{
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
 use utilities::clean_hex_address;
 
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	Percent,
 };

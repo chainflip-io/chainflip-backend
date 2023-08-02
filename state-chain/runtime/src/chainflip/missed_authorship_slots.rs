@@ -2,7 +2,7 @@ use cf_traits::MissedAuthorshipSlots;
 use codec::Decode;
 use frame_support::storage_alias;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use sp_runtime::DigestItem;
+use frame_support::sp_runtime::DigestItem;
 
 use crate::System;
 
@@ -55,7 +55,7 @@ mod test_missed_authorship_slots {
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
-	use sp_runtime::{
+	use frame_support::sp_runtime::{
 		testing::{Header, UintAuthorityId},
 		traits::IdentityLookup,
 		BuildStorage, Digest,

@@ -100,7 +100,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			use sp_runtime::traits::Zero;
+			use frame_support::sp_runtime::traits::Zero;
 			Self {
 				init_chain_state: ChainState {
 					block_height: <T::TargetChain as Chain>::ChainBlockNumber::zero(),
