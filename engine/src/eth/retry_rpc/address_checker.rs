@@ -38,7 +38,7 @@ impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 						client.address_states(block_hash, contract_address, addresses).await
 					})
 				}),
-				"address_states",
+				format!("address_states({block_hash}, {contract_address}"),
 			)
 			.await
 	}
@@ -58,7 +58,7 @@ impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 						client.balances(block_hash, contract_address, addresses).await
 					})
 				}),
-				"balances",
+				format!("balances({block_hash}, {contract_address}"),
 			)
 			.await
 	}

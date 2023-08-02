@@ -56,7 +56,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block(block_hash).await })
 				}),
-				"block",
+				format!("block({block_hash})"),
 			)
 			.await
 	}
@@ -68,12 +68,13 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_hash(block_number).await })
 				}),
-				"block_hash",
+				format!("block_hash({block_number})"),
 			)
 			.await
 	}
 
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid {
+		let log = format!("send_raw_transaction({transaction_bytes:?})");
 		self.retry_client
 			.request(
 				Box::pin(move |client| {
@@ -81,7 +82,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
 				}),
-				"send_raw_transaction",
+				log,
 			)
 			.await
 	}
@@ -93,7 +94,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.next_block_fee_rate().await })
 				}),
-				"next_block_fee_rate",
+				"next_block_fee_rate".to_string(),
 			)
 			.await
 	}
@@ -105,7 +106,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.average_block_fee_rate(block_hash).await })
 				}),
-				"average_block_fee_rate",
+				format!("average_block_fee_rate({block_hash})"),
 			)
 			.await
 	}
@@ -122,7 +123,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 						Ok(header)
 					})
 				}),
-				"best_block_header",
+				"best_block_header".to_string(),
 			)
 			.await
 	}
@@ -155,7 +156,7 @@ impl ChainClient for BtcRetryRpcClient {
 						})
 					})
 				}),
-				"header_at_index",
+				format!("header_at_index({index})"),
 			)
 			.await
 	}

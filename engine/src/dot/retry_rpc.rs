@@ -78,7 +78,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_hash(block_number).await })
 				}),
-				"block_hash",
+				format!("block_hash({block_number})"),
 			)
 			.await
 	}
@@ -94,7 +94,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					))
 					})
 				}),
-				"extrinsics",
+				format!("extrinsics({block_hash})"),
 			)
 			.await
 	}
@@ -106,7 +106,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.events(block_hash).await })
 				}),
-				"events",
+				format!("events({block_hash})"),
 			)
 			.await
 	}
@@ -118,12 +118,13 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.current_runtime_version().await })
 				}),
-				"current_runtime_version",
+				"current_runtime_version".to_string(),
 			)
 			.await
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash {
+		let log = format!("submit_raw_encoded_extrinsic({encoded_bytes:?})");
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
@@ -133,7 +134,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 						async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await },
 					)
 				}),
-				"submit_raw_encoded_extrinsic",
+				log,
 			)
 			.await
 	}
@@ -163,7 +164,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_best_heads().await })
 				}),
-				"subscribe_best_heads",
+				"subscribe_best_heads".to_string(),
 			)
 			.await
 	}
@@ -177,7 +178,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_finalized_heads().await })
 				}),
-				"subscribe_finalized_heads",
+				"subscribe_finalized_heads".to_string(),
 			)
 			.await
 	}
@@ -223,7 +224,7 @@ impl ChainClient for DotRetryRpcClient {
 						})
 					})
 				}),
-				"header_at_index",
+				format!("header_at_index({index})"),
 			)
 			.await
 	}

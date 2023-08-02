@@ -32,21 +32,21 @@ type RequestId = u64;
 
 type Attempt = u32;
 
-type RequestName = &'static str;
+type RequestLog = String;
 
-type SubmissionFutureOutput = (RequestId, RequestName, Result<BoxAny, (anyhow::Error, Attempt)>);
+type SubmissionFutureOutput = (RequestId, RequestLog, Result<BoxAny, (anyhow::Error, Attempt)>);
 type SubmissionFuture = Pin<Box<dyn Future<Output = SubmissionFutureOutput> + Send + 'static>>;
 type SubmissionFutures = FuturesUnordered<SubmissionFuture>;
 
 type RetryDelays = FuturesUnordered<
-	Pin<Box<dyn Future<Output = (RequestId, RequestName, Attempt)> + Send + 'static>>,
+	Pin<Box<dyn Future<Output = (RequestId, RequestLog, Attempt)> + Send + 'static>>,
 >;
 
 type BoxAny = Box<dyn Any + Send>;
 
 type RequestPackage<Client> = (oneshot::Sender<BoxAny>, FutureAnyGenerator<Client>);
 
-type RequestSent<Client> = (oneshot::Sender<BoxAny>, RequestName, FutureAnyGenerator<Client>);
+type RequestSent<Client> = (oneshot::Sender<BoxAny>, RequestLog, FutureAnyGenerator<Client>);
 
 /// Tracks all the retries
 #[derive(Clone)]
@@ -130,7 +130,7 @@ fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Durati
 fn submission_future<Client: Clone>(
 	client: Client,
 	retrier_name: &'static str,
-	request_name: RequestName,
+	request_log: RequestLog,
 	submission_fn: &FutureAnyGenerator<Client>,
 	request_id: RequestId,
 	initial_request_timeout: Duration,
@@ -141,7 +141,7 @@ fn submission_future<Client: Clone>(
 	Box::pin(async move {
 		(
 			request_id,
-			request_name,
+			request_log.clone(),
 			match tokio::time::timeout(
 				max_sleep_duration(initial_request_timeout, attempt),
 				submission_fut,
@@ -151,7 +151,7 @@ fn submission_future<Client: Clone>(
 				Ok(Ok(t)) => Ok(t),
 				Ok(Err(e)) => Err(e),
 				Err(_) => Err(anyhow::anyhow!(
-					"Retrier {retrier_name}: Request {request_id} of {request_name} timed out"
+					"Retrier {retrier_name}: Request {request_log} with id: {request_id} timed out"
 				)),
 			}
 			.map_err(|e| (e, attempt)),
@@ -182,12 +182,12 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 
 		scope.spawn(async move {
 			utilities::loop_select! {
-				if let Some((response_sender, request_name, closure)) = request_receiver.recv() => {
+				if let Some((response_sender, request_log, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					submission_holder.push(submission_future(primary_client.clone(), name, request_name, &closure, request_id, initial_request_timeout, 0));
+					submission_holder.push(submission_future(primary_client.clone(), name, request_log, &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				let (request_id, request_name, result) = submission_holder.next_or_pending() => {
+				let (request_id, request_log, result) = submission_holder.next_or_pending() => {
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
@@ -199,28 +199,28 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 							// We avoid small delays by always having a time of at least half.
 							let half_max = max_sleep_duration(initial_request_timeout, attempt) / 2;
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
-							tracing::error!("Retrier {name}: Error for request_id {request_id} of {request_name}, attempt {attempt}: {e}. Delaying for {}ms", sleep_duration.as_millis());
+							tracing::error!("Retrier {name}: Error for Request {request_log} with id: {request_id}, attempt {attempt}: {e}. Delaying for {}ms", sleep_duration.as_millis());
 
 							// Delay the request before the next retry.
 							retry_delays.push(Box::pin(
 								async move {
 									tokio::time::sleep(sleep_duration).await;
-									(request_id, request_name, attempt)
+									(request_id, request_log, attempt)
 								}
 							));
 						},
 					}
 				},
-				let (request_id, request_name, attempt) = retry_delays.next_or_pending() => {
+				let (request_id, request_log, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
-					tracing::trace!("Retrier {name}: Retrying request_id: {request_id} of {request_name} for attempt: {next_attempt}");
+					tracing::trace!("Retrier {name}: Retrying request {request_log} with id: {request_id} for attempt: {next_attempt}");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
-							submission_holder.push(submission_future(primary_client.clone(), name, request_name, closure, request_id, initial_request_timeout, next_attempt));
+							submission_holder.push(submission_future(primary_client.clone(), name, request_log, closure, request_id, initial_request_timeout, next_attempt));
 						} else {
-							tracing::trace!("Retrier {name}: Dropped request_id: {request_id} of {request_name} not retrying.");
+							tracing::trace!("Retrier {name}: Dropped request {request_log} with id: {request_id} not retrying.");
 							request_holder.remove(&request_id);
 						}
 					}
@@ -236,7 +236,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 	async fn send_request<T: Send + 'static>(
 		&self,
 		specific_closure: TypedFutureGenerator<T, Client>,
-		request_name: RequestName,
+		request_log: RequestLog,
 	) -> oneshot::Receiver<BoxAny> {
 		let future_any_fn: FutureAnyGenerator<Client> = Box::pin(move |client| {
 			let future = specific_closure(client);
@@ -247,7 +247,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 			})
 		});
 		let (tx, rx) = oneshot::channel::<BoxAny>();
-		let _result = self.request_sender.send((tx, request_name, future_any_fn)).await;
+		let _result = self.request_sender.send((tx, request_log, future_any_fn)).await;
 		rx
 	}
 
@@ -255,9 +255,9 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 	pub async fn request<T: Send + 'static>(
 		&self,
 		specific_closure: TypedFutureGenerator<T, Client>,
-		request_name: RequestName,
+		request_log: RequestLog,
 	) -> T {
-		let rx = self.send_request(specific_closure, request_name).await;
+		let rx = self.send_request(specific_closure, request_log).await;
 		let result: BoxAny = rx.await.unwrap();
 		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
 	}
@@ -309,17 +309,26 @@ mod tests {
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT), "request 1")
+					.send_request(
+						specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
+						"request 1".to_string(),
+					)
 					.await;
 
 				const REQUEST_2: u64 = 64;
 				let rx2 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT), "request 2")
+					.send_request(
+						specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
+						"request 2".to_string(),
+					)
 					.await;
 
 				const REQUEST_3: u128 = 128;
 				let rx3 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_3, INITIAL_TIMEOUT), "request 3")
+					.send_request(
+						specific_fut_closure(REQUEST_3, INITIAL_TIMEOUT),
+						"request 3".to_string(),
+					)
 					.await;
 
 				// Receive items in a different order to sending
@@ -346,12 +355,12 @@ mod tests {
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_1, TIMEOUT), "request 1")
+					.send_request(specific_fut_closure(REQUEST_1, TIMEOUT), "request 1".to_string())
 					.await;
 
 				const REQUEST_2: u64 = 64;
 				let rx2 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_2, TIMEOUT), "request 2")
+					.send_request(specific_fut_closure(REQUEST_2, TIMEOUT), "request 2".to_string())
 					.await;
 
 				check_result(rx1, REQUEST_1).await;
@@ -377,7 +386,10 @@ mod tests {
 				assert_eq!(
 					REQUEST_1,
 					retrier_client
-						.request(specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT), "request 1")
+						.request(
+							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
+							"request 1".to_string()
+						)
 						.await
 				);
 
@@ -385,7 +397,10 @@ mod tests {
 				assert_eq!(
 					REQUEST_2,
 					retrier_client
-						.request(specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT), "request 2")
+						.request(
+							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
+							"request 2".to_string()
+						)
 						.await
 				);
 
@@ -410,12 +425,12 @@ mod tests {
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_1, TIMEOUT), "request 1")
+					.send_request(specific_fut_closure(REQUEST_1, TIMEOUT), "request 1".to_string())
 					.await;
 
 				const REQUEST_2: u64 = 64;
 				let rx2 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_2, TIMEOUT), "request 2")
+					.send_request(specific_fut_closure(REQUEST_2, TIMEOUT), "request 2".to_string())
 					.await;
 
 				// The submission buffer should be full of the first two requests. We set the
@@ -424,8 +439,10 @@ mod tests {
 				const REQUEST_3: u128 = 128;
 				timeout(
 					Duration::from_millis(100),
-					retrier_client
-						.request(specific_fut_closure(REQUEST_3, Duration::default()), "request 3"),
+					retrier_client.request(
+						specific_fut_closure(REQUEST_3, Duration::default()),
+						"request 3".to_string(),
+					),
 				)
 				.await
 				.unwrap_err();
@@ -436,7 +453,7 @@ mod tests {
 						Duration::from_millis(600),
 						retrier_client.request(
 							specific_fut_closure(REQUEST_3, Duration::default()),
-							"request 3"
+							"request 3".to_string(),
 						),
 					)
 					.await
@@ -476,7 +493,7 @@ mod tests {
 				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
 
 				retrier_client
-					.request(specific_fut_err::<(), _>(INITIAL_TIMEOUT), "request")
+					.request(specific_fut_err::<(), _>(INITIAL_TIMEOUT), "request".to_string())
 					.await;
 
 				Ok(())
