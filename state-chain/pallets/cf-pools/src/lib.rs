@@ -8,7 +8,7 @@ use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
-use sp_runtime::{Permill, Saturating};
+use frame_support::sp_runtime::{Permill, Saturating};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};

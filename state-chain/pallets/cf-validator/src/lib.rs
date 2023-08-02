@@ -31,9 +31,9 @@ use frame_support::{
 };
 pub use pallet::*;
 use sp_core::ed25519;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
-	Percent,
+	Percent, Permill,
 };
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -96,7 +96,7 @@ pub mod pallet {
 	use cf_traits::{AccountRoleRegistry, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
-	use sp_runtime::app_crypto::RuntimePublic;
+	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -1264,9 +1264,9 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 
 	fn estimate_current_session_progress(
 		now: T::BlockNumber,
-	) -> (Option<sp_runtime::Permill>, Weight) {
+	) -> (Option<Permill>, Weight) {
 		(
-			Some(sp_runtime::Permill::from_rational(
+			Some(Permill::from_rational(
 				now.saturating_sub(CurrentEpochStartedAt::<T>::get()),
 				BlocksPerEpoch::<T>::get(),
 			)),

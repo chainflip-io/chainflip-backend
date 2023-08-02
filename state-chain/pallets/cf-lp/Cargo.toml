@@ -27,14 +27,14 @@ scale-info = { version = '2.5.0', default-features = false, features = ['derive'
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
 frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
 
 [dev-dependencies]
 pallet-cf-account-roles = { path = '../cf-account-roles' }
 cf-test-utilities = { path = '../../test-utilities' }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
 
 [features]
 default = ['std']
@@ -48,9 +48,6 @@ std = [
   'frame-system/std',
   'scale-info/std',
   'serde/std',
-  'sp-core/std',
-  'sp-io/std',
-  'sp-runtime/std',
   'sp-std/std',
 ]
 runtime-benchmarks = [

@@ -144,7 +144,7 @@ where
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		if should_upgrade::<P, FROM, TO>() {
 			let state = U::pre_upgrade().map_err(|e| {
 				log::error!(
@@ -168,7 +168,7 @@ where
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		if let Some((lowest, highest)) = try_runtime_helpers::get_migration_bounds::<P>() {
 			assert_eq!(
 				<P as GetStorageVersion>::on_chain_storage_version(),
@@ -186,7 +186,7 @@ where
 			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
 			Ok(())
 		} else {
-			Ok(())
+			Ok(().into())
 		}
 	}
 }

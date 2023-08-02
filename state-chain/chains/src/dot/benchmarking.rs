@@ -9,7 +9,7 @@ use crate::{
 	},
 };
 
-use sp_runtime::generic::Era;
+use frame_support::sp_runtime::generic::Era;
 
 use super::{
 	api::{rotate_vault_proxy, PolkadotApi},

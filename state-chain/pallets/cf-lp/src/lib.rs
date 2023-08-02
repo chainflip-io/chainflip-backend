@@ -5,14 +5,13 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::DispatchResult;
-
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi,
 };
-use sp_runtime::{traits::BlockNumberProvider, Saturating};
+use frame_support::sp_runtime::DispatchResult;
+use frame_support::sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
 
 mod benchmarking;

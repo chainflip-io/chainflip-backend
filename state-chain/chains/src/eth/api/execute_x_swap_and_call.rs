@@ -4,7 +4,7 @@ use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use ethabi::Token;
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
+use frame_support::sp_runtime::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'

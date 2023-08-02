@@ -14,7 +14,7 @@ use cf_traits::{
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::{One, Saturating};
+use frame_support::sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
@@ -134,7 +134,7 @@ pub struct VaultEpochAndState {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use sp_runtime::Percent;
+	use frame_support::sp_runtime::Percent;
 
 	use super::*;
 
@@ -712,7 +712,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			use sp_runtime::traits::Zero;
+			use frame_support::sp_runtime::traits::Zero;
 			Self {
 				vault_key: None,
 				deployment_block: Zero::zero(),

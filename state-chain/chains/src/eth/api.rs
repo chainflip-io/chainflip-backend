@@ -3,7 +3,7 @@ use crate::*;
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{Hash, Keccak256, UniqueSaturatedInto},
 	DispatchError,
 };

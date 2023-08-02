@@ -18,7 +18,7 @@ mod tests;
 
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 	Rounding, SaturatedConversion,
 };
@@ -339,7 +339,7 @@ fn calculate_inflation_to_block_reward<T>(
 where
 	T: Into<u128> + From<u128>,
 {
-	use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
+	use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 
 	multiply_by_rational_with_rounding(
 		issuance.into(),

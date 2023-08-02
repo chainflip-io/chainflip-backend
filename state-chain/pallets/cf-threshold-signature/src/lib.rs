@@ -32,7 +32,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{BlockNumberProvider, Saturating, Zero},
 	RuntimeDebug,
 };

@@ -5,7 +5,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::btc, ChannelId};
 use cf_traits::EpochInfo;
-use sp_runtime::DispatchError;
+use frame_support::sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(

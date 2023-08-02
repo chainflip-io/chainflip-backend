@@ -20,7 +20,7 @@ use frame_support::{
 	traits::{Get, OnKilledAccount},
 };
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
+use frame_support::sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
 	iter::{self, Iterator},
@@ -331,7 +331,7 @@ pub mod pallet {
 		/// A node is considered online, and therefore qualified if fewer than
 		/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
 		fn is_qualified(validator_id: &T::ValidatorId) -> bool {
-			use sp_runtime::traits::Saturating;
+			use frame_support::sp_runtime::traits::Saturating;
 			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
 				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
 					T::HeartbeatBlockInterval::get()

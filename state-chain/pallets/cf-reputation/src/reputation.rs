@@ -1,7 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{pallet_prelude::Member, Parameter};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating, Zero};
+use frame_support::sp_runtime::traits::{AtLeast32BitUnsigned, Saturating, Zero};
 use sp_std::fmt::Debug;
 
 pub type ReputationPoints = i32;

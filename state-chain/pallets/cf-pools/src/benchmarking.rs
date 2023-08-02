@@ -11,7 +11,7 @@ use frame_support::{
 	traits::{EnsureOrigin, OnNewAccount},
 };
 use frame_system::RawOrigin;
-use sp_runtime::traits::One;
+use frame_support::sp_runtime::traits::One;
 
 fn new_lp_account<T: Chainflip>() -> T::AccountId {
 	let caller: T::AccountId = whitelisted_caller();

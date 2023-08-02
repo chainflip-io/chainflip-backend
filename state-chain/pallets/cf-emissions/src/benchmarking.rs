@@ -16,7 +16,7 @@ const SUPPLY_UPDATE_INTERVAL: u32 = 100;
 const INFLATION_RATE: u32 = 200;
 
 fn on_initialize_setup<T: Config>(should_mint: bool) -> <T as frame_system::Config>::BlockNumber {
-	use sp_runtime::{Digest, DigestItem};
+	use frame_support::sp_runtime::{Digest, DigestItem};
 	type System<T> = frame_system::Pallet<T>;
 	let author_slot = 1u32;
 	let pre_digest =

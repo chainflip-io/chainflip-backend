@@ -13,7 +13,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
 pub use pallet::*;
-use sp_runtime::{DispatchError, TransactionOutcome};
+use frame_support::sp_runtime::{DispatchError, TransactionOutcome};
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 mod benchmarking;

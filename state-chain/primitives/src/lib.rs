@@ -5,7 +5,7 @@
 //! Primitive types to be used across Chainflip's various crates.
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
 };

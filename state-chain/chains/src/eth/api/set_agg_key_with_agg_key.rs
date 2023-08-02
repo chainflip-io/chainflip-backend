@@ -3,7 +3,7 @@ use crate::eth::AggKey;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::Token;
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
+use frame_support::sp_runtime::RuntimeDebug;
 use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's

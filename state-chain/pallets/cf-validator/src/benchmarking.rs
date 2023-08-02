@@ -13,7 +13,7 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
-use sp_runtime::{Digest, DigestItem};
+use frame_support::sp_runtime::{Digest, DigestItem};
 use sp_std::vec;
 
 mod p2p_crypto {

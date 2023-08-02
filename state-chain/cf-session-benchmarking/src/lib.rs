@@ -6,7 +6,7 @@ use frame_support::{assert_ok, codec::Decode};
 use frame_system::RawOrigin;
 use pallet_session::*;
 use rand::{RngCore, SeedableRng};
-use sp_runtime::traits::Convert;
+use frame_support::sp_runtime::traits::Convert;
 use sp_std::{prelude::*, vec};
 
 pub struct Pallet<T: Config>(pallet_session::Pallet<T>);
