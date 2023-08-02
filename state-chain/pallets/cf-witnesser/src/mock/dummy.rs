@@ -48,7 +48,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// increments value, starting from 0
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::ref_time(10_000) + T::DbWeight::get().writes(1))]
+		#[pallet::weight(Weight::from_parts(10_000) + T::DbWeight::get().writes(1), 0)]
 		pub fn increment_value(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 

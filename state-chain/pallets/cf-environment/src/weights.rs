@@ -43,32 +43,32 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Environment CfeSettings (r:0 w:1)
 	fn set_cfe_settings() -> Weight {
 		// Minimum execution time: 17_000 nanoseconds.
-		Weight::ref_time(17_000_000)
+		Weight::from_parts(17_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Environment EthereumSupportedAssets (r:1 w:1)
 	fn update_supported_eth_assets() -> Weight {
 		// Minimum execution time: 24_000 nanoseconds.
-		Weight::ref_time(24_000_000)
+		Weight::from_parts(24_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
 	fn update_polkadot_runtime_version() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::ref_time(20_000_000)
+		Weight::from_parts(20_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
 	fn update_safe_mode() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::ref_time(20_000_000)
+		Weight::from_parts(20_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	fn set_next_compatibility_version() -> Weight {
-		Weight::ref_time(1_000)
+		Weight::from_parts(1_000, 0)
 	}
 }
 
@@ -77,32 +77,32 @@ impl WeightInfo for () {
 	// Storage: Environment CfeSettings (r:0 w:1)
 	fn set_cfe_settings() -> Weight {
 		// Minimum execution time: 17_000 nanoseconds.
-		Weight::ref_time(17_000_000)
+		Weight::from_parts(17_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Environment EthereumSupportedAssets (r:1 w:1)
 	fn update_supported_eth_assets() -> Weight {
 		// Minimum execution time: 24_000 nanoseconds.
-		Weight::ref_time(24_000_000)
+		Weight::from_parts(24_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
 	fn update_polkadot_runtime_version() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::ref_time(20_000_000)
+		Weight::from_parts(20_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
 	fn update_safe_mode() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::ref_time(20_000_000)
+		Weight::from_parts(20_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 
 	fn set_next_compatibility_version() -> Weight {
-		Weight::ref_time(1_000)
+		Weight::from_parts(1_000, 0)
 	}
 }

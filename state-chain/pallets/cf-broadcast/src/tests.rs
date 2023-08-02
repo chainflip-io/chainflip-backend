@@ -34,7 +34,7 @@ thread_local! {
 }
 
 // When calling on_idle, we should broadcast everything with this excess weight.
-const LARGE_EXCESS_WEIGHT: Weight = Weight::ref_time(20_000_000_000);
+const LARGE_EXCESS_WEIGHT: Weight = Weight::from_parts(20_000_000_000, 0);
 
 const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 

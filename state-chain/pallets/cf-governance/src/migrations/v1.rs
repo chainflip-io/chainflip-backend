@@ -9,7 +9,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			members.map(|members| members.into_iter().collect())
 		})
 		.expect("Decoding of old type should not fail");
-		Weight::ref_time(0)
+		Weight::from_parts(0, 0)
 	}
 
 	#[cfg(feature = "try-runtime")]

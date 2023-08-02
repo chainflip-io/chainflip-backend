@@ -35,14 +35,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Aura CurrentSlot (r:1 w:0)
 	fn set() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(Weight::ref_time(11_000_000)
+		(Weight::from_parts(11_000_000, 0)
 )
 			.saturating_add(T::DbWeight::get().reads(2u64))
 			.saturating_add(T::DbWeight::get().writes(1u64))
 	}
 	fn on_finalize() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(Weight::ref_time(5_000_000)
+		(Weight::from_parts(5_000_000, 0)
 )
 	}
 }

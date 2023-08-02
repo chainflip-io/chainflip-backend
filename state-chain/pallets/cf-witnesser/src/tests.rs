@@ -240,7 +240,7 @@ fn can_purge_stale_storage() {
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3, 4]);
 
 		// Nothing to clean up in epoch 4
-		Witnesser::on_idle(1, Weight::ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(1, Weight::from_parts(BLOCK_WEIGHT), 0);
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3]);
 		for e in [2u32, 9, 10, 11] {
 			assert_eq!(Votes::<Test>::get(e, call1), Some(vec![0, 0, e as u8]));
@@ -251,7 +251,7 @@ fn can_purge_stale_storage() {
 			assert_eq!(CallHashExecuted::<Test>::get(e, call2), Some(()));
 		}
 
-		Witnesser::on_idle(2, Weight::ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(2, Weight::from_parts(BLOCK_WEIGHT), 0);
 
 		// Partially clean data from epoch 2
 		Witnesser::on_idle(3, delete_weight * 4);
@@ -277,7 +277,7 @@ fn can_purge_stale_storage() {
 		))));
 
 		// Clean the remaining storage
-		Witnesser::on_idle(4, Weight::ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(4, Weight::from_parts(BLOCK_WEIGHT), 0);
 
 		// Epoch 2's stale data should be fully cleaned.
 		assert_eq!(CallHashExecuted::<Test>::get(2u32, call1), None);
@@ -298,8 +298,8 @@ fn can_purge_stale_storage() {
 		Witnesser::on_expired_epoch(9);
 		Witnesser::on_expired_epoch(10);
 		assert_eq!(EpochsToCull::<Test>::get(), vec![9, 10]);
-		Witnesser::on_idle(4, Weight::ref_time(BLOCK_WEIGHT));
-		Witnesser::on_idle(5, Weight::ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(4, Weight::from_parts(BLOCK_WEIGHT), 0);
+		Witnesser::on_idle(5, Weight::from_parts(BLOCK_WEIGHT), 0);
 		assert!(EpochsToCull::<Test>::get().is_empty());
 
 		for e in [9u32, 10] {

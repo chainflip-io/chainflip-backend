@@ -46,7 +46,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	fn signature_success() -> Weight {
 		// Minimum execution time: 30_000 nanoseconds.
-		Weight::ref_time(37_000_000)
+		Weight::from_parts(37_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -56,14 +56,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[1, 100]`.
 	fn report_signature_failed(_a: u32, ) -> Weight {
 		// Minimum execution time: 34_000 nanoseconds.
-		Weight::ref_time(45_476_538)
+		Weight::from_parts(45_476_538, 0)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:1)
 	fn set_threshold_signature_timeout() -> Weight {
 		// Minimum execution time: 17_000 nanoseconds.
-		Weight::ref_time(19_000_000)
+		Weight::from_parts(19_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -83,11 +83,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `r` is `[0, 50]`.
 	fn on_initialize(a: u32, r: u32, ) -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::ref_time(11_289_319)
+		Weight::from_parts(11_289_319, 0)
 			// Standard Error: 62_565
-			.saturating_add(Weight::ref_time(207_509).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(207_509, 0).saturating_mul(a.into()))
 			// Standard Error: 173_928
-			.saturating_add(Weight::ref_time(33_102_908).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(33_102_908, 0).saturating_mul(r.into()))
 			.saturating_add(T::DbWeight::get().reads(12))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(r.into())))
 			.saturating_add(T::DbWeight::get().writes(3))
@@ -99,9 +99,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `o` is `[1, 100]`.
 	fn report_offenders(o: u32, ) -> Weight {
 		// Minimum execution time: 24_000 nanoseconds.
-		Weight::ref_time(17_464_120)
+		Weight::from_parts(17_464_120, 0)
 			// Standard Error: 29_253
-			.saturating_add(Weight::ref_time(6_229_654).saturating_mul(o.into()))
+			.saturating_add(Weight::from_parts(6_229_654, 0).saturating_mul(o.into()))
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(o.into())))
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -117,7 +117,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	fn signature_success() -> Weight {
 		// Minimum execution time: 30_000 nanoseconds.
-		Weight::ref_time(37_000_000)
+		Weight::from_parts(37_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -127,14 +127,14 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[1, 100]`.
 	fn report_signature_failed(_a: u32, ) -> Weight {
 		// Minimum execution time: 34_000 nanoseconds.
-		Weight::ref_time(45_476_538)
+		Weight::from_parts(45_476_538, 0)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:1)
 	fn set_threshold_signature_timeout() -> Weight {
 		// Minimum execution time: 17_000 nanoseconds.
-		Weight::ref_time(19_000_000)
+		Weight::from_parts(19_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -154,11 +154,11 @@ impl WeightInfo for () {
 	/// The range of component `r` is `[0, 50]`.
 	fn on_initialize(a: u32, r: u32, ) -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::ref_time(11_289_319)
+		Weight::from_parts(11_289_319, 0)
 			// Standard Error: 62_565
-			.saturating_add(Weight::ref_time(207_509).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(207_509, 0).saturating_mul(a.into()))
 			// Standard Error: 173_928
-			.saturating_add(Weight::ref_time(33_102_908).saturating_mul(r.into()))
+			.saturating_add(Weight::from_parts(33_102_908, 0).saturating_mul(r.into()))
 			.saturating_add(RocksDbWeight::get().reads(12))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(r.into())))
 			.saturating_add(RocksDbWeight::get().writes(3))
@@ -170,9 +170,9 @@ impl WeightInfo for () {
 	/// The range of component `o` is `[1, 100]`.
 	fn report_offenders(o: u32, ) -> Weight {
 		// Minimum execution time: 24_000 nanoseconds.
-		Weight::ref_time(17_464_120)
+		Weight::from_parts(17_464_120, 0)
 			// Standard Error: 29_253
-			.saturating_add(Weight::ref_time(6_229_654).saturating_mul(o.into()))
+			.saturating_add(Weight::from_parts(6_229_654, 0).saturating_mul(o.into()))
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(o.into())))
 			.saturating_add(RocksDbWeight::get().writes(1))
