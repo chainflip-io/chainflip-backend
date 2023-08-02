@@ -153,8 +153,7 @@ export async function testAllSwaps() {
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
     }),
-    /*
-    testSwapViaContract('USDC', 'ETH', {
+    testSwapViaContract('USDC', 'FLIP', {
       message: getAbiEncodedMessage(),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
@@ -163,9 +162,7 @@ export async function testAllSwaps() {
       message: getAbiEncodedMessage(),
       gasBudget: 10000000000000000,
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-      sourceAddress: { ETH: await newAddress('ETH', randomAsHex(32)) },
     }),
-    */
   ]);
 
   const contractSwaps = Promise.all([
@@ -173,7 +170,6 @@ export async function testAllSwaps() {
     testSwapViaContract('ETH', 'USDC'),
     testSwapViaContract('ETH', 'BTC'),
     testSwapViaContract('ETH', 'FLIP'),
-    /*
     testSwapViaContract('USDC', 'DOT'),
     testSwapViaContract('USDC', 'ETH'),
     testSwapViaContract('USDC', 'BTC'),
@@ -182,38 +178,37 @@ export async function testAllSwaps() {
     testSwapViaContract('FLIP', 'ETH'),
     testSwapViaContract('FLIP', 'BTC'),
     testSwapViaContract('FLIP', 'USDC'),
-    */
   ]);
 
   const regularSwaps = Promise.all([
     testSwap('ETH', 'DOT'),
     testSwap('ETH', 'USDC'),
+    testSwap('ETH', 'FLIP'),
     testSwap('ETH', 'BTC', 'P2PKH'),
     testSwap('ETH', 'BTC', 'P2WSH'),
     testSwap('ETH', 'BTC', 'P2SH'),
     testSwap('ETH', 'BTC', 'P2WPKH'),
-
     testSwap('USDC', 'DOT'),
+    testSwap('USDC', 'FLIP'),
     testSwap('USDC', 'ETH'),
     testSwap('USDC', 'BTC', 'P2PKH'),
     testSwap('USDC', 'BTC', 'P2WSH'),
     testSwap('USDC', 'BTC', 'P2SH'),
     testSwap('USDC', 'BTC', 'P2WPKH'),
     testSwap('DOT', 'BTC', 'P2WSH'),
-    testSwap('FLIP', 'BTC', 'P2SH'),
-    testSwap('BTC', 'DOT'),
     testSwap('DOT', 'USDC'),
     testSwap('DOT', 'ETH'),
+    testSwap('DOT', 'FLIP'),
+    testSwap('BTC', 'DOT'),
     testSwap('BTC', 'ETH'),
     testSwap('BTC', 'USDC'),
-    testSwap('ETH', 'USDC'),
-    testSwap('FLIP', 'DOT'),
     testSwap('BTC', 'FLIP'),
+    testSwap('FLIP', 'BTC', 'P2SH'),
+    testSwap('FLIP', 'DOT'),
+    testSwap('FLIP', 'ETH'),
+    testSwap('FLIP', 'USDC'),
   ]);
 
-  // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
-  // all ccm swaps have the same destination address (cfTester) and then it will get a
-  // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
     testSwap('BTC', 'ETH', undefined, {
       message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
@@ -241,6 +236,16 @@ export async function testAllSwaps() {
       cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
     }),
     testSwap('ETH', 'USDC', undefined, {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+    }),
+    testSwap('FLIP', 'USDC', undefined, {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+    }),
+    testSwap('FLIP', 'ETH', undefined, {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gasBudget: 5000000,
       cfParameters: getAbiEncodedMessage(['address', 'uint256']),
