@@ -22,7 +22,6 @@ enum SolidityType {
   Address = 'address',
 }
 
-
 let swapCount = 1;
 
 function newAbiEncodedMessage(types?: SolidityType[]): string {
@@ -131,7 +130,6 @@ async function testSwap(
   );
   await performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
-
 async function testSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -141,7 +139,7 @@ async function testSwapViaContract(
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
-    undefined,
+    addressType,
     messageMetadata,
     ' Contract',
   );
@@ -195,11 +193,11 @@ export async function testAllSwaps() {
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault(
     'USDC',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 5n).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   );
 
   const regularSwaps: Promise<void>[] = [];
@@ -238,15 +236,7 @@ export async function testAllSwaps() {
     testDepositEthereum('FLIP', 'BTC'),
   ]);
 
-  // await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
-  await regularSwaps;
-  await contractSwaps;
-  await ccmSwaps;
-  await ccmContractSwaps;
-
-  await depositTestSwaps;
-
-
+  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps, depositTestSwaps]);
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
