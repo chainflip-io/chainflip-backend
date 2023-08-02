@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset, assetDecimals } from '@chainflip-io/cli';
+import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { performSwap, doPerformSwap, requestNewSwap, SenderType } from '../shared/perform_swap';
 import {
@@ -11,21 +11,32 @@ import {
   observeBadEvents,
   observeFetch,
 } from '../shared/utils';
-import { BtcAddressType } from '../shared/new_btc_address';
+import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { performSwapViaContract, approveTokenVault } from '../shared/contract_swap';
 
+enum SolidityType {
+  Uint256 = 'uint256',
+  String = 'string',
+  Bytes = 'bytes',
+  Address = 'address',
+}
+
+
 let swapCount = 1;
 
-function getAbiEncodedMessage(types?: string[]): string {
+function newAbiEncodedMessage(types?: SolidityType[]): string {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
 
-  const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
-  let typesArray: string[] = [];
+  let typesArray: SolidityType[] = [];
   if (types === undefined) {
-    const numElements = Math.floor(Math.random() * validSolidityTypes.length) + 1;
+    const numElements = Math.floor(Math.random() * (Object.keys(SolidityType).length / 2)) + 1;
     for (let i = 0; i < numElements; i++) {
-      typesArray.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
+      typesArray.push(
+        Object.values(SolidityType)[
+          Math.floor(Math.random() * (Object.keys(SolidityType).length / 2))
+        ],
+      );
     }
   } else {
     typesArray = types;
@@ -35,16 +46,16 @@ function getAbiEncodedMessage(types?: string[]): string {
 
   for (let i = 0; i < typesArray.length; i++) {
     switch (typesArray[i]) {
-      case 'uint256':
+      case SolidityType.Uint256:
         variables.push(randomAsNumber());
         break;
-      case 'string':
+      case SolidityType.String:
         variables.push(Math.random().toString(36).substring(2));
         break;
-      case 'bytes':
+      case SolidityType.Bytes:
         variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
         break;
-      case 'address':
+      case SolidityType.Address:
         variables.push(randomAsHex(20));
         break;
       // Add more cases for other Solidity types as needed
@@ -54,6 +65,28 @@ function getAbiEncodedMessage(types?: string[]): string {
   }
   const encodedMessage = web3.eth.abi.encodeParameters(typesArray, variables);
   return encodedMessage;
+}
+
+function newCcmMetadata(
+  sourceAsset: Asset,
+  gas?: number,
+  messageTypesArray?: SolidityType[],
+  cfParamsArray?: SolidityType[],
+) {
+  const message = newAbiEncodedMessage(messageTypesArray);
+  const cfParameters = newAbiEncodedMessage(cfParamsArray);
+  const gasBudget =
+    gas ??
+    Math.floor(
+      Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
+        100,
+    );
+
+  return {
+    message,
+    gasBudget,
+    cfParameters,
+  };
 }
 
 export async function prepareSwap(
@@ -102,6 +135,7 @@ async function testSwap(
 async function testSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
+  addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
 ) {
   const { destAddress, tag } = await prepareSwap(
@@ -132,9 +166,30 @@ async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
 }
 
 export async function testAllSwaps() {
+  function appendSwap(
+    swapArray: Promise<void>[],
+    assetSource: Asset,
+    assetDest: Asset,
+    functionCall: (
+      sourceAsset: Asset,
+      destAsset: Asset,
+      addressType?: BtcAddressType,
+      messageMetadata?: CcmDepositMetadata,
+    ) => Promise<void>,
+    messageMetadata?: CcmDepositMetadata,
+  ) {
+    if (assetDest === 'BTC') {
+      Object.values(btcAddressTypes).forEach((btcAddrType) => {
+        // regularSwapsArray.push(testSwap(assetSource, assetDest, btcAddrType));
+        swapArray.push(functionCall(assetSource, assetDest, btcAddrType, messageMetadata));
+      });
+    } else {
+      swapArray.push(functionCall(assetSource, assetDest, undefined, messageMetadata));
+    }
+  }
+
   let stopObserving = false;
   const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
-
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
@@ -147,117 +202,51 @@ export async function testAllSwaps() {
     (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 5n).toString(),
   );
 
-  const ccmContractSwaps = Promise.all([
-    testSwapViaContract('ETH', 'USDC', {
-      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-      gasBudget: 5000000,
-      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    }),
-    testSwapViaContract('USDC', 'FLIP', {
-      message: getAbiEncodedMessage(),
-      gasBudget: 5000000,
-      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-    }),
-    testSwapViaContract('FLIP', 'ETH', {
-      message: getAbiEncodedMessage(),
-      gasBudget: 10000000000000000,
-      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-    }),
-  ]);
+  const regularSwaps: Promise<void>[] = [];
+  const contractSwaps: Promise<void>[] = [];
+  const ccmSwaps: Promise<void>[] = [];
+  const ccmContractSwaps: Promise<void>[] = [];
 
-  const contractSwaps = Promise.all([
-    testSwapViaContract('ETH', 'DOT'),
-    testSwapViaContract('ETH', 'USDC'),
-    testSwapViaContract('ETH', 'BTC'),
-    testSwapViaContract('ETH', 'FLIP'),
-    testSwapViaContract('USDC', 'DOT'),
-    testSwapViaContract('USDC', 'ETH'),
-    testSwapViaContract('USDC', 'BTC'),
-    testSwapViaContract('USDC', 'FLIP'),
-    testSwapViaContract('FLIP', 'DOT'),
-    testSwapViaContract('FLIP', 'ETH'),
-    testSwapViaContract('FLIP', 'BTC'),
-    testSwapViaContract('FLIP', 'USDC'),
-  ]);
+  Object.values(Assets).forEach((assetSource) => {
+    Object.values(Assets).forEach((assetDest) => {
+      // DO WE ALLOW SWAPS OF THE SAME CURRENCY???
+      if (assetSource !== assetDest) {
+        appendSwap(regularSwaps, assetSource, assetDest, testSwap);
 
-  const regularSwaps = Promise.all([
-    testSwap('ETH', 'DOT'),
-    testSwap('ETH', 'USDC'),
-    testSwap('ETH', 'FLIP'),
-    testSwap('ETH', 'BTC', 'P2PKH'),
-    testSwap('ETH', 'BTC', 'P2WSH'),
-    testSwap('ETH', 'BTC', 'P2SH'),
-    testSwap('ETH', 'BTC', 'P2WPKH'),
-    testSwap('USDC', 'DOT'),
-    testSwap('USDC', 'FLIP'),
-    testSwap('USDC', 'ETH'),
-    testSwap('USDC', 'BTC', 'P2PKH'),
-    testSwap('USDC', 'BTC', 'P2WSH'),
-    testSwap('USDC', 'BTC', 'P2SH'),
-    testSwap('USDC', 'BTC', 'P2WPKH'),
-    testSwap('DOT', 'BTC', 'P2WSH'),
-    testSwap('DOT', 'USDC'),
-    testSwap('DOT', 'ETH'),
-    testSwap('DOT', 'FLIP'),
-    testSwap('BTC', 'DOT'),
-    testSwap('BTC', 'ETH'),
-    testSwap('BTC', 'USDC'),
-    testSwap('BTC', 'FLIP'),
-    testSwap('FLIP', 'BTC', 'P2SH'),
-    testSwap('FLIP', 'DOT'),
-    testSwap('FLIP', 'ETH'),
-    testSwap('FLIP', 'USDC'),
-  ]);
+        if (chainFromAsset(assetSource) === chainFromAsset('ETH')) {
+          appendSwap(contractSwaps, assetSource, assetDest, testSwapViaContract);
 
-  const ccmSwaps = Promise.all([
-    testSwap('BTC', 'ETH', undefined, {
-      message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
-      gasBudget: 1000000,
-      cfParameters: '',
-    }),
-    testSwap('BTC', 'USDC', undefined, {
-      message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
-      gasBudget: 600000,
-      cfParameters: getAbiEncodedMessage(['uint256']),
-    }),
-    testSwap('DOT', 'ETH', undefined, {
-      message: getAbiEncodedMessage(['string', 'address']),
-      gasBudget: 1000000,
-      cfParameters: getAbiEncodedMessage(['string', 'string']),
-    }),
-    testSwap('DOT', 'FLIP', undefined, {
-      message: getAbiEncodedMessage(),
-      gasBudget: 1000000,
-      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    }),
-    testSwap('USDC', 'ETH', undefined, {
-      message: getAbiEncodedMessage(),
-      gasBudget: 5000000,
-      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-    }),
-    testSwap('ETH', 'USDC', undefined, {
-      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-      gasBudget: 5000000,
-      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    }),
-    testSwap('FLIP', 'USDC', undefined, {
-      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-      gasBudget: 5000000,
-      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    }),
-    testSwap('FLIP', 'ETH', undefined, {
-      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-      gasBudget: 5000000,
-      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    }),
-  ]);
+          if (chainFromAsset(assetDest) === chainFromAsset('ETH')) {
+            appendSwap(
+              ccmContractSwaps,
+              assetSource,
+              assetDest,
+              testSwapViaContract,
+              newCcmMetadata(assetSource),
+            );
+          }
+        }
+        if (chainFromAsset(assetDest) === chainFromAsset('ETH')) {
+          appendSwap(ccmSwaps, assetSource, assetDest, testSwap, newCcmMetadata(assetSource));
+        }
+      }
+    });
+  });
 
   const depositTestSwaps = Promise.all([
     testDepositEthereum('ETH', 'DOT'),
     testDepositEthereum('FLIP', 'BTC'),
   ]);
 
-  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps, depositTestSwaps]);
+  // await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
+  await regularSwaps;
+  await contractSwaps;
+  await ccmSwaps;
+  await ccmContractSwaps;
+
+  await depositTestSwaps;
+
+
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
