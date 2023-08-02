@@ -50,61 +50,79 @@ pub trait BtcRetryRpcApi {
 impl BtcRetryRpcApi for BtcRetryRpcClient {
 	async fn block(&self, block_hash: BlockHash) -> Block {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.block(block_hash).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block(block_hash).await })
+				}),
+				"block",
+			)
 			.await
 	}
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.block_hash(block_number).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block_hash(block_number).await })
+				}),
+				"block_hash",
+			)
 			.await
 	}
 
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				let transaction_bytes = transaction_bytes.clone();
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					let transaction_bytes = transaction_bytes.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
+				}),
+				"send_raw_transaction",
+			)
 			.await
 	}
 
 	async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount> {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.next_block_fee_rate().await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.next_block_fee_rate().await })
+				}),
+				"next_block_fee_rate",
+			)
 			.await
 	}
 
 	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.average_block_fee_rate(block_hash).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.average_block_fee_rate(block_hash).await })
+				}),
+				"average_block_fee_rate",
+			)
 			.await
 	}
 
 	async fn best_block_header(&self) -> BlockHeader {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move {
-					let best_block_hash = client.best_block_hash().await?;
-					let header = client.block_header(best_block_hash).await?;
-					assert_eq!(header.hash, best_block_hash);
-					Ok(header)
-				})
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let best_block_hash = client.best_block_hash().await?;
+						let header = client.block_header(best_block_hash).await?;
+						assert_eq!(header.hash, best_block_hash);
+						Ok(header)
+					})
+				}),
+				"best_block_header",
+			)
 			.await
 	}
 }
@@ -120,21 +138,24 @@ impl ChainClient for BtcRetryRpcClient {
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
 		self.retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move {
-					let block_hash = client.block_hash(index).await?;
-					let block_header = client.block_header(block_hash).await?;
-					assert_eq!(block_header.height, index);
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let block_hash = client.block_hash(index).await?;
+						let block_header = client.block_header(block_hash).await?;
+						assert_eq!(block_header.height, index);
 
-					Ok(Header {
-						index,
-						hash: block_hash,
-						parent_hash: block_header.previous_block_hash,
-						data: (),
+						Ok(Header {
+							index,
+							hash: block_hash,
+							parent_hash: block_header.previous_block_hash,
+							data: (),
+						})
 					})
-				})
-			}))
+				}),
+				"header_at_index",
+			)
 			.await
 	}
 }
