@@ -11,7 +11,7 @@ import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
+import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -29,7 +29,7 @@ export function getEthContractAddress(contract: string): string {
       return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
     case 'USDC':
       return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
-    case 'CFRECEIVER':
+    case 'CFTESTER':
       return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
     case 'GATEWAY':
       return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
@@ -150,16 +150,18 @@ export function getBtcClient(): Client {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventQuery = (data: any) => boolean;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Event = { data: any; block: number; event_index: number };
+type Event = { name: any; data: any; block: number; event_index: number };
 export async function observeEvent(
   eventName: string,
   api: ApiPromise,
   eventQuery?: EventQuery,
+  stopObserveEvent?: () => boolean,
 ): Promise<Event> {
   let result: Event | undefined;
-  let waiting = true;
+  let eventFound = false;
 
   const query = eventQuery ?? (() => true);
+  const stopObserve = stopObserveEvent ?? (() => false);
 
   const [expectedSection, expectedMethod] = eventName.split(':');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,26 +170,48 @@ export async function observeEvent(
     const events: any[] = await api.query.system.events.at(header.hash);
     events.forEach((record, index) => {
       const { event } = record;
-      if (waiting && event.section === expectedSection && event.method === expectedMethod) {
+      if (
+        !eventFound &&
+        event.section.includes(expectedSection) &&
+        event.method.includes(expectedMethod)
+      ) {
         result = {
+          name: { section: event.section, method: event.method },
           data: event.toHuman().data,
           block: header.number.toNumber(),
           event_index: index,
         };
         if (query(result)) {
-          waiting = false;
+          eventFound = true;
           unsubscribe();
         }
       }
     });
   });
-  while (waiting) {
+  while (!eventFound && !stopObserve()) {
     await sleep(1000);
   }
   return result as Event;
 }
 
-export async function getAddress(
+// Make sure the stopObserveEvent returns true before the end of the test
+export async function observeBadEvents(
+  eventName: string,
+  stopObserveEvent: () => boolean,
+  eventQuery?: EventQuery,
+) {
+  const event = await observeEvent(
+    eventName,
+    await getChainflipApi(),
+    eventQuery,
+    stopObserveEvent,
+  );
+  if (event) {
+    throw new Error(`Unexpected event emited ${event.name.section}:${event.name.method}`);
+  }
+}
+
+export async function newAddress(
   asset: Asset,
   seed: string,
   type?: BtcAddressType,
@@ -195,9 +219,9 @@ export async function getAddress(
   let rawAddress;
 
   switch (asset) {
+    case 'FLIP':
     case 'ETH':
     case 'USDC':
-    case 'FLIP':
       rawAddress = newEthAddress(seed);
       break;
     case 'DOT':
@@ -238,6 +262,24 @@ export async function observeBalanceIncrease(
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
+export async function observeFetch(asset: Asset, address: string): Promise<void> {
+  for (let i = 0; i < 120; i++) {
+    const balance = Number(await getBalance(asset as Asset, address));
+    if (balance === 0) {
+      if (assetToChain(asset) === 'Eth') {
+        const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+        if ((await web3.eth.getCode(address)) === '0x') {
+          throw new Error('Eth address has no bytecode');
+        }
+      }
+      return;
+    }
+    await sleep(1000);
+  }
+
+  throw new Error('Failed to observe the fetch');
+}
+
 export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
@@ -251,9 +293,7 @@ export async function observeEVMEvent(
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
 
   // Gets all the event parameter as an array
-  const eventAbi = cfReceiverMockAbi.find(
-    (item) => item.type === 'event' && item.name === eventName,
-  )!;
+  const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
 
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
@@ -298,7 +338,7 @@ export async function observeCcmReceived(
   address: string,
   messageMetadata: CcmDepositMetadata,
 ): Promise<void> {
-  await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
+  await observeEVMEvent(cfTesterAbi, address, 'ReceivedxSwapAndCall', [
     chainContractIds[assetChains[sourceAsset]].toString(),
     '*',
     messageMetadata.message,
@@ -348,7 +388,7 @@ export function handleSubstrateError(api: any) {
       let error;
       if (dispatchError.isModule) {
         const { docs, name, section } = api.registry.findMetaError(dispatchError.asModule);
-        error = section + '.' + name + ' ' + docs;
+        error = section + '.' + name + ': ' + docs;
       } else {
         error = dispatchError.toString();
       }

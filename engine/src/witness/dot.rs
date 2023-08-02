@@ -1,3 +1,6 @@
+mod dot_chain_tracking;
+mod dot_source;
+
 use cf_chains::{
 	dot::{
 		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotProxyType,
@@ -29,15 +32,12 @@ use crate::{
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
-	witness::chain_source::{dot_source::DotUnfinalisedSource, extension::ChainSourceExt},
+	witness::common::chain_source::extension::ChainSourceExt,
 };
-
 use anyhow::Result;
+use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
-use super::{
-	chain_source::dot_source::DotFinalisedSource, common::STATE_CHAIN_CONNECTION,
-	epoch_source::EpochSourceBuilder,
-};
+use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
 /// This event represents a rotation of the agg key. We have handed over control of the vault
 /// to the new aggregrate at this event.
@@ -130,17 +130,12 @@ where
 		DotSubClient::new(&settings.ws_node_endpoint),
 	);
 
-	let dot_chain_tracking = DotUnfinalisedSource::new(dot_client.clone())
+	DotUnfinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
-		.run();
-
-	scope.spawn(async move {
-		dot_chain_tracking.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	let epoch_source = epoch_source
 		.filter_map(
@@ -156,14 +151,14 @@ where
 		)
 		.await;
 
-	let dot_ingress_witnessing = DotFinalisedSource::new(dot_client.clone())
+	DotFinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.strictly_monotonic()
 		.then(|header| async move {
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
 		.chunk_by_vault(epoch_source.vaults().await)
-		.ingress_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing
 		.then({
@@ -281,12 +276,7 @@ where
 			}
 			)
 			.continuous("Polkadot".to_string(), db)
-		.run();
-
-	scope.spawn(async move {
-		dot_ingress_witnessing.await;
-		Ok(())
-	});
+		.spawn(scope);
 
 	Ok(())
 }
@@ -323,10 +313,11 @@ fn deposit_witnesses(
 						amount: *amount,
 						deposit_details: (),
 					});
-				}
-
-				if from == our_vault || to == our_vault {
-					tracing::info!("Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+				} else if from == our_vault {
+					tracing::info!("Transfer from our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+					extrinsic_indices.insert(*extrinsic_index);
+				} else if to == our_vault {
+					tracing::info!("Transfer to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 					extrinsic_indices.insert(*extrinsic_index);
 				}
 			}

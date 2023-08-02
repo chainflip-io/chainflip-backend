@@ -1,27 +1,32 @@
 use anyhow::anyhow;
-use cf_utilities::try_parse_number_or_hex;
+use cf_utilities::{task_scope::task_scope, try_parse_number_or_hex};
 use chainflip_api::{
 	self,
 	lp::{
 		self, BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSellOrder, MintLimitOrderReturn,
 		MintRangeOrderReturn, Tick,
 	},
-	primitives::{AccountRole, Asset, ForeignChain},
+	primitives::{
+		chains::{Bitcoin, Ethereum, Polkadot},
+		AccountRole, Asset, ForeignChain,
+	},
 	settings::StateChain,
 };
 use clap::Parser;
+use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, Error},
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-
+use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
 use std::{collections::HashMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
-	use chainflip_api::{lp, primitives::AssetAmount};
+	use super::*;
+	use chainflip_api::{lp, primitives::AssetAmount, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
 	use sp_rpc::number::NumberOrHex;
 
@@ -75,6 +80,13 @@ pub mod rpc_types {
 				RangeOrderSize::PoolLiquidity(liquidity) => Self::Liquidity(liquidity.try_into()?),
 			})
 		}
+	}
+
+	#[derive(Serialize, Deserialize)]
+	pub struct OpenSwapChannels {
+		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
+		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
+		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
 	}
 }
 
@@ -142,6 +154,9 @@ pub trait Rpc {
 
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error>;
+
+	#[method(name = "getOpenSwapChannels")]
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -323,6 +338,30 @@ impl RpcServer for RpcServerImpl {
 		)
 		.await
 		.map(|tx_hash| tx_hash.to_string())
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
+		task_scope(|scope| {
+			async move {
+				let api =
+					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
+						.await?;
+
+				tokio::try_join!(
+					api.get_open_swap_channels::<Ethereum>(None),
+					api.get_open_swap_channels::<Bitcoin>(None),
+					api.get_open_swap_channels::<Polkadot>(None),
+				)
+				.map(|(ethereum, bitcoin, polkadot)| OpenSwapChannels {
+					ethereum,
+					bitcoin,
+					polkadot,
+				})
+			}
+			.boxed()
+		})
+		.await
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 }

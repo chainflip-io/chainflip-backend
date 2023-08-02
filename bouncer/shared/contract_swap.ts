@@ -42,6 +42,7 @@ export async function executeContractSwap(
     network: 'localnet',
     vaultContractAddress: getEthContractAddress('VAULT'),
     ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
+    gasLimit: 200000,
   } as const;
 
   const params = {
@@ -62,7 +63,7 @@ export async function executeContractSwap(
     receipt = await executeCall(
       {
         ...params,
-        gasAmount: messageMetadata.gas_budget.toString(),
+        gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
       } as ExecuteCallParams,
       options,
@@ -122,7 +123,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const nonce = await getNextEthNonce();
+  const nonce = await getNextEthNonce(true);
   return approveVault(
     {
       amount,

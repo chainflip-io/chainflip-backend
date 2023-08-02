@@ -1,56 +1,33 @@
-import Web3 from 'web3';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { HexString } from '@polkadot/util/types';
+import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEthNonce } from './send_eth';
-import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
+import {
+  getEthContractAddress,
+  hexPubkeyToFlipAddress,
+  decodeFlipAddressForContract,
+} from './utils';
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
+import { approveErc20 } from './approve_erc20';
 
-export async function fundFlip(pubkey: HexString, flipAmount: string) {
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+export async function fundFlip(address: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
+  await approveErc20('FLIP', getEthContractAddress('GATEWAY'), flipAmount);
 
-  const web3 = new Web3(ethEndpoint);
+  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
   const flipContractAddress = process.env.ETH_FLIP_ADDRESS ?? getEthContractAddress('FLIP');
 
   const gatewayContractAddress =
     process.env.ETH_GATEWAY_ADDRESS ?? getEthContractAddress('GATEWAY');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const flipContract = new web3.eth.Contract(erc20abi as any, flipContractAddress);
-
-  const txData = flipContract.methods.approve(gatewayContractAddress, flipperinoAmount).encodeABI();
   const whaleKey =
     process.env.ETH_USDC_WHALE ||
     '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
   console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
-
-  const nonce = await getNextEthNonce();
-  const tx = { to: flipContractAddress, data: txData, gas: 2000000, nonce };
-  const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-  const receipt = await web3.eth.sendSignedTransaction(
-    signedTx.rawTransaction as string,
-    (error) => {
-      if (error) {
-        console.error('Ethereum transaction failure:', error);
-      }
-    },
-  );
-
-  console.log(
-    'Transaction complete, tx_hash: ' +
-      receipt.transactionHash +
-      ' blockNumber: ' +
-      receipt.blockNumber +
-      ' blockHash: ' +
-      receipt.blockHash,
-  );
 
   const wallet = new Wallet(
     whaleKey,
@@ -66,9 +43,17 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
     nonce: await getNextEthNonce(),
   };
 
-  console.log('Funding ' + flipAmount + ' FLIP to ' + pubkey);
-
-  const receipt2 = await fundStateChainAccount(pubkey, flipperinoAmount, options);
+  console.log('Funding ' + flipAmount + ' FLIP to ' + address);
+  let pubkey = address;
+  try {
+    pubkey = decodeFlipAddressForContract(address);
+  } catch {
+    // ignore error
+  }
+  if (pubkey.substr(0, 2) !== '0x') {
+    pubkey = '0x' + pubkey;
+  }
+  const receipt2 = await fundStateChainAccount(pubkey as HexString, flipperinoAmount, options);
 
   console.log(
     'Transaction complete, tx_hash: ' +

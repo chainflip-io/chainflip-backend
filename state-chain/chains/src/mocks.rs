@@ -64,6 +64,17 @@ impl Chain for MockEthereum {
 	type DepositDetails = [u8; 4];
 }
 
+impl ToHumanreadableAddress for u64 {
+	type Humanreadable = u64;
+
+	fn to_humanreadable(
+		&self,
+		_network_environment: cf_primitives::NetworkEnvironment,
+	) -> Self::Humanreadable {
+		*self
+	}
+}
+
 impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
 	fn from(channel: &DepositChannel<MockEthereum>) -> Self {
 		channel.channel_id as u128
@@ -87,6 +98,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct MockTrackedData {
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
