@@ -37,7 +37,7 @@ log = "0.4.16"
 clap = { version = "4.0.9", features = ["derive"] }
 
 sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sp-core = { version = "21.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-executor = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-service = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-telemetry = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
@@ -48,20 +48,20 @@ sc-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag
 sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sp-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-consensus = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
-sc-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
-sc-finality-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
-sp-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sc-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sp-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
-sp-runtime = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sp-runtime = { version = "24.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sp-io = { version = "23.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sp-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
-sp-keyring = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sp-keyring = { version = "24.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { version = "0.15.1", features = ["full"] }
-sc-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+jsonrpsee = { version = "0.16.2", features = ["full"] }
 sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sp-blockchain = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }

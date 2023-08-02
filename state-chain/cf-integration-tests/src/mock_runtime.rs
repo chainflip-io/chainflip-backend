@@ -1,7 +1,7 @@
 use chainflip_node::test_account_from_seed;
 use frame_support::sp_io::TestExternalities;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{BuildStorage, Percent};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
