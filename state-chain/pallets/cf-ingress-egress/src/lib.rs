@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -503,7 +503,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
-					.drain_filter(|request| {
+					.extract_if(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch {
@@ -555,7 +555,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_fetch_id,
 				} => {
 					fetch_params.push(FetchAssetParams {
-						deposit_fetch_id: deposit_fetch_id.expect("Checked in drain_filter"),
+						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
 					});
 					addresses.push(deposit_address.clone());
@@ -606,7 +606,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
-				ccms.drain_filter(|ccm| !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()))
+				ccms.extract_if(|ccm| !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()))
 					.collect()
 			});
 		for ccm in ccms_to_send {

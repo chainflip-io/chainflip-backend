@@ -384,7 +384,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				!submissions.is_empty()
 			});
 
-			for (_request_id, request) in requests.drain_filter(|_request_id, request| {
+			for (_request_id, request) in requests.extract_if(|_request_id, request| {
 				!request.lifetime.contains(&(block.header.number + 1)) ||
 					!request.allow_resubmits && request.pending_submissions == 0
 			}) {
@@ -398,7 +398,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			}
 
 			// Has to be a separate loop from the above due to not being able to await inside
-			// drain_filter
+			// extract_if
 			for (_request_id, request) in requests.iter_mut() {
 				if request.pending_submissions == 0 {
 					debug!("Resubmitting extrinsic as all existing submissions have expired.");
