@@ -2,10 +2,13 @@ use anyhow::anyhow;
 use cf_utilities::{task_scope::task_scope, try_parse_number_or_hex};
 use chainflip_api::{
 	self,
-	lp::{self, BuyOrSellOrder, MintRangeOrderReturn, Tick},
+	lp::{
+		self, BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSellOrder, MintLimitOrderReturn,
+		MintRangeOrderReturn, Tick,
+	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
-		AccountRole, Asset, ForeignChain,
+		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
 };
@@ -18,7 +21,7 @@ use jsonrpsee::{
 };
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
-use std::{ops::Range, path::PathBuf};
+use std::{collections::HashMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -45,6 +48,13 @@ pub mod rpc_types {
 		fn try_from(value: AssetAmounts) -> Result<Self, Self::Error> {
 			Ok(lp::SideMap::from_array([value.unstable.try_into()?, value.stable.try_into()?]))
 		}
+	}
+
+	#[derive(Serialize, Deserialize)]
+	pub struct RangeOrder {
+		pub lower_tick: i32,
+		pub upper_tick: i32,
+		pub liquidity: u128,
 	}
 
 	/// Range Orders can be specified in terms of either asset amounts or pool liquidity.
@@ -83,7 +93,7 @@ pub mod rpc_types {
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<String, Error>;
+	async fn register_account(&self) -> Result<Hash, Error>;
 
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
@@ -101,7 +111,7 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<String, Error>;
+	) -> Result<(ForeignChain, u64), Error>;
 
 	#[method(name = "mintRangeOrder")]
 	async fn mint_range_order(
@@ -119,7 +129,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error>;
+	) -> Result<BurnRangeOrderReturn, Error>;
 
 	#[method(name = "mintLimitOrder")]
 	async fn mint_limit_order(
@@ -128,7 +138,7 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error>;
+	) -> Result<MintLimitOrderReturn, Error>;
 
 	#[method(name = "burnLimitOrder")]
 	async fn burn_limit_order(
@@ -137,13 +147,13 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error>;
+	) -> Result<BurnLimitOrderReturn, Error>;
 
 	#[method(name = "assetBalances")]
-	async fn asset_balances(&self) -> Result<String, Error>;
+	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<String, Error>;
+	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error>;
 
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
@@ -175,10 +185,9 @@ impl RpcServer for RpcServerImpl {
 	) -> Result<String, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
 			.map_err(|e| Error::Custom(e.to_string()))?;
-		lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
+		Ok(lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
 			.await
-			.map(|tx_hash| tx_hash.to_string())
-			.map_err(|e| Error::Custom(e.to_string()))
+			.map(|tx_hash| tx_hash.to_string())?)
 	}
 
 	/// Returns an egress id
@@ -187,40 +196,44 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<String, Error> {
+	) -> Result<(ForeignChain, u64), Error> {
 		let destination_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
-				.map_err(|e| Error::Custom(e.to_string()))?;
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
 
-		lp::withdraw_asset(
+		Ok(lp::withdraw_asset(
 			&self.state_chain_settings,
 			try_parse_number_or_hex(amount)?,
 			asset,
 			destination_address,
 		)
-		.await
-		.map(|(_, id)| id.to_string())
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<String, Error> {
-		lp::get_balances(&self.state_chain_settings)
-			.await
-			.map(|balances| {
-				serde_json::to_string(&balances).expect("Should output balances as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error> {
+		Ok(lp::get_balances(&self.state_chain_settings).await?)
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<String, Error> {
-		lp::get_range_orders(&self.state_chain_settings)
-			.await
-			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output range orders as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error> {
+		Ok(lp::get_range_orders(&self.state_chain_settings).await.map(|orders| {
+			orders
+				.into_iter()
+				.map(|(asset, orders)| {
+					(
+						asset,
+						orders
+							.into_iter()
+							.map(|(lower_tick, upper_tick, liquidity)| rpc_types::RangeOrder {
+								lower_tick,
+								upper_tick,
+								liquidity,
+							})
+							.collect::<Vec<rpc_types::RangeOrder>>(),
+					)
+				})
+				.collect::<HashMap<Asset, Vec<rpc_types::RangeOrder>>>()
+		})?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -233,17 +246,16 @@ impl RpcServer for RpcServerImpl {
 		order_size: rpc_types::RangeOrderSize,
 	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
-			return Err(Error::Custom("Invalid tick range".to_string()))
+			return Err(anyhow!("Invalid tick range").into())
 		}
 
-		lp::mint_range_order(
+		Ok(lp::mint_range_order(
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
 			order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
 		)
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Removes liquidity from a range order.
@@ -254,20 +266,18 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error> {
+	) -> Result<BurnRangeOrderReturn, Error> {
 		if start >= end {
-			return Err(Error::Custom("Invalid tick range".to_string()))
+			return Err(anyhow!("Invalid tick range").into())
 		}
 
-		lp::burn_range_order(
+		Ok(lp::burn_range_order(
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
 			try_parse_number_or_hex(amount)?,
 		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Creates or adds liquidity to a limit order.
@@ -278,17 +288,15 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error> {
-		lp::mint_limit_order(
+	) -> Result<MintLimitOrderReturn, Error> {
+		Ok(lp::mint_limit_order(
 			&self.state_chain_settings,
 			asset,
 			order,
 			price,
 			try_parse_number_or_hex(amount)?,
 		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Removes liquidity from a limit order.
@@ -299,32 +307,28 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error> {
-		lp::burn_limit_order(
+	) -> Result<BurnLimitOrderReturn, Error> {
+		Ok(lp::burn_limit_order(
 			&self.state_chain_settings,
 			asset,
 			order,
 			price,
 			try_parse_number_or_hex(amount)?,
 		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	/// Returns the tx hash that the account role was set
-	async fn register_account(&self) -> Result<String, Error> {
-		chainflip_api::register_account_role(
+	async fn register_account(&self) -> Result<Hash, Error> {
+		Ok(chainflip_api::register_account_role(
 			AccountRole::LiquidityProvider,
 			&self.state_chain_settings,
 		)
-		.await
-		.map(|tx_hash| format!("{tx_hash:#x}"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
-		task_scope(|scope| {
+		Ok(task_scope(|scope| {
 			async move {
 				let api =
 					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
@@ -343,8 +347,7 @@ impl RpcServer for RpcServerImpl {
 			}
 			.boxed()
 		})
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		.await?)
 	}
 }
 

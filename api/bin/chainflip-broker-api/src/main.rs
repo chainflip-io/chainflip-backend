@@ -112,9 +112,10 @@ impl RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn register_account(&self) -> Result<String, Error> {
-		Ok(chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
+		chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
 			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))?)
+			.map(|tx_hash| format!("{tx_hash:#x}"))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	async fn request_swap_deposit_address(
