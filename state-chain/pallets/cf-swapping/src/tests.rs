@@ -240,7 +240,7 @@ fn expect_swap_id_to_be_emitted() {
 					deposit_address: EncodedAddress::Eth(..),
 					channel_id: 1
 				},
-				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)), broker_swap_fee: _ }),
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)), broker_commission: _ }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
@@ -304,7 +304,7 @@ fn can_swap_using_witness_origin() {
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			broker_swap_fee: None,
+			broker_commission: None,
 		}));
 	});
 }
@@ -1018,7 +1018,7 @@ fn swap_by_witnesser_happy_path() {
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			broker_swap_fee: None,
+			broker_commission: None,
 		}));
 
 		// Confiscated fund is unchanged
@@ -1094,7 +1094,7 @@ fn swap_by_deposit_happy_path() {
 				channel_id: 1,
 			},
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			broker_swap_fee: Some(0),
+			broker_commission: Some(0),
 		}));
 
 		// Confiscated fund is unchanged
@@ -1695,7 +1695,7 @@ fn ccm_swaps_emits_events() {
 				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				swap_type: SwapType::CcmPrincipal(1),
-				broker_swap_fee: _
+				broker_commission: _
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_type: SwapType::CcmGas(1),

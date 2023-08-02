@@ -27,7 +27,6 @@ pub struct BrokerSwapDepositAddress {
 	pub expiry_block: BlockNumber,
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
-	pub broker_fee_rate: BasisPoints,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -37,7 +36,6 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			expiry_block: value.expiry_block,
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
-			broker_fee_rate: value.broker_fee_rate,
 		}
 	}
 }
