@@ -15,7 +15,7 @@ pub struct BtcRetryRpcClient {
 	retry_client: RetrierClient<BtcRpcClient>,
 }
 
-const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl BtcRetryRpcClient {

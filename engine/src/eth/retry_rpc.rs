@@ -27,7 +27,7 @@ pub struct EthersRetryRpcClient {
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
-const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl EthersRetryRpcClient {

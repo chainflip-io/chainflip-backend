@@ -28,7 +28,7 @@ pub struct DotRetryRpcClient {
 	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
-const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
 impl DotRetryRpcClient {
