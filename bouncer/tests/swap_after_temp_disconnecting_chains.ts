@@ -7,7 +7,7 @@ try {
   console.log('=== Testing a swap after temporarily disconnecting external nodes ===');
 
   const networkName = 'chainflip-localnet_default';
-  const allExternalNodes = ['bitcoin', 'chainflip-localnet-geth-1', 'polkadot'];
+  const allExternalNodes = ['bitcoin', 'geth', 'polkadot'];
 
   allExternalNodes.forEach((container) => {
     disconnectContainerFromNetwork(container, networkName);
