@@ -286,10 +286,10 @@ pub mod pallet {
 		/// Redeem is disabled due to Safe Mode.
 		RedeemDisabled,
 
-		/// Redeem is disabled due to Safe Mode.
+		/// Start Bidding is disabled due to Safe Mode.
 		StartBiddingDisabled,
 
-		/// Redeem is disabled due to Safe Mode.
+		/// Stop Bidding is disabled due to Safe Mode.
 		StopBiddingDisabled,
 	}
 
