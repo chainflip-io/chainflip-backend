@@ -113,7 +113,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
-	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Store the list of funded accounts and whether or not they are a active bidder.

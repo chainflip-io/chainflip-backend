@@ -38,7 +38,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::storage_version(PALLET_VERSION)]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	use frame_system::pallet_prelude::*;

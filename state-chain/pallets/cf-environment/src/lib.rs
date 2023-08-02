@@ -265,7 +265,8 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		// This weight is not strictly correct but since it's a governance call, weight is irrelevant.
+		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
@@ -300,7 +301,8 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		// This weight is not strictly correct but since it's a governance call, weight is irrelevant.
+		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
 			block_number: cf_chains::btc::BlockNumber,

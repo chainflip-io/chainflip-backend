@@ -140,7 +140,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 

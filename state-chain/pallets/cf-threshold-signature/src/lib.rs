@@ -246,7 +246,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// A counter to generate fresh request ids.
