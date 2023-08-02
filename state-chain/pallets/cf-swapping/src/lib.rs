@@ -619,6 +619,13 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
+			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			let deposit_amount = if from == Asset::Usdc {
+				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+			} else {
+				deposit_amount
+			};
+
 			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
@@ -958,14 +965,14 @@ pub mod pallet {
 			deposit_block_height: u64,
 			from: Asset,
 			to: Asset,
-			amount: AssetAmount,
+			deposit_amount: AssetAmount,
 			destination_address: ForeignChainAddress,
 			broker_id: Self::AccountId,
 			broker_commission_bps: BasisPoints,
 			channel_id: ChannelId,
 		) {
 			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
-				amount;
+				deposit_amount;
 
 			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
 				earned_fees.saturating_accrue(fee)
@@ -979,17 +986,24 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
+			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			let deposit_amount = if from == Asset::Usdc {
+				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+			} else {
+				deposit_amount
+			};
+
 			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
-				amount,
+				deposit_amount,
 				destination_address.clone(),
 				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset: from,
-					deposit_amount: amount,
+					deposit_amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
 					origin: swap_origin,
@@ -1013,6 +1027,14 @@ pub mod pallet {
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
+
+			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			let deposit_amount = if source_asset == Asset::Usdc {
+				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+			} else {
+				deposit_amount
+			};
+			// PARTNERNET ONLY
 
 			let principal_swap_amount =
 				deposit_amount.saturating_sub(deposit_metadata.channel_metadata.gas_budget);
