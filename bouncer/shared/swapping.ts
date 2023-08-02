@@ -84,7 +84,7 @@ export async function prepareSwap(
   return { destAddress, tag };
 }
 
-async function testSwap(
+export async function testSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
