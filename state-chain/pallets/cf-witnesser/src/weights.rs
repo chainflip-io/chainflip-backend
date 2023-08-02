@@ -48,7 +48,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Witnesser ExtraCallData (r:1 w:0)
 	fn witness_at_epoch() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
-		Weight::ref_time(37_000_000)
+		Weight::from_parts(37_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(9))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -56,15 +56,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `n` is `[1, 255]`.
 	fn remove_storage_items(n: u32, ) -> Weight {
 		// Minimum execution time: 4_000 nanoseconds.
-		Weight::ref_time(7_355_839)
+		Weight::from_parts(7_355_839, 0)
 			// Standard Error: 4_933
-			.saturating_add(Weight::ref_time(919_823).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(919_823, 0).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}
 	// Storage: Witnesser EpochsToCull (r:1 w:0)
 	fn on_idle_with_nothing_to_remove() -> Weight {
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::ref_time(3_000_000)
+		Weight::from_parts(3_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 	}
 }
@@ -81,7 +81,7 @@ impl WeightInfo for () {
 	// Storage: Witnesser ExtraCallData (r:1 w:0)
 	fn witness_at_epoch() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
-		Weight::ref_time(37_000_000)
+		Weight::from_parts(37_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(9))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -89,15 +89,15 @@ impl WeightInfo for () {
 	/// The range of component `n` is `[1, 255]`.
 	fn remove_storage_items(n: u32, ) -> Weight {
 		// Minimum execution time: 4_000 nanoseconds.
-		Weight::ref_time(7_355_839)
+		Weight::from_parts(7_355_839, 0)
 			// Standard Error: 4_933
-			.saturating_add(Weight::ref_time(919_823).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(919_823, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 	}
 	// Storage: Witnesser EpochsToCull (r:1 w:0)
 	fn on_idle_with_nothing_to_remove() -> Weight {
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::ref_time(3_000_000)
+		Weight::from_parts(3_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 }

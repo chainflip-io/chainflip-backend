@@ -258,7 +258,7 @@ mod test_versioned_upgrade {
 	impl OnRuntimeUpgrade for DummyUpgrade {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			UPGRADES_COMPLETED.with(|cell| *cell.borrow_mut() += 1);
-			Weight::ref_time(0)
+			Weight::from_parts(0, 0)
 		}
 
 		#[cfg(feature = "try-runtime")]
