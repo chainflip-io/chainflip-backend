@@ -21,7 +21,7 @@ use anyhow::Result;
 use subxt::{self, config::Header as SubxtHeader};
 
 macro_rules! polkadot_source {
-	($self:expr, $func: ident) => {{
+	($self:expr, $func:ident) => {{
 		struct State<C> {
 			client: C,
 			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
@@ -55,6 +55,10 @@ macro_rules! polkadot_source {
 					}
 					// We don't want to spam retries if the node returns a stream that's empty
 					// immediately.
+					tracing::warn!(
+						"Timeout getting next header from Polkadot {} stream. Restarting stream...",
+						stringify!($func)
+					);
 					tokio::time::sleep(RESTART_STREAM_DELAY).await;
 					let stream = state.client.$func().await;
 					state = State { client: state.client, stream };
