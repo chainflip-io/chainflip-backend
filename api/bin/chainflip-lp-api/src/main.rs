@@ -8,7 +8,7 @@ use chainflip_api::{
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
-		AccountRole, Asset, ForeignChain,
+		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
 };
@@ -93,7 +93,7 @@ pub mod rpc_types {
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<String, Error>;
+	async fn register_account(&self) -> Result<Hash, Error>;
 
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
@@ -331,7 +331,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns the tx hash that the account role was set
-	async fn register_account(&self) -> Result<String, Error> {
+	async fn register_account(&self) -> Result<Hash, Error> {
 		chainflip_api::register_account_role(
 			AccountRole::LiquidityProvider,
 			&self.state_chain_settings,
