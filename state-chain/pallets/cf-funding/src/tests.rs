@@ -18,7 +18,7 @@ use sp_runtime::{traits::BadOrigin, DispatchError};
 type FlipError = pallet_cf_flip::Error<Test>;
 
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
-const ETH_ZERO_ADDRESS: EthereumAddress = H160([0xff; 20]);
+const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 
 #[test]
