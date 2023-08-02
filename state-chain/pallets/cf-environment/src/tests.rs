@@ -48,7 +48,7 @@ fn update_supported_eth_assets() {
 			Environment::update_supported_eth_assets(
 				RuntimeOrigin::root(),
 				Asset::Eth,
-				EthereumAddress::repeat_byte(2)
+				EthereumAddress::repeat_byte(3)
 			),
 			<Error<Test>>::EthAddressNotUpdateable
 		);
