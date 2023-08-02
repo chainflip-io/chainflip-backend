@@ -166,8 +166,8 @@ async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
 export async function testAllSwaps() {
   function appendSwap(
     swapArray: Promise<void>[],
-    assetSource: Asset,
-    assetDest: Asset,
+    sourceAsset: Asset,
+    destAsset: Asset,
     functionCall: (
       sourceAsset: Asset,
       destAsset: Asset,
@@ -176,13 +176,12 @@ export async function testAllSwaps() {
     ) => Promise<void>,
     messageMetadata?: CcmDepositMetadata,
   ) {
-    if (assetDest === 'BTC') {
+    if (destAsset === 'BTC') {
       Object.values(btcAddressTypes).forEach((btcAddrType) => {
-        // regularSwapsArray.push(testSwap(assetSource, assetDest, btcAddrType));
-        swapArray.push(functionCall(assetSource, assetDest, btcAddrType, messageMetadata));
+        swapArray.push(functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata));
       });
     } else {
-      swapArray.push(functionCall(assetSource, assetDest, undefined, messageMetadata));
+      swapArray.push(functionCall(sourceAsset, destAsset, undefined, messageMetadata));
     }
   }
 
@@ -205,27 +204,27 @@ export async function testAllSwaps() {
   const ccmSwaps: Promise<void>[] = [];
   const ccmContractSwaps: Promise<void>[] = [];
 
-  Object.values(Assets).forEach((assetSource) => {
-    Object.values(Assets).forEach((assetDest) => {
+  Object.values(Assets).forEach((sourceAsset) => {
+    Object.values(Assets).forEach((destAsset) => {
       // SDK prevents swaps from the same asset to the same asset
-      if (assetSource !== assetDest) {
-        appendSwap(regularSwaps, assetSource, assetDest, testSwap);
+      if (sourceAsset !== destAsset) {
+        appendSwap(regularSwaps, sourceAsset, destAsset, testSwap);
 
-        if (chainFromAsset(assetSource) === chainFromAsset('ETH')) {
-          appendSwap(contractSwaps, assetSource, assetDest, testSwapViaContract);
+        if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
+          appendSwap(contractSwaps, sourceAsset, destAsset, testSwapViaContract);
 
-          if (chainFromAsset(assetDest) === chainFromAsset('ETH')) {
+          if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
             appendSwap(
               ccmContractSwaps,
-              assetSource,
-              assetDest,
+              sourceAsset,
+              destAsset,
               testSwapViaContract,
-              newCcmMetadata(assetSource),
+              newCcmMetadata(sourceAsset),
             );
           }
         }
-        if (chainFromAsset(assetDest) === chainFromAsset('ETH')) {
-          appendSwap(ccmSwaps, assetSource, assetDest, testSwap, newCcmMetadata(assetSource));
+        if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+          appendSwap(ccmSwaps, sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
       }
     });
