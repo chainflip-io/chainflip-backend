@@ -33,9 +33,9 @@ use cf_chains::{
 		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
-	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
-	TransactionBuilder,
+	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
@@ -427,7 +427,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
-				message_metadata: Option<CcmDepositMetadata>,
+				channel_metadata: Option<CcmChannelMetadata>,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -437,7 +437,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							destination_address,
 							broker_commission_bps,
 							broker_id,
-							message_metadata,
+							channel_metadata,
 						),
 					)+
 				}

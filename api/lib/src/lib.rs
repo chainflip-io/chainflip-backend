@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress, eth::to_ethereum_address, CcmDepositMetadata, ForeignChain,
+	address::EncodedAddress, eth::to_ethereum_address, CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
@@ -21,7 +21,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmDepositMetadata,
+		CcmChannelMetadata, CcmDepositMetadata,
 	};
 }
 
@@ -362,7 +362,7 @@ pub async fn request_swap_deposit_address(
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
 	broker_commission_bps: BasisPoints,
-	message_metadata: Option<CcmDepositMetadata>,
+	channel_metadata: Option<CcmChannelMetadata>,
 ) -> Result<SwapDepositAddress> {
 	let (events, block_number) = connect_submit_and_get_events(
 		state_chain_settings,
@@ -371,7 +371,7 @@ pub async fn request_swap_deposit_address(
 			destination_asset,
 			destination_address,
 			broker_commission_bps,
-			message_metadata,
+			channel_metadata,
 		},
 		AccountRole::None,
 	)

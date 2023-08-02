@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{chains::assets::any, Asset, EthereumAddress, SwapOutput};
+use cf_primitives::{Asset, EthereumAddress, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::Pool;
@@ -130,7 +130,7 @@ pub trait CustomApi {
 		&self,
 		assert: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<HashMap<any::Asset, Option<Pool<AccountId32>>>>;
+	) -> RpcResult<HashMap<Asset, Option<Pool<AccountId32>>>>;
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -211,7 +211,7 @@ pub trait CustomApi {
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "current_compatibility_version")]
-	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>>;
+	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 }
 
 /// An RPC extension for the state chain node.
@@ -556,12 +556,10 @@ where
 		Ok(pools)
 	}
 
-	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>> {
-		use sp_api::Encode;
+	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
 		self.client
 			.runtime_api()
 			.cf_current_compatibility_version(&self.query_block_id(None))
-			.map(|ver| ver.encode())
 			.map_err(to_rpc_error)
 	}
 }

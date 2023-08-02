@@ -1,7 +1,7 @@
 import { encodeAddress } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli';
 import { newSwap } from './new_swap';
-import { send } from './send';
+import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
   getChainflipApi,
@@ -34,7 +34,6 @@ export async function requestNewSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  fee: number,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
 ): Promise<SwapParams> {
@@ -61,7 +60,7 @@ export async function requestNewSwap(
       return destAddressMatches && destAssetMatches && sourceAssetMatches;
     },
   );
-  await newSwap(sourceAsset, destAsset, destAddress, fee, messageMetadata);
+  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata);
 
   const res = (await addressPromise).data;
 
@@ -81,10 +80,16 @@ export async function requestNewSwap(
   };
 }
 
+export enum SenderType {
+  Address,
+  Contract,
+}
+
 export async function doPerformSwap(
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
+  senderType = SenderType.Address,
 ) {
   const chainflipApi = await getChainflipApi();
 
@@ -106,7 +111,10 @@ export async function doPerformSwap(
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
 
-  await send(sourceAsset, depositAddress);
+  await (senderType === SenderType.Address
+    ? send(sourceAsset, depositAddress)
+    : sendViaCfTester(sourceAsset, depositAddress));
+
   console.log(`${tag} Funded the address`);
 
   await swapScheduledHandle;
@@ -131,13 +139,12 @@ export async function performSwap(
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
+  senderType = SenderType.Address,
 ) {
-  const fee = 100;
-
   const tag = swapTag ?? '';
 
   console.log(
-    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${fee} ${
+    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
       messageMetadata ? `someMessage` : ''
     }`,
   );
@@ -146,9 +153,8 @@ export async function performSwap(
     sourceAsset,
     destAsset,
     destAddress,
-    fee,
     tag,
     messageMetadata,
   );
-  await doPerformSwap(swapParams, tag, messageMetadata);
+  await doPerformSwap(swapParams, tag, messageMetadata, senderType);
 }

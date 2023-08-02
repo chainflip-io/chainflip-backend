@@ -163,6 +163,7 @@ pub type TransactionHash = [u8; 32];
 	TypeInfo,
 	MaxEncodedLen,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SemVer {
 	pub major: u8,
 	pub minor: u8,

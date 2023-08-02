@@ -14,7 +14,7 @@ use chainflip_api::{
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error, __reexports::serde_json},
+	core::{async_trait, Error},
 	proc_macros::rpc,
 	server::ServerBuilder,
 };

@@ -1,10 +1,12 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	address::ForeignChainAddress, AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto,
-	ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams, TransferAssetParams,
+	AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, Ethereum,
+	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
-use cf_primitives::{chains::assets, EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{
+	chains::assets, EgressId, EthereumAddress, ForeignChain, ETHEREUM_ETH_ADDRESS,
+};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -90,7 +92,8 @@ pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 	nonce: <Ethereum as ChainAbi>::ReplayProtection,
 	egress_id: EgressId,
 	transfer_param: TransferAssetParams<Ethereum>,
-	source_address: ForeignChainAddress,
+	source_chain: ForeignChain,
+	source_address: Option<ForeignChainAddress>,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockEthEnvironment>,
 }
@@ -99,7 +102,8 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Ethereum>,
-		source_address: ForeignChainAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
@@ -109,6 +113,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 				nonce: Default::default(),
 				egress_id,
 				transfer_param,
+				source_chain,
 				source_address,
 				message,
 				_phantom: PhantomData,

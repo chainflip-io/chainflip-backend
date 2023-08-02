@@ -42,6 +42,7 @@ export async function executeContractSwap(
     network: 'localnet',
     vaultContractAddress: getEthContractAddress('VAULT'),
     ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
+    gasLimit: 200000,
   } as const;
 
   const params = {

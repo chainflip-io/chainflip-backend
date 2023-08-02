@@ -1182,7 +1182,6 @@ dependencies = [
  "jsonrpsee 0.16.2",
  "serde",
  "sp-rpc",
- "state-chain-runtime",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
@@ -1313,6 +1312,7 @@ dependencies = [
  "jsonrpsee 0.16.2",
  "pallet-cf-pools",
  "serde",
+ "serde_json",
  "sp-rpc",
  "tokio",
  "tracing",
@@ -6480,6 +6480,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",

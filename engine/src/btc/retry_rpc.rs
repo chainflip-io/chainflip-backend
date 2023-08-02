@@ -3,7 +3,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	retrier::RetrierClient,
-	witness::chain_source::{ChainClient, Header},
+	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::Bitcoin;
 use core::time::Duration;
