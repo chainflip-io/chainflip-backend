@@ -39,12 +39,14 @@ impl EthersRetryRpcClient {
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
+				"eth_rpc",
 				eth_rpc_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
+				"eth_subscribe",
 				sub_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,

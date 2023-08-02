@@ -129,6 +129,7 @@ fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Durati
 // Creates a future of a particular submission.
 fn submission_future<Client: Clone>(
 	client: Client,
+	retrier_name: &'static str,
 	request_name: RequestName,
 	submission_fn: &FutureAnyGenerator<Client>,
 	request_id: RequestId,
@@ -149,7 +150,9 @@ fn submission_future<Client: Clone>(
 			{
 				Ok(Ok(t)) => Ok(t),
 				Ok(Err(e)) => Err(e),
-				Err(_) => Err(anyhow::anyhow!("Request timed out")),
+				Err(_) => Err(anyhow::anyhow!(
+					"Retrier {retrier_name}: Request {request_id} of {request_name} timed out"
+				)),
 			}
 			.map_err(|e| (e, attempt)),
 		)
@@ -162,6 +165,8 @@ fn submission_future<Client: Clone>(
 impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
+		// The name of the retrier that appears in the logs.
+		name: &'static str,
 		primary_client: Client,
 		initial_request_timeout: Duration,
 		maximum_concurrent_submissions: u32,
@@ -179,7 +184,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 			utilities::loop_select! {
 				if let Some((response_sender, request_name, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					submission_holder.push(submission_future(primary_client.clone(), request_name, &closure, request_id, initial_request_timeout, 0));
+					submission_holder.push(submission_future(primary_client.clone(), name, request_name, &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				let (request_id, request_name, result) = submission_holder.next_or_pending() => {
@@ -194,7 +199,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 							// We avoid small delays by always having a time of at least half.
 							let half_max = max_sleep_duration(initial_request_timeout, attempt) / 2;
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
-							tracing::error!("Error for request_id {request_id}, attempt {attempt}. Request: {request_name} {e}. Delaying for {}ms", sleep_duration.as_millis());
+							tracing::error!("Retrier {name}: Error for request_id {request_id} of {request_name}, attempt {attempt}: {e}. Delaying for {}ms", sleep_duration.as_millis());
 
 							// Delay the request before the next retry.
 							retry_delays.push(Box::pin(
@@ -208,14 +213,14 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 				},
 				let (request_id, request_name, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
-					tracing::trace!("Retrying request_id: {request_id} of {request_name} for attempt: {next_attempt}");
+					tracing::trace!("Retrier {name}: Retrying request_id: {request_id} of {request_name} for attempt: {next_attempt}");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
-							submission_holder.push(submission_future(primary_client.clone(), request_name, closure, request_id, initial_request_timeout, next_attempt));
+							submission_holder.push(submission_future(primary_client.clone(), name, request_name, closure, request_id, initial_request_timeout, next_attempt));
 						} else {
-							tracing::trace!("Dropped request_id: {request_id}, of {request_name} not retrying.");
+							tracing::trace!("Retrier {name}: Dropped request_id: {request_id} of {request_name} not retrying.");
 							request_holder.remove(&request_id);
 						}
 					}
@@ -300,7 +305,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -337,7 +342,7 @@ mod tests {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
-				let retrier_client = RetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -366,7 +371,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -400,7 +405,7 @@ mod tests {
 
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
-				let retrier_client = RetrierClient::new(scope, (), INITIAL_TIMEOUT, 2);
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 2);
 
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
@@ -468,7 +473,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request(specific_fut_err::<(), _>(INITIAL_TIMEOUT), "request")
