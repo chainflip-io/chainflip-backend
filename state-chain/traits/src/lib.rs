@@ -672,7 +672,7 @@ pub trait DepositApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
-	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
+	fn expire_channel(address: C::ChainAccount);
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -776,16 +776,16 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait DepositHandler<C: ChainCrypto> {
+pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
-		_tx_id: <C as ChainCrypto>::TransactionInId,
-		_amount: <C as Chain>::ChainAmount,
-		_address: <C as Chain>::ChainAccount,
-		_asset: <C as Chain>::ChainAsset,
+		_deposit_details: C::DepositDetails,
+		_amount: C::ChainAmount,
+		_address: C::ChainAccount,
+		_asset: C::ChainAsset,
 	) {
 	}
 	fn on_channel_opened(
-		_address: <C as Chain>::ChainAccount,
+		_address: C::ChainAccount,
 		_channel_id: ChannelId,
 	) -> Result<(), DispatchError> {
 		Ok(())

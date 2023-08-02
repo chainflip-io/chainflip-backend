@@ -5,8 +5,12 @@ use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
 use crate::{
-	eth::{retry_rpc::EthersRetryRpcApi, vault::EthAssetApi},
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+	eth::retry_rpc::EthersRetryRpcApi,
+	state_chain_observer::client::{
+		base_rpc_api::{BaseRpcClient, RawRpcApi},
+		extrinsic_api::signed::SignedExtrinsicApi,
+		StateChainClient,
+	},
 };
 
 use super::{
@@ -17,38 +21,29 @@ use super::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use ethers::prelude::*;
 
-abigen!(Vault, "eth-contract-abis/perseverance-rc17/IVault.json");
+abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-pub struct VaultRpc<T> {
-	inner_vault: Vault<Provider<T>>,
-}
-
-impl<T: JsonRpcClient> VaultRpc<T> {
-	pub fn new(provider: Arc<Provider<T>>, vault_contract_address: H160) -> Self {
-		let inner_vault = Vault::new(vault_contract_address, provider);
-		Self { inner_vault }
-	}
+#[async_trait::async_trait]
+pub trait EthAssetApi {
+	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>>;
 }
 
 #[async_trait::async_trait]
-pub trait VaultApi {
-	async fn fetched_native_events(&self, block_hash: H256) -> Result<Vec<FetchedNativeFilter>>;
-}
-
-#[async_trait::async_trait]
-impl<T: JsonRpcClient + 'static> VaultApi for VaultRpc<T> {
-	async fn fetched_native_events(&self, block_hash: H256) -> Result<Vec<FetchedNativeFilter>> {
-		let fetched_native_events =
-			self.inner_vault.event::<FetchedNativeFilter>().at_block_hash(block_hash);
-
-		Ok(fetched_native_events.query().await?)
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
+	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
+		self.base_rpc_client
+			.raw_rpc_client
+			.cf_eth_asset(None, token_address)
+			.await
+			.map_err(Into::into)
 	}
 }
 
-#[allow(unused)]
 pub enum CallFromEventError {
 	Network(anyhow::Error),
 	Decode(String),
@@ -57,7 +52,7 @@ pub enum CallFromEventError {
 pub async fn call_from_event<StateChainClient>(
 	event: Event<VaultEvents>,
 	state_chain_client: Arc<StateChainClient>,
-) -> Result<pallet_cf_swapping::Call<state_chain_runtime::Runtime>, CallFromEventError>
+) -> Result<Option<pallet_cf_swapping::Call<state_chain_runtime::Runtime>>, CallFromEventError>
 where
 	StateChainClient: EthAssetApi,
 {
@@ -84,7 +79,7 @@ where
 		})
 	}
 
-	match event.event_parameters {
+	Ok(match event.event_parameters {
 		VaultEvents::SwapNativeFilter(SwapNativeFilter {
 			dst_chain,
 			dst_address,
@@ -92,7 +87,7 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Ok(
+		}) => Some(
 			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_from_contract {
 				from: Asset::Eth,
 				to: try_into_primitive(dst_token)?,
@@ -112,7 +107,7 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Ok(pallet_cf_swapping::Call::schedule_swap_from_contract {
+		}) => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
 			from: state_chain_client
 				.asset(src_token.0)
 				.await
@@ -139,7 +134,7 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Ok(pallet_cf_swapping::Call::ccm_deposit {
+		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: Asset::Eth,
 			destination_asset: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
@@ -165,7 +160,7 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Ok(pallet_cf_swapping::Call::ccm_deposit {
+		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: state_chain_client
 				.asset(src_token.0)
 				.await
@@ -189,10 +184,8 @@ where
 			},
 			tx_hash: event.tx_hash.into(),
 		}),
-		unhandled_event => Err(CallFromEventError::Decode(format!(
-			"Unhandled vault contract event: {unhandled_event:?}"
-		))),
-	}
+		_ => None,
+	})
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
@@ -217,21 +210,21 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					events_at_block::<VaultEvents, _>(header, contract_address, &eth_rpc).await?
 				{
 					match call_from_event(event, state_chain_client.clone()).await {
-						Ok(call) => {
-							state_chain_client
-								.submit_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(call.into()),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
+						Ok(option_call) =>
+							if let Some(call) = option_call {
+								state_chain_client
+									.submit_signed_extrinsic(
+										pallet_cf_witnesser::Call::witness_at_epoch {
+											call: Box::new(call.into()),
+											epoch_index: epoch.index,
+										},
+									)
+									.await;
+							},
+						Err(CallFromEventError::Decode(message)) => {
+							tracing::error!("Ignoring vault contract event: {message}");
 						},
 						Err(CallFromEventError::Network(err)) => return Err(err),
-						Err(CallFromEventError::Decode(message)) => {
-							tracing::warn!("Ignoring event: {message}");
-							continue
-						},
 					}
 				}
 

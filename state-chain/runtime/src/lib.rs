@@ -137,7 +137,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 5,
+	spec_version: 12,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
@@ -330,6 +330,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
 	type NetworkFee = NetworkFee;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = ();
 }
 
@@ -1025,7 +1026,7 @@ impl_runtime_apis! {
 
 		fn cf_environment() -> runtime_apis::Environment {
 			runtime_apis::Environment {
-				bitcoin_network: Environment::bitcoin_network(),
+				bitcoin_network: Environment::network_environment().into(),
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::witness::chain_source::{ChainClient, ChainStream};
+use cf_chains::ChainState;
 use frame_support::CloneNoBound;
 use futures::FutureExt;
 use futures_core::FusedStream;
@@ -18,11 +19,13 @@ use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
 	witness::{
 		chain_source::Header,
-		common::{RuntimeHasChain, STATE_CHAIN_CONNECTION},
+		common::{RuntimeHasChain, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION},
 	},
 };
 
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
+
+type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
@@ -32,10 +35,7 @@ where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
 	inner: Inner,
-	receiver: tokio::sync::watch::Receiver<(
-		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
-		Addresses<Inner>,
-	)>,
+	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 }
 impl<Inner: ChunkedByVault> IngressAddresses<Inner>
 where
@@ -44,10 +44,7 @@ where
 	// We wait for the chain_tracking to pass a blocks height before assessing the addresses that
 	// should be witnessed at that block to ensure, the set of addresses each engine attempts to
 	// witness at a given block is consistent
-	fn is_header_ready(
-		index: Inner::Index,
-		chain_state: &pallet_cf_chain_tracking::ChainState<Inner::Chain>,
-	) -> bool {
+	fn is_header_ready(index: Inner::Index, chain_state: &ChainState<Inner::Chain>) -> bool {
 		index < chain_state.block_height
 	}
 
@@ -60,7 +57,7 @@ where
 	async fn get_chain_state_and_addresses<StateChainClient: StorageApi + Send + Sync + 'static>(
 		state_chain_client: &StateChainClient,
 		block_hash: state_chain_runtime::Hash,
-	) -> (Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>, Addresses<Inner>)
+	) -> (ChainState<Inner::Chain>, Addresses<Inner>)
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 	{
@@ -71,7 +68,8 @@ where
 					<Inner::Chain as PalletInstanceAlias>::Instance,
 				>>(block_hash)
 				.await
-				.expect(STATE_CHAIN_CONNECTION),
+				.expect(STATE_CHAIN_CONNECTION)
+				.expect(STATE_CHAIN_BEHAVIOUR),
 			state_chain_client
 				.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,
@@ -121,6 +119,9 @@ impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
+	type ExtraInfo = Inner::ExtraInfo;
+	type ExtraHistoricInfo = Inner::ExtraHistoricInfo;
+
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
 	type Data = (Inner::Data, Addresses<Inner>);
@@ -142,7 +143,7 @@ where
 				struct State<Inner: ChunkedByVault> where
 				state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain> {
 					receiver:
-						tokio::sync::watch::Receiver<(Option<ChainState<Inner>>, Addresses<Inner>)>,
+						tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 					pending_headers: Vec<Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					ready_headers:
 						Vec<Header<Inner::Index, Inner::Hash, (Inner::Data, Addresses<Inner>)>>,
@@ -156,28 +157,24 @@ where
 						headers: It,
 					) {
 						let chain_state_and_addresses = self.receiver.borrow();
-						let (option_chain_state, addresses) = &*chain_state_and_addresses;
-						if let Some(chain_state) = option_chain_state {
-							for header in headers {
-								if IngressAddresses::<Inner>::is_header_ready(
-									header.index,
-									chain_state,
-								) {
-									self.ready_headers.push(header.map_data(|header| {
-										(
-											header.data,
-											IngressAddresses::<Inner>::addresses_for_header(
-												header.index,
-												addresses,
-											),
-										)
-									}));
-								} else {
-									self.pending_headers.push(header);
-								}
+						let (chain_state, addresses) = &*chain_state_and_addresses;
+						for header in headers {
+							if IngressAddresses::<Inner>::is_header_ready(
+								header.index,
+								chain_state,
+							) {
+								self.ready_headers.push(header.map_data(|header| {
+									(
+										header.data,
+										IngressAddresses::<Inner>::addresses_for_header(
+											header.index,
+											addresses,
+										),
+									)
+								}));
+							} else {
+								self.pending_headers.push(header);
 							}
-						} else {
-							self.pending_headers.extend(headers);
 						}
 					}
 				}
@@ -216,20 +213,13 @@ where
 	}
 }
 
-type ChainState<Inner> = pallet_cf_chain_tracking::ChainState<<Inner as ChunkedByVault>::Chain>;
-
-type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
-
 #[derive(CloneNoBound)]
 pub struct IngressAddressesClient<Inner: ChunkedByVault>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
 	inner_client: Inner::Client,
-	receiver: tokio::sync::watch::Receiver<(
-		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
-		Addresses<Inner>,
-	)>,
+	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 }
 
 impl<Inner: ChunkedByVault> IngressAddressesClient<Inner>
@@ -238,10 +228,7 @@ where
 {
 	pub fn new(
 		inner_client: Inner::Client,
-		receiver: tokio::sync::watch::Receiver<(
-			Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
-			Addresses<Inner>,
-		)>,
+		receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 	) -> Self {
 		Self { inner_client, receiver }
 	}
@@ -263,10 +250,8 @@ where
 
 		let addresses = {
 			let chain_state_and_addresses = receiver
-				.wait_for(|(option_chain_state, _addresses)| {
-					option_chain_state.as_ref().is_some_and(|chain_state| {
-						IngressAddresses::<Inner>::is_header_ready(index, chain_state)
-					})
+				.wait_for(|(chain_state, _addresses)| {
+					IngressAddresses::<Inner>::is_header_ready(index, chain_state)
 				})
 				.await
 				.expect(OR_CANCEL);
@@ -282,7 +267,7 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn ingress_addresses<'env, StateChainStream, StateChainClient>(
+	pub async fn deposit_addresses<'env, StateChainStream, StateChainClient>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,

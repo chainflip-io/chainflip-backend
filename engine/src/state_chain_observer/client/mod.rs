@@ -1,4 +1,6 @@
 pub mod base_rpc_api;
+pub mod chain_api;
+pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 
@@ -21,6 +23,7 @@ use utilities::{
 
 use self::{
 	base_rpc_api::BaseRpcClient,
+	chain_api::ChainApi,
 	extrinsic_api::signed::{signer, SignedExtrinsicApi},
 };
 
@@ -81,6 +84,7 @@ pub struct StateChainClient<
 	unsigned_extrinsic_client: extrinsic_api::unsigned::UnsignedExtrinsicClient,
 	_block_producer: ScopedJoinHandle<()>,
 	pub base_rpc_client: Arc<BaseRpcClient>,
+	latest_block_hash_watcher: tokio::sync::watch::Receiver<state_chain_runtime::Hash>,
 }
 
 impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
@@ -171,7 +175,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 		let genesis_hash = base_rpc_client.block_hash(0).await?.expect(SUBSTRATE_BEHAVIOUR);
 
-		let (mut state_chain_stream, block_producer) = {
+		let (latest_block_hash_watcher, mut state_chain_stream, block_producer) = {
 			let (first_finalized_block_header, mut finalized_block_header_stream) = {
 				// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
 				// https://arxiv.org/abs/2007.01560
@@ -284,7 +288,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				state_chain_runtime::Header,
 			)>(BLOCK_CAPACITY);
 
+			let (latest_block_hash_sender, latest_block_hash_watcher) =
+				tokio::sync::watch::channel::<state_chain_runtime::Hash>(latest_block_hash);
+
 			(
+				latest_block_hash_watcher,
 				block_receiver.make_cached(
 					StreamCache {
 						block_hash: latest_block_hash,
@@ -300,11 +308,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						loop {
 							let block_header =
 								finalized_block_header_stream.next().await.unwrap()?;
-							if block_sender
-								.broadcast((block_header.hash(), block_header))
-								.await
-								.is_err()
-							{
+							let block_hash = block_header.hash();
+							if block_sender.broadcast((block_hash, block_header)).await.is_err() {
+								break Ok(())
+							}
+							if latest_block_hash_sender.send(block_hash).is_err() {
 								break Ok(())
 							}
 						}
@@ -324,6 +332,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			),
 			_block_producer: block_producer,
 			base_rpc_client,
+			latest_block_hash_watcher,
 		});
 
 		info!(
@@ -480,11 +489,23 @@ impl<
 	}
 }
 
+#[async_trait]
+impl<
+		BaseRpcApi: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: Send + Sync + 'static,
+	> ChainApi for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
+{
+	fn latest_finalized_hash(&self) -> state_chain_runtime::Hash {
+		*self.latest_block_hash_watcher.borrow()
+	}
+}
+
 #[cfg(test)]
 pub mod mocks {
 	use crate::state_chain_observer::client::{
 		extrinsic_api::{signed::SignedExtrinsicApi, unsigned::UnsignedExtrinsicApi},
 		storage_api::StorageApi,
+		ChainApi,
 	};
 	use async_trait::async_trait;
 	use frame_support::storage::types::QueryKindTrait;
@@ -529,6 +550,10 @@ pub mod mocks {
 			) -> H256
 			where
 				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
+		}
+		#[async_trait]
+		impl ChainApi for StateChainClient {
+			fn latest_finalized_hash(&self) -> state_chain_runtime::Hash;
 		}
 		#[async_trait]
 		impl StorageApi for StateChainClient {

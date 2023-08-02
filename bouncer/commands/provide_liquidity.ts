@@ -1,10 +1,9 @@
-#!/usr/bin/env node
-
+#!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes two arguments.
 // It will fund liquidity of the given currency and amount
-// For example: pnpm ./commands/provide_liquidity.ts btc 1.5
+// For example: ./commands/provide_liquidity.ts btc 1.5
 
 import { Asset } from '@chainflip-io/cli';
 import { runWithTimeout } from '../shared/utils';

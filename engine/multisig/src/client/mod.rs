@@ -258,10 +258,8 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
-		let span = info_span!(
-			"Keygen Ceremony",
-			ceremony_id = ceremony_id_string::<C::CryptoScheme>(ceremony_id)
-		);
+		let span =
+			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		info!(
@@ -282,10 +280,8 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 		sharing_participants: BTreeSet<AccountId>,
 		receiving_participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
-		let span = info_span!(
-			"Key Handover Ceremony",
-			ceremony_id = ceremony_id_string::<C::CryptoScheme>(ceremony_id)
-		);
+		let span =
+			info_span!("Key Handover Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!(
@@ -327,10 +323,8 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, SigningPayload<C>)>,
 	) -> BoxFuture<'_, Result<Vec<Signature<C>>, (BTreeSet<AccountId>, SigningFailureReason)>> {
-		let span = info_span!(
-			"Signing Ceremony",
-			ceremony_id = ceremony_id_string::<C::CryptoScheme>(ceremony_id)
-		);
+		let span =
+			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		assert!(signers.contains(&self.my_account_id));
@@ -395,8 +389,8 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 	}
 }
 
-/// Outputs the ceremony id with the name of the crypto scheme to make it visibly unique in the
+/// Outputs the ceremony id with the name of the Crypto Chain to make it visibly unique in the
 /// logs.
-pub fn ceremony_id_string<C: CryptoScheme>(ceremony_id: CeremonyId) -> String {
-	format!("{}({ceremony_id})", C::NAME)
+pub fn ceremony_id_string<Chain: ChainSigning>(ceremony_id: CeremonyId) -> String {
+	format!("{}({ceremony_id})", Chain::NAME)
 }

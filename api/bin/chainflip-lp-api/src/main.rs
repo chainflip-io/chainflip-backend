@@ -7,7 +7,7 @@ use chainflip_api::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain,
 	},
-	queries::SwapChannelInfo,
+	queries::{Pool, QueryApi, RangeOrderPosition},
 	settings::StateChain,
 	AccountId32,
 };
@@ -18,13 +18,14 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use pallet_cf_pools::Pool;
+use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
-	use chainflip_api::{lp, primitives::AssetAmount};
+	use super::*;
+	use chainflip_api::{lp, primitives::AssetAmount, queries::SwapChannelInfo};
 	use serde::{Deserialize, Serialize};
 	use sp_rpc::number::NumberOrHex;
 
@@ -71,6 +72,13 @@ pub mod rpc_types {
 				RangeOrderSize::PoolLiquidity(liquidity) => Self::Liquidity(liquidity.try_into()?),
 			})
 		}
+	}
+
+	#[derive(Serialize, Deserialize)]
+	pub struct OpenSwapChannels {
+		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
+		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
+		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
 	}
 }
 
@@ -137,10 +145,13 @@ pub trait Rpc {
 	async fn asset_balances(&self) -> Result<String, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<String, Error>;
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error>;
 
 	#[method(name = "getOpenSwapChannels")]
-	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error>;
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
 
 	#[method(name = "getPools")]
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
@@ -214,13 +225,19 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<String, Error> {
-		lp::get_range_orders(&self.state_chain_settings)
-			.await
-			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output range orders as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error> {
+		Ok(task_scope(|scope| {
+			async move {
+				let api = QueryApi::connect(scope, &self.state_chain_settings).await?;
+				let range_orders = api.get_range_orders(None, account_id).await?;
+				Ok(range_orders)
+			}
+			.boxed()
+		})
+		.await?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -323,25 +340,20 @@ impl RpcServer for RpcServerImpl {
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error> {
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
 		task_scope(|scope| {
 			async move {
-				let (client, latest_hash) =
-					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
+				let api = QueryApi::connect(scope, &self.state_chain_settings).await?;
 
 				tokio::try_join!(
-					chainflip_api::queries::get_open_swap_channels::<Ethereum>(
-						client.clone(),
-						latest_hash,
-					),
-					chainflip_api::queries::get_open_swap_channels::<Bitcoin>(
-						client.clone(),
-						latest_hash,
-					),
-					chainflip_api::queries::get_open_swap_channels::<Polkadot>(client, latest_hash),
+					api.get_open_swap_channels::<Ethereum>(None),
+					api.get_open_swap_channels::<Bitcoin>(None),
+					api.get_open_swap_channels::<Polkadot>(None),
 				)
-				.map(|(eth_result, btc_result, dot_result)| {
-					[eth_result, btc_result, dot_result].into_iter().flatten().collect::<Vec<_>>()
+				.map(|(ethereum, bitcoin, polkadot)| OpenSwapChannels {
+					ethereum,
+					bitcoin,
+					polkadot,
 				})
 			}
 			.boxed()
@@ -351,30 +363,26 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		task_scope(|scope| {
-			async move {
-				let (client, latest_hash) =
-					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
-				chainflip_api::queries::get_pools(client, latest_hash, Some(asset)).await
-			}
-			.boxed()
-		})
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		get_pools(&self.state_chain_settings, Some(asset)).await
 	}
 
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		task_scope(|scope| {
-			async move {
-				let (client, latest_hash) =
-					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
-				chainflip_api::queries::get_pools(client, latest_hash, None).await
-			}
-			.boxed()
-		})
-		.await
-		.map_err(|e| Error::Custom(e.to_string()))
+		get_pools(&self.state_chain_settings, None).await
 	}
+}
+
+async fn get_pools(
+	state_chain_settings: &StateChain,
+	asset: Option<Asset>,
+) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+	Ok(task_scope(|scope| {
+		async move {
+			let api = QueryApi::connect(scope, state_chain_settings).await?;
+			api.get_pools(None, asset).await
+		}
+		.boxed()
+	})
+	.await?)
 }
 
 #[derive(Parser, Debug, Clone, Default)]

@@ -1,11 +1,12 @@
+#!/usr/bin/env -S pnpm tsx
 import { Asset } from '@chainflip-io/cli';
 import { performSwap } from '../shared/perform_swap';
 
 async function main() {
-  const SRC_CCY = process.argv[2].toUpperCase() as Asset;
-  const DST_CCY = process.argv[3].toUpperCase() as Asset;
-  const ADDRESS = process.argv[4];
-  await performSwap(SRC_CCY, DST_CCY, ADDRESS);
+  const srcCcy = process.argv[2].toUpperCase() as Asset;
+  const dstCcy = process.argv[3].toUpperCase() as Asset;
+  const address = process.argv[4];
+  await performSwap(srcCcy, dstCcy, address);
   process.exit(0);
 }
 

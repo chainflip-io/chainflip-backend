@@ -3,13 +3,16 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
+	db::PersistentKeyDB,
 	settings::Settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
 };
 
-use super::epoch_source::EpochSource;
+use crate::state_chain_observer::client::chain_api::ChainApi;
+
+use super::{epoch_source::EpochSource, vault::EthAssetApi};
 
 use anyhow::Result;
 
@@ -19,30 +22,48 @@ pub async fn start<StateChainClient, StateChainStream>(
 	settings: &Settings,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
+	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainStream: StateChainStreamApi,
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainStream: StateChainStreamApi + Clone,
+	StateChainClient:
+		StorageApi + EthAssetApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
-	let initial_block_hash = state_chain_stream.cache().block_hash;
-	let epoch_source = EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
-		.await
-		.participating(state_chain_client.account_id())
-		.await;
+	let epoch_source =
+		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
+			.await
+			.participating(state_chain_client.account_id())
+			.await;
 
 	super::eth::start(
 		scope,
 		&settings.eth,
 		state_chain_client.clone(),
+		state_chain_stream.clone(),
 		epoch_source.clone(),
-		initial_block_hash,
+		db.clone(),
 	)
 	.await?;
 
-	super::btc::start(scope, &settings.btc, state_chain_client.clone(), epoch_source.clone())
-		.await?;
+	super::btc::start(
+		scope,
+		&settings.btc,
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	)
+	.await?;
 
-	super::dot::start(scope, &settings.dot, state_chain_client, epoch_source).await?;
+	super::dot::start(
+		scope,
+		&settings.dot,
+		state_chain_client,
+		state_chain_stream,
+		epoch_source,
+		db,
+	)
+	.await?;
 
 	Ok(())
 }

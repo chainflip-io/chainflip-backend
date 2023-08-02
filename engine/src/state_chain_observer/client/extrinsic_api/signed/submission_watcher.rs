@@ -10,7 +10,10 @@ use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
 use crate::state_chain_observer::client::{
-	base_rpc_api, storage_api::StorageApi, SUBSTRATE_BEHAVIOUR,
+	base_rpc_api,
+	error_decoder::{DispatchError, ErrorDecoder},
+	storage_api::StorageApi,
+	SUBSTRATE_BEHAVIOUR,
 };
 
 use super::signer;
@@ -29,10 +32,6 @@ pub enum FinalizationError {
 	)]
 	Unknown,
 }
-
-#[derive(Error, Debug)]
-#[error("The requested transaction was included in a finalized block but its dispatch call failed: {0:?}")]
-pub struct DispatchError(sp_runtime::DispatchError);
 
 #[derive(Error, Debug)]
 pub enum ExtrinsicError {
@@ -82,6 +81,7 @@ pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sy
 	genesis_hash: state_chain_runtime::Hash,
 	extrinsic_lifetime: state_chain_runtime::BlockNumber,
 	base_rpc_client: Arc<BaseRpcClient>,
+	error_decoder: ErrorDecoder,
 }
 
 pub enum SubmissionLogicError {
@@ -113,6 +113,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				genesis_hash,
 				extrinsic_lifetime,
 				base_rpc_client,
+				error_decoder: Default::default(),
 			},
 			Default::default(),
 		)
@@ -344,9 +345,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 												dispatch_error,
 												dispatch_info: _,
 											},
-										) => Some(Err(ExtrinsicError::Dispatch(DispatchError(
-											*dispatch_error,
-										)))),
+										) => Some(Err(ExtrinsicError::Dispatch(
+											self.error_decoder
+												.decode_dispatch_error(*dispatch_error),
+										))),
 										_ => None,
 									})
 									.expect(SUBSTRATE_BEHAVIOUR)

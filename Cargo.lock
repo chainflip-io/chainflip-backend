@@ -789,12 +789,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
-name = "bytemuck"
-version = "1.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
-
-[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -934,6 +928,7 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
+ "ss58-registry",
  "utilities",
 ]
 
@@ -1169,6 +1164,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "tiny-bip39 1.0.0",
+ "tokio",
  "tracing",
  "utilities",
  "zeroize",
@@ -1275,7 +1271,6 @@ dependencies = [
  "regex",
  "reqwest",
  "rlp",
- "roaring",
  "rocksdb",
  "sc-rpc-api",
  "scale-info",
@@ -1318,7 +1313,6 @@ dependencies = [
  "jsonrpsee 0.16.2",
  "pallet-cf-pools",
  "serde",
- "serde_json",
  "sp-rpc",
  "tokio",
  "tracing",
@@ -7909,12 +7903,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "retain_mut"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c31b5c4033f8fdde8700e4657be2c497e7288f01515be52168c631e2e4d4086"
-
-[[package]]
 name = "rfc6979"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7979,17 +7967,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "roaring"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef0fb5e826a8bde011ecae6a8539dd333884335c57ff0f003fbe27c25bbe8f71"
-dependencies = [
- "bytemuck",
- "byteorder",
- "retain_mut",
 ]
 
 [[package]]
@@ -10770,9 +10747,9 @@ dependencies = [
 
 [[package]]
 name = "ss58-registry"
-version = "1.40.0"
+version = "1.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb47a8ad42e5fc72d5b1eb104a5546937eaf39843499948bb666d6e93c62423b"
+checksum = "bfc443bad666016e012538782d9e3006213a7db43e9fb1dda91657dc06a6fa08"
 dependencies = [
  "Inflector",
  "num-format",
@@ -12063,6 +12040,7 @@ dependencies = [
  "itertools",
  "lazy_format",
  "mockall",
+ "num-traits",
  "pin-project",
  "predicates",
  "serde",

@@ -62,7 +62,7 @@ export async function executeContractSwap(
     receipt = await executeCall(
       {
         ...params,
-        gasAmount: messageMetadata.gas_budget.toString(),
+        gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
       } as ExecuteCallParams,
       options,
@@ -94,8 +94,8 @@ export async function performSwapViaContract(
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
-      if ('vault' in event[5]) {
-        return event[5].vault.txHash === receipt.transactionHash;
+      if ('Vault' in event.data.origin) {
+        return event.data.origin.Vault.txHash === receipt.transactionHash;
       }
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;
@@ -122,7 +122,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const nonce = await getNextEthNonce();
+  const nonce = await getNextEthNonce(true);
   return approveVault(
     {
       amount,

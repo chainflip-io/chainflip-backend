@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pallet_cf_chain_tracking::ChainState;
+use cf_chains::ChainState;
 use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::chain_source::Header;

@@ -15,10 +15,15 @@ pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-pub struct PoolState<LiquidityProvider: Ord> {
+#[cfg_attr(
+	feature = "std",
+	serde(bound = "LiquidityProvider: Clone + Ord + Serialize + serde::de::DeserializeOwned")
+)]
+pub struct PoolState<LiquidityProvider> {
 	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
 	pub range_orders: range_orders::PoolState<LiquidityProvider>,
 }
+
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn current_sqrt_price<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,

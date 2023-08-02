@@ -14,9 +14,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
-	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChannelLifecycleHooks,
+	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -98,11 +98,11 @@ pub mod pallet {
 		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	pub struct DepositWitness<C: Chain + ChainCrypto> {
+	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
 		pub amount: C::ChainAmount,
-		pub tx_id: <C as ChainCrypto>::TransactionInId,
+		pub deposit_details: C::DepositDetails,
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -255,7 +255,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
@@ -292,7 +292,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		},
 	}
 
@@ -388,11 +388,14 @@ pub mod pallet {
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+			_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for DepositWitness { deposit_address, asset, amount, tx_id } in deposit_witnesses {
-				Self::process_single_deposit(deposit_address, asset, amount, tx_id)?;
+			for DepositWitness { deposit_address, asset, amount, deposit_details } in
+				deposit_witnesses
+			{
+				Self::process_single_deposit(deposit_address, asset, amount, deposit_details)?;
 			}
 			Ok(())
 		}
@@ -565,7 +568,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
-		tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
@@ -581,7 +584,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address,
 				asset,
 				amount,
-				tx_id,
+				deposit_details,
 			});
 			return Ok(())
 		}
@@ -637,9 +640,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			),
 		};
 
-		T::DepositHandler::on_deposit_made(tx_id.clone(), amount, deposit_address.clone(), asset);
+		T::DepositHandler::on_deposit_made(
+			deposit_details.clone(),
+			amount,
+			deposit_address.clone(),
+			asset,
+		);
 
-		Self::deposit_event(Event::DepositReceived { deposit_address, asset, amount, tx_id });
+		Self::deposit_event(Event::DepositReceived {
+			deposit_address,
+			asset,
+			amount,
+			deposit_details,
+		});
 		Ok(())
 	}
 
@@ -651,25 +664,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		channel_action: ChannelAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
-		// We have an address available, so we can just use it.
-
-		let (deposit_channel, channel_id) =
-			if let Some((channel_id, address)) = DepositChannelPool::<T, I>::drain().next() {
-				(address, channel_id)
-			} else {
-				let next_channel_id =
-					ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
-						*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
-						Ok(*id)
-					})?;
-				(
-					DepositChannel::generate_new::<T::AddressDerivation>(
-						next_channel_id,
-						source_asset,
-					)?,
+		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
+			DepositChannelPool::<T, I>::drain().next()
+		{
+			deposit_channel.asset = source_asset;
+			(deposit_channel, channel_id)
+		} else {
+			let next_channel_id =
+				ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
+					*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+					Ok(*id)
+				})?;
+			(
+				DepositChannel::generate_new::<T::AddressDerivation>(
 					next_channel_id,
-				)
-			};
+					source_asset,
+				)?,
+				next_channel_id,
+			)
+		};
 
 		let deposit_address = deposit_channel.address.clone();
 
@@ -692,7 +705,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((channel_id, deposit_address))
 	}
 
-	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
+	fn close_channel(address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
@@ -700,7 +713,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_asset: deposit_channel_details.deposit_channel.asset,
 			});
 			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(channel_id, channel);
+				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
 			}
 		} else {
 			#[cfg(test)]
@@ -799,7 +812,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
-		Self::close_channel(channel_id, address);
+	fn expire_channel(address: TargetChainAccount<T, I>) {
+		Self::close_channel(address);
 	}
 }

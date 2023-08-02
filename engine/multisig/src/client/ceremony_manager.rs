@@ -23,6 +23,7 @@ use crate::{
 	},
 	crypto::{CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
+	ChainSigning,
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
@@ -105,11 +106,11 @@ impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
-pub struct CeremonyManager<C: CryptoScheme> {
+pub struct CeremonyManager<Chain: ChainSigning> {
 	my_account_id: AccountId,
 	outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-	signing_states: CeremonyStates<SigningCeremony<C>>,
-	keygen_states: CeremonyStates<KeygenCeremony<C>>,
+	signing_states: CeremonyStates<SigningCeremony<Chain::CryptoScheme>>,
+	keygen_states: CeremonyStates<KeygenCeremony<Chain::CryptoScheme>>,
 	latest_ceremony_id: CeremonyId,
 }
 
@@ -322,7 +323,7 @@ pub fn deserialize_for_version<C: CryptoScheme>(
 	}
 }
 
-impl<C: CryptoScheme> CeremonyManager<C> {
+impl<Chain: ChainSigning> CeremonyManager<Chain> {
 	pub fn new(
 		my_account_id: AccountId,
 		outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
@@ -337,7 +338,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		}
 	}
 
-	async fn on_request(&mut self, request: CeremonyRequest<C>, scope: &Scope<'_, anyhow::Error>) {
+	async fn on_request(
+		&mut self,
+		request: CeremonyRequest<Chain::CryptoScheme>,
+		scope: &Scope<'_, anyhow::Error>,
+	) {
 		// Always update the latest ceremony id, even if we are not participating
 		self.update_latest_ceremony_id(request.ceremony_id);
 
@@ -390,7 +395,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	pub async fn run(
 		mut self,
-		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<C>>,
+		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<Chain::CryptoScheme>>,
 		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	) -> Result<()> {
 		task_scope(|scope| {
@@ -404,7 +409,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 							// At this point we know the messages to be for the
 							// appropriate curve (as defined by `C`)
-							match deserialize_for_version::<C>(data) {
+							match deserialize_for_version::<Chain::CryptoScheme>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
 									warn!("Failed to deserialize message from: {sender_id}");
@@ -420,7 +425,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 					}
 				}
 			}
-			.instrument(info_span!("MultisigClient", chain = C::NAME))
+			.instrument(info_span!("MultisigClient", chain = Chain::NAME))
 			.boxed()
 		})
 		.await
@@ -431,48 +436,50 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
 		rng: Rng,
-		result_sender: CeremonyResultSender<KeygenCeremony<C>>,
-		resharing_context: ResharingContext<C>,
+		result_sender: CeremonyResultSender<KeygenCeremony<Chain::CryptoScheme>>,
+		resharing_context: ResharingContext<Chain::CryptoScheme>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!participants.is_empty(), "Key handover request has no participants");
 
-		let span =
-			info_span!("Key Handover Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+		let span = info_span!(
+			"Key Handover Ceremony",
+			ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
+		);
 		let _entered = span.enter();
 
 		debug!("Processing a key handover request");
 
-		let request = match prepare_key_handover_request(
-			ceremony_id,
-			&self.my_account_id,
-			participants,
-			&self.outgoing_p2p_message_sender,
-			resharing_context,
-			rng,
-		) {
-			Ok(request) => request,
-			Err(failed_outcome) => {
-				let _res = result_sender.send(CeremonyOutcome::<KeygenCeremony<C>>::Err((
-					BTreeSet::new(),
-					failed_outcome,
-				)));
+		let request =
+			match prepare_key_handover_request(
+				ceremony_id,
+				&self.my_account_id,
+				participants,
+				&self.outgoing_p2p_message_sender,
+				resharing_context,
+				rng,
+			) {
+				Ok(request) => request,
+				Err(failed_outcome) => {
+					let _res = result_sender.send(CeremonyOutcome::<
+						KeygenCeremony<Chain::CryptoScheme>,
+					>::Err((BTreeSet::new(), failed_outcome)));
 
-				// Remove a possible unauthorised ceremony
-				self.keygen_states.cleanup_unauthorised_ceremony(&ceremony_id);
-				return
-			},
-		};
+					// Remove a possible unauthorised ceremony
+					self.keygen_states.cleanup_unauthorised_ceremony(&ceremony_id);
+					return
+				},
+			};
 
 		let ceremony_handle =
-			self.keygen_states.get_state_or_create_unauthorized(ceremony_id, scope);
+			self.keygen_states.get_state_or_create_unauthorized::<Chain>(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
 			.with_context(|| {
 				format!(
 					"Invalid key handover request with ceremony id {}",
-					ceremony_id_string::<C>(ceremony_id)
+					ceremony_id_string::<Chain>(ceremony_id)
 				)
 			})
 			.unwrap();
@@ -484,46 +491,46 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
 		rng: Rng,
-		result_sender: CeremonyResultSender<KeygenCeremony<C>>,
+		result_sender: CeremonyResultSender<KeygenCeremony<Chain::CryptoScheme>>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
 		let span =
-			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<Chain>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a keygen request");
 
-		let request = match prepare_keygen_request(
-			ceremony_id,
-			&self.my_account_id,
-			participants,
-			&self.outgoing_p2p_message_sender,
-			rng,
-		) {
-			Ok(request) => request,
-			Err(failed_outcome) => {
-				let _res = result_sender.send(CeremonyOutcome::<KeygenCeremony<C>>::Err((
-					BTreeSet::new(),
-					failed_outcome,
-				)));
+		let request =
+			match prepare_keygen_request(
+				ceremony_id,
+				&self.my_account_id,
+				participants,
+				&self.outgoing_p2p_message_sender,
+				rng,
+			) {
+				Ok(request) => request,
+				Err(failed_outcome) => {
+					let _res = result_sender.send(CeremonyOutcome::<
+						KeygenCeremony<Chain::CryptoScheme>,
+					>::Err((BTreeSet::new(), failed_outcome)));
 
-				// Remove a possible unauthorised ceremony
-				self.keygen_states.cleanup_unauthorised_ceremony(&ceremony_id);
-				return
-			},
-		};
+					// Remove a possible unauthorised ceremony
+					self.keygen_states.cleanup_unauthorised_ceremony(&ceremony_id);
+					return
+				},
+			};
 
 		let ceremony_handle =
-			self.keygen_states.get_state_or_create_unauthorized(ceremony_id, scope);
+			self.keygen_states.get_state_or_create_unauthorized::<Chain>(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
 			.with_context(|| {
 				format!(
 					"Invalid keygen request with ceremony id {}",
-					ceremony_id_string::<C>(ceremony_id)
+					ceremony_id_string::<Chain>(ceremony_id)
 				)
 			})
 			.unwrap();
@@ -534,15 +541,18 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
+		signing_info: Vec<(
+			KeygenResultInfo<Chain::CryptoScheme>,
+			<Chain::CryptoScheme as CryptoScheme>::SigningPayload,
+		)>,
 		rng: Rng,
-		result_sender: CeremonyResultSender<SigningCeremony<C>>,
+		result_sender: CeremonyResultSender<SigningCeremony<Chain::CryptoScheme>>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
 		let span =
-			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<Chain>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a request to sign");
@@ -557,10 +567,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		) {
 			Ok(request) => request,
 			Err(failed_outcome) => {
-				let _res = result_sender.send(CeremonyOutcome::<SigningCeremony<C>>::Err((
-					BTreeSet::new(),
-					failed_outcome,
-				)));
+				let _res = result_sender.send(CeremonyOutcome::<
+					SigningCeremony<Chain::CryptoScheme>,
+				>::Err((BTreeSet::new(), failed_outcome)));
 
 				// Remove a possible unauthorised ceremony
 				self.signing_states.cleanup_unauthorised_ceremony(&ceremony_id);
@@ -569,15 +578,16 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		};
 
 		// We have the key and have received a request to sign
-		let ceremony_handle =
-			self.signing_states.get_state_or_create_unauthorized(ceremony_id, scope);
+		let ceremony_handle = self
+			.signing_states
+			.get_state_or_create_unauthorized::<Chain>(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
 			.with_context(|| {
 				format!(
 					"Invalid sign request with ceremony id {}",
-					ceremony_id_string::<C>(ceremony_id)
+					ceremony_id_string::<Chain>(ceremony_id)
 				)
 			})
 			.unwrap();
@@ -587,18 +597,18 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	fn process_p2p_message(
 		&mut self,
 		sender_id: AccountId,
-		message: MultisigMessage<C::Point>,
+		message: MultisigMessage<<Chain::CryptoScheme as CryptoScheme>::Point>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
 		match message {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } => {
 				let span = info_span!(
 					"Keygen Ceremony",
-					ceremony_id = ceremony_id_string::<C>(ceremony_id)
+					ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 				);
 				let _entered = span.enter();
 
-				self.keygen_states.process_data(
+				self.keygen_states.process_data::<Chain>(
 					sender_id,
 					ceremony_id,
 					data,
@@ -609,11 +619,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } => {
 				let span = info_span!(
 					"Signing Ceremony",
-					ceremony_id = ceremony_id_string::<C>(ceremony_id)
+					ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 				);
 				let _entered = span.enter();
 
-				self.signing_states.process_data(
+				self.signing_states.process_data::<Chain>(
 					sender_id,
 					ceremony_id,
 					data,
@@ -665,24 +675,24 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	}
 
 	/// Process ceremony data arriving from a peer,
-	fn process_data(
+	fn process_data<Chain: ChainSigning>(
 		&mut self,
 		sender_id: AccountId,
 		ceremony_id: CeremonyId,
 		data: Ceremony::Data,
 		latest_ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-	) {
+	) where
+		Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+	{
 		debug!("Received data {data} from [{sender_id}]");
 
 		// If no ceremony exists, create an unauthorised one (with ceremony id tracking
 		if !self.ceremony_handles.contains_key(&ceremony_id) {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
-			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
-			if ceremony_id >
-				latest_ceremony_id + <Ceremony::Crypto as CryptoScheme>::CEREMONY_ID_WINDOW
-			{
+			let ceremony_id_string = ceremony_id_string::<Chain>(ceremony_id);
+			if ceremony_id > latest_ceremony_id + Chain::CEREMONY_ID_WINDOW {
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {
@@ -700,7 +710,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
 				self.ceremony_handles.insert(
 					ceremony_id,
-					CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope),
+					CeremonyHandle::spawn::<Chain>(ceremony_id, self.outcome_sender.clone(), scope),
 				);
 			}
 		}
@@ -718,13 +728,16 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 
 	/// Returns the state for the given ceremony id if it exists,
 	/// otherwise creates a new unauthorized one
-	fn get_state_or_create_unauthorized(
+	fn get_state_or_create_unauthorized<Chain: ChainSigning>(
 		&mut self,
 		ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-	) -> &mut CeremonyHandle<Ceremony> {
+	) -> &mut CeremonyHandle<Ceremony>
+	where
+		Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+	{
 		self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
-			CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope)
+			CeremonyHandle::spawn::<Chain>(ceremony_id, self.outcome_sender.clone(), scope)
 		})
 	}
 
@@ -782,15 +795,18 @@ enum CeremonyRequestState<Ceremony: CeremonyTrait> {
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
-	fn spawn(
+	fn spawn<Chain: ChainSigning>(
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		scope: &Scope<'_, anyhow::Error>,
-	) -> Self {
+	) -> Self
+	where
+		Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+	{
 		let (message_sender, message_receiver) = mpsc::unbounded_channel();
 		let (request_sender, request_receiver) = oneshot::channel();
 
-		let task_handle = scope.spawn_with_handle(CeremonyRunner::<Ceremony>::run(
+		let task_handle = scope.spawn_with_handle(CeremonyRunner::<Ceremony, Chain>::run(
 			ceremony_id,
 			message_receiver,
 			request_receiver,
