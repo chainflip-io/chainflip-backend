@@ -55,7 +55,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:0 w:1)
 	fn funded() -> Weight {
 		// Minimum execution time: 91_000 nanoseconds.
-		Weight::from_ref_time(94_000_000)
+		Weight::ref_time(94_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
@@ -95,7 +95,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem() -> Weight {
 		// Minimum execution time: 229_000 nanoseconds.
-		Weight::from_ref_time(248_000_000)
+		Weight::ref_time(248_000_000)
 			.saturating_add(T::DbWeight::get().reads(31))
 			.saturating_add(T::DbWeight::get().writes(14))
 	}
@@ -134,7 +134,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem_all() -> Weight {
 		// Minimum execution time: 237_000 nanoseconds.
-		Weight::from_ref_time(248_000_000)
+		Weight::ref_time(248_000_000)
 			.saturating_add(T::DbWeight::get().reads(30))
 			.saturating_add(T::DbWeight::get().writes(14))
 	}
@@ -152,7 +152,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Funding ActiveBidder (r:0 w:1)
 	fn redeemed() -> Weight {
 		// Minimum execution time: 125_000 nanoseconds.
-		Weight::from_ref_time(129_000_000)
+		Weight::ref_time(129_000_000)
 			.saturating_add(T::DbWeight::get().reads(7))
 			.saturating_add(T::DbWeight::get().writes(11))
 	}
@@ -164,7 +164,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator Backups (r:1 w:1)
 	fn redemption_expired() -> Weight {
 		// Minimum execution time: 74_000 nanoseconds.
-		Weight::from_ref_time(78_000_000)
+		Weight::ref_time(78_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
@@ -176,7 +176,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Funding ActiveBidder (r:1 w:1)
 	fn stop_bidding() -> Weight {
 		// Minimum execution time: 62_000 nanoseconds.
-		Weight::from_ref_time(67_000_000)
+		Weight::ref_time(67_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -184,7 +184,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Funding ActiveBidder (r:1 w:1)
 	fn start_bidding() -> Weight {
 		// Minimum execution time: 44_000 nanoseconds.
-		Weight::from_ref_time(47_000_000)
+		Weight::ref_time(47_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -192,7 +192,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Funding MinimumFunding (r:0 w:1)
 	fn update_minimum_funding() -> Weight {
 		// Minimum execution time: 32_000 nanoseconds.
-		Weight::from_ref_time(33_000_000)
+		Weight::ref_time(33_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -200,14 +200,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Funding RedemptionTax (r:0 w:1)
 	fn update_redemption_tax() -> Weight {
 		// Minimum execution time: 33_000 nanoseconds.
-		Weight::from_ref_time(33_000_000)
+		Weight::ref_time(33_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Funding BoundAddress (r:1 w:1)
 	fn bind_redeem_address() -> Weight {
 		// Minimum execution time: 17_000 nanoseconds.
-		Weight::from_ref_time(18_000_000)
+		Weight::ref_time(18_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -216,11 +216,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `b` is `[1, 100]`.
 	fn update_restricted_addresses(a: u32, b: u32, ) -> Weight {
 		// Minimum execution time: 894_000 nanoseconds.
-		Weight::from_ref_time(995_413)
+		Weight::ref_time(995_413)
 			// Standard Error: 47_147
-			.saturating_add(Weight::from_ref_time(9_110_754).saturating_mul(a.into()))
+			.saturating_add(Weight::ref_time(9_110_754).saturating_mul(a.into()))
 			// Standard Error: 47_147
-			.saturating_add(Weight::from_ref_time(9_085_808).saturating_mul(b.into()))
+			.saturating_add(Weight::ref_time(9_085_808).saturating_mul(b.into()))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
@@ -236,7 +236,7 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:0 w:1)
 	fn funded() -> Weight {
 		// Minimum execution time: 91_000 nanoseconds.
-		Weight::from_ref_time(94_000_000)
+		Weight::ref_time(94_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
@@ -276,7 +276,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem() -> Weight {
 		// Minimum execution time: 229_000 nanoseconds.
-		Weight::from_ref_time(248_000_000)
+		Weight::ref_time(248_000_000)
 			.saturating_add(RocksDbWeight::get().reads(31))
 			.saturating_add(RocksDbWeight::get().writes(14))
 	}
@@ -315,7 +315,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem_all() -> Weight {
 		// Minimum execution time: 237_000 nanoseconds.
-		Weight::from_ref_time(248_000_000)
+		Weight::ref_time(248_000_000)
 			.saturating_add(RocksDbWeight::get().reads(30))
 			.saturating_add(RocksDbWeight::get().writes(14))
 	}
@@ -333,7 +333,7 @@ impl WeightInfo for () {
 	// Storage: Funding ActiveBidder (r:0 w:1)
 	fn redeemed() -> Weight {
 		// Minimum execution time: 125_000 nanoseconds.
-		Weight::from_ref_time(129_000_000)
+		Weight::ref_time(129_000_000)
 			.saturating_add(RocksDbWeight::get().reads(7))
 			.saturating_add(RocksDbWeight::get().writes(11))
 	}
@@ -345,7 +345,7 @@ impl WeightInfo for () {
 	// Storage: Validator Backups (r:1 w:1)
 	fn redemption_expired() -> Weight {
 		// Minimum execution time: 74_000 nanoseconds.
-		Weight::from_ref_time(78_000_000)
+		Weight::ref_time(78_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
@@ -357,7 +357,7 @@ impl WeightInfo for () {
 	// Storage: Funding ActiveBidder (r:1 w:1)
 	fn stop_bidding() -> Weight {
 		// Minimum execution time: 62_000 nanoseconds.
-		Weight::from_ref_time(67_000_000)
+		Weight::ref_time(67_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -365,7 +365,7 @@ impl WeightInfo for () {
 	// Storage: Funding ActiveBidder (r:1 w:1)
 	fn start_bidding() -> Weight {
 		// Minimum execution time: 44_000 nanoseconds.
-		Weight::from_ref_time(47_000_000)
+		Weight::ref_time(47_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -373,7 +373,7 @@ impl WeightInfo for () {
 	// Storage: Funding MinimumFunding (r:0 w:1)
 	fn update_minimum_funding() -> Weight {
 		// Minimum execution time: 32_000 nanoseconds.
-		Weight::from_ref_time(33_000_000)
+		Weight::ref_time(33_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -381,14 +381,14 @@ impl WeightInfo for () {
 	// Storage: Funding RedemptionTax (r:0 w:1)
 	fn update_redemption_tax() -> Weight {
 		// Minimum execution time: 33_000 nanoseconds.
-		Weight::from_ref_time(33_000_000)
+		Weight::ref_time(33_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Funding BoundAddress (r:1 w:1)
 	fn bind_redeem_address() -> Weight {
 		// Minimum execution time: 17_000 nanoseconds.
-		Weight::from_ref_time(18_000_000)
+		Weight::ref_time(18_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -397,11 +397,11 @@ impl WeightInfo for () {
 	/// The range of component `b` is `[1, 100]`.
 	fn update_restricted_addresses(a: u32, b: u32, ) -> Weight {
 		// Minimum execution time: 894_000 nanoseconds.
-		Weight::from_ref_time(995_413)
+		Weight::ref_time(995_413)
 			// Standard Error: 47_147
-			.saturating_add(Weight::from_ref_time(9_110_754).saturating_mul(a.into()))
+			.saturating_add(Weight::ref_time(9_110_754).saturating_mul(a.into()))
 			// Standard Error: 47_147
-			.saturating_add(Weight::from_ref_time(9_085_808).saturating_mul(b.into()))
+			.saturating_add(Weight::ref_time(9_085_808).saturating_mul(b.into()))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

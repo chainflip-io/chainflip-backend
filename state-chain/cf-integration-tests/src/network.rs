@@ -515,7 +515,7 @@ impl Network {
 			// Provide very large weight to ensure all on_idle processing can occur
 			state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 				block_number,
-				Weight::from_ref_time(1_000_000_000_000),
+				Weight::ref_time(1_000_000_000_000),
 			);
 
 			for event in self.state_chain_gateway_contract.events() {

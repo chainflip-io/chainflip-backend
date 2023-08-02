@@ -465,7 +465,7 @@ pub mod pallet {
 					T::ValidatorWeightInfo::rotation_phase_activating_keys(num_primary_candidates)
 				},
 				// The new session will kick off the new epoch
-				_ => Weight::from_ref_time(0),
+				_ => Weight::ref_time(0),
 			});
 			weight
 		}

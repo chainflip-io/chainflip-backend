@@ -644,7 +644,7 @@ fn can_reap_dust_account() {
 		Account::<Test>::insert(CHARLIE, FlipAccount { balance: 11, bond: 0 });
 
 		// Dust accounts are reaped on_idle
-		Flip::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
+		Flip::on_idle(1, Weight::ref_time(1_000_000_000_000));
 
 		assert!(!Account::<Test>::contains_key(ALICE));
 		assert_eq!(Account::<Test>::get(BOB), FlipAccount { balance: 10, bond: 0 });

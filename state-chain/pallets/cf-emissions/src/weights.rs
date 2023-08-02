@@ -43,13 +43,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Emissions BackupNodeEmissionInflation (r:0 w:1)
 	fn update_backup_node_emission_inflation() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::ref_time(15_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionInflation (r:0 w:1)
 	fn update_current_authority_emission_inflation() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::ref_time(15_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionPerBlock (r:1 w:0)
@@ -84,7 +84,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn rewards_minted() -> Weight {
 		// Minimum execution time: 126_000 nanoseconds.
-		Weight::from_ref_time(129_000_000)
+		Weight::ref_time(129_000_000)
 			.saturating_add(T::DbWeight::get().reads(29))
 			.saturating_add(T::DbWeight::get().writes(14))
 	}
@@ -99,14 +99,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Emissions LastSupplyUpdateBlock (r:1 w:0)
 	fn rewards_not_minted() -> Weight {
 		// Minimum execution time: 32_000 nanoseconds.
-		Weight::from_ref_time(34_000_000)
+		Weight::ref_time(34_000_000)
 			.saturating_add(T::DbWeight::get().reads(9))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: Emissions SupplyUpdateInterval (r:0 w:1)
 	fn update_supply_update_interval() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::ref_time(16_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
@@ -116,13 +116,13 @@ impl WeightInfo for () {
 	// Storage: Emissions BackupNodeEmissionInflation (r:0 w:1)
 	fn update_backup_node_emission_inflation() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::ref_time(15_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionInflation (r:0 w:1)
 	fn update_current_authority_emission_inflation() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::ref_time(15_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Emissions CurrentAuthorityEmissionPerBlock (r:1 w:0)
@@ -157,7 +157,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn rewards_minted() -> Weight {
 		// Minimum execution time: 126_000 nanoseconds.
-		Weight::from_ref_time(129_000_000)
+		Weight::ref_time(129_000_000)
 			.saturating_add(RocksDbWeight::get().reads(29))
 			.saturating_add(RocksDbWeight::get().writes(14))
 	}
@@ -172,14 +172,14 @@ impl WeightInfo for () {
 	// Storage: Emissions LastSupplyUpdateBlock (r:1 w:0)
 	fn rewards_not_minted() -> Weight {
 		// Minimum execution time: 32_000 nanoseconds.
-		Weight::from_ref_time(34_000_000)
+		Weight::ref_time(34_000_000)
 			.saturating_add(RocksDbWeight::get().reads(9))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: Emissions SupplyUpdateInterval (r:0 w:1)
 	fn update_supply_update_interval() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::ref_time(16_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

@@ -44,20 +44,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Reputation AccrualRatio (r:0 w:1)
 	fn update_accrual_ratio() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::ref_time(15_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:1 w:1)
 	fn set_penalty() -> Weight {
 		// Minimum execution time: 22_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::ref_time(23_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:0 w:1)
 	fn update_missed_heartbeat_penalty() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::ref_time(16_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
@@ -66,7 +66,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Reputation AccrualRatio (r:1 w:0)
 	fn heartbeat() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::ref_time(23_000_000)
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -83,13 +83,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Emissions BackupNodeEmissionPerBlock (r:0 w:1)
 	fn submit_network_state() -> Weight {
 		// Minimum execution time: 39_000 nanoseconds.
-		Weight::from_ref_time(41_000_000)
+		Weight::ref_time(41_000_000)
 			.saturating_add(T::DbWeight::get().reads(9))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	fn on_initialize_no_action() -> Weight {
 		// Minimum execution time: 0 nanoseconds.
-		Weight::from_ref_time(0)
+		Weight::ref_time(0)
 	}
 }
 
@@ -98,20 +98,20 @@ impl WeightInfo for () {
 	// Storage: Reputation AccrualRatio (r:0 w:1)
 	fn update_accrual_ratio() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::ref_time(15_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:1 w:1)
 	fn set_penalty() -> Weight {
 		// Minimum execution time: 22_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::ref_time(23_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:0 w:1)
 	fn update_missed_heartbeat_penalty() -> Weight {
 		// Minimum execution time: 15_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::ref_time(16_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
@@ -120,7 +120,7 @@ impl WeightInfo for () {
 	// Storage: Reputation AccrualRatio (r:1 w:0)
 	fn heartbeat() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::ref_time(23_000_000)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -137,12 +137,12 @@ impl WeightInfo for () {
 	// Storage: Emissions BackupNodeEmissionPerBlock (r:0 w:1)
 	fn submit_network_state() -> Weight {
 		// Minimum execution time: 39_000 nanoseconds.
-		Weight::from_ref_time(41_000_000)
+		Weight::ref_time(41_000_000)
 			.saturating_add(RocksDbWeight::get().reads(9))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	fn on_initialize_no_action() -> Weight {
 		// Minimum execution time: 0 nanoseconds.
-		Weight::from_ref_time(0)
+		Weight::ref_time(0)
 	}
 }

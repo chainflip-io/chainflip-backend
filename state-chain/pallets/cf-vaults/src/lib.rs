@@ -767,7 +767,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::debug!("Keygen response timeout has elapsed, attempting to resolve outcome...");
 			Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(ceremony_id));
 		} else {
-			return Weight::from_ref_time(0)
+			return Weight::ref_time(0)
 		};
 
 		let candidate_count = response_status.candidate_count();
