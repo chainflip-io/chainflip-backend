@@ -381,8 +381,6 @@ pub mod pallet {
 		},
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
-		/// The vault rotation has been terminated due to Safe Mode.
-		VaultRotationTerminatedBySafeMode,
 		/// The vault's key has been rotated externally \[new_public_key\]
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
@@ -428,6 +426,8 @@ pub mod pallet {
 		KeyHandoverFailure {
 			ceremony_id: CeremonyId,
 		},
+		/// The vault rotation has been aborted early.
+		VaultRotationAborted,
 	}
 
 	#[pallet::error]

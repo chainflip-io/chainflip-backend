@@ -83,10 +83,10 @@ where
 		C::activate();
 	}
 
-	fn terminate_rotation_by_safe_mode() {
-		A::terminate_rotation_by_safe_mode();
-		B::terminate_rotation_by_safe_mode();
-		C::terminate_rotation_by_safe_mode();
+	fn abort_vault_rotation() {
+		A::abort_vault_rotation();
+		B::abort_vault_rotation();
+		C::abort_vault_rotation();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
