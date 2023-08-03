@@ -71,7 +71,7 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v1.0.0
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -79,6 +79,8 @@ services:
       # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
       - 9945:9944 # ws port
+    volumes:
+      - ./init/polkadot/chainspec.dev.v1.0.0.json:/polkadot/chainspec.dev.json
     healthcheck:
       test:
         [
@@ -92,6 +94,17 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    command:
+      - --alice
+      - --blocks-pruning=archive
+      - --chain=/polkadot/chainspec.dev.json
+      - --force-authoring
+      - --name=PolkaDocker
+      - --rpc-cors=all
+      - --rpc-external
+      - --rpc-methods=unsafe
+      - --state-pruning=archive
+      - --validator
 
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
