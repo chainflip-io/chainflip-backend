@@ -151,7 +151,7 @@ fn submission_future<Client: Clone>(
 				Ok(Ok(t)) => Ok(t),
 				Ok(Err(e)) => Err(e),
 				Err(_) => Err(anyhow::anyhow!(
-					"Retrier {retrier_name}: Request {request_log} with id: {request_id} timed out"
+					"Retrier {retrier_name}: Request `{request_log}` with id `{request_id}` timed out"
 				)),
 			}
 			.map_err(|e| (e, attempt)),
@@ -199,7 +199,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 							// We avoid small delays by always having a time of at least half.
 							let half_max = max_sleep_duration(initial_request_timeout, attempt) / 2;
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
-							tracing::error!("Retrier {name}: Error for Request {request_log} with id: {request_id}, attempt {attempt}: {e}. Delaying for {}ms", sleep_duration.as_millis());
+							tracing::error!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, attempt `{attempt}`: {e}. Delaying for {}ms", sleep_duration.as_millis());
 
 							// Delay the request before the next retry.
 							retry_delays.push(Box::pin(
@@ -213,14 +213,14 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 				},
 				let (request_id, request_log, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
-					tracing::trace!("Retrier {name}: Retrying request {request_log} with id: {request_id} for attempt: {next_attempt}");
+					tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}`, attempt `{next_attempt}`");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
 							submission_holder.push(submission_future(primary_client.clone(), name, request_log, closure, request_id, initial_request_timeout, next_attempt));
 						} else {
-							tracing::trace!("Retrier {name}: Dropped request {request_log} with id: {request_id} not retrying.");
+							tracing::trace!("Retrier {name}: Dropped request `{request_log}` with id `{request_id}` not retrying.");
 							request_holder.remove(&request_id);
 						}
 					}
