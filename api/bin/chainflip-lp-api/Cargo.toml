@@ -31,6 +31,8 @@ sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfl
 tokio = "1.20.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+pallet-cf-pools = { path = '../../../state-chain/pallets/cf-pools' }
+cf-primitives = { path = "../../../state-chain/primitives" }
 
 # Local
 chainflip-api = { path = "../../lib" }
