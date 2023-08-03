@@ -607,9 +607,9 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 
 			// PARTERNET ONLY
-			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			// LIMIT USDC SWAP DEPOSITS TO 1_000 USDC
 			let deposit_amount = if from == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+				sp_std::cmp::max(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
@@ -929,9 +929,9 @@ pub mod pallet {
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 
 			// PARTERNET ONLY
-			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			// LIMIT USDC SWAP DEPOSITS TO 1_000 USDC
 			let deposit_amount = if from == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+				sp_std::cmp::max(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
@@ -974,9 +974,9 @@ pub mod pallet {
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
 			// PARTERNET ONLY
-			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			// LIMIT USDC SWAP DEPOSITS TO 1_000 USDC
 			let deposit_amount = if source_asset == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+				sp_std::cmp::max(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
