@@ -609,7 +609,7 @@ pub mod pallet {
 			// PARTERNET ONLY
 			// LIMIT USDC SWAP DEPOSITS TO 1_000 USDC
 			let deposit_amount = if from == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 1_000 * 1_000_000)
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
@@ -931,7 +931,7 @@ pub mod pallet {
 			// PARTERNET ONLY
 			// LIMIT USDC SWAP DEPOSITS TO 1_000 USDC
 			let deposit_amount = if from == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 1_000 * 1_000_000)
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
@@ -976,7 +976,7 @@ pub mod pallet {
 			// PARTERNET ONLY
 			// LIMIT USDC SWAP DEPOSITS TO 1_000 USDC
 			let deposit_amount = if source_asset == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 1_000 * 1_000_000)
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
