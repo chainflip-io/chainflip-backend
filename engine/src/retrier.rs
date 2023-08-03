@@ -184,7 +184,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 			utilities::loop_select! {
 				if let Some((response_sender, request_log, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					tracing::info!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}`");
+					tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}`");
 					submission_holder.push(submission_future(primary_client.clone(), name, request_log, &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
