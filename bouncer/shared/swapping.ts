@@ -187,9 +187,11 @@ export async function testAllSwaps() {
 
   let stopObserving = false;
   const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
-  // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
-  // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
+  // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
+  // Total contract swap per ERC20 token = ccmContractSwaps + contractSwaps =
+  //     (numberAssetsEthereum - 1) + (numberAssets (BTC has 4 different types) - 1) = 2 + 7 = 9
   await approveTokenVault(
     'USDC',
     (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 9n).toString(),
