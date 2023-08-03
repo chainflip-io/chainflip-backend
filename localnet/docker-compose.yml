@@ -94,6 +94,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    environment:
+      - RUST_BACKTRACE=full
     command:
       - --alice
       - --blocks-pruning=archive
