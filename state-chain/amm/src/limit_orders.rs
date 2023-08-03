@@ -31,7 +31,7 @@ fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 
 /// Represents a number exclusively between 0 and 1.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize, Default))]
 struct FloatBetweenZeroAndOne {
 	normalised_mantissa: U256,
 	negative_exponent: U256,
@@ -260,16 +260,20 @@ pub struct CollectedAmounts {
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
+	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	amount: Amount,
+	#[cfg_attr(feature = "std", serde(skip))]
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct FixedPool {
+	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	available: Amount,
+	#[cfg_attr(feature = "std", serde(skip))]
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
@@ -292,8 +296,6 @@ impl<L: Serialize + Clone> Serialize for PoolState<L> {
 		use serde::ser::SerializeStruct;
 		let mut state = serializer.serialize_struct("PoolState", 4)?;
 		state.serialize_field("fee_hundredth_pips", &self.fee_hundredth_pips)?;
-		state.serialize_field("next_pool_instance", &self.next_pool_instance)?;
-		state.serialize_field("fixed_pools", &self.fixed_pools)?;
 		state.serialize_field(
 			"positions",
 			&self
@@ -304,15 +306,6 @@ impl<L: Serialize + Clone> Serialize for PoolState<L> {
 		state.end()
 	}
 }
-
-// #[cfg(feature = "std")]
-// impl<L: for<'de> Deserialize<'de>> Deserialize<'de> for PoolState<L> {
-// 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-// 	where
-// 		D: serde::Deserializer<'de>,
-// 	{
-// 	}
-// }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity.

@@ -43,11 +43,12 @@ const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MI
 #[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct Position {
 	liquidity: Liquidity,
+	#[cfg_attr(feature = "std", serde(skip))]
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
 
 impl Position {
-	fn collect_fees<LiquidityProvider: Ord>(
+	fn collect_fees<LiquidityProvider>(
 		&mut self,
 		pool_state: &PoolState<LiquidityProvider>,
 		lower_tick: Tick,
@@ -91,7 +92,7 @@ impl Position {
 		collected_fees
 	}
 
-	fn set_liquidity<LiquidityProvider: Ord>(
+	fn set_liquidity<LiquidityProvider>(
 		&mut self,
 		pool_state: &PoolState<LiquidityProvider>,
 		new_liquidity: Liquidity,
@@ -127,7 +128,9 @@ pub struct PoolState<LiquidityProvider> {
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
+	#[cfg_attr(feature = "std", serde(skip))]
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
+	#[cfg_attr(feature = "std", serde(skip))]
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::map_as_seq"))]
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
