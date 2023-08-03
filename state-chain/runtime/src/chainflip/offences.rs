@@ -79,8 +79,8 @@ impl From<pallet_cf_validator::PalletOffence> for Offence {
 	}
 }
 
-impl<T> From<GrandpaEquivocationOffence<T>> for Offence {
-	fn from(_: GrandpaEquivocationOffence<T>) -> Self {
+impl<T> From<EquivocationOffence<T>> for Offence {
+	fn from(_: EquivocationOffence<T>) -> Self {
 		Self::GrandpaEquivocation
 	}
 }
