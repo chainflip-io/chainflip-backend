@@ -15,11 +15,11 @@ use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
 	sr25519, Pair, Public,
 };
-use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
@@ -33,7 +33,7 @@ use state_chain_runtime::{
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
 use utilities::clean_hex_address;
 
-use frame_support::sp_runtime::{
+use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	Percent,
 };

@@ -39,6 +39,7 @@ futures = { version = "0.3.21", features = ["thread-pool"]}
 sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sp-core = { version = "21.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-executor = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
+sc-network = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-service = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-telemetry = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
 sc-keystore = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-07' }
