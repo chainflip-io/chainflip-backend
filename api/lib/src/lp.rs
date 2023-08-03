@@ -1,5 +1,3 @@
-use std::{collections::HashMap, sync::Arc};
-
 use anyhow::{anyhow, Context, Result};
 pub use cf_amm::{
 	common::{SideMap, Tick},
@@ -22,6 +20,7 @@ pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, 
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
+use std::{collections::BTreeMap, sync::Arc};
 use utilities::{task_scope::task_scope, CachedStream};
 
 use crate::connect_submit_and_get_events;
@@ -107,7 +106,7 @@ pub async fn withdraw_asset(
 
 pub async fn get_balances(
 	state_chain_settings: &settings::StateChain,
-) -> Result<HashMap<Asset, AssetAmount>> {
+) -> Result<BTreeMap<Asset, AssetAmount>> {
 	task_scope(|scope| {
 		async {
 			let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
@@ -119,7 +118,7 @@ pub async fn get_balances(
 			)
 			.await?;
 
-			let balances: Result<HashMap<Asset, AssetAmount>> =
+			let balances: Result<BTreeMap<Asset, AssetAmount>> =
 				futures::future::join_all(Asset::all().iter().map(|asset| async {
 					Ok((
 						*asset,
@@ -199,8 +198,8 @@ pub async fn mint_range_order(
 	.await
 }
 
-#[derive(Serialize)]
-pub struct BurnRageOrderReturn {
+#[derive(Serialize, Deserialize)]
+pub struct BurnRangeOrderReturn {
 	assets_credited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
@@ -210,7 +209,7 @@ pub async fn burn_range_order(
 	asset: Asset,
 	range: Range<Tick>,
 	amount: AssetAmount,
-) -> Result<BurnRageOrderReturn> {
+) -> Result<BurnRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
@@ -252,7 +251,7 @@ pub async fn burn_range_order(
 							collected_fees,
 							..
 						},
-					) => Some(BurnRageOrderReturn { assets_credited, collected_fees }),
+					) => Some(BurnRangeOrderReturn { assets_credited, collected_fees }),
 					_ => None,
 				})
 				.expect("RangeOrderBurned must have been generated"))
@@ -262,7 +261,7 @@ pub async fn burn_range_order(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MintLimitOrderReturn {
 	assets_debited: AssetAmount,
 	collected_fees: AssetAmount,
@@ -325,7 +324,7 @@ pub async fn mint_limit_order(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BurnLimitOrderReturn {
 	assets_credited: AssetAmount,
 	collected_fees: AssetAmount,
