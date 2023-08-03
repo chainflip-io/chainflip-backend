@@ -122,13 +122,13 @@ where
 	}
 }
 
-impl<T, O, FullIdentification> OnKilledAccount<T::ValidatorId>
+impl<T, O, FullIdentification> OnKilledAccount<T::AccountId>
 	for ChainflipOffenceReportingAdapter<T, O, FullIdentification>
 where
 	T: Config,
 	O: sp_staking::offence::Offence<IdentificationTuple<T, FullIdentification>>,
 {
-	fn on_killed_account(who: &T::ValidatorId) {
-		OffenceTimeSlotTracker::<T>::remove(Self::report_id(who));
+	fn on_killed_account(who: &T::AccountId) {
+		OffenceTimeSlotTracker::<T>::remove(Self::report_id(T::ValidatorId::from_ref(&who)));
 	}
 }
