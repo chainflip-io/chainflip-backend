@@ -28,7 +28,7 @@ pub struct DotRetryRpcClient {
 	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
-const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
 impl DotRetryRpcClient {
@@ -40,12 +40,14 @@ impl DotRetryRpcClient {
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
+				"dot_rpc",
 				dot_rpc_client,
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
+				"dot_subscribe",
 				dot_sub_client,
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
@@ -71,51 +73,69 @@ pub trait DotRetryRpcApi {
 impl DotRetryRpcApi for DotRetryRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash> {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.block_hash(block_number).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.block_hash(block_number).await })
+				}),
+				format!("block_hash({block_number})"),
+			)
 			.await
 	}
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic> {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move {
-					client.extrinsics(block_hash).await?.ok_or(anyhow::anyhow!(
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.extrinsics(block_hash).await?.ok_or(anyhow::anyhow!(
 						"Block not found when querying for extrinsics at block hash {block_hash}"
 					))
-				})
-			}))
+					})
+				}),
+				format!("extrinsics({block_hash})"),
+			)
 			.await
 	}
 
 	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>> {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.events(block_hash).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.events(block_hash).await })
+				}),
+				format!("events({block_hash})"),
+			)
 			.await
 	}
 
 	async fn current_runtime_version(&self) -> RuntimeVersion {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.current_runtime_version().await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.current_runtime_version().await })
+				}),
+				"current_runtime_version".to_string(),
+			)
 			.await
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash {
+		let log = format!("submit_raw_encoded_extrinsic({encoded_bytes:?})");
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				let encoded_bytes = encoded_bytes.clone();
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					let encoded_bytes = encoded_bytes.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(
+						async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await },
+					)
+				}),
+				log,
+			)
 			.await
 	}
 }
@@ -139,10 +159,13 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
 		self.sub_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.subscribe_best_heads().await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.subscribe_best_heads().await })
+				}),
+				"subscribe_best_heads".to_string(),
+			)
 			.await
 	}
 
@@ -150,10 +173,13 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
 		self.sub_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.subscribe_finalized_heads().await })
-			}))
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.subscribe_finalized_heads().await })
+				}),
+				"subscribe_finalized_heads".to_string(),
+			)
 			.await
 	}
 }
@@ -169,35 +195,37 @@ impl ChainClient for DotRetryRpcClient {
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move {
-					let block_hash = client
-						.block_hash(index)
-						.await?
-						// TODO: Make these just return Result?
-						.ok_or(anyhow::anyhow!("No block hash found for index {index}"))?;
-					let header = client
-						.block(block_hash)
-						.await?
-						.ok_or(anyhow::anyhow!("No block found for block hash {block_hash}"))?
-						.block
-						.header;
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let block_hash = client
+							.block_hash(index)
+							.await?
+							// TODO: Make these just return Result?
+							.ok_or(anyhow::anyhow!("No block hash found for index {index}"))?;
+						let header = client
+							.block(block_hash)
+							.await?
+							.ok_or(anyhow::anyhow!("No block found for block hash {block_hash}"))?
+							.block
+							.header;
 
-					assert_eq!(index, header.number);
+						assert_eq!(index, header.number);
 
-					let events = client
-						.events(block_hash)
-						.await?
-						.ok_or(anyhow::anyhow!("No events found for block hash {block_hash}"))?;
-					Ok(Header {
-						index,
-						hash: header.hash(),
-						parent_hash: Some(header.parent_hash),
-						data: events,
+						let events = client.events(block_hash).await?.ok_or(anyhow::anyhow!(
+							"No events found for block hash {block_hash}"
+						))?;
+						Ok(Header {
+							index,
+							hash: header.hash(),
+							parent_hash: Some(header.parent_hash),
+							data: events,
+						})
 					})
-				})
-			}))
+				}),
+				format!("header_at_index({index})"),
+			)
 			.await
 	}
 }

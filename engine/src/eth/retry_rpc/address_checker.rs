@@ -30,13 +30,16 @@ impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 		addresses: Vec<H160>,
 	) -> Vec<AddressState> {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				let addresses = addresses.clone();
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move {
-					client.address_states(block_hash, contract_address, addresses).await
-				})
-			}))
+			.request(
+				Box::pin(move |client| {
+					let addresses = addresses.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.address_states(block_hash, contract_address, addresses).await
+					})
+				}),
+				format!("address_states({block_hash}, {contract_address}"),
+			)
 			.await
 	}
 
@@ -47,13 +50,16 @@ impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 		addresses: Vec<H160>,
 	) -> Vec<U256> {
 		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				let addresses = addresses.clone();
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(
-					async move { client.balances(block_hash, contract_address, addresses).await },
-				)
-			}))
+			.request(
+				Box::pin(move |client| {
+					let addresses = addresses.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client.balances(block_hash, contract_address, addresses).await
+					})
+				}),
+				format!("balances({block_hash}, {contract_address}"),
+			)
 			.await
 	}
 }
