@@ -129,7 +129,6 @@ fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Durati
 // Creates a future of a particular submission.
 fn submission_future<Client: Clone>(
 	client: Client,
-	retrier_name: &'static str,
 	request_log: RequestLog,
 	submission_fn: &FutureAnyGenerator<Client>,
 	request_id: RequestId,
@@ -150,9 +149,7 @@ fn submission_future<Client: Clone>(
 			{
 				Ok(Ok(t)) => Ok(t),
 				Ok(Err(e)) => Err(e),
-				Err(_) => Err(anyhow::anyhow!(
-					"Retrier {retrier_name}: Request `{request_log}` with id `{request_id}` timed out"
-				)),
+				Err(_) => Err(anyhow::anyhow!("Request timed out")),
 			}
 			.map_err(|e| (e, attempt)),
 		)
@@ -185,7 +182,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 				if let Some((response_sender, request_log, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
 					tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}`");
-					submission_holder.push(submission_future(primary_client.clone(), name, request_log, &closure, request_id, initial_request_timeout, 0));
+					submission_holder.push(submission_future(primary_client.clone(), request_log, &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				let (request_id, request_log, result) = submission_holder.next_or_pending() => {
@@ -214,16 +211,18 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 				},
 				let (request_id, request_log, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
-					tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}`, attempt `{next_attempt}`");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
-							submission_holder.push(submission_future(primary_client.clone(), name, request_log, closure, request_id, initial_request_timeout, next_attempt));
+							tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}`, attempt `{next_attempt}`");
+							submission_holder.push(submission_future(primary_client.clone(), request_log, closure, request_id, initial_request_timeout, next_attempt));
 						} else {
 							tracing::trace!("Retrier {name}: Dropped request `{request_log}` with id `{request_id}` not retrying.");
 							request_holder.remove(&request_id);
 						}
+					} else {
+						tracing::trace!("Retrier {name}: Request `{request_log}` with id `{request_id}` already succeeded, not retrying.");
 					}
 				},
 			};
