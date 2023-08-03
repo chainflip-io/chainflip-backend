@@ -907,6 +907,7 @@ pub mod pallet {
 		/// Callback function to kick off the swapping process after a successful deposit.
 		fn schedule_swap_from_channel(
 			deposit_address: ForeignChainAddress,
+			ingress_block_height: u64,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -940,6 +941,7 @@ pub mod pallet {
 					origin: SwapOrigin::DepositChannel {
 						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 						channel_id,
+						ingress_block_height,
 					},
 					swap_type: SwapType::Swap(destination_address),
 				});

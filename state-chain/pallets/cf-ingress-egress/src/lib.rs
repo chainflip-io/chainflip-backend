@@ -390,14 +390,20 @@ pub mod pallet {
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
-			_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+			block_height: <T::TargetChain as Chain>::ChainBlockNumber,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			for DepositWitness { deposit_address, asset, amount, deposit_details } in
 				deposit_witnesses
 			{
-				Self::process_single_deposit(deposit_address, asset, amount, deposit_details)?;
+				Self::process_single_deposit(
+					deposit_address,
+					asset,
+					amount,
+					deposit_details,
+					block_height,
+				)?;
 			}
 			Ok(())
 		}
@@ -572,6 +578,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		block_height: <T::TargetChain as Chain>::ChainBlockNumber,
 	) -> DispatchResult {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
@@ -616,6 +623,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broker_commission_bps,
 			} => T::SwapDepositHandler::schedule_swap_from_channel(
 				deposit_address.clone().into(),
+				block_height.into(),
 				asset.into(),
 				destination_asset,
 				amount.into(),
@@ -643,6 +651,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						deposit_address.clone().into(),
 					),
 					channel_id,
+					ingress_block_height: block_height.into(),
 				},
 			),
 		};
