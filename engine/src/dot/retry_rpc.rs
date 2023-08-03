@@ -90,11 +90,11 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.extrinsics(block_hash).await?.ok_or(anyhow::anyhow!(
-						"Block not found when querying for extrinsics at block hash {block_hash}"
+						"Block not found when querying for extrinsics at block hash {block_hash:?}"
 					))
 					})
 				}),
-				format!("extrinsics({block_hash})"),
+				format!("extrinsics({block_hash:?})"),
 			)
 			.await
 	}
@@ -106,7 +106,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.events(block_hash).await })
 				}),
-				format!("events({block_hash})"),
+				format!("events({block_hash:?})"),
 			)
 			.await
 	}
@@ -207,14 +207,14 @@ impl ChainClient for DotRetryRpcClient {
 						let header = client
 							.block(block_hash)
 							.await?
-							.ok_or(anyhow::anyhow!("No block found for block hash {block_hash}"))?
+							.ok_or(anyhow::anyhow!("No block found for block hash {block_hash:?}"))?
 							.block
 							.header;
 
 						assert_eq!(index, header.number);
 
 						let events = client.events(block_hash).await?.ok_or(anyhow::anyhow!(
-							"No events found for block hash {block_hash}"
+							"No events found for block hash {block_hash:?}"
 						))?;
 						Ok(Header {
 							index,
