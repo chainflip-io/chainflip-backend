@@ -75,28 +75,35 @@ async function testMultipleDeposits(destAsset: Asset) {
 }
 
 // Simple double swap test via smart contract call. No need to check all the balances, that's why we have the other tests
-// Just a hardcoded swap to simplify the address and chain encoding.
-async function testTxMultipleSwaps() {
-  const { destAddress, tag } = await prepareSwap('ETH', 'DOT');
+// Not supporting BTC to not add more unnecessary complexity.
+async function testTxMultipleSwaps(sourceAsset: Asset, destAsset: Asset) {
+  const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const web3 = new Web3(ethEndpoint);
 
   // performDoubleContractSwap
   const cfTesterAddress = getEthContractAddress('CFTESTER');
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
-  const amount = BigInt(amountToFineAmount(defaultAssetAmounts('ETH'), assetDecimals.ETH));
+  const amount = BigInt(
+    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset]),
+  );
+  const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
-      chainContractIds[assetChains.DOT],
-      decodeDotAddressForContract(destAddress),
-      assetContractIds.DOT,
-      getEthContractAddress('ETH'),
+      chainContractIds[assetChains[destAsset]],
+      destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
+      assetContractIds[destAsset],
+      getEthContractAddress(sourceAsset),
       amount,
       '0x',
-      2,
+      numSwaps,
     )
     .encodeABI();
-  const receipt = await signAndSendTxEth(cfTesterAddress, (amount * 2n).toString(), txData);
+  const receipt = await signAndSendTxEth(
+    cfTesterAddress,
+    (amount * BigInt(numSwaps)).toString(),
+    txData,
+  );
 
   let eventCounter = 0;
   let stopObserve = false;
@@ -118,7 +125,7 @@ async function testTxMultipleSwaps() {
   );
 
   while (eventCounter === 0) {
-    await sleep(3000);
+    await sleep(2000);
   }
   console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
@@ -144,7 +151,12 @@ export async function testEthereumDeposits() {
     testMultipleDeposits('USDC'),
   ]);
 
-  await Promise.all([depositTests, duplicatedDepositTest, testTxMultipleSwaps()]);
+  const multipleTxSwapsTest = Promise.all([
+    testTxMultipleSwaps('ETH', 'DOT'),
+    testTxMultipleSwaps('ETH', 'FLIP'),
+  ]);
+
+  await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
 
   console.log('=== Deposit Tests completed ===');
 }
