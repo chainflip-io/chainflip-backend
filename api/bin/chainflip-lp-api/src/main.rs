@@ -109,7 +109,7 @@ pub trait Rpc {
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<String, Error>;
+	) -> Result<Hash, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -206,15 +206,10 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<String, Error> {
+	) -> Result<Hash, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
 			.map_err(|e| Error::Custom(e.to_string()))?;
-		Ok(self
-			.api
-			.lp_api()
-			.register_emergency_withdrawal_address(ewa_address)
-			.await
-			.map(|tx_hash| tx_hash.to_string())?)
+		Ok(self.api.lp_api().register_emergency_withdrawal_address(ewa_address).await?)
 	}
 
 	/// Returns an egress id
