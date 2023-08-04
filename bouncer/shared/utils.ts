@@ -175,13 +175,14 @@ export async function observeEvent(
         event.section.includes(expectedSection) &&
         event.method.includes(expectedMethod)
       ) {
-        result = {
+        const expectedEvent = {
           name: { section: event.section, method: event.method },
           data: event.toHuman().data,
           block: header.number.toNumber(),
           event_index: index,
         };
-        if (query(result)) {
+        if (query(expectedEvent)) {
+          result = expectedEvent;
           eventFound = true;
           unsubscribe();
         }
