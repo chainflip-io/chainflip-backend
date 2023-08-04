@@ -912,7 +912,6 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	})
 }
 
-// Helper function that checks if a full vault key rotation can be done.
 fn do_full_key_rotation() {
 	let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 	// Start Key gen
@@ -987,6 +986,10 @@ fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 			Err(Default::default())
 		));
 		VaultsPallet::on_initialize(2);
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::Failed { .. })
+		);
 
 		// Abort the vault rotation now
 		VaultsPallet::abort_vault_rotation();
@@ -1021,6 +1024,10 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 
 		VaultsPallet::on_initialize(1);
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::KeygenVerificationComplete { .. })
+		);
 
 		// Abort the vault rotation now
 		VaultsPallet::abort_vault_rotation();
@@ -1076,6 +1083,10 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 		));
 
 		VaultsPallet::on_initialize(2);
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::KeyHandoverFailed { .. })
+		);
 
 		// Abort the vault rotation now
 		VaultsPallet::abort_vault_rotation();

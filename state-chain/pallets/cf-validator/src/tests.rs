@@ -816,7 +816,7 @@ fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
 }
 
 #[test]
-fn authority_rotation_can_suceed_after_aborted_by_safe_mode() {
+fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_winning_bids();
 		// Abort authority rotation using Safe Mode.
