@@ -10,7 +10,9 @@ use chainflip_api::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
+	queries::{Pool, QueryApi, RangeOrderPosition},
 	settings::StateChain,
+	AccountId32,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -21,7 +23,7 @@ use jsonrpsee::{
 };
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
-use std::{collections::HashMap, ops::Range, path::PathBuf};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -150,13 +152,22 @@ pub trait Rpc {
 	) -> Result<BurnLimitOrderReturn, Error>;
 
 	#[method(name = "assetBalances")]
-	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error>;
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error>;
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error>;
 
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
+
+	#[method(name = "getPools")]
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+
+	#[method(name = "getPool")]
+	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -210,30 +221,24 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error> {
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error> {
 		Ok(lp::get_balances(&self.state_chain_settings).await?)
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<rpc_types::RangeOrder>>, Error> {
-		Ok(lp::get_range_orders(&self.state_chain_settings).await.map(|orders| {
-			orders
-				.into_iter()
-				.map(|(asset, orders)| {
-					(
-						asset,
-						orders
-							.into_iter()
-							.map(|(lower_tick, upper_tick, liquidity)| rpc_types::RangeOrder {
-								lower_tick,
-								upper_tick,
-								liquidity,
-							})
-							.collect::<Vec<rpc_types::RangeOrder>>(),
-					)
-				})
-				.collect::<HashMap<Asset, Vec<rpc_types::RangeOrder>>>()
-		})?)
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error> {
+		Ok(task_scope(|scope| {
+			async move {
+				let api = QueryApi::connect(scope, &self.state_chain_settings).await?;
+				let range_orders = api.get_range_orders(None, account_id).await?;
+				Ok(range_orders)
+			}
+			.boxed()
+		})
+		.await?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -330,9 +335,7 @@ impl RpcServer for RpcServerImpl {
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
 		Ok(task_scope(|scope| {
 			async move {
-				let api =
-					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
-						.await?;
+				let api = QueryApi::connect(scope, &self.state_chain_settings).await?;
 
 				tokio::try_join!(
 					api.get_open_swap_channels::<Ethereum>(None),
@@ -349,6 +352,28 @@ impl RpcServer for RpcServerImpl {
 		})
 		.await?)
 	}
+
+	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+		get_pools(&self.state_chain_settings, Some(asset)).await
+	}
+
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+		get_pools(&self.state_chain_settings, None).await
+	}
+}
+
+async fn get_pools(
+	state_chain_settings: &StateChain,
+	asset: Option<Asset>,
+) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+	Ok(task_scope(|scope| {
+		async move {
+			let api = QueryApi::connect(scope, state_chain_settings).await?;
+			api.get_pools(None, asset).await
+		}
+		.boxed()
+	})
+	.await?)
 }
 
 #[derive(Parser, Debug, Clone, Default)]
