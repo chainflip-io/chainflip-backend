@@ -18,15 +18,33 @@ use chainflip_engine::{
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
-use codec::Decode;
 use futures::FutureExt;
 use jsonrpsee_subxt::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
-	task_scope::{self, task_scope},
+	make_periodic_tick,
+	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };
+
+lazy_static::lazy_static! {
+	static ref CFE_VERSION: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
+}
+
+fn is_compatible_with_runtime(runtime_compatibility_version: &SemVer) -> bool {
+	CFE_VERSION.major == runtime_compatibility_version.major &&
+		CFE_VERSION.minor == runtime_compatibility_version.minor
+}
+
+enum CfeStatus {
+	Active(ScopedJoinHandle<()>),
+	Idle,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			utilities::init_json_logger(scope).await;
+			let mut start_logger_server_fn = Some(utilities::init_json_logger().await);
 
 			// Note that we use jsonrpsee ^0.16 to prevent unwanted
 			// warning when this ws client is disconnected
@@ -48,30 +66,46 @@ async fn main() -> anyhow::Result<()> {
 				.build(&settings.state_chain.ws_endpoint)
 				.await?;
 
-			loop {
-				let current_runtime_version = {
-					let bytes: Vec<u8> = ws_rpc_client
-						.request("cf_current_compatibility_version", Vec::<()>::new())
-						.await
-						.unwrap();
-					SemVer::decode(&mut bytes.as_slice()).unwrap()
-				};
-				tracing::info!(
-					"Current runtime compatibility version: {:?}",
-					current_runtime_version
-				);
+			let mut cfe_status = CfeStatus::Idle;
 
-				// TODO: check if actually compatible
-				let is_compatible = true;
-				if is_compatible {
-					tracing::info!("Runtime version is compatible, starting the engine!");
-					break
-				} else {
-					tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
+			loop {
+				poll_interval.tick().await;
+
+				let runtime_compatibility_version: SemVer = ws_rpc_client
+					.request("cf_current_compatibility_version", Vec::<()>::new())
+					.await
+					.unwrap();
+
+				let compatible =
+					is_compatible_with_runtime(&runtime_compatibility_version);
+
+				match cfe_status {
+					CfeStatus::Active(_) =>
+						if !compatible {
+							tracing::info!(
+								"Runtime version ({runtime_compatibility_version:?}) is no longer compatible, shutting down the engine!"
+							);
+							// This will exit the scope, dropping the handle and thus terminating
+							// the main task
+							break Err(anyhow::anyhow!("Incompatible runtime version"))
+						},
+					CfeStatus::Idle =>
+						if compatible {
+							start_logger_server_fn.take().expect("only called once")(scope);
+							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
+
+							let settings = settings.clone();
+							let handle = scope.spawn_with_handle(
+								task_scope(|scope| start(scope, settings).boxed())
+							);
+
+							cfe_status = CfeStatus::Active(handle);
+						} else {
+							tracing::info!("Current runtime is not compatible with this CFE version ({:?})", *CFE_VERSION);
+						}
 				}
 			}
-
-			start(scope, settings).await
 		}
 		.boxed()
 	})
@@ -103,11 +137,7 @@ async fn start(
 
 	state_chain_client
 		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
-			new_version: SemVer {
-				major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-				minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-				patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-			},
+			new_version: *CFE_VERSION,
 		})
 		.await
 		.until_finalized()

@@ -23,6 +23,7 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use sp_runtime::AccountId32;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -139,7 +140,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 12,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 2,
+	transaction_version: 3,
 	state_version: 1,
 };
 
@@ -149,15 +150,10 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-parameter_types! {
-	pub const MinEpoch: BlockNumber = 1;
-}
-
 impl pallet_cf_validator::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
-	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault, BitcoinVault>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
@@ -998,7 +994,7 @@ impl_runtime_apis! {
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
-				redemption_period_as_percentage: Validator::redemption_period_as_percentage(),
+				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
@@ -1029,6 +1025,10 @@ impl_runtime_apis! {
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
+		}
+
+		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+			LiquidityPools::get_pool(asset)
 		}
 	}
 

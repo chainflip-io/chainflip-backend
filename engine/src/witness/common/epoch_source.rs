@@ -240,6 +240,7 @@ impl<
 		HistoricInfo: Clone + Send + Sync + 'static,
 	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
+	/// Only keep the epochs where the given account is participating in that epoch as an authority.
 	pub async fn participating(
 		self,
 		account_id: AccountId,
@@ -269,6 +270,8 @@ impl<
 		.await
 	}
 
+	/// Filter out the epochs where the provided `filter_map` returns `None`, mapping the epoch
+	/// info. Just map the historic info, without filtering anything based on it.
 	pub async fn filter_map<
 		FilterMapInfo,
 		InfoFut,
@@ -401,6 +404,9 @@ impl<
 		HistoricInfo,
 	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
+	/// Get all the vaults for each each epoch for a particular chain.
+	/// Not all epochs will have all vaults. For example, the first epoch will not have a vault for
+	/// Polkadot or Bitcoin.
 	pub async fn vaults<TChain: ExternalChain>(
 		self,
 	) -> EpochSourceBuilder<

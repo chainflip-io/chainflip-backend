@@ -27,13 +27,23 @@ jobs:
           search_artifacts: true
           check_artifacts: true
 
+      - name: Fetch Runtime from release/${{ env.MAJOR_MINOR }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: release-sisyphos.yml
+          name: chainflip-backend-runtime-ubuntu-${{ matrix.ubuntu_version }}
+          branch: release/${{ env.MAJOR_MINOR }}
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
+
       - name: Check Downloaded Binaries Version Matches Tag 🕵️‍♂️
         shell: bash
         run: |
           # TODO: Make this look nicer once we have --version flag in all binaries
-          ./ci/scripts/check_binary_version.sh chainflip-node ${{ github.ref_name }}
-          ./ci/scripts/check_binary_version.sh chainflip-engine ${{ github.ref_name }}
-          ./ci/scripts/check_binary_version.sh chainflip-cli ${{ github.ref_name }}
+          ./ci/scripts/check_binary_version.sh ./chainflip-node ${{ github.ref_name }}
+          ./ci/scripts/check_binary_version.sh ./chainflip-engine ${{ github.ref_name }}
+          ./ci/scripts/check_binary_version.sh ./chainflip-cli ${{ github.ref_name }}
 
       - name: Re-upload binary artifacts
         uses: actions/upload-artifact@v3
@@ -47,9 +57,9 @@ jobs:
             chainflip-node
             generate-genesis-keys
 
-      - name: Upload binary artifacts
+      - name: Re-upload runtime artifacts
         uses: actions/upload-artifact@v3
         with:
           name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
           path: |
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+            ./state_chain_runtime*.wasm

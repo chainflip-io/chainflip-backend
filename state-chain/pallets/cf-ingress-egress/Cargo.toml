@@ -14,6 +14,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
+cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false, features = ['derive'] }
 
 log = { version = '0.4.16', default-features = false }
 

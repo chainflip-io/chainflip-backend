@@ -22,20 +22,20 @@ pub struct MintRangeOrderReturn {
 	collected_fees: SideMap<AssetAmount>,
 }
 
-#[derive(Serialize)]
-pub struct BurnRageOrderReturn {
+#[derive(Serialize, Deserialize)]
+pub struct BurnRangeOrderReturn {
 	assets_credited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MintLimitOrderReturn {
 	assets_debited: AssetAmount,
 	collected_fees: AssetAmount,
 	swapped_liquidity: AssetAmount,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BurnLimitOrderReturn {
 	assets_credited: AssetAmount,
 	collected_fees: AssetAmount,
@@ -141,7 +141,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		asset: Asset,
 		range: Range<Tick>,
 		amount: AssetAmount,
-	) -> Result<BurnRageOrderReturn> {
+	) -> Result<BurnRangeOrderReturn> {
 		// TODO: Re-enable this check after #3082 in implemented
 		// Find the current position and calculate new target amount
 		// if get_liquidity_at_position(&state_chain_client, asset, range,
@@ -171,7 +171,7 @@ pub trait LpApi: SignedExtrinsicApi {
 						collected_fees,
 						..
 					},
-				) => Some(BurnRageOrderReturn { assets_credited, collected_fees }),
+				) => Some(BurnRangeOrderReturn { assets_credited, collected_fees }),
 				_ => None,
 			})
 			.expect("RangeOrderBurned must have been generated"))

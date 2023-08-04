@@ -21,6 +21,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
 	EgressApi, GetBlockHeight, SwapDepositHandler,
@@ -722,10 +723,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
 			}
 		} else {
-			#[cfg(test)]
-			panic!("Tried to close an unknown channel.");
-			#[cfg(not(test))]
-			log::error!("Tried to close an unknown channel.")
+			log_or_panic!("Tried to close an unknown channel.");
 		}
 	}
 }
