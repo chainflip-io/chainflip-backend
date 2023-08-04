@@ -71,10 +71,26 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
+    volumes:
+      - ./init/polkadot/chainspec.json:/polkadot/chainspec.json
+    environment:
+      - RUST_BACKTRACE=full
+    command:
+      - --alice
+      - --blocks-pruning=archive 
+      - --chain=/polkadot/chainspec.json 
+      - --force-authoring 
+      - --name=PolkaDocker 
+      - --rpc-cors=all 
+      - --rpc-external 
+      - --rpc-methods=unsafe 
+      - --state-pruning=archive 
+      - --validator 
+      - --ws-external
     ports:
       # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
