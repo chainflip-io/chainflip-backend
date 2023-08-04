@@ -80,6 +80,7 @@ impl_runtime_safe_mode! {
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
+	reputation: pallet_cf_reputation::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 

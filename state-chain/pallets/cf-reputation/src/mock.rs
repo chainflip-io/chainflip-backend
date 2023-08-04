@@ -1,6 +1,6 @@
 use super::*;
-use crate as pallet_cf_reputation;
-use cf_traits::{impl_mock_chainflip, AccountRoleRegistry, Slashing};
+use crate::{self as pallet_cf_reputation, PalletSafeMode};
+use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, Slashing};
 use frame_support::{construct_runtime, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -144,7 +144,10 @@ impl Config for Test {
 	type Slasher = MockSlasher;
 	type WeightInfo = ();
 	type MaximumAccruableReputation = MaximumAccruableReputation;
+	type SafeMode = MockRuntimeSafeMode;
 }
+
+impl_mock_runtime_safe_mode! { reputation: PalletSafeMode }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
