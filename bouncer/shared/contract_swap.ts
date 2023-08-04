@@ -123,7 +123,6 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  let receipt;
   await getNextEthNonce((nextNonce) =>
     approveVault(
       {
@@ -139,9 +138,4 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       },
     ),
   );
-
-  if (receipt === undefined) {
-    return receipt;
-  }
-  return receipt;
 }
