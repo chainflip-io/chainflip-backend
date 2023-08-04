@@ -1,7 +1,9 @@
 import Web3 from 'web3';
 import { signAndSendTxEth } from './send_eth';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
 import { amountToFineAmount } from './utils';
+import { getErc20abi } from './eth_abis';
+
+const erc20abi = await getErc20abi();
 
 export async function sendErc20(
   destinationAddress: string,
