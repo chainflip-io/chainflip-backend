@@ -99,6 +99,7 @@ where
 	let eth_safe_vault_source = eth_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
+		.logging("safe block produced")
 		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await);
 

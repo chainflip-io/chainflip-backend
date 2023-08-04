@@ -59,6 +59,7 @@ where
 	btc_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
+		.logging("safe block produced")
 		.then(move |header| {
 			let btc_client = btc_client.clone();
 			async move {

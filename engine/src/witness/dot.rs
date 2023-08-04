@@ -154,6 +154,7 @@ where
 	DotFinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.strictly_monotonic()
+		.logging("finalised block produced")
 		.then(|header| async move {
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
