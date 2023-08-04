@@ -55,7 +55,7 @@ mod test {
 
 	#[test]
 	fn test_decoding() {
-		assert_eq!(parse_hex_bytes("0x00").unwrap(), b"00");
+		assert_eq!(&parse_hex_bytes("0x00").unwrap(), &[0b00]);
 		assert_eq!(parse_hex_bytes("").unwrap(), b"");
 		assert_err!(parse_hex_bytes("abc"));
 	}
