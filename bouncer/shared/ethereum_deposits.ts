@@ -38,7 +38,7 @@ async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
   await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EthereumDepositTest2]`);
 }
 
-async function testMultipleDeposits(destAsset: Asset) {
+async function testSuccessiveDeposits(destAsset: Asset) {
   let stopObserving = false;
   const sourceAsset = 'ETH';
 
@@ -75,9 +75,8 @@ async function testMultipleDeposits(destAsset: Asset) {
   await observingSwapScheduled;
 }
 
-// Simple double swap test via smart contract call. No need to check all the balances, that's why we have the other tests
 // Not supporting BTC to not add more unnecessary complexity with address encoding.
-async function testTxMultipleSwaps(srcAsset: Asset, dstAsset: Asset) {
+async function testTxMultipleContractSwaps(srcAsset: Asset, dstAsset: Asset) {
   async function test(sourceAsset: Asset, destAsset: Asset) {
     const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
     const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
@@ -150,15 +149,15 @@ export async function testEthereumDeposits() {
   ]);
 
   const duplicatedDepositTest = Promise.all([
-    testMultipleDeposits('DOT'),
-    testMultipleDeposits('BTC'),
-    testMultipleDeposits('FLIP'),
-    testMultipleDeposits('USDC'),
+    testSuccessiveDeposits('DOT'),
+    testSuccessiveDeposits('BTC'),
+    testSuccessiveDeposits('FLIP'),
+    testSuccessiveDeposits('USDC'),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
-    testTxMultipleSwaps('ETH', 'DOT'),
-    testTxMultipleSwaps('ETH', 'FLIP'),
+    testTxMultipleContractSwaps('ETH', 'DOT'),
+    testTxMultipleContractSwaps('ETH', 'FLIP'),
   ]);
 
   await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
