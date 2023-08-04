@@ -135,6 +135,7 @@ where
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
+		.logging("chain tracking")
 		.spawn(scope);
 
 	let epoch_source = epoch_source
@@ -275,8 +276,9 @@ where
 				}
 				}
 			}
-			)
-			.continuous("Polkadot".to_string(), db)
+		)
+		.continuous("Polkadot".to_string(), db)
+		.logging("witnessing")
 		.spawn(scope);
 
 	Ok(())

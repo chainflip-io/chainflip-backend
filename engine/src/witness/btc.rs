@@ -53,6 +53,7 @@ where
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
+		.logging("chain tracking")
 		.spawn(scope);
 
 	let btc_client = btc_client.clone();
@@ -132,6 +133,7 @@ where
 			}
 		})
 		.continuous("Bitcoin".to_string(), db)
+		.logging("witnessing")
 		.spawn(scope);
 
 	Ok(())
