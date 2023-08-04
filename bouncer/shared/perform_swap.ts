@@ -111,17 +111,17 @@ export async function doPerformSwap(
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
 
-  await (senderType === SenderType.Address
-    ? send(sourceAsset, depositAddress)
-    : sendViaCfTester(sourceAsset, depositAddress));
-
-  console.log(`${tag} Funded the address`);
-
-  await swapScheduledHandle;
-
-  console.log(`${tag} Waiting for balance to update`);
-
   try {
+    await (senderType === SenderType.Address
+      ? send(sourceAsset, depositAddress)
+      : sendViaCfTester(sourceAsset, depositAddress));
+
+    console.log(`${tag} Funded the address`);
+
+    await swapScheduledHandle;
+
+    console.log(`${tag} Waiting for balance to update`);
+
     const [newBalance] = await Promise.all([
       observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,

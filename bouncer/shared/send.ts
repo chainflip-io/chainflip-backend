@@ -38,6 +38,10 @@ export async function sendViaCfTester(asset: Asset, toAddress: string, amount?: 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
 
+  if ((await web3.eth.getCode(cfTesterAddress)) === '0x') {
+    throw new Error('CFTester not deployed');
+  }
+
   let txData;
   let value = '0';
   switch (asset) {
