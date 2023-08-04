@@ -18,6 +18,7 @@ import {
   decodeDotAddressForContract,
   defaultAssetAmounts,
   amountToFineAmount,
+  runWithTimeout,
 } from '../shared/utils';
 import { signAndSendTxEth } from './send_eth';
 import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
@@ -75,65 +76,69 @@ async function testMultipleDeposits(destAsset: Asset) {
 }
 
 // Simple double swap test via smart contract call. No need to check all the balances, that's why we have the other tests
-// Not supporting BTC to not add more unnecessary complexity.
-async function testTxMultipleSwaps(sourceAsset: Asset, destAsset: Asset) {
-  const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-  const web3 = new Web3(ethEndpoint);
+// Not supporting BTC to not add more unnecessary complexity with address encoding.
+async function testTxMultipleSwaps(srcAsset: Asset, dstAsset: Asset) {
+  async function test(sourceAsset: Asset, destAsset: Asset) {
+    const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
+    const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+    const web3 = new Web3(ethEndpoint);
 
-  // performDoubleContractSwap
-  const cfTesterAddress = getEthContractAddress('CFTESTER');
-  const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
-  const amount = BigInt(
-    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset]),
-  );
-  const numSwaps = 2;
-  const txData = cfTesterContract.methods
-    .multipleContractSwap(
-      chainContractIds[assetChains[destAsset]],
-      destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
-      assetContractIds[destAsset],
-      getEthContractAddress(sourceAsset),
-      amount,
-      '0x',
-      numSwaps,
-    )
-    .encodeABI();
-  const receipt = await signAndSendTxEth(
-    cfTesterAddress,
-    (amount * BigInt(numSwaps)).toString(),
-    txData,
-  );
+    const cfTesterAddress = getEthContractAddress('CFTESTER');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
+    const amount = BigInt(
+      amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset]),
+    );
+    const numSwaps = 2;
+    const txData = cfTesterContract.methods
+      .multipleContractSwap(
+        chainContractIds[assetChains[destAsset]],
+        destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
+        assetContractIds[destAsset],
+        getEthContractAddress(sourceAsset),
+        amount,
+        '0x',
+        numSwaps,
+      )
+      .encodeABI();
+    const receipt = await signAndSendTxEth(
+      cfTesterAddress,
+      (amount * BigInt(numSwaps)).toString(),
+      txData,
+    );
 
-  let eventCounter = 0;
-  let stopObserve = false;
+    let eventCounter = 0;
+    let stopObserve = false;
 
-  const observingEvent = observeEvent(
-    'swapping:SwapScheduled',
-    await getChainflipApi(),
-    (event) => {
-      if ('Vault' in event.data.origin) {
-        if (event.data.origin.Vault.txHash === receipt.transactionHash) {
-          if (eventCounter++ >= 1) {
+    const observingEvent = observeEvent(
+      'swapping:SwapScheduled',
+      await getChainflipApi(),
+      (event) => {
+        if (
+          'Vault' in event.data.origin &&
+          event.data.origin.Vault.txHash === receipt.transactionHash
+        ) {
+          if (++eventCounter > 1) {
             throw new Error('Multiple swap scheduled events detected');
           }
         }
-      }
-      return false;
-    },
-    () => stopObserve,
-  );
+        return false;
+      },
+      () => stopObserve,
+    );
 
-  while (eventCounter === 0) {
-    await sleep(2000);
+    while (eventCounter === 0) {
+      await sleep(2000);
+    }
+    console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
+
+    // Wait some more time after the first event to ensure another one is not emited
+    await sleep(30000);
+
+    stopObserve = true;
+    await observingEvent;
   }
-  console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
-
-  // After first event is found, wait some more time to ensure another one is not emited
-  await sleep(30000);
-
-  stopObserve = true;
-  await observingEvent;
+  runWithTimeout(test(srcAsset, dstAsset), 180000);
 }
 
 export async function testEthereumDeposits() {
