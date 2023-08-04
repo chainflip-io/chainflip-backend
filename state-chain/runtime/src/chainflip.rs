@@ -166,11 +166,17 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn is_valid_for_rebroadcast(
-		_call: &EthereumApi<EthEnvironment>,
+		call: &EthereumApi<EthEnvironment>,
 		_payload: &<Ethereum as ChainCrypto>::Payload,
+		current_key: &<Ethereum as ChainCrypto>::AggKey,
+		signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Nothing to validate for Ethereum
-		true
+		// Check if signature is valid
+		<Ethereum as ChainCrypto>::verify_threshold_signature(
+			current_key,
+			&call.threshold_signature_payload(),
+			signature,
+		)
 	}
 }
 
@@ -189,8 +195,17 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<Polkadot as ChainCrypto>::Payload,
+		current_key: &<Polkadot as ChainCrypto>::AggKey,
+		signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		&call.threshold_signature_payload() == payload
+		// First check if the payload is still valid. If it is, check if the signature is still
+		// valid
+		(&call.threshold_signature_payload() == payload) &&
+			<Polkadot as ChainCrypto>::verify_threshold_signature(
+				current_key,
+				&call.threshold_signature_payload(),
+				signature,
+			)
 	}
 }
 
@@ -210,10 +225,16 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	fn is_valid_for_rebroadcast(
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<Bitcoin as ChainCrypto>::Payload,
+		_current_key: &<Bitcoin as ChainCrypto>::AggKey,
+		_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Todo: The transaction wont be valid for rebroadcast as soon as we transition to new epoch
-		// since the input utxo set will change and the whole apicall would be invalid. This case
-		// will be handled later
+		// The payload for Bitcoin will never change and so it doesnt need to be checked here.
+		// Moreover, since the Bitcoin transactions are chained together where the next transaction
+		// is based on the success of the previous one, we should never have a situation where the
+		// signature for a tx is not valid. This is because when we rotate, the rotation tx (sending
+		// funds to new vault) will only execute onchain when all the previous pending txs have gone
+		// through and so once we rotate to new vault, epoch, there should be no pending txs.
+		// Therefore, we don't have to check anything here and just rebroadcast.
 		true
 	}
 }
