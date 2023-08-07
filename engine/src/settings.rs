@@ -510,7 +510,7 @@ impl ArbOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
 		insert_command_line_option(map, "arb.ws_node_endpoint", &self.arb_ws_node_endpoint);
 		insert_command_line_option(map, "arb.http_node_endpoint", &self.arb_http_node_endpoint);
-		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.arb_private_key_file);
+		insert_command_line_option_path(map, ARB_PRIVATE_KEY_FILE, &self.arb_private_key_file);
 	}
 }
 

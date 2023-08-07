@@ -14,8 +14,8 @@ signing_key_file = "signing_key_file"
 private_key_file = "eth_private_key_file"
 
 [arb]
-# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
-private_key_file = "./localnet/init/keys/eth_private_key_file"
+# Use the same key as Ethereum, as arbitrum is EVM compatible.
+private_key_file = "eth_private_key_file"
 
 [health_check]
 hostname = "0.0.0.0"
