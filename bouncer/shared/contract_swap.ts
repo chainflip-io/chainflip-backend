@@ -131,7 +131,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       },
       {
         signer: wallet,
-        nextNonce,
+        nonce: nextNonce,
         network: 'localnet',
         vaultContractAddress: getEthContractAddress('VAULT'),
         srcTokenContractAddress: getEthContractAddress(srcAsset),
