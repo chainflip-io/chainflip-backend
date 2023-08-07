@@ -56,13 +56,13 @@ where
 		.context("Failed to get KeyManager address from SC")?
 		.into();
 
-	let vault_address = state_chain_client
-		.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-		)
-		.await
-		.context("Failed to get Vault contract address from SC")?
-		.into();
+	// let vault_address = state_chain_client
+	// 	.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
+	// 		state_chain_client.latest_finalized_hash(),
+	// 	)
+	// 	.await
+	// 	.context("Failed to get Vault contract address from SC")?
+	// 	.into();
 
 	let arb_client = EthersRetryRpcClient::new(
 		scope,
@@ -93,35 +93,35 @@ where
 		.logging("KeyManager")
 		.spawn(scope);
 
-	arb_safe_vault_source
-		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.erc20_deposits::<_, _, UsdcEvents>(
-			state_chain_client.clone(),
-			arb_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdc,
-		)
-		.await?
-		.continuous("ArbUSDCDeposits".to_string(), db.clone())
-		.logging("ArbUSDCDeposits")
-		.spawn(scope);
+	// arb_safe_vault_source
+	// 	.clone()
+	// 	.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+	// 	.await
+	// 	.erc20_deposits::<_, _, UsdcEvents>(
+	// 		state_chain_client.clone(),
+	// 		arb_client.clone(),
+	// 		cf_primitives::chains::assets::arb::Asset::ArbUsdc,
+	// 	)
+	// 	.await?
+	// 	.continuous("ArbUSDCDeposits".to_string(), db.clone())
+	// 	.logging("ArbUSDCDeposits")
+	// 	.spawn(scope);
 
-	arb_safe_vault_source
-		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.ethereum_deposits(state_chain_client.clone(), arb_client.clone())
-		.await
-		.continuous("ArbEthereumDeposits".to_string(), db.clone())
-		.logging("ArbEthereumDeposits")
-		.spawn(scope);
+	// arb_safe_vault_source
+	// 	.clone()
+	// 	.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+	// 	.await
+	// 	.ethereum_deposits(state_chain_client.clone(), arb_client.clone())
+	// 	.await
+	// 	.continuous("ArbEthereumDeposits".to_string(), db.clone())
+	// 	.logging("ArbEthereumDeposits")
+	// 	.spawn(scope);
 
-	arb_safe_vault_source
-		.vault_witnessing(state_chain_client.clone(), arb_client.clone(), vault_address)
-		.continuous("Vault".to_string(), db)
-		.logging("Vault")
-		.spawn(scope);
+	// arb_safe_vault_source
+	// 	.vault_witnessing(state_chain_client.clone(), arb_client.clone(), vault_address)
+	// 	.continuous("Vault".to_string(), db)
+	// 	.logging("Vault")
+	// 	.spawn(scope);
 
 	Ok(())
 }

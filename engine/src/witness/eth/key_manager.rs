@@ -9,7 +9,7 @@ use ethers::{
 	types::{Bloom, TransactionReceipt},
 };
 use sp_core::{H160, H256};
-use state_chain_runtime::EthereumInstance;
+use state_chain_runtime::PalletInstanceAlias;
 use tracing::{info, trace};
 
 use super::{
@@ -71,40 +71,48 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					match event.event_parameters {
 						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => {
 							state_chain_client
-									.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
-											pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
+											pallet_cf_vaults::Call::<
+												_,
+												<Inner::Chain as PalletInstanceAlias>::Instance,
+											>::vault_key_rotated {
 												block_number: header.index,
 												tx_id: event.tx_hash,
 											}
 											.into(),
 										),
 										epoch_index: epoch.index,
-									})
-									.await;
+									},
+								)
+								.await;
 						},
 						KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 							new_agg_key,
 							..
 						}) => {
 							state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(
-												pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated_externally {
-													new_public_key:
-														cf_chains::eth::AggKey::from_pubkey_compressed(
-															new_agg_key.serialize(),
-														),
-													block_number: header.index,
-													tx_id: event.tx_hash,
-												}
-												.into(),
-											),
-											epoch_index: epoch.index,
-										},
-									)
-									.await;
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call: Box::new(
+											pallet_cf_vaults::Call::<
+												_,
+												<Inner::Chain as PalletInstanceAlias>::Instance,
+											>::vault_key_rotated_externally {
+												new_public_key:
+													cf_chains::eth::AggKey::from_pubkey_compressed(
+														new_agg_key.serialize(),
+													),
+												block_number: header.index,
+												tx_id: event.tx_hash,
+											}
+											.into(),
+										),
+										epoch_index: epoch.index,
+									},
+								)
+								.await;
 						},
 						KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
 							sig_data,
@@ -131,23 +139,31 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
 							state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(
-												pallet_cf_broadcast::Call::<_, EthereumInstance>::transaction_succeeded {
-													tx_out_id: SchnorrVerificationComponents {
-														s: sig_data.sig.into(),
-														k_times_g_address: sig_data.k_times_g_address.into(),
-													},
-													signer_id: from.into(),
-													tx_fee: TransactionFee { effective_gas_price, gas_used },
-												}
-												.into(),
-											),
-											epoch_index: epoch.index,
-										},
-									)
-									.await;
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call: Box::new(
+											pallet_cf_broadcast::Call::<
+												_,
+												<Inner::Chain as PalletInstanceAlias>::Instance,
+											>::transaction_succeeded {
+												tx_out_id: SchnorrVerificationComponents {
+													s: sig_data.sig.into(),
+													k_times_g_address: sig_data
+														.k_times_g_address
+														.into(),
+												},
+												signer_id: from.into(),
+												tx_fee: TransactionFee {
+													effective_gas_price,
+													gas_used,
+												},
+											}
+											.into(),
+										),
+										epoch_index: epoch.index,
+									},
+								)
+								.await;
 						},
 						KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter {
 							message,
