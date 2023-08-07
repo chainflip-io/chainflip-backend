@@ -12,7 +12,7 @@
 // swapping_swapsEnabled, swapping_withdrawalsEnabled, swapping_depositsEnabled, swapping_brokerRegistrationEnabled,
 // pools_mintingRangeOrderEnabled, pools_mintingLimitOrderEnabled, pools_burningRangeOrderEnabled,
 // pools_burningLimitOrderEnabled, reputation_reportingEnabled, liquidityProvider_depositEnabled,
-// liquidityProvider_withdrawalEnabled, validator_authorityRotationEnabled
+// liquidityProvider_withdrawalEnabled, validator_authorityRotationEnabled, vaults_slashingEnabled
 //
 // For example: ./commands/safe_mode.ts amber swapping_swapsEnabled,swapping_withdrawalsEnabled
 

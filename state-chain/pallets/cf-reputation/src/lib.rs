@@ -395,26 +395,27 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	type Offence = T::Offence;
 
 	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
-		if T::SafeMode::get().reporting_enabled {
-			let offence = offence.into();
-			let penalty = Self::resolve_penalty_for(offence);
+		if !T::SafeMode::get().reporting_enabled {
+			return
+		}
+		let offence = offence.into();
+		let penalty = Self::resolve_penalty_for(offence);
 
-			if penalty.reputation > 0 {
-				for validator_id in validators {
-					Reputations::<T>::mutate(validator_id, |rep| {
-						rep.deduct_reputation(penalty.reputation);
-					});
-					Self::deposit_event(Event::OffencePenalty {
-						offender: validator_id.clone(),
-						offence,
-						penalty: penalty.reputation,
-					});
-				}
+		if penalty.reputation > 0 {
+			for validator_id in validators {
+				Reputations::<T>::mutate(validator_id, |rep| {
+					rep.deduct_reputation(penalty.reputation);
+				});
+				Self::deposit_event(Event::OffencePenalty {
+					offender: validator_id.clone(),
+					offence,
+					penalty: penalty.reputation,
+				});
 			}
+		}
 
-			if penalty.suspension > Zero::zero() {
-				Self::suspend_all(validators, &offence, penalty.suspension);
-			}
+		if penalty.suspension > Zero::zero() {
+			Self::suspend_all(validators, &offence, penalty.suspension);
 		}
 	}
 

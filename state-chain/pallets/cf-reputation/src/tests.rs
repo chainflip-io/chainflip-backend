@@ -1,5 +1,5 @@
 use crate::{mock::*, *};
-use cf_traits::{offence_reporting::*, EpochInfo, QualifyNode};
+use cf_traits::{offence_reporting::*, EpochInfo, QualifyNode, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
@@ -262,6 +262,23 @@ fn forgiveness() {
 	});
 }
 
+#[test]
+fn dont_report_in_safe_mode() {
+	new_test_ext().execute_with(|| {
+		let marcello = 1;
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			reputation: crate::PalletSafeMode { reporting_enabled: false },
+		});
+		ReputationPallet::report_many(AllOffences::NotLockingYourComputer, &[marcello]);
+		assert_eq!(ReputationPallet::reputation(marcello).reputation_points, 0);
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			reputation: crate::PalletSafeMode { reporting_enabled: true },
+		});
+		ReputationPallet::report_many(AllOffences::NotLockingYourComputer, &[marcello]);
+		assert!(ReputationPallet::reputation(marcello).reputation_points < 0);
+	});
+}
+
 #[cfg(test)]
 mod reporting_adapter_test {
 	use super::*;
@@ -422,5 +439,20 @@ fn only_authorities_should_appear_in_network_state() {
 			1,
 			"We should have one node"
 		);
+	});
+}
+
+#[test]
+fn in_safe_mode_you_dont_lose_reputation_for_being_offline() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(BOB)));
+		assert!(ReputationPallet::is_qualified(&BOB));
+		let reputation = reputation_points(&BOB);
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			reputation: PalletSafeMode { reporting_enabled: false },
+		});
+		advance_by_hearbeat_intervals(3);
+		assert!(!ReputationPallet::is_qualified(&BOB));
+		assert_eq!(reputation, reputation_points(&BOB));
 	});
 }

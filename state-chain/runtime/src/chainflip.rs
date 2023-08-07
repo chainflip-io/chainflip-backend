@@ -81,6 +81,7 @@ impl_runtime_safe_mode! {
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
+	vault: pallet_cf_vaults::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
