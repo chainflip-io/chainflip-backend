@@ -1,3 +1,4 @@
+mod arb;
 mod btc;
 pub mod common;
 mod dot;

@@ -45,6 +45,16 @@ where
 	)
 	.await?;
 
+	super::arb::start(
+		scope,
+		&settings.arb,
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	)
+	.await?;
+
 	super::btc::start(
 		scope,
 		&settings.btc,
