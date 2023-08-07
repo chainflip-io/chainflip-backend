@@ -155,8 +155,9 @@ impl ReconnectContext {
 	}
 
 	fn reset(&mut self, account_id: &AccountId) {
-		tracing::debug!("Resetting reconnection delay for {}", account_id);
-		self.reconnect_delays.remove(account_id);
+		if self.reconnect_delays.remove(account_id).is_some() {
+			tracing::debug!("Reconnection delay for {} is reset", account_id);
+		}
 	}
 }
 
@@ -365,6 +366,10 @@ impl P2PContext {
 		if self.peer_infos.remove(&account_id).is_none() {
 			error!("Failed to remove peer info for unknown peer: {account_id}");
 		}
+
+		// There may or may not be a reconnection delay for
+		// this node, but we reset it just in case:
+		self.reconnect_context.reset(&account_id);
 	}
 
 	/// Reconnect to peer assuming that its peer info hasn't changed
