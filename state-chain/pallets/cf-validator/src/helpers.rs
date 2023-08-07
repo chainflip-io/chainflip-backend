@@ -44,6 +44,8 @@ pub fn select_sharing_participants<
 
 #[cfg(test)]
 mod select_sharing_participants_tests {
+	use cf_utilities::success_threshold_from_share_count;
+
 	use super::*;
 
 	type ValidatorId = u32;
@@ -69,8 +71,10 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::from([6, 7, 8, 9, 10]);
 
+		let threshold = success_threshold_from_share_count(old_authorities.len() as u32);
+
 		let sharing_participants =
-			select_sharing_participants(1, old_authorities, &new_authorities, 1).unwrap();
+			select_sharing_participants(threshold, old_authorities, &new_authorities, 1).unwrap();
 
 		assert!(new_authorities.is_disjoint(&sharing_participants));
 	}
@@ -83,8 +87,11 @@ mod select_sharing_participants_tests {
 		let new_authorities =
 			BTreeSet::<ValidatorId>::from_iter(INTERSECTING_SET.iter().chain(&[6, 7]).cloned());
 
+		let threshold =
+			cf_utilities::success_threshold_from_share_count(old_authorities.len() as u32);
+
 		let sharing_participants =
-			select_sharing_participants(1, old_authorities, &new_authorities, 1).unwrap();
+			select_sharing_participants(threshold, old_authorities, &new_authorities, 1).unwrap();
 
 		assert!(INTERSECTING_SET.iter().all(|x| sharing_participants.contains(x)));
 	}
@@ -94,8 +101,11 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 
+		let threshold =
+			cf_utilities::success_threshold_from_share_count(old_authorities.len() as u32);
+
 		assert_eq!(
-			select_sharing_participants(3, old_authorities, &new_authorities, 1)
+			select_sharing_participants(threshold, old_authorities, &new_authorities, 1)
 				.unwrap()
 				.len(),
 			4
@@ -107,12 +117,14 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 9, 10]);
 
+		let threshold = success_threshold_from_share_count(old_authorities.len() as u32);
+
 		let sharing_participants =
-			select_sharing_participants(7, old_authorities, &new_authorities, 1).unwrap();
+			select_sharing_participants(threshold, old_authorities, &new_authorities, 1).unwrap();
 
 		// All thew new authorities are shared. There should be another 2 from the old authorities.
-		assert_eq!(sharing_participants.len(), 7);
-		assert!(new_authorities.iter().all(|x| sharing_participants.contains(x)));
+		assert_eq!(sharing_participants.len(), threshold as usize);
+		assert!(new_authorities.is_subset(&sharing_participants))
 	}
 
 	#[test]
