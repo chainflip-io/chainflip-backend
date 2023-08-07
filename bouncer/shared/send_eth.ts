@@ -55,6 +55,7 @@ export async function signAndSendTxEth(to: string, value?: string, data?: string
       ' blockHash: ' +
       receipt.blockHash,
   );
+  return receipt;
 }
 
 export async function sendEth(ethereumAddress: string, ethAmount: string) {

@@ -1,7 +1,28 @@
-import { Asset } from '@chainflip-io/cli';
+import Web3 from 'web3';
+import {
+  Asset,
+  chainContractIds,
+  assetChains,
+  assetContractIds,
+  assetDecimals,
+} from '@chainflip-io/cli';
 import { doPerformSwap } from '../shared/perform_swap';
-import { testSwap } from '../shared/swapping';
-import { observeFetch, observeBadEvents, sleep } from '../shared/utils';
+import { prepareSwap, testSwap } from '../shared/swapping';
+import {
+  observeFetch,
+  observeBadEvents,
+  sleep,
+  observeEvent,
+  getChainflipApi,
+  getEthContractAddress,
+  decodeDotAddressForContract,
+  defaultAssetAmounts,
+  amountToFineAmount,
+} from '../shared/utils';
+import { signAndSendTxEth } from './send_eth';
+import { getCFTesterAbi } from './eth_abis';
+
+const cfTesterAbi = await getCFTesterAbi();
 
 async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
@@ -18,7 +39,7 @@ async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
   await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EthereumDepositTest2]`);
 }
 
-async function testDuplicatedDeposit(destAsset: Asset) {
+async function testSuccessiveDeposits(destAsset: Asset) {
   let stopObserving = false;
   const sourceAsset = 'ETH';
 
@@ -55,6 +76,68 @@ async function testDuplicatedDeposit(destAsset: Asset) {
   await observingSwapScheduled;
 }
 
+// Not supporting BTC to avoid adding more unnecessary complexity with address encoding.
+async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset) {
+  const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
+  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+  const web3 = new Web3(ethEndpoint);
+
+  const cfTesterAddress = getEthContractAddress('CFTESTER');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
+  const amount = BigInt(
+    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset]),
+  );
+  const numSwaps = 2;
+  const txData = cfTesterContract.methods
+    .multipleContractSwap(
+      chainContractIds[assetChains[destAsset]],
+      destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
+      assetContractIds[destAsset],
+      getEthContractAddress(sourceAsset),
+      amount,
+      '0x',
+      numSwaps,
+    )
+    .encodeABI();
+  const receipt = await signAndSendTxEth(
+    cfTesterAddress,
+    (amount * BigInt(numSwaps)).toString(),
+    txData,
+  );
+
+  let eventCounter = 0;
+  let stopObserve = false;
+
+  const observingEvent = observeEvent(
+    'swapping:SwapScheduled',
+    await getChainflipApi(),
+    (event) => {
+      if (
+        'Vault' in event.data.origin &&
+        event.data.origin.Vault.txHash === receipt.transactionHash
+      ) {
+        if (++eventCounter > 1) {
+          throw new Error('Multiple swap scheduled events detected');
+        }
+      }
+      return false;
+    },
+    () => stopObserve,
+  );
+
+  while (eventCounter === 0) {
+    await sleep(2000);
+  }
+  console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
+
+  // Wait some more time after the first event to ensure another one is not emited
+  await sleep(30000);
+
+  stopObserve = true;
+  await observingEvent;
+}
+
 export async function testEthereumDeposits() {
   console.log('=== Testing Deposits ===');
 
@@ -64,13 +147,18 @@ export async function testEthereumDeposits() {
   ]);
 
   const duplicatedDepositTest = Promise.all([
-    testDuplicatedDeposit('DOT'),
-    testDuplicatedDeposit('BTC'),
-    testDuplicatedDeposit('FLIP'),
-    testDuplicatedDeposit('USDC'),
+    testSuccessiveDeposits('DOT'),
+    testSuccessiveDeposits('BTC'),
+    testSuccessiveDeposits('FLIP'),
+    testSuccessiveDeposits('USDC'),
   ]);
 
-  await Promise.all([depositTests, duplicatedDepositTest]);
+  const multipleTxSwapsTest = Promise.all([
+    testTxMultipleContractSwaps('ETH', 'DOT'),
+    testTxMultipleContractSwaps('ETH', 'FLIP'),
+  ]);
+
+  await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
 
   console.log('=== Deposit Tests completed ===');
 }
