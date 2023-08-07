@@ -103,8 +103,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.1
 					.into_iter()
 					.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
-					.map(|deposit_channel| deposit_channel.deposit_channel.address)
-					.collect::<HashSet<_>>();
+					.map(|deposit_channel| deposit_channel.deposit_channel.address.into())
+					.collect::<HashSet<H160>>();
 
 				let deposit_witnesses = events_at_block::<Events, _>(
 					Header {
@@ -122,7 +122,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					match event.event_parameters.into() {
 						Erc20Events::TransferFilter{to, value, from: _ } if addresses.contains(&to) =>
 							Some(DepositWitness {
-								deposit_address: to,
+								deposit_address: to.into(),
 								amount: value.try_into().expect(
 									"Any ERC20 tokens we support should have amounts that fit into a u128",
 								),

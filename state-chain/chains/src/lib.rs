@@ -34,6 +34,7 @@ pub use frame_support::traits::Get;
 pub mod benchmarking_value;
 
 pub mod any;
+pub mod arb;
 pub mod btc;
 pub mod dot;
 pub mod eth;

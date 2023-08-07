@@ -98,8 +98,9 @@ impl WitnessDataExtraction for RuntimeCall {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{RuntimeOrigin, Validator, Witnesser};
+	use crate::{ArbitrumInstance, RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
+		arb::ArbitrumTrackedData,
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
 		eth::EthereumTrackedData,
@@ -153,6 +154,16 @@ mod tests {
 							median_tip: fee.into(),
 							runtime_version: Default::default(),
 						},
+					},
+				}),
+			ForeignChain::Arbitrum =>
+				RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					ArbitrumInstance,
+				>::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: BLOCK_HEIGHT,
+						tracked_data: ArbitrumTrackedData { base_fee: BASE_FEE },
 					},
 				}),
 		}

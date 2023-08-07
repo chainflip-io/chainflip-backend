@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::Ethereum;
+use cf_chains::{eth::EthereumAddress, Ethereum, ForeignChainAddress};
 use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
@@ -23,7 +23,7 @@ use super::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::{address::EncodedAddress, CcmChannelMetadata, CcmDepositMetadata};
-use cf_primitives::{Asset, EthereumAddress, ForeignChain};
+use cf_primitives::{Asset, ForeignChain};
 use ethers::prelude::*;
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
@@ -40,7 +40,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Sen
 	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
 		self.base_rpc_client
 			.raw_rpc_client
-			.cf_eth_asset(None, token_address)
+			.cf_eth_asset(None, token_address.0)
 			.await
 			.map_err(Into::into)
 	}
@@ -111,7 +111,7 @@ where
 			cf_parameters: _,
 		}) => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
 			from: state_chain_client
-				.asset(src_token.0)
+				.asset(src_token.into())
 				.await
 				.map_err(|e| {
 					CallFromEventError::Network(anyhow!(
@@ -146,7 +146,7 @@ where
 			)?,
 			deposit_metadata: CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
-				source_address: Some(sender.into()),
+				source_address: Some(ForeignChainAddress::Eth(sender.into())),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
 					gas_budget: try_into_primitive(gas_amount)?,
@@ -167,7 +167,7 @@ where
 			cf_parameters,
 		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: state_chain_client
-				.asset(src_token.0)
+				.asset(src_token.into())
 				.await
 				.map_err(|e| {
 					CallFromEventError::Network(anyhow!(
@@ -183,7 +183,7 @@ where
 			)?,
 			deposit_metadata: CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
-				source_address: Some(sender.into()),
+				source_address: Some(ForeignChainAddress::Eth(sender.into())),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
 					gas_budget: try_into_primitive(gas_amount)?,

@@ -15,8 +15,8 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_validator::RotationPhase;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, Authorship, BitcoinInstance, EthereumInstance, PolkadotInstance, RuntimeEvent,
-	RuntimeOrigin, Weight,
+	AccountRoles, ArbitrumInstance, Authorship, BitcoinInstance, EthereumInstance,
+	PolkadotInstance, RuntimeEvent, RuntimeOrigin, Weight,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -104,7 +104,7 @@ impl Cli {
 	pub fn redeem(
 		account: &NodeId,
 		amount: RedemptionAmount<FlipBalance>,
-		eth_address: EthereumAddress,
+		eth_address: EvmAddress,
 	) {
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(account.clone()), amount, eth_address));
 	}
@@ -135,6 +135,7 @@ pub struct Engine {
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+	pub arb_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 }
 
 impl Engine {
@@ -143,6 +144,7 @@ impl Engine {
 		eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 		dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 		btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+		arb_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	) -> Self {
 		Engine {
 			node_id,
@@ -150,6 +152,7 @@ impl Engine {
 			eth_threshold_signer,
 			dot_threshold_signer,
 			btc_threshold_signer,
+			arb_threshold_signer,
 		}
 	}
 
@@ -209,6 +212,7 @@ impl Engine {
 							self.eth_threshold_signer.borrow_mut().use_proposed_key();
 							self.dot_threshold_signer.borrow_mut().use_proposed_key();
 							self.btc_threshold_signer.borrow_mut().use_proposed_key();
+							self.arb_threshold_signer.borrow_mut().use_proposed_key();
 					}
 					RuntimeEvent::EthereumThresholdSigner(
 						// A signature request
@@ -255,6 +259,25 @@ impl Engine {
 									vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].1.clone()))],
 								);
 					}
+
+					RuntimeEvent::ArbitrumThresholdSigner(
+						// A signature request
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+							ceremony_id,
+							key,
+							payload,
+							..
+						}) => {
+
+						// if we unwrap on this, we'll panic, because we will have already succeeded
+						// on a previous submission (all nodes submit this)
+						let _result = state_chain_runtime::ArbitrumThresholdSigner::signature_success(
+							RuntimeOrigin::none(),
+							*ceremony_id,
+							self.arb_threshold_signer.borrow().sign_with_key(*key, payload.as_fixed_bytes()),
+						);
+					}
+
 					RuntimeEvent::Validator(
 						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
 						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
@@ -303,6 +326,15 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
 										block_number: 100,
 										tx_id: [2u8; 32],
+									}.into()),
+									Validator::epoch_index()
+								);
+
+								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
+									RuntimeOrigin::signed(self.node_id.clone()),
+									Box::new(pallet_cf_vaults::Call::<_, ArbitrumInstance>::vault_key_rotated {
+										block_number: 100,
+										tx_id: [3u8; 32].into(),
 									}.into()),
 									Validator::epoch_index()
 								);
@@ -369,6 +401,10 @@ impl Engine {
 						}
 
 				}
+				RuntimeEvent::ArbitrumVault(
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
+						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, ArbitrumInstance>(*ceremony_id, participants, self.arb_threshold_signer.clone(), self.node_id.clone());
+				}
 			);
 		}
 	}
@@ -418,6 +454,7 @@ pub struct Network {
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+	pub arb_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 }
 
 impl Network {
@@ -476,6 +513,7 @@ impl Network {
 				self.eth_threshold_signer.clone(),
 				self.dot_threshold_signer.clone(),
 				self.btc_threshold_signer.clone(),
+				self.arb_threshold_signer.clone(),
 			),
 		);
 	}

@@ -20,7 +20,12 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee_subxt::core::client::ClientT;
-use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+use multisig::{
+	self,
+	bitcoin::BtcSigning,
+	eth::{ArbSigning, EthSigning},
+	polkadot::PolkadotSigning,
+};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
 	make_periodic_tick,
@@ -159,6 +164,8 @@ async fn start(
 		dot_incoming_receiver,
 		btc_outgoing_sender,
 		btc_incoming_receiver,
+		arb_outgoing_sender,
+		arb_incoming_receiver,
 		peer_update_sender,
 		p2p_fut,
 	) = p2p::start(
@@ -222,6 +229,23 @@ async fn start(
 
 	scope.spawn(btc_multisig_client_backend_future);
 
+	let (arb_multisig_client, arb_multisig_client_backend_future) =
+		chainflip_engine::multisig::start_client::<ArbSigning>(
+			state_chain_client.account_id(),
+			KeyStore::new(db.clone()),
+			arb_incoming_receiver,
+			arb_outgoing_sender,
+			state_chain_client
+				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+					state_chain_runtime::Runtime,
+					state_chain_runtime::ArbitrumInstance,
+				>>(state_chain_stream.cache().block_hash)
+				.await
+				.context("Failed to get Arbitrum CeremonyIdCounter from SC")?,
+		);
+
+	scope.spawn(arb_multisig_client_backend_future);
+
 	witness::start::start(
 		scope,
 		&settings,
@@ -237,12 +261,15 @@ async fn start(
 		EthBroadcaster::new(EthRpcClient::new(&settings.eth).await?),
 		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
 		BtcBroadcaster::new(btc_rpc_client.clone()),
+		EthBroadcaster::new(EthRpcClient::new(&settings.arb).await?),
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,
+		arb_multisig_client,
 		peer_update_sender,
 	));
 
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+
 	Ok(())
 }

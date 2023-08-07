@@ -10,7 +10,7 @@ use super::{
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
 use anyhow::Context;
-use cf_chains::{eth::ParityBit, ChainCrypto, Ethereum};
+use cf_chains::{eth::ParityBit, Arbitrum, ChainCrypto, Ethereum};
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
@@ -38,8 +38,20 @@ impl SignatureToThresholdSignature<Ethereum> for Vec<EthSchnorrSignature> {
 	}
 }
 
+impl SignatureToThresholdSignature<Arbitrum> for Vec<EthSchnorrSignature> {
+	fn to_threshold_signature(&self) -> <Arbitrum as ChainCrypto>::ThresholdSignature {
+		self.iter()
+			.map(|s| s.clone().into())
+			.next()
+			.expect("Exactly one signature for Arbitrum")
+	}
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct EthSigning {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ArbSigning {}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct SigningPayload(pub [u8; 32]);
@@ -55,8 +67,7 @@ impl AsRef<[u8]> for SigningPayload {
 		&self.0
 	}
 }
-
-/// Ethereum crypto scheme (as defined by the Key Manager contract)
+/// crypto scheme for Ethereum and EVM chains (as defined by the Key Manager contract)
 #[derive(Clone, Debug, PartialEq)]
 pub struct EvmCryptoScheme;
 
@@ -65,6 +76,12 @@ impl ChainSigning for EthSigning {
 	type Chain = cf_chains::Ethereum;
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
+}
+impl ChainSigning for ArbSigning {
+	type CryptoScheme = EvmCryptoScheme;
+	type Chain = cf_chains::Arbitrum;
+	const NAME: &'static str = "Arbitrum";
+	const CHAIN_TAG: ChainTag = ChainTag::Arbitrum;
 }
 impl CryptoScheme for EvmCryptoScheme {
 	type Point = Point;

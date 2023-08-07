@@ -5,10 +5,11 @@ use crate::{
 	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, eth::EthereumFetchId, CcmChannelMetadata, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	address::AddressConverter,
+	eth::{EthereumAddress, EthereumFetchId},
+	CcmChannelMetadata, DepositChannel, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
-use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
+use cf_primitives::{chains::assets::eth, ChannelId, EvmAddress, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
@@ -22,10 +23,9 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
 };
-use sp_core::H160;
 
-const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
-const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
+const ALICE_ETH_ADDRESS: EvmAddress = [100u8; 20];
+const BOB_ETH_ADDRESS: EvmAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 const EXPIRY_BLOCK: u64 = 6;
@@ -89,7 +89,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		let asset = ETH_ETH;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02],
 				gas_budget: 1_000,
@@ -480,11 +480,11 @@ fn can_process_ccm_deposit() {
 #[test]
 fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
-		let destination_address: H160 = [0x01; 20].into();
+		let destination_address: EthereumAddress = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02],
 				gas_budget: 1_000,
@@ -508,8 +508,8 @@ fn can_egress_ccm() {
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
 				cf_parameters: vec![],
+				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				source_chain: ForeignChain::Ethereum,
-				source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -530,7 +530,7 @@ fn can_egress_ccm() {
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
-				to: destination_address
+				to: destination_address,
 			},
 			ccm.source_chain,
 			ccm.source_address,
@@ -685,7 +685,7 @@ fn multi_use_deposit_same_block() {
 						..
 					}) if matches!(
 						fetch_params.last().unwrap().deposit_fetch_id,
-						EthereumFetchId::Fetch(address) if address == *deposit_address
+						EthereumFetchId::Fetch(address) if address == (*deposit_address).into()
 					)
 				),
 				"Expected a new AllBatch apicall to be scheduled to fetch from a deployed address, got {:?}.",
@@ -834,7 +834,9 @@ fn channel_reuse_with_different_assets() {
 			channel_id
 		})
 		.inspect_storage(|channel_id| {
-			assert!(DepositChannelLookup::<Test, _>::get(H160(ALICE_ETH_ADDRESS)).is_none());
+			assert!(
+				DepositChannelLookup::<Test, _>::get(EthereumAddress(ALICE_ETH_ADDRESS)).is_none()
+			);
 			assert!(
 				DepositChannelPool::<Test, _>::iter_values().next().unwrap().channel_id ==
 					*channel_id

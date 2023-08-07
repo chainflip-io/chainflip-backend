@@ -2,7 +2,7 @@
 
 use super::{
 	api::{EthereumReplayProtection, EthereumTransactionBuilder},
-	TransactionFee,
+	EthereumAddress, TransactionFee,
 };
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
@@ -107,5 +107,17 @@ impl BenchmarkValue for TransactionFee {
 impl BenchmarkValue for EthAmount {
 	fn benchmark_value() -> Self {
 		2000
+	}
+}
+
+impl BenchmarkValue for EthereumAddress {
+	fn benchmark_value() -> Self {
+		EthereumAddress([1_u8; 20])
+	}
+}
+
+impl BenchmarkValueExtended for EthereumAddress {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		EthereumAddress([id; 20])
 	}
 }

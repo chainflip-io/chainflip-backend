@@ -44,7 +44,9 @@ impl ExecutexSwapAndCall {
 		match address {
 			None => (chain as u32, vec![]),
 			Some(ForeignChainAddress::Eth(source_address)) =>
-				(ForeignChain::Ethereum as u32, source_address.to_vec()),
+				(ForeignChain::Ethereum as u32, source_address.0.to_vec()),
+			Some(ForeignChainAddress::Arb(source_address)) =>
+				(ForeignChain::Arbitrum as u32, source_address.0.to_vec()),
 			Some(ForeignChainAddress::Dot(source_address)) =>
 				(ForeignChain::Polkadot as u32, source_address.aliased_ref().to_vec()),
 			Some(ForeignChainAddress::Btc(script)) =>

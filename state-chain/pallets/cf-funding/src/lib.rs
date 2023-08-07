@@ -18,7 +18,7 @@ mod tests;
 use cf_chains::RegisterRedemption;
 #[cfg(feature = "std")]
 use cf_primitives::AccountRole;
-use cf_primitives::EthereumAddress;
+use cf_primitives::EvmAddress;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
 	Chainflip, EpochInfo, FeePayment, Funding,
@@ -59,7 +59,7 @@ pub mod pallet {
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
-	pub type FundingAttempt<Amount> = (EthereumAddress, Amount);
+	pub type FundingAttempt<Amount> = (EvmAddress, Amount);
 
 	pub type FlipBalance<T> = <T as Chainflip>::Amount;
 
@@ -140,7 +140,7 @@ pub mod pallet {
 	/// List of restricted addresses
 	#[pallet::storage]
 	pub type RestrictedAddresses<T: Config> =
-		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
+		StorageMap<_, Blake2_128Concat, EvmAddress, (), ValueQuery>;
 
 	/// Map that bookkeeps the restricted balances for each address
 	#[pallet::storage]
@@ -148,14 +148,13 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		AccountId<T>,
-		BTreeMap<EthereumAddress, FlipBalance<T>>,
+		BTreeMap<EvmAddress, FlipBalance<T>>,
 		ValueQuery,
 	>;
 
 	/// Map of bound addresses for accounts.
 	#[pallet::storage]
-	pub type BoundAddress<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress>;
+	pub type BoundAddress<T: Config> = StorageMap<_, Blake2_128Concat, AccountId<T>, EvmAddress>;
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
@@ -213,15 +212,15 @@ pub mod pallet {
 		RedemptionExpired { account_id: AccountId<T> },
 
 		/// A new restricted address has been added
-		AddedRestrictedAddress { address: EthereumAddress },
+		AddedRestrictedAddress { address: EvmAddress },
 
 		/// A restricted address has been removed
-		RemovedRestrictedAddress { address: EthereumAddress },
+		RemovedRestrictedAddress { address: EvmAddress },
 
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
 			account_id: AccountId<T>,
-			withdrawal_address: EthereumAddress,
+			withdrawal_address: EvmAddress,
 			amount: FlipBalance<T>,
 		},
 
@@ -235,7 +234,7 @@ pub mod pallet {
 		RedemptionAmountZero { account_id: AccountId<T> },
 
 		/// An account has been bound to an address.
-		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
+		BoundRedeemAddress { account_id: AccountId<T>, address: EvmAddress },
 	}
 
 	#[pallet::error]
@@ -313,7 +312,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			funder: EthereumAddress,
+			funder: EvmAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
@@ -359,7 +358,7 @@ pub mod pallet {
 		pub fn redeem(
 			origin: OriginFor<T>,
 			amount: RedemptionAmount<FlipBalance<T>>,
-			address: EthereumAddress,
+			address: EvmAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
@@ -617,8 +616,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32))]
 		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
-			addresses_to_add: Vec<EthereumAddress>,
-			addresses_to_remove: Vec<EthereumAddress>,
+			addresses_to_add: Vec<EvmAddress>,
+			addresses_to_remove: Vec<EvmAddress>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			for address in addresses_to_add {
@@ -649,7 +648,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::bind_redeem_address())]
 		pub fn bind_redeem_address(
 			origin: OriginFor<T>,
-			address: EthereumAddress,
+			address: EvmAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
