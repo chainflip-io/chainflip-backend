@@ -603,7 +603,7 @@ fn testnet_genesis(
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
 		arbitrum_vault: ArbitrumVaultConfig {
-			vault_key: None,
+			vault_key: Some(eth::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			deployment_block: 0,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},

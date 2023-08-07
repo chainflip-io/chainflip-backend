@@ -49,6 +49,12 @@ pub const ETH_HTTP_NODE_ENDPOINT: &str = "ETH__HTTP_NODE_ENDPOINT";
 /// A WebSocket node endpoint for Ethereum
 pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";
 
+/// A HTTP node endpoint for Arbitrum
+pub const ARB_HTTP_NODE_ENDPOINT: &str = "ARB__HTTP_NODE_ENDPOINT";
+
+/// A WebSocket node endpoint for Arbitrum
+pub const ARB_WS_NODE_ENDPOINT: &str = "ARB__WS_NODE_ENDPOINT";
+
 pub const BTC_HTTP_NODE_ENDPOINT: &str = "BTC__HTTP_NODE_ENDPOINT";
 pub const BTC_RPC_USER: &str = "BTC__RPC_USER";
 pub const BTC_RPC_PASSWORD: &str = "BTC__RPC_PASSWORD";
