@@ -171,9 +171,9 @@ impl QueryApi {
 						.range_orders
 						.positions()
 						.into_iter()
-						.filter_map(|((owner, upper_tick, lower_tick), liquidity)| {
+						.filter_map(|((owner, lower_tick, upper_tick), liquidity)| {
 							if owner == account_id {
-								Some(RangeOrderPosition { upper_tick, lower_tick, liquidity })
+								Some(RangeOrderPosition { lower_tick, upper_tick, liquidity })
 							} else {
 								None
 							}
@@ -187,8 +187,8 @@ impl QueryApi {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RangeOrderPosition {
-	pub upper_tick: i32,
 	pub lower_tick: i32,
+	pub upper_tick: i32,
 	#[serde(with = "utilities::serde_helpers::number_or_hex")]
 	pub liquidity: u128,
 }
