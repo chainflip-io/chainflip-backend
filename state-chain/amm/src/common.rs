@@ -28,6 +28,29 @@ impl core::ops::Not for Side {
 	}
 }
 
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+struct ValidityWindow {
+	// Could be Option or we could just use MIN/MAX as defaults.
+	open_after: BlockOrTimestamp,
+	open_until: BlockOrTimestamp,
+}
+
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum BlockOrTimestamp {
+	Block(u64),
+}
+
+// This is the actual type we use to determine if an order is valid.
+// We can extend this later on with Price/Quantity constraints.
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct OrderValidity {
+	valid_at: ValidityWindow,
+	valid_until: BlockOrTimestamp,
+}
+
 #[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SideMap<T> {

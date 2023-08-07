@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
+	common::{OneToZero, OrderValidity, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
@@ -179,7 +179,6 @@ pub mod pallet {
 		/// It is no longer possible to mint limit orders due to reaching the maximum pool
 		/// instances, other than for ticks where a fixed pool currently exists.
 		MaximumPoolInstances,
-
 		/// The pool does not have enough liquidity left to process the swap.
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
@@ -397,11 +396,14 @@ pub mod pallet {
 			unstable_asset: any::Asset,
 			price_range_in_ticks: core::ops::Range<Tick>,
 			order_size: RangeOrderSize,
+			order_validity: OrderValidity,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_range_order_enabled,
 				Error::<T>::MintingRangeOrderDisabled
 			);
+
+			Self::check_validity(order_validity)?;
 
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -575,14 +577,19 @@ pub mod pallet {
 			order: Order,
 			price_as_tick: Tick,
 			amount: AssetAmount,
+			order_validity: OrderValidity,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_limit_order_enabled,
 				Error::<T>::MintingLimitOrderDisabled
 			);
+			// Check creation window if over reject.
+			Self::check_validity(order_validity)?;
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 				let side = utilities::order_to_side(order);
+
+				// if the order window has not started yet hold it back.
 
 				Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
@@ -780,6 +787,10 @@ impl<T: Config> Pallet<T> {
 				}
 			},
 		})
+	}
+
+	fn check_validity(order: OrderValidity) -> Result<(), DispatchError> {
+		Ok(())
 	}
 
 	fn try_credit_single_asset(

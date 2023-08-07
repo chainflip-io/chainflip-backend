@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
+use cf_amm::common::OrderValidity;
 pub use cf_amm::{
 	common::{SideMap, Tick},
 	range_orders::Liquidity,
@@ -191,6 +192,7 @@ pub async fn mint_range_order(
 	asset: Asset,
 	range: Range<Tick>,
 	order_size: RangeOrderSize,
+	validity: OrderValidity,
 ) -> Result<MintRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
@@ -210,6 +212,7 @@ pub async fn mint_range_order(
 					unstable_asset: asset,
 					price_range_in_ticks: range,
 					order_size,
+					order_validity: validity,
 				})
 				.await
 				.until_finalized()
@@ -311,6 +314,7 @@ pub async fn mint_limit_order(
 	order: BuyOrSellOrder,
 	price: Tick,
 	amount: AssetAmount,
+	validity: OrderValidity,
 ) -> Result<MintLimitOrderReturn> {
 	task_scope(|scope| {
 		async {
@@ -331,6 +335,7 @@ pub async fn mint_limit_order(
 					order,
 					price_as_tick: price,
 					amount,
+					order_validity: validity,
 				})
 				.await
 				.until_finalized()

@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use cf_amm::common::OrderValidity;
 use cf_utilities::{task_scope::task_scope, try_parse_number_or_hex};
 use chainflip_api::{
 	self,
@@ -120,6 +121,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		order_size: rpc_types::RangeOrderSize,
+		validity: OrderValidity,
 	) -> Result<MintRangeOrderReturn, Error>;
 
 	#[method(name = "burnRangeOrder")]
@@ -138,6 +140,7 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
+		validity: OrderValidity,
 	) -> Result<MintLimitOrderReturn, Error>;
 
 	#[method(name = "burnLimitOrder")]
@@ -244,6 +247,7 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		order_size: rpc_types::RangeOrderSize,
+		validity: OrderValidity,
 	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
 			return Err(anyhow!("Invalid tick range").into())
@@ -254,6 +258,7 @@ impl RpcServer for RpcServerImpl {
 			asset,
 			Range { start, end },
 			order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
+			validity,
 		)
 		.await?)
 	}
@@ -288,6 +293,7 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
+		validity: OrderValidity,
 	) -> Result<MintLimitOrderReturn, Error> {
 		Ok(lp::mint_limit_order(
 			&self.state_chain_settings,
@@ -295,6 +301,7 @@ impl RpcServer for RpcServerImpl {
 			order,
 			price,
 			try_parse_number_or_hex(amount)?,
+			validity,
 		)
 		.await?)
 	}
