@@ -18,7 +18,6 @@ import {
   decodeDotAddressForContract,
   defaultAssetAmounts,
   amountToFineAmount,
-  runWithTimeout,
 } from '../shared/utils';
 import { signAndSendTxEth } from './send_eth';
 import { getCFTesterAbi } from './eth_abis';
