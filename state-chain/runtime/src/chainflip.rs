@@ -218,8 +218,9 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 
 	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
-		// We might need to restructure the tx depending on the current fee per utxo. no-op until we
-		// have chain tracking
+		// Since BTC txs are chained and the subsequent tx depends on the success of the previous
+		// one, changing the BTC tx fee will mean all subsequent txs are also invalid and so
+		// refreshing btc tx is not trivial. We leave it a no-op for now.
 	}
 
 	fn is_valid_for_rebroadcast(
@@ -228,13 +229,12 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		_current_key: &<Bitcoin as ChainCrypto>::AggKey,
 		_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// The payload for Bitcoin will never change and so it doesnt need to be checked here.
-		// Moreover, since the Bitcoin transactions are chained together where the next transaction
-		// is based on the success of the previous one, we should never have a situation where the
-		// signature for a tx is not valid. This is because when we rotate, the rotation tx (sending
-		// funds to new vault) will only execute onchain when all the previous pending txs have gone
-		// through and so once we rotate to new vault, epoch, there should be no pending txs.
-		// Therefore, we don't have to check anything here and just rebroadcast.
+		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
+		// checked here. We also dont need to check for the signature here because even if we are in
+		// the next epoch and the key has changed, the old signature for the btc tx is still valid
+		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
+		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
+		// to check anything here and just rebroadcast.
 		true
 	}
 }
