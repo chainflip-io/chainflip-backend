@@ -24,28 +24,28 @@ import { getCFTesterAbi } from './eth_abis';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-async function testDepositEthereum(srcAsset: Asset, dstAsset: Asset) {
+async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
-    srcAsset,
-    dstAsset,
+    sourceAsset,
+    destAsset,
     undefined,
     undefined,
     ' EthereumDepositTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  await observeFetch(srcAsset, swapParams.depositAddress);
+  await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await doPerformSwap(swapParams, `[${srcAsset}->${dstAsset} EthereumDepositTest2]`);
+  await doPerformSwap(swapParams, `[${sourceAsset}->${destAsset} EthereumDepositTest2]`);
 }
 
-async function testSuccessiveDeposits(dstAsset: Asset) {
+async function testSuccessiveDeposits(destAsset: Asset) {
   let stopObserving = false;
-  const srcAsset = 'ETH';
+  const sourceAsset = 'ETH';
 
   const swapParams = await testSwap(
-    srcAsset,
-    dstAsset,
+    sourceAsset,
+    destAsset,
     undefined,
     undefined,
     ' DuplicatedDepositTest',
@@ -59,14 +59,14 @@ async function testSuccessiveDeposits(dstAsset: Asset) {
       if ('DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
-        const assetMatches = srcAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+        const assetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
         return channelMatches && assetMatches;
       }
       return false;
     },
   );
 
-  await observeFetch(srcAsset, swapParams.depositAddress);
+  await observeFetch(sourceAsset, swapParams.depositAddress);
 
   // Arbitrary time value that should be enough to determine that another swap has not been triggered.
   // Trying to witness the fetch BroadcastSuccess is just unnecessarily complicated here.
@@ -77,22 +77,24 @@ async function testSuccessiveDeposits(dstAsset: Asset) {
 }
 
 // Not supporting BTC to avoid adding more unnecessary complexity with address encoding.
-async function testTxMultipleContractSwaps(srcAsset: Asset, dstAsset: Asset) {
-  const { destAddress, tag } = await prepareSwap(srcAsset, dstAsset);
+async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset) {
+  const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const web3 = new Web3(ethEndpoint);
 
   const cfTesterAddress = getEthContractAddress('CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfTesterContract = new web3.eth.Contract(cfTesterAbi as any, cfTesterAddress);
-  const amount = BigInt(amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]));
+  const amount = BigInt(
+    amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset]),
+  );
   const numSwaps = 2;
   const txData = cfTesterContract.methods
     .multipleContractSwap(
-      chainContractIds[assetChains[dstAsset]],
-      dstAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
-      assetContractIds[dstAsset],
-      getEthContractAddress(srcAsset),
+      chainContractIds[assetChains[destAsset]],
+      destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress,
+      assetContractIds[destAsset],
+      getEthContractAddress(sourceAsset),
       amount,
       '0x',
       numSwaps,
