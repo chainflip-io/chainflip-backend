@@ -21,7 +21,9 @@ import {
   runWithTimeout,
 } from '../shared/utils';
 import { signAndSendTxEth } from './send_eth';
-import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
+import { getCFTesterAbi } from './eth_abis';
+
+const cfTesterAbi = await getCFTesterAbi();
 
 async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
   const swapParams = await testSwap(
@@ -75,7 +77,7 @@ async function testSuccessiveDeposits(destAsset: Asset) {
   await observingSwapScheduled;
 }
 
-// Not supporting BTC to not add more unnecessary complexity with address encoding.
+// Not supporting BTC to avoid adding more unnecessary complexity with address encoding.
 async function testTxMultipleContractSwaps(srcAsset: Asset, dstAsset: Asset) {
   async function test(sourceAsset: Asset, destAsset: Asset) {
     const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
