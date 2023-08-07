@@ -80,7 +80,7 @@ pub mod common {
 	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
 
 	/// Percent of the epoch we are allowed to redeem
-	pub const PERCENT_OF_EPOCH_PERIOD_REDEEMABLE: u8 = 50;
+	pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
 
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.

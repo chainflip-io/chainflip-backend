@@ -55,7 +55,15 @@ mod test {
 
 	#[test]
 	fn test_decoding() {
-		assert_eq!(parse_hex_bytes("0x00").unwrap(), b"00");
+		assert_eq!(parse_hex_bytes("0x00").unwrap(), vec![0]);
+		assert_eq!(parse_hex_bytes("cf").unwrap(), vec![0xcf]);
+		assert_eq!(
+			parse_hex_bytes("0x00112233445566778899aabbccddeeff").unwrap(),
+			vec![
+				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+				0xee, 0xff
+			]
+		);
 		assert_eq!(parse_hex_bytes("").unwrap(), b"");
 		assert_err!(parse_hex_bytes("abc"));
 	}
@@ -112,9 +120,10 @@ impl RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn register_account(&self) -> Result<String, Error> {
-		Ok(chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
+		chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
 			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))?)
+			.map(|tx_hash| format!("{tx_hash:#x}"))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	async fn request_swap_deposit_address(

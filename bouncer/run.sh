@@ -4,3 +4,4 @@ set -e
 ./commands/setup_swaps.ts
 ./tests/all_concurrent_tests.ts
 ./tests/rotates_through_btc_swap.ts
+./tests/swap_after_temp_disconnecting_chains.ts

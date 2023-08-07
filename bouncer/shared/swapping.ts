@@ -1,19 +1,21 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { Asset, assetDecimals, Assets } from '@chainflip-io/cli';
 import Web3 from 'web3';
-import { performSwap, doPerformSwap, requestNewSwap, SenderType } from '../shared/perform_swap';
+import { performSwap, SwapParams } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
   getEthContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
-  observeBadEvents,
-  observeFetch,
 } from '../shared/utils';
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { performSwapViaContract, approveTokenVault } from '../shared/contract_swap';
+import {
+  performSwapViaContract,
+  approveTokenVault,
+  ContractSwapParams,
+} from '../shared/contract_swap';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -116,56 +118,42 @@ export async function prepareSwap(
   return { destAddress, tag };
 }
 
-async function testSwap(
+export async function testSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
+  tagSuffix?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
     addressType,
     messageMetadata,
+    tagSuffix,
   );
-  await performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
+  return performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 async function testSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
+  tagSuffix?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
     addressType,
     messageMetadata,
-    ' Contract',
+    (tagSuffix ?? '') + ' Contract',
   );
-  await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
-}
-
-async function testDepositEthereum(sourceAsset: Asset, destAsset: Asset) {
-  const { destAddress, tag } = await prepareSwap(
-    sourceAsset,
-    destAsset,
-    undefined,
-    undefined,
-    ' AssetWitnessingTest',
-  );
-
-  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
-
-  await doPerformSwap(swapParams, tag, undefined, SenderType.Contract);
-  // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  await observeFetch(sourceAsset, swapParams.depositAddress);
-  await doPerformSwap(swapParams, tag, undefined, SenderType.Contract);
+  return performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
 export async function testAllSwaps() {
   function appendSwap(
-    swapArray: Promise<void>[],
+    swapArray: Promise<SwapParams | ContractSwapParams>[],
     sourceAsset: Asset,
     destAsset: Asset,
     functionCall: (
@@ -173,7 +161,8 @@ export async function testAllSwaps() {
       destAsset: Asset,
       addressType?: BtcAddressType,
       messageMetadata?: CcmDepositMetadata,
-    ) => Promise<void>,
+      tagSuffix?: string,
+    ) => Promise<SwapParams | ContractSwapParams>,
     messageMetadata?: CcmDepositMetadata,
   ) {
     if (destAsset === 'BTC') {
@@ -185,8 +174,7 @@ export async function testAllSwaps() {
     }
   }
 
-  let stopObserving = false;
-  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  console.log('=== Testing all swaps ===');
 
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Set the allowance to the same amount of total asset swapped in contractsSwaps to avoid nonce issues.
@@ -201,10 +189,10 @@ export async function testAllSwaps() {
     (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   );
 
-  const regularSwaps: Promise<void>[] = [];
-  const contractSwaps: Promise<void>[] = [];
-  const ccmSwaps: Promise<void>[] = [];
-  const ccmContractSwaps: Promise<void>[] = [];
+  const regularSwaps: Promise<SwapParams>[] = [];
+  const contractSwaps: Promise<ContractSwapParams>[] = [];
+  const ccmSwaps: Promise<SwapParams>[] = [];
+  const ccmContractSwaps: Promise<ContractSwapParams>[] = [];
 
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets).forEach((destAsset) => {
@@ -232,14 +220,5 @@ export async function testAllSwaps() {
     });
   });
 
-  const depositTestSwaps = Promise.all([
-    testDepositEthereum('ETH', 'DOT'),
-    testDepositEthereum('FLIP', 'BTC'),
-  ]);
-
-  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps, depositTestSwaps]);
-
-  // Gracefully exit the broadcast abort observer
-  stopObserving = true;
-  await observingBadEvents;
+  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
 }
