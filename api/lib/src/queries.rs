@@ -125,7 +125,6 @@ impl QueryApi {
 		})
 	}
 
-	/// Get the
 	pub async fn get_range_orders(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,

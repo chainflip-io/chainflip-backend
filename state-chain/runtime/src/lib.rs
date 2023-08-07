@@ -1027,7 +1027,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
 			LiquidityPools::get_pool(asset)
 		}
 	}

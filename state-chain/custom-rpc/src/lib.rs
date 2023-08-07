@@ -538,17 +538,16 @@ where
 				asset,
 				self.client
 					.runtime_api()
-					.cf_get_pools(&self.query_block_id(at), asset)
+					.cf_get_pool(&self.query_block_id(at), asset)
 					.map_err(to_rpc_error)?,
 			);
 		} else {
-			let assets = vec![Asset::Dot, Asset::Eth, Asset::Flip, Asset::Usdc, Asset::Btc];
-			for asset in assets {
+			for asset in Asset::all().iter() {
 				pools.insert(
-					asset,
+					*asset,
 					self.client
 						.runtime_api()
-						.cf_get_pools(&self.query_block_id(at), asset)
+						.cf_get_pool(&self.query_block_id(at), *asset)
 						.map_err(to_rpc_error)?,
 				);
 			}
