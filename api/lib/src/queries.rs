@@ -146,7 +146,7 @@ impl QueryApi {
 						.range_orders
 						.positions()
 						.into_iter()
-						.filter_map(|((owner, upper_tick, lower_tick), liquidity)| {
+						.filter_map(|((owner, lower_tick, upper_tick), liquidity)| {
 							if owner == account_id {
 								Some(RangeOrderPosition { upper_tick, lower_tick, liquidity })
 							} else {
