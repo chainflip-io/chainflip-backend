@@ -9,6 +9,7 @@ services:
 
   geth:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc3-1-node
+    container_name: geth
     platform: linux/amd64
     ports:
       - "127.0.0.1:8545:8545"
