@@ -5,7 +5,8 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
-	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress, SwapOrigin,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	SwapOrigin,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -307,11 +308,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
-		let message = CcmDepositMetadata {
+		let message = CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
 		assert_ok!(Swapping::request_swap_deposit_address(
@@ -418,10 +418,13 @@ fn can_process_ccm_via_direct_deposit() {
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
 		let message = CcmDepositMetadata {
-			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20])
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
+				gas_budget,
+				cf_parameters: vec![],
+			},
 		};
 
 		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{
@@ -429,7 +432,7 @@ fn can_process_ccm_via_direct_deposit() {
 			deposit_amount,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::Eth([0x02; 20]),
-			message_metadata: message,
+			deposit_metadata: message,
 			tx_hash: Default::default(),
 		}));
 		let current_epoch = Validator::current_epoch();

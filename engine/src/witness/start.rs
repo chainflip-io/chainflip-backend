@@ -12,7 +12,7 @@ use crate::{
 
 use crate::state_chain_observer::client::chain_api::ChainApi;
 
-use super::{epoch_source::EpochSource, vault::EthAssetApi};
+use super::{common::epoch_source::EpochSource, eth::vault::EthAssetApi};
 
 use anyhow::Result;
 

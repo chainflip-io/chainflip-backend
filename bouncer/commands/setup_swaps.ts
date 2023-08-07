@@ -52,6 +52,8 @@ async function main(): Promise<void> {
     rangeOrder('BTC', deposits.get('BTC')! * 0.9999),
     rangeOrder('FLIP', deposits.get('FLIP')! * 0.9999),
   ]);
+  console.log('=== Swaps Setup completed ===');
+
   process.exit(0);
 }
 
