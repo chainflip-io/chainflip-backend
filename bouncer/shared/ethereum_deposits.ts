@@ -59,7 +59,7 @@ async function testSuccessiveDeposits(dstAsset: Asset) {
       if ('DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
-        const assetMatches = srcAsset === (event.data.srcAsset.toUpperCase() as Asset);
+        const assetMatches = srcAsset === (event.data.sourceAsset.toUpperCase() as Asset);
         return channelMatches && assetMatches;
       }
       return false;
