@@ -161,7 +161,7 @@ impl Config for Test {
 impl_mock_runtime_safe_mode! { reputation: PalletSafeMode }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		reputation_pallet: ReputationPalletConfig {
 			accrual_ratio: ACCRUAL_RATIO,

@@ -255,7 +255,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000), 0);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -359,7 +359,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000), 0);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -454,7 +454,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000), 0);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,

@@ -192,7 +192,7 @@ where
 			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
 			Ok(())
 		} else {
-			Ok(().into())
+			Ok(())
 		}
 	}
 }

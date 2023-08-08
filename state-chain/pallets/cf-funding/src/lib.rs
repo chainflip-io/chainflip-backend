@@ -16,7 +16,6 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
-#[cfg(feature = "std")]
 use cf_primitives::AccountRole;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,

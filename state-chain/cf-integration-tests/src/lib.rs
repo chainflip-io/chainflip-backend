@@ -29,7 +29,6 @@ use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,
 	Reputation, Runtime, RuntimeOrigin, System, Validator,
 };
-use pallet_cf_funding::EthTransactionHash;
 
 type NodeId = AccountId32;
 const ETH_DUMMY_ADDR: EthereumAddress = EthereumAddress::repeat_byte(42u8);
@@ -56,7 +55,7 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 // The minimum number of blocks a vault rotation should last
 const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	Backup,

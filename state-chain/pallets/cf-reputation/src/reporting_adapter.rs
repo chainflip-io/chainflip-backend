@@ -129,6 +129,6 @@ where
 	O: sp_staking::offence::Offence<IdentificationTuple<T, FullIdentification>>,
 {
 	fn on_killed_account(who: &T::AccountId) {
-		OffenceTimeSlotTracker::<T>::remove(Self::report_id(T::ValidatorId::from_ref(&who)));
+		OffenceTimeSlotTracker::<T>::remove(Self::report_id(T::ValidatorId::from_ref(who)));
 	}
 }

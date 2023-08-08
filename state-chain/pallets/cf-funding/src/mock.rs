@@ -196,7 +196,7 @@ pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {

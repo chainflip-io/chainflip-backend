@@ -133,7 +133,7 @@ pub trait CustomApi {
 		&self,
 		assert: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<HashMap<Asset, Option<Pool<AccountId32>>>>;
+	) -> RpcResult<HashMap<Asset, Option<Pool<state_chain_runtime::AccountId>>>>;
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -536,14 +536,14 @@ where
 		&self,
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<HashMap<Asset, Option<Pool<AccountId32>>>> {
-		let mut pools = HashMap::<Asset, Option<Pool<AccountId32>>>::new();
+	) -> RpcResult<HashMap<Asset, Option<Pool<state_chain_runtime::AccountId>>>> {
+		let mut pools = HashMap::<Asset, Option<Pool<state_chain_runtime::AccountId>>>::new();
 		if let Some(asset) = asset {
 			pools.insert(
 				asset,
 				self.client
 					.runtime_api()
-					.cf_get_pools(&self.query_block_id(at), asset)
+					.cf_get_pools(self.unwrap_or_best(at), asset)
 					.map_err(to_rpc_error)?,
 			);
 		} else {
@@ -553,7 +553,7 @@ where
 					asset,
 					self.client
 						.runtime_api()
-						.cf_get_pools(&self.query_block_id(at), asset)
+						.cf_get_pools(self.unwrap_or_best(at), asset)
 						.map_err(to_rpc_error)?,
 				);
 			}

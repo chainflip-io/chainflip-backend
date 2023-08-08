@@ -109,7 +109,7 @@ macro_rules! impl_test_helpers {
 		pub type TestRunner<Ctx> = $crate::TestExternalities<$runtime, AllPalletsWithSystem, Ctx>;
 
 		/// Create new test externalities with the provided genesis config.
-		pub fn with_genesis(g: GenesisConfig) -> TestRunner<()> {
+		pub fn with_genesis(g: RuntimeGenesisConfig) -> TestRunner<()> {
 			TestRunner::<()>::new(g)
 		}
 

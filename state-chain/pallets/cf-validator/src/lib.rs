@@ -28,7 +28,7 @@ use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{BlockNumberProvider, CheckedDiv, One, Saturating, UniqueSaturatedInto, Zero},
+		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
 		Percent, Permill,
 	},
 	traits::{EstimateNextSessionRotation, OnKilledAccount},

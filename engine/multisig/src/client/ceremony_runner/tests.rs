@@ -183,6 +183,9 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 	));
 }
 
+// Note: Clippy seems to throw a false positive without this.
+// (as of `clippy 0.1.73 (a17c7968 2023-07-30)`).
+#[allow(clippy::needless_pass_by_ref_mut)]
 /// Sends a message to the state and makes sure it was ignored (not delayed or accepted)
 async fn ensure_message_is_ignored(
 	state: &mut CeremonyRunner<SigningCeremony<EvmCryptoScheme>, EthSigning>,

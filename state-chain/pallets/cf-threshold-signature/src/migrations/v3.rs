@@ -1,6 +1,8 @@
 use crate::*;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::marker::PhantomData;
+#[cfg(feature = "try-runtime")]
+use frame_support::dispatch::DispatchError;
 
 mod old_types {
 	use super::*;
@@ -44,16 +46,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				threshold_ceremony_type: old.threshold_ceremony_type,
 			})
 		});
-		Weight::from_ref_time(0)
+		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok(Default::default())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		Ok(())
 	}
 }
