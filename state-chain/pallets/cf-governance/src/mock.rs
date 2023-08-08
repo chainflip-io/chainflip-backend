@@ -120,7 +120,7 @@ pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		governance: GovernanceConfig {
 			members: BTreeSet::from([ALICE, BOB, CHARLES]),

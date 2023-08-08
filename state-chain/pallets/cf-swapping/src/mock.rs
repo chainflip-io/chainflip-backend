@@ -147,7 +147,7 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> TestExternalities<Test, AllPalletsWithSystem> {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		swapping: SwappingConfig { swap_ttl: 5, minimum_swap_amounts: vec![] },
 	};

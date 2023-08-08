@@ -11,8 +11,8 @@ macro_rules! impl_mock_ensure_witnessed_for_origin {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn successful_origin() -> $origin {
-				frame_system::RawOrigin::Root.into()
+			fn try_successful_origin() -> Result<$origin, ()> {
+				Ok(frame_system::RawOrigin::Root.into())
 			}
 		}
 	};

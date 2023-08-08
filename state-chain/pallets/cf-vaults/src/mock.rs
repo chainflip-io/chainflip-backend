@@ -244,7 +244,7 @@ pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
 fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
 			vault_key,

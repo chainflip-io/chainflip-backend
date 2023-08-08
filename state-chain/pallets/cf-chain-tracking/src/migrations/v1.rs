@@ -13,16 +13,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			b"ChainState",
 			b"CurrentChainState",
 		);
-		Weight::from_ref_time(0)
+		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok(CurrentChainState::<T, I>::exists().encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		if <bool>::decode(&mut &_state[..])
 			.map_err(|_| "Failed to decode ChainTracking pre-upgrade state.")?
 		{

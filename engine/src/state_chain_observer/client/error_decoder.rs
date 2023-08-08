@@ -104,6 +104,7 @@ pub enum DispatchError {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use codec::{Decode, Encode};
 	use sp_runtime::ModuleError;
 
@@ -128,8 +129,10 @@ mod tests {
 
 	#[test]
 	fn check_error_decoding() {
-		let encoded_error =
-			sp_runtime::DispatchError::from(pallet_cf_funding::Error::NoPendingRedemption).encode();
+		let encoded_error = sp_runtime::DispatchError::from(
+			pallet_cf_funding::Error::<state_chain_runtime::Runtime>::NoPendingRedemption,
+		)
+		.encode();
 		let dispatch_error = sp_runtime::DispatchError::decode(&mut &encoded_error[..]).unwrap();
 
 		// Message should be erased.

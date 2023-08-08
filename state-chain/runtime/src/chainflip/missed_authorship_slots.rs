@@ -59,6 +59,7 @@ mod test_missed_authorship_slots {
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
+	use sp_core::ConstBool;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -118,10 +119,11 @@ mod test_missed_authorship_slots {
 		type AuthorityId = AuthorityId;
 		type DisabledValidators = ();
 		type MaxAuthorities = ConstU32<10>;
+		type AllowMultipleBlocksPerSlot = ConstBool<false>;
 	}
 
 	pub fn new_test_ext(authorities: Vec<u64>) -> frame_support::sp_io::TestExternalities {
-		GenesisConfig {
+		RuntimeGenesisConfig {
 			system: Default::default(),
 			aura: AuraConfig {
 				authorities: authorities

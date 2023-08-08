@@ -181,7 +181,7 @@ pub const ETH_CHAIN_ID: u64 = 1;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
 			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,

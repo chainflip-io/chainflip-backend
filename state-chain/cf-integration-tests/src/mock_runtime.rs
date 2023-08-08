@@ -97,7 +97,7 @@ impl ExtBuilder {
 		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH);
 		let ethereum_vault_key = key_components.agg_key();
 
-		state_chain_runtime::GenesisConfig {
+		state_chain_runtime::RuntimeGenesisConfig {
 			// These are set indirectly via the session pallet.
 			aura: Default::default(),
 			// These are set indirectly via the session pallet.

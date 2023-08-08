@@ -152,9 +152,9 @@ impl MockBidderProvider {
 	pub fn set_default_test_bids() {
 		BIDDERS.with(|cell| {
 			*cell.borrow_mut() = AUCTION_WINNERS
-				.zip(WINNING_BIDS)
 				.into_iter()
-				.chain(AUCTION_LOSERS.zip(LOSING_BIDS))
+				.zip(WINNING_BIDS)
+				.chain(AUCTION_LOSERS.into_iter().zip(LOSING_BIDS))
 				.chain(sp_std::iter::once((UNQUALIFIED_NODE, UNQUALIFIED_NODE_BID)))
 				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 				.collect()
@@ -251,7 +251,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 
 	TestExternalitiesWithCheck {
 		ext: {
-			let mut ext: sp_io::TestExternalities = GenesisConfig {
+			let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 				system: SystemConfig::default(),
 				session: SessionConfig {
 					keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]

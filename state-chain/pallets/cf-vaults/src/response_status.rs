@@ -147,7 +147,7 @@ mod tests {
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
 			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
-			assert!(matches!(outcome, Err(_)), "Expected failure, got: {:?}", outcome);
+			assert!(outcome.is_err(), "Expected failure, got: {:?}", outcome);
 		};
 	}
 

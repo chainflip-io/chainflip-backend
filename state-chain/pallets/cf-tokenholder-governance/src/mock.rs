@@ -176,7 +176,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	];
 
 	let mut ext: sp_io::TestExternalities =
-		GenesisConfig::default().build_storage().unwrap().into();
+		RuntimeGenesisConfig::default().build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
