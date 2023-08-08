@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, ForeignChain, Hash};
+use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -125,11 +125,6 @@ pub enum CliCommand {
 	VanityName {
 		#[clap(help = "Name in UTF-8 (max length 64)")]
 		name: String,
-	},
-	#[clap(about = "Submit a query to the State Chain")]
-	Query {
-		#[clap(help = "Block hash to be queried")]
-		block_hash: Hash,
 	},
 	#[clap(
         // This is only useful for testing. No need to show to the end user.

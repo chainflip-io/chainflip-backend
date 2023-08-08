@@ -428,6 +428,8 @@ pub mod pallet {
 		KeyHandoverFailure {
 			ceremony_id: CeremonyId,
 		},
+		/// The vault rotation has been aborted early.
+		VaultRotationAborted,
 	}
 
 	#[pallet::error]

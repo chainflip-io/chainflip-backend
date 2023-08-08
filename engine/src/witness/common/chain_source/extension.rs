@@ -11,7 +11,7 @@ use crate::witness::common::{
 };
 
 use super::{
-	aliases, and_then::AndThen, lag_safety::LagSafety, shared::SharedSource,
+	aliases, and_then::AndThen, lag_safety::LagSafety, logging::Logging, shared::SharedSource,
 	strictly_monotonic::StrictlyMonotonic, then::Then, ChainSource, Header,
 };
 
@@ -60,6 +60,15 @@ pub trait ChainSourceExt: ChainSource {
 		Self::Data: Clone,
 	{
 		SharedSource::new(self, scope)
+	}
+
+	/// Logs when a header is produced by the underlying stream the hash and index of the header.
+	/// Prefixes the log message with the given prefix.
+	fn logging(self, log_prefix: &'static str) -> Logging<Self>
+	where
+		Self: Sized,
+	{
+		Logging::new(self, log_prefix)
 	}
 
 	/// Ensures the stream is always increasing with respect to the header index (normally the block

@@ -928,5 +928,193 @@ fn dont_slash_in_safe_mode() {
 		keygen_failure(&[BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 1);
 		assert!(MockSlasher::slash_count(CHARLIE) == 1);
+	});
+}
+
+fn do_full_key_rotation() {
+	let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+	// Start Key gen
+	<VaultsPallet as VaultRotator>::keygen(
+		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+		rotation_epoch,
+	);
+	let keygen_ceremony_id = current_ceremony_id();
+
+	for p in ALL_CANDIDATES {
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(*p),
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+		));
+	}
+
+	// Key verification
+	VaultsPallet::on_initialize(2);
+	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+	// Key handover
+	const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+	VaultsPallet::key_handover(
+		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		rotation_epoch,
+	);
+
+	let handover_ceremony_id = current_ceremony_id();
+	for p in HANDOVER_PARTICIPANTS {
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(p),
+			handover_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
+		));
+	}
+	VaultsPallet::on_initialize(3);
+
+	// Key activation
+	VaultsPallet::activate();
+
+	assert_last_event!(crate::Event::VaultRotationCompleted);
+	assert_eq!(PendingVaultRotation::<MockRuntime, _>::get(), Some(VaultRotationStatus::Complete));
+	assert_eq!(VaultsPallet::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+}
+
+#[test]
+fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
+	new_test_ext().execute_with(|| {
+		MockOptimisticActivation::set(true);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			rotation_epoch,
+		);
+		let keygen_ceremony_id = current_ceremony_id();
+
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(ALICE),
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+		));
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(BOB),
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+		));
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(CHARLIE),
+			keygen_ceremony_id,
+			Err(Default::default())
+		));
+		VaultsPallet::on_initialize(2);
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::Failed { .. })
+		);
+
+		// Abort the vault rotation now
+		VaultsPallet::abort_vault_rotation();
+
+		assert!(PendingVaultRotation::<MockRuntime, _>::get().is_none());
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 0);
+		assert_eq!(VaultsPallet::status(), AsyncResult::Void);
+
+		// Can restart the vault rotation and succeed.
+		do_full_key_rotation();
+	})
+}
+
+#[test]
+fn can_recover_from_abort_vault_rotation_after_key_verification() {
+	new_test_ext().execute_with(|| {
+		MockOptimisticActivation::set(true);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			rotation_epoch,
+		);
+		let keygen_ceremony_id = current_ceremony_id();
+
+		for p in ALL_CANDIDATES {
+			assert_ok!(VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(*p),
+				keygen_ceremony_id,
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::KeygenVerificationComplete { .. })
+		);
+
+		// Abort the vault rotation now
+		VaultsPallet::abort_vault_rotation();
+
+		assert!(PendingVaultRotation::<MockRuntime, _>::get().is_none());
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 0);
+		assert_eq!(VaultsPallet::status(), AsyncResult::Void);
+
+		// Can restart the vault rotation and succeed.
+		do_full_key_rotation();
+	})
+}
+
+#[test]
+fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
+	new_test_ext().execute_with(|| {
+		MockOptimisticActivation::set(true);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			rotation_epoch,
+		);
+		let keygen_ceremony_id = current_ceremony_id();
+		for p in ALL_CANDIDATES {
+			assert_ok!(VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(*p),
+				keygen_ceremony_id,
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// Key handover
+		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+		VaultsPallet::key_handover(
+			BTreeSet::from(HANDOVER_PARTICIPANTS),
+			BTreeSet::from(HANDOVER_PARTICIPANTS),
+			rotation_epoch,
+		);
+
+		let handover_ceremony_id = current_ceremony_id();
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(ALICE),
+			handover_ceremony_id,
+			Err(Default::default())
+		));
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(BOB),
+			handover_ceremony_id,
+			Err(Default::default())
+		));
+
+		VaultsPallet::on_initialize(2);
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::KeyHandoverFailed { .. })
+		);
+
+		// Abort the vault rotation now
+		VaultsPallet::abort_vault_rotation();
+
+		assert!(PendingVaultRotation::<MockRuntime, _>::get().is_none());
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 0);
+		assert_eq!(VaultsPallet::status(), AsyncResult::Void);
+
+		// Can restart the vault rotation and succeed.
+		do_full_key_rotation();
 	})
 }
