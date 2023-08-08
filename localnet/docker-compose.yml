@@ -27,6 +27,7 @@ services:
     pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
     pull_policy: always
+    restart: unless-stopped
     platform: linux/amd64
     ports:
       - "127.0.0.1:8547:8547"
@@ -44,6 +45,7 @@ services:
     pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
     pull_policy: always
+    restart: unless-stopped
     platform: linux/amd64
     ports:
       - "127.0.0.1:8047:8547"
@@ -61,6 +63,7 @@ services:
     pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
     pull_policy: always
+    restart: unless-stopped
     platform: linux/amd64
     ports:
       - "127.0.0.1:8147:8547"
