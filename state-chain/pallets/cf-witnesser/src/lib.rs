@@ -14,17 +14,19 @@ mod tests;
 
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
+use cf_traits::{impl_pallet_safe_mode, AccountRoleRegistry, Chainflip, EpochInfo};
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
 	pallet_prelude::Member,
 	storage::with_storage_layer,
-	traits::EnsureOrigin,
+	traits::{EnsureOrigin, Get},
 	Hashable,
 };
 use sp_std::prelude::*;
+
+impl_pallet_safe_mode!(PalletSafeMode; witness_calls_enabled);
 
 pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
@@ -39,7 +41,7 @@ pub trait WitnessDataExtraction {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::pallet_prelude::{OptionQuery, *};
 	use frame_system::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -59,6 +61,9 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -99,8 +104,33 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochsToCull<T: Config> = StorageValue<_, Vec<EpochIndex>, ValueQuery>;
 
+	/// This stores (expired) epochs that needs to have its data culled.
+	#[pallet::storage]
+	pub type WitnessedCallsScheduledForDispatch<T: Config> =
+		StorageValue<_, Vec<(EpochIndex, Box<<T as Config>::RuntimeCall>, CallHash)>, OptionQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_current_block: BlockNumberFor<T>) -> Weight {
+			if T::SafeMode::get().witness_calls_enabled &&
+				WitnessedCallsScheduledForDispatch::<T>::exists()
+			{
+				let _ = WitnessedCallsScheduledForDispatch::<T>::take().unwrap().into_iter().map(
+					|(witnessed_at_epoch, call, call_hash)| {
+						Self::dispatch_call(
+							witnessed_at_epoch,
+							T::EpochInfo::epoch_index(),
+							*call,
+							call_hash,
+						)
+					},
+				);
+				Weight::zero().saturating_add(T::DbWeight::get().reads(1))
+			} else {
+				Weight::zero()
+			}
+		}
+
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
@@ -302,7 +332,7 @@ pub mod pallet {
 				(last_expired_epoch..=current_epoch)
 					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
+				Self::dispatch_or_schedule_call(epoch_index, current_epoch, call, call_hash);
 			}
 			Ok(().into())
 		}
@@ -332,7 +362,12 @@ pub mod pallet {
 			if let Some(extra_data) = extra_data {
 				ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
 			}
-			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
+			Self::dispatch_or_schedule_call(
+				epoch_index,
+				T::EpochInfo::epoch_index(),
+				call,
+				call_hash,
+			);
 			Ok(())
 		}
 	}
@@ -355,15 +390,34 @@ impl<T: Config> Pallet<T> {
 		(extra_data, CallHash(call.blake2_256()))
 	}
 
-	fn dispatch_call(
+	fn dispatch_or_schedule_call(
 		witnessed_at_epoch: EpochIndex,
 		current_epoch: EpochIndex,
-		mut call: <T as Config>::RuntimeCall,
+		mut call: Box<<T as Config>::RuntimeCall>,
 		call_hash: CallHash,
 	) {
 		if let Some(mut extra_data) = ExtraCallData::<T>::get(witnessed_at_epoch, call_hash) {
 			call.combine_and_inject(&mut extra_data)
 		}
+		if T::SafeMode::get().witness_calls_enabled {
+			Self::dispatch_call(witnessed_at_epoch, current_epoch, *call, call_hash);
+		} else {
+			WitnessedCallsScheduledForDispatch::<T>::mutate(|maybe_witnessed_calls| {
+				if let Some(witnessed_calls) = maybe_witnessed_calls.as_mut() {
+					witnessed_calls.push((witnessed_at_epoch, call, call_hash));
+				} else {
+					*maybe_witnessed_calls = Some(vec![(witnessed_at_epoch, call, call_hash)]);
+				}
+			});
+		}
+	}
+
+	fn dispatch_call(
+		witnessed_at_epoch: EpochIndex,
+		current_epoch: EpochIndex,
+		call: <T as Config>::RuntimeCall,
+		call_hash: CallHash,
+	) {
 		let _result = with_storage_layer(move || {
 			call.dispatch_bypass_filter(
 				(if witnessed_at_epoch == current_epoch {
