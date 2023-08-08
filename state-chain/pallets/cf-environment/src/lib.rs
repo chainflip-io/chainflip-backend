@@ -198,19 +198,19 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
 				if next_version != T::CurrentCompatibilityVersion::get() {
-					return Err("NextCompatibilityVersion does not match the current runtime")
+					return Err("NextCompatibilityVersion does not match the current runtime".into())
 				}
 			} else {
-				return Err("NextCompatibilityVersion is not set")
+				return Err("NextCompatibilityVersion is not set".into())
 			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}

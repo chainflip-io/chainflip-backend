@@ -10,6 +10,8 @@ mod helper_functions;
 pub use helper_functions::*;
 
 #[cfg(feature = "try-runtime")]
+use frame_support::pallet_prelude::DispatchError;
+#[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
 /// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to version `TO`.
@@ -266,14 +268,14 @@ mod test_versioned_upgrade {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_data: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_data: Vec<u8>) -> Result<(), DispatchError> {
 			if Self::is_error_on_post_upgrade() {
-				Err("err")
+				Err("err".into())
 			} else {
 				Ok(())
 			}
