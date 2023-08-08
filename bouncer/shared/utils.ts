@@ -11,7 +11,9 @@ import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
+import { getCFTesterAbi } from './eth_abis';
+
+const cfTesterAbi = await getCFTesterAbi();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -175,13 +177,14 @@ export async function observeEvent(
         event.section.includes(expectedSection) &&
         event.method.includes(expectedMethod)
       ) {
-        result = {
+        const expectedEvent = {
           name: { section: event.section, method: event.method },
           data: event.toHuman().data,
           block: header.number.toNumber(),
           event_index: index,
         };
-        if (query(result)) {
+        if (query(expectedEvent)) {
+          result = expectedEvent;
           eventFound = true;
           unsubscribe();
         }

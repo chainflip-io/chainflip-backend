@@ -1,12 +1,14 @@
 import Web3 from 'web3';
-import { assetDecimals } from '@chainflip-io/cli';
+import { assetDecimals, approveVault } from '@chainflip-io/cli';
 import { amountToFineAmount, ethNonceMutex } from './utils';
 
 let nextNonce: number | undefined;
 
-export async function getNextEthNonce(forceQuery?: boolean): Promise<number> {
+export async function getNextEthNonce(
+  callback?: (nextNonce: number) => ReturnType<typeof approveVault>,
+): Promise<number> {
   return ethNonceMutex.runExclusive(async () => {
-    if (nextNonce === undefined || forceQuery) {
+    if (nextNonce === undefined) {
       const ethEndpoint = process.env.ETH_ENDPOINT || 'http://127.0.0.1:8545';
       const web3 = new Web3(ethEndpoint);
       const whaleKey =
@@ -15,6 +17,10 @@ export async function getNextEthNonce(forceQuery?: boolean): Promise<number> {
       const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
       const txCount = await web3.eth.getTransactionCount(address);
       nextNonce = txCount;
+    }
+    // The SDK returns null if no transaction is sent
+    if (callback && (await callback(nextNonce)) === null) {
+      return nextNonce;
     }
     return nextNonce++;
   });
@@ -49,6 +55,7 @@ export async function signAndSendTxEth(to: string, value?: string, data?: string
       ' blockHash: ' +
       receipt.blockHash,
   );
+  return receipt;
 }
 
 export async function sendEth(ethereumAddress: string, ethAmount: string) {

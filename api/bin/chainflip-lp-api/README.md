@@ -118,7 +118,7 @@ Parameters:
 - Asset as a camel-case string, eg "Eth" or "Dot"
 - Lower tick as i32
 - Upper tick as i32
-- Asset amount as u128
+- Order size amount as RangeOrderSize
 
 Return:
 

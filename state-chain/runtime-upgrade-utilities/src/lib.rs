@@ -29,26 +29,83 @@ pub struct VersionedMigration<
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime_helpers {
-	use frame_support::{storage_alias, traits::PalletInfoAccess, Twox64Concat};
-	use sp_std::{
-		cmp::{max, min},
-		vec::Vec,
-	};
+	use frame_support::traits::PalletInfoAccess;
+	use sp_std::vec::Vec;
 
-	#[storage_alias]
-	type MigrationBounds = StorageMap<RuntimeUpgradeUtils, Twox64Concat, Vec<u8>, (u16, u16)>;
+	#[cfg(feature = "std")]
+	pub use with_std::*;
 
-	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
-		MigrationBounds::mutate(T::name().as_bytes(), |bounds| {
-			*bounds = match bounds {
-				None => Some((FROM, TO)),
-				Some((lower, upper)) => Some((min(FROM, *(lower)), max(TO, *(upper)))),
-			}
-		});
+	#[cfg(not(feature = "std"))]
+	pub use without_std::*;
+
+	#[cfg(feature = "std")]
+	mod with_std {
+		use super::*;
+		use core::cell::RefCell;
+		use sp_std::{
+			cmp::{max, min},
+			collections::btree_map::BTreeMap,
+		};
+
+		thread_local! {
+			pub static MIGRATION_BOUNDS: RefCell<BTreeMap<&'static str, (u16, u16)>> = Default::default();
+			#[allow(clippy::type_complexity)]
+			pub static MIGRATION_STATE: RefCell<BTreeMap<&'static str, BTreeMap<(u16, u16), Vec<u8>>>> = Default::default();
+		}
+
+		pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
+			MIGRATION_BOUNDS.with(|cell| {
+				cell.borrow_mut()
+					.entry(T::name())
+					.and_modify(|(from, to)| {
+						*from = min(*from, FROM);
+						*to = max(*to, TO);
+					})
+					.or_insert((FROM, TO));
+			});
+		}
+
+		pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
+			MIGRATION_BOUNDS.with(|cell| cell.borrow().get(T::name()).copied())
+		}
+
+		pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
+			MIGRATION_STATE
+				.with(|cell| cell.borrow_mut().entry(T::name()).or_default().insert((FROM, TO), s));
+		}
+
+		pub fn restore_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> Vec<u8> {
+			MIGRATION_STATE.with(|cell| {
+				cell.borrow()
+					.get(T::name())
+					.cloned()
+					.unwrap_or_default()
+					.get(&(FROM, TO))
+					.cloned()
+					.unwrap_or_default()
+			})
+		}
 	}
 
-	pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
-		MigrationBounds::get(T::name().as_bytes())
+	#[cfg(not(feature = "std"))]
+	mod without_std {
+		use super::*;
+
+		pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
+			log::warn!("❗️ Runtime upgrade utilities are not supported in no-std.");
+		}
+
+		pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
+			Default::default()
+		}
+
+		pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
+			log::warn!("❗️ Runtime upgrade utilities are not supported in no-std.");
+		}
+
+		pub fn restore_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> Vec<u8> {
+			Default::default()
+		}
 	}
 }
 
@@ -88,36 +145,48 @@ where
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		let state = U::pre_upgrade()?;
-		log::info!(
-			"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
-			P::name(),
-			FROM,
-			TO
-		);
-		Ok(state)
+		if should_upgrade::<P, FROM, TO>() {
+			let state = U::pre_upgrade().map_err(|e| {
+				log::error!(
+					"💥 {}: Pre-upgrade checks for migration failed at stage {FROM}->{TO}: {:?}",
+					P::name(),
+					e
+				);
+				"🛑 Pallet pre-upgrade checks failed."
+			})?;
+			log::info!(
+				"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
+				P::name(),
+				FROM,
+				TO
+			);
+			try_runtime_helpers::save_state::<P, FROM, TO>(state.clone());
+			Ok(state)
+		} else {
+			Ok(Vec::new())
+		}
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-		let (_, expected_version) =
-			try_runtime_helpers::get_migration_bounds::<P>().ok_or_else(|| {
-				log::error!("💥 {}: Expected a runtime storage upgrade.", P::name(),);
-				"🛑 Pallet expected a runtime storage upgrade."
-			})?;
-
-		if <P as GetStorageVersion>::on_chain_storage_version() == expected_version {
-			U::post_upgrade(state)?;
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+		if let Some((lowest, highest)) = try_runtime_helpers::get_migration_bounds::<P>() {
+			assert_eq!(
+				<P as GetStorageVersion>::on_chain_storage_version(),
+				highest,
+				"Runtime upgrade expected to process all pre-checks, then upgrade, then all post-checks.",
+			);
+			U::post_upgrade(try_runtime_helpers::restore_state::<P, FROM, TO>()).map_err(|e| {
+					log::error!(
+					"💥 {}: Post-upgrade checks for migration from version {lowest} to {highest} failed at stage {FROM}->{TO}: {:?}",
+					P::name(),
+					e
+				);
+					"🛑 Pallet post-upgrade checks failed."
+				})?;
 			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
 			Ok(())
 		} else {
-			log::error!(
-				"💥 {}: Expected post-upgrade storage version {:?}, found {:?}.",
-				P::name(),
-				expected_version,
-				<P as GetStorageVersion>::on_chain_storage_version(),
-			);
-			Err("🛑 Pallet storage migration version mismatch.")
+			Ok(())
 		}
 	}
 }

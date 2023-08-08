@@ -30,6 +30,17 @@ pub enum AuctionError {
 	NotEnoughBidders,
 }
 
+/// The outcome of a successful auction.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub struct AuctionOutcome<Id, Amount> {
+	/// The auction winners, sorted by descending bid.
+	pub winners: Vec<Id>,
+	/// The auction losers, sorted by descending bid.
+	pub losers: Vec<Id>,
+	/// The resulting bond for the next epoch.
+	pub bond: Amount,
+}
+
 impl<T: Config> From<AuctionError> for Error<T> {
 	fn from(err: AuctionError) -> Self {
 		match err {
@@ -57,6 +68,7 @@ impl SetSizeMaximisingAuctionResolver {
 	pub fn resolve_auction<CandidateId: Clone, BidAmount: Copy + AtLeast32BitUnsigned>(
 		&self,
 		mut auction_candidates: Vec<Bid<CandidateId, BidAmount>>,
+		auction_bid_cutoff_percentage: Percent,
 	) -> Result<AuctionOutcome<CandidateId, BidAmount>, AuctionError> {
 		ensure!(auction_candidates.len() as u32 >= self.parameters.min_size, {
 			log::error!(
@@ -74,16 +86,29 @@ impl SetSizeMaximisingAuctionResolver {
 
 		auction_candidates.sort_unstable_by_key(|&Bid { amount, .. }| Reverse(amount));
 
-		let losers = auction_candidates
-			.split_off(min(target_size as usize, auction_candidates.len()))
-			.into_iter()
-			.map(Into::into)
-			.collect();
+		let losers =
+			auction_candidates.split_off(min(target_size as usize, auction_candidates.len()));
 		let bond = auction_candidates
 			.last()
 			.map(|bid| bid.amount)
 			.expect("Can't run auction with no candidates, and candidates must be funded > 0.");
 		let winners = auction_candidates.into_iter().map(|bid| bid.bidder_id).collect();
+		let cutoff_bid = auction_bid_cutoff_percentage * bond;
+
+		debug_assert!(losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
+
+		let losers = losers
+			.into_iter()
+			.map_while(
+				|Bid { amount, bidder_id }| {
+					if amount >= cutoff_bid {
+						Some(bidder_id)
+					} else {
+						None
+					}
+				},
+			)
+			.collect();
 
 		Ok(AuctionOutcome { winners, losers, bond })
 	}
@@ -146,14 +171,10 @@ mod test_auction_resolution {
 
 	macro_rules! check_auction_resolution_invariants {
 		($candidates:ident, $resolver:ident, $outcome:ident) => {
-			let AuctionOutcome { winners, losers, bond } = $outcome;
+			let AuctionOutcome { winners, losers, .. } = $outcome;
 
 			assert_eq!(
-				winners
-					.iter()
-					.chain(losers.iter().map(|bid| &bid.bidder_id))
-					.cloned()
-					.collect::<BTreeSet<_>>(),
+				winners.iter().chain(losers.iter()).cloned().collect::<BTreeSet<_>>(),
 				$candidates.iter().map(|bid| bid.bidder_id).collect::<BTreeSet<_>>(),
 				"Winners and losers together must make up all candidates."
 			);
@@ -171,10 +192,6 @@ mod test_auction_resolution {
 				winners.len() as u32 <= $resolver.current_size + $resolver.parameters.max_expansion,
 				"max_expansion constraint violated."
 			);
-
-			for Bid { amount, .. } in losers.iter() {
-				assert!(*amount <= bond, "All losing bids must be less than or equal to the bond.");
-			}
 		};
 	}
 
@@ -192,7 +209,9 @@ mod test_auction_resolution {
 			.map(|bidder_id| Bid { bidder_id, amount: 100u128 })
 			.collect::<Vec<_>>();
 
-		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
+		let outcome = auction_resolver
+			.resolve_auction(candidates.clone(), Default::default())
+			.unwrap();
 
 		assert_eq!(outcome.winners.len() as u32, MAX_SIZE);
 
@@ -213,7 +232,9 @@ mod test_auction_resolution {
 			.map(|bidder_id| Bid { bidder_id, amount: 100u128 })
 			.collect::<Vec<_>>();
 
-		let outcome = auction_resolver.resolve_auction(candidates.clone()).unwrap();
+		let outcome = auction_resolver
+			.resolve_auction(candidates.clone(), Default::default())
+			.unwrap();
 
 		assert_eq!(outcome.winners.len() as u32, CURRENT_SIZE + MAX_EXPANSION);
 
@@ -243,11 +264,42 @@ mod test_auction_resolution {
 			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
 			.collect();
 
-		let outcome = auction_resolver.resolve_auction(candidates).unwrap();
+		let outcome = auction_resolver.resolve_auction(candidates, Default::default()).unwrap();
 
 		assert_eq!(outcome.bond, 195);
 		assert_eq!(outcome.winners.len(), CURRENT_SIZE as usize);
+	}
 
-		assert!(outcome.losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
+	#[test]
+	fn losers_are_cut_off_at_cutoff_percentage() {
+		const CURRENT_SIZE: u32 = 100;
+		const MAX_EXPANSION: u32 = 0;
+		const NUM_LOSERS: u32 = 50;
+		const CUTOFF_PERCENT: Percent = Percent::from_percent(50);
+		const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
+			min_size: CURRENT_SIZE,
+			max_size: CURRENT_SIZE,
+			max_expansion: MAX_EXPANSION,
+		};
+		let auction_resolver =
+			SetSizeMaximisingAuctionResolver::try_new(CURRENT_SIZE, AUCTION_PARAMETERS).unwrap();
+
+		use nanorand::{Rng, WyRand};
+
+		let candidates = 0u32..(CURRENT_SIZE + NUM_LOSERS);
+		let mut bids: Vec<_> = (0..(CURRENT_SIZE + NUM_LOSERS)).collect();
+		WyRand::new_seed(4).shuffle(&mut bids);
+
+		let candidates: Vec<_> = candidates
+			.zip(bids)
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+			.collect();
+
+		let outcome = auction_resolver.resolve_auction(candidates, CUTOFF_PERCENT).unwrap();
+
+		assert_eq!(outcome.bond, NUM_LOSERS);
+		assert_eq!(outcome.winners.len(), CURRENT_SIZE as usize);
+
+		assert_eq!(outcome.losers.len() as u32, CUTOFF_PERCENT * NUM_LOSERS);
 	}
 }

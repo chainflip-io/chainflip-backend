@@ -22,7 +22,7 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
   return destAddress;
 }
 
-type SwapParams = {
+export type SwapParams = {
   sourceAsset: Asset;
   destAsset: Asset;
   depositAddress: string;
@@ -157,4 +157,6 @@ export async function performSwap(
     messageMetadata,
   );
   await doPerformSwap(swapParams, tag, messageMetadata, senderType);
+
+  return swapParams;
 }

@@ -8,7 +8,7 @@ pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
 pub const MIN_AUTHORITIES: AuthorityCount = 2;
 
 /// Percent of the epoch we are allowed to redeem
-pub const PERCENT_OF_EPOCH_PERIOD_REDEEMABLE: u8 = 50;
+pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
 
 // Consider the equation (1 + x/1_000_000_000)^n = 1 + inf/100
 // where inf is the target yearly inflation (percent), n is the number of compundings that

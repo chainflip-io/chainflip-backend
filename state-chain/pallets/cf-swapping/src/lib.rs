@@ -249,6 +249,7 @@ pub mod pallet {
 
 	/// Minimum swap amount for each asset.
 	#[pallet::storage]
+	#[pallet::getter(fn minimum_swap_amount)]
 	pub type MinimumSwapAmount<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
@@ -868,6 +869,14 @@ pub mod pallet {
 					egress_id,
 					asset: ccm_swap.destination_asset,
 					amount: ccm_output_principal,
+				});
+			}
+			if let Some(swap_id) = ccm_swap.gas_swap_id {
+				Self::deposit_event(Event::<T>::SwapEgressScheduled {
+					swap_id,
+					egress_id,
+					asset: gas_asset,
+					amount: ccm_output_gas,
 				});
 			}
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
