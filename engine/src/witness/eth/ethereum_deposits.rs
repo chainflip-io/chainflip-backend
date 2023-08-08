@@ -33,6 +33,13 @@ use super::super::common::{
 use crate::eth::retry_rpc::EthersRetryRpcApi;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
+	/// We track Ethereum deposits by checking the balance via our own deployed AddressChecker
+	/// contract. This is to ensure we can detect deposits from:
+	/// - A standard ETH transfer
+	/// - A transfer made via a contract, which would not be detected by checking the `to` field in
+	///   standard transfers since the `to` field would not be set
+	/// We do *not* officially support ETH deposited using Ethereum/Solidity's self-destruct.
+	/// See [below](`eth_ingresses_at_block`) for more details.
 	pub async fn ethereum_deposits<StateChainClient, EthRetryRpcClient>(
 		self,
 		state_chain_client: Arc<StateChainClient>,
@@ -180,6 +187,20 @@ where
 		.zip(previous_address_states.into_iter().zip(address_states)))
 }
 
+/// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
+/// `eth_ingresses_at_block`.
+///
+/// if !address.hasContract:
+///    swap = address.balanceAtCurrentBlock - address.balanceAtPreviousBlock
+///  else:
+///    swap = (sum of amounts in the FetchedNative events for the particular sender) -
+/// address.balanceAtPreviousBlock
+///
+/// We then do this on *every* block. This ensures we don't miss anything. See the tests below.
+/// The `FetchedNative` events are emitted by the Deposit contracts that are deployed to the
+/// addresses we generate.
+/// Note that when we have a contract deployed already we substrate the balance at the previous
+/// block, since we will have already witnessed the deposits at the time the deposit was made.
 pub fn eth_ingresses_at_block<
 	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
 >(
