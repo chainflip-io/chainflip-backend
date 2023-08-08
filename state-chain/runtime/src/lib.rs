@@ -1030,6 +1030,10 @@ impl_runtime_apis! {
 		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
 			LiquidityPools::get_pool(asset)
 		}
+
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
+			Swapping::minimum_swap_amount(asset)
+		}
 	}
 
 	// END custom runtime APIs

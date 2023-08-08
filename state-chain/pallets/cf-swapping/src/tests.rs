@@ -947,6 +947,7 @@ fn can_set_minimum_swap_amount() {
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, amount));
 
 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), amount);
+		assert_eq!(Swapping::minimum_swap_amount(asset), amount);
 
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
 			asset,

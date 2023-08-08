@@ -112,5 +112,6 @@ decl_runtime_apis!(
 			-> Option<SwapOutput>;
 		fn cf_environment() -> Environment;
 		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 	}
 );
