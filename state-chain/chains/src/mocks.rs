@@ -251,7 +251,12 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(_call: &Call, _payload: &<Abi as ChainCrypto>::Payload) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &Call,
+		_payload: &<Abi as ChainCrypto>::Payload,
+		_current_key: &<Abi as ChainCrypto>::AggKey,
+		_signature: &<Abi as ChainCrypto>::ThresholdSignature,
+	) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
 }
