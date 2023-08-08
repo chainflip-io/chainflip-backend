@@ -1076,6 +1076,7 @@ impl<T: Config> Pallet<T> {
 				target: "cf-validator",
 				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
+			T::VaultRotator::abort_vault_rotation();
 			Self::abort_rotation();
 			return
 		}

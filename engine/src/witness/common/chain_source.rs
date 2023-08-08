@@ -1,6 +1,7 @@
 pub mod and_then;
 pub mod extension;
 pub mod lag_safety;
+pub mod logging;
 pub mod shared;
 pub mod strictly_monotonic;
 pub mod then;
@@ -22,8 +23,8 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
-	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Index: core::fmt::Debug + Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Hash: core::fmt::Debug + PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
 
