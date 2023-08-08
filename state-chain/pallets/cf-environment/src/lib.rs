@@ -21,7 +21,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 mod benchmarking;
 
@@ -265,7 +265,8 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
 		#[pallet::call_index(1)]
-		// This weight is not strictly correct but since it's a governance call, weight is irrelevant.
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
 		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
@@ -301,7 +302,8 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
 		#[pallet::call_index(2)]
-		// This weight is not strictly correct but since it's a governance call, weight is irrelevant.
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
 		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
@@ -373,7 +375,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	pub struct GenesisConfig {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,

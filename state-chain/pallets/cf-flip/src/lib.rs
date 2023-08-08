@@ -208,7 +208,6 @@ pub mod pallet {
 		pub total_issuance: T::Balance,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			use frame_support::sp_runtime::traits::Zero;

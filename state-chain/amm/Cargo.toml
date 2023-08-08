@@ -8,7 +8,7 @@ description = "Chainflip's AMM Logic"
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-serde = { version = '1.0', default-features = false, features = ['derive'] }
+serde = { version = '1.0', default-features = false, features = ['alloc', 'derive'] }
 
 # Parity deps
 codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = ['derive'] }

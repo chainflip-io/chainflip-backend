@@ -28,14 +28,14 @@ use cf_traits::{
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
+	sp_runtime::{
+		traits::{BlockNumberProvider, Saturating, Zero},
+		RuntimeDebug,
+	},
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
-use frame_support::sp_runtime::{
-	traits::{BlockNumberProvider, Saturating, Zero},
-	RuntimeDebug,
-};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
@@ -301,7 +301,6 @@ pub mod pallet {
 		pub _instance: PhantomData<I>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {

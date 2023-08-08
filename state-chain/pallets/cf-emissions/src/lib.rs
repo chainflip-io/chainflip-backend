@@ -16,12 +16,14 @@ mod benchmarking;
 mod mock;
 mod tests;
 
-use frame_support::traits::{Get, Imbalance};
-use sp_arithmetic::traits::UniqueSaturatedFrom;
-use frame_support::sp_runtime::{
-	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
-	Rounding, SaturatedConversion,
+use frame_support::{
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
+		Rounding, SaturatedConversion,
+	},
+	traits::{Get, Imbalance},
 };
+use sp_arithmetic::traits::UniqueSaturatedFrom;
 
 use cf_primitives::{chains::AnyChain, Asset};
 
@@ -263,7 +265,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	pub struct GenesisConfig {
 		pub current_authority_emission_inflation: u32,
 		pub backup_node_emission_inflation: u32,

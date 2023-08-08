@@ -1,17 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
-use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
-pub use pallet::*;
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi,
 };
-use frame_support::sp_runtime::DispatchResult;
-use frame_support::sp_runtime::{traits::BlockNumberProvider, Saturating};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::BlockNumberProvider, DispatchResult, Saturating},
+};
+use frame_system::pallet_prelude::*;
+pub use pallet::*;
 use sp_std::vec::Vec;
 
 mod benchmarking;
@@ -146,7 +147,6 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { lp_ttl: T::BlockNumber::from(1200u32) }

@@ -17,10 +17,10 @@ pub use weights::WeightInfo;
 
 use frame_support::{
 	pallet_prelude::*,
+	sp_runtime::traits::{BlockNumberProvider, Saturating, Zero},
 	traits::{Get, OnKilledAccount},
 };
 pub use pallet::*;
-use frame_support::sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
 	iter::{self, Iterator},
@@ -364,7 +364,6 @@ pub mod pallet {
 		pub genesis_validators: Vec<T::ValidatorId>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {

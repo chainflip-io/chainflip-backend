@@ -17,7 +17,7 @@ mockall = {version = "0.11.0", optional = true}
 futures = {version = "0.3.14", optional = true}
 tokio = {version = "1.13.1", features = ["full"], optional = true}
 lazy_format = "2.0"
-serde = { version = "1.0", optional = true}
+serde = { version = "1.0", optional = true, default_features = false, features = ["alloc", "derive"] }
 async-channel = { version = "1.7.1", optional = true}
 tempfile = { version = "3.3.0", optional = true}
 itertools = {version = "0.10", default_features = false}
@@ -33,22 +33,29 @@ tempfile = "3.3.0"
 
 [features]
 default = ['std']
-test-utils = ['tempfile', 'tracing', 'tracing-subscriber']
+test-utils = [
+  'dep:tempfile',
+  'dep:tracing',
+  'dep:tracing-subscriber',
+]
 std = [
-  'anyhow',
-  'async-broadcast',
-  'predicates',
-  'mockall',
-  'futures',
-  'tokio',
+  'dep:anyhow',
+  'dep:async-broadcast',
+  'dep:predicates',
+  'dep:mockall',
+  'dep:futures',
+  'dep:tokio',
   'hex/std',
-  'serde',
-  'async-channel',
+  'dep:async-channel',
   'itertools/use_std',
-  'pin-project',
-  'tracing',
-  'tracing-subscriber',
-  'warp',
-  'sp-rpc',
-  'num-traits',
+  'dep:pin-project',
+  'serde/std',
+  'dep:tracing',
+  'dep:tracing-subscriber',
+  'dep:warp',
+  'dep:sp-rpc',
+  'dep:num-traits',
+]
+serde = [
+  'dep:serde',
 ]

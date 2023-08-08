@@ -118,8 +118,19 @@ impl Heartbeat for MockHeartbeat {
 	fn on_heartbeat_interval() {}
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum AllOffences {
 	MissedHeartbeat,
 	NotLockingYourComputer,

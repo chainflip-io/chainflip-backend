@@ -15,16 +15,11 @@ targets = ['x86_64-unknown-linux-gnu']
 substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-07', optional = true }
 
 [dependencies]
-# Required to get wasm to compile.
-# See https://docs.rs/getrandom/#webassembly-support
-getrandom = { version = '0.2.3', features = ['js'], default-features = false }
-
-hex-literal = "0.3.1"
+hex-literal = "0.4.1"
 log = { version = '0.4.16', default-features = false }
 nanorand = { version = '0.7', default-features = false, features = ['wyrand']}
-serde = { version = '1.0.126', optional = true, features = ['derive'] }
+serde = { version = '1.0.126', default_features = false, features = ['alloc', 'derive'] }
 ethabi = {default-features = false, version = '18.0'}
-
 
 # Chainflip local dependencies
 cf-amm = { path = '../amm', default-features = false }
@@ -165,10 +160,9 @@ std = [
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment-rpc-runtime-api/std',
-  'pallet-transaction-payment-rpc-runtime-api/std',
   'pallet-transaction-payment/std',
   'scale-info/std',
-  'serde',
+  'serde/std',
   'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',

@@ -27,14 +27,14 @@ use cf_traits::{
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
+	sp_runtime::{
+		traits::{BlockNumberProvider, CheckedDiv, One, Saturating, UniqueSaturatedInto, Zero},
+		Percent, Permill,
+	},
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
 pub use pallet::*;
 use sp_core::ed25519;
-use frame_support::sp_runtime::{
-	traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
-	Percent, Permill,
-};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	prelude::*,
@@ -94,9 +94,9 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 pub mod pallet {
 	use super::*;
 	use cf_traits::{AccountRoleRegistry, VaultStatus};
+	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
-	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -756,7 +756,6 @@ pub mod pallet {
 		pub max_expansion: AuthorityCount,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
@@ -1264,9 +1263,7 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 		Self::blocks_per_epoch()
 	}
 
-	fn estimate_current_session_progress(
-		now: T::BlockNumber,
-	) -> (Option<Permill>, Weight) {
+	fn estimate_current_session_progress(now: T::BlockNumber) -> (Option<Permill>, Weight) {
 		(
 			Some(Permill::from_rational(
 				now.saturating_sub(CurrentEpochStartedAt::<T>::get()),
