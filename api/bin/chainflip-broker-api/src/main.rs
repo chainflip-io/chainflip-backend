@@ -55,7 +55,15 @@ mod test {
 
 	#[test]
 	fn test_decoding() {
-		assert_eq!(parse_hex_bytes("0x00").unwrap(), b"00");
+		assert_eq!(parse_hex_bytes("0x00").unwrap(), vec![0]);
+		assert_eq!(parse_hex_bytes("cf").unwrap(), vec![0xcf]);
+		assert_eq!(
+			parse_hex_bytes("0x00112233445566778899aabbccddeeff").unwrap(),
+			vec![
+				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+				0xee, 0xff
+			]
+		);
 		assert_eq!(parse_hex_bytes("").unwrap(), b"");
 		assert_err!(parse_hex_bytes("abc"));
 	}

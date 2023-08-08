@@ -72,6 +72,12 @@ export async function executeContractSwap(
 
   return receipt;
 }
+export type ContractSwapParams = {
+  sourceAsset: Asset;
+  destAsset: Asset;
+  destAddress: string;
+  txHash: string;
+};
 
 export async function performSwapViaContract(
   sourceAsset: Asset,
@@ -79,7 +85,7 @@ export async function performSwapViaContract(
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
-) {
+): Promise<ContractSwapParams> {
   const api = await getChainflipApi();
 
   const tag = swapTag ?? '';
@@ -112,6 +118,12 @@ export async function performSwapViaContract(
       ccmEventEmitted,
     ]);
     console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    return {
+      sourceAsset,
+      destAsset,
+      destAddress,
+      txHash: receipt.transactionHash,
+    };
   } catch (err) {
     throw new Error(`${tag} ${err}`);
   }

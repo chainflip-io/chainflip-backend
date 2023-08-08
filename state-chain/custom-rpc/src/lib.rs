@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, EthereumAddress, SemVer, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, EthereumAddress, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::Pool;
@@ -212,6 +212,8 @@ pub trait CustomApi {
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
+	#[method(name = "min_swap_amount")]
+	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 }
 
 /// An RPC extension for the state chain node.
@@ -559,6 +561,13 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_compatibility_version(&self.query_block_id(None))
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {
+		self.client
+			.runtime_api()
+			.cf_min_swap_amount(&self.query_block_id(None), asset)
 			.map_err(to_rpc_error)
 	}
 }
