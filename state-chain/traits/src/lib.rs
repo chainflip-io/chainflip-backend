@@ -26,14 +26,14 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
 	pallet_prelude::Member,
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
+	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-use frame_support::sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
-};
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
 
 /// Common base config for Chainflip pallets.
