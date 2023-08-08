@@ -651,7 +651,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						deposit_address.clone().into(),
 					),
 					channel_id,
-					ingress_block_height: block_height.into(),
+					deposit_block_height: block_height.into(),
 				},
 			),
 		};

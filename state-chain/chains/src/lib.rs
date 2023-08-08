@@ -323,7 +323,7 @@ pub enum SwapOrigin {
 	DepositChannel {
 		deposit_address: address::EncodedAddress,
 		channel_id: ChannelId,
-		ingress_block_height: u64,
+		deposit_block_height: u64,
 	},
 	Vault {
 		tx_hash: TransactionHash,

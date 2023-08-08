@@ -483,7 +483,7 @@ fn can_process_ccm_deposit() {
 						deposit_address.into()
 					),
 					channel_id: 1,
-					ingress_block_height: Default::default()
+					deposit_block_height: Default::default()
 				}
 			}]
 		);

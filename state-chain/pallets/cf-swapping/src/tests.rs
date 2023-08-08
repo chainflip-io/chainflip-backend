@@ -243,7 +243,7 @@ fn expect_swap_id_to_be_emitted() {
 				origin: SwapOrigin::DepositChannel {
 					deposit_address: EncodedAddress::Eth(..),
 					channel_id: 1,
-					ingress_block_height: 0
+					deposit_block_height: 0
 				},
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..))
 			}),
@@ -1096,7 +1096,7 @@ fn swap_by_deposit_happy_path() {
 			origin: SwapOrigin::DepositChannel {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
-				ingress_block_height: Default::default(),
+				deposit_block_height: Default::default(),
 			},
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 		}));
