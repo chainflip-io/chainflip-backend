@@ -7,7 +7,7 @@ use frame_support::instances::*;
 
 /// Allows a type to be used as an alias for a pallet `Instance`.
 pub trait PalletInstanceAlias {
-	type Instance: 'static;
+	type Instance: Send + Sync + 'static;
 }
 
 impl PalletInstanceAlias for cf_chains::eth::Ethereum {

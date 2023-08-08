@@ -83,6 +83,8 @@ pub trait RuntimeCallHasChain<Runtime: RuntimeHasChain<TChain>, TChain: External
 	std::convert::From<pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>>
 	+ std::convert::From<
 		pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+	> + std::convert::From<
+		pallet_cf_broadcast::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 	>
 {
 }
@@ -93,6 +95,8 @@ where
 			pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 		> + std::convert::From<
 			pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+		> + std::convert::From<
+			pallet_cf_broadcast::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 		>,
 {
 }
