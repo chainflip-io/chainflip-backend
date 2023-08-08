@@ -1,5 +1,5 @@
 #![feature(absolute_path)]
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
@@ -13,8 +13,9 @@ use api::{
 	lp::LpApi, primitives::RedemptionAmount, AccountId32, BrokerApi, GovernanceApi, KeyPair,
 	OperatorApi, StateChainApi, SwapDepositAddress,
 };
+use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
-use utilities::{clean_eth_address, task_scope::task_scope};
+use utilities::{clean_hex_address, task_scope::task_scope};
 
 mod settings;
 
@@ -133,15 +134,11 @@ async fn request_redemption(
 	eth_address: &str,
 ) -> Result<()> {
 	// Sanitise data
-	let eth_address: [u8; 20] = clean_eth_address(eth_address)
-		.context("Invalid ETH address supplied")
-		.and_then(|eth_address|
-			if eth_address == [0; 20] {
-				Err(anyhow!("Cannot submit redemption to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
-			} else {
-				Ok(eth_address)
-			}
-		)?;
+	let eth_address = EthereumAddress::from_slice(
+		clean_hex_address::<[u8; 20]>(eth_address)
+			.context("Invalid ETH address supplied")?
+			.as_slice(),
+	);
 
 	let amount = match amount {
 		Some(amount_float) => {
@@ -221,7 +218,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 		seed_phrase: String,
 		ethereum_key: KeyPair,
 		#[serde(with = "hex")]
-		ethereum_address: [u8; 20],
+		ethereum_address: EthereumAddress,
 		signing_key: KeyPair,
 		signing_account_id: AccountId32,
 	}
@@ -234,7 +231,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				"🔑 Ethereum public key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum address: 0x{}", hex::encode(self.ethereum_address))?;
+			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
 			writeln!(
 				f,
 				"🔑 Validator public key: 0x{}",

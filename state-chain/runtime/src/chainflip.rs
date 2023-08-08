@@ -31,15 +31,14 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
+		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
 	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
@@ -276,17 +275,16 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 impl EthEnvironmentProvider for EthEnvironment {
 	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 		match asset {
-			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
+			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
 	fn contract_address(contract: EthereumContract) -> eth::Address {
 		match contract {
-			EthereumContract::StateChainGateway =>
-				Environment::state_chain_gateway_address().into(),
-			EthereumContract::KeyManager => Environment::key_manager_address().into(),
-			EthereumContract::Vault => Environment::eth_vault_address().into(),
+			EthereumContract::StateChainGateway => Environment::state_chain_gateway_address(),
+			EthereumContract::KeyManager => Environment::key_manager_address(),
+			EthereumContract::Vault => Environment::eth_vault_address(),
 		}
 	}
 

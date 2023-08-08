@@ -15,10 +15,9 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::RegisterRedemption;
+use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 #[cfg(feature = "std")]
 use cf_primitives::AccountRole;
-use cf_primitives::EthereumAddress;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
 	Chainflip, EpochInfo, FeePayment, Funding,
@@ -440,7 +439,7 @@ pub mod pallet {
 				let call = T::RegisterRedemption::new_unsigned(
 					<T as Config>::FunderId::from_ref(&account_id).as_ref(),
 					net_amount.unique_saturated_into(),
-					&address,
+					address.as_fixed_bytes(),
 					contract_expiry,
 				);
 

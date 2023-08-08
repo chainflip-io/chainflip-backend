@@ -49,7 +49,8 @@ impl KeyUtils for EthKeyComponents {
 		let k = SecretKey::parse(&k).unwrap();
 		let signature = self.agg_key.sign(message, &self.secret, &k);
 
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let k_times_g_address =
+			to_ethereum_address(PublicKey::from_secret_key(&k)).to_fixed_bytes();
 		SchnorrVerificationComponents { s: signature, k_times_g_address }
 	}
 
