@@ -10,7 +10,7 @@ use frame_benchmarking::{account, benchmarks_instance_pallet};
 
 benchmarks_instance_pallet! {
 	disable_asset_egress {
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 	} : { let _ = Pallet::<T, I>::enable_or_disable_egress(origin, destination_asset, true); }
 	verify {
@@ -39,7 +39,7 @@ benchmarks_instance_pallet! {
 	}
 
 	set_minimum_deposit {
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount =  BenchmarkValue::benchmark_value();
 	} : { let _ = Pallet::<T, I>::set_minimum_deposit(origin, destination_asset, amount); }
@@ -52,7 +52,7 @@ benchmarks_instance_pallet! {
 	finalise_ingress {
 		let a in 1 .. 100;
 		let mut addresses = vec![];
-		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		for i in 1..a {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);

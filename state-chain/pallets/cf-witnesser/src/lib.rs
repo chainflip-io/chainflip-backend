@@ -417,8 +417,8 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		RawOrigin::HistoricalActiveEpochWitnessThreshold.into()
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::HistoricalActiveEpochWitnessThreshold.into())
 	}
 }
 
@@ -450,7 +450,7 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		RawOrigin::CurrentEpochWitnessThreshold.into()
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::CurrentEpochWitnessThreshold.into())
 	}
 }

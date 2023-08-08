@@ -67,7 +67,7 @@ benchmarks! {
 			ttl,
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert_eq!(crate::LpTTL::<T>::get(), ttl);
 	}

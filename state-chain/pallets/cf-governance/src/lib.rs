@@ -460,8 +460,8 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		RawOrigin::GovernanceApproval.into()
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::GovernanceApproval.into())
 	}
 }
 

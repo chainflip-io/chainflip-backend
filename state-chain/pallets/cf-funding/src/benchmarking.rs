@@ -25,7 +25,7 @@ benchmarks! {
 			funder: withdrawal_address,
 			tx_hash,
 		};
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -40,7 +40,7 @@ benchmarks! {
 		let withdrawal_address: EthereumAddress = Default::default();
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
@@ -61,7 +61,7 @@ benchmarks! {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
 		Call::<T>::funded {
 			account_id: caller.clone(),
@@ -84,7 +84,7 @@ benchmarks! {
 		let withdrawal_address: EthereumAddress = Default::default();
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let funds = MinimumFunding::<T>::get() * T::Amount::from(10u32);
 
 		Call::<T>::funded {
@@ -114,7 +114,7 @@ benchmarks! {
 		let withdrawal_address: EthereumAddress = Default::default();
 
 		let caller: T::AccountId = whitelisted_caller();
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 
 		Call::<T>::funded {
 			account_id: caller.clone(),
@@ -161,7 +161,7 @@ benchmarks! {
 			minimum_funding: MinimumFunding::<T>::get(),
 		};
 
-		let origin = <T as Chainflip>::EnsureGovernance::successful_origin();
+		let origin = <T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(MinimumFunding::<T>::get(), MinimumFunding::<T>::get());
@@ -173,7 +173,7 @@ benchmarks! {
 			amount,
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert_eq!(crate::RedemptionTax::<T>::get(), amount);
 	}
@@ -200,7 +200,7 @@ benchmarks! {
 			addresses_to_remove: (1 .. b as u32).map(|_| Default::default()).collect::<Vec<_>>()
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
