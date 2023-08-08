@@ -212,8 +212,8 @@ pub trait CustomApi {
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
-	#[method(name = "min_swapping_amount")]
-	fn cf_min_swapping_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
+	#[method(name = "min_swap_amount")]
+	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 }
 
 /// An RPC extension for the state chain node.
@@ -565,7 +565,7 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_min_swapping_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {
+	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {
 		self.client
 			.runtime_api()
 			.cf_min_swap_amount(&self.query_block_id(None), asset)
