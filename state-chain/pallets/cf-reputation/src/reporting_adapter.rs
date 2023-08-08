@@ -73,6 +73,9 @@ where
 		_reporters: Vec<T::ValidatorId>,
 		offence: O,
 	) -> Result<(), sp_staking::offence::OffenceError> {
+		if !T::SafeMode::get().reporting_enabled {
+			return Ok(())
+		}
 		const CF_ERROR_EXPECTED_SINGLE_OFFENDER: u8 = 0xcf;
 
 		let offenders = offence.offenders();

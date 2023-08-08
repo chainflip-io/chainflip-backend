@@ -600,6 +600,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
+	type SafeMode = chainflip::RuntimeSafeMode;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {

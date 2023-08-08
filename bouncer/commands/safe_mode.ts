@@ -8,8 +8,12 @@
 // For "amber" mode, you can specify which features should remain enabled. For this, as the second argument
 // provide a comma separated list (without spaces!) of the features that should remain enabled.
 // Available features are:
-// emissions_emissionsSyncEnabled, funding_redeemEnabled, swapping_swapsEnabled, swapping_withdrawalsEnabled,
-// liquidityProvider_depositEnabled, liquidityProvider_withdrawalEnabled, validator_authorityRotationEnabled
+// emissions_emissionsSyncEnabled, funding_redeemEnabled, funding_startBiddingEnabled, funding_stopBiddingEnabled,
+// swapping_swapsEnabled, swapping_withdrawalsEnabled, swapping_depositsEnabled, swapping_brokerRegistrationEnabled,
+// pools_mintingRangeOrderEnabled, pools_mintingLimitOrderEnabled, pools_burningRangeOrderEnabled,
+// pools_burningLimitOrderEnabled, reputation_reportingEnabled, liquidityProvider_depositEnabled,
+// liquidityProvider_withdrawalEnabled, validator_authorityRotationEnabled, vaults_slashingEnabled
+//
 // For example: ./commands/safe_mode.ts amber swapping_swapsEnabled,swapping_withdrawalsEnabled
 
 import { runWithTimeout } from '../shared/utils';
