@@ -1178,6 +1178,7 @@ dependencies = [
  "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
+ "futures",
  "hex",
  "jsonrpsee 0.16.2",
  "serde",
