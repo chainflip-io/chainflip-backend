@@ -203,7 +203,7 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		(&call.threshold_signature_payload() == payload) &&
 			<Polkadot as ChainCrypto>::verify_threshold_signature(
 				current_key,
-				&call.threshold_signature_payload(),
+				payload,
 				signature,
 			)
 	}
