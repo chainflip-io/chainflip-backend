@@ -4,6 +4,8 @@ use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
+#[cfg(feature = "try-runtime")]
+use frame_support::dispatch::DispatchError;
 
 /// Runtime Migration for migrating from V0 to V1 based on perseverance at commit `3f3d1ea0` (branch
 /// `release/0.6`).
@@ -30,23 +32,26 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let pending_redemptions_accounts = PendingRedemptions::<T>::iter_keys().collect::<Vec<_>>();
 		let num_redemptions = pending_redemptions_accounts.len() as u32;
 		Ok((pending_redemptions_accounts, num_redemptions).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		let (pending_redemptions_accounts, num_redemptions) =
 			<(Vec<AccountId<T>>, u32)>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state.")?;
 		ensure!(
 			num_redemptions == pending_redemptions_accounts.len() as u32,
-			"Redemptions mismatch!"
+			DispatchError::from("Redemptions mismatch!")
 		);
 		for account in pending_redemptions_accounts {
-			ensure!(PendingRedemptions::<T>::get(account).is_some(), "Missing redemption!");
+			ensure!(
+				PendingRedemptions::<T>::get(account).is_some(),
+				DispatchError::from("Missing redemption!")
+			);
 		}
 		Ok(())
 	}
