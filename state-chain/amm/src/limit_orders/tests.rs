@@ -85,7 +85,7 @@ fn test_float() {
 		let initial_value = rng_u256(&mut rng);
 		let initial_float = FloatBetweenZeroAndOne::max();
 
-		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8, 256))
+		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8..256))
 			.map(|_| rng_u256_numerator_denominator(&mut rng))
 			.fold(
 				(initial_value, initial_value, initial_float.clone()),

@@ -35,6 +35,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0080: This advisory comes from `parity-util-mem`, which is unmaintained but not a security issue. It's a dependency of `substrate`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
+# - RUSTSEC-2020-0071: This advisory is related to a potential segfault, which can only happen in very specific circumstances.
 cf-audit = '''
 audit --ignore RUSTSEC-2022-0070
       --ignore RUSTSEC-2021-0145
@@ -46,4 +47,5 @@ audit --ignore RUSTSEC-2022-0070
       --ignore RUSTSEC-2020-0168
       --ignore RUSTSEC-2022-0080
       --ignore RUSTSEC-2022-0061
+      --ignore RUSTSEC-2020-0071
 '''
