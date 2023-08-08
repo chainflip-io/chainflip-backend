@@ -44,7 +44,7 @@ impl PolkadotSignature {
 
 impl PartialOrd for PolkadotSignature {
 	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-		self.aliased_ref().partial_cmp(other.aliased_ref())
+		Some(self.cmp(other))
 	}
 }
 
