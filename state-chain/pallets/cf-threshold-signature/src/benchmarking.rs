@@ -84,7 +84,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::set_threshold_signature_timeout {
 			new_timeout
 		};
-	} : { call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin())? }
+	} : { call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap())? }
 	verify {
 		assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
 	}

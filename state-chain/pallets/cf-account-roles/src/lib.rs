@@ -210,6 +210,12 @@ macro_rules! define_ensure_origin {
 					Err(o) => Err(o),
 				}
 			}
+
+			#[cfg(feature = "runtime-benchmarks")]
+			fn try_successful_origin() -> Result<<T as frame_system::Config>::RuntimeOrigin, ()> {
+				// Can't return a default account id with the correct role.
+				Err(())
+			}
 		}
 
 		/// Ensure that the origin is signed and that the signer operates the correct [AccountRole].
