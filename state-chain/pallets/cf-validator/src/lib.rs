@@ -371,8 +371,8 @@ pub mod pallet {
 							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
-							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <=
-								Self::current_consensus_threshold() {
+							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
+								Self::current_consensus_success_threshold() {
 								log::warn!(
 									target: "cf-validator",
 									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
@@ -408,7 +408,7 @@ pub mod pallet {
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
 							rotation_state.ban(offenders);
-							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
+							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) < Self::current_consensus_success_threshold() {
 								log::warn!(
 									target: "cf-validator",
 									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
@@ -1083,7 +1083,7 @@ impl<T: Config> Pallet<T> {
 
 		let authority_candidates = rotation_state.authority_candidates();
 		if let Some(sharing_participants) = helpers::select_sharing_participants(
-			Self::current_consensus_threshold(),
+			Self::current_consensus_success_threshold(),
 			rotation_state.unbanned_current_authorities::<T>(),
 			&authority_candidates,
 			block_number.unique_saturated_into(),
@@ -1162,10 +1162,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	///Note that the resulting threshold is the maximum number of parties not enough to generate a
-	/// signature, i.e. at least t+1 parties are required.
-	fn current_consensus_threshold() -> AuthorityCount {
-		cf_utilities::threshold_from_share_count(Self::current_authority_count())
+	/// The smallest number of parties that can generate a signature.
+	fn current_consensus_success_threshold() -> AuthorityCount {
+		cf_utilities::success_threshold_from_share_count(Self::current_authority_count())
 	}
 }
 
