@@ -283,6 +283,13 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   throw new Error('Failed to observe the fetch');
 }
 
+type EVMEvent = {
+  name: string;
+  address: string;
+  txHash: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  returnValues: any;
+};
 export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
@@ -290,7 +297,7 @@ export async function observeEVMEvent(
   eventName: string,
   eventParametersExpected: string[],
   initialBlockNumber?: number,
-): Promise<void> {
+): Promise<EVMEvent> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
@@ -302,6 +309,7 @@ export async function observeEVMEvent(
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
   let eventWitnessed = false;
+  let result: EVMEvent | undefined;
 
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
     const currentBlockNumber = await web3.eth.getBlockNumber();
@@ -320,6 +328,12 @@ export async function observeEVMEvent(
             break;
           } else if (k === parameterNames.length - 1) {
             eventWitnessed = true;
+            result = {
+              name: events[j].event,
+              address: events[j].address,
+              txHash: events[j].transactionHash,
+              returnValues: events[j].returnValues,
+            };
             break;
           }
         }
@@ -330,7 +344,7 @@ export async function observeEVMEvent(
   }
 
   if (eventWitnessed) {
-    return Promise.resolve();
+    return result as EVMEvent;
   }
   return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
 }
@@ -340,8 +354,8 @@ export async function observeCcmReceived(
   destAsset: Asset,
   address: string,
   messageMetadata: CcmDepositMetadata,
-): Promise<void> {
-  await observeEVMEvent(cfTesterAbi, address, 'ReceivedxSwapAndCall', [
+): Promise<EVMEvent> {
+  return observeEVMEvent(cfTesterAbi, address, 'ReceivedxSwapAndCall', [
     chainContractIds[assetChains[sourceAsset]].toString(),
     '*',
     messageMetadata.message,
