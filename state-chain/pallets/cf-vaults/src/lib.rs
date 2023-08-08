@@ -11,10 +11,13 @@ use cf_traits::{
 	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
 	VaultStatus, VaultTransitionHandler,
 };
-use frame_support::{pallet_prelude::*, traits::StorageVersion};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::traits::{One, Saturating},
+	traits::StorageVersion,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use frame_support::sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
@@ -709,7 +712,6 @@ pub mod pallet {
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			use frame_support::sp_runtime::traits::Zero;

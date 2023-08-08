@@ -22,13 +22,14 @@ use cf_traits::EpochInfo;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use pallet_cf_funding::EthTransactionHash;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::crypto::Pair;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
+use sp_core::crypto::Pair;
 use frame_support::sp_runtime::AccountId32;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,
 	Reputation, Runtime, RuntimeOrigin, System, Validator,
 };
+use pallet_cf_funding::EthTransactionHash;
 
 type NodeId = AccountId32;
 const ETH_DUMMY_ADDR: EthereumAddress = EthereumAddress::repeat_byte(42u8);
@@ -55,8 +56,7 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 // The minimum number of blocks a vault rotation should last
 const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	Backup,

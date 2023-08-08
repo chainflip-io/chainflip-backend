@@ -6,8 +6,19 @@ use pallet_grandpa::EquivocationOffence;
 use scale_info::TypeInfo;
 
 /// Offences that can be reported in this runtime.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum Offence {
 	/// There was a failure in participation during a signing.
 	ParticipateSigningFailed,

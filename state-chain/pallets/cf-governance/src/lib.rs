@@ -9,11 +9,11 @@ use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
 	ensure,
 	pallet_prelude::DispatchResultWithPostInfo,
+	sp_runtime::{DispatchError, TransactionOutcome},
 	storage::with_transaction,
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
 pub use pallet::*;
-use frame_support::sp_runtime::{DispatchError, TransactionOutcome};
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 mod benchmarking;
@@ -413,7 +413,6 @@ pub mod pallet {
 		pub expiry_span: u64,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			const FIVE_DAYS_IN_SECONDS: u64 = 5 * 24 * 60 * 60;

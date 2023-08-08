@@ -17,7 +17,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -64,7 +64,6 @@ pub mod pallet {
 		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { initial_account_roles: Default::default() }

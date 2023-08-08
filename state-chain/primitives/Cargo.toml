@@ -6,10 +6,11 @@ authors = ['Chainflip <https://chainflip.io>']
 description = 'Common primitive types used across Chainflip'
 
 [dependencies]
-serde = { optional = true, version = '1.0.126', features = ['derive'] }
-hex = { optional = true, version = '0.4' }
+serde = { default_features = false, version = '1.0.126', features = ['alloc', 'derive'] }
+hex = { optional = true, version = '0.4'}
+ethabi = { default-features = false, version = '18.0' }
 strum = { default-features = false, version = '0.24' }
-strum_macros = { default-features = false, version = '0.24' }
+strum_macros = {  default-features = false, version = '0.24' }
 
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
@@ -25,10 +26,11 @@ sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainf
 default = ['std']
 std = [
   'codec/std',
-  'scale-info/std',
-  'hex',
-  'serde',
-  'sp-std/std',
   'frame-support/std',
+  'dep:hex',
+  'scale-info/std',
+  'serde/std',
+  'sp-std/std',
+  'strum/std',
 ]
 runtime-benchmarks = []

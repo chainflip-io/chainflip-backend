@@ -9,16 +9,15 @@ use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
+		DispatchError,
+	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
 	StorageHasher,
 };
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use frame_support::sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
-	DispatchError,
-};
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -330,8 +329,7 @@ pub enum SwapOrigin {
 }
 
 /// Deposit channel Metadata for Cross-Chain-Message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
 	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
@@ -343,8 +341,7 @@ pub struct CcmChannelMetadata {
 	pub cf_parameters: Vec<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmDepositMetadata {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
@@ -352,9 +349,17 @@ pub struct CcmDepositMetadata {
 }
 
 #[derive(
-	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	CloneNoBound,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	DebugNoBound,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainState<C: Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub tracked_data: C::TrackedData,

@@ -1,4 +1,5 @@
 use super::*;
+use frame_support::sp_runtime::AccountId32;
 
 #[derive(Debug, Clone)]
 pub struct SubstrateNetworkAddress {

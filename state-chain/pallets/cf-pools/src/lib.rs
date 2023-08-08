@@ -5,13 +5,14 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
-use frame_support::{pallet_prelude::*, transactional};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{Permill, Saturating},
+	transactional,
+};
 use frame_system::pallet_prelude::OriginFor;
-use sp_arithmetic::traits::Zero;
-use frame_support::sp_runtime::{Permill, Saturating};
-
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::Zero;
 
 pub use pallet::*;
 
@@ -50,15 +51,27 @@ pub mod pallet {
 		pub pool_state: PoolState<LiquidityProvider>,
 	}
 
-	#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
-	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	#[derive(
+		PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Deserialize, Serialize,
+	)]
 	pub enum Order {
 		Buy,
 		Sell,
 	}
 
-	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		PartialEq,
+		Eq,
+		Deserialize,
+		Serialize,
+	)]
 	pub enum RangeOrderSize {
 		AssetAmounts { desired: SideMap<AssetAmount>, minimum: SideMap<AssetAmount> },
 		Liquidity(Liquidity),
@@ -117,7 +130,6 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { flip_buy_interval: T::BlockNumber::zero() }

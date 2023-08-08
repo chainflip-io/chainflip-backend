@@ -10,23 +10,20 @@ use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 // TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
 	BackupOrPassive(BackupOrPassive),

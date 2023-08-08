@@ -2,10 +2,12 @@ use super::{Ethereum, EthereumFetchId, SchnorrVerificationComponents};
 use crate::*;
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
-use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
-use frame_support::sp_runtime::{
-	traits::{Hash, Keccak256, UniqueSaturatedInto},
-	DispatchError,
+use frame_support::{
+	sp_runtime::{
+		traits::{Hash, Keccak256, UniqueSaturatedInto},
+		DispatchError,
+	},
+	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
 };
 use sp_std::marker::PhantomData;
 
@@ -105,8 +107,19 @@ impl Tokenizable for EthereumReplayProtection {
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
 pub struct SigData {
 	/// The Schnorr signature.
 	sig: Uint,

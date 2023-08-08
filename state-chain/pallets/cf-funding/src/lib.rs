@@ -27,6 +27,10 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	pallet_prelude::Weight,
+	sp_runtime::{
+		traits::{CheckedSub, UniqueSaturatedInto, Zero},
+		Saturating,
+	},
 	traits::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnRuntimeUpgrade, StorageVersion,
 		UnixTime,
@@ -35,10 +39,6 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use frame_support::sp_runtime::{
-	traits::{CheckedSub, UniqueSaturatedInto, Zero},
-	Saturating,
-};
 use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
@@ -691,7 +691,6 @@ pub mod pallet {
 		pub redemption_ttl: Duration,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
