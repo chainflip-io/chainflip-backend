@@ -1076,6 +1076,7 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "ethabi",
  "frame-support",
  "hex",
  "parity-scale-codec",
@@ -8449,9 +8450,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.35.14"
+version = "0.35.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6380889b07a03b5ecf1d44dc9ede6fd2145d84b502a2a9ca0b03c48e0cc3220f"
+checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
 dependencies = [
  "bitflags 1.3.2",
  "errno 0.2.8",
@@ -12974,7 +12975,7 @@ dependencies = [
  "log",
  "object 0.29.0",
  "rustc-demangle",
- "rustix 0.35.14",
+ "rustix 0.35.13",
  "serde",
  "target-lexicon",
  "thiserror",
@@ -13054,7 +13055,7 @@ dependencies = [
  "memoffset 0.6.5",
  "paste",
  "rand 0.8.5",
- "rustix 0.35.14",
+ "rustix 0.35.13",
  "thiserror",
  "wasmtime-asm-macros 1.0.2",
  "wasmtime-environ 1.0.2",
