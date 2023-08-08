@@ -167,7 +167,7 @@ pub trait Rpc {
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 
 	#[method(name = "getPool")]
-	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -353,8 +353,8 @@ impl RpcServer for RpcServerImpl {
 		.await?)
 	}
 
-	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		get_pools(&self.state_chain_settings, Some(asset)).await
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error> {
+		Ok(get_pools(&self.state_chain_settings, Some(asset)).await?.get(&asset).cloned())
 	}
 
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {

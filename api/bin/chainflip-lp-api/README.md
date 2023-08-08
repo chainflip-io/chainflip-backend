@@ -217,7 +217,7 @@ Parameters:
 
 Return:
 
-- A BTreeMap with the required pool in json format
+- The required pool in json format
 
 -------------
 
