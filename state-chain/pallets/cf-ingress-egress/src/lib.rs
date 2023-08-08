@@ -26,9 +26,11 @@ use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
 	EgressApi, GetBlockHeight, SwapDepositHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{DispatchError, TransactionOutcome},
+};
 pub use pallet::*;
-use frame_support::sp_runtime::TransactionOutcome;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.

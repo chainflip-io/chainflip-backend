@@ -48,8 +48,8 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 #[test]
 fn test_dot_derive() {
 	use crate::Runtime;
-	use pallet_cf_environment::PolkadotVaultAccountId;
 	use frame_support::sp_runtime::app_crypto::Ss58Codec;
+	use pallet_cf_environment::PolkadotVaultAccountId;
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 		let (account_id, address_format) = sp_runtime::AccountId32::from_ss58check_with_version(

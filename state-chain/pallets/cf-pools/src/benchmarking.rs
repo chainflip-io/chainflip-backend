@@ -8,10 +8,10 @@ use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,
+	sp_runtime::traits::One,
 	traits::{EnsureOrigin, OnNewAccount},
 };
 use frame_system::RawOrigin;
-use frame_support::sp_runtime::traits::One;
 
 fn new_lp_account<T: Chainflip>() -> T::AccountId {
 	let caller: T::AccountId = whitelisted_caller();

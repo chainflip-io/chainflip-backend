@@ -16,7 +16,7 @@ use sp_std::vec::Vec;
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:
 ///   1. `P`'s stored version should be equal to `FROM`.
-///   2.  The version supported by the pallet is greater or equal to `TO`.
+///   2. The version supported by the pallet is greater or equal to `TO`.
 ///
 /// As long as both conditions are met, the upgrade `U` will run and then the pallet's stored
 /// version is set to `TO`.
@@ -109,7 +109,11 @@ mod try_runtime_helpers {
 	}
 }
 
-fn should_upgrade<P: GetStorageVersion<CurrentStorageVersion = StorageVersion>, const FROM: u16, const TO: u16>() -> bool {
+fn should_upgrade<
+	P: GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	const FROM: u16,
+	const TO: u16,
+>() -> bool {
 	<P as GetStorageVersion>::on_chain_storage_version() == FROM &&
 		<P as GetStorageVersion>::current_storage_version() >= TO
 }

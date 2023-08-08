@@ -48,6 +48,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
 	traits::Get,
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -55,7 +56,6 @@ pub use offences::*;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
-use frame_support::sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
 impl Chainflip for Runtime {

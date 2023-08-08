@@ -5,12 +5,14 @@
 
 use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, Encode};
-use frame_support::traits::{Imbalance, SameOrOther, TryDrop};
-use scale_info::TypeInfo;
-use frame_support::sp_runtime::{
-	traits::{CheckedAdd, CheckedSub, Saturating, Zero},
-	RuntimeDebug,
+use frame_support::{
+	sp_runtime::{
+		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
+		RuntimeDebug,
+	},
+	traits::{Imbalance, SameOrOther, TryDrop},
 };
+use scale_info::TypeInfo;
 use sp_std::{cmp, mem, result};
 
 /// Internal sources of funds.

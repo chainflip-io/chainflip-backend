@@ -9,11 +9,14 @@ use pallet_session::Config as SessionConfig;
 use cf_traits::{AccountRoleRegistry, SafeMode, SetSafeMode, VaultStatus};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
-	assert_ok, dispatch::UnfilteredDispatchable, storage_alias, traits::OnNewAccount,
+	assert_ok,
+	dispatch::UnfilteredDispatchable,
+	sp_runtime::{Digest, DigestItem},
+	storage_alias,
+	traits::OnNewAccount,
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
-use frame_support::sp_runtime::{Digest, DigestItem};
 use sp_std::vec;
 
 mod p2p_crypto {

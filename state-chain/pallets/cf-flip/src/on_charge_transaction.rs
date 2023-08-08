@@ -5,10 +5,13 @@
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
 use cf_traits::WaivedFees;
-use frame_support::{pallet_prelude::InvalidTransaction, traits::Imbalance};
+use frame_support::{
+	pallet_prelude::InvalidTransaction,
+	sp_runtime::traits::{DispatchInfoOf, Zero},
+	traits::Imbalance,
+};
 use frame_system::Config;
 use pallet_transaction_payment::{Config as TxConfig, OnChargeTransaction};
-use frame_support::sp_runtime::traits::{DispatchInfoOf, Zero};
 use sp_std::marker::PhantomData;
 
 /// Marker struct for implementation of [OnChargeTransaction].

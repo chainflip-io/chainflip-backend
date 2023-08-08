@@ -1,8 +1,7 @@
 use cf_traits::MissedAuthorshipSlots;
 use codec::Decode;
-use frame_support::storage_alias;
+use frame_support::{sp_runtime::DigestItem, storage_alias};
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use frame_support::sp_runtime::DigestItem;
 
 use crate::System;
 
@@ -52,14 +51,14 @@ mod test_missed_authorship_slots {
 	use codec::Encode;
 	use frame_support::{
 		construct_runtime, parameter_types,
+		sp_runtime::{
+			testing::{Header, UintAuthorityId},
+			traits::IdentityLookup,
+			BuildStorage, Digest,
+		},
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
-	use frame_support::sp_runtime::{
-		testing::{Header, UintAuthorityId},
-		traits::IdentityLookup,
-		BuildStorage, Digest,
-	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
