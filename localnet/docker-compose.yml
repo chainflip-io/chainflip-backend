@@ -2,6 +2,7 @@ version: "3.9"
 services:
   redis:
     image: redis:6.2.6
+    pull_policy: always
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -9,6 +10,7 @@ services:
 
   geth:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc3-1-node
+    pull_policy: always
     container_name: geth
     platform: linux/amd64
     ports:
@@ -24,6 +26,7 @@ services:
   sequencer:
     pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    pull_policy: always
     platform: linux/amd64
     ports:
       - "127.0.0.1:8547:8547"
@@ -40,6 +43,7 @@ services:
   staker-unsafe:
     pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    pull_policy: always
     platform: linux/amd64
     ports:
       - "127.0.0.1:8047:8547"
@@ -56,6 +60,7 @@ services:
   poster:
     pid: host # allow debugging
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
+    pull_policy: always
     platform: linux/amd64
     ports:
       - "127.0.0.1:8147:8547"
@@ -82,15 +87,15 @@ services:
       - RUST_BACKTRACE=full
     command:
       - --alice
-      - --blocks-pruning=archive 
-      - --chain=/polkadot/chainspec.json 
-      - --force-authoring 
-      - --name=PolkaDocker 
-      - --rpc-cors=all 
-      - --rpc-external 
-      - --rpc-methods=unsafe 
-      - --state-pruning=archive 
-      - --validator 
+      - --blocks-pruning=archive
+      - --chain=/polkadot/chainspec.json
+      - --force-authoring
+      - --name=PolkaDocker
+      - --rpc-cors=all
+      - --rpc-external
+      - --rpc-methods=unsafe
+      - --state-pruning=archive
+      - --validator
       - --ws-external
     ports:
       # - 30333:30333 # p2p port
@@ -102,8 +107,8 @@ services:
           "CMD-SHELL",
           "curl",
           "-H 'Content-Type: application/json;'",
-          "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9945"
+          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
+          "http://localhost:9945",
         ]
       interval: 10s
       timeout: 5s
@@ -112,8 +117,8 @@ services:
 
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
-    platform: linux/amd64
     pull_policy: always
+    platform: linux/amd64
     container_name: bitcoin
     restart: unless-stopped
     ports:
@@ -127,8 +132,8 @@ services:
           "curl",
           "--user flip:flip",
           "-H 'Content-Type: text/plain;'",
-          "-d '{\"jsonrpc\":\"1.0\", \"id\": \"1\", \"method\": \"getblockchaininfo\", \"params\" : []}'",
-          "http://127.0.0.1:8332"
+          '-d ''{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}''',
+          "http://127.0.0.1:8332",
         ]
       interval: 10s
       timeout: 5s
