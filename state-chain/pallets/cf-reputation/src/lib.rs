@@ -8,8 +8,8 @@ mod mock;
 mod tests;
 
 use cf_traits::{
-	offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode, ReputationResetter,
-	Slashing,
+	impl_pallet_safe_mode, offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode,
+	ReputationResetter, Slashing,
 };
 
 pub mod weights;
@@ -33,6 +33,8 @@ mod reputation;
 
 pub use reporting_adapter::*;
 pub use reputation::*;
+
+impl_pallet_safe_mode!(PalletSafeMode; reporting_enabled);
 
 impl<T: Config> ReputationParameters for T {
 	type OnlineCredits = T::BlockNumber;
@@ -127,12 +129,17 @@ pub mod pallet {
 		/// The maximum number of reputation points that can be accrued
 		#[pallet::constant]
 		type MaximumAccruableReputation: Get<ReputationPoints>;
+
+		/// Safe mode access
+		type SafeMode: Get<PalletSafeMode>;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: T::BlockNumber) -> Weight {
-			if Self::blocks_since_new_interval(current_block) == Zero::zero() {
+			if T::SafeMode::get().reporting_enabled &&
+				Self::blocks_since_new_interval(current_block) == Zero::zero()
+			{
 				// Reputation depends on heartbeats
 				Self::penalise_offline_authorities(Self::current_network_state().offline);
 				T::Heartbeat::on_heartbeat_interval();
@@ -388,6 +395,9 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	type Offence = T::Offence;
 
 	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
+		if !T::SafeMode::get().reporting_enabled {
+			return
+		}
 		let offence = offence.into();
 		let penalty = Self::resolve_penalty_for(offence);
 

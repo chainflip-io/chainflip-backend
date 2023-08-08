@@ -11,7 +11,7 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, GetBlockHeight,
 };
 use frame_support::{
@@ -32,6 +32,7 @@ pub type ValidatorId = u64;
 thread_local! {
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
+	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -179,13 +180,29 @@ pub type MockOffenceReporter =
 
 pub struct MockSlasher;
 
+impl MockSlasher {
+	pub fn slash_count(validator_id: ValidatorId) -> usize {
+		SLASHES.with(|slashes| slashes.borrow().iter().filter(|id| **id == validator_id).count())
+	}
+}
+
 impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {}
+	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
+		// Count those slashes
+		SLASHES.with(|count| {
+			count.borrow_mut().push(*validator_id);
+		});
+	}
 
-	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
+	fn slash_balance(account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+		// Count those slashes
+		SLASHES.with(|count| {
+			count.borrow_mut().push(*account_id);
+		});
+	}
 }
 
 pub struct BlockHeightProvider;
@@ -198,8 +215,7 @@ impl GetBlockHeight<MockEthereum> for BlockHeightProvider {
 	}
 }
 
-impl_pallet_safe_mode!(MockPalletSafeMode; flag);
-impl_mock_runtime_safe_mode!(test: MockPalletSafeMode);
+impl_mock_runtime_safe_mode! { vault: PalletSafeMode }
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type RuntimeEvent = RuntimeEvent;

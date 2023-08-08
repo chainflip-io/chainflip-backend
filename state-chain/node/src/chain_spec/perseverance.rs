@@ -1,7 +1,7 @@
 pub use super::common::*;
 use super::{parse_account, StateChainEnvironment};
-use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
+use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
 
@@ -13,8 +13,7 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
-
-pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
+pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("1194C91d47Fc1b65bE18db38380B5344682b67db"),

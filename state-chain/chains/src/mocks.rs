@@ -64,6 +64,17 @@ impl Chain for MockEthereum {
 	type DepositDetails = [u8; 4];
 }
 
+impl ToHumanreadableAddress for u64 {
+	type Humanreadable = u64;
+
+	fn to_humanreadable(
+		&self,
+		_network_environment: cf_primitives::NetworkEnvironment,
+	) -> Self::Humanreadable {
+		*self
+	}
+}
+
 impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
 	fn from(channel: &DepositChannel<MockEthereum>) -> Self {
 		channel.channel_id as u128
@@ -247,7 +258,12 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(_call: &Call, _payload: &<Abi as ChainCrypto>::Payload) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &Call,
+		_payload: &<Abi as ChainCrypto>::Payload,
+		_current_key: &<Abi as ChainCrypto>::AggKey,
+		_signature: &<Abi as ChainCrypto>::ThresholdSignature,
+	) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
 }

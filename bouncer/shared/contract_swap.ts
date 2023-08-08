@@ -42,6 +42,7 @@ export async function executeContractSwap(
     network: 'localnet',
     vaultContractAddress: getEthContractAddress('VAULT'),
     ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
+    gasLimit: 200000,
   } as const;
 
   const params = {
@@ -71,6 +72,12 @@ export async function executeContractSwap(
 
   return receipt;
 }
+export type ContractSwapParams = {
+  sourceAsset: Asset;
+  destAsset: Asset;
+  destAddress: string;
+  txHash: string;
+};
 
 export async function performSwapViaContract(
   sourceAsset: Asset,
@@ -78,7 +85,7 @@ export async function performSwapViaContract(
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
-) {
+): Promise<ContractSwapParams> {
   const api = await getChainflipApi();
 
   const tag = swapTag ?? '';
@@ -111,6 +118,12 @@ export async function performSwapViaContract(
       ccmEventEmitted,
     ]);
     console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    return {
+      sourceAsset,
+      destAsset,
+      destAddress,
+      txHash: receipt.transactionHash,
+    };
   } catch (err) {
     throw new Error(`${tag} ${err}`);
   }
@@ -122,18 +135,19 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const nonce = await getNextEthNonce(true);
-  return approveVault(
-    {
-      amount,
-      srcAsset,
-    },
-    {
-      signer: wallet,
-      nonce,
-      network: 'localnet',
-      vaultContractAddress: getEthContractAddress('VAULT'),
-      srcTokenContractAddress: getEthContractAddress(srcAsset),
-    },
+  await getNextEthNonce((nextNonce) =>
+    approveVault(
+      {
+        amount,
+        srcAsset,
+      },
+      {
+        signer: wallet,
+        nonce: nextNonce,
+        network: 'localnet',
+        vaultContractAddress: getEthContractAddress('VAULT'),
+        srcTokenContractAddress: getEthContractAddress(srcAsset),
+      },
+    ),
   );
 }

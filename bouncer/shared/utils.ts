@@ -11,7 +11,9 @@ import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
+import { getCFTesterAbi } from './eth_abis';
+
+const cfTesterAbi = await getCFTesterAbi();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -175,13 +177,14 @@ export async function observeEvent(
         event.section.includes(expectedSection) &&
         event.method.includes(expectedMethod)
       ) {
-        result = {
+        const expectedEvent = {
           name: { section: event.section, method: event.method },
           data: event.toHuman().data,
           block: header.number.toNumber(),
           event_index: index,
         };
-        if (query(result)) {
+        if (query(expectedEvent)) {
+          result = expectedEvent;
           eventFound = true;
           unsubscribe();
         }
@@ -260,6 +263,24 @@ export async function observeBalanceIncrease(
   }
 
   return Promise.reject(new Error('Failed to observe balance increase'));
+}
+
+export async function observeFetch(asset: Asset, address: string): Promise<void> {
+  for (let i = 0; i < 120; i++) {
+    const balance = Number(await getBalance(asset as Asset, address));
+    if (balance === 0) {
+      if (assetToChain(asset) === 'Eth') {
+        const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+        if ((await web3.eth.getCode(address)) === '0x') {
+          throw new Error('Eth address has no bytecode');
+        }
+      }
+      return;
+    }
+    await sleep(1000);
+  }
+
+  throw new Error('Failed to observe the fetch');
 }
 
 export async function observeEVMEvent(

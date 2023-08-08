@@ -1,12 +1,13 @@
-use cf_chains::address::AddressConverter;
+use anyhow::anyhow;
+use cf_utilities::task_scope::{task_scope, Scope};
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{
-		AccountRole, Asset, BasisPoints, BlockNumber, CcmDepositMetadata, ChannelId, ForeignChain,
-	},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
+	BrokerApi, OperatorApi, StateChainApi,
 };
 use clap::Parser;
+use futures::FutureExt;
 use hex::FromHexError;
 use jsonrpsee::{
 	core::{async_trait, Error},
@@ -15,8 +16,8 @@ use jsonrpsee::{
 };
 use serde::{Deserialize, Serialize};
 use sp_rpc::number::NumberOrHex;
-use state_chain_runtime::chainflip::ChainAddressConverter;
-use std::{path::PathBuf, vec};
+use std::path::PathBuf;
+use tracing::log;
 
 /// The response type expected by the broker api.
 ///
@@ -41,48 +42,56 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BrokerCcmDepositMetadata {
+pub struct BrokerCcmChannelMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
-	source_address: String,
-	source_chain: ForeignChain,
 	cf_parameters: Option<String>,
 }
 
-fn try_convert_string_to_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
+fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
 	hex::decode(string.strip_prefix("0x").unwrap_or(string))
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
+	use cf_utilities::assert_err;
 
 	#[test]
 	fn test_decoding() {
-		assert_eq!(try_convert_string_to_bytes("0x00").unwrap(), vec![0]);
-		assert_eq!(try_convert_string_to_bytes("").unwrap(), Vec::<u8>::new());
+		assert_eq!(parse_hex_bytes("0x00").unwrap(), vec![0]);
+		assert_eq!(parse_hex_bytes("cf").unwrap(), vec![0xcf]);
+		assert_eq!(
+			parse_hex_bytes("0x00112233445566778899aabbccddeeff").unwrap(),
+			vec![
+				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+				0xee, 0xff
+			]
+		);
+		assert_eq!(parse_hex_bytes("").unwrap(), b"");
+		assert_err!(parse_hex_bytes("abc"));
 	}
 }
 
-impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
-	type Error = &'static str;
+impl TryInto<CcmChannelMetadata> for BrokerCcmChannelMetadata {
+	type Error = anyhow::Error;
 
-	fn try_into(self) -> Result<CcmDepositMetadata, Self::Error> {
-		let gas_budget = self.gas_budget.try_into().or(Err("Failed to parse gas budget"))?;
-		let encoded_address = clean_foreign_chain_address(self.source_chain, &self.source_address)
-			.or(Err("Failed to parse source address"))?;
-		let source_address = ChainAddressConverter::try_from_encoded_address(encoded_address)
-			.or(Err("Failed to parse source address"))?;
+	fn try_into(self) -> Result<CcmChannelMetadata, Self::Error> {
+		let gas_budget = self
+			.gas_budget
+			.try_into()
+			.map_err(|_| anyhow!("Failed to parse {:?} as gas budget", self.gas_budget))?;
 		let message =
-			try_convert_string_to_bytes(&self.message).or(Err("Failed to parse message"))?;
+			parse_hex_bytes(&self.message).map_err(|e| anyhow!("Failed to parse message: {e}"))?;
+
 		let cf_parameters = self
 			.cf_parameters
-			.map(|parameters| try_convert_string_to_bytes(&parameters))
+			.map(|parameters| parse_hex_bytes(&parameters))
 			.transpose()
-			.or(Err("Failed to parse cf parameters"))?
-			.unwrap_or(vec![]);
+			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
+			.unwrap_or_default();
 
-		Ok(CcmDepositMetadata { gas_budget, message, cf_parameters, source_address })
+		Ok(CcmChannelMetadata { gas_budget, message, cf_parameters })
 	}
 }
 
@@ -98,51 +107,59 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		message_metadata: Option<BrokerCcmDepositMetadata>,
+		channel_metadata: Option<BrokerCcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error>;
 }
 
 pub struct RpcServerImpl {
-	state_chain_settings: StateChain,
+	api: StateChainApi,
 }
 
 impl RpcServerImpl {
-	pub fn new(BrokerOptions { ws_endpoint, signing_key_file, .. }: BrokerOptions) -> Self {
-		Self { state_chain_settings: StateChain { ws_endpoint, signing_key_file } }
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		BrokerOptions { ws_endpoint, signing_key_file, .. }: BrokerOptions,
+	) -> Result<Self, anyhow::Error> {
+		Ok(Self {
+			api: StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
+				.await?,
+		})
 	}
 }
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn register_account(&self) -> Result<String, Error> {
-		Ok(chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
+		self.api
+			.operator_api()
+			.register_account_role(AccountRole::Broker)
 			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))?)
+			.map(|tx_hash| format!("{tx_hash:#x}"))
+			.map_err(Into::into)
 	}
+
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		message_metadata: Option<BrokerCcmDepositMetadata>,
+		channel_metadata: Option<BrokerCcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error> {
-		let message_metadata = if let Some(metadata) = message_metadata {
-			Some(TryInto::<CcmDepositMetadata>::try_into(metadata).map_err(anyhow::Error::msg)?)
-		} else {
-			None
-		};
+		let channel_metadata = channel_metadata.map(TryInto::try_into).transpose()?;
 
-		Ok(chainflip_api::request_swap_deposit_address(
-			&self.state_chain_settings,
-			source_asset,
-			destination_asset,
-			clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
-			broker_commission_bps,
-			message_metadata,
-		)
-		.await?)
-		.map(BrokerSwapDepositAddress::from)
+		self.api
+			.broker_api()
+			.request_swap_deposit_address(
+				source_asset,
+				destination_asset,
+				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
+				broker_commission_bps,
+				channel_metadata,
+			)
+			.await
+			.map(BrokerSwapDepositAddress::from)
+			.map_err(Into::into)
 	}
 }
 
@@ -177,13 +194,19 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
-	let server_addr = server.local_addr()?;
-	let server = server.start(RpcServerImpl::new(opts).into_rpc())?;
+	task_scope(|scope| {
+		async move {
+			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
+			let server_addr = server.local_addr()?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
-	println!("🎙 Server is listening on {server_addr}.");
+			log::info!("🎙 Server is listening on {server_addr}.");
 
-	server.stopped().await;
+			server.stopped().await;
 
-	Ok(())
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
 }

@@ -40,6 +40,11 @@ pub mod pallet {
 	use super::*;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	#[cfg_attr(
+		feature = "std",
+		serde(bound = "LiquidityProvider: Clone + Ord + Serialize + serde::de::DeserializeOwned")
+	)]
 	pub struct Pool<LiquidityProvider> {
 		pub enabled: bool,
 		pub pool_state: PoolState<LiquidityProvider>,
@@ -85,7 +90,7 @@ pub mod pallet {
 	/// Pools are indexed by single asset since USDC is implicit.
 	/// The STABLE_ASSET is always PoolSide::Asset1
 	#[pallet::storage]
-	pub(super) type Pools<T: Config> =
+	pub type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, Pool<T::AccountId>, OptionQuery>;
 
 	/// FLIP ready to be burned.
@@ -179,7 +184,6 @@ pub mod pallet {
 		/// It is no longer possible to mint limit orders due to reaching the maximum pool
 		/// instances, other than for ticks where a fixed pool currently exists.
 		MaximumPoolInstances,
-
 		/// The pool does not have enough liquidity left to process the swap.
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
@@ -780,6 +784,10 @@ impl<T: Config> Pallet<T> {
 				}
 			},
 		})
+	}
+
+	pub fn get_pool(asset: Asset) -> Option<Pool<T::AccountId>> {
+		Pools::<T>::get(asset)
 	}
 
 	fn try_credit_single_asset(

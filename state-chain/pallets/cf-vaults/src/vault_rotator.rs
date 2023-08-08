@@ -1,5 +1,6 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{CeremonyIdProvider, GetBlockHeight};
 use sp_runtime::traits::BlockNumberProvider;
 
@@ -186,13 +187,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						);
 					},
 					Err(SetAggKeyWithAggKeyError::Failed) => {
-						#[cfg(test)]
-						panic!(
-							"Unexpected failure during {} vault activation.",
-							<T::Chain as cf_chains::Chain>::NAME,
-						);
-						#[cfg(not(test))]
-						log::error!(
+						log_or_panic!(
 							"Unexpected failure during {} vault activation.",
 							<T::Chain as cf_chains::Chain>::NAME,
 						);
@@ -206,11 +201,15 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key });
 			}
 		} else {
-			#[cfg(not(test))]
-			log::error!("activate key called before key handover completed");
-			#[cfg(test)]
-			panic!("activate key called before keygen handover completed");
+			log_or_panic!("activate key called before key handover completed");
 		}
+	}
+
+	fn abort_vault_rotation() {
+		PendingVaultRotation::<T, I>::kill();
+		KeyHandoverResolutionPendingSince::<T, I>::kill();
+		KeygenResolutionPendingSince::<T, I>::kill();
+		Self::deposit_event(Event::<T, I>::VaultRotationAborted);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

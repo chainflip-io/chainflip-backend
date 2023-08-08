@@ -928,6 +928,7 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
+ "ss58-registry",
  "utilities",
 ]
 
@@ -1149,6 +1150,7 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-funding",
  "pallet-cf-governance",
+ "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-swapping",
@@ -1162,6 +1164,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "tiny-bip39 1.0.0",
+ "tokio",
  "tracing",
  "utilities",
  "zeroize",
@@ -1175,11 +1178,11 @@ dependencies = [
  "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
+ "futures",
  "hex",
  "jsonrpsee 0.16.2",
  "serde",
  "sp-rpc",
- "state-chain-runtime",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
@@ -1302,10 +1305,13 @@ name = "chainflip-lp-api"
 version = "0.9.0"
 dependencies = [
  "anyhow",
+ "cf-primitives",
  "chainflip-api",
  "clap 3.2.25",
+ "futures",
  "hex",
  "jsonrpsee 0.16.2",
+ "pallet-cf-pools",
  "serde",
  "serde_json",
  "sp-rpc",
@@ -2007,6 +2013,7 @@ dependencies = [
  "hex",
  "jsonrpsee 0.15.1",
  "pallet-cf-governance",
+ "pallet-cf-pools",
  "sc-client-api",
  "serde",
  "sp-api",
@@ -6474,6 +6481,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -10741,9 +10749,9 @@ dependencies = [
 
 [[package]]
 name = "ss58-registry"
-version = "1.40.0"
+version = "1.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb47a8ad42e5fc72d5b1eb104a5546937eaf39843499948bb666d6e93c62423b"
+checksum = "bfc443bad666016e012538782d9e3006213a7db43e9fb1dda91657dc06a6fa08"
 dependencies = [
  "Inflector",
  "num-format",

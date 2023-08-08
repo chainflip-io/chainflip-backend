@@ -1,6 +1,8 @@
 import Web3 from 'web3';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
 import { fineAmountToAmount } from './utils';
+import { getErc20abi } from './eth_abis';
+
+const erc20abi = await getErc20abi();
 
 export async function getErc20Balance(
   walletAddress: string,

@@ -2,11 +2,52 @@ use crate::{
 	genesis, get_validator_state, network, ChainflipAccountState, NodeId, HEARTBEAT_BLOCK_INTERVAL,
 	VAULT_ROTATION_BLOCKS,
 };
-use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
-use cf_traits::EpochInfo;
+
+use frame_support::assert_ok;
 use sp_runtime::AccountId32;
-use state_chain_runtime::{Flip, Validator};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+
+use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
+use cf_traits::{AsyncResult, EpochInfo, VaultRotator, VaultStatus};
+use pallet_cf_environment::SafeModeUpdate;
+use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
+use state_chain_runtime::{Environment, EthereumVault, Flip, Runtime, Validator};
+
+// Helper function that creates a network, funds backup nodes, and have them join the auction.
+fn fund_authorities_and_join_auction(
+	max_authorities: AuthorityCount,
+) -> (network::Network, BTreeSet<NodeId>, BTreeSet<NodeId>) {
+	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
+	// authorities The result will be our newly created nodes will be authorities
+	// and the genesis authorities will become backup nodes
+	let genesis_authorities = Validator::current_authorities();
+	let (mut testnet, init_backup_nodes) =
+		network::Network::create(max_authorities as u8, &genesis_authorities);
+
+	// An initial balance which is greater than the genesis balances
+	// We intend for these initially backup nodes to win the auction
+	const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
+	// Fund these backup nodes so that they are included in the next epoch
+	for node in &init_backup_nodes {
+		testnet.state_chain_gateway_contract.fund_account(
+			node.clone(),
+			INITIAL_FUNDING,
+			GENESIS_EPOCH,
+		);
+	}
+
+	// Allow the funds to be registered, initialise the account keys and peer
+	// ids, register as a validator, then start bidding.
+	testnet.move_forward_blocks(1);
+
+	for node in &init_backup_nodes {
+		network::Cli::register_as_validator(node);
+		network::setup_account_and_peer_mapping(node);
+		network::Cli::start_bidding(node);
+	}
+
+	(testnet, genesis_authorities, init_backup_nodes)
+}
 
 #[test]
 fn authorities_earn_rewards_for_authoring_blocks() {
@@ -64,34 +105,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
-			// authorities The result will be our newly created nodes will be authorities
-			// and the genesis authorities will become backup nodes
-			let genesis_authorities = Validator::current_authorities();
-			let (mut testnet, init_backup_nodes) =
-				network::Network::create(MAX_AUTHORITIES as u8, &genesis_authorities);
-
-			// An initial balance which is greater than the genesis balances
-			// We intend for these initially backup nodes to win the auction
-			const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
-			// Fund these backup nodes so that they are included in the next epoch
-			for node in &init_backup_nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					INITIAL_FUNDING,
-					GENESIS_EPOCH,
-				);
-			}
-
-			// Allow the funds to be registered, then initialise the account keys and peer
-			// ids.
-			testnet.move_forward_blocks(1);
-
-			for node in &init_backup_nodes {
-				network::Cli::register_as_validator(node);
-				network::setup_account_and_peer_mapping(node);
-				network::Cli::start_bidding(node);
-			}
+			let (mut testnet, genesis_authorities, init_backup_nodes) =
+				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			// Start an auction
 			testnet.move_to_next_epoch();
@@ -153,5 +168,85 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			for (backup_node, pre_balance) in backup_node_balances {
 				assert!(pre_balance < Flip::total_balance_of(&backup_node));
 			}
+		});
+}
+
+#[test]
+fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			// Resolve Auction
+			testnet.move_to_next_epoch();
+			testnet.submit_heartbeat_all_engines();
+
+			// Run until key gen is completed.
+			testnet.move_forward_blocks(2);
+			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
+
+			// This is the last chance to abort validator rotation. Activate code red here.
+			assert_ok!(Environment::update_safe_mode(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				SafeModeUpdate::CodeRed
+			));
+			testnet.move_forward_blocks(1);
+
+			// Ensure Validator and Vault rotation have been aborted.
+			assert_eq!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle);
+			assert_eq!(EthereumVault::status(), AsyncResult::Void);
+
+			// Authority rotation does not start while in Safe Mode.
+			testnet.move_forward_blocks(EPOCH_BLOCKS);
+
+			assert_eq!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle);
+			assert_eq!(EthereumVault::status(), AsyncResult::Void);
+
+			// Changing to code green should restart the Authority rotation
+			assert_ok!(Environment::update_safe_mode(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				SafeModeUpdate::CodeGreen
+			));
+
+			// Authority rotation should be successful.
+			testnet.submit_heartbeat_all_engines();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
+		});
+}
+
+#[test]
+fn authority_rotation_cannot_be_aborted_after_key_handover() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			// Resolve Auction
+			testnet.move_to_next_epoch();
+			testnet.submit_heartbeat_all_engines();
+
+			// Run until key handover starts
+			testnet.move_forward_blocks(3);
+			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+
+			assert_ok!(Environment::update_safe_mode(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				SafeModeUpdate::CodeRed
+			));
+
+			// Authority rotation is completed while in Code Red.
+			testnet.move_forward_blocks(3);
+
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 		});
 }
