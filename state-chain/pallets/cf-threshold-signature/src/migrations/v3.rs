@@ -1,8 +1,8 @@
 use crate::*;
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use frame_support::dispatch::DispatchError;
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use sp_std::marker::PhantomData;
 
 mod old_types {
 	use super::*;
