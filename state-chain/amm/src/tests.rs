@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use cf_utilities::assert_ok;
-use sp_core::crypto::Infallible;
+use core::convert::Infallible;
 
 use crate::common::{MAX_SQRT_PRICE, MIN_SQRT_PRICE};
 
