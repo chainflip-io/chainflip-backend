@@ -2,13 +2,14 @@
 import { testLpDepositExpiry } from '../shared/lp_deposit_expiry';
 import { testAllSwaps } from '../shared/swapping';
 import { testEthereumDeposits } from '../shared/ethereum_deposits';
+import { testLpApi } from '../shared/lp_api_test';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
 
 async function runAllConcurrentTests() {
   let stopObserving = false;
   const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
 
-  await Promise.all([testAllSwaps(), testLpDepositExpiry(), testEthereumDeposits()]);
+  await Promise.all([testAllSwaps(), testLpDepositExpiry(), testEthereumDeposits(), testLpApi()]);
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;

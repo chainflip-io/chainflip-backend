@@ -95,10 +95,11 @@ export function defaultAssetAmounts(asset: Asset): string {
 
 export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
   const controller = new AbortController();
+  const error = new Error(`Timed out after ${millis} ms.`);
   const result = await Promise.race([
     promise,
     sleep(millis, { signal: AbortController }).then(() => {
-      throw new Error(`Timed out after ${millis} ms.`);
+      throw error;
     }),
   ]);
   controller.abort();
@@ -399,4 +400,14 @@ export function handleSubstrateError(api: any) {
       process.exit(1);
     }
   };
+}
+
+export function isValidHexHash(hash: string): boolean {
+  const hexHashRegex = /^0x[0-9a-fA-F]{64}$/;
+  return hexHashRegex.test(hash);
+}
+
+export function isValidEthAddress(address: string): boolean {
+  const ethRegex = /^0x[a-fA-F0-9]{40}$/;
+  return ethRegex.test(address);
 }
