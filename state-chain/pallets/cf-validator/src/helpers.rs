@@ -12,7 +12,7 @@ pub fn select_sharing_participants<
 	ValidatorId: sp_std::fmt::Debug + PartialEq + Eq + Clone + Ord,
 >(
 	success_threshold: u32,
-	old_authorities: BTreeSet<ValidatorId>,
+	current_authorities: BTreeSet<ValidatorId>,
 	new_authorities: &BTreeSet<ValidatorId>,
 	block_number: u64,
 ) -> Option<BTreeSet<ValidatorId>> {
@@ -22,14 +22,14 @@ pub fn select_sharing_participants<
 		things
 	}
 
-	if (old_authorities.len() as u32) < success_threshold || new_authorities.is_empty() {
+	if (current_authorities.len() as u32) < success_threshold || new_authorities.is_empty() {
 		return None
 	}
 
-	let both = old_authorities.intersection(new_authorities);
+	let both = current_authorities.intersection(new_authorities);
 	let shuffled_both = shuffle(both, block_number);
 
-	let old_not_in_new = old_authorities.difference(new_authorities);
+	let old_not_in_new = current_authorities.difference(new_authorities);
 	let shuffled_old_not_in_new = shuffle(old_not_in_new, block_number);
 
 	Some(
@@ -81,11 +81,13 @@ mod select_sharing_participants_tests {
 
 	#[test]
 	fn partial_intersection_prioritises_authorities_who_stay() {
-		const INTERSECTING_SET: [u32; 3] = [3, 4, 5];
-		let old_authorities =
-			BTreeSet::<ValidatorId>::from_iter([1, 2].iter().chain(&INTERSECTING_SET).cloned());
-		let new_authorities =
-			BTreeSet::<ValidatorId>::from_iter(INTERSECTING_SET.iter().chain(&[6, 7]).cloned());
+		let intersecting_set = BTreeSet::<ValidatorId>::from_iter([3, 4, 5]);
+
+		let old_authorities: BTreeSet<_> =
+			intersecting_set.union(&BTreeSet::from_iter([1, 2])).copied().collect();
+
+		let new_authorities: BTreeSet<_> =
+			intersecting_set.union(&BTreeSet::from_iter([6, 7])).copied().collect();
 
 		let threshold =
 			cf_utilities::success_threshold_from_share_count(old_authorities.len() as u32);
@@ -93,7 +95,7 @@ mod select_sharing_participants_tests {
 		let sharing_participants =
 			select_sharing_participants(threshold, old_authorities, &new_authorities, 1).unwrap();
 
-		assert!(INTERSECTING_SET.iter().all(|x| sharing_participants.contains(x)));
+		assert!(intersecting_set.is_subset(&sharing_participants));
 	}
 
 	#[test]
