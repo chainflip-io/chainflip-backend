@@ -9,10 +9,11 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
-	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
+	AccountId, AccountRoles, ArbitrumChainTracking, ArbitrumIngressEgress, Authorship,
+	BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault, BlockNumber, Emissions, Environment,
+	EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance,
+	PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress, Runtime, RuntimeCall,
+	System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -20,6 +21,7 @@ use cf_chains::{
 		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
 		ForeignChainAddress,
 	},
+	arb::api::ArbitrumApi,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
@@ -34,9 +36,9 @@ use cf_chains::{
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
-	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, TransactionBuilder,
+	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChainCrypto, ChainEnvironment, ChainState, ForeignChain, ReplayProtectionProvider,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
@@ -55,7 +57,8 @@ pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
-use sp_core::U256;
+use sp_core::{H160, U256};
+use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
 impl Chainflip for Runtime {
@@ -250,6 +253,39 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 }
 
+pub struct ArbTransactionBuilder;
+
+impl TransactionBuilder<Arbitrum, ArbitrumApi<ArbEnvironment>> for ArbTransactionBuilder {
+	fn build_transaction(
+		signed_call: &ArbitrumApi<ArbEnvironment>,
+	) -> <Arbitrum as ChainAbi>::Transaction {
+		eth::Transaction {
+			chain_id: signed_call.replay_protection().chain_id,
+			contract: signed_call.replay_protection().contract_address,
+			data: signed_call.chain_encoded(),
+			..Default::default()
+		}
+	}
+
+	fn refresh_unsigned_data(unsigned_tx: &mut <Arbitrum as ChainAbi>::Transaction) {
+		if let Some(ChainState { tracked_data, .. }) = ArbitrumChainTracking::chain_state() {
+			unsigned_tx.max_fee_per_gas = Some(U256::from(tracked_data.base_fee));
+			unsigned_tx.max_priority_fee_per_gas = None;
+		}
+		// if we don't have ChainState, we leave it unmodified
+	}
+
+	fn is_valid_for_rebroadcast(
+		_call: &ArbitrumApi<ArbEnvironment>,
+		_payload: &<Arbitrum as ChainCrypto>::Payload,
+		_current_key: &<Arbitrum as ChainCrypto>::AggKey,
+		_signature: &<Arbitrum as ChainCrypto>::ThresholdSignature,
+	) -> bool {
+		// Nothing to validate for Arbitrum
+		true
+	}
+}
+
 pub struct BlockAuthorRewardDistribution;
 
 impl RewardsDistribution for BlockAuthorRewardDistribution {
@@ -282,15 +318,15 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 	}
 }
 
-impl EthEnvironmentProvider for EthEnvironment {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
+impl EthEnvironmentProvider<Ethereum> for EthEnvironment {
+	fn token_address(asset: assets::eth::Asset) -> Option<H160> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
-	fn contract_address(contract: EthereumContract) -> eth::Address {
+	fn contract_address(contract: EthereumContract) -> H160 {
 		match contract {
 			EthereumContract::StateChainGateway => Environment::state_chain_gateway_address(),
 			EthereumContract::KeyManager => Environment::key_manager_address(),
@@ -304,6 +340,34 @@ impl EthEnvironmentProvider for EthEnvironment {
 
 	fn next_nonce() -> u64 {
 		Environment::next_ethereum_signature_nonce()
+	}
+}
+
+pub struct ArbEnvironment;
+
+impl EthEnvironmentProvider<Arbitrum> for ArbEnvironment {
+	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
+		match asset {
+			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
+			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset).map(Into::into),
+		}
+	}
+
+	fn contract_address(contract: EthereumContract) -> H160 {
+		match contract {
+			// we dont have a state chain gateway contract on arbitrum.
+			EthereumContract::StateChainGateway => unimplemented!(),
+			EthereumContract::KeyManager => Environment::arb_key_manager_address(),
+			EthereumContract::Vault => Environment::arb_vault_address(),
+		}
+	}
+
+	fn chain_id() -> eth::api::EthereumChainId {
+		Environment::arbitrum_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_arbitrum_signature_nonce()
 	}
 }
 
@@ -371,6 +435,9 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 pub struct BtcVaultTransitionHandler;
 impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
 
+pub struct ArbVaultTransitionHandler;
+impl VaultTransitionHandler<Arbitrum> for ArbVaultTransitionHandler {}
+
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {
@@ -410,6 +477,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
+			ForeignChain::Arbitrum => todo!("Arbitrum govkey broadcast"),
 		}
 	}
 
@@ -418,6 +486,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
 			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
 			ForeignChain::Bitcoin => false,
+			ForeignChain::Arbitrum => todo!("Arbitrum govkey compatibility"),
 		}
 	}
 }
@@ -530,14 +599,16 @@ impl_deposit_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Arbitrum, ArbitrumIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
-	(Bitcoin, BitcoinIngressEgress)
+	(Bitcoin, BitcoinIngressEgress),
+	(Arbitrum, ArbitrumIngressEgress)
 );
 
 pub struct EthDepositHandler;
@@ -577,6 +648,9 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	}
 }
 
+pub struct ArbDepositHandler;
+impl DepositHandler<Arbitrum> for ArbDepositHandler {}
+
 pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
@@ -590,7 +664,6 @@ impl AddressConverter for ChainAddressConverter {
 		try_from_encoded_address(encoded_address, Environment::network_environment)
 	}
 }
-
 pub struct BroadcastReadyProvider;
 impl OnBroadcastReady<Ethereum> for BroadcastReadyProvider {
 	type ApiCall = EthereumApi<EthEnvironment>;
@@ -618,6 +691,9 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 			_ => unreachable!(),
 		}
 	}
+}
+impl OnBroadcastReady<Arbitrum> for BroadcastReadyProvider {
+	type ApiCall = ArbitrumApi<ArbEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;

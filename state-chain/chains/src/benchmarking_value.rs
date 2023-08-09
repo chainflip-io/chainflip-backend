@@ -6,8 +6,10 @@ use cf_primitives::{
 
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::EncodedAddress;
+
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
+
 #[cfg(feature = "runtime-benchmarks")]
 use crate::eth::EthereumFetchId;
 

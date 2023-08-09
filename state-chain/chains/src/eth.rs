@@ -19,6 +19,7 @@ use frame_support::sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
+use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,40 @@ pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
+
+// TODO: Where is this actually used.
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct EthereumAddress(pub [u8; 20]);
+
+impl From<EthereumAddress> for H160 {
+	fn from(value: EthereumAddress) -> Self {
+		value.0.into()
+	}
+}
+impl From<H160> for EthereumAddress {
+	fn from(value: H160) -> Self {
+		EthereumAddress(*value.as_fixed_bytes())
+	}
+}
+impl From<[u8; 20]> for EthereumAddress {
+	fn from(value: [u8; 20]) -> Self {
+		EthereumAddress(value)
+	}
+}
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
@@ -68,7 +103,7 @@ impl ChainCrypto for Ethereum {
 	) -> bool {
 		agg_key
 			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
+			.map_err(|e| log::warn!("Ethereum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
 

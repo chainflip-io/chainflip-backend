@@ -1,9 +1,14 @@
-use cf_chains::eth::{api::EthEnvironmentProvider, Address};
+#![cfg(debug_assertions)]
+
+use cf_chains::{
+	eth::{api::EthEnvironmentProvider, Address},
+	mocks::MockEthereum,
+};
 
 /// A mock that just returns defaults for the KeyManager and Chain ID.
 pub struct MockEthEnvironment;
 
-impl EthEnvironmentProvider for MockEthEnvironment {
+impl EthEnvironmentProvider<MockEthereum> for MockEthEnvironment {
 	fn contract_address(_contract: cf_chains::eth::api::EthereumContract) -> Address {
 		Default::default()
 	}

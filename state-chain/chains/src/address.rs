@@ -1,6 +1,9 @@
 extern crate alloc;
 
-use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, Chain};
+use crate::{
+	arb::ArbitrumAddress, btc::ScriptPubkey, dot::PolkadotAccountId,
+	eth::Address as EthereumAddress, Chain,
+};
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::DispatchError;
@@ -38,6 +41,7 @@ pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot(PolkadotAccountId),
 	Btc(ScriptPubkey),
+	Arb(ArbitrumAddress),
 }
 
 impl ForeignChainAddress {
@@ -46,6 +50,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
 			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
 			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
+			ForeignChainAddress::Arb(_) => ForeignChain::Arbitrum,
 		}
 	}
 }
@@ -57,6 +62,7 @@ pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
+	Arb([u8; 20]),
 }
 
 pub trait AddressConverter: Sized {
@@ -70,7 +76,7 @@ pub trait AddressConverter: Sized {
 impl core::fmt::Display for EncodedAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		match self {
-			EncodedAddress::Eth(addr) => {
+			EncodedAddress::Eth(addr) | EncodedAddress::Arb(addr) => {
 				write!(f, "0x{}", hex::encode(&addr[..]))
 			},
 			EncodedAddress::Dot(addr) => {
@@ -164,6 +170,14 @@ impl EncodedAddress {
 				Ok(EncodedAddress::Dot(address))
 			},
 			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
+			ForeignChain::Arbitrum => {
+				if bytes.len() != 20 {
+					return Err("Invalid Arbitrum address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Arb(address))
+			},
 		}
 	}
 }
@@ -178,6 +192,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(
 			script_pubkey.to_address(&network_environment().into()).as_bytes().to_vec(),
 		),
+		ForeignChainAddress::Arb(address) => EncodedAddress::Arb(address.0),
 	}
 }
 
@@ -197,6 +212,8 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 			)
 			.map_err(|_| ())?,
 		)),
+		EncodedAddress::Arb(address_bytes) =>
+			Ok(ForeignChainAddress::Arb(ArbitrumAddress(address_bytes))),
 	}
 }
 
@@ -229,6 +246,16 @@ impl ToHumanreadableAddress for EthereumAddress {
 	}
 }
 
+impl ToHumanreadableAddress for ArbitrumAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = crate::arb::Address;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		(*self).into()
+	}
+}
+
 impl ToHumanreadableAddress for PolkadotAccountId {
 	#[cfg(feature = "std")]
 	type Humanreadable = crate::dot::SubstrateNetworkAddress;
@@ -245,6 +272,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
+	Arb(<ArbitrumAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 impl ToHumanreadableAddress for ForeignChainAddress {
@@ -260,6 +288,8 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Dot(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Btc(address) =>
 				ForeignChainAddressHumanreadable::Btc(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Arb(address) =>
+				ForeignChainAddressHumanreadable::Arb(address.to_humanreadable(network_environment)),
 		}
 	}
 }

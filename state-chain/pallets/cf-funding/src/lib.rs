@@ -16,6 +16,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
+#[cfg(feature = "std")]
 use cf_primitives::AccountRole;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
@@ -47,7 +48,7 @@ impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled, start_bidding_enabled, st
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::eth::Ethereum;
+	use cf_chains::eth::{Address as EthereumAddress, Ethereum};
 	use cf_primitives::BroadcastId;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;

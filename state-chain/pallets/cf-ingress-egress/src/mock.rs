@@ -11,7 +11,7 @@ pub use cf_chains::{
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount,
+	Asset, AssetAmount, ETHEREUM_ETH_ADDRESS,
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
