@@ -422,7 +422,7 @@ pub mod pallet {
 
 	/// Sets the genesis governance
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Members::<T>::set(self.members.clone());
 			ExpiryTime::<T>::set(self.expiry_span);

@@ -262,7 +262,7 @@ pub mod pallet {
 					match proposal.clone() {
 						Proposal::SetGovernanceKey(chain, key) => {
 							GovKeyUpdateAwaitingEnactment::<T>::put::<(
-								<T as frame_system::Config>::BlockNumber,
+								BlockNumberFor<T>,
 								(cf_chains::ForeignChain, Vec<u8>),
 							)>((enactment_block, (chain, key)));
 						},

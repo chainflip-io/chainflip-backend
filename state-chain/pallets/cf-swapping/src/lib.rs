@@ -228,7 +228,7 @@ pub mod pallet {
 
 	/// Stores the swap TTL in blocks.
 	#[pallet::storage]
-	pub type SwapTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type SwapTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
@@ -239,7 +239,7 @@ pub mod pallet {
 	pub type SwapChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<(ChannelId, ForeignChainAddress)>,
 		ValueQuery,
 	>;
@@ -265,7 +265,7 @@ pub mod pallet {
 		SwapDepositAddressReady {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
-			expiry_block: T::BlockNumber,
+			expiry_block: BlockNumberFor<T>,
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
@@ -320,7 +320,7 @@ pub mod pallet {
 			channel_id: ChannelId,
 		},
 		SwapTtlSet {
-			ttl: T::BlockNumber,
+			ttl: BlockNumberFor<T>,
 		},
 		CcmDepositReceived {
 			ccm_id: u64,
@@ -372,12 +372,12 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub swap_ttl: T::BlockNumber,
+		pub swap_ttl: BlockNumberFor<T>,
 		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			SwapTTL::<T>::put(self.swap_ttl);
 			for (asset, min) in &self.minimum_swap_amounts {
@@ -389,7 +389,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			// 1200 = 2 hours (6 sec per block)
-			Self { swap_ttl: T::BlockNumber::from(1_200u32), minimum_swap_amounts: vec![] }
+			Self { swap_ttl: BlockNumberFor::<T>::from(1_200u32), minimum_swap_amounts: vec![] }
 		}
 	}
 
@@ -694,7 +694,7 @@ pub mod pallet {
 		/// - [On update](Event::SwapTtlSet)
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
-		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			SwapTTL::<T>::set(ttl);
 

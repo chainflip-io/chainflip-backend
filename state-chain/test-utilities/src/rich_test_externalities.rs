@@ -5,6 +5,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnInitialize},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::BuildStorage;
 
 /// Basic [sp_io::TestExternalities] wrapper that provides a richer API for testing pallets.
@@ -12,9 +13,9 @@ struct RichExternalities<Runtime>(sp_io::TestExternalities, std::marker::Phantom
 
 impl<
 		Runtime: frame_system::Config,
-		Pallets: OnInitialize<Runtime::BlockNumber>
-			+ OnIdle<Runtime::BlockNumber>
-			+ OnFinalize<Runtime::BlockNumber>,
+		Pallets: OnInitialize<BlockNumberFor<Runtime>>
+			+ OnIdle<BlockNumberFor<Runtime>>
+			+ OnFinalize<BlockNumberFor<Runtime>>,
 	> RichExternalities<(Runtime, Pallets)>
 {
 	fn new(ext: sp_io::TestExternalities) -> Self {
@@ -48,7 +49,7 @@ impl<
 	#[track_caller]
 	fn execute_at_block<Ctx>(
 		mut self,
-		block_number: impl Into<Runtime::BlockNumber>,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Pallets, Ctx> {
 		let context = self.0.execute_with(|| {
@@ -74,9 +75,9 @@ pub struct TestExternalities<Runtime, Pallets, Ctx = ()> {
 impl<Runtime, Pallets> TestExternalities<Runtime, Pallets>
 where
 	Runtime: frame_system::Config,
-	Pallets: OnInitialize<Runtime::BlockNumber>
-		+ OnIdle<Runtime::BlockNumber>
-		+ OnFinalize<Runtime::BlockNumber>,
+	Pallets: OnInitialize<BlockNumberFor<Runtime>>
+		+ OnIdle<BlockNumberFor<Runtime>>
+		+ OnFinalize<BlockNumberFor<Runtime>>,
 {
 	/// Useful for backwards-compatibility. This is equivalent to the context-less execute_with from
 	/// [sp_io::TestExternalities].
@@ -92,9 +93,9 @@ where
 impl<Runtime, Pallets, Ctx> TestExternalities<Runtime, Pallets, Ctx>
 where
 	Runtime: frame_system::Config,
-	Pallets: OnInitialize<Runtime::BlockNumber>
-		+ OnIdle<Runtime::BlockNumber>
-		+ OnFinalize<Runtime::BlockNumber>,
+	Pallets: OnInitialize<BlockNumberFor<Runtime>>
+		+ OnIdle<BlockNumberFor<Runtime>>
+		+ OnFinalize<BlockNumberFor<Runtime>>,
 	Ctx: Clone,
 {
 	/// Initialises new [TestExternalities] with the given genesis config at block number 1.
@@ -169,7 +170,7 @@ where
 	#[track_caller]
 	pub fn then_execute_at_block<R>(
 		self,
-		block_number: impl Into<Runtime::BlockNumber>,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, Pallets, R> {
 		let context = self.context;

@@ -236,7 +236,7 @@ pub mod pallet {
 	/// block number.
 	#[pallet::storage]
 	pub type Timeouts<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<BroadcastAttemptId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttemptId>, ValueQuery>;
 
 	/// Stores all needed information to be able to re-request the signature
 	#[pallet::storage]

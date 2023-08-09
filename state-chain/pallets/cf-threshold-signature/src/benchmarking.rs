@@ -78,9 +78,9 @@ benchmarks_instance_pallet! {
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
 	set_threshold_signature_timeout {
-		let old_timeout: T::BlockNumber = 5u32.into();
+		let old_timeout: BlockNumberFor<T> = 5u32.into();
 		ThresholdSignatureResponseTimeout::<T, I>::put(old_timeout);
-		let new_timeout: T::BlockNumber = old_timeout + 1u32.into();
+		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
 		let call = Call::<T, I>::set_threshold_signature_timeout {
 			new_timeout
 		};

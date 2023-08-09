@@ -114,7 +114,7 @@ pub mod pallet {
 		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
 			deposit_address: EncodedAddress,
-			expiry_block: T::BlockNumber,
+			expiry_block: BlockNumberFor<T>,
 		},
 		LiquidityDepositAddressExpired {
 			address: EncodedAddress,
@@ -126,7 +126,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 		},
 		LpTtlSet {
-			ttl: T::BlockNumber,
+			ttl: BlockNumberFor<T>,
 		},
 		EmergencyWithdrawalAddressRegistered {
 			account_id: T::AccountId,
@@ -137,11 +137,11 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub lp_ttl: T::BlockNumber,
+		pub lp_ttl: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			LpTTL::<T>::put(self.lp_ttl);
 		}
@@ -149,7 +149,7 @@ pub mod pallet {
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { lp_ttl: T::BlockNumber::from(1200u32) }
+			Self { lp_ttl: BlockNumberFor::<T>::from(1200u32) }
 		}
 	}
 
@@ -168,7 +168,7 @@ pub mod pallet {
 	pub(super) type LiquidityChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<(ChannelId, cf_chains::ForeignChainAddress)>,
 		ValueQuery,
 	>;
@@ -186,7 +186,7 @@ pub mod pallet {
 
 	/// The TTL for liquidity channels.
 	#[pallet::storage]
-	pub type LpTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type LpTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -303,7 +303,7 @@ pub mod pallet {
 		/// - [On update](Event::LpTtlSet)
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
-		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			LpTTL::<T>::set(ttl);
 

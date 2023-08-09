@@ -112,7 +112,7 @@ pub mod pallet {
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
-	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
 	#[pallet::storage]
@@ -120,11 +120,11 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub flip_buy_interval: T::BlockNumber,
+		pub flip_buy_interval: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
 		}
@@ -132,7 +132,7 @@ pub mod pallet {
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: T::BlockNumber::zero() }
+			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
 		}
 	}
 
@@ -218,7 +218,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		UpdatedBuyInterval {
-			buy_interval: T::BlockNumber,
+			buy_interval: BlockNumberFor<T>,
 		},
 		PoolStateUpdated {
 			unstable_asset: any::Asset,
@@ -294,7 +294,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_buy_interval())]
 		pub fn update_buy_interval(
 			origin: OriginFor<T>,
-			new_buy_interval: T::BlockNumber,
+			new_buy_interval: BlockNumberFor<T>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);

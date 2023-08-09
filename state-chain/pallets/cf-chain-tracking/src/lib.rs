@@ -15,7 +15,7 @@ use cf_traits::{Chainflip, GetBlockHeight};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, traits::OnRuntimeUpgrade,
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
 
@@ -46,7 +46,7 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_runtime_upgrade() -> Weight {
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
@@ -91,7 +91,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			CurrentChainState::<T, I>::put(self.init_chain_state.clone());
 		}

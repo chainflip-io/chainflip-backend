@@ -185,7 +185,7 @@ pub mod pallet {
 			Offence = Self::Offence,
 		>;
 
-		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
+		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
 
 		/// For activating Safe mode: CODE RED for the chain.
 		type SafeMode: Get<PalletSafeMode> + SafeMode + SetSafeMode<Self::SafeMode>;
@@ -679,7 +679,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
 		pub fn set_keygen_response_timeout(
 			origin: OriginFor<T>,
-			new_timeout: T::BlockNumber,
+			new_timeout: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -724,7 +724,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key {
 				Pallet::<T, I>::set_vault_key_for_epoch(

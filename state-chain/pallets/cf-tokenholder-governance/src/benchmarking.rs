@@ -18,7 +18,7 @@ benchmarks! {
 		let a in 10..1000;
 		let proposal = generate_proposal();
 		Proposals::<T>::insert(
-			T::BlockNumber::from(1u32),
+			BlockNumberFor<T>::from(1u32),
 			proposal.clone(),
 		);
 		let backers = (0..a).map(|i| account("doogle", i, 0)).collect::<BTreeSet<_>>();

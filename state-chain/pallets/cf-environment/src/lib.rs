@@ -56,6 +56,7 @@ pub mod pallet {
 	use cf_chains::btc::{ScriptPubkey, Utxo};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
+	use frame_support::DefaultNoBound;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -190,7 +191,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
 			NextCompatibilityVersion::<T>::kill();
@@ -375,8 +376,8 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(DefaultNoBound)]
+	pub struct GenesisConfig<T> {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
 		pub state_chain_gateway_address: EthereumAddress,
@@ -387,11 +388,12 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub network_environment: NetworkEnvironment,
+		pub _config: PhantomData<T>,
 	}
 
 	/// Sets the genesis config
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);

@@ -71,10 +71,10 @@ pub struct Submission {
 }
 
 pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static> {
-	submissions_by_nonce: BTreeMap<state_chain_runtime::Index, Vec<Submission>>,
-	pub anticipated_nonce: state_chain_runtime::Index,
+	submissions_by_nonce: BTreeMap<state_chain_runtime::Nonce, Vec<Submission>>,
+	pub anticipated_nonce: state_chain_runtime::Nonce,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
-	finalized_nonce: state_chain_runtime::Index,
+	finalized_nonce: state_chain_runtime::Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: state_chain_runtime::BlockNumber,
 	runtime_version: sp_version::RuntimeVersion,
@@ -93,7 +93,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 {
 	pub fn new(
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
-		finalized_nonce: state_chain_runtime::Index,
+		finalized_nonce: state_chain_runtime::Nonce,
 		finalized_block_hash: state_chain_runtime::Hash,
 		finalized_block_number: state_chain_runtime::BlockNumber,
 		runtime_version: sp_version::RuntimeVersion,
@@ -119,14 +119,14 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		)
 	}
 
-	pub fn finalized_nonce(&self) -> state_chain_runtime::Index {
+	pub fn finalized_nonce(&self) -> state_chain_runtime::Nonce {
 		self.finalized_nonce
 	}
 
 	pub async fn submit_extrinsic_at_nonce(
 		&mut self,
 		request: &mut Request,
-		nonce: state_chain_runtime::Index,
+		nonce: state_chain_runtime::Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
@@ -253,7 +253,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
 		block_hash: H256,
-	) -> Result<()> {
+	) -> Result<(), anyhow::Error> {
 		let block = self.base_rpc_client.block(block_hash).await?.expect(SUBSTRATE_BEHAVIOUR).block;
 		// TODO: Move this out into BlockProducer
 		let events = self
@@ -280,7 +280,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			self.finalized_block_hash = block_hash;
 
 			self.finalized_nonce = nonce;
-			self.anticipated_nonce = state_chain_runtime::Index::max(self.anticipated_nonce, nonce);
+			self.anticipated_nonce = state_chain_runtime::Nonce::max(self.anticipated_nonce, nonce);
 
 			for (extrinsic_index, extrinsic_events) in events
 				.into_iter()

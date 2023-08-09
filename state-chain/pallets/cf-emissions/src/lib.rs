@@ -37,7 +37,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -61,7 +61,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ AtLeast32BitUnsigned
-			+ UniqueSaturatedFrom<Self::BlockNumber>
+			+ UniqueSaturatedFrom<BlockNumberFor<Self>>
 			+ Into<u128>
 			+ From<u128>;
 
@@ -89,7 +89,7 @@ pub mod pallet {
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
-		type CompoundingInterval: Get<<Self as frame_system::Config>::BlockNumber>;
+		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
 		/// Something that can provide the state chain gatweay address.
 		type EthEnvironment: EthEnvironmentProvider;
@@ -265,20 +265,21 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(DefaultNoBound)]
+	pub struct GenesisConfig<T> {
 		pub current_authority_emission_inflation: u32,
 		pub backup_node_emission_inflation: u32,
 		pub supply_update_interval: u32,
+		pub _config: PhantomData<T>,
 	}
 
 	/// At genesis we need to set the inflation rates for active and backup validators.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			CurrentAuthorityEmissionInflation::<T>::put(self.current_authority_emission_inflation);
 			BackupNodeEmissionInflation::<T>::put(self.backup_node_emission_inflation);
-			SupplyUpdateInterval::<T>::put(T::BlockNumber::from(self.supply_update_interval));
+			SupplyUpdateInterval::<T>::put(BlockNumberFor::<T>::from(self.supply_update_interval));
 			<Pallet<T> as BlockEmissions>::calculate_block_emissions();
 		}
 	}
@@ -286,14 +287,17 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Determines if we should broadcast supply update at block number `block_number`.
-	fn should_update_supply_at(block_number: T::BlockNumber) -> bool {
+	fn should_update_supply_at(block_number: BlockNumberFor<T>) -> bool {
 		let supply_update_interval = SupplyUpdateInterval::<T>::get();
 		let blocks_elapsed = block_number - LastSupplyUpdateBlock::<T>::get();
 		blocks_elapsed >= supply_update_interval
 	}
 
 	/// Updates the total supply on the ETH blockchain
-	fn broadcast_update_total_supply(total_supply: T::FlipBalance, block_number: T::BlockNumber) {
+	fn broadcast_update_total_supply(
+		total_supply: T::FlipBalance,
+		block_number: BlockNumberFor<T>,
+	) {
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(

@@ -23,12 +23,12 @@ fn new_lp_account<T: Chainflip>() -> T::AccountId {
 benchmarks! {
 	update_buy_interval {
 		let call = Call::<T>::update_buy_interval{
-			new_buy_interval: T::BlockNumber::one(),
+			new_buy_interval: BlockNumberFor<T>::one(),
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert_eq!(FlipBuyInterval::<T>::get(), T::BlockNumber::one());
+		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor<T>::one());
 	}
 
 	update_pool_enabled {

@@ -237,7 +237,7 @@ pub mod pallet {
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.
 		#[pallet::constant]
-		type CeremonyRetryDelay: Get<Self::BlockNumber>;
+		type CeremonyRetryDelay: Get<BlockNumberFor<Self>>;
 
 		/// Pallet weights
 		type Weights: WeightInfo;
@@ -312,7 +312,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			ThresholdSignatureResponseTimeout::<T, I>::put(
 				self.threshold_signature_response_timeout,
