@@ -1,9 +1,8 @@
 use cf_chains::{
-	btc::BitcoinNetwork,
 	dot::{PolkadotAccountId, PolkadotHash},
 	eth, ChainState,
 };
-use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount};
+use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment};
 
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
@@ -13,7 +12,8 @@ use cf_chains::{
 };
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
-use sc_service::{ChainType, Properties};
+pub use sc_service::{ChainType, Properties};
+use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
@@ -31,9 +31,12 @@ use state_chain_runtime::{
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
-use utilities::clean_eth_address;
+use utilities::clean_hex_address;
 
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	Percent,
+};
 
 pub mod common;
 pub mod partnernet;
@@ -104,12 +107,12 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			.try_into()
 			.map_err(|_| "Incorrect length of hex string.".into())
 	}
-	from_env_var!(clean_eth_address, FLIP_TOKEN_ADDRESS, flip_token_address);
-	from_env_var!(clean_eth_address, ETH_USDC_ADDRESS, eth_usdc_address);
-	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
-	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
-	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
-	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
+	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
+	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
+	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, key_manager_address);
+	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
@@ -229,16 +232,16 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				1,
 				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
-					flip_token_address,
-					eth_usdc_address,
-					state_chain_gateway_address,
-					key_manager_address,
-					eth_vault_address,
-					eth_address_checker_address,
+					flip_token_address: flip_token_address.into(),
+					eth_usdc_address: eth_usdc_address.into(),
+					state_chain_gateway_address: state_chain_gateway_address.into(),
+					key_manager_address: key_manager_address.into(),
+					eth_vault_address: eth_vault_address.into(),
+					eth_address_checker_address: eth_address_checker_address.into(),
 					ethereum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
-					bitcoin_network: BitcoinNetwork::Regtest,
+					network_environment: NetworkEnvironment::Development,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -252,7 +255,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				common::EXPIRY_SPAN_IN_SECONDS,
 				common::ACCRUAL_RATIO,
-				common::PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+				Percent::from_percent(common::REDEMPTION_PERIOD_AS_PERCENTAGE),
 				common::SUPPLY_UPDATE_INTERVAL,
 				common::PENALTIES.to_vec(),
 				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
@@ -271,7 +274,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Fork ID
 		None,
 		// Properties
-		None,
+		Some(chainflip_properties()),
 		// Extensions
 		None,
 	))
@@ -340,16 +343,16 @@ macro_rules! network_spec {
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
 							EnvironmentConfig {
-								flip_token_address,
-								eth_usdc_address,
-								state_chain_gateway_address,
-								key_manager_address,
-								eth_vault_address,
-								eth_address_checker_address,
+								flip_token_address: flip_token_address.into(),
+								eth_usdc_address: eth_usdc_address.into(),
+								state_chain_gateway_address: state_chain_gateway_address.into(),
+								key_manager_address: key_manager_address.into(),
+								eth_vault_address: eth_vault_address.into(),
+								eth_address_checker_address: eth_address_checker_address.into(),
 								ethereum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								bitcoin_network: BITCOIN_NETWORK,
+								network_environment: NETWORK_ENVIRONMENT,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -363,7 +366,7 @@ macro_rules! network_spec {
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 							EXPIRY_SPAN_IN_SECONDS,
 							ACCRUAL_RATIO,
-							PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+							Percent::from_percent(REDEMPTION_PERIOD_AS_PERCENTAGE),
 							SUPPLY_UPDATE_INTERVAL,
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
@@ -419,7 +422,7 @@ fn testnet_genesis(
 	backup_node_emission_inflation_perbill: u32,
 	expiry_span: u64,
 	accrual_ratio: (i32, u32),
-	percent_of_epoch_period_redeemable: u8,
+	redemption_period_as_percentage: Percent,
 	supply_update_interval: u32,
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
@@ -515,8 +518,8 @@ fn testnet_genesis(
 				.collect(),
 			genesis_vanity_names,
 			blocks_per_epoch,
-			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
-			backup_reward_node_percentage: 20,
+			redemption_period_as_percentage,
+			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
@@ -633,16 +636,15 @@ fn testnet_genesis(
 }
 
 pub fn chainflip_properties() -> Properties {
-	let mut properties = Properties::new();
-	properties.insert(
-		"ss58Format".into(),
-		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
-	);
-	properties.insert("tokenDecimals".into(), 18.into());
-	properties.insert("tokenSymbol".into(), "FLIP".into());
-	properties.insert("color".into(), "#61CFAA".into());
-
-	properties
+	json!({
+		"ss58Format": state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX,
+		"tokenDecimals": 18,
+		"tokenSymbol": "FLIP",
+		"color": "#61CFAA",
+	})
+	.as_object()
+	.unwrap()
+	.clone()
 }
 
 /// Sets global that ensures SC AccountId's are printed correctly

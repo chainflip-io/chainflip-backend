@@ -28,20 +28,27 @@ impl ExecutexSwapAndCall {
 	pub(crate) fn new(
 		egress_id: EgressId,
 		transfer_param: EncodableTransferAssetParams,
-		source_address: ForeignChainAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Self {
-		let (source_chain, source_address) = Self::destructure_address(source_address);
+		let (source_chain, source_address) =
+			Self::destructure_address(source_chain, source_address);
 		Self { egress_id, transfer_param, source_chain, source_address, message }
 	}
 
-	fn destructure_address(address: ForeignChainAddress) -> (u32, Vec<u8>) {
+	fn destructure_address(
+		chain: ForeignChain,
+		address: Option<ForeignChainAddress>,
+	) -> (u32, Vec<u8>) {
 		match address {
-			ForeignChainAddress::Eth(source_address) =>
-				(ForeignChain::Ethereum as u32, source_address.to_vec()),
-			ForeignChainAddress::Dot(source_address) =>
+			None => (chain as u32, vec![]),
+			Some(ForeignChainAddress::Eth(source_address)) =>
+				(ForeignChain::Ethereum as u32, source_address.0.to_vec()),
+			Some(ForeignChainAddress::Dot(source_address)) =>
 				(ForeignChain::Polkadot as u32, source_address.aliased_ref().to_vec()),
-			ForeignChainAddress::Btc(script) => (ForeignChain::Bitcoin as u32, script.bytes()),
+			Some(ForeignChainAddress::Btc(script)) =>
+				(ForeignChain::Bitcoin as u32, script.bytes()),
 		}
 	}
 
@@ -101,8 +108,11 @@ mod test_execute_x_swap_and_execute {
 
 		let dummy_src_address =
 			ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([0xff; 32]));
-		let (dummy_chain, dummy_address) =
-			super::ExecutexSwapAndCall::destructure_address(dummy_src_address.clone());
+		let dummy_src_chain = ForeignChain::Polkadot;
+		let (dummy_chain, dummy_address) = super::ExecutexSwapAndCall::destructure_address(
+			dummy_src_chain,
+			Some(dummy_src_address.clone()),
+		);
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];
 
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
@@ -122,7 +132,8 @@ mod test_execute_x_swap_and_execute {
 			super::ExecutexSwapAndCall::new(
 				(ForeignChain::Ethereum, 0),
 				dummy_transfer_asset_param.clone(),
-				dummy_src_address,
+				dummy_src_chain,
+				Some(dummy_src_address),
 				dummy_message.clone(),
 			),
 		);

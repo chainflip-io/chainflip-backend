@@ -1,4 +1,7 @@
+use super::Address as EthereumAddress;
 use cf_primitives::ChannelId;
+use cf_utilities::SliceToArray;
+use ethereum_types::H160;
 use sp_runtime::traits::{Hash, Keccak256};
 use sp_std::{mem::size_of, vec::Vec};
 
@@ -45,22 +48,24 @@ const DEPOSIT_CONTRACT_BYTECODE: [u8; 1114] = hex_literal::hex!(
 // Always the same, this is a CREATE2 constant.
 const PREFIX_BYTE: u8 = 0xff;
 
+pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = H160([0xEE; 20]);
+
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and channel id.
 /// @param vault_address The address of the Ethereum Vault
 /// @param token_address The token address if this is a token deposit
 /// @param channel_id The numerical channel id
 pub fn get_create_2_address(
-	vault_address: [u8; 20],
-	token_address: Option<[u8; 20]>,
+	vault_address: EthereumAddress,
+	token_address: Option<EthereumAddress>,
 	channel_id: ChannelId,
-) -> [u8; 20] {
+) -> EthereumAddress {
 	// This hash is used in the later CREATE2 derivation.
 	// see: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/Deposit.sol.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
 		itertools::chain!(
 			DEPOSIT_CONTRACT_BYTECODE,
 			[0u8; 12], // padding
-			token_address.unwrap_or(cf_primitives::ETHEREUM_ETH_ADDRESS),
+			token_address.unwrap_or(ETHEREUM_ETH_ADDRESS).to_fixed_bytes(),
 		)
 		.collect::<Vec<_>>()
 		.as_slice(),
@@ -68,13 +73,13 @@ pub fn get_create_2_address(
 
 	let create_2_args = itertools::chain!(
 		[PREFIX_BYTE],
-		vault_address,
+		vault_address.to_fixed_bytes(),
 		get_salt(channel_id),
 		deploy_transaction_bytes_hash.to_fixed_bytes()
 	)
 	.collect::<Vec<_>>();
 
-	Keccak256::hash(&create_2_args).to_fixed_bytes()[12..].try_into().unwrap()
+	H160(Keccak256::hash(&create_2_args)[12..].as_array())
 }
 
 /// Get the CREATE2 salt for a given channel_id, equivalent to the big-endian u32, left-padded to 32
@@ -90,14 +95,16 @@ pub fn get_salt(channel_id: ChannelId) -> [u8; 32] {
 mod test_super {
 	use super::*;
 	// Based on previously verified values.
-	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
-	const FLIP_ADDRESS: [u8; 20] = hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9");
+	const VAULT_ADDRESS: EthereumAddress =
+		H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"));
+	const FLIP_ADDRESS: EthereumAddress =
+		H160(hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"));
 
 	#[test]
 	fn test_eth_eth() {
 		assert_eq!(
 			get_create_2_address(VAULT_ADDRESS, None, 420696969),
-			hex_literal::hex!("311373270d730749FF22fd3c1F9836AA803Be47a")
+			H160(hex_literal::hex!("311373270d730749FF22fd3c1F9836AA803Be47a"))
 		);
 
 		println!("Derivation worked for ETH:ETH! 🚀");
@@ -106,12 +113,12 @@ mod test_super {
 	#[test]
 	fn test_eth_flip() {
 		// Based on previously verified values.
-		const VAULT_ADDRESS: [u8; 20] =
-			hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
+		const VAULT_ADDRESS: EthereumAddress =
+			H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"));
 
 		assert_eq!(
 			get_create_2_address(VAULT_ADDRESS, Some(FLIP_ADDRESS), 42069),
-			hex_literal::hex!("e3477D1C61feDe43a5bbB5A7Fd40489225D18826")
+			H160(hex_literal::hex!("e3477D1C61feDe43a5bbB5A7Fd40489225D18826"))
 		);
 		println!("Derivation worked for ETH:FLIP! 🚀");
 	}

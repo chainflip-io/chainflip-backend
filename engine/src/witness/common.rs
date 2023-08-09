@@ -1,9 +1,13 @@
+pub mod chain_source;
+pub mod chunked_chain_source;
+pub mod epoch_source;
+
 use cf_chains::{Chain, ChainAbi};
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
 
-use super::chain_source::ChainSource;
+use chain_source::ChainSource;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 

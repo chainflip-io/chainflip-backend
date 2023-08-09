@@ -11,6 +11,7 @@ use warp::{Filter, Reply};
 pub mod future_map;
 pub mod loop_select;
 pub mod rle_bitmap;
+pub mod serde_helpers;
 pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
@@ -19,18 +20,16 @@ pub use unending_stream::UnendingStream;
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
 
-pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], anyhow::Error> {
+pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
 		None => address_str,
 	};
 
-	let address: [u8; LEN] = hex::decode(address_hex_str)
+	hex::decode(address_hex_str)
 		.context("Invalid hex")?
 		.try_into()
-		.map_err(|_| anyhow::anyhow!("Invalid address length"))?;
-
-	Ok(address)
+		.map_err(|_| anyhow::anyhow!("Invalid address length"))
 }
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
@@ -39,16 +38,10 @@ pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 	})
 }
 
-pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], anyhow::Error> {
-	clean_hex_address(dirty_eth_address).context("Failed to parse Ethereum address.")
-}
-
-pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], anyhow::Error> {
-	clean_hex_address(dirty_dot_address).context("Failed to parse Polkadot address.")
-}
-
 #[test]
 fn cleans_eth_address() {
+	let clean_eth_address = clean_hex_address::<[u8; 20]>;
+
 	// fail too short
 	let input = "0x323232";
 	assert!(clean_eth_address(input).is_err());
@@ -318,7 +311,7 @@ macro_rules! print_starting {
 /// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
+pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
@@ -338,61 +331,66 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 		reload_handle
 	};
 
-	scope.spawn_weak(async move {
-		const PATH: &str = "tracing";
-		const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
-		const PORT: u16 = 36079;
+	|scope| {
+		scope.spawn_weak(async move {
+			const PATH: &str = "tracing";
+			const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
+			const PORT: u16 = 36079;
 
-		let change_filter = warp::post()
-			.and(warp::path(PATH))
-			.and(warp::path::end())
-			.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
-			.and(warp::body::json())
-			.then({
-				let reload_handle = reload_handle.clone();
-				move |filter: String| {
-					futures::future::ready(
-						match EnvFilter::builder()
-							.with_default_directive(LevelFilter::INFO.into())
-							.parse(filter)
-						{
-							Ok(env_filter) => match reload_handle.reload(env_filter) {
-								Ok(_) => warp::reply().into_response(),
+			let change_filter = warp::post()
+				.and(warp::path(PATH))
+				.and(warp::path::end())
+				.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
+				.and(warp::body::json())
+				.then({
+					let reload_handle = reload_handle.clone();
+					move |filter: String| {
+						futures::future::ready(
+							match EnvFilter::builder()
+								.with_default_directive(LevelFilter::INFO.into())
+								.parse(filter)
+							{
+								Ok(env_filter) => match reload_handle.reload(env_filter) {
+									Ok(_) => warp::reply().into_response(),
+									Err(error) => warp::reply::with_status(
+										warp::reply::json(&error.to_string()),
+										warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+									)
+									.into_response(),
+								},
 								Err(error) => warp::reply::with_status(
 									warp::reply::json(&error.to_string()),
-									warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+									warp::http::StatusCode::BAD_REQUEST,
 								)
 								.into_response(),
 							},
-							Err(error) => warp::reply::with_status(
-								warp::reply::json(&error.to_string()),
-								warp::http::StatusCode::BAD_REQUEST,
-							)
-							.into_response(),
-						},
-					)
-				}
-			});
+						)
+					}
+				});
 
-		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
-			futures::future::ready({
-				let (status, message) =
-					match reload_handle.with_current(|env_filter| env_filter.to_string()) {
-						Ok(reply) => (warp::http::StatusCode::OK, reply),
-						Err(error) =>
-							(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
-					};
+			let get_filter =
+				warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
+					futures::future::ready({
+						let (status, message) = match reload_handle
+							.with_current(|env_filter| env_filter.to_string())
+						{
+							Ok(reply) => (warp::http::StatusCode::OK, reply),
+							Err(error) =>
+								(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+						};
 
-				warp::reply::with_status(warp::reply::json(&message), status).into_response()
-			})
+						warp::reply::with_status(warp::reply::json(&message), status)
+							.into_response()
+					})
+				});
+
+			warp::serve(change_filter.or(get_filter))
+				.run((std::net::Ipv4Addr::LOCALHOST, PORT))
+				.await;
+
+			Ok(())
 		});
-
-		warp::serve(change_filter.or(get_filter))
-			.run((std::net::Ipv4Addr::LOCALHOST, PORT))
-			.await;
-
-		Ok(())
-	});
+	}
 }
 
 // We use PathBuf because the value must be Sized, Path is not Sized

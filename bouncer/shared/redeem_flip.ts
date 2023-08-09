@@ -3,6 +3,7 @@ import { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import Keyring from '@polkadot/keyring';
 import { getNextEthNonce } from './send_eth';
+import { getGatewayAbi } from './eth_abis';
 import {
   sleep,
   observeEvent,
@@ -12,7 +13,8 @@ import {
   amountToFineAmount,
   observeEVMEvent,
 } from './utils';
-import gatewayAbi from '../../eth-contract-abis/perseverance-0.9-rc3/IStateChainGateway.json';
+
+const gatewayAbi = await getGatewayAbi();
 
 export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAmount: string) {
   const chainflip = await getChainflipApi();

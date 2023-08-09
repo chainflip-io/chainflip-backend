@@ -16,13 +16,14 @@ use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
-	eth::{self, api::EthereumApi, Ethereum},
+	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use sp_runtime::AccountId32;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -68,9 +69,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SemVer, SwapOutput,
-};
+pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
@@ -139,7 +138,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 12,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 2,
+	transaction_version: 3,
 	state_version: 1,
 };
 
@@ -149,15 +148,10 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-parameter_types! {
-	pub const MinEpoch: BlockNumber = 1;
-}
-
 impl pallet_cf_validator::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
-	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault, BitcoinVault>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
@@ -604,6 +598,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
+	type SafeMode = chainflip::RuntimeSafeMode;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
@@ -998,7 +993,7 @@ impl_runtime_apis! {
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
-				redemption_period_as_percentage: Validator::redemption_period_as_percentage(),
+				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
@@ -1025,10 +1020,18 @@ impl_runtime_apis! {
 
 		fn cf_environment() -> runtime_apis::Environment {
 			runtime_apis::Environment {
-				bitcoin_network: Environment::bitcoin_network(),
+				bitcoin_network: Environment::network_environment().into(),
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
+		}
+
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+			LiquidityPools::get_pool(asset)
+		}
+
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
+			Swapping::minimum_swap_amount(asset)
 		}
 	}
 

@@ -11,8 +11,9 @@ use cf_chains::{
 		CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
+	eth::Address as EthereumAddress,
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthereumAddress, SemVer};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
@@ -31,7 +32,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 type SignatureNonce = u64;
 
@@ -151,12 +152,6 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn bitcoin_network)]
-	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
-	/// currently supports.
-	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
-
-	#[pallet::storage]
 	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
 	/// from.
 	pub type BitcoinActiveDepositAddressDetails<T> =
@@ -171,6 +166,11 @@ pub mod pallet {
 	#[pallet::getter(fn next_compatibility_version)]
 	/// If this storage is set, a new version of Chainflip is available for upgrade.
 	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn network_environment)]
+	/// Contains the network environment for this runtime.
+	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -377,7 +377,7 @@ pub mod pallet {
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-		pub bitcoin_network: BitcoinNetwork,
+		pub network_environment: NetworkEnvironment,
 	}
 
 	/// Sets the genesis config
@@ -398,7 +398,8 @@ pub mod pallet {
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
-			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
+
+			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 		}
 	}
 }
