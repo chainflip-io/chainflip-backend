@@ -43,7 +43,9 @@ async function testAssetBalances() {
   // TODO: Calculate the required amount of Eth for the mint commands
   if (balances.Eth < withdrawAmount) {
     throw new Error(
-      `Need at least ${withdrawAmount} Eth for the test to work, has the setup been run?`,
+      `Need at least ${withdrawAmount} Eth for the test to work, has the setup been run? balances: ${JSON.stringify(
+        balances,
+      )}`,
     );
   }
 }
