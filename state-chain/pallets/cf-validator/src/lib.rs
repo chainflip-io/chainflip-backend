@@ -725,12 +725,10 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;
-			if <Self as EpochInfo>::current_authority_count() >=
-				AuctionParameters::<T>::get().max_size
-			{
+			if Self::current_authority_count() >= AuctionParameters::<T>::get().max_size {
 				ensure!(
 					T::FundingInfo::total_balance_of(&account_id) >=
-						RegistrationBondPercentage::<T>::get() * <Self as EpochInfo>::bond(),
+						RegistrationBondPercentage::<T>::get() * Self::bond(),
 					Error::<T>::NotEnoughFunds
 				);
 			}
