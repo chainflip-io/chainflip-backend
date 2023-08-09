@@ -5,21 +5,21 @@ import { observeCcmReceived, observeSwapScheduled, sleep } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
-import { CcmDepositMetadata } from './new_swap';
 
 let stopObserving = false;
-
-function newGasTestCcmMetadata() {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
-  return web3.eth.abi.encodeParameters(['string'], ['GasTest']);
-}
 
 async function testGasLimitSwap(
   sourceAsset: Asset,
   destAsset: Asset,
-  messageMetadata: CcmDepositMetadata,
   addressType?: BtcAddressType,
 ) {
+  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+  const messageMetadata = newCcmMetadata(
+    sourceAsset,
+    web3.eth.abi.encodeParameters(['string'], ['GasTest']),
+    1,
+  );
+
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
@@ -56,9 +56,9 @@ export async function testGasLimitCcmSwaps() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
   const gasLimitTests = [
-    testGasLimitSwap('DOT', 'FLIP', newCcmMetadata('DOT', newGasTestCcmMetadata())),
-    testGasLimitSwap('ETH', 'USDC', newCcmMetadata('ETH', newGasTestCcmMetadata())),
-    testGasLimitSwap('FLIP', 'ETH', newCcmMetadata('ETH', newGasTestCcmMetadata())),
+    testGasLimitSwap('DOT', 'FLIP'),
+    testGasLimitSwap('ETH', 'USDC'),
+    testGasLimitSwap('FLIP', 'ETH'),
   ];
 
   // Used as a benchmark for the other tests
