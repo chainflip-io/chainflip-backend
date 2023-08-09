@@ -1,7 +1,7 @@
 import Web3 from 'web3';
 import { Asset } from '@chainflip-io/cli/.';
-import { newCcmMetadata, prepareSwap, testSwap } from './swapping';
-import { observeCcmReceived, observeSwapScheduled, sleep } from './utils';
+import { newCcmMetadata, prepareSwap } from './swapping';
+import { getChainflipApi, observeCcmReceived, observeEvent, observeSwapScheduled } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
@@ -61,11 +61,13 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('FLIP', 'ETH'),
   ];
 
-  // Used as a benchmark for the other tests
-  await testSwap('BTC', 'FLIP', undefined, newCcmMetadata('BTC'));
+  let broadcastAborted = 0;
+  await observeEvent(
+    'ethereumBroadcaster:BroadcastAborted',
+    await getChainflipApi(),
+    (_) => ++broadcastAborted === gasLimitTests.length,
+  );
 
-  // Safeguard
-  await sleep(20000);
   stopObserving = true;
 
   await Promise.all(gasLimitTests);
