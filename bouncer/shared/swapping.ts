@@ -193,8 +193,8 @@ export async function testAllSwaps() {
 
   Object.values(Assets).flatMap((sourceAsset) =>
     Object.values(Assets)
-      // SDK prevents swaps from the same asset to the same asset
       .filter((destAsset) => sourceAsset !== destAsset)
+      // eslint-disable-next-line array-callback-return
       .map((destAsset) => {
         // Regular swaps
         appendSwap(allSwaps, sourceAsset, destAsset, testSwap);
