@@ -242,6 +242,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
 					network_environment: NetworkEnvironment::Development,
+					_config: PhantomData,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -353,6 +354,7 @@ macro_rules! network_spec {
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								network_environment: NETWORK_ENVIRONMENT,
+								_config: PhantomData,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -503,6 +505,7 @@ fn testnet_genesis(
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
+			_config: PhantomData,
 		},
 		validator: ValidatorConfig {
 			genesis_authorities: authority_ids.clone(),
@@ -550,7 +553,7 @@ fn testnet_genesis(
 		// These are set indirectly via the session pallet.
 		aura: AuraConfig { authorities: vec![] },
 		// These are set indirectly via the session pallet.
-		grandpa: GrandpaConfig { authorities: vec![] },
+		grandpa: GrandpaConfig { authorities: vec![], _config: PhantomData },
 		governance: GovernanceConfig { members: BTreeSet::from([root_key]), expiry_span },
 		reputation: ReputationConfig {
 			accrual_ratio,
@@ -602,6 +605,7 @@ fn testnet_genesis(
 			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
 			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
 			supply_update_interval,
+			_config: PhantomData,
 		},
 		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
 		ethereum_chain_tracking: EthereumChainTrackingConfig {

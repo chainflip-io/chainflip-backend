@@ -1305,6 +1305,7 @@ dependencies = [
  "sc-executor",
  "sc-keystore",
  "sc-network",
+ "sc-offchain",
  "sc-rpc-api",
  "sc-service",
  "sc-telemetry",
@@ -4135,7 +4136,9 @@ dependencies = [
  "futures-util",
  "http",
  "hyper",
+ "log",
  "rustls 0.21.6",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls 0.24.1",
 ]
@@ -8690,6 +8693,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-offchain"
+version = "4.0.0-dev"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08#72dc39b772f242971e2c6c034cd533dad6cf98ee"
+dependencies = [
+ "array-bytes 6.1.0",
+ "bytes",
+ "fnv",
+ "futures",
+ "futures-timer",
+ "hyper",
+ "hyper-rustls 0.24.1",
+ "libp2p",
+ "log",
+ "num_cpus",
+ "once_cell",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "sc-client-api",
+ "sc-network",
+ "sc-network-common",
+ "sc-transaction-pool-api",
+ "sc-utils",
+ "sp-api",
+ "sp-core 21.0.0",
+ "sp-externalities 0.19.0",
+ "sp-keystore 0.27.0",
+ "sp-offchain",
+ "sp-runtime 24.0.0",
+ "threadpool",
+ "tracing",
+]
+
+[[package]]
 name = "sc-proposer-metrics"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08#72dc39b772f242971e2c6c034cd533dad6cf98ee"
@@ -11088,6 +11125,15 @@ checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
  "cfg-if",
  "once_cell",
+]
+
+[[package]]
+name = "threadpool"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
+dependencies = [
+ "num_cpus",
 ]
 
 [[package]]

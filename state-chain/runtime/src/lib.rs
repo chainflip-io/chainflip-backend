@@ -97,8 +97,8 @@ pub type Signature = MultiSignature;
 /// to the public key of our transaction signing scheme.
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-/// Index of a transaction in the chain.
-pub type Index = u32;
+/// Nonce of a transaction in the chain.
+pub type Nonce = u32;
 
 /// Balance of an account.
 pub type Balance = u128;
@@ -388,6 +388,8 @@ parameter_types! {
 impl frame_system::Config for Runtime {
 	/// The basic call filter to use in dispatchable.
 	type BaseCallFilter = frame_support::traits::Everything;
+	/// The block type for the runtime.
+	type Block = Block;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
@@ -396,18 +398,14 @@ impl frame_system::Config for Runtime {
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
 	type RuntimeCall = RuntimeCall;
+	/// The type for storing how many extrinsics an account has signed.
+	type Nonce = Nonce;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
-	/// The index type for storing how many extrinsics an account has signed.
-	type Index = Index;
-	/// The index type for blocks.
-	type BlockNumber = BlockNumber;
 	/// The type for hashing blocks and tries.
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The header type.
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
 	/// The ubiquitous origin type.
@@ -471,16 +469,10 @@ type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReporting
 
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	// type KeyOwnerProofSystem = Historical;
-	// type KeyOwnerProof = KeyOwnerProof<Historical, GrandpaId>;
-	// type KeyOwnerIdentification = KeyOwnerIdentification<Historical, GrandpaId>;
-	// type HandleEquivocation = pallet_grandpa::EquivocationHandler<
-	// 	Self::KeyOwnerIdentification,
-	// 	GrandpaOffenceReporter<Self>,
-	// 	BlocksPerEpoch,
-	// >;
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	// Note: We don't use nomination.
+	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
 	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
@@ -727,10 +719,6 @@ impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 
 construct_runtime!(
 	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,
@@ -1151,8 +1139,8 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Nonce> for Runtime {
+		fn account_nonce(account: AccountId) -> Nonce {
 			System::account_nonce(account)
 		}
 	}

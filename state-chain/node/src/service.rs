@@ -1,12 +1,14 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
+use futures::FutureExt;
 use jsonrpsee::RpcModule;
-use sc_client_api::BlockBackend;
+use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::SharedVoterState;
 pub use sc_executor::NativeElseWasmExecutor;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncParams};
 use sc_telemetry::{Telemetry, TelemetryWorker};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
@@ -37,6 +39,10 @@ pub(crate) type FullClient =
 	sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
+
+/// The minimum period of blocks on which justifications will be
+/// imported and generated.
+const GRANDPA_JUSTIFICATION_PERIOD: u32 = 512;
 
 #[allow(clippy::type_complexity)]
 pub fn new_partial(
@@ -99,6 +105,7 @@ pub fn new_partial(
 
 	let (grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
 		client.clone(),
+		GRANDPA_JUSTIFICATION_PERIOD,
 		&client,
 		select_chain.clone(),
 		telemetry.as_ref().map(|x| x.handle()),
@@ -159,6 +166,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let (shared_voter_state, shared_authority_set, justification_stream, finality_provider) = {
 		let (_grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
 			client.clone(),
+			GRANDPA_JUSTIFICATION_PERIOD,
 			&(client.clone() as Arc<_>),
 			select_chain.clone(),
 			telemetry.as_ref().map(|x| x.handle()),
@@ -204,11 +212,23 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		})?;
 
 	if config.offchain_worker.enabled {
-		sc_service::build_offchain_workers(
-			&config,
-			task_manager.spawn_handle(),
-			client.clone(),
-			network.clone(),
+		task_manager.spawn_handle().spawn(
+			"offchain-workers-runner",
+			"offchain-worker",
+			sc_offchain::OffchainWorkers::new(sc_offchain::OffchainWorkerOptions {
+				runtime_api_provider: client.clone(),
+				is_validator: config.role.is_authority(),
+				keystore: Some(keystore_container.keystore()),
+				offchain_db: backend.offchain_storage(),
+				transaction_pool: Some(OffchainTransactionPoolFactory::new(
+					transaction_pool.clone(),
+				)),
+				network_provider: network.clone(),
+				enable_http_requests: true,
+				custom_extensions: |_| vec![],
+			})
+			.run(client.clone(), task_manager.spawn_handle())
+			.boxed(),
 		);
 	}
 
@@ -335,7 +355,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		let grandpa_config = sc_consensus_grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: Duration::from_millis(333),
-			justification_period: 512,
+			justification_generation_period: GRANDPA_JUSTIFICATION_PERIOD,
 			name: Some(name),
 			observer_enabled: false,
 			keystore,
@@ -359,6 +379,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			prometheus_registry,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.
