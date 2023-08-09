@@ -195,8 +195,8 @@ where
 /// address.balanceAtPreviousBlock
 ///
 /// We then do this on *every* block. This ensures we don't miss anything. See the tests below.
-/// The `FetchedNative` events are emitted by the Deposit contracts that are deployed to the
-/// addresses we generate.
+/// The `FetchedNative` events are emitted by the Vault contract, when the deposit contract fetches
+/// to when they receive funds, after deployment.
 /// Note that when we have a contract deployed already we substrate the balance at the previous
 /// block, since we will have already witnessed the deposits at the time the deposit was made.
 pub fn eth_ingresses_at_block<
