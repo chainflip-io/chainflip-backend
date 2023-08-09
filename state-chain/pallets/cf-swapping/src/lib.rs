@@ -269,7 +269,7 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
-			broker_fee_rate: BasisPoints,
+			broker_commission_rate: BasisPoints,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -549,7 +549,7 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				channel_id,
-				broker_fee_rate: broker_commission_bps,
+				broker_commission_rate: broker_commission_bps,
 			});
 
 			Ok(())
