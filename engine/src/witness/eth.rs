@@ -9,6 +9,7 @@ pub mod vault;
 
 use std::sync::Arc;
 
+use cf_primitives::chains::assets::eth;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -78,6 +79,13 @@ where
 		)
 		.await
 		.context("Failed to get Vault contract address from SC")?;
+
+	let address_checker_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+		)
+		.await
+		.expect(STATE_CHAIN_CONNECTION);
 
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
@@ -151,7 +159,13 @@ where
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.ethereum_deposits(state_chain_client.clone(), eth_client.clone())
+		.ethereum_deposits(
+			state_chain_client.clone(),
+			eth_client.clone(),
+			eth::Asset::Eth,
+			address_checker_address,
+			vault_address,
+		)
 		.await
 		.continuous("EthereumDeposits".to_string(), db.clone())
 		.logging("EthereumDeposits")
