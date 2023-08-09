@@ -190,7 +190,13 @@ fn request_address_and_deposit(
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
 	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-	assert_ok!(IngressEgress::process_single_deposit(address, asset, 1_000, ()));
+	assert_ok!(IngressEgress::process_single_deposit(
+		address,
+		asset,
+		1_000,
+		(),
+		Default::default()
+	));
 	(id, address)
 }
 
@@ -452,7 +458,13 @@ fn can_process_ccm_deposit() {
 		);
 
 		// Making a deposit should trigger CcmHandler.
-		assert_ok!(IngressEgress::process_single_deposit(deposit_address, from_asset, amount, (),));
+		assert_ok!(IngressEgress::process_single_deposit(
+			deposit_address,
+			from_asset,
+			amount,
+			(),
+			Default::default()
+		));
 		assert_eq!(
 			MockCcmHandler::get_ccm_requests(),
 			vec![CcmRequest {
@@ -466,6 +478,7 @@ fn can_process_ccm_deposit() {
 						deposit_address.into()
 					),
 					channel_id: 1,
+					deposit_block_height: Default::default()
 				}
 			}]
 		);
@@ -546,7 +559,13 @@ fn multi_use_deposit_address_different_blocks() {
 		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
 			// Set the address to deployed.
 			// Do another, should succeed.
-			assert_ok!(Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, ()));
+			assert_ok!(Pallet::<Test, _>::process_single_deposit(
+				deposit_address,
+				ETH,
+				1,
+				(),
+				Default::default()
+			));
 			channel
 		})
 		.then_execute_at_next_block(|(_, deposit_address)| {
@@ -760,7 +779,8 @@ fn handle_pending_deployment() {
 		IngressEgress::on_finalize(1);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 		// Process deposit again the same address.
-		Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, ()).unwrap();
+		Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, (), Default::default())
+			.unwrap();
 		// None-pending requests can still be sent
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
@@ -782,7 +802,14 @@ fn handle_pending_deployment_same_block() {
 	new_test_ext().execute_with(|| {
 		// Initial request.
 		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
-		Pallet::<Test, _>::process_single_deposit(deposit_address, eth::Asset::Eth, 1, ()).unwrap();
+		Pallet::<Test, _>::process_single_deposit(
+			deposit_address,
+			eth::Asset::Eth,
+			1,
+			(),
+			Default::default(),
+		)
+		.unwrap();
 		// Expect to have two fetch requests.
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 2);
 		// Process deposits.
