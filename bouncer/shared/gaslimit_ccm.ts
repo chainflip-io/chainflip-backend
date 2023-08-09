@@ -65,7 +65,7 @@ export async function testGasLimitCcmSwaps() {
   await testSwap('BTC', 'FLIP', undefined, newCcmMetadata('BTC'));
 
   // Safeguard
-  await sleep(5000);
+  await sleep(20000);
   stopObserving = true;
 
   await Promise.all(gasLimitTests);

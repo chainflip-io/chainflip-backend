@@ -146,10 +146,19 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	fn build_transaction(
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
+		// TODO: This should take into account the ccm gas budget. (See PRO-161)
+		const CCM_GAS_LIMIT: u64 = 400_000;
+		const DEFAULT_GAS_LIMIT: u64 = 15_000_000;
+		let gas_limit = match signed_call {
+			EthereumApi::ExecutexSwapAndCall(_) => Some(CCM_GAS_LIMIT.into()),
+			// None means there is no gas limit.
+			_ => Some(DEFAULT_GAS_LIMIT.into()),
+		};
 		eth::Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
+			gas_limit,
 			..Default::default()
 		}
 	}
