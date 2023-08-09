@@ -171,7 +171,7 @@ pub trait Rpc {
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 
 	#[method(name = "getPool")]
-	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -338,8 +338,8 @@ impl RpcServer for RpcServerImpl {
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
 	}
 
-	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		Ok(self.api.query_api().get_pools(None, Some(asset)).await?)
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error> {
+		Ok(self.api.query_api().get_pools(None, Some(asset)).await?.get(&asset).cloned())
 	}
 
 	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
