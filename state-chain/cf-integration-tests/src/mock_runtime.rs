@@ -92,7 +92,7 @@ impl ExtBuilder {
 	/// Default ext configuration with BlockNumber 1
 	pub fn build(&self) -> TestExternalities {
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH);
 		let ethereum_vault_key = key_components.agg_key();
@@ -172,6 +172,7 @@ impl ExtBuilder {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
+				..Default::default()
 			},
 			account_roles: AccountRolesConfig {
 				initial_account_roles: self

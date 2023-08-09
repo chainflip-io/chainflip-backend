@@ -182,5 +182,5 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
 	}
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

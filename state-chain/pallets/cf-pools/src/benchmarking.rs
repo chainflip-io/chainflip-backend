@@ -11,7 +11,7 @@ use frame_support::{
 	sp_runtime::traits::One,
 	traits::{EnsureOrigin, OnNewAccount},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
 fn new_lp_account<T: Chainflip>() -> T::AccountId {
 	let caller: T::AccountId = whitelisted_caller();
@@ -23,12 +23,12 @@ fn new_lp_account<T: Chainflip>() -> T::AccountId {
 benchmarks! {
 	update_buy_interval {
 		let call = Call::<T>::update_buy_interval{
-			new_buy_interval: BlockNumberFor<T>::one(),
+			new_buy_interval: BlockNumberFor::<T>::one(),
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor<T>::one());
+		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
 	}
 
 	update_pool_enabled {

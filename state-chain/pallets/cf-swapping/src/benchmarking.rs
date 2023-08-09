@@ -148,7 +148,7 @@ benchmarks! {
 	}
 
 	set_swap_ttl {
-		let ttl = BlockNumberFor<T>::from(1_000u32);
+		let ttl = BlockNumberFor::<T>::from(1_000u32);
 		let call = Call::<T>::set_swap_ttl {
 			ttl
 		};

@@ -15,24 +15,19 @@ use frame_support::{construct_runtime, parameter_types, traits::OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
-	testing::{Header, UintAuthorityId},
+	testing::UintAuthorityId,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 	BuildStorage,
 };
 use std::cell::RefCell;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
+type Block = frame_system::mocking::MockBlock<Test>;
+
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub struct Test {
 		System: frame_system,
 		ValidatorPallet: pallet_cf_validator,
 		Session: pallet_session,
@@ -48,13 +43,12 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = ValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();

@@ -137,7 +137,7 @@ where
 mod tests {
 	use super::*;
 	use crate::{
-		mock::{new_test_ext, MockRuntime, NEW_AGG_PUB_KEY_PRE_HANDOVER},
+		mock::{new_test_ext, Test, NEW_AGG_PUB_KEY_PRE_HANDOVER},
 		AggKeyFor, KeygenOutcomeFor,
 	};
 	use cf_chains::mocks::MockAggKey;
@@ -146,7 +146,7 @@ mod tests {
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
-			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
+			let outcome: KeygenOutcomeFor<Test> = $ex;
 			assert!(outcome.is_err(), "Expected failure, got: {:?}", outcome);
 		};
 	}
@@ -155,42 +155,42 @@ mod tests {
 	fn test_threshold() {
 		// The success threshold is the smallest number of participants that *can* reach consensus.
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..144))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..144))
 				.super_majority_threshold(),
 			96
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..145))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..145))
 				.super_majority_threshold(),
 			97
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..146))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..146))
 				.super_majority_threshold(),
 			98
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..147))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..147))
 				.super_majority_threshold(),
 			98
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..148))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..148))
 				.super_majority_threshold(),
 			99
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..149))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..149))
 				.super_majority_threshold(),
 			100
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..150))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..150))
 				.super_majority_threshold(),
 			100
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..151))
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(0..151))
 				.super_majority_threshold(),
 			101
 		);
@@ -205,15 +205,15 @@ mod tests {
 			.collect()
 	}
 
-	fn unanimous(num_candidates: usize, outcome: ReportedOutcome) -> KeygenOutcomeFor<MockRuntime> {
+	fn unanimous(num_candidates: usize, outcome: ReportedOutcome) -> KeygenOutcomeFor<Test> {
 		get_outcome(&n_times([(num_candidates, outcome)]), |_| [])
 	}
 
-	fn unanimous_success(num_candidates: usize) -> KeygenOutcomeFor<MockRuntime> {
+	fn unanimous_success(num_candidates: usize) -> KeygenOutcomeFor<Test> {
 		unanimous(num_candidates, ReportedOutcome::Success)
 	}
 
-	fn unanimous_failure(num_candidates: usize) -> KeygenOutcomeFor<MockRuntime> {
+	fn unanimous_failure(num_candidates: usize) -> KeygenOutcomeFor<Test> {
 		unanimous(num_candidates, ReportedOutcome::Failure)
 	}
 
@@ -223,7 +223,7 @@ mod tests {
 		num_bad_keys: usize,
 		num_timeouts: usize,
 		report_gen: F,
-	) -> KeygenOutcomeFor<MockRuntime> {
+	) -> KeygenOutcomeFor<Test> {
 		get_outcome(
 			n_times([
 				(num_successes, ReportedOutcome::Success),
@@ -262,10 +262,9 @@ mod tests {
 	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
 		outcomes: &[ReportedOutcome],
 		report_gen: F,
-	) -> Result<AggKeyFor<MockRuntime>, BTreeSet<u64>> {
-		let mut status = KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(
-			1..=outcomes.len() as u64,
-		));
+	) -> Result<AggKeyFor<Test>, BTreeSet<u64>> {
+		let mut status =
+			KeygenResponseStatus::<Test, _>::new(BTreeSet::from_iter(1..=outcomes.len() as u64));
 
 		for (index, outcome) in outcomes.iter().enumerate() {
 			let id = 1 + index as u64;
@@ -284,8 +283,8 @@ mod tests {
 		}
 
 		let outcome = status.resolve_keygen_outcome();
-		assert_eq!(KeygenSuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
-		assert!(!KeygenFailureVoters::<MockRuntime, _>::exists());
+		assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
+		assert!(!KeygenFailureVoters::<Test, _>::exists());
 		outcome
 	}
 
