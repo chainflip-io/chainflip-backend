@@ -994,7 +994,6 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
- "ethabi 18.0.0",
  "frame-support",
  "hex",
  "parity-scale-codec",
@@ -1178,6 +1177,7 @@ dependencies = [
  "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
+ "futures",
  "hex",
  "jsonrpsee 0.16.2",
  "serde",

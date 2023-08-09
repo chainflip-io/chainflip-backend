@@ -29,7 +29,9 @@ export async function setSafeModeToAmber(options: string[]) {
     swapping: {},
     liquidityProvider: {},
     validator: {},
+    reputation: {},
     pools: {},
+    vault: {},
   };
   options.forEach((x) => {
     try {

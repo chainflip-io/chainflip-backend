@@ -640,9 +640,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::TransactionBuilder::is_valid_for_rebroadcast(
 				&api_call,
 				&broadcast_attempt.threshold_signature_payload,
-			) && <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 				&key,
-				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
 				let next_broadcast_attempt_id =

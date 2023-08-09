@@ -21,11 +21,12 @@ name = "chainflip-broker-api"
 
 [dependencies]
 chainflip-api = { path = "../../lib" }
-utilities = { path = "../../../utilities" }
+cf-utilities = { package = "utilities", path = "../../../utilities" }
 cf-chains = { path = '../../../state-chain/chains', default-features = false }
 
 anyhow = "1.0.66"
 clap = { version = "3.2.23", features = ["derive"] }
+futures = "0.3"
 hex = "0.4.3"
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }

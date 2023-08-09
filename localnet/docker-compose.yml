@@ -82,15 +82,15 @@ services:
       - RUST_BACKTRACE=full
     command:
       - --alice
-      - --blocks-pruning=archive 
-      - --chain=/polkadot/chainspec.json 
-      - --force-authoring 
-      - --name=PolkaDocker 
-      - --rpc-cors=all 
-      - --rpc-external 
-      - --rpc-methods=unsafe 
-      - --state-pruning=archive 
-      - --validator 
+      - --blocks-pruning=archive
+      - --chain=/polkadot/chainspec.json
+      - --force-authoring
+      - --name=PolkaDocker
+      - --rpc-cors=all
+      - --rpc-external
+      - --rpc-methods=unsafe
+      - --state-pruning=archive
+      - --validator
       - --ws-external
     ports:
       # - 30333:30333 # p2p port

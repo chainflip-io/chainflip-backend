@@ -15,7 +15,7 @@ use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
-	EpochInfo, KeyProvider, SafeMode, VaultRotator, VaultStatus,
+	EpochInfo, KeyProvider, SafeMode, SetSafeMode, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
@@ -847,14 +847,14 @@ mod vault_key_rotation {
 fn test_vault_key_rotated_externally_triggers_code_red() {
 	new_test_ext().execute_with(|| {
 		const TX_HASH: [u8; 4] = [0xab; 4];
-		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_GREEN);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_GREEN);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			RuntimeOrigin::root(),
 			NEW_AGG_PUB_KEY_POST_HANDOVER,
 			1,
 			TX_HASH,
 		));
-		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_RED);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_RED);
 		assert_last_event!(crate::Event::VaultRotatedExternally(..));
 	});
 }
@@ -910,6 +910,25 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 			VaultRotationStatus::Complete
 		))
 	})
+}
+
+#[test]
+fn dont_slash_in_safe_mode() {
+	new_test_ext().execute_with(|| {
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			vault: crate::PalletSafeMode { slashing_enabled: false },
+		});
+		keygen_failure(&[BOB, CHARLIE]);
+		assert!(MockSlasher::slash_count(BOB) == 0);
+		assert!(MockSlasher::slash_count(CHARLIE) == 0);
+
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			vault: crate::PalletSafeMode { slashing_enabled: true },
+		});
+		keygen_failure(&[BOB, CHARLIE]);
+		assert!(MockSlasher::slash_count(BOB) == 1);
+		assert!(MockSlasher::slash_count(CHARLIE) == 1);
+	});
 }
 
 fn do_full_key_rotation() {

@@ -211,20 +211,12 @@ impl<C: CryptoScheme> ResharingContext<C> {
 
 		let sharing_participants: BTreeSet<_> = sharing_participants
 			.iter()
-			.map(|id| {
-				party_idx_mapping
-					.get_idx(id)
-					.expect("participant must be a known key share holder")
-			})
+			.map(|id| party_idx_mapping.get_idx(id).expect("must exist by construction"))
 			.collect();
 
 		let receiving_participants: BTreeSet<_> = receiving_participants
 			.iter()
-			.map(|id| {
-				party_idx_mapping
-					.get_idx(id)
-					.expect("participant must be a known key share holder")
-			})
+			.map(|id| party_idx_mapping.get_idx(id).expect("must exist by construction"))
 			.collect();
 
 		ResharingContext {

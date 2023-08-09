@@ -4,15 +4,14 @@ use cf_chains::{
 	AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, Ethereum,
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
-use cf_primitives::{
-	chains::assets, EgressId, EthereumAddress, ForeignChain, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
 
-pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
+pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
+pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEthEnvironment;
 
