@@ -77,6 +77,13 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+pub struct VaultTransfer<C: Chain> {
+	asset: C::ChainAsset,
+	amount: C::ChainAmount,
+	destination_address: C::ChainAccount,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -241,6 +248,11 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// Stores any failed transfers by the Vault contract.
+	#[pallet::storage]
+	pub type FailedVaultTransfers<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -295,6 +307,11 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		},
+		VaultTransferFailed {
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			destination_address: TargetChainAccount<T, I>,
 		},
 	}
 
@@ -419,6 +436,35 @@ pub mod pallet {
 			MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
 
 			Self::deposit_event(Event::<T, I>::MinimumDepositSet { asset, minimum_deposit });
+			Ok(())
+		}
+
+		/// Stores information on failed Vault transfer.
+		/// Requires Witness origin.
+		///
+		/// ## Events
+		///
+		/// - [on_sucess](Event::VaultTransferFailed)
+		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
+		pub fn vault_transfer_failed(
+			origin: OriginFor<T>,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			destination_address: TargetChainAccount<T, I>,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			FailedVaultTransfers::<T, I>::append(VaultTransfer {
+				asset,
+				amount,
+				destination_address: destination_address.clone(),
+			});
+
+			Self::deposit_event(Event::<T, I>::VaultTransferFailed {
+				asset,
+				amount,
+				destination_address,
+			});
 			Ok(())
 		}
 	}

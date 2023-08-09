@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
-	Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer,
+	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
 };
 use cf_chains::{
 	address::AddressConverter, eth::EthereumFetchId, CcmChannelMetadata, DepositChannel,
@@ -846,4 +846,29 @@ fn channel_reuse_with_different_assets() {
 					*asset
 			);
 		});
+}
+
+#[test]
+fn can_store_failed_vault_transfers() {
+	new_test_ext().execute_with(|| {
+		let vault_transfer = VaultTransfer::<Ethereum> {
+			asset: eth::Asset::Eth,
+			amount: 1_000_000u128,
+			destination_address: [0xcf; 20].into(),
+		};
+
+		assert_ok!(IngressEgress::vault_transfer_failed(
+			RuntimeOrigin::root(),
+			vault_transfer.asset,
+			vault_transfer.amount,
+			vault_transfer.destination_address,
+		));
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultTransferFailed {
+			asset: vault_transfer.asset,
+			amount: vault_transfer.amount,
+			destination_address: vault_transfer.destination_address,
+		}));
+		assert_eq!(FailedVaultTransfers::<Test>::get(), vec![vault_transfer]);
+	});
 }
