@@ -1,17 +1,18 @@
 use std::{collections::HashSet, sync::Arc};
 
-use anyhow::Context;
-use cf_chains::Ethereum;
-use cf_primitives::chains::assets;
 use ethers::types::{Bloom, H160};
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
-use state_chain_runtime::EthereumInstance;
+use state_chain_runtime::PalletInstanceAlias;
 
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	witness::common::{
+		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
+		RuntimeHasChain,
 	},
 };
 
@@ -19,7 +20,6 @@ use super::{
 	super::common::{
 		chain_source::Header,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
-		STATE_CHAIN_CONNECTION,
 	},
 	contract_common::events_at_block,
 };
@@ -66,15 +66,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: EthRetryRpcClient,
-		asset: assets::eth::Asset,
+		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
+		asset_contract_address: H160,
 	) -> Result<ChunkedByVaultBuilder<impl ChunkedByVault>, anyhow::Error>
 	where
-		Inner: ChunkedByVault<
-			Index = u64,
-			Hash = H256,
-			Data = (Bloom, Vec<DepositChannelDetails<Ethereum>>),
-			Chain = Ethereum,
-		>,
+		Inner::Chain:
+			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
+		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
 		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
 		EthRetryRpcClient: EthersRetryRpcApi + Send + Sync + Clone,
 		Events: std::fmt::Debug
@@ -83,16 +81,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			+ Sync
 			+ Into<Erc20Events>
 			+ 'static,
+		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+		state_chain_runtime::RuntimeCall:
+			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		let erc20_contract_address = state_chain_client
-			.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-				&asset,
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION)
-			.with_context(|| format!("EthereumSupportedAssets does not include {asset:?}"))?;
-
 		Ok(self.then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let eth_rpc = eth_rpc.clone();
@@ -112,7 +104,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						parent_hash: header.parent_hash,
 						data: header.data.0,
 					},
-					erc20_contract_address,
+					asset_contract_address,
 					&eth_rpc,
 				)
 				.await?
@@ -137,7 +129,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
-								pallet_cf_ingress_egress::Call::<_, EthereumInstance>::process_deposits {
+								pallet_cf_ingress_egress::Call::<
+									_,
+									<Inner::Chain as PalletInstanceAlias>::Instance,
+								>::process_deposits {
 									deposit_witnesses,
 									block_height: header.index,
 								}

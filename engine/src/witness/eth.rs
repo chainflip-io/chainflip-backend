@@ -87,6 +87,24 @@ where
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
+	let usdc_contract_address = state_chain_client
+		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+			&cf_primitives::chains::assets::eth::Asset::Usdc,
+		)
+		.await
+		.expect(STATE_CHAIN_CONNECTION)
+		.with_context(|| "EthereumSupportedAssets does not include USDC")?;
+
+	let flip_contract_address = state_chain_client
+		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+			&cf_primitives::chains::assets::eth::Asset::Flip,
+		)
+		.await
+		.expect(STATE_CHAIN_CONNECTION)
+		.with_context(|| "EthereumSupportedAssets does not include FLIP")?;
+
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
 		EthRpcClient::new(settings).await?,
@@ -135,6 +153,7 @@ where
 			state_chain_client.clone(),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Usdc,
+			usdc_contract_address,
 		)
 		.await?
 		.continuous("USDCDeposits".to_string(), db.clone())
@@ -149,6 +168,7 @@ where
 			state_chain_client.clone(),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Flip,
+			flip_contract_address,
 		)
 		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
