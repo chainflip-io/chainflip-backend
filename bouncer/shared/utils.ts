@@ -197,6 +197,20 @@ export async function observeEvent(
   return result as Event;
 }
 
+export async function observeSwapScheduled(sourceAsset: Asset, channelId: number) {
+  const chainflipApi = await getChainflipApi();
+
+  return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+    if ('DepositChannel' in event.data.origin) {
+      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
+      const assetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+      return channelMatches && assetMatches;
+    }
+    // Otherwise it was a swap scheduled by interacting with the ETH smart contract
+    return false;
+  });
+}
+
 // Make sure the stopObserveEvent returns true before the end of the test
 export async function observeBadEvents(
   eventName: string,
@@ -296,11 +310,13 @@ export async function observeEVMEvent(
   address: string,
   eventName: string,
   eventParametersExpected: string[],
+  stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
+  const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
   const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
@@ -311,14 +327,16 @@ export async function observeEVMEvent(
   let eventWitnessed = false;
   let result: EVMEvent | undefined;
 
-  for (let i = 0; i < 120 && !eventWitnessed; i++) {
+  // eslint-disable-next-line
+  outerLoop: for (let i = 0; i < 120; i++) {
+    if (stopObserve()) return result as EVMEvent;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
       const events = await contract.getPastEvents(eventName, {
         fromBlock: initBlockNumber,
         toBlock: currentBlockNumber,
       });
-      for (let j = 0; j < events.length && !eventWitnessed; j++) {
+      for (let j = 0; j < events.length; j++) {
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (
@@ -334,7 +352,8 @@ export async function observeEVMEvent(
               txHash: events[j].transactionHash,
               returnValues: events[j].returnValues,
             };
-            break;
+            // eslint-disable-next-line no-labels
+            break outerLoop;
           }
         }
       }
@@ -354,15 +373,22 @@ export async function observeCcmReceived(
   destAsset: Asset,
   address: string,
   messageMetadata: CcmDepositMetadata,
+  stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent> {
-  return observeEVMEvent(cfTesterAbi, address, 'ReceivedxSwapAndCall', [
-    chainContractIds[assetChains[sourceAsset]].toString(),
-    '*',
-    messageMetadata.message,
-    getEthContractAddress(destAsset.toString()),
-    '*',
-    '*',
-  ]);
+  return observeEVMEvent(
+    cfTesterAbi,
+    address,
+    'ReceivedxSwapAndCall',
+    [
+      chainContractIds[assetChains[sourceAsset]].toString(),
+      '*',
+      messageMetadata.message,
+      getEthContractAddress(destAsset.toString()),
+      '*',
+      '*',
+    ],
+    stopObserveEvent,
+  );
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x

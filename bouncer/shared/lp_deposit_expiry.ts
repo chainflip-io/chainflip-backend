@@ -41,4 +41,6 @@ export async function testLpDepositExpiry() {
   await submitGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(originalExpiryTime));
 
   await observeEvent('liquidityProvider:LpTtlSet', chainflip);
+
+  console.log('=== LP deposit expiry test complete ===');
 }

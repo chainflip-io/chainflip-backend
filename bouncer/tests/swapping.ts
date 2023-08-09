@@ -4,7 +4,6 @@ import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
   await testAllSwaps();
-  console.log('=== Swapping test complete ===');
   process.exit(0);
 }
 

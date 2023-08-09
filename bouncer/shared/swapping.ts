@@ -68,13 +68,13 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return encodedMessage;
 }
 
-function newCcmMetadata(
+export function newCcmMetadata(
   sourceAsset: Asset,
+  ccmMessage?: string,
   gas?: number,
-  messageTypesArray?: SolidityType[],
   cfParamsArray?: SolidityType[],
 ) {
-  const message = newAbiEncodedMessage(messageTypesArray);
+  const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
   const gasBudget =
     gas ??
@@ -221,4 +221,6 @@ export async function testAllSwaps() {
   });
 
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
+
+  console.log('=== Swapping test complete ===');
 }
