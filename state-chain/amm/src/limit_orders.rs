@@ -1,17 +1,20 @@
 #[cfg(test)]
 mod tests;
 
+use core::convert::Infallible;
+
 use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
+use sp_std::vec::Vec;
 
 use crate::common::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, Amount, OneToZero, SideMap,
-	SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_HUNDREDTH_PIPS,
-	SQRT_PRICE_FRACTIONAL_BITS,
+	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price, Amount,
+	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
+	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -708,5 +711,45 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		};
 
 		Ok(collected_amounts)
+	}
+
+	/// Returns all the assets associated with a position
+	///
+	/// This function never panics.
+	pub fn position<SD: SwapDirection>(
+		&self,
+		lp: &LiquidityProvider,
+		tick: Tick,
+	) -> Result<(CollectedAmounts, Amount), PositionError<Infallible>> {
+		let sqrt_price = Self::validate_tick(tick)?;
+		let price = sqrt_price_to_price(sqrt_price);
+
+		let positions = &self.positions[!SD::INPUT_SIDE];
+		let fixed_pools = &self.fixed_pools[!SD::INPUT_SIDE];
+
+		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
+			positions
+				.get(&(sqrt_price, lp.clone()))
+				.ok_or(PositionError::NonExistent)?
+				.clone(),
+			fixed_pools.get(&sqrt_price),
+			price,
+			self.fee_hundredth_pips,
+		);
+
+		Ok((
+			collected_amounts,
+			option_position.map_or(Default::default(), |position| position.amount),
+		))
+	}
+
+	/// Returns all the assets available for swaps in a given direction
+	///
+	/// This function never panics.
+	pub fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
+		self.fixed_pools[!SD::INPUT_SIDE]
+			.iter()
+			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
+			.collect()
 	}
 }

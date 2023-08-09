@@ -11,10 +11,9 @@ use cf_chains::{
 		CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
+	eth::Address as EthereumAddress,
 };
-use cf_primitives::{
-	chains::assets::eth::Asset as EthAsset, EthereumAddress, NetworkEnvironment, SemVer,
-};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,

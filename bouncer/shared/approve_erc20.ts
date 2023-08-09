@@ -2,8 +2,10 @@ import Web3 from 'web3';
 import { Asset } from '@chainflip-io/cli';
 import { amountToFineAmount } from '../shared/utils';
 import { getEthContractAddress } from './utils';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
 import { signAndSendTxEth } from './send_eth';
+import { getErc20abi } from './eth_abis';
+
+const erc20abi = await getErc20abi();
 
 export async function approveErc20(asset: Asset, toAddress: string, amount: string) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';

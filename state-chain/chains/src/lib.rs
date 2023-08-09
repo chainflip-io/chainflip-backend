@@ -212,7 +212,12 @@ where
 	fn refresh_unsigned_data(tx: &mut Abi::Transaction);
 
 	/// Checks if the payload is still valid for the call.
-	fn is_valid_for_rebroadcast(call: &Call, payload: &<Abi as ChainCrypto>::Payload) -> bool;
+	fn is_valid_for_rebroadcast(
+		call: &Call,
+		payload: &<Abi as ChainCrypto>::Payload,
+		current_key: &<Abi as ChainCrypto>::AggKey,
+		signature: &<Abi as ChainCrypto>::ThresholdSignature,
+	) -> bool;
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.

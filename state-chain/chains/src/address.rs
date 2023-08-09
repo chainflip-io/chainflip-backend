@@ -1,7 +1,7 @@
 extern crate alloc;
 
-use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, Chain};
-use cf_primitives::{ChannelId, EthereumAddress, ForeignChain, NetworkEnvironment};
+use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, Chain};
+use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -79,23 +79,12 @@ pub enum AddressError {
 	InvalidAddress,
 }
 
-impl TryFrom<ForeignChainAddress> for EthereumAddress {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Eth(addr) => Ok(addr),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
 impl TryFrom<ForeignChainAddress> for H160 {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Eth(addr) => Ok(addr.into()),
+			ForeignChainAddress::Eth(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -123,32 +112,9 @@ impl TryFrom<ForeignChainAddress> for ScriptPubkey {
 	}
 }
 
-// For MockEthereum
-impl TryFrom<ForeignChainAddress> for u64 {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Eth(addr) => Ok(addr[0] as u64),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-impl From<u64> for ForeignChainAddress {
-	fn from(address: u64) -> ForeignChainAddress {
-		ForeignChainAddress::Eth([address as u8; 20])
-	}
-}
-
 impl From<EthereumAddress> for ForeignChainAddress {
 	fn from(address: EthereumAddress) -> ForeignChainAddress {
 		ForeignChainAddress::Eth(address)
-	}
-}
-
-impl From<H160> for ForeignChainAddress {
-	fn from(address: H160) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(address.to_fixed_bytes())
 	}
 }
 
@@ -193,7 +159,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	network_environment: GetNetwork,
 ) -> EncodedAddress {
 	match address {
-		ForeignChainAddress::Eth(address) => EncodedAddress::Eth(address),
+		ForeignChainAddress::Eth(address) => EncodedAddress::Eth(address.0),
 		ForeignChainAddress::Dot(address) => EncodedAddress::Dot(*address.aliased_ref()),
 		ForeignChainAddress::Btc(script_pubkey) => EncodedAddress::Btc(
 			script_pubkey.to_address(&network_environment().into()).as_bytes().to_vec(),
@@ -207,7 +173,7 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	network_environment: GetNetwork,
 ) -> Result<ForeignChainAddress, ()> {
 	match encoded_address {
-		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
+		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes.into())),
 		EncodedAddress::Dot(address_bytes) =>
 			Ok(ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(address_bytes))),
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
@@ -241,17 +207,7 @@ impl ToHumanreadableAddress for ScriptPubkey {
 
 impl ToHumanreadableAddress for EthereumAddress {
 	#[cfg(feature = "std")]
-	type Humanreadable = crate::eth::Address;
-
-	#[cfg(feature = "std")]
-	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
-		self.into()
-	}
-}
-
-impl ToHumanreadableAddress for crate::eth::Address {
-	#[cfg(feature = "std")]
-	type Humanreadable = crate::eth::Address;
+	type Humanreadable = Self;
 
 	#[cfg(feature = "std")]
 	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {

@@ -25,6 +25,7 @@ use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
@@ -908,7 +909,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	#[cfg(feature = "std")]
-	pub fn positions(&self) -> BTreeMap<(LiquidityProvider, i32, i32), Liquidity> {
+	pub fn positions(&self) -> BTreeMap<(LiquidityProvider, Tick, Tick), Liquidity> {
 		self.positions.iter().map(|(k, v)| (k.clone(), v.liquidity)).collect()
 	}
 }

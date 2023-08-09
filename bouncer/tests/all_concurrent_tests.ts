@@ -1,10 +1,18 @@
 #!/usr/bin/env -S pnpm tsx
 import { testLpDepositExpiry } from '../shared/lp_deposit_expiry';
 import { testAllSwaps } from '../shared/swapping';
-import { runWithTimeout } from '../shared/utils';
+import { testEthereumDeposits } from '../shared/ethereum_deposits';
+import { runWithTimeout, observeBadEvents } from '../shared/utils';
 
 async function runAllConcurrentTests() {
-  await Promise.all([testAllSwaps(), testLpDepositExpiry()]);
+  let stopObserving = false;
+  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+
+  await Promise.all([testAllSwaps(), testLpDepositExpiry(), testEthereumDeposits()]);
+
+  // Gracefully exit the broadcast abort observer
+  stopObserving = true;
+  await observingBadEvents;
 }
 
 runWithTimeout(runAllConcurrentTests(), 1800000)

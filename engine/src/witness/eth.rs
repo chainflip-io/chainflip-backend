@@ -63,24 +63,21 @@ where
             state_chain_client.latest_finalized_hash(),
         )
         .await
-        .context("Failed to get StateChainGateway address from SC")?
-        .into();
+        .context("Failed to get StateChainGateway address from SC")?;
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
-		.context("Failed to get KeyManager address from SC")?
-		.into();
+		.context("Failed to get KeyManager address from SC")?;
 
 	let vault_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
-		.context("Failed to get Vault contract address from SC")?
-		.into();
+		.context("Failed to get Vault contract address from SC")?;
 
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
@@ -94,11 +91,13 @@ where
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), eth_client.clone())
+		.logging("chain tracking")
 		.spawn(scope);
 
 	let eth_safe_vault_source = eth_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
+		.logging("safe block produced")
 		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await);
 
@@ -106,6 +105,7 @@ where
 		.clone()
 		.key_manager_witnessing(state_chain_client.clone(), eth_client.clone(), key_manager_address)
 		.continuous("KeyManager".to_string(), db.clone())
+		.logging("KeyManager")
 		.spawn(scope);
 
 	eth_safe_vault_source
@@ -116,6 +116,7 @@ where
 			state_chain_gateway_address,
 		)
 		.continuous("StateChainGateway".to_string(), db.clone())
+		.logging("StateChainGateway")
 		.spawn(scope);
 
 	eth_safe_vault_source
@@ -129,6 +130,7 @@ where
 		)
 		.await?
 		.continuous("USDCDeposits".to_string(), db.clone())
+		.logging("USDCDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source
@@ -142,6 +144,7 @@ where
 		)
 		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
+		.logging("FlipDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source
@@ -151,11 +154,13 @@ where
 		.ethereum_deposits(state_chain_client.clone(), eth_client.clone())
 		.await
 		.continuous("EthereumDeposits".to_string(), db.clone())
+		.logging("EthereumDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source
 		.vault_witnessing(state_chain_client.clone(), eth_client.clone(), vault_address)
 		.continuous("Vault".to_string(), db)
+		.logging("Vault")
 		.spawn(scope);
 
 	Ok(())

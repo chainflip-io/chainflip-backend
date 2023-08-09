@@ -91,8 +91,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			)
 			.await
 			.expect(STATE_CHAIN_CONNECTION)
-			.with_context(|| format!("EthereumSupportedAssets does not include {asset:?}"))?
-			.into();
+			.with_context(|| format!("EthereumSupportedAssets does not include {asset:?}"))?;
 
 		Ok(self.then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();

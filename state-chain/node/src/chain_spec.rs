@@ -31,7 +31,7 @@ use state_chain_runtime::{
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
-use utilities::clean_eth_address;
+use utilities::clean_hex_address;
 
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -107,12 +107,12 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			.try_into()
 			.map_err(|_| "Incorrect length of hex string.".into())
 	}
-	from_env_var!(clean_eth_address, FLIP_TOKEN_ADDRESS, flip_token_address);
-	from_env_var!(clean_eth_address, ETH_USDC_ADDRESS, eth_usdc_address);
-	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
-	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
-	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
-	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
+	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
+	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
+	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, key_manager_address);
+	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
@@ -232,12 +232,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				1,
 				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
-					flip_token_address,
-					eth_usdc_address,
-					state_chain_gateway_address,
-					key_manager_address,
-					eth_vault_address,
-					eth_address_checker_address,
+					flip_token_address: flip_token_address.into(),
+					eth_usdc_address: eth_usdc_address.into(),
+					state_chain_gateway_address: state_chain_gateway_address.into(),
+					key_manager_address: key_manager_address.into(),
+					eth_vault_address: eth_vault_address.into(),
+					eth_address_checker_address: eth_address_checker_address.into(),
 					ethereum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
@@ -343,12 +343,12 @@ macro_rules! network_spec {
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
 							EnvironmentConfig {
-								flip_token_address,
-								eth_usdc_address,
-								state_chain_gateway_address,
-								key_manager_address,
-								eth_vault_address,
-								eth_address_checker_address,
+								flip_token_address: flip_token_address.into(),
+								eth_usdc_address: eth_usdc_address.into(),
+								state_chain_gateway_address: state_chain_gateway_address.into(),
+								key_manager_address: key_manager_address.into(),
+								eth_vault_address: eth_vault_address.into(),
+								eth_address_checker_address: eth_address_checker_address.into(),
 								ethereum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),

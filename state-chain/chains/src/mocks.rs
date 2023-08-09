@@ -1,9 +1,11 @@
-#![cfg(feature = "std")]
+#![cfg(debug_assertions)]
 
 use crate::{
 	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
+use cf_utilities::SliceToArray;
+use sp_core::H160;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -72,6 +74,23 @@ impl ToHumanreadableAddress for u64 {
 		_network_environment: cf_primitives::NetworkEnvironment,
 	) -> Self::Humanreadable {
 		*self
+	}
+}
+
+impl TryFrom<ForeignChainAddress> for u64 {
+	type Error = ();
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Eth(addr) => Ok(u64::from_be_bytes(addr.0[12..].as_array())),
+			_ => Err(()),
+		}
+	}
+}
+
+impl From<u64> for ForeignChainAddress {
+	fn from(id: u64) -> Self {
+		ForeignChainAddress::Eth(H160::from_low_u64_be(id))
 	}
 }
 
@@ -258,7 +277,12 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(_call: &Call, _payload: &<Abi as ChainCrypto>::Payload) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &Call,
+		_payload: &<Abi as ChainCrypto>::Payload,
+		_current_key: &<Abi as ChainCrypto>::AggKey,
+		_signature: &<Abi as ChainCrypto>::ThresholdSignature,
+	) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
 }

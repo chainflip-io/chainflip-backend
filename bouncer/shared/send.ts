@@ -5,8 +5,10 @@ import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
 import { sendEth, signAndSendTxEth } from './send_eth';
 import { getEthContractAddress, defaultAssetAmounts, amountToFineAmount } from './utils';
-import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
 import { approveErc20 } from './approve_erc20';
+import { getCFTesterAbi } from './eth_abis';
+
+const cfTesterAbi = await getCFTesterAbi();
 
 export async function send(asset: Asset, address: string, amount?: string) {
   switch (asset) {

@@ -16,7 +16,7 @@ use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
-	eth::{self, api::EthereumApi, Ethereum},
+	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;
@@ -69,9 +69,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SemVer, SwapOutput,
-};
+pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
@@ -600,6 +598,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
+	type SafeMode = chainflip::RuntimeSafeMode;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
@@ -1027,8 +1026,12 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
 			LiquidityPools::get_pool(asset)
+		}
+
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
+			Swapping::minimum_swap_amount(asset)
 		}
 	}
 

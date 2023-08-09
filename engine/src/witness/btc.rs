@@ -53,12 +53,14 @@ where
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
+		.logging("chain tracking")
 		.spawn(scope);
 
 	let btc_client = btc_client.clone();
 	btc_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
+		.logging("safe block produced")
 		.then(move |header| {
 			let btc_client = btc_client.clone();
 			async move {
@@ -131,6 +133,7 @@ where
 			}
 		})
 		.continuous("Bitcoin".to_string(), db)
+		.logging("witnessing")
 		.spawn(scope);
 
 	Ok(())

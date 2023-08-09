@@ -249,6 +249,7 @@ pub mod pallet {
 
 	/// Minimum swap amount for each asset.
 	#[pallet::storage]
+	#[pallet::getter(fn minimum_swap_amount)]
 	pub type MinimumSwapAmount<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
@@ -268,6 +269,7 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
+			broker_commission_rate: BasisPoints,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -278,6 +280,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 			swap_type: SwapType,
+			broker_commission: Option<AssetAmount>,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -546,6 +549,7 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				channel_id,
+				broker_commission_rate: broker_commission_bps,
 			});
 
 			Ok(())
@@ -621,6 +625,7 @@ pub mod pallet {
 					destination_address,
 					origin: SwapOrigin::Vault { tx_hash },
 					swap_type: SwapType::Swap(destination_address_internal),
+					broker_commission: None,
 				});
 			}
 			Ok(())
@@ -870,6 +875,14 @@ pub mod pallet {
 					amount: ccm_output_principal,
 				});
 			}
+			if let Some(swap_id) = ccm_swap.gas_swap_id {
+				Self::deposit_event(Event::<T>::SwapEgressScheduled {
+					swap_id,
+					egress_id,
+					asset: gas_asset,
+					amount: ccm_output_gas,
+				});
+			}
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 
@@ -944,6 +957,7 @@ pub mod pallet {
 						deposit_block_height,
 					},
 					swap_type: SwapType::Swap(destination_address),
+					broker_commission: Some(fee),
 				});
 			}
 		}
@@ -1022,6 +1036,7 @@ pub mod pallet {
 						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
+						broker_commission: None,
 					});
 					Some(swap_id)
 				};
@@ -1048,6 +1063,7 @@ pub mod pallet {
 					destination_address: encoded_destination_address.clone(),
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
+					broker_commission: None,
 				});
 				Some(swap_id)
 			};

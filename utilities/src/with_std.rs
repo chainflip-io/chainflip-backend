@@ -20,18 +20,16 @@ pub use unending_stream::UnendingStream;
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
 
-pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], anyhow::Error> {
+pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
 		None => address_str,
 	};
 
-	let address: [u8; LEN] = hex::decode(address_hex_str)
+	hex::decode(address_hex_str)
 		.context("Invalid hex")?
 		.try_into()
-		.map_err(|_| anyhow::anyhow!("Invalid address length"))?;
-
-	Ok(address)
+		.map_err(|_| anyhow::anyhow!("Invalid address length"))
 }
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
@@ -40,16 +38,10 @@ pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 	})
 }
 
-pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], anyhow::Error> {
-	clean_hex_address(dirty_eth_address).context("Failed to parse Ethereum address.")
-}
-
-pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], anyhow::Error> {
-	clean_hex_address(dirty_dot_address).context("Failed to parse Polkadot address.")
-}
-
 #[test]
 fn cleans_eth_address() {
+	let clean_eth_address = clean_hex_address::<[u8; 20]>;
+
 	// fail too short
 	let input = "0x323232";
 	assert!(clean_eth_address(input).is_err());

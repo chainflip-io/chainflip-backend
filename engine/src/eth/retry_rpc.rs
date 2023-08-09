@@ -122,7 +122,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 							.await
 					})
 				}),
-				format!("get_logs({block_hash}, {contract_address})"),
+				format!("get_logs({block_hash:?}, {contract_address:?})"),
 			)
 			.await
 	}
@@ -146,7 +146,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.transaction_receipt(tx_hash).await })
 				}),
-				format!("transaction_receipt({tx_hash})"),
+				format!("transaction_receipt({tx_hash:?})"),
 			)
 			.await
 	}
