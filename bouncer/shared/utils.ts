@@ -360,7 +360,7 @@ export async function observeEVMEvent(
     await sleep(2500);
   }
 
-  if (eventWitnessed) {
+  if (result) {
     return result as EVMEvent;
   }
   return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
