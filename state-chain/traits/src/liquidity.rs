@@ -9,6 +9,7 @@ pub trait SwapDepositHandler {
 	#[allow(clippy::too_many_arguments)]
 	fn schedule_swap_from_channel(
 		deposit_address: ForeignChainAddress,
+		deposit_block_height: u64,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
@@ -70,6 +71,7 @@ impl<T: frame_system::Config> SwapDepositHandler for T {
 
 	fn schedule_swap_from_channel(
 		_deposit_address: ForeignChainAddress,
+		_deposit_block_height: u64,
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,

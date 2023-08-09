@@ -325,8 +325,14 @@ pub trait FeeRefundCalculator<C: Chain> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
-	DepositChannel { deposit_address: address::EncodedAddress, channel_id: ChannelId },
-	Vault { tx_hash: TransactionHash },
+	DepositChannel {
+		deposit_address: address::EncodedAddress,
+		channel_id: ChannelId,
+		deposit_block_height: u64,
+	},
+	Vault {
+		tx_hash: TransactionHash,
+	},
 }
 
 /// Deposit channel Metadata for Cross-Chain-Message.

@@ -34,7 +34,7 @@ benchmarks_instance_pallet! {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value()).unwrap()
+		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value()).unwrap()
 	}
 
 	set_minimum_deposit {
