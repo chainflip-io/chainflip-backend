@@ -8,6 +8,7 @@ use frame_support::{
 		DispatchError,
 	},
 	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+use ethereum_types::H160;
 };
 use sp_std::marker::PhantomData;
 
@@ -262,8 +263,8 @@ impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransa
 }
 
 /// Provides the environment data for ethereum-like chains.
-pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
+pub trait EthEnvironmentProvider<C: Chain> {
+	fn token_address(asset: <C as Chain>::ChainAsset) -> Option<eth::Address>;
 	fn contract_address(contract: EthereumContract) -> eth::Address;
 	fn chain_id() -> EthereumChainId;
 	fn next_nonce() -> u64;
@@ -297,7 +298,7 @@ impl ChainAbi for Ethereum {
 
 impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
@@ -312,7 +313,7 @@ where
 
 impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Ethereum as ChainCrypto>::GovKey>,
@@ -327,7 +328,7 @@ where
 
 impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
@@ -339,7 +340,7 @@ where
 
 impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
@@ -359,7 +360,7 @@ where
 
 impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self::UpdateFlipSupply(EthereumTransactionBuilder::new_unsigned(
@@ -371,60 +372,77 @@ where
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Result<Self, AllBatchError> {
-		let mut fetch_only_params = vec![];
-		let mut fetch_deploy_params = vec![];
-		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
-			if let Some(token_address) = E::token_address(asset) {
-				match deposit_fetch_id {
-					EthereumFetchId::Fetch(contract_address) => {
-						debug_assert!(
-							asset != assets::eth::Asset::Eth,
-							"Eth should not be fetched. It is auto-fetched in the smart contract."
-						);
-						fetch_only_params.push(EncodableFetchAssetParams {
-							contract_address,
-							asset: token_address,
-						})
-					},
-					EthereumFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
-						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
-					EthereumFetchId::NotRequired => (),
-				};
-			} else {
-				return Err(AllBatchError::Other)
-			}
-		}
-		Ok(Self::AllBatch(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::Vault),
-			all_batch::AllBatch::new(
-				fetch_deploy_params,
-				fetch_only_params,
-				transfer_params
-					.into_iter()
-					.map(|TransferAssetParams { asset, to, amount }| {
-						E::token_address(asset)
-							.map(|address| EncodableTransferAssetParams {
-								to,
-								amount,
-								asset: address,
-							})
-							.ok_or(AllBatchError::Other)
-					})
-					.collect::<Result<Vec<_>, _>>()?,
-			),
-		)))
+		Ok(Self::AllBatch(evm_all_batch_builder(
+			fetch_params,
+			transfer_params,
+			E::token_address,
+			E::replay_protection,
+		)?))
 	}
+}
+
+pub fn evm_all_batch_builder<
+	C: Chain<DepositFetchId = EthereumFetchId, ChainAccount = impl Into<H160>, ChainAmount = u128>,
+	F: Fn(<C as Chain>::ChainAsset) -> Option<H160>,
+	G: FnOnce(EthereumContract) -> EthereumReplayProtection,
+>(
+	fetch_params: Vec<FetchAssetParams<C>>,
+	transfer_params: Vec<TransferAssetParams<C>>,
+	token_address_fn: F,
+	replay_protection_fn: G,
+) -> Result<EthereumTransactionBuilder<all_batch::AllBatch>, AllBatchError> {
+	let mut fetch_only_params = vec![];
+	let mut fetch_deploy_params = vec![];
+	for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
+		if let Some(token_address) = token_address_fn(asset) {
+			match deposit_fetch_id {
+				EthereumFetchId::Fetch(contract_address) => {
+					// re-instate once types sorted out
+					// debug_assert!(
+					// 	asset != assets::eth::Asset::Eth,
+					// 	"Eth should not be fetched. It is auto-fetched in the smart contract."
+					// );
+					fetch_only_params
+						.push(EncodableFetchAssetParams { contract_address, asset: token_address })
+				},
+				EthereumFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
+					.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
+				EthereumFetchId::NotRequired => (),
+			};
+		} else {
+			return Err(AllBatchError::Other)
+		}
+	}
+	Ok(EthereumTransactionBuilder::new_unsigned(
+		replay_protection_fn(EthereumContract::Vault),
+		all_batch::AllBatch::new(
+			fetch_deploy_params,
+			fetch_only_params,
+			transfer_params
+				.into_iter()
+				.map(|TransferAssetParams { asset, to, amount }| {
+					token_address_fn(asset)
+						.map(|address| EncodableTransferAssetParams {
+							to: to.into(),
+							amount,
+							asset: address,
+						})
+						.ok_or(AllBatchError::Other)
+				})
+				.collect::<Result<Vec<_>, _>>()?,
+		),
+	))
 }
 
 impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider<Ethereum>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,

@@ -167,21 +167,35 @@ impl pallet_cf_environment::Config for Test {
 }
 
 pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
-pub const KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
-pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
+pub const ETH_KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
+pub const ETH_VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
+
+// TODO: Where is the arb address checker?
 pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
+
+pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([3u8; 20]);
+pub const ARB_VAULT_ADDRESS: eth::Address = H160([4u8; 20]);
+pub const ARBUSDC_TOKEN_ADDRESS: eth::Address = H160([5u8; 20]);
+
 pub const ETH_CHAIN_ID: u64 = 1;
+pub const ARB_CHAIN_ID: u64 = 2;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
-			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
-			key_manager_address: KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
-			eth_vault_address: VAULT_ADDRESS,
+			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
+			key_manager_address: ETH_KEY_MANAGER_ADDRESS,
+			eth_vault_address: ETH_VAULT_ADDRESS,
 			eth_address_checker_address: ADDRESS_CHECKER,
+
+			arbitrum_chain_id: ARB_CHAIN_ID,
+			arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
+			arb_vault_address: ARB_VAULT_ADDRESS,
+			arbusdc_token_address: ARBUSDC_TOKEN_ADDRESS,
+
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),

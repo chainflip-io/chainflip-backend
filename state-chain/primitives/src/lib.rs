@@ -4,6 +4,8 @@
 //!
 //! Primitive types to be used across Chainflip's various crates.
 use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_core::H160;
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
@@ -68,6 +70,8 @@ pub struct TxId {
 	pub block_number: PolkadotBlockNumber,
 	pub extrinsic_index: u32,
 }
+
+pub const ETHEREUM_ETH_ADDRESS: H160 = H160([0xEE; 20]);
 
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;

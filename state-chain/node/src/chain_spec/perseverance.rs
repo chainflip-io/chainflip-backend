@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::{parse_account, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::{arb::CHAIN_ID_MAINNET, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -21,8 +21,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	state_chain_gateway_address: hex_literal::hex!("C960C4eEe4ADf40d24374D85094f3219cf2DD8EB"),
 	key_manager_address: hex_literal::hex!("56a10b82180D4b8F6203541FEaF2c88a3999e847"),
 	eth_vault_address: hex_literal::hex!("F1B061aCCDAa4B7c029128b49aBc047F89D5CB8d"),
+	arb_key_manager_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arb_vault_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
+	arbusdc_token_address: hex_literal::hex!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), /* put correct values here */
 	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
+	arbitrum_chain_id: CHAIN_ID_MAINNET, // put the correct chain id for arb testnet
 	eth_init_agg_key: hex_literal::hex!(
 		"036e4e4d5e5b36c66ad380541929a66bb1f7eaa267b3fa07b342ef390f9a271093"
 	),

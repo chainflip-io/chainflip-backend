@@ -5,18 +5,20 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{BuildStorage, Percent};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
-	EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	ReputationConfig, Runtime, SessionConfig, System, ValidatorConfig,
+	ArbitrumVaultConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig,
+	GovernanceConfig, ReputationConfig, Runtime, SessionConfig, System, ValidatorConfig,
 };
 
 use cf_chains::{
+	arb::ArbitrumTrackedData,
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	Bitcoin, ChainState, Ethereum, Polkadot,
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use state_chain_runtime::{
-	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
+	ArbitrumChainTrackingConfig, BitcoinChainTrackingConfig, EthereumChainTrackingConfig,
+	PolkadotChainTrackingConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -168,6 +170,11 @@ impl ExtBuilder {
 				deployment_block: 0,
 				keygen_response_timeout: 4,
 			},
+			arbitrum_vault: ArbitrumVaultConfig {
+				vault_key: Some(ethereum_vault_key),
+				deployment_block: 0,
+				keygen_response_timeout: 4,
+			},
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -188,6 +195,12 @@ impl ExtBuilder {
 						base_fee: 1000000u32.into(),
 						priority_fee: 100u32.into(),
 					},
+				},
+			},
+			arbitrum_chain_tracking: ArbitrumChainTrackingConfig {
+				init_chain_state: ChainState::<Arbitrum> {
+					block_height: 0,
+					tracked_data: ArbitrumTrackedData { base_fee: 100000u32.into() },
 				},
 			},
 			polkadot_chain_tracking: PolkadotChainTrackingConfig {
@@ -211,6 +224,7 @@ impl ExtBuilder {
 			bitcoin_threshold_signer: Default::default(),
 			ethereum_threshold_signer: Default::default(),
 			polkadot_threshold_signer: Default::default(),
+			arbitrum_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
 			environment: Default::default(),
