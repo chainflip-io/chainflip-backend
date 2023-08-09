@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use cf_chains::{Bitcoin, Ethereum, Polkadot};
+use cf_chains::{Arbitrum, Bitcoin, Ethereum, Polkadot};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -19,6 +19,8 @@ pub struct P2PMuxer {
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	btc_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	btc_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+	arb_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
+	arb_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 }
 
 /// Top-level protocol message, encapsulates all others
@@ -82,6 +84,7 @@ fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	VersionedMessage { version: CURRENT_PROTOCOL_VERSION, payload: &with_tag }.serialize()
 }
 
+#[allow(clippy::type_complexity)]
 impl P2PMuxer {
 	pub fn start(
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
@@ -93,6 +96,8 @@ impl P2PMuxer {
 		MultisigMessageReceiver<Polkadot>,
 		MultisigMessageSender<Bitcoin>,
 		MultisigMessageReceiver<Bitcoin>,
+		MultisigMessageSender<Arbitrum>,
+		MultisigMessageReceiver<Arbitrum>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -104,6 +109,9 @@ impl P2PMuxer {
 		let (btc_outgoing_sender, btc_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
 		let (btc_incoming_sender, btc_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+		let (arb_outgoing_sender, arb_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (arb_incoming_sender, arb_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 		let muxer = P2PMuxer {
 			all_incoming_receiver,
 			all_outgoing_sender,
@@ -113,6 +121,8 @@ impl P2PMuxer {
 			dot_incoming_sender,
 			btc_outgoing_receiver,
 			btc_incoming_sender,
+			arb_outgoing_receiver,
+			arb_incoming_sender,
 		};
 
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
@@ -124,6 +134,8 @@ impl P2PMuxer {
 			MultisigMessageReceiver::<Polkadot>::new(dot_incoming_receiver),
 			MultisigMessageSender::<Bitcoin>::new(btc_outgoing_sender),
 			MultisigMessageReceiver::<Bitcoin>::new(btc_incoming_receiver),
+			MultisigMessageSender::<Arbitrum>::new(arb_outgoing_sender),
+			MultisigMessageReceiver::<Arbitrum>::new(arb_incoming_receiver),
 			muxer_fut,
 		)
 	}
@@ -145,12 +157,17 @@ impl P2PMuxer {
 							ChainTag::Polkadot => {
 								self.dot_incoming_sender
 									.send((account_id, message))
-									.expect("polkadot receiver dropped");
+									.expect("dot receiver dropped");
 							},
 							ChainTag::Bitcoin => {
 								self.btc_incoming_sender
 									.send((account_id, message))
-									.expect("bitcoin receiver dropped");
+									.expect("btc receiver dropped");
+							},
+							ChainTag::Arbitrum => {
+								self.arb_incoming_sender
+									.send((account_id, message))
+									.expect("arb receiver dropped");
 							},
 							ChainTag::Ed25519 => {
 								warn!("Ed25519 not yet supported")
@@ -199,6 +216,9 @@ impl P2PMuxer {
 				}
 				Some(data) = self.btc_outgoing_receiver.recv() => {
 					self.process_outgoing(ChainTag::Bitcoin, data).await;
+				}
+				Some(data) = self.arb_outgoing_receiver.recv() => {
+					self.process_outgoing(ChainTag::Arbitrum, data).await;
 				}
 			}
 		}

@@ -8,7 +8,9 @@ use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{
+	AccountId, ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -220,17 +222,20 @@ pub async fn start<
 	DotRpc,
 	BtcRpc,
 	EthMultisigClient,
-	PolkadotMultisigClient,
-	BitcoinMultisigClient,
+	DotMultisigClient,
+	BtcMultisigClient,
+	ArbMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
 	dot_broadcaster: DotBroadcaster<DotRpc>,
 	btc_broadcaster: BtcBroadcaster<BtcRpc>,
+	arb_broadcaster: EthBroadcaster<EthRpc>,
 	eth_multisig_client: EthMultisigClient,
-	dot_multisig_client: PolkadotMultisigClient,
-	btc_multisig_client: BitcoinMultisigClient,
+	dot_multisig_client: DotMultisigClient,
+	btc_multisig_client: BtcMultisigClient,
+	arb_multisig_client: ArbMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 ) -> Result<(), anyhow::Error>
 where
@@ -239,8 +244,9 @@ where
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
-	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
-	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
+	DotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
+	BtcMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
+	ArbMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
 		StorageApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
@@ -366,6 +372,22 @@ where
                                             participants,
                                         ).await;
                                     }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumVault(
+                                        pallet_cf_vaults::Event::KeygenRequest {
+                                            ceremony_id,
+                                            participants,
+                                            epoch_index
+                                        }
+                                    ) => {
+                                        handle_keygen_request::<_, _, _, ArbitrumInstance>(
+                                            scope,
+                                            &arb_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            epoch_index,
+                                            participants,
+                                        ).await;
+                                    }
                                     state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
@@ -451,6 +473,28 @@ where
                                             ).await;
                                         }
                                     }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+                                            request_id: _,
+                                            ceremony_id,
+                                            epoch,
+                                            key,
+                                            signatories,
+                                            payload,
+                                        },
+                                    ) => {
+                                        handle_signing_request::<_, _, _, ArbitrumInstance>(
+                                                scope,
+                                                &arb_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            signatories,
+                                            vec![(
+                                                KeyId::new(epoch, key),
+                                                multisig::eth::SigningPayload(payload.0)
+                                            )],
+                                        ).await;
+                                    }
                                     // ======= KEY HANDOVER =======
                                     state_chain_runtime::RuntimeEvent::BitcoinVault(
                                         pallet_cf_vaults::Event::KeyHandoverRequest {
@@ -489,6 +533,13 @@ where
                                         },
                                     ) => {
                                         panic!("There should be no key handover requests made for Polkadot")
+                                    }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ..
+                                        },
+                                    ) => {
+                                        panic!("There should be no key handover requests made for Arbitrum")
                                     }
 
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
@@ -565,6 +616,33 @@ where
                                                     )
                                                     .await;
                                                 }
+                                            }
+                                        }
+                                    }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumBroadcaster(
+                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                            broadcast_attempt_id,
+                                            nominee,
+                                            transaction_payload,
+                                            // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
+                                            transaction_out_id: _,
+                                        },
+                                    ) if nominee == account_id => {
+                                        match arb_broadcaster.send(transaction_payload).await {
+                                            Ok(tx_hash) => info!("Arbitrum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                            Err(error) => {
+                                                // Note: this error can indicate that we failed to estimate gas, or that there is
+                                                // a problem with the Arbitrum rpc node, or with the configured account. For example
+                                                // if the account balance is too low to pay for required gas.
+                                                error!("Error on Arbitrum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
+                                                state_chain_client.submit_signed_extrinsic(
+                                                    state_chain_runtime::RuntimeCall::ArbitrumBroadcaster(
+                                                        pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                            broadcast_attempt_id,
+                                                        },
+                                                    ),
+                                                )
+                                                .await;
                                             }
                                         }
                                     }

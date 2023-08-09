@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	RedemptionTax, RestrictedAddresses, RestrictedBalances,
+	mock::*, pallet, ActiveBidder, Error, PendingRedemptions, RedemptionAmount, RedemptionTax,
+	RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
@@ -9,6 +9,8 @@ use cf_traits::{
 	Bonding, SetSafeMode,
 };
 use sp_core::H160;
+
+use cf_chains::eth::Address as EthereumAddress;
 
 use crate::BoundAddress;
 use frame_support::{assert_noop, assert_ok};

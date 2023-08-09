@@ -1,8 +1,11 @@
 use cf_chains::{dot::PolkadotPublicKey, ChainCrypto};
 use multisig::{
-	bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainSigning, CryptoScheme,
+	bitcoin::BtcSigning,
+	eth::{ArbSigning, EthSigning},
+	polkadot::PolkadotSigning,
+	ChainSigning, CryptoScheme,
 };
-use state_chain_runtime::{BitcoinInstance, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance};
 
 /// Compatibility layer for converting between public keys generated using the [CryptoScheme] types
 /// and the on-chain representation as defined by [ChainCrypto].
@@ -20,6 +23,14 @@ impl CryptoCompat<EthSigning, cf_chains::Ethereum> for EthereumInstance {
 	}
 }
 
+impl CryptoCompat<PolkadotSigning, cf_chains::Polkadot> for PolkadotInstance {
+	fn pubkey_to_aggkey(
+		pubkey: <<PolkadotSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
+	) -> <cf_chains::Polkadot as ChainCrypto>::AggKey {
+		PolkadotPublicKey::from_aliased(pubkey.to_bytes())
+	}
+}
+
 impl CryptoCompat<BtcSigning, cf_chains::Bitcoin> for BitcoinInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<BtcSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
@@ -28,10 +39,10 @@ impl CryptoCompat<BtcSigning, cf_chains::Bitcoin> for BitcoinInstance {
 	}
 }
 
-impl CryptoCompat<PolkadotSigning, cf_chains::Polkadot> for PolkadotInstance {
+impl CryptoCompat<ArbSigning, cf_chains::Arbitrum> for ArbitrumInstance {
 	fn pubkey_to_aggkey(
-		pubkey: <<PolkadotSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Polkadot as ChainCrypto>::AggKey {
-		PolkadotPublicKey::from_aliased(pubkey.to_bytes())
+		pubkey: <<ArbSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
+	) -> <cf_chains::Arbitrum as ChainCrypto>::AggKey {
+		pubkey
 	}
 }

@@ -6,15 +6,16 @@ use cf_primitives::EpochIndex;
 use cf_traits::{AsyncResult, VaultRotator, VaultStatus};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-pub struct AllVaultRotator<A, B, C> {
-	_phantom: PhantomData<(A, B, C)>,
+pub struct AllVaultRotator<A, B, C, D> {
+	_phantom: PhantomData<(A, B, C, D)>,
 }
 
-impl<A, B, C> VaultRotator for AllVaultRotator<A, B, C>
+impl<A, B, C, D> VaultRotator for AllVaultRotator<A, B, C, D>
 where
 	A: VaultRotator,
 	B: VaultRotator<ValidatorId = A::ValidatorId>,
 	C: VaultRotator<ValidatorId = A::ValidatorId>,
+	D: VaultRotator<ValidatorId = A::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
 
@@ -22,7 +23,8 @@ where
 	fn keygen(candidates: BTreeSet<Self::ValidatorId>, next_epoch_index: EpochIndex) {
 		A::keygen(candidates.clone(), next_epoch_index);
 		B::keygen(candidates.clone(), next_epoch_index);
-		C::keygen(candidates, next_epoch_index);
+		C::keygen(candidates.clone(), next_epoch_index);
+		D::keygen(candidates, next_epoch_index);
 	}
 
 	/// Start all the key handovers for the vaults with the provided `candidates`.
@@ -33,11 +35,12 @@ where
 	) {
 		A::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
 		B::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
-		C::key_handover(sharing_participants, new_candidates, epoch_index);
+		C::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
+		D::key_handover(sharing_participants, new_candidates, epoch_index);
 	}
 
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
-		let async_results = [A::status(), B::status(), C::status()];
+		let async_results = [A::status(), B::status(), C::status(), D::status()];
 
 		// if any of the inner rotations are void, then the overall vault rotation result is void.
 		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
@@ -81,6 +84,7 @@ where
 		A::activate();
 		B::activate();
 		C::activate();
+		D::activate();
 	}
 
 	fn abort_vault_rotation() {
@@ -93,14 +97,17 @@ where
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		A::set_status(outcome.clone());
 		B::set_status(outcome.clone());
-		C::set_status(outcome);
+		C::set_status(outcome.clone());
+		D::set_status(outcome);
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use cf_traits::{
-		mocks::vault_rotator::{MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC},
+		mocks::vault_rotator::{
+			MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC, MockVaultRotatorD,
+		},
 		AsyncResult, VaultRotator,
 	};
 
@@ -112,10 +119,15 @@ mod tests {
 			MockVaultRotatorA::keygen_success();
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
+			MockVaultRotatorD::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Ready(VaultStatus::KeygenComplete)
 			);
 		});
@@ -127,10 +139,15 @@ mod tests {
 			MockVaultRotatorA::key_handover_success();
 			MockVaultRotatorB::key_handover_success();
 			MockVaultRotatorC::key_handover_success();
+			MockVaultRotatorD::key_handover_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
 			);
 		});
@@ -142,10 +159,15 @@ mod tests {
 			MockVaultRotatorA::keys_activated();
 			MockVaultRotatorB::keys_activated();
 			MockVaultRotatorC::keys_activated();
+			MockVaultRotatorD::keys_activated();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Ready(VaultStatus::RotationComplete)
 			);
 		});
@@ -160,10 +182,15 @@ mod tests {
 			MockVaultRotatorA::keys_activated();
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
+			MockVaultRotatorD::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::default()))
 			);
 		});
@@ -177,10 +204,15 @@ mod tests {
 			MockVaultRotatorA::failed(OFFENDERS);
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
+			MockVaultRotatorD::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
@@ -190,10 +222,15 @@ mod tests {
 			MockVaultRotatorA::failed(OFFENDERS);
 			MockVaultRotatorB::key_handover_success();
 			MockVaultRotatorC::key_handover_success();
+			MockVaultRotatorD::key_handover_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
@@ -205,11 +242,16 @@ mod tests {
 			MockVaultRotatorA::failed([1, 2, 3, 4]);
 			MockVaultRotatorB::failed([2, 4, 5]);
 			MockVaultRotatorC::failed([4, 5, 6]);
+			MockVaultRotatorD::failed([5, 6, 7]);
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
-				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4, 5, 6])))
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4, 5, 6, 7])))
 			);
 		});
 	}
@@ -220,10 +262,15 @@ mod tests {
 			MockVaultRotatorA::pending();
 			MockVaultRotatorB::pending();
 			MockVaultRotatorC::pending();
+			MockVaultRotatorD::pending();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Pending
 			);
 		});
@@ -235,10 +282,15 @@ mod tests {
 			MockVaultRotatorA::keygen_success();
 			MockVaultRotatorB::pending();
 			MockVaultRotatorC::keygen_success();
+			MockVaultRotatorD::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Pending
 			);
 		});
@@ -253,10 +305,15 @@ mod tests {
 			MockVaultRotatorA::failed([1, 2, 3]);
 			MockVaultRotatorB::pending();
 			MockVaultRotatorC::failed([4, 5, 6]);
+			MockVaultRotatorD::failed([4, 5, 7]);
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
-				),
+				AllVaultRotator::<
+					MockVaultRotatorA,
+					MockVaultRotatorB,
+					MockVaultRotatorC,
+					MockVaultRotatorD,
+				>::status(),
 				AsyncResult::Pending
 			);
 		});
