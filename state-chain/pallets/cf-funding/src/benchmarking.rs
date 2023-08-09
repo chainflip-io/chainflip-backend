@@ -3,6 +3,7 @@
 
 use super::*;
 
+use cf_chains::eth::Address as EthereumAddress;
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{

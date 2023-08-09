@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::Ethereum;
+use cf_chains::{Ethereum, ForeignChainAddress};
 use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
@@ -149,7 +149,7 @@ where
 			)?,
 			deposit_metadata: CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
-				source_address: Some(sender.into()),
+				source_address: Some(ForeignChainAddress::Eth(sender)),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
 					gas_budget: try_into_primitive(gas_amount)?,
@@ -186,7 +186,7 @@ where
 			)?,
 			deposit_metadata: CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
-				source_address: Some(sender.into()),
+				source_address: Some(ForeignChainAddress::Eth(sender)),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
 					gas_budget: try_into_primitive(gas_amount)?,

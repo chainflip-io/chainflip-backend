@@ -114,9 +114,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 											>::process_deposits {
 												deposit_witnesses: ingresses
 													.into_iter()
-													.map(|(to_addr, value)| {
+													.map(|(deposit_address, value)| {
 														pallet_cf_ingress_egress::DepositWitness {
-																deposit_address: to_addr,
+																deposit_address,
 																asset: native_asset,
 																amount:
 																	value
@@ -191,7 +191,7 @@ pub fn eth_ingresses_at_block<
 	addresses: Addresses,
 	native_events: Vec<FetchedNativeFilter>,
 ) -> Result<Vec<(H160, U256)>, anyhow::Error> {
-	let fetched_native_totals: BTreeMap<_, _> = native_events
+	let fetched_native_totals: BTreeMap<H160, _> = native_events
 		.into_iter()
 		.into_group_map_by(|f| f.sender)
 		.into_iter()

@@ -325,7 +325,8 @@ pub trait BrokerApi: SignedExtrinsicApi {
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
+		ForeignChain::Ethereum | ForeignChain::Arbitrum =>
+			EncodedAddress::Eth(clean_hex_address(address)?),
 		ForeignChain::Polkadot => EncodedAddress::Dot(clean_hex_address(address)?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
