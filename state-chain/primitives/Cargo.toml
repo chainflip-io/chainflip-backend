@@ -6,21 +6,28 @@ authors = ['Chainflip <https://chainflip.io>']
 description = 'Common primitive types used across Chainflip'
 
 [dependencies]
-serde = { default_features = false, version = '1.0.126', features = ['alloc', 'derive'] }
-hex = { optional = true, version = '0.4'}
+serde = { default_features = false, version = '1.0.126', features = [
+  'alloc',
+  'derive',
+] }
+hex = { optional = true, version = '0.4' }
 ethabi = { default-features = false, version = '18.0' }
 strum = { default-features = false, version = '0.24' }
-strum_macros = {  default-features = false, version = '0.24' }
+strum_macros = { default-features = false, version = '0.24' }
 
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
 
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = ['derive'] }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+  'derive',
+] }
+scale-info = { version = "2.5.0", default-features = false, features = [
+  "derive",
+] }
 
 [dev-dependencies]
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
 
 [features]
 default = ['std']

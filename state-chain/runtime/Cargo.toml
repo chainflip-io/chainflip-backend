@@ -12,14 +12,17 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 targets = ['x86_64-unknown-linux-gnu']
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-07', optional = true }
+substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08', optional = true }
 
 [dependencies]
 hex-literal = "0.4.1"
 log = { version = '0.4.16', default-features = false }
-nanorand = { version = '0.7', default-features = false, features = ['wyrand']}
-serde = { version = '1.0.126', default_features = false, features = ['alloc', 'derive'] }
-ethabi = {default-features = false, version = '18.0'}
+nanorand = { version = '0.7', default-features = false, features = ['wyrand'] }
+serde = { version = '1.0.126', default_features = false, features = [
+  'alloc',
+  'derive',
+] }
+ethabi = { default-features = false, version = '18.0' }
 
 # Chainflip local dependencies
 cf-amm = { path = '../amm', default-features = false }
@@ -37,55 +40,61 @@ pallet-cf-environment = { path = '../pallets/cf-environment', default-features =
 pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false }
-pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false }
-pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false  }
+pallet-cf-lp = { path = '../pallets/cf-lp', default-features = false }
+pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
 pallet-cf-funding = { path = '../pallets/cf-funding', default-features = false }
-pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false  }
+pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false }
 pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
 pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
 pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
-pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
+pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false }
 
 # SCALE
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = ['derive'] }
-scale-info = { version = '2.5.0', default-features = false, features = ['derive'] }
+codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+  'derive',
+] }
+scale-info = { version = '2.5.0', default-features = false, features = [
+  'derive',
+] }
 
 # Additional FRAME pallets
-pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false, features = ['historical'] }
+pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false, features = [
+  'historical',
+] }
 
 # Substrate dependencies
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", optional = true, default-features = false }
-frame-executive = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-frame-system-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", optional = true, default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", optional = true, default-features = false }
+frame-executive = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+frame-system-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", optional = true, default-features = false }
 
-pallet-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-pallet-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
+pallet-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+pallet-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
 
-sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-core = { version = "21.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-runtime = { version = "24.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-std = { version = "8.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-sp-version = { version = "22.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
+sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-core = { version = "21.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-runtime = { version = "24.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-std = { version = "8.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-version = { version = "22.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
 
-frame-try-runtime = { optional = true, tag = 'chainflip-monthly-2023-07', default-features = false, git = 'https://github.com/chainflip-io/substrate.git' }
+frame-try-runtime = { optional = true, tag = 'chainflip-monthly-2023-08', default-features = false, git = 'https://github.com/chainflip-io/substrate.git' }
 
 # Used for RPCs
-frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
-pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-07", default-features = false }
+frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
 
 [features]
 default = ['std']
