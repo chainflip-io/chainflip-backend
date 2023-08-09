@@ -5,8 +5,9 @@ use crate::{
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, eth::EthereumFetchId, CcmChannelMetadata, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	address::AddressConverter,
+	eth::{Address as EthereumAddress, EthereumFetchId},
+	CcmChannelMetadata, DepositChannel, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
@@ -24,8 +25,8 @@ use frame_support::{
 };
 use sp_core::H160;
 
-const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
-const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
+const ALICE_ETH_ADDRESS: cf_chains::eth::Address = H160([100u8; 20]);
+const BOB_ETH_ADDRESS: cf_chains::eth::Address = H160([101u8; 20]);
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 const EXPIRY_BLOCK: u64 = 6;
@@ -492,7 +493,7 @@ fn can_process_ccm_deposit() {
 #[test]
 fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
-		let destination_address: H160 = [0x01; 20].into();
+		let destination_address: EthereumAddress = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
@@ -520,8 +521,8 @@ fn can_egress_ccm() {
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
 				cf_parameters: vec![],
-				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+				source_chain: ForeignChain::Ethereum,
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -542,7 +543,7 @@ fn can_egress_ccm() {
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
-				to: destination_address
+				to: destination_address,
 			},
 			ccm.source_chain,
 			ccm.source_address,

@@ -167,7 +167,7 @@ mod test_all_batch {
 	const NONCE: u64 = 54321;
 	const CHANNEL_ID: u64 = 12345;
 
-	impl EthEnvironmentProvider for MockEnvironment {
+	impl EthEnvironmentProvider<Ethereum> for MockEnvironment {
 		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 			Some(eth::Address::from_low_u64_be(asset as u64))
 		}

@@ -536,8 +536,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 		let request_ccm =
 			CcmChannelMetadata { message: vec![0x01], gas_budget, cf_parameters: vec![] };
 		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+			source_chain: ForeignChain::Ethereum,
 			channel_metadata: request_ccm.clone(),
 		};
 

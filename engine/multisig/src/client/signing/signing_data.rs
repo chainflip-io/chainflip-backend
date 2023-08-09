@@ -169,8 +169,10 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 	fn is_initial_stage_data_size_valid<Chain: ChainSigning>(&self) -> bool {
 		match self {
 			SigningData::CommStage1(message) => match Chain::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
-					message.payload.len() <= max_signing_commitments_size(1),
+				ChainTag::Ethereum |
+				ChainTag::Polkadot |
+				ChainTag::Ed25519 |
+				ChainTag::Arbitrum => message.payload.len() <= max_signing_commitments_size(1),
 				ChainTag::Bitcoin =>
 				// At this stage we may not know the number of payloads, so we use a maximum
 					message.payload.len() <= max_signing_commitments_size(MAX_BTC_SIGNING_PAYLOADS),
