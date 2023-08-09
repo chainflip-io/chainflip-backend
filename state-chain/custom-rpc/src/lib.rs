@@ -536,7 +536,7 @@ where
 					*asset,
 					self.client
 						.runtime_api()
-						.cf_get_pools(self.unwrap_or_best(at), asset)
+						.cf_get_pool(self.unwrap_or_best(at), *asset)
 						.map_err(to_rpc_error)?,
 				);
 			}
