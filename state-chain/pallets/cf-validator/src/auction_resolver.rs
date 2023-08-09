@@ -71,7 +71,7 @@ impl SetSizeMaximisingAuctionResolver {
 		auction_bid_cutoff_percentage: Percent,
 	) -> Result<AuctionOutcome<CandidateId, BidAmount>, AuctionError> {
 		ensure!(auction_candidates.len() as u32 >= self.parameters.min_size, {
-			log::error!(
+			log::warn!(
 				"[cf-auction] not enough auction candidates. {} < {}",
 				auction_candidates.len(),
 				self.parameters.min_size
