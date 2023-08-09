@@ -15,7 +15,7 @@ use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Percent,
+	Percent,
 };
 
 type AccountId = u64;
