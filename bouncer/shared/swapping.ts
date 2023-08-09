@@ -191,10 +191,11 @@ export async function testAllSwaps() {
 
   const allSwaps: Promise<SwapParams | ContractSwapParams>[] = [];
 
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets).forEach((destAsset) => {
+  Object.values(Assets).flatMap((sourceAsset) =>
+    Object.values(Assets)
       // SDK prevents swaps from the same asset to the same asset
-      if (sourceAsset !== destAsset) {
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .map((destAsset) => {
         // Regular swaps
         appendSwap(allSwaps, sourceAsset, destAsset, testSwap);
 
@@ -217,9 +218,8 @@ export async function testAllSwaps() {
           // CCM swaps
           appendSwap(allSwaps, sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
-      }
-    });
-  });
+      }),
+  );
 
   await Promise.all(allSwaps);
 }
