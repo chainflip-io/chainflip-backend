@@ -324,7 +324,6 @@ export async function observeEVMEvent(
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
-  let eventWitnessed = false;
   let result: EVMEvent | undefined;
 
   // eslint-disable-next-line
@@ -345,7 +344,6 @@ export async function observeEVMEvent(
           ) {
             break;
           } else if (k === parameterNames.length - 1) {
-            eventWitnessed = true;
             result = {
               name: events[j].event,
               address: events[j].address,
