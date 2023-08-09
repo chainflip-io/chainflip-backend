@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress, eth::to_ethereum_address, CcmChannelMetadata, ForeignChain,
+	address::EncodedAddress,
+	eth::{to_ethereum_address, Address as EthereumAddress},
+	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
@@ -24,6 +28,10 @@ pub mod primitives {
 		CcmChannelMetadata, CcmDepositMetadata,
 	};
 }
+pub use chainflip_engine::state_chain_observer::client::{
+	base_rpc_api::{BaseRpcApi, RawRpcApi},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+};
 
 pub mod lp;
 pub mod queries;
@@ -32,14 +40,12 @@ pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
-	base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
-	DefaultRpcClient, StateChainClient,
+	base_rpc_api::BaseRpcClient, DefaultRpcClient, StateChainClient,
 };
-use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
+use utilities::{clean_hex_address, task_scope::Scope};
 
 #[async_trait]
-trait AuctionPhaseApi {
+pub trait AuctionPhaseApi {
 	async fn is_auction_phase(&self) -> Result<bool>;
 }
 
@@ -59,7 +65,7 @@ impl<
 }
 
 #[async_trait]
-trait RotateSessionKeysApi {
+pub trait RotateSessionKeysApi {
 	async fn rotate_session_keys(&self) -> Result<Bytes>;
 }
 
@@ -87,266 +93,176 @@ pub async fn request_block(
 		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
-async fn connect_submit_and_get_events<Call>(
-	state_chain_settings: &settings::StateChain,
-	call: Call,
-	required_role: AccountRole,
-) -> Result<(Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::BlockNumber)>
-where
-	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
-{
-	task_scope(|scope| {
-		async {
-			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				required_role,
-				false,
-			)
-			.await?;
-
-			let (_tx_hash, events, header, ..) =
-				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
-
-			Ok((events, header.number))
-		}
-		.boxed()
-	})
-	.await
+pub struct StateChainApi {
+	pub state_chain_client: Arc<StateChainClient>,
 }
 
-pub async fn request_redemption(
-	amount: primitives::RedemptionAmount,
-	eth_address: [u8; 20],
-	state_chain_settings: &settings::StateChain,
-) -> Result<H256> {
-	task_scope(|scope| {
-		async {
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::None,
-				false,
-			)
-			.await?;
+impl StateChainApi {
+	pub async fn connect<'a>(
+		scope: &Scope<'a, anyhow::Error>,
+		state_chain_settings: settings::StateChain,
+	) -> Result<Self, anyhow::Error> {
+		let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+			scope,
+			&state_chain_settings.ws_endpoint,
+			&state_chain_settings.signing_key_file,
+			AccountRole::None,
+			false,
+		)
+		.await?;
 
-			// Are we in a current auction phase
-			if state_chain_client.is_auction_phase().await? {
-				bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
-			}
+		Ok(Self { state_chain_client })
+	}
 
-			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::redeem {
-					amount,
-					address: eth_address,
-				})
-				.await
-				.until_finalized()
-				.await?;
+	pub fn operator_api(&self) -> Arc<impl OperatorApi> {
+		self.state_chain_client.clone()
+	}
 
-			Ok(tx_hash)
-		}
-		.boxed()
-	})
-	.await
+	pub fn governance_api(&self) -> Arc<impl GovernanceApi> {
+		self.state_chain_client.clone()
+	}
+
+	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
+		self.state_chain_client.clone()
+	}
+
+	pub fn lp_api(&self) -> Arc<impl lp::LpApi> {
+		self.state_chain_client.clone()
+	}
+
+	pub fn query_api(&self) -> queries::QueryApi {
+		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
+	}
 }
 
-pub async fn register_account_role(
-	role: AccountRole,
-	state_chain_settings: &settings::StateChain,
-) -> Result<H256> {
-	task_scope(|scope| {
-		async {
-			let call = match role {
-				AccountRole::Validator =>
-					RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
-				AccountRole::Broker =>
-					RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
-				AccountRole::LiquidityProvider =>
-					RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-				AccountRole::None => bail!("Cannot register account role None"),
-			};
+#[async_trait]
+impl OperatorApi for StateChainClient {}
+#[async_trait]
+impl GovernanceApi for StateChainClient {}
+#[async_trait]
+impl BrokerApi for StateChainClient {}
 
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::None,
-				false,
-			)
+#[async_trait]
+pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
+	async fn request_redemption(
+		&self,
+		amount: primitives::RedemptionAmount,
+		address: EthereumAddress,
+	) -> Result<H256> {
+		// Are we in a current auction phase
+		if self.is_auction_phase().await? {
+			bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
+		}
+
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address })
+			.await
+			.until_finalized()
 			.await?;
 
-			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(call)
-				.await
-				.until_finalized()
-				.await
-				.context("Could not register account role for account")?;
-			Ok(tx_hash)
+		Ok(tx_hash)
+	}
+
+	async fn register_account_role(&self, role: AccountRole) -> Result<H256> {
+		let call = match role {
+			AccountRole::Validator =>
+				RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
+			AccountRole::Broker =>
+				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
+			AccountRole::LiquidityProvider =>
+				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
+			AccountRole::None => bail!("Cannot register account role None"),
+		};
+
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(call)
+			.await
+			.until_finalized()
+			.await
+			.context("Could not register account role for account")?;
+		Ok(tx_hash)
+	}
+
+	async fn rotate_session_keys(&self) -> Result<H256> {
+		let seed = RotateSessionKeysApi::rotate_session_keys(self)
+			.await
+			.context("Could not rotate session keys.")?;
+
+		let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
+		let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
+
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
+				keys: SessionKeys {
+					aura: AuraId::from(SrPublic::from_raw(aura_key)),
+					grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
+				},
+				proof: [0; 1].to_vec(),
+			})
+			.await
+			.until_finalized()
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn stop_bidding(&self) -> Result<()> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
+			.await
+			.until_finalized()
+			.await
+			.context("Could not stop bidding")?;
+		println!("Account stopped bidding, in tx {tx_hash:#x}.");
+		Ok(())
+	}
+
+	async fn start_bidding(&self) -> Result<()> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
+			.await
+			.until_finalized()
+			.await
+			.context("Could not start bidding")?;
+		println!("Account started bidding at tx {tx_hash:#x}.");
+
+		Ok(())
+	}
+
+	async fn set_vanity_name(&self, name: String) -> Result<()> {
+		if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
+			bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
 		}
-		.boxed()
-	})
-	.await
+
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
+				name: name.as_bytes().to_vec(),
+			})
+			.await
+			.until_finalized()
+			.await
+			.context("Could not set vanity name for your account")?;
+		println!("Vanity name set at tx {tx_hash:#x}.");
+		Ok(())
+	}
 }
 
-pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<H256> {
-	task_scope(|scope| {
-		async {
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::None,
-				false,
-			)
-			.await?;
-			let seed = state_chain_client
-				.rotate_session_keys()
-				.await
-				.context("Could not rotate session keys.")?;
+#[async_trait]
+pub trait GovernanceApi: SignedExtrinsicApi {
+	async fn force_rotation(&self) -> Result<()> {
+		println!("Submitting governance proposal for rotation.");
+		self.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
+			call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+		})
+		.await
+		.until_finalized()
+		.await
+		.context("Failed to submit rotation governance proposal")?;
 
-			let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
-			let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
+		println!("If you're the governance dictator, the rotation will begin soon.");
 
-			let new_session_key = SessionKeys {
-				aura: AuraId::from(SrPublic::from_raw(aura_key)),
-				grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
-			};
-
-			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
-					keys: new_session_key,
-					proof: [0; 1].to_vec(),
-				})
-				.await
-				.until_finalized()
-				.await?;
-
-			Ok(tx_hash)
-		}
-		.boxed()
-	})
-	.await
-}
-
-// Account must be the governance dictator in order for this to work.
-pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Result<()> {
-	task_scope(|scope| {
-		async {
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::None,
-				false,
-			)
-			.await?;
-
-			println!("Submitting governance proposal for rotation.");
-			state_chain_client
-				.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
-					call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
-				})
-				.await
-				.until_finalized()
-				.await
-				.context("Failed to submit rotation governance proposal")?;
-
-			println!("If you're the governance dictator, the rotation will begin soon.");
-
-			Ok(())
-		}
-		.boxed()
-	})
-	.await
-}
-
-pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
-	task_scope(|scope| {
-		async {
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::Validator,
-				false,
-			)
-			.await?;
-			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
-				.await
-				.until_finalized()
-				.await
-				.context("Could not stop bidding")?;
-			println!("Account stopped bidding, in tx {tx_hash:#x}.");
-			Ok(())
-		}
-		.boxed()
-	})
-	.await
-}
-
-pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
-	task_scope(|scope| {
-		async {
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::Validator,
-				false,
-			)
-			.await?;
-
-			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
-				.await
-				.until_finalized()
-				.await
-				.context("Could not start bidding")?;
-			println!("Account started bidding at tx {tx_hash:#x}.");
-
-			Ok(())
-		}
-		.boxed()
-	})
-	.await
-}
-
-pub async fn set_vanity_name(
-	name: String,
-	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
-	task_scope(|scope| {
-		async {
-			if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
-				bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
-			}
-
-			let (_, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::None,
-				false,
-			)
-			.await?;
-			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
-					name: name.as_bytes().to_vec(),
-				})
-				.await
-				.until_finalized()
-				.await
-				.context("Could not set vanity name for your account")?;
-			println!("Vanity name set at tx {tx_hash:#x}.");
-			Ok(())
-		}
-		.boxed()
-	})
-	.await
+		Ok(())
+	}
 }
 
 pub struct SwapDepositAddress {
@@ -356,50 +272,52 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 }
 
-pub async fn request_swap_deposit_address(
-	state_chain_settings: &settings::StateChain,
-	source_asset: Asset,
-	destination_asset: Asset,
-	destination_address: EncodedAddress,
-	broker_commission_bps: BasisPoints,
-	channel_metadata: Option<CcmChannelMetadata>,
-) -> Result<SwapDepositAddress> {
-	let (events, block_number) = connect_submit_and_get_events(
-		state_chain_settings,
-		pallet_cf_swapping::Call::request_swap_deposit_address {
-			source_asset,
-			destination_asset,
-			destination_address,
-			broker_commission_bps,
-			channel_metadata,
-		},
-		AccountRole::None,
-	)
-	.await?;
+#[async_trait]
+pub trait BrokerApi: SignedExtrinsicApi {
+	async fn request_swap_deposit_address(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: EncodedAddress,
+		broker_commission_bps: BasisPoints,
+		channel_metadata: Option<CcmChannelMetadata>,
+	) -> Result<SwapDepositAddress> {
+		let (_tx_hash, events, header, ..) = self
+			.submit_signed_extrinsic(pallet_cf_swapping::Call::request_swap_deposit_address {
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission_bps,
+				channel_metadata,
+			})
+			.await
+			.until_finalized()
+			.await?;
 
-	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-		pallet_cf_swapping::Event::SwapDepositAddressReady {
-			deposit_address,
-			expiry_block,
-			channel_id,
-			..
-		},
-	)) = events.iter().find(|event| {
-		matches!(
-			event,
-			state_chain_runtime::RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
+		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::SwapDepositAddressReady {
+				deposit_address,
+				expiry_block,
+				channel_id,
+				..
+			},
+		)) = events.iter().find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
+				)
 			)
-		)
-	}) {
-		Ok(SwapDepositAddress {
-			address: deposit_address.to_string(),
-			expiry_block: *expiry_block,
-			issued_block: block_number,
-			channel_id: *channel_id,
-		})
-	} else {
-		panic!("SwapDepositAddressReady must have been generated");
+		}) {
+			Ok(SwapDepositAddress {
+				address: deposit_address.to_string(),
+				expiry_block: *expiry_block,
+				issued_block: header.number,
+				channel_id: *channel_id,
+			})
+		} else {
+			panic!("SwapDepositAddressReady must have been generated");
+		}
 	}
 }
 
@@ -407,8 +325,8 @@ pub async fn request_swap_deposit_address(
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum => EncodedAddress::Eth(clean_eth_address(address)?),
-		ForeignChain::Polkadot => EncodedAddress::Dot(clean_dot_address(address)?),
+		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
+		ForeignChain::Polkadot => EncodedAddress::Dot(clean_hex_address(address)?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
@@ -483,7 +401,9 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(String, KeyPai
 /// Note this is *not* a general-purpose utility for deriving Ethereum addresses. You should
 /// not expect to be able to recover this address in any mainstream wallet. Notably, this
 /// does *not* use BIP44 derivation paths.
-pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, [u8; 20])> {
+pub fn generate_ethereum_key(
+	seed_phrase: Option<&str>,
+) -> Result<(String, KeyPair, EthereumAddress)> {
 	use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
 	let mnemonic = seed_phrase
@@ -541,7 +461,7 @@ mod test_key_generation {
 			hex::encode(generated.1.secret_key)
 		);
 		assert_eq!(
-			(generated.0, generated.2.to_vec()),
+			(generated.0, generated.2.as_bytes().to_vec()),
 			(
 				SEED_PHRASE.to_string(),
 				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()

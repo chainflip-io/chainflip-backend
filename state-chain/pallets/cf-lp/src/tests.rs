@@ -189,7 +189,7 @@ fn can_register_and_deregister_emergency_withdrawal_address() {
 	new_test_ext().execute_with(|| {
 		let account_id = AccountId::from(LP_ACCOUNT);
 		let encoded_address = EncodedAddress::Eth([0x01; 20]);
-		let decoded_address = ForeignChainAddress::Eth([0x01; 20]);
+		let decoded_address = ForeignChainAddress::Eth([0x01; 20].into());
 		assert!(
 			EmergencyWithdrawalAddress::<Test>::get(&account_id, ForeignChain::Ethereum).is_none()
 		);
@@ -221,7 +221,7 @@ fn can_register_and_deregister_emergency_withdrawal_address() {
 
 		// Can reaplce the registered EWA with a new one.
 		let encoded_address = EncodedAddress::Eth([0x05; 20]);
-		let decoded_address = ForeignChainAddress::Eth([0x05; 20]);
+		let decoded_address = ForeignChainAddress::Eth([0x05; 20].into());
 
 		assert_ok!(LiquidityProvider::register_emergency_withdrawal_address(
 			RuntimeOrigin::signed(account_id.clone()),

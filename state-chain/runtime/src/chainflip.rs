@@ -31,15 +31,14 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
+		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
 	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
@@ -80,6 +79,8 @@ impl_runtime_safe_mode! {
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
+	reputation: pallet_cf_reputation::PalletSafeMode,
+	vault: pallet_cf_vaults::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -166,11 +167,17 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn is_valid_for_rebroadcast(
-		_call: &EthereumApi<EthEnvironment>,
+		call: &EthereumApi<EthEnvironment>,
 		_payload: &<Ethereum as ChainCrypto>::Payload,
+		current_key: &<Ethereum as ChainCrypto>::AggKey,
+		signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Nothing to validate for Ethereum
-		true
+		// Check if signature is valid
+		<Ethereum as ChainCrypto>::verify_threshold_signature(
+			current_key,
+			&call.threshold_signature_payload(),
+			signature,
+		)
 	}
 }
 
@@ -189,8 +196,17 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<Polkadot as ChainCrypto>::Payload,
+		current_key: &<Polkadot as ChainCrypto>::AggKey,
+		signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		&call.threshold_signature_payload() == payload
+		// First check if the payload is still valid. If it is, check if the signature is still
+		// valid
+		(&call.threshold_signature_payload() == payload) &&
+			<Polkadot as ChainCrypto>::verify_threshold_signature(
+				current_key,
+				payload,
+				signature,
+			)
 	}
 }
 
@@ -203,17 +219,23 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 
 	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
-		// We might need to restructure the tx depending on the current fee per utxo. no-op until we
-		// have chain tracking
+		// Since BTC txs are chained and the subsequent tx depends on the success of the previous
+		// one, changing the BTC tx fee will mean all subsequent txs are also invalid and so
+		// refreshing btc tx is not trivial. We leave it a no-op for now.
 	}
 
 	fn is_valid_for_rebroadcast(
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<Bitcoin as ChainCrypto>::Payload,
+		_current_key: &<Bitcoin as ChainCrypto>::AggKey,
+		_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Todo: The transaction wont be valid for rebroadcast as soon as we transition to new epoch
-		// since the input utxo set will change and the whole apicall would be invalid. This case
-		// will be handled later
+		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
+		// checked here. We also dont need to check for the signature here because even if we are in
+		// the next epoch and the key has changed, the old signature for the btc tx is still valid
+		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
+		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
+		// to check anything here and just rebroadcast.
 		true
 	}
 }
@@ -253,17 +275,16 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 impl EthEnvironmentProvider for EthEnvironment {
 	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 		match asset {
-			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
+			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
 	fn contract_address(contract: EthereumContract) -> eth::Address {
 		match contract {
-			EthereumContract::StateChainGateway =>
-				Environment::state_chain_gateway_address().into(),
-			EthereumContract::KeyManager => Environment::key_manager_address().into(),
-			EthereumContract::Vault => Environment::eth_vault_address().into(),
+			EthereumContract::StateChainGateway => Environment::state_chain_gateway_address(),
+			EthereumContract::KeyManager => Environment::key_manager_address(),
+			EthereumContract::Vault => Environment::eth_vault_address(),
 		}
 	}
 

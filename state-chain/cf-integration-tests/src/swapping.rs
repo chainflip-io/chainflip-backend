@@ -419,7 +419,7 @@ fn can_process_ccm_via_direct_deposit() {
 		let deposit_amount = 1_000;
 		let message = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20])),
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 				gas_budget,

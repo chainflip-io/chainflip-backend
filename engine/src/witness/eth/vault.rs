@@ -22,8 +22,11 @@ use super::{
 };
 
 use anyhow::{anyhow, Result};
-use cf_chains::{address::EncodedAddress, CcmChannelMetadata, CcmDepositMetadata};
-use cf_primitives::{Asset, EthereumAddress, ForeignChain};
+use cf_chains::{
+	address::EncodedAddress, eth::Address as EthereumAddress, CcmChannelMetadata,
+	CcmDepositMetadata,
+};
+use cf_primitives::{Asset, ForeignChain};
 use ethers::prelude::*;
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
@@ -111,7 +114,7 @@ where
 			cf_parameters: _,
 		}) => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
 			from: state_chain_client
-				.asset(src_token.0)
+				.asset(src_token)
 				.await
 				.map_err(|e| {
 					CallFromEventError::Network(anyhow!(
@@ -167,7 +170,7 @@ where
 			cf_parameters,
 		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: state_chain_client
-				.asset(src_token.0)
+				.asset(src_token)
 				.await
 				.map_err(|e| {
 					CallFromEventError::Network(anyhow!(

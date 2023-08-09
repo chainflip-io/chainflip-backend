@@ -1,8 +1,8 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, Chain};
-use cf_primitives::chains::assets::any;
+use cf_primitives::{chains::assets::any, AssetAmount};
 use chainflip_engine::state_chain_observer::client::{
-	chain_api::ChainApi, storage_api::StorageApi, StateChainStreamApi,
+	chain_api::ChainApi, storage_api::StorageApi,
 };
 pub use pallet_cf_pools::Pool;
 use serde::Deserialize;
@@ -19,8 +19,7 @@ pub struct SwapChannelInfo<C: Chain> {
 }
 
 pub struct QueryApi {
-	state_chain_client: Arc<StateChainClient>,
-	_state_chain_stream: Box<dyn StateChainStreamApi>,
+	pub(crate) state_chain_client: Arc<StateChainClient>,
 }
 
 impl QueryApi {
@@ -30,7 +29,7 @@ impl QueryApi {
 	) -> Result<QueryApi> {
 		log::debug!("Connecting to state chain at: {}", state_chain_settings.ws_endpoint);
 
-		let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
@@ -39,7 +38,7 @@ impl QueryApi {
 		)
 		.await?;
 
-		Ok(Self { state_chain_client, _state_chain_stream: Box::new(state_chain_stream) })
+		Ok(Self { state_chain_client })
 	}
 
 	pub async fn get_open_swap_channels<C: Chain + PalletInstanceAlias>(
@@ -97,6 +96,31 @@ impl QueryApi {
 			.collect::<Vec<_>>())
 	}
 
+	pub async fn get_balances(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+	) -> Result<BTreeMap<Asset, AssetAmount>> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+
+		futures::future::join_all(Asset::all().iter().map(|asset| async {
+			Ok((
+				*asset,
+				self.state_chain_client
+					.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
+						block_hash,
+						&self.state_chain_client.account_id(),
+						asset,
+					)
+					.await?
+					.unwrap_or_default(),
+			))
+		}))
+		.await
+		.into_iter()
+		.collect()
+	}
+
 	pub async fn get_pools(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
@@ -147,9 +171,9 @@ impl QueryApi {
 						.range_orders
 						.positions()
 						.into_iter()
-						.filter_map(|((owner, upper_tick, lower_tick), liquidity)| {
+						.filter_map(|((owner, lower_tick, upper_tick), liquidity)| {
 							if owner == account_id {
-								Some(RangeOrderPosition { upper_tick, lower_tick, liquidity })
+								Some(RangeOrderPosition { lower_tick, upper_tick, liquidity })
 							} else {
 								None
 							}
@@ -163,8 +187,8 @@ impl QueryApi {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RangeOrderPosition {
-	pub upper_tick: i32,
 	pub lower_tick: i32,
+	pub upper_tick: i32,
 	#[serde(with = "utilities::serde_helpers::number_or_hex")]
 	pub liquidity: u128,
 }

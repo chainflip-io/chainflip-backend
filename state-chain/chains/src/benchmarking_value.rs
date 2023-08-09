@@ -89,7 +89,7 @@ impl BenchmarkValue for ForeignChainAddress {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for ForeignChainAddress {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		ForeignChainAddress::Eth([id; 20])
+		ForeignChainAddress::Eth([id; 20].into())
 	}
 }
 

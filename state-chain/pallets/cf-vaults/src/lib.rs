@@ -6,10 +6,10 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
-	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState, SafeMode, SetSafeMode,
-	Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult,
+	Broadcaster, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState,
+	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
+	VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -54,6 +54,8 @@ pub type KeygenResponseStatus<T, I> =
 
 pub type KeyHandoverResponseStatus<T, I> =
 	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
+
+impl_pallet_safe_mode!(PalletSafeMode; slashing_enabled);
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
@@ -184,7 +186,7 @@ pub mod pallet {
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// For activating Safe mode: CODE RED for the chain.
-		type SafeMode: SafeMode + SetSafeMode<Self::SafeMode>;
+		type SafeMode: Get<PalletSafeMode> + SafeMode + SetSafeMode<Self::SafeMode>;
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 
@@ -834,8 +836,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn terminate_rotation(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
-		for offender in offenders {
-			T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
+		if T::SafeMode::get().slashing_enabled {
+			for offender in offenders {
+				T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
+			}
 		}
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.iter().cloned().collect(),

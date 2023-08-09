@@ -13,7 +13,7 @@ await cryptoWaitReady();
 
 const keyring = new Keyring({ type: 'sr25519' });
 
-const snowWhite = keyring.createFromUri(snowWhiteUri);
+export const snowWhite = keyring.createFromUri(snowWhiteUri);
 
 export async function submitGovernanceExtrinsic(extrinsic: SubmittableExtrinsic<'promise'>) {
   return snowWhiteMutex.runExclusive(async () =>

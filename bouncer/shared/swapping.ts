@@ -189,23 +189,23 @@ export async function testAllSwaps() {
     (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 9n).toString(),
   );
 
-  const regularSwaps: Promise<SwapParams>[] = [];
-  const contractSwaps: Promise<ContractSwapParams>[] = [];
-  const ccmSwaps: Promise<SwapParams>[] = [];
-  const ccmContractSwaps: Promise<ContractSwapParams>[] = [];
+  const allSwaps: Promise<SwapParams | ContractSwapParams>[] = [];
 
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets).forEach((destAsset) => {
       // SDK prevents swaps from the same asset to the same asset
       if (sourceAsset !== destAsset) {
-        appendSwap(regularSwaps, sourceAsset, destAsset, testSwap);
+        // Regular swaps
+        appendSwap(allSwaps, sourceAsset, destAsset, testSwap);
 
         if (chainFromAsset(sourceAsset) === chainFromAsset('ETH')) {
-          appendSwap(contractSwaps, sourceAsset, destAsset, testSwapViaContract);
+          // Contract Swaps
+          appendSwap(allSwaps, sourceAsset, destAsset, testSwapViaContract);
 
           if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
+            // CCM contract swaps
             appendSwap(
-              ccmContractSwaps,
+              allSwaps,
               sourceAsset,
               destAsset,
               testSwapViaContract,
@@ -214,11 +214,12 @@ export async function testAllSwaps() {
           }
         }
         if (chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-          appendSwap(ccmSwaps, sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+          // CCM swaps
+          appendSwap(allSwaps, sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
       }
     });
   });
 
-  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
+  await Promise.all(allSwaps);
 }

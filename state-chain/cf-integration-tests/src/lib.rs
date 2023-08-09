@@ -16,23 +16,23 @@ mod governance;
 mod new_epoch;
 mod swapping;
 
+use cf_chains::eth::Address as EthereumAddress;
+use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
+use cf_traits::EpochInfo;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use pallet_cf_funding::EthTransactionHash;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::Pair;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,
 	Reputation, Runtime, RuntimeOrigin, System, Validator,
 };
 
-use cf_primitives::{AuthorityCount, BlockNumber, EthereumAddress, FlipBalance};
-use cf_traits::EpochInfo;
-use pallet_cf_funding::EthTransactionHash;
-use sp_runtime::AccountId32;
-
 type NodeId = AccountId32;
-const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
-const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+const ETH_DUMMY_ADDR: EthereumAddress = EthereumAddress::repeat_byte(42u8);
+const ETH_ZERO_ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(0xff);
 const TX_HASH: EthTransactionHash = [211u8; 32];
 
 pub const GENESIS_KEY_SEED: u64 = 42;

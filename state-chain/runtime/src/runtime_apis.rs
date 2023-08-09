@@ -1,7 +1,11 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SemVer, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::PolkadotHash,
+	eth::{api::EthereumChainId, Address as EthereumAddress},
+};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -112,5 +116,6 @@ decl_runtime_apis!(
 			-> Option<SwapOutput>;
 		fn cf_environment() -> Environment;
 		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 	}
 );

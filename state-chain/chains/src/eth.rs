@@ -193,12 +193,10 @@ pub struct AggKey {
 	pub pub_key_y_parity: ParityBit,
 }
 
-pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {
+pub fn to_ethereum_address(pubkey: PublicKey) -> eth::Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
-	let mut res = [0u8; 20];
-	res.copy_from_slice(&h.0[12..]);
-	res
+	eth::Address::from_slice(&h.0[12..])
 }
 
 impl AggKey {
@@ -281,7 +279,7 @@ impl AggKey {
 
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
-		let e = self.message_challenge_scalar(msg_hash, &k_times_g_address);
+		let e = self.message_challenge_scalar(msg_hash, k_times_g_address.as_fixed_bytes());
 
 		let d: Scalar = (*secret).into();
 		let k: Scalar = (*sig_nonce).into();
@@ -732,7 +730,7 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		// Public agg key
 		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
@@ -753,7 +751,7 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k)).0;
 		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
 
 		// This should pass.

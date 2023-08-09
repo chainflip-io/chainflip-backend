@@ -175,9 +175,7 @@ pub mod pallet {
 					T::EgressHandler::schedule_egress(
 						Asset::Flip,
 						flip_to_burn,
-						ForeignChainAddress::Eth(
-							T::EthEnvironment::state_chain_gateway_address().into(),
-						),
+						ForeignChainAddress::Eth(T::EthEnvironment::state_chain_gateway_address()),
 						None,
 					);
 					T::Issuance::burn(flip_to_burn.into());
