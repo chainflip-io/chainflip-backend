@@ -523,7 +523,7 @@ pub mod pallet {
 		}
 
 		// TODO: Remove this before mainnet (or use a feature flag?)
-		#[pallet::weight(T::WeightInfo::on_signature_ready())]
+		#[pallet::weight(Weight::zero())]
 		#[pallet::call_index(3)]
 		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
 			ensure_root(origin)?;

@@ -316,7 +316,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(T::WeightInfo::witness_at_epoch())]
+		#[pallet::weight(Weight::zero())]
 		pub fn force_witness(
 			origin: OriginFor<T>,
 			mut call: Box<<T as Config>::RuntimeCall>,

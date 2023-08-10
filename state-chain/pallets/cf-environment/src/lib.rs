@@ -268,7 +268,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
+		#[pallet::weight(Weight::zero())]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
@@ -305,7 +305,7 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
+		#[pallet::weight(Weight::zero())]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
 			block_number: cf_chains::btc::BlockNumber,
