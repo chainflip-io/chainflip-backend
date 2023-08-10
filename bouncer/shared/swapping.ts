@@ -68,20 +68,21 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return encodedMessage;
 }
 
-function newCcmMetadata(
+export function newCcmMetadata(
   sourceAsset: Asset,
-  gas?: number,
-  messageTypesArray?: SolidityType[],
+  ccmMessage?: string,
+  gasPerMil?: number,
   cfParamsArray?: SolidityType[],
 ) {
-  const message = newAbiEncodedMessage(messageTypesArray);
+  const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  const gasBudget =
-    gas ??
-    Math.floor(
-      Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
-        100,
-    );
+  const gasFraction = gasPerMil ?? 10;
+
+  const gasBudget = Math.floor(
+    (Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) *
+      gasFraction) /
+      1000,
+  );
 
   return {
     message,
@@ -208,4 +209,6 @@ export async function testAllSwaps() {
   );
 
   await Promise.all(allSwaps);
+
+  console.log('=== Swapping test complete ===');
 }

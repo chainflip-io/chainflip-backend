@@ -139,7 +139,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
 }
 
 export async function testEthereumDeposits() {
-  console.log('=== Testing Deposits ===');
+  console.log('=== Testing Ethereum Deposits ===');
 
   const depositTests = Promise.all([
     testDepositEthereum('ETH', 'DOT'),
@@ -160,5 +160,5 @@ export async function testEthereumDeposits() {
 
   await Promise.all([depositTests, duplicatedDepositTest, multipleTxSwapsTest]);
 
-  console.log('=== Deposit Tests completed ===');
+  console.log('=== Ethereum Deposit Test completed ===');
 }

@@ -197,6 +197,20 @@ export async function observeEvent(
   return result as Event;
 }
 
+export async function observeSwapScheduled(sourceAsset: Asset, channelId: number) {
+  const chainflipApi = await getChainflipApi();
+
+  return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+    if ('DepositChannel' in event.data.origin) {
+      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
+      const assetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+      return channelMatches && assetMatches;
+    }
+    // Otherwise it was a swap scheduled by interacting with the ETH smart contract
+    return false;
+  });
+}
+
 // Make sure the stopObserveEvent returns true before the end of the test
 export async function observeBadEvents(
   eventName: string,
@@ -283,17 +297,26 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   throw new Error('Failed to observe the fetch');
 }
 
+type EVMEvent = {
+  name: string;
+  address: string;
+  txHash: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  returnValues: any;
+};
 export async function observeEVMEvent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
   address: string,
   eventName: string,
   eventParametersExpected: string[],
+  stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
-): Promise<void> {
+): Promise<EVMEvent | undefined> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
+  const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
   const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
@@ -301,16 +324,15 @@ export async function observeEVMEvent(
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
-  let eventWitnessed = false;
-
-  for (let i = 0; i < 120 && !eventWitnessed; i++) {
+  for (let i = 0; i < 120; i++) {
+    if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
       const events = await contract.getPastEvents(eventName, {
         fromBlock: initBlockNumber,
         toBlock: currentBlockNumber,
       });
-      for (let j = 0; j < events.length && !eventWitnessed; j++) {
+      for (let j = 0; j < events.length; j++) {
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (
@@ -319,8 +341,12 @@ export async function observeEVMEvent(
           ) {
             break;
           } else if (k === parameterNames.length - 1) {
-            eventWitnessed = true;
-            break;
+            return {
+              name: events[j].event,
+              address: events[j].address,
+              txHash: events[j].transactionHash,
+              returnValues: events[j].returnValues,
+            };
           }
         }
       }
@@ -329,10 +355,7 @@ export async function observeEVMEvent(
     await sleep(2500);
   }
 
-  if (eventWitnessed) {
-    return Promise.resolve();
-  }
-  return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
+  throw new Error(`Failed to observe the ${eventName} event`);
 }
 
 export async function observeCcmReceived(
@@ -340,15 +363,22 @@ export async function observeCcmReceived(
   destAsset: Asset,
   address: string,
   messageMetadata: CcmDepositMetadata,
-): Promise<void> {
-  await observeEVMEvent(cfTesterAbi, address, 'ReceivedxSwapAndCall', [
-    chainContractIds[assetChains[sourceAsset]].toString(),
-    '*',
-    messageMetadata.message,
-    getEthContractAddress(destAsset.toString()),
-    '*',
-    '*',
-  ]);
+  stopObserveEvent?: () => boolean,
+): Promise<EVMEvent | undefined> {
+  return observeEVMEvent(
+    cfTesterAbi,
+    address,
+    'ReceivedxSwapAndCall',
+    [
+      chainContractIds[assetChains[sourceAsset]].toString(),
+      '*',
+      messageMetadata.message,
+      getEthContractAddress(destAsset.toString()),
+      '*',
+      '*',
+    ],
+    stopObserveEvent,
+  );
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x
