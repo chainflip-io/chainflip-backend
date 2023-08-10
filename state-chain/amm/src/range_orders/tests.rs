@@ -126,7 +126,7 @@ fn test_amounts_to_liquidity() {
 				// Iterations have been decreased to ensure tests run in a reasonable time, but
 				// this has been run 100 billion times
 				for _i in 0..1000000 {
-					let tick = rng.gen_range(MIN_TICK..=MAX_TICK);
+					let tick = rng.gen_range(MIN_TICK..MAX_TICK);
 
 					let pool_state = PoolState::new(
 						0,
