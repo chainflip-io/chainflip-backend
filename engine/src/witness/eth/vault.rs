@@ -80,7 +80,7 @@ pub fn call_from_event(
 		}) => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
 			from: *(supported_assets
 				.get(&src_token)
-				.ok_or(anyhow!("Source token {src_token} not found"))?),
+				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
 			to: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
 			destination_address: try_into_encoded_address(
@@ -130,7 +130,7 @@ pub fn call_from_event(
 		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: *(supported_assets
 				.get(&src_token)
-				.ok_or(anyhow!("Source token {src_token} not found"))?),
+				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
 			destination_asset: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
 			destination_address: try_into_encoded_address(
