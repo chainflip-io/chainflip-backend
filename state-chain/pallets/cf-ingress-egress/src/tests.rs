@@ -412,7 +412,8 @@ fn reused_address_channel_id_matches() {
 		DepositChannelPool::<Test, _>::insert(CHANNEL_ID, new_channel.clone());
 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, expiry: 1_000u64 },
+			ChannelAction::LiquidityProvision { lp_account: 0 },
+			1_000u64,
 		)
 		.unwrap();
 		// The reused details should be the same as before.

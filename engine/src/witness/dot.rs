@@ -285,7 +285,7 @@ where
 }
 
 fn address_and_details_to_addresses(
-	address_and_details: Vec<DepositChannelDetails<Polkadot>>,
+	address_and_details: Vec<DepositChannelDetails<state_chain_runtime::Runtime, PolkadotInstance>>,
 ) -> Vec<PolkadotAccountId> {
 	address_and_details
 		.into_iter()

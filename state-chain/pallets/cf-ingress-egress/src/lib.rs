@@ -107,31 +107,38 @@ pub mod pallet {
 		pub deposit_details: C::DepositDetails,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	pub struct DepositChannelDetails<C: Chain> {
-		pub deposit_channel: DepositChannel<C>,
-		pub opened_at: C::ChainBlockNumber,
+	#[derive(
+		CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
+		pub deposit_channel: DepositChannel<T::TargetChain>,
+		/// The block number at which the deposit channel was opened, expressed as a block number
+		/// on the external Chain.
+		pub opened_at: <T::TargetChain as Chain>::ChainBlockNumber,
+		/// The block number at which the deposit channel will be closed, expressed as a
+		/// Chainflip-native block number.
+		// TODO: We should consider changing this to also be an external block number and expire
+		// based on external block numbers. See PRO-689.
+		pub expires_at: T::BlockNumber,
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum ChannelAction<AccountId, BlockNumber> {
+	pub enum ChannelAction<AccountId> {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_id: AccountId,
 			broker_commission_bps: BasisPoints,
-			expiry: BlockNumber,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
-			expiry: BlockNumber,
 		},
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
-			expiry: BlockNumber,
 		},
 	}
 
@@ -195,7 +202,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		DepositChannelDetails<T::TargetChain>,
+		DepositChannelDetails<T, I>,
 		OptionQuery,
 	>;
 
@@ -205,7 +212,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		ChannelAction<T::AccountId, T::BlockNumber>,
+		ChannelAction<T::AccountId>,
 		OptionQuery,
 	>;
 
@@ -683,7 +690,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// May re-use an existing deposit address, depending on chain configuration.
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
-		channel_action: ChannelAction<T::AccountId, T::BlockNumber>,
+		channel_action: ChannelAction<T::AccountId>,
+		expires_at: T::BlockNumber,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -720,7 +728,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
-			DepositChannelDetails { deposit_channel, opened_at },
+			DepositChannelDetails { deposit_channel, opened_at, expires_at },
 		);
 
 		Ok((channel_id, deposit_address))
@@ -794,11 +802,12 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		expiry: T::BlockNumber,
+		expiry_block: T::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account, expiry },
+			ChannelAction::LiquidityProvision { lp_account },
+			expiry_block,
 		)?;
 
 		Ok((channel_id, deposit_address.into()))
@@ -812,7 +821,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry: T::BlockNumber,
+		expiry_block: T::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
@@ -821,16 +830,15 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_asset,
 					destination_address,
 					channel_metadata: msg,
-					expiry,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
 					broker_commission_bps,
 					broker_id,
-					expiry,
 				},
 			},
+			expiry_block,
 		)?;
 
 		Ok((channel_id, deposit_address.into()))
