@@ -338,6 +338,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
+			origin: SwapOrigin,
 		},
 		CcmFailed {
 			reason: CcmFailReason,
@@ -610,12 +611,14 @@ pub mod pallet {
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, to)?;
+			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
+			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
 				deposit_amount,
 				destination_address_internal.clone(),
+				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -623,7 +626,7 @@ pub mod pallet {
 					deposit_amount,
 					destination_asset: to,
 					destination_address,
-					origin: SwapOrigin::Vault { tx_hash },
+					origin: swap_origin,
 					swap_type: SwapType::Swap(destination_address_internal),
 					broker_commission: None,
 				});
@@ -837,7 +840,12 @@ pub mod pallet {
 			grouped_swaps
 		}
 
-		fn schedule_swap(from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> u64 {
+		fn schedule_swap_internal(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			swap_type: SwapType,
+		) -> u64 {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
@@ -887,11 +895,12 @@ pub mod pallet {
 		}
 
 		// Schedule and returns the swap id if the swap is valid.
-		fn schedule_swap_from_channel_received(
+		fn schedule_swap_with_check(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
+			swap_origin: &SwapOrigin,
 		) -> Option<u64> {
 			if amount < MinimumSwapAmount::<T>::get(from) {
 				// If the swap amount is less than the minimum required,
@@ -905,11 +914,17 @@ pub mod pallet {
 					destination_address: T::AddressConverter::to_encoded_address(
 						destination_address,
 					),
+					origin: swap_origin.clone(),
 				});
 				None
 			} else {
 				// Otherwise schedule the swap.
-				Some(Self::schedule_swap(from, to, amount, SwapType::Swap(destination_address)))
+				Some(Self::schedule_swap_internal(
+					from,
+					to,
+					amount,
+					SwapType::Swap(destination_address),
+				))
 			}
 		}
 	}
@@ -938,12 +953,18 @@ pub mod pallet {
 
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
+			let swap_origin = SwapOrigin::DepositChannel {
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				channel_id,
+				deposit_block_height,
+			};
 
-			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
+			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
 				amount,
 				destination_address.clone(),
+				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -951,11 +972,7 @@ pub mod pallet {
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
-					origin: SwapOrigin::DepositChannel {
-						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-						channel_id,
-						deposit_block_height,
-					},
+					origin: swap_origin,
 					swap_type: SwapType::Swap(destination_address),
 					broker_commission: Some(fee),
 				});
@@ -1022,7 +1039,7 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let swap_id = Self::schedule_swap(
+					let swap_id = Self::schedule_swap_internal(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
@@ -1049,7 +1066,7 @@ pub mod pallet {
 				swap_output.gas = Some(deposit_metadata.channel_metadata.gas_budget);
 				None
 			} else {
-				let swap_id = Self::schedule_swap(
+				let swap_id = Self::schedule_swap_internal(
 					source_asset,
 					output_gas_asset,
 					deposit_metadata.channel_metadata.gas_budget,
