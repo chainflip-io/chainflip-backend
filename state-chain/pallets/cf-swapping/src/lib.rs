@@ -269,6 +269,7 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
+			broker_commission_rate: BasisPoints,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -279,6 +280,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 			swap_type: SwapType,
+			broker_commission: Option<AssetAmount>,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -547,6 +549,7 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				channel_id,
+				broker_commission_rate: broker_commission_bps,
 			});
 
 			Ok(())
@@ -622,6 +625,7 @@ pub mod pallet {
 					destination_address,
 					origin: SwapOrigin::Vault { tx_hash },
 					swap_type: SwapType::Swap(destination_address_internal),
+					broker_commission: None,
 				});
 			}
 			Ok(())
@@ -916,6 +920,7 @@ pub mod pallet {
 		/// Callback function to kick off the swapping process after a successful deposit.
 		fn schedule_swap_from_channel(
 			deposit_address: ForeignChainAddress,
+			deposit_block_height: u64,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -949,8 +954,10 @@ pub mod pallet {
 					origin: SwapOrigin::DepositChannel {
 						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 						channel_id,
+						deposit_block_height,
 					},
 					swap_type: SwapType::Swap(destination_address),
+					broker_commission: Some(fee),
 				});
 			}
 		}
@@ -1029,6 +1036,7 @@ pub mod pallet {
 						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
+						broker_commission: None,
 					});
 					Some(swap_id)
 				};
@@ -1055,6 +1063,7 @@ pub mod pallet {
 					destination_address: encoded_destination_address.clone(),
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
+					broker_commission: None,
 				});
 				Some(swap_id)
 			};

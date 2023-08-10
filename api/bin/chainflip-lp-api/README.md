@@ -199,6 +199,26 @@ Note: This functionality is not implemented yet.
 
 - A list of all assets and their range order positions in json format
 
+### `lp_getPools`
+
+Parameters:
+
+None
+
+Return:
+
+- A BTreeMap of all pools in json format
+
+### `lp_getPool`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+
+Return:
+
+- The required pool in json format
+
 -------------
 
 ## Limitations
