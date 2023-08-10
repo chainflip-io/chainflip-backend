@@ -987,6 +987,7 @@ fn swap_by_witnesser_happy_path() {
 			asset: from,
 			amount,
 			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 		}));
 		// Fund is confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
@@ -1059,6 +1060,11 @@ fn swap_by_deposit_happy_path() {
 			asset: from,
 			amount,
 			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::DepositChannel {
+				deposit_address: EncodedAddress::Eth(Default::default()),
+				channel_id: 1,
+				deposit_block_height: 1,
+			},
 		}));
 		// Fund is confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);

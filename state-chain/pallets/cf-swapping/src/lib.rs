@@ -338,6 +338,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
+			origin: SwapOrigin,
 		},
 		CcmFailed {
 			reason: CcmFailReason,
@@ -610,12 +611,14 @@ pub mod pallet {
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, to)?;
+			let swap_origin = SwapOrigin::Vault { tx_hash };
 
 			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
 				from,
 				to,
 				deposit_amount,
 				destination_address_internal.clone(),
+				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -623,7 +626,7 @@ pub mod pallet {
 					deposit_amount,
 					destination_asset: to,
 					destination_address,
-					origin: SwapOrigin::Vault { tx_hash },
+					origin: swap_origin,
 					swap_type: SwapType::Swap(destination_address_internal),
 					broker_commission: None,
 				});
@@ -892,6 +895,7 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
+			swap_origin: &SwapOrigin,
 		) -> Option<u64> {
 			if amount < MinimumSwapAmount::<T>::get(from) {
 				// If the swap amount is less than the minimum required,
@@ -905,6 +909,7 @@ pub mod pallet {
 					destination_address: T::AddressConverter::to_encoded_address(
 						destination_address,
 					),
+					origin: swap_origin.clone(),
 				});
 				None
 			} else {
@@ -938,12 +943,18 @@ pub mod pallet {
 
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
+			let swap_origin = SwapOrigin::DepositChannel {
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+				channel_id,
+				deposit_block_height,
+			};
 
 			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
 				from,
 				to,
 				amount,
 				destination_address.clone(),
+				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -951,11 +962,7 @@ pub mod pallet {
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
-					origin: SwapOrigin::DepositChannel {
-						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-						channel_id,
-						deposit_block_height,
-					},
+					origin: swap_origin,
 					swap_type: SwapType::Swap(destination_address),
 					broker_commission: Some(fee),
 				});
