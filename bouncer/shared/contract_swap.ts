@@ -1,8 +1,6 @@
 import {
   Asset,
   executeSwap,
-  executeCall,
-  ExecuteCallParams,
   ExecuteSwapParams,
   approveVault,
   assetChains,
@@ -45,30 +43,23 @@ export async function executeContractSwap(
     gasLimit: 200000,
   } as const;
 
-  const params = {
-    destChain,
-    destAsset,
-    // It is important that this is large enough to result in
-    // an amount larger than existential (e.g. on Polkadot):
-    amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
-    destAddress,
-    srcAsset,
-    srcChain: assetChains[srcAsset],
-  } as ExecuteSwapParams;
-
-  let receipt;
-  if (!messageMetadata) {
-    receipt = await executeSwap(params, options);
-  } else {
-    receipt = await executeCall(
-      {
-        ...params,
+  const receipt = await executeSwap(
+    {
+      destChain,
+      destAsset,
+      // It is important that this is large enough to result in
+      // an amount larger than existential (e.g. on Polkadot):
+      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
+      destAddress,
+      srcAsset,
+      srcChain: assetChains[srcAsset],
+      ...(messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-      } as ExecuteCallParams,
-      options,
-    );
-  }
+      }),
+    } as ExecuteSwapParams,
+    options,
+  );
 
   return receipt;
 }
