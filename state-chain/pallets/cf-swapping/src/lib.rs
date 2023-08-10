@@ -613,7 +613,7 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
+			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
 				deposit_amount,
@@ -840,7 +840,12 @@ pub mod pallet {
 			grouped_swaps
 		}
 
-		fn schedule_swap(from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> u64 {
+		fn schedule_swap_internal(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			swap_type: SwapType,
+		) -> u64 {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
@@ -890,7 +895,7 @@ pub mod pallet {
 		}
 
 		// Schedule and returns the swap id if the swap is valid.
-		fn schedule_swap_from_channel_received(
+		fn schedule_swap_with_check(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -914,7 +919,12 @@ pub mod pallet {
 				None
 			} else {
 				// Otherwise schedule the swap.
-				Some(Self::schedule_swap(from, to, amount, SwapType::Swap(destination_address)))
+				Some(Self::schedule_swap_internal(
+					from,
+					to,
+					amount,
+					SwapType::Swap(destination_address),
+				))
 			}
 		}
 	}
@@ -949,7 +959,7 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
+			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
 				amount,
@@ -1029,7 +1039,7 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					let swap_id = Self::schedule_swap(
+					let swap_id = Self::schedule_swap_internal(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
@@ -1056,7 +1066,7 @@ pub mod pallet {
 				swap_output.gas = Some(deposit_metadata.channel_metadata.gas_budget);
 				None
 			} else {
-				let swap_id = Self::schedule_swap(
+				let swap_id = Self::schedule_swap_internal(
 					source_asset,
 					output_gas_asset,
 					deposit_metadata.channel_metadata.gas_budget,
