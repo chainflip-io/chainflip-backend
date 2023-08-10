@@ -159,6 +159,7 @@ export async function observeEvent(
   api: ApiPromise,
   eventQuery?: EventQuery,
   stopObserveEvent?: () => boolean,
+  finalized = false,
 ): Promise<Event> {
   let result: Event | undefined;
   let eventFound = false;
@@ -167,8 +168,13 @@ export async function observeEvent(
   const stopObserve = stopObserveEvent ?? (() => false);
 
   const [expectedSection, expectedMethod] = eventName.split(':');
+
+  const subscribeMethod = finalized
+    ? api.rpc.chain.subscribeFinalizedHeads
+    : api.rpc.chain.subscribeNewHeads;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await api.rpc.chain.subscribeNewHeads(async (header) => {
+  const unsubscribe: any = await subscribeMethod(async (header) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const events: any[] = await api.query.system.events.at(header.hash);
     events.forEach((record, index) => {

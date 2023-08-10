@@ -12,7 +12,7 @@ import {
 } from '../shared/utils';
 import { send } from '../shared/send';
 
-export async function provideLiquidity(ccy: Asset, amount: number) {
+export async function provideLiquidity(ccy: Asset, amount: number, waitForFinalization = false) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
@@ -70,6 +70,8 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
     'liquidityProvider:AccountCredited',
     chainflip,
     (event) => event.data.asset.toUpperCase() === ccy,
+    undefined,
+    waitForFinalization,
   );
   send(ccy, ingressAddress, String(amount));
   await eventHandle;

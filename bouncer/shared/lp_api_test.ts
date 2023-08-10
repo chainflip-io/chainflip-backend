@@ -1,7 +1,15 @@
 #!/usr/bin/env -S pnpm tsx
+import { assetDecimals } from '@chainflip-io/cli';
 import assert from 'assert';
-import { getChainflipApi, observeEvent, isValidHexHash, isValidEthAddress } from './utils';
+import {
+  getChainflipApi,
+  observeEvent,
+  isValidHexHash,
+  isValidEthAddress,
+  amountToFineAmount,
+} from './utils';
 import { jsonRpc } from './json_rpc';
+import { provideLiquidity } from './provide_liquidity';
 
 interface RangeOrder {
   lower_tick: number;
@@ -9,8 +17,12 @@ interface RangeOrder {
   liquidity: string;
 }
 
-const withdrawAssetAmount = 1;
-const mintAssetAmount = 1000;
+const testEthAmount = 0.1;
+const withdrawAssetAmount = parseInt(
+  amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH),
+);
+const mintAssetAmount = parseInt(amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH));
+const totalEthNeeded = testEthAmount * 3;
 const chainflip = await getChainflipApi();
 const ethAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
@@ -31,23 +43,16 @@ async function testGetPools() {
 
   const ethPool = await lpApiRpc(`lp_getPool`, ['Eth']);
   assert.strictEqual(
-    JSON.stringify(ethPool.Eth), // TODO: Change this to just ethPool in PR #3802
+    JSON.stringify(ethPool),
     JSON.stringify(pools.Eth),
     `Mismatch pool data returned`,
   );
 }
 
 async function testAssetBalances() {
-  const totalEthNeeded = withdrawAssetAmount + 2 * mintAssetAmount;
-
-  // Check that the account has the required Eth and test the assetBalances command
   const balances = await lpApiRpc(`lp_assetBalances`, []);
-  if (balances.Eth < totalEthNeeded) {
-    throw new Error(
-      `Need at least ${totalEthNeeded} Eth for the test to work, has the setup been run? balances: ${JSON.stringify(
-        balances,
-      )}`,
-    );
+  if (balances.Eth < amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH)) {
+    throw new Error(`Not enough Eth for test. balances: ${JSON.stringify(balances)}`);
   }
 }
 
@@ -136,8 +141,9 @@ async function testRangeOrder() {
     },
   ]);
 
-  assert(
-    (await mintRangeOrder).assets_debited.zero === mintAssetAmount,
+  assert.strictEqual(
+    (await mintRangeOrder).assets_debited.zero,
+    mintAssetAmount,
     `Unexpected mint range order result`,
   );
 
@@ -156,7 +162,11 @@ async function testRangeOrder() {
     upperTick,
     rangeOrder.liquidity,
   ]);
-  assert((await burnRangeOrder).assets_credited.zero > 0, `Unexpected burn range order result`);
+  assert.strictEqual(
+    (await burnRangeOrder).assets_credited.zero,
+    mintAssetAmount,
+    `Unexpected burn range order result`,
+  );
 
   // Check that the range order is gone
   const rangeOrdersAfterBurn = await lpApiRpc(`lp_getRangeOrders`, []);
@@ -189,8 +199,14 @@ async function testLimitOrder() {
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi() {
-  // Run these tests first because they are fast and will confirm that setup has been run
-  await Promise.all([testGetPools(), testAssetBalances()]);
+  // Confirm that the pools are ready to be used by the other tests
+  await testGetPools();
+
+  // We have to wait finalization here because the LP API server is using a finalized block stream
+  await provideLiquidity('ETH', totalEthNeeded, true);
+
+  // Check that we have enough eth to do the rest of the tests
+  await testAssetBalances();
 
   await Promise.all([
     testRegisterEmergencyWithdrawalAddress(),
