@@ -146,7 +146,7 @@ pub mod pallet {
 		type TargetChain: ChainAbi;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue;
+		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue + Send + Sync;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
