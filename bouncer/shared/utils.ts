@@ -324,8 +324,7 @@ export async function observeEVMEvent(
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
-  // eslint-disable-next-line
-  outerLoop: for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 120; i++) {
     if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
