@@ -53,10 +53,10 @@ export async function executeContractSwap(
       destAddress,
       srcAsset,
       srcChain: assetChains[srcAsset],
-      ...(messageMetadata && {
+      ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-      }),
+      },
     } as ExecuteSwapParams,
     options,
   );
