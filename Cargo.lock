@@ -876,7 +876,7 @@ dependencies = [
  "ethereum-types",
  "frame-support",
  "hex",
- "hex-literal 0.3.4",
+ "hex-literal",
  "itertools 0.10.5",
  "libsecp256k1",
  "log",
@@ -907,7 +907,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
- "hex-literal 0.3.4",
+ "hex-literal",
  "libsecp256k1",
  "pallet-aura",
  "pallet-authorship",
@@ -1290,7 +1290,7 @@ dependencies = [
  "frame-system",
  "futures",
  "hex",
- "hex-literal 0.3.4",
+ "hex-literal",
  "jsonrpsee",
  "log",
  "pallet-transaction-payment",
@@ -3950,12 +3950,6 @@ dependencies = [
 
 [[package]]
 name = "hex-literal"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
-
-[[package]]
-name = "hex-literal"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
@@ -6360,7 +6354,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.4",
+ "hex-literal",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -6445,7 +6439,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.4",
+ "hex-literal",
  "log",
  "pallet-cf-governance",
  "parity-scale-codec",
@@ -6554,7 +6548,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.3.4",
+ "hex-literal",
  "log",
  "pallet-cf-reputation",
  "pallet-cf-validator",
@@ -10639,7 +10633,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
- "hex-literal 0.4.1",
+ "hex-literal",
  "log",
  "nanorand",
  "pallet-aura",
@@ -12565,8 +12559,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5388522c899d1e1c96a4c307e3797e0f697ba7c77dd8e0e625ecba9dd0342937"
 dependencies = [
  "arrayvec 0.7.4",
- "base64 0.21.2",
- "bytes",
  "derive_more",
  "ethabi",
  "ethereum-types",
@@ -12579,7 +12571,6 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "pin-project",
- "reqwest",
  "rlp",
  "serde",
  "serde_json",

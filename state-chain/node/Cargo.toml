@@ -29,7 +29,7 @@ utilities = { package = "utilities", path = "../../utilities" }
 
 # Added by Chainflip
 hex = "0.4"
-hex-literal = "0.3.1"
+hex-literal = "0.4.1"
 log = "0.4.16"
 
 # Substrate-node-template dependencies
