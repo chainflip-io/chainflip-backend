@@ -267,7 +267,7 @@ impl TransactionBuilder<Arbitrum, ArbitrumApi<ArbEnvironment>> for ArbTransactio
 
 	fn refresh_unsigned_data(unsigned_tx: &mut <Arbitrum as ChainAbi>::Transaction) {
 		if let Some(ChainState { tracked_data, .. }) = ArbitrumChainTracking::chain_state() {
-			unsigned_tx.max_fee_per_gas = Some(U256::from(tracked_data.base_fee));
+			unsigned_tx.max_fee_per_gas = Some(U256::from(tracked_data.base_fee.saturating_mul(2)));
 			unsigned_tx.max_priority_fee_per_gas = None;
 		}
 		// if we don't have ChainState, we leave it unmodified
