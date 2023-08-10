@@ -176,13 +176,12 @@ impl pallet_cf_environment::Config for Test {
 pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
 pub const ETH_KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
 pub const ETH_VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
-
-// TODO: Where is the arb address checker?
-pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
+pub const ETH_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([3u8; 20]);
 
 pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([3u8; 20]);
 pub const ARB_VAULT_ADDRESS: eth::Address = H160([4u8; 20]);
 pub const ARBUSDC_TOKEN_ADDRESS: eth::Address = H160([5u8; 20]);
+pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([6u8; 20]);
 
 pub const ETH_CHAIN_ID: u64 = 1;
 pub const ARB_CHAIN_ID: u64 = 2;
@@ -196,12 +195,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
 			key_manager_address: ETH_KEY_MANAGER_ADDRESS,
 			eth_vault_address: ETH_VAULT_ADDRESS,
-			eth_address_checker_address: ADDRESS_CHECKER,
+			eth_address_checker_address: ETH_ADDRESS_CHECKER_ADDRESS,
 
 			arbitrum_chain_id: ARB_CHAIN_ID,
 			arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
 			arb_vault_address: ARB_VAULT_ADDRESS,
 			arbusdc_token_address: ARBUSDC_TOKEN_ADDRESS,
+			arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,
 
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),
