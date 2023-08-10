@@ -115,12 +115,6 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<String>;
-	#[method(name = "cf_eth_asset")]
-	fn cf_eth_asset(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-		token_address: EthereumAddress,
-	) -> RpcResult<Option<Asset>>;
 	#[method(name = "eth_flip_token_address")]
 	fn cf_eth_flip_token_address(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<String>;
@@ -259,16 +253,6 @@ where
 			.cf_eth_flip_token_address(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(hex::encode)
-	}
-	fn cf_eth_asset(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-		token_address: EthereumAddress,
-	) -> RpcResult<Option<Asset>> {
-		self.client
-			.runtime_api()
-			.cf_eth_asset(&self.query_block_id(at), token_address)
-			.map_err(to_rpc_error)
 	}
 	fn cf_eth_state_chain_gateway_address(
 		&self,
