@@ -14,7 +14,7 @@ function loadContractCached(abiPath: string) {
     return cached;
   };
 }
-const CF_ETH_CONTRACT_ABI_TAG = 'perseverance-0.9-rc3';
+const CF_ETH_CONTRACT_ABI_TAG = 'perseverance-0.9-rc4';
 export const getErc20abi = loadContractCached('../eth-contract-abis/IERC20.json');
 export const getGatewayAbi = loadContractCached(
   '../eth-contract-abis/' + CF_ETH_CONTRACT_ABI_TAG + '/IStateChainGateway.json',
