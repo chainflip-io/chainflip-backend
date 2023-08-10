@@ -1063,7 +1063,7 @@ fn swap_by_deposit_happy_path() {
 			origin: SwapOrigin::DepositChannel {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
-				deposit_block_height: 1,
+				deposit_block_height: 0,
 			},
 		}));
 		// Fund is confiscated
