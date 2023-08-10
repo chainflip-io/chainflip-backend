@@ -461,6 +461,7 @@ pub mod pallet {
 		pub arbusdc_token_address: EthereumAddress,
 		pub arb_key_manager_address: EthereumAddress,
 		pub arb_vault_address: EthereumAddress,
+		pub arb_address_checker_address: EthereumAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
 		pub _config: PhantomData<T>,
@@ -489,6 +490,7 @@ pub mod pallet {
 			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
 			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arbusdc_token_address);
+			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 		}
