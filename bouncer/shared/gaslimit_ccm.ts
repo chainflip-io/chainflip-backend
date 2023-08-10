@@ -16,7 +16,7 @@ async function testGasLimitSwap(
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const messageMetadata = newCcmMetadata(
     sourceAsset,
-    web3.eth.abi.encodeParameters(['string'], ['GasTest']),
+    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', 0]),
     1,
   );
 

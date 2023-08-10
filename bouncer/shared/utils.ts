@@ -333,6 +333,8 @@ export async function observeEVMEvent(
         toBlock: currentBlockNumber,
       });
       for (let j = 0; j < events.length; j++) {
+        if (events[j].returnValues.length !== parameterNames.length)
+          throw new Error('Unexpected event length');
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (
@@ -374,6 +376,7 @@ export async function observeCcmReceived(
       '*',
       messageMetadata.message,
       getEthContractAddress(destAsset.toString()),
+      '*',
       '*',
       '*',
     ],
