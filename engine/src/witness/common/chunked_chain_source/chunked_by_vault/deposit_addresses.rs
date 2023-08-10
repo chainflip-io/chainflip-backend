@@ -24,7 +24,12 @@ use crate::{
 
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
 
-pub type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
+pub type Addresses<Inner> = Vec<
+	DepositChannelDetails<
+		state_chain_runtime::Runtime,
+		<<Inner as ChunkedByVault>::Chain as PalletInstanceAlias>::Instance,
+	>,
+>;
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator

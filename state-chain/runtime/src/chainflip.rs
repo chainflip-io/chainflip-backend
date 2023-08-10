@@ -435,10 +435,12 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
+			type BlockNumber = <Runtime as frame_system::Config>::BlockNumber;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
+				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -446,6 +448,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
+								expiry,
 							),
 					)+
 				}
@@ -458,6 +461,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
+				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -468,6 +472,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
+							expiry,
 						),
 					)+
 				}

@@ -28,10 +28,11 @@ benchmarks_instance_pallet! {
 			deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
 				1,
 				source_asset,
-			).unwrap()
+			).unwrap(),
+			expires_at: T::BlockNumber::from(1_000u32),
 		});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
-			lp_account: account("doogle", 0, 0)
+			lp_account: account("doogle", 0, 0),
 		});
 	}: {
 		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value()).unwrap()
@@ -56,12 +57,13 @@ benchmarks_instance_pallet! {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
 			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-			let mut channel = DepositChannelDetails {
+			let mut channel = DepositChannelDetails::<T, I> {
 				opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
 				deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
 					1,
 					source_asset,
-				).unwrap()
+				).unwrap(),
+				expires_at: T::BlockNumber::from(1_000u32),
 			};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);

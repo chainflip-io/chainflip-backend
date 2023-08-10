@@ -16,6 +16,7 @@ pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
 	source_asset: any::Asset,
 	destination_asset: any::Asset,
+	expiry_block: state_chain_runtime::BlockNumber,
 }
 
 pub struct QueryApi {
@@ -83,14 +84,15 @@ impl QueryApi {
 					_ => None,
 				}
 				.and_then(|destination_asset| {
-					channel_details
-						.get(address)
-						.map(|details| (destination_asset, details.deposit_channel.clone()))
+					channel_details.get(address).map(|details| {
+						(destination_asset, details.deposit_channel.clone(), details.expires_at)
+					})
 				})
-				.map(|(&destination_asset, deposit_channel)| SwapChannelInfo {
+				.map(|(&destination_asset, deposit_channel, expiry)| SwapChannelInfo {
 					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
 					source_asset: deposit_channel.asset.into(),
 					destination_asset,
+					expiry_block: expiry,
 				})
 			})
 			.collect::<Vec<_>>())
