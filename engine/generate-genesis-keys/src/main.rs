@@ -3,8 +3,11 @@ use cf_primitives::GENESIS_EPOCH;
 use chainflip_engine::db::PersistentKeyDB;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use multisig::{
-	bitcoin::BtcSigning, client::keygen::generate_key_data, eth::EthSigning,
-	polkadot::PolkadotSigning, CanonicalEncoding, ChainSigning, KeyId, Rng,
+	bitcoin::BtcSigning,
+	client::{keygen::generate_key_data, KeygenResultInfo},
+	eth::{ArbSigning, EthSigning, EvmCryptoScheme},
+	polkadot::PolkadotSigning,
+	CanonicalEncoding, ChainSigning, CryptoScheme, KeyId, Rng,
 };
 use rand::SeedableRng;
 use state_chain_runtime::AccountId;
@@ -25,6 +28,7 @@ type Record = (String, AccountId);
 #[derive(Serialize, Deserialize)]
 struct AggKeys {
 	eth_agg_key: String,
+	arb_agg_key: String,
 	dot_agg_key: String,
 	btc_agg_key: String,
 }
@@ -71,11 +75,19 @@ fn main() {
 		.expect("Should read from csv file"),
 	);
 
+	let (evm_public_key, evm_shares) = generate_keys::<EvmCryptoScheme>(&node_id_to_name_map);
+
 	// output to stdout - CI can read the json from stdout
 	println!(
 		"{}",
 		serde_json::to_string_pretty(&AggKeys {
-			eth_agg_key: generate_and_save_keys::<EthSigning>(&node_id_to_name_map),
+			// save the same key for arb and eth.
+			eth_agg_key: save_keys::<EthSigning>(
+				evm_public_key,
+				evm_shares.clone(),
+				&node_id_to_name_map
+			),
+			arb_agg_key: save_keys::<ArbSigning>(evm_public_key, evm_shares, &node_id_to_name_map),
 			dot_agg_key: generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map),
 			btc_agg_key: generate_and_save_keys::<BtcSigning>(&node_id_to_name_map),
 		})
@@ -83,16 +95,29 @@ fn main() {
 	);
 }
 
-// We just return the PublicKeyBytes (as hex) here. The chain_spec only needs to read this. At
-// genesis it knows that the starting epoch index is the Genesis index.
-fn generate_and_save_keys<Crypto: ChainSigning>(
+fn generate_and_save_keys<ChainCrypto: ChainSigning>(
 	node_id_to_name_map: &HashMap<AccountId, String>,
 ) -> String {
-	let (public_key, key_shares) = generate_key_data::<Crypto::CryptoScheme>(
+	let (public_key, key_shares) = generate_keys::<ChainCrypto::CryptoScheme>(node_id_to_name_map);
+	save_keys::<ChainCrypto>(public_key, key_shares, node_id_to_name_map)
+}
+
+fn generate_keys<Crypto: CryptoScheme>(
+	node_id_to_name_map: &HashMap<AccountId, String>,
+) -> (Crypto::PublicKey, HashMap<AccountId, KeygenResultInfo<Crypto>>) {
+	generate_key_data::<Crypto>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		&mut Rng::from_entropy(),
-	);
+	)
+}
 
+// We just return the PublicKeyBytes (as hex) here. The chain_spec only needs to read this. At
+// genesis it knows that the starting epoch index is the Genesis index.
+fn save_keys<ChainCrypto: ChainSigning>(
+	public_key: <ChainCrypto::CryptoScheme as CryptoScheme>::PublicKey,
+	key_shares: HashMap<AccountId, KeygenResultInfo<ChainCrypto::CryptoScheme>>,
+	node_id_to_name_map: &HashMap<AccountId, String>,
+) -> String {
 	// Create a db for each key share, giving the db the name of the node it is for.
 	for (node_id, key_share) in key_shares {
 		PersistentKeyDB::open_and_migrate_to_latest(
@@ -107,13 +132,12 @@ fn generate_and_save_keys<Crypto: ChainSigning>(
 			None,
 		)
 		.expect("Should create database at latest version")
-		.update_key::<Crypto>(&KeyId::new(GENESIS_EPOCH, public_key.clone()), &key_share);
+		.update_key::<ChainCrypto>(&KeyId::new(GENESIS_EPOCH, public_key.clone()), &key_share);
 	}
 
 	hex::encode(public_key.encode_key())
 }
 
-#[cfg(test)]
 #[test]
 fn should_generate_and_save_all_keys() {
 	use multisig::bitcoin::BtcSigning;
@@ -128,6 +152,7 @@ fn should_generate_and_save_all_keys() {
 	generate_and_save_keys::<EthSigning>(&node_id_to_name_map);
 	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
 	generate_and_save_keys::<BtcSigning>(&node_id_to_name_map);
+	generate_and_save_keys::<ArbSigning>(&node_id_to_name_map);
 
 	// Open the db and check the keys
 	let db =
@@ -137,4 +162,5 @@ fn should_generate_and_save_all_keys() {
 	assert_eq!(db.load_keys::<EthSigning>().len(), 1);
 	assert_eq!(db.load_keys::<PolkadotSigning>().len(), 1);
 	assert_eq!(db.load_keys::<BtcSigning>().len(), 1);
+	assert_eq!(db.load_keys::<ArbSigning>().len(), 1);
 }
