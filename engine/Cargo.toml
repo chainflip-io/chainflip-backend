@@ -70,7 +70,6 @@ tokio = { version = "1.22", features = ["full", "test-util"] }
 tokio-stream = { version = "0.1.5", features = ["sync"] }
 url = "2.4"
 web3 = { version = "0.19", default-features = false, features = [
-  "http-rustls-tls",
   "ws-tls-tokio",
 ] }
 zeroize = "1.5.4"
