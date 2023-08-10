@@ -26,8 +26,9 @@ use cf_chains::{
 	address::EncodedAddress, eth::Address as EthereumAddress, CcmChannelMetadata,
 	CcmDepositMetadata,
 };
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{chains::assets::eth::Asset as EthereumAsset, Asset, ForeignChain};
 use ethers::prelude::*;
+use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
@@ -57,7 +58,7 @@ pub enum CallFromEventError {
 pub async fn call_from_event<StateChainClient>(
 	event: Event<VaultEvents>,
 	state_chain_client: Arc<StateChainClient>,
-) -> Result<Option<pallet_cf_swapping::Call<state_chain_runtime::Runtime>>, CallFromEventError>
+) -> Result<Option<RuntimeCall>, CallFromEventError>
 where
 	StateChainClient: EthAssetApi,
 {
@@ -92,18 +93,16 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Some(
-			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_from_contract {
-				from: Asset::Eth,
-				to: try_into_primitive(dst_token)?,
-				deposit_amount: try_into_primitive(amount)?,
-				destination_address: try_into_encoded_address(
-					try_into_primitive(dst_chain)?,
-					dst_address.to_vec(),
-				)?,
-				tx_hash: event.tx_hash.into(),
-			},
-		),
+		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
+			from: Asset::Eth,
+			to: try_into_primitive(dst_token)?,
+			deposit_amount: try_into_primitive(amount)?,
+			destination_address: try_into_encoded_address(
+				try_into_primitive(dst_chain)?,
+				dst_address.to_vec(),
+			)?,
+			tx_hash: event.tx_hash.into(),
+		})),
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
 			dst_address,
@@ -112,7 +111,7 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
+		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
 			from: state_chain_client
 				.asset(src_token)
 				.await
@@ -129,7 +128,7 @@ where
 				dst_address.to_vec(),
 			)?,
 			tx_hash: event.tx_hash.into(),
-		}),
+		})),
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
 			dst_address,
@@ -139,7 +138,7 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
+		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: Asset::Eth,
 			destination_asset: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
@@ -157,7 +156,7 @@ where
 				},
 			},
 			tx_hash: event.tx_hash.into(),
-		}),
+		})),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -168,7 +167,7 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
+		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: state_chain_client
 				.asset(src_token)
 				.await
@@ -194,7 +193,40 @@ where
 				},
 			},
 			tx_hash: event.tx_hash.into(),
-		}),
+		})),
+		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
+			recipient,
+			amount,
+		}) => Some(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::vault_transfer_failed {
+				asset: EthereumAsset::Eth,
+				amount: try_into_primitive(amount)?,
+				destination_address: recipient,
+			},
+		)),
+		VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
+			recipient,
+			amount,
+			token,
+			reason: _,
+		}) => Some(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::<
+			Runtime,
+			EthereumInstance,
+		>::vault_transfer_failed {
+			asset: state_chain_client
+				.asset(token)
+				.await
+				.map_err(|e| {
+					CallFromEventError::Network(anyhow!(
+						"Failed to retrieve asset token for TransferTokenFailed call: {e}"
+					))
+				})?
+				.ok_or(CallFromEventError::Decode(format!("Asset token {token} not found")))?
+				.try_into()
+				.map_err(|_| CallFromEventError::Decode(format!("Asset {token} not supported")))?,
+			amount: try_into_primitive(amount)?,
+			destination_address: recipient,
+		})),
 		_ => None,
 	})
 }
@@ -226,7 +258,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(call.into()),
+											call: Box::new(call),
 											epoch_index: epoch.index,
 										},
 									)
