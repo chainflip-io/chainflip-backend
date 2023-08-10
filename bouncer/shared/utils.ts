@@ -312,7 +312,7 @@ export async function observeEVMEvent(
   eventParametersExpected: string[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
-): Promise<EVMEvent> {
+): Promise<EVMEvent | undefined> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
@@ -324,11 +324,9 @@ export async function observeEVMEvent(
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
-  let result: EVMEvent | undefined;
-
   // eslint-disable-next-line
   outerLoop: for (let i = 0; i < 120; i++) {
-    if (stopObserve()) return result as EVMEvent;
+    if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
       const events = await contract.getPastEvents(eventName, {
@@ -344,14 +342,12 @@ export async function observeEVMEvent(
           ) {
             break;
           } else if (k === parameterNames.length - 1) {
-            result = {
+            return {
               name: events[j].event,
               address: events[j].address,
               txHash: events[j].transactionHash,
               returnValues: events[j].returnValues,
             };
-            // eslint-disable-next-line no-labels
-            break outerLoop;
           }
         }
       }
@@ -360,10 +356,7 @@ export async function observeEVMEvent(
     await sleep(2500);
   }
 
-  if (result) {
-    return result as EVMEvent;
-  }
-  return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
+  throw new Error(`Failed to observe the ${eventName} event`);
 }
 
 export async function observeCcmReceived(
@@ -372,7 +365,7 @@ export async function observeCcmReceived(
   address: string,
   messageMetadata: CcmDepositMetadata,
   stopObserveEvent?: () => boolean,
-): Promise<EVMEvent> {
+): Promise<EVMEvent | undefined> {
   return observeEVMEvent(
     cfTesterAbi,
     address,
