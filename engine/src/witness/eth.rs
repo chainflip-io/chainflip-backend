@@ -7,9 +7,10 @@ mod key_manager;
 mod state_chain_gateway;
 pub mod vault;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use cf_primitives::chains::assets::eth;
+use sp_core::H160;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -31,7 +32,6 @@ use super::common::{
 	STATE_CHAIN_CONNECTION,
 };
 use eth_source::EthSource;
-use vault::EthAssetApi;
 
 use anyhow::{Context, Result};
 
@@ -46,10 +46,19 @@ pub async fn start<StateChainClient, StateChainStream>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainClient:
-		StorageApi + ChainApi + EthAssetApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
+	let supported_assets: HashMap<H160, cf_primitives::Asset> = state_chain_client
+		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+		)
+		.await
+		.context("Failed to fetch Ethereum supported assets")?
+		.into_iter()
+		.map(|(asset, address)| (address, asset.into()))
+		.collect();
+
 	let expected_chain_id = web3::types::U256::from(
 		state_chain_client
 			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
@@ -192,7 +201,14 @@ where
 		.spawn(scope);
 
 	eth_safe_vault_source
-		.vault_witnessing(state_chain_client.clone(), eth_client.clone(), vault_address)
+		.vault_witnessing(
+			state_chain_client.clone(),
+			eth_client.clone(),
+			vault_address,
+			cf_primitives::Asset::Eth,
+			cf_primitives::ForeignChain::Ethereum,
+			supported_assets,
+		)
 		.continuous("Vault".to_string(), db)
 		.logging("Vault")
 		.spawn(scope);

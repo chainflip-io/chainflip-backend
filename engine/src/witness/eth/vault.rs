@@ -1,16 +1,11 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::Ethereum;
 use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
-	state_chain_observer::client::{
-		base_rpc_api::{BaseRpcClient, RawRpcApi},
-		extrinsic_api::signed::SignedExtrinsicApi,
-		StateChainClient,
-	},
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 };
 
 use super::{
@@ -31,56 +26,26 @@ use ethers::prelude::*;
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-#[async_trait::async_trait]
-pub trait EthAssetApi {
-	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>>;
-}
-
-#[async_trait::async_trait]
-impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
-	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
-{
-	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
-		self.base_rpc_client
-			.raw_rpc_client
-			.cf_eth_asset(None, token_address)
-			.await
-			.map_err(Into::into)
-	}
-}
-
-pub enum CallFromEventError {
-	Network(anyhow::Error),
-	Decode(String),
-}
-
-pub async fn call_from_event<StateChainClient>(
+pub fn call_from_event(
 	event: Event<VaultEvents>,
-	state_chain_client: Arc<StateChainClient>,
-) -> Result<Option<pallet_cf_swapping::Call<state_chain_runtime::Runtime>>, CallFromEventError>
-where
-	StateChainClient: EthAssetApi,
-{
-	fn try_into_encoded_address(
-		chain: ForeignChain,
-		bytes: Vec<u8>,
-	) -> Result<EncodedAddress, CallFromEventError> {
-		EncodedAddress::from_chain_bytes(chain, bytes).map_err(|e| {
-			CallFromEventError::Decode(format!("Failed to convert into EncodedAddress: {e}"))
-		})
+	// can be different for different EVM chains
+	native_asset: Asset,
+	source_chain: ForeignChain,
+	supported_assets: &HashMap<EthereumAddress, Asset>,
+) -> Result<Option<pallet_cf_swapping::Call<state_chain_runtime::Runtime>>> {
+	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
+		EncodedAddress::from_chain_bytes(chain, bytes)
+			.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
 	}
 
 	fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 		from: Primitive,
-	) -> Result<CfType, CallFromEventError>
+	) -> Result<CfType>
 	where
 		<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
 	{
 		from.try_into().map_err(|err| {
-			CallFromEventError::Decode(format!(
-				"Failed to convert into {:?}: {err}",
-				std::any::type_name::<CfType>(),
-			))
+			anyhow!("Failed to convert into {:?}: {err}", std::any::type_name::<CfType>(),)
 		})
 	}
 
@@ -94,7 +59,7 @@ where
 			cf_parameters: _,
 		}) => Some(
 			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_from_contract {
-				from: Asset::Eth,
+				from: native_asset,
 				to: try_into_primitive(dst_token)?,
 				deposit_amount: try_into_primitive(amount)?,
 				destination_address: try_into_encoded_address(
@@ -113,15 +78,9 @@ where
 			sender: _,
 			cf_parameters: _,
 		}) => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
-			from: state_chain_client
-				.asset(src_token)
-				.await
-				.map_err(|e| {
-					CallFromEventError::Network(anyhow!(
-						"Failed to retrieve from token for SwapToken call: {e}"
-					))
-				})?
-				.ok_or(CallFromEventError::Decode(format!("Source token {src_token} not found")))?,
+			from: *(supported_assets
+				.get(&src_token)
+				.ok_or(anyhow!("Source token {src_token} not found"))?),
 			to: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
 			destination_address: try_into_encoded_address(
@@ -140,7 +99,7 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: Asset::Eth,
+			source_asset: native_asset,
 			destination_asset: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
 			destination_address: try_into_encoded_address(
@@ -148,7 +107,7 @@ where
 				dst_address.to_vec(),
 			)?,
 			deposit_metadata: CcmDepositMetadata {
-				source_chain: ForeignChain::Ethereum,
+				source_chain,
 				source_address: Some(sender.into()),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
@@ -169,15 +128,9 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => Some(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: state_chain_client
-				.asset(src_token)
-				.await
-				.map_err(|e| {
-					CallFromEventError::Network(anyhow!(
-						"Failed to retrieve From token for XCallToken call: {e}"
-					))
-				})?
-				.ok_or(CallFromEventError::Decode(format!("Source token {src_token} not found")))?,
+			source_asset: *(supported_assets
+				.get(&src_token)
+				.ok_or(anyhow!("Source token {src_token} not found"))?),
 			destination_asset: try_into_primitive(dst_token)?,
 			deposit_amount: try_into_primitive(amount)?,
 			destination_address: try_into_encoded_address(
@@ -185,7 +138,7 @@ where
 				dst_address.to_vec(),
 			)?,
 			deposit_metadata: CcmDepositMetadata {
-				source_chain: ForeignChain::Ethereum,
+				source_chain,
 				source_address: Some(sender.into()),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
@@ -207,20 +160,26 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: EthRpcClient,
-		contract_address: H160,
+		contract_address: EthereumAddress,
+		native_asset: Asset,
+		source_chain: ForeignChain,
+		supported_assets: HashMap<EthereumAddress, Asset>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
-		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
-		StateChainClient: SignedExtrinsicApi + EthAssetApi + Send + Sync + 'static,
+		Inner::Chain:
+			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
+		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
+		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let eth_rpc = eth_rpc.clone();
+			let supported_assets = supported_assets.clone();
 			async move {
 				for event in
 					events_at_block::<VaultEvents, _>(header, contract_address, &eth_rpc).await?
 				{
-					match call_from_event(event, state_chain_client.clone()).await {
+					match call_from_event(event, native_asset, source_chain, &supported_assets) {
 						Ok(option_call) =>
 							if let Some(call) = option_call {
 								state_chain_client
@@ -232,10 +191,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									)
 									.await;
 							},
-						Err(CallFromEventError::Decode(message)) => {
+						Err(message) => {
 							tracing::error!("Ignoring vault contract event: {message}");
 						},
-						Err(CallFromEventError::Network(err)) => return Err(err),
 					}
 				}
 
