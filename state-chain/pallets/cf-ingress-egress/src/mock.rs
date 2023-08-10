@@ -135,7 +135,7 @@ pub trait RequestAddressAndDeposit {
 			<Test as frame_system::Config>::AccountId,
 			TestChainAsset,
 			TestChainAmount,
-			<Test as frame_system::Config>::AccountId,
+			<Test as frame_system::Config>::BlockNumber,
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
@@ -195,7 +195,7 @@ pub trait RequestAddress {
 		requests: &[(
 			<Test as frame_system::Config>::AccountId,
 			TestChainAsset,
-			<Test as frame_system::Config>::AccountId,
+			<Test as frame_system::Config>::BlockNumber,
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
