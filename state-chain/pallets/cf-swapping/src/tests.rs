@@ -341,6 +341,7 @@ fn swap_expires() {
 			broker_commission_bps: 0,
 			broker_id: ALICE,
 			channel_metadata: None,
+			expiry,
 		};
 
 		assert_eq!(

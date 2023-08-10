@@ -181,6 +181,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
 		/// API for handling asset egress.
@@ -530,6 +531,9 @@ pub mod pallet {
 				);
 			}
 
+			let expiry_block = frame_system::Pallet::<T>::current_block_number()
+				.saturating_add(SwapTTL::<T>::get());
+
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
 				destination_asset,
@@ -537,10 +541,9 @@ pub mod pallet {
 				broker_commission_bps,
 				broker,
 				channel_metadata,
+				expiry_block,
 			)?;
 
-			let expiry_block = frame_system::Pallet::<T>::current_block_number()
-				.saturating_add(SwapTTL::<T>::get());
 			SwapChannelExpiries::<T>::append(expiry_block, (channel_id, deposit_address.clone()));
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {

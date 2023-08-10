@@ -30,8 +30,9 @@ benchmarks_instance_pallet! {
 				source_asset,
 			).unwrap()
 		});
-		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
-			lp_account: account("doogle", 0, 0)
+		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId, T::BlockNumber>::LiquidityProvision {
+			lp_account: account("doogle", 0, 0),
+			expiry: T::BlockNumber::from(1_000u32),
 		});
 	}: {
 		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value()).unwrap()

@@ -115,20 +115,23 @@ pub mod pallet {
 
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum ChannelAction<AccountId> {
+	pub enum ChannelAction<AccountId, BlockNumber> {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_id: AccountId,
 			broker_commission_bps: BasisPoints,
+			expiry: BlockNumber,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
+			expiry: BlockNumber,
 		},
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
+			expiry: BlockNumber,
 		},
 	}
 
@@ -202,7 +205,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		ChannelAction<<T as frame_system::Config>::AccountId>,
+		ChannelAction<T::AccountId, T::BlockNumber>,
 		OptionQuery,
 	>;
 
@@ -614,13 +617,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		match ChannelActions::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?
 		{
-			ChannelAction::LiquidityProvision { lp_account } =>
+			ChannelAction::LiquidityProvision { lp_account, .. } =>
 				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			ChannelAction::Swap {
 				destination_address,
 				destination_asset,
 				broker_id,
 				broker_commission_bps,
+				..
 			} => T::SwapDepositHandler::schedule_swap_from_channel(
 				deposit_address.clone().into(),
 				block_height.into(),
@@ -636,6 +640,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				channel_metadata,
+				..
 			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
 				amount.into(),
@@ -678,7 +683,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// May re-use an existing deposit address, depending on chain configuration.
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
-		channel_action: ChannelAction<T::AccountId>,
+		channel_action: ChannelAction<T::AccountId, T::BlockNumber>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -783,14 +788,18 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
-	type AccountId = <T as frame_system::Config>::AccountId;
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
+		expiry: T::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) =
-			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
+		let (channel_id, deposit_address) = Self::open_channel(
+			source_asset,
+			ChannelAction::LiquidityProvision { lp_account, expiry },
+		)?;
 
 		Ok((channel_id, deposit_address.into()))
 	}
@@ -803,6 +812,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		expiry: T::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
@@ -811,12 +821,14 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_asset,
 					destination_address,
 					channel_metadata: msg,
+					expiry,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
 					broker_commission_bps,
 					broker_id,
+					expiry,
 				},
 			},
 		)?;
