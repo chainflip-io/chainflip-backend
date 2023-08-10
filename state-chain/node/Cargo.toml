@@ -37,7 +37,7 @@ clap = { version = "4.2.5", features = ["derive"] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
 
 sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-core = { version = "21.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sc-executor = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sc-network = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sc-service = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
@@ -54,11 +54,11 @@ sc-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", 
 sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sp-consensus-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-runtime = { version = "24.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-io = { version = "23.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sp-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
-sp-keyring = { version = "24.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
+sp-keyring = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08' }
 
