@@ -124,8 +124,7 @@ macro_rules! chain_assets {
 
 			pub type Chain = $chain;
 
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash)]
-			#[derive(Serialize, Deserialize)]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, serde::Serialize, serde::Deserialize)]
 			pub enum Asset {
 				$(
 					$asset,
