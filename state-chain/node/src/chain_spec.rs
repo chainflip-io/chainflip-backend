@@ -87,6 +87,7 @@ pub struct StateChainEnvironment {
 	arb_vault_address: [u8; 20],
 	arbusdc_token_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
+	arb_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
 	arbitrum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
@@ -116,6 +117,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			.try_into()
 			.map_err(|_| "Incorrect length of hex string.".into())
 	}
+	// These env var names need to match what's in the corresponding localnet .env files.
 	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
 	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
@@ -125,6 +127,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
 	from_env_var!(clean_hex_address, ARBUSDC_TOKEN_ADDRESS, arbusdc_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ARBITRUM_CHAIN_ID, arbitrum_chain_id);
@@ -160,6 +163,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		arb_vault_address,
 		arbusdc_token_address,
 		eth_address_checker_address,
+		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		eth_init_agg_key,
@@ -194,6 +198,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		arb_vault_address,
 		arbusdc_token_address,
 		eth_address_checker_address,
+		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		eth_init_agg_key,
@@ -262,6 +267,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					arb_vault_address: arb_vault_address.into(),
 					arbusdc_token_address: arbusdc_token_address.into(),
 					eth_address_checker_address: eth_address_checker_address.into(),
+					arb_address_checker_address: arb_address_checker_address.into(),
 					ethereum_chain_id,
 					arbitrum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
@@ -331,6 +337,7 @@ macro_rules! network_spec {
 					arb_vault_address,
 					arbusdc_token_address,
 					eth_address_checker_address,
+					arb_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
 					eth_init_agg_key,
@@ -393,6 +400,7 @@ macro_rules! network_spec {
 								arb_vault_address: arb_vault_address.into(),
 								arbusdc_token_address: arbusdc_token_address.into(),
 								eth_address_checker_address: eth_address_checker_address.into(),
+								arb_address_checker_address: arb_address_checker_address.into(),
 								ethereum_chain_id,
 								arbitrum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
