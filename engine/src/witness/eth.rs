@@ -49,7 +49,7 @@ where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	let supported_assets: HashMap<H160, cf_primitives::Asset> = state_chain_client
+	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = state_chain_client
 		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
@@ -207,7 +207,7 @@ where
 			vault_address,
 			cf_primitives::Asset::Eth,
 			cf_primitives::ForeignChain::Ethereum,
-			supported_assets,
+			supported_erc20_tokens,
 		)
 		.continuous("Vault".to_string(), db)
 		.logging("Vault")
