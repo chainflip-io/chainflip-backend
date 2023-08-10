@@ -660,7 +660,7 @@ fn testnet_genesis(
 		arbitrum_chain_tracking: ArbitrumChainTrackingConfig {
 			init_chain_state: ChainState::<Arbitrum> {
 				block_height: 0,
-				tracked_data: ArbitrumTrackedData { base_fee: 100000u32.into() },
+				tracked_data: ArbitrumTrackedData { base_fee: 100000000u32.into() },
 			},
 		},
 		polkadot_chain_tracking: PolkadotChainTrackingConfig {
