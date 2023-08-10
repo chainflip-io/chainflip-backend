@@ -528,10 +528,7 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		account_id: &Self::AccountId,
 		amount: Self::Balance,
 	) -> Result<(), DispatchError> {
-		ensure!(
-			amount <= Self::liquid_funds(account_id),
-			DispatchError::from(Error::<T>::InsufficientLiquidity)
-		);
+		ensure!(amount <= Self::liquid_funds(account_id), Error::<T>::InsufficientLiquidity);
 		Self::settle(account_id, Self::deposit_pending_redemption(account_id, amount).into());
 		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 

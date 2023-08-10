@@ -74,11 +74,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		let (awaiting, proposal_count) = <(bool, u32)>::decode(&mut &state[..]).unwrap();
 		ensure!(
 			GovKeyUpdateAwaitingEnactment::<T>::get().is_some() == awaiting,
-			DispatchError::from("GovKeyUpdateAwaitingEnactment migration failed.")
+			"GovKeyUpdateAwaitingEnactment migration failed."
 		);
 		ensure!(
 			Proposals::<T>::iter_keys().count() as u32 == proposal_count,
-			DispatchError::from("Proposals migration failed.")
+			"Proposals migration failed."
 		);
 		Ok(())
 	}

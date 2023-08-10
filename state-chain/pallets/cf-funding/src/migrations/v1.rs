@@ -45,13 +45,10 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				.map_err(|_| "Failed to decode pre-upgrade state.")?;
 		ensure!(
 			num_redemptions == pending_redemptions_accounts.len() as u32,
-			DispatchError::from("Redemptions mismatch!")
+			"Redemptions mismatch!"
 		);
 		for account in pending_redemptions_accounts {
-			ensure!(
-				PendingRedemptions::<T>::get(account).is_some(),
-				DispatchError::from("Missing redemption!")
-			);
+			ensure!(PendingRedemptions::<T>::get(account).is_some(), "Missing redemption!");
 		}
 		Ok(())
 	}
