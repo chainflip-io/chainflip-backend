@@ -5,7 +5,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
-	health, p2p,
+	health, p2p, 
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -15,6 +15,7 @@ use chainflip_engine::{
 		},
 	},
 	witness,
+	metrics,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -27,6 +28,7 @@ use utilities::{
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };
+
 
 lazy_static::lazy_static! {
 	static ref CFE_VERSION: SemVer = SemVer {
@@ -113,6 +115,11 @@ async fn start(
 
 	if let Some(health_check_settings) = &settings.health_check {
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
+	}
+
+	metrics::register_metrics();
+	if let Some(prometheus_metric_settings) = &settings.prometheus_metric {
+		metrics::start(scope, prometheus_metric_settings).await?;
 	}
 
 	let (state_chain_stream, state_chain_client) =

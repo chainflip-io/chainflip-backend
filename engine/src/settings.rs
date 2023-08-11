@@ -98,6 +98,12 @@ pub struct HealthCheck {
 	pub port: Port,
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct PrometheusMetric {
+	pub hostname: String,
+	pub port: Port,
+}
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
@@ -114,6 +120,7 @@ pub struct Settings {
 	pub btc: Btc,
 
 	pub health_check: Option<HealthCheck>,
+	pub prometheus_metric: Option<PrometheusMetric>,
 	pub signing: Signing,
 }
 

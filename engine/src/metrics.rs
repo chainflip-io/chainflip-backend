@@ -1,0 +1,70 @@
+//! Metric monitoring for the CFE
+//! allowing prometheus server to query metrics from the CFE
+//! Returns the metrics encoded in a prometheus format
+//! Method returns a Sender, allowing graceful termination of the infinite loop
+
+use std::net::IpAddr;
+
+use tracing::info;
+use utilities::task_scope;
+use warp::Filter;
+use prometheus::{
+    IntCounter, IntGauge, Registry,
+};
+use crate::settings;
+use lazy_static;
+
+lazy_static::lazy_static! {
+	static ref REGISTRY: Registry = Registry::new();
+	pub static ref METRIC_COUNTER: IntCounter = IntCounter::new("metric1", "help1").expect("Metric succesfully created");
+	pub static ref METRIC_GAUGE: IntGauge = IntGauge::new("metric2", "help2").expect("Metric succesfully created");
+}
+
+
+#[tracing::instrument(name = "prometheus-metric", skip_all)]
+pub async fn start<'a, 'env>(
+	scope: &'a task_scope::Scope<'env, anyhow::Error>,
+	prometheus_metric_settings: &'a settings::PrometheusMetric,
+) -> Result<(), anyhow::Error> {
+	info!("Starting");
+
+	const PATH: &str = "metrics";
+
+	let future =
+		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(move || {
+			metrics_handler()
+		}))
+		.bind((prometheus_metric_settings.hostname.parse::<IpAddr>()?, prometheus_metric_settings.port));
+
+	scope.spawn_weak(async move {
+		future.await;
+		Ok(())
+	});
+
+	Ok(())
+}
+
+
+fn metrics_handler() -> String {
+    use prometheus::Encoder;
+    let encoder = prometheus::TextEncoder::new();
+
+    let mut buffer = Vec::new();
+    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
+        eprintln!("could not encode custom metrics: {}", e);
+    };
+    let res = match String::from_utf8(buffer) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("custom metrics could not be from_utf8'd: {}", e);
+            String::default()
+        }
+    };
+
+    res
+}
+
+pub fn register_metrics() {
+	REGISTRY.register(Box::new(METRIC_COUNTER.clone())).expect("Metric succesfully register");
+	REGISTRY.register(Box::new(METRIC_GAUGE.clone())).expect("Metric succesfully register");
+}
