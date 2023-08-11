@@ -246,10 +246,7 @@ impl<T> PositionError<T> {
 }
 
 #[derive(Debug)]
-pub enum BurnError {
-	/// Position referenced does not contain the requested liquidity
-	PositionLacksLiquidity,
-}
+pub enum BurnError {}
 
 #[derive(Debug)]
 pub enum CollectError {}
@@ -654,31 +651,36 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				price,
 				self.fee_hundredth_pips,
 			);
-			let mut position =
-				option_position.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
-			let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing.
+			Ok(if let Some(mut position) = option_position {
+				let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing before collect.
 
-			position.amount = position
-				.amount
-				.checked_sub(amount)
-				.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
-			fixed_pool.available -= amount;
+				let amount = core::cmp::min(position.amount, amount);
+				position.amount -= amount;
+				fixed_pool.available -= amount;
 
-			let post_operation_position_existence = if position.amount.is_zero() {
+				let post_operation_position_existence = if position.amount.is_zero() {
+					positions.remove(&(sqrt_price, lp.clone()));
+					PostOperationPositionExistence::DoesNotExist
+				} else {
+					assert!(!fixed_pool.available.is_zero());
+					positions.insert((sqrt_price, lp.clone()), position);
+					PostOperationPositionExistence::Exists
+				};
+				if fixed_pool.available.is_zero() {
+					fixed_pools.remove(&sqrt_price);
+				} else {
+					fixed_pools.insert(sqrt_price, fixed_pool);
+				}
+
+				(amount, collected_amounts, post_operation_position_existence)
+			} else {
 				positions.remove(&(sqrt_price, lp.clone()));
-				PostOperationPositionExistence::DoesNotExist
-			} else {
-				assert!(!fixed_pool.available.is_zero());
-				positions.insert((sqrt_price, lp.clone()), position);
-				PostOperationPositionExistence::Exists
-			};
-			if fixed_pool.available.is_zero() {
-				fixed_pools.remove(&sqrt_price);
-			} else {
-				fixed_pools.insert(sqrt_price, fixed_pool);
-			}
-
-			Ok((amount, collected_amounts, post_operation_position_existence))
+				(
+					Default::default(),
+					collected_amounts,
+					PostOperationPositionExistence::DoesNotExist,
+				)
+			})
 		}
 	}
 
