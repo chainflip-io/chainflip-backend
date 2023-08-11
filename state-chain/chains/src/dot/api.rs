@@ -1,7 +1,10 @@
 pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
-use super::{PolkadotAccountId, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
+use super::{
+	PolkadotAccountId, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion,
+	POLKADOT_EXISTENTIAL_DEPOSIT_AMOUNT,
+};
 use crate::{dot::Polkadot, *};
 use frame_support::{traits::Get, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -66,7 +69,12 @@ where
 		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
 			E::replay_protection(),
 			fetch_params,
-			transfer_params,
+			transfer_params
+				.into_iter()
+				.filter(|transfer_params| {
+					transfer_params.amount > POLKADOT_EXISTENTIAL_DEPOSIT_AMOUNT
+				})
+				.collect::<Vec<_>>(),
 			E::try_vault_account().ok_or(AllBatchError::Other)?,
 		)))
 	}

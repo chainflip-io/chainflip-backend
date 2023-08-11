@@ -25,6 +25,8 @@ use sp_runtime::{
 	AccountId32, MultiAddress, MultiSignature,
 };
 
+pub const POLKADOT_EXISTENTIAL_DEPOSIT_AMOUNT: PolkadotBalance = 10_000_000_000; //1 DOT
+
 #[cfg_attr(feature = "std", derive(Hash))]
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotSignature(sr25519::Signature);
