@@ -51,9 +51,22 @@ async function testGetPools() {
 }
 
 async function testAssetBalances() {
-  const balances = await lpApiRpc(`lp_assetBalances`, []);
-  if (balances.Eth < parseInt(amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH))) {
-    throw new Error(`Not enough Eth for test. balances: ${JSON.stringify(balances)}`);
+  let balances = await lpApiRpc(`lp_assetBalances`, []);
+  const fineAmountNeeded = parseInt(
+    amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH),
+  );
+
+  // Wait for the balance to update
+  let retryCount = 0;
+  while (balances.Eth < fineAmountNeeded) {
+    retryCount++;
+    if (retryCount > 10) {
+      throw new Error(
+        `Not enough Eth for test (${fineAmountNeeded}). balances: ${JSON.stringify(balances)}`,
+      );
+    }
+    await sleep(1000);
+    balances = await lpApiRpc(`lp_assetBalances`, []);
   }
 }
 
@@ -224,8 +237,6 @@ export async function testLpApi() {
 
   // We have to wait finalization here because the LP API server is using a finalized block stream
   await provideLiquidity('ETH', totalEthNeeded, true);
-  // A small delay to make sure the LP API server has processed the finalized block
-  await sleep(1000);
 
   // Check that we have enough eth to do the rest of the tests
   await testAssetBalances();
