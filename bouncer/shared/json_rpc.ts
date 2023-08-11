@@ -4,9 +4,7 @@ export async function jsonRpc(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any[],
   port: number,
-  throwError = true,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
+): Promise<JSON> {
   console.log('Sending json RPC', method);
 
   id++;
@@ -26,11 +24,7 @@ export async function jsonRpc(
 
   const data = await response.json();
   if (data.error) {
-    if (throwError) {
-      throw new Error(`${method} failed: ${data.error.message}`);
-    } else {
-      return data.error;
-    }
+    throw new Error(`${method} failed: ${data.error.message}`);
   } else {
     return data.result;
   }

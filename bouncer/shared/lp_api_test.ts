@@ -7,6 +7,7 @@ import {
   isValidHexHash,
   isValidEthAddress,
   amountToFineAmount,
+  sleep,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -21,16 +22,16 @@ const testEthAmount = 0.1;
 const withdrawAssetAmount = parseInt(
   amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH),
 );
-const mintAssetAmount = parseInt(amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH));
+const mintAssetAmount = withdrawAssetAmount;
 const totalEthNeeded = testEthAmount * 3;
 const chainflip = await getChainflipApi();
 const ethAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function lpApiRpc(method: string, params: any[], throwError = true): Promise<any> {
+async function lpApiRpc(method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `start_lp_api.sh`
   const port = 10589;
-  return jsonRpc(method, params, port, throwError);
+  return jsonRpc(method, params, port);
 }
 
 async function testGetPools() {
@@ -51,7 +52,7 @@ async function testGetPools() {
 
 async function testAssetBalances() {
   const balances = await lpApiRpc(`lp_assetBalances`, []);
-  if (balances.Eth < amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH)) {
+  if (balances.Eth < parseInt(amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH))) {
     throw new Error(`Not enough Eth for test. balances: ${JSON.stringify(balances)}`);
   }
 }
@@ -63,7 +64,10 @@ async function testRegisterEmergencyWithdrawalAddress() {
     (event) => event.data.address.Eth === ethAddress,
   );
 
-  const registerEwa = lpApiRpc(`lp_registerEmergencyWithdrawalAddress`, ['Ethereum', ethAddress]);
+  const registerEwa = await lpApiRpc(`lp_registerEmergencyWithdrawalAddress`, [
+    'Ethereum',
+    ethAddress,
+  ]);
   if (!isValidHexHash(await registerEwa)) {
     throw new Error(`Unexpected lp_registerEmergencyWithdrawalAddress result`);
   }
@@ -75,10 +79,9 @@ async function testLiquidityDeposit() {
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
   );
-  const liquidityDeposit = lpApiRpc(`lp_liquidityDeposit`, ['Eth']);
-
+  const liquidityDepositResult = await lpApiRpc(`lp_liquidityDeposit`, ['Eth']);
   const liquidityDepositEvent = await observeLiquidityDepositEvent;
-  const liquidityDepositResult = await liquidityDeposit;
+
   assert.strictEqual(
     liquidityDepositEvent.data.depositAddress.Eth,
     liquidityDepositResult,
@@ -91,31 +94,36 @@ async function testLiquidityDeposit() {
 }
 
 async function testWithdrawAsset() {
-  const withdrawAsset = lpApiRpc(`lp_withdrawAsset`, [withdrawAssetAmount, 'Eth', ethAddress]);
-  const withdrawAssetResult = await withdrawAsset;
-  assert.strictEqual(withdrawAssetResult[0], 'Ethereum', `Unexpected withdraw result`);
-  const egressId = withdrawAssetResult[1];
-  assert(egressId > 0, `Unexpected withdraw result ${withdrawAssetResult}`);
+  const withdrawAsset = await lpApiRpc(`lp_withdrawAsset`, [
+    withdrawAssetAmount,
+    'Eth',
+    ethAddress,
+  ]);
+  assert.strictEqual(withdrawAsset[0], 'Ethereum', `Unexpected withdraw asset result`);
+  const egressId = withdrawAsset[1];
+  assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 }
 
 async function testRegisterAccount() {
-  const registerAccount = lpApiRpc(`lp_registerAccount`, [], false);
-
-  // This account is already registered, so the command will fail.
-  assert.strictEqual(
-    (await registerAccount).message,
-    'Could not register account role for account',
-    `Unexpected register account result`,
-  );
+  try {
+    await lpApiRpc(`lp_registerAccount`, []);
+    throw new Error(`Unexpected lp_registerAccount result`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    // This account is already registered, so the command will fail.
+    if (!error.message.includes('Could not register account role for account')) {
+      throw new Error(`Unexpected lp_registerAccount error: ${JSON.stringify(error)}`);
+    }
+  }
 }
 
 async function testRangeOrder() {
   const lowerTick = 1;
   const upperTick = 2;
 
-  // Check the range order doesn't already exist
-  const ExistingRangeOrders = await lpApiRpc(`lp_getRangeOrders`, []);
-  const existingTestRangeOrder = ExistingRangeOrders.Eth.find(
+  // Cleanup after any unfinished previous test so it does not interfere with this test
+  const existingRangeOrders = await lpApiRpc(`lp_getRangeOrders`, []);
+  const existingTestRangeOrder = existingRangeOrders.Eth.find(
     (rangeOrder: RangeOrder) =>
       rangeOrder.lower_tick === lowerTick && rangeOrder.upper_tick === upperTick,
   );
@@ -129,7 +137,8 @@ async function testRangeOrder() {
     ]);
   }
 
-  const mintRangeOrder = lpApiRpc(`lp_mintRangeOrder`, [
+  // Mint a range order
+  const mintRangeOrder = await lpApiRpc(`lp_mintRangeOrder`, [
     'Eth',
     lowerTick,
     upperTick,
@@ -142,7 +151,7 @@ async function testRangeOrder() {
   ]);
 
   assert.strictEqual(
-    (await mintRangeOrder).assets_debited.zero,
+    mintRangeOrder.assets_debited.zero,
     mintAssetAmount,
     `Unexpected mint range order result`,
   );
@@ -156,14 +165,15 @@ async function testRangeOrder() {
     throw new Error(`Did not find minted range order ${JSON.stringify(rangeOrders.Eth)}`);
   }
 
-  const burnRangeOrder = lpApiRpc(`lp_burnRangeOrder`, [
+  // Burn the range order
+  const burnRangeOrder = await lpApiRpc(`lp_burnRangeOrder`, [
     'Eth',
     lowerTick,
     upperTick,
     rangeOrder.liquidity,
   ]);
   assert.strictEqual(
-    (await burnRangeOrder).assets_credited.zero,
+    burnRangeOrder.assets_credited.zero,
     mintAssetAmount,
     `Unexpected burn range order result`,
   );
@@ -181,17 +191,27 @@ async function testRangeOrder() {
 
 async function testLimitOrder() {
   const price = 2;
-  const mintLimitOrder = lpApiRpc(`lp_mintLimitOrder`, ['Eth', 'Sell', price, mintAssetAmount]);
+  const mintLimitOrder = await lpApiRpc(`lp_mintLimitOrder`, [
+    'Eth',
+    'Sell',
+    price,
+    mintAssetAmount,
+  ]);
 
   assert.strictEqual(
-    (await mintLimitOrder).assets_debited,
+    mintLimitOrder.assets_debited,
     mintAssetAmount,
     `Unexpected mint limit order result`,
   );
 
-  const burnLimitOrder = lpApiRpc(`lp_burnLimitOrder`, ['Eth', 'Sell', price, mintAssetAmount]);
+  const burnLimitOrder = await lpApiRpc(`lp_burnLimitOrder`, [
+    'Eth',
+    'Sell',
+    price,
+    mintAssetAmount,
+  ]);
   assert.strictEqual(
-    (await burnLimitOrder).assets_credited,
+    burnLimitOrder.assets_credited,
     mintAssetAmount,
     `Unexpected burn limit order result`,
   );
@@ -204,6 +224,8 @@ export async function testLpApi() {
 
   // We have to wait finalization here because the LP API server is using a finalized block stream
   await provideLiquidity('ETH', totalEthNeeded, true);
+  // A small delay to make sure the LP API server has processed the finalized block
+  await sleep(1000);
 
   // Check that we have enough eth to do the rest of the tests
   await testAssetBalances();
