@@ -115,7 +115,7 @@ pub mod pallet {
 			if T::SafeMode::get().witness_calls_enabled &&
 				WitnessedCallsScheduledForDispatch::<T>::exists()
 			{
-				let _ = WitnessedCallsScheduledForDispatch::<T>::take().unwrap().into_iter().map(
+				WitnessedCallsScheduledForDispatch::<T>::take().unwrap().into_iter().for_each(
 					|(witnessed_at_epoch, call, call_hash)| {
 						Self::dispatch_call(
 							witnessed_at_epoch,

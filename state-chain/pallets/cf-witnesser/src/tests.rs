@@ -3,10 +3,11 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	weights::WeightInfo,
-	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, VoteMask, Votes,
+	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, PalletSafeMode,
+	VoteMask, Votes, WitnessedCallsScheduledForDispatch,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochInfo, EpochTransitionHandler, SafeMode, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -318,5 +319,51 @@ fn can_purge_stale_storage() {
 		assert_eq!(ExtraCallData::<Test>::get(11u32, call2), Some(vec![vec![0], vec![11]]));
 		assert_eq!(CallHashExecuted::<Test>::get(11u32, call1), Some(()));
 		assert_eq!(CallHashExecuted::<Test>::get(11u32, call2), Some(()));
+	});
+}
+
+#[test]
+fn test_safe_mode() {
+	new_test_ext().execute_with(|| {
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CODE_RED,
+		});
+
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
+
+		// Only one vote, nothing should happen yet.
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(ALISSA),
+			call.clone(),
+			current_epoch
+		));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+
+		// Vote again, we should reach the threshold but not dispatch the call.
+		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(BOBSON), call, current_epoch));
+
+		// the call should not be dispatched
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+
+		//the call should be stored for dispatching later when safe mode is deactivated.
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_some());
+
+		Witnesser::on_initialize(1);
+
+		// the call is still not dispatched and we do nothing in the on_initialize since we are
+		// still in safe mode
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_some());
+
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CODE_GREEN,
+		});
+
+		// the call should now dispatch since we now deactivated the safe mode.
+		Witnesser::on_initialize(2);
+
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_none());
+
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});
 }
