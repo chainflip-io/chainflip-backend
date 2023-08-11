@@ -31,8 +31,8 @@ use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
-	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	Amount, OneToZero, PostOperationPositionExistence, Side, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -538,7 +538,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<(SideMap<Amount>, CollectedFees), PositionError<BurnError>> {
+	) -> Result<
+		(SideMap<Amount>, CollectedFees, PostOperationPositionExistence),
+		PositionError<BurnError>,
+	> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
@@ -587,19 +590,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_delta;
 				}
 
-				if position.liquidity == 0 {
+				let post_operation_position_existence = if position.liquidity == 0 {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
 					// exists its ticks also exist in the liquidity_map, by removing zero liquidity
 					// positions
 					self.positions.remove(&(lp.clone(), lower_tick, upper_tick));
+					PostOperationPositionExistence::DoesNotExist
 				} else {
 					*self.positions.get_mut(&(lp.clone(), lower_tick, upper_tick)).unwrap() =
 						position;
-				}
+					PostOperationPositionExistence::Exists
+				};
 
 				// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
 				// owed in the position, instead it is returned here.
-				Ok((amounts_owed, collected_fees))
+				Ok((amounts_owed, collected_fees, post_operation_position_existence))
 			} else {
 				Err(PositionError::Other(BurnError::PositionLacksLiquidity))
 			}
