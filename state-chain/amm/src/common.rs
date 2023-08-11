@@ -47,6 +47,7 @@ pub struct OrderValidity<BlockNumber> {
 }
 
 impl<BlockNumber> OrderValidity<BlockNumber> {
+	/// Creates a new order validity with the given validity window and expiration block number.
 	pub fn new(valid_until: BlockNumber, open_after: BlockNumber, open_until: BlockNumber) -> Self {
 		Self { valid_at: ValidityWindow { open_after, open_until }, valid_until }
 	}

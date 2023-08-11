@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+use crate::range_orders::Liquidity;
 use cf_amm::{
 	common::{OneToZero, OrderValidity, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne},
 	limit_orders,
@@ -68,16 +69,23 @@ pub mod pallet {
 		pub unstable_asset: any::Asset,
 		pub price_range_in_ticks: core::ops::Range<Tick>,
 		pub order_size: RangeOrderSize,
+		pub liquidity: Option<Liquidity>,
 	}
 
 	// TODO: add needed fields to this struct for mint/burn.
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct LimitOrderDetails {}
+	pub struct LimitOrderDetails<AccountId> {
+		pub lp: AccountId,
+		pub unstable_asset: any::Asset,
+		pub order: Order,
+		pub price_as_tick: Tick,
+		pub amount: AssetAmount,
+	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub enum RangeOrLimitOrderDetails<AccountId> {
 		RangeOrder(RangeOrderDetails<AccountId>),
-		LimitOrder(LimitOrderDetails),
+		LimitOrder(LimitOrderDetails<AccountId>),
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
@@ -187,6 +195,50 @@ pub mod pallet {
 					}) {
 						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
 					}
+				}
+			}
+			if let Some(order) = OrderQueue::<T>::take(current_block) {
+				match order.lifetime {
+					// Order gets activated.
+					Lifetime::Activate => match order.details {
+						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
+							let _ = Self::collect_and_mint_range_order_inner(
+								range_order.lp,
+								range_order.unstable_asset,
+								range_order.price_range_in_ticks,
+								range_order.order_size,
+							);
+						},
+						RangeOrLimitOrderDetails::LimitOrder(limit_order) => {
+							let _ = Self::collect_and_mint_limit_order_inner(
+								limit_order.lp,
+								limit_order.unstable_asset,
+								limit_order.order,
+								limit_order.price_as_tick,
+								limit_order.amount,
+							);
+						},
+					},
+					// Order runs out of
+					Lifetime::Deactivate => match order.details {
+						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
+							let _ = Self::collect_and_burn_range_order_inner(
+								range_order.lp,
+								range_order.unstable_asset,
+								range_order.price_range_in_ticks,
+								range_order.liquidity.unwrap(),
+							);
+						},
+						RangeOrLimitOrderDetails::LimitOrder(limit_order) => {
+							let _ = Self::collect_and_burn_limit_order_inner(
+								limit_order.lp,
+								limit_order.unstable_asset,
+								limit_order.order,
+								limit_order.price_as_tick,
+								limit_order.amount,
+							);
+						},
+					},
 				}
 			}
 			weight_used
@@ -463,6 +515,7 @@ pub mod pallet {
 							unstable_asset,
 							price_range_in_ticks,
 							order_size,
+							liquidity: None,
 						}),
 					},
 				);
@@ -583,7 +636,13 @@ pub mod pallet {
 					gets_active_at,
 					OrderDetails {
 						lifetime: Lifetime::Activate,
-						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {}),
+						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {
+							lp,
+							unstable_asset,
+							order,
+							price_as_tick,
+							amount,
+						}),
 					},
 				);
 				Ok(())
@@ -620,43 +679,13 @@ pub mod pallet {
 				Error::<T>::BurningLimitOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let side = utilities::order_to_side(order);
-
-				let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }) =
-					(match side {
-						Side::Zero =>
-							cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
-						Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
-					})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
-					.map_err(|e| match e {
-						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-						limit_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist,
-						limit_orders::PositionError::Other(
-							limit_orders::BurnError::PositionLacksLiquidity,
-						) => Error::<T>::PositionLacksLiquidity,
-					})?;
-
-				let collected_fees =
-					Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
-				let swapped_liquidity =
-					Self::try_credit_single_asset(&lp, unstable_asset, !side, swapped_liquidity)?;
-				let assets_credited =
-					Self::try_credit_single_asset(&lp, unstable_asset, side, assets_credited)?;
-
-				Self::deposit_event(Event::<T>::LimitOrderBurned {
-					lp,
-					unstable_asset,
-					order,
-					price_as_tick,
-					assets_credited,
-					collected_fees,
-					swapped_liquidity,
-				});
-
-				Ok(())
-			})
+			Self::collect_and_burn_limit_order_inner(
+				lp,
+				unstable_asset,
+				order,
+				price_as_tick,
+				amount,
+			)
 		}
 	}
 }
@@ -715,6 +744,58 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn collect_and_burn_range_order_inner(
+		lp: T::AccountId,
+		unstable_asset: any::Asset,
+		price_range_in_ticks: core::ops::Range<Tick>,
+		liquidity: Liquidity,
+	) -> DispatchResult {
+		todo!()
+	}
+
+	pub fn collect_and_burn_limit_order_inner(
+		lp: T::AccountId,
+		unstable_asset: any::Asset,
+		order: Order,
+		price_as_tick: Tick,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+			let side = utilities::order_to_side(order);
+
+			let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }) =
+				(match side {
+					Side::Zero => cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
+					Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
+				})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
+				.map_err(|e| match e {
+					limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
+					limit_orders::PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
+					limit_orders::PositionError::Other(
+						limit_orders::BurnError::PositionLacksLiquidity,
+					) => Error::<T>::PositionLacksLiquidity,
+				})?;
+
+			let collected_fees = Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
+			let swapped_liquidity =
+				Self::try_credit_single_asset(&lp, unstable_asset, !side, swapped_liquidity)?;
+			let assets_credited =
+				Self::try_credit_single_asset(&lp, unstable_asset, side, assets_credited)?;
+
+			Self::deposit_event(Event::<T>::LimitOrderBurned {
+				lp,
+				unstable_asset,
+				order,
+				price_as_tick,
+				assets_credited,
+				collected_fees,
+				swapped_liquidity,
+			});
+
+			Ok(())
+		})
+	}
+
 	pub fn collect_and_mint_range_order_inner(
 		lp: T::AccountId,
 		unstable_asset: any::Asset,
