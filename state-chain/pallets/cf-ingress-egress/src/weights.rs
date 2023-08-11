@@ -34,6 +34,7 @@ pub trait WeightInfo {
 	fn process_single_deposit() -> Weight;
 	fn set_minimum_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
+	fn vault_transfer_failed() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -60,7 +61,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 	fn set_minimum_deposit() -> Weight{
 		Weight::from_ref_time(1_000_000)
-} 
+	} 
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {
@@ -69,6 +70,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			// Standard Error: 4_207
 			.saturating_add(Weight::from_ref_time(1_981_649).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
+	}
+
+	fn vault_transfer_failed() -> Weight {
+		Weight::from_ref_time(1_000_000)
 	}
 }
 
@@ -95,7 +100,7 @@ impl WeightInfo for () {
 
 	fn set_minimum_deposit() -> Weight{
 		Weight::from_ref_time(1_000_000)
-}
+	}
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {
@@ -104,5 +109,9 @@ impl WeightInfo for () {
 			// Standard Error: 4_207
 			.saturating_add(Weight::from_ref_time(1_981_649).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
+	}
+	
+	fn vault_transfer_failed() -> Weight {
+		Weight::from_ref_time(1_000_000)
 	}
 }

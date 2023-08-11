@@ -259,6 +259,9 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
 	/// Stores any failed transfers by the Vault contract.
+	/// Without dealing with the underlying reason for the failure, retrying is unlike to succeed.
+	/// Therefore these calls are stored here, until we can react to the reason for failure and
+	/// respond appropriately.
 	#[pallet::storage]
 	pub type FailedVaultTransfers<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
@@ -440,7 +443,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [on_sucess](Event::MinimumDepositSet)
+		/// - [on_success](Event::MinimumDepositSet)
 		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
 		pub fn set_minimum_deposit(
 			origin: OriginFor<T>,
@@ -460,8 +463,8 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [on_sucess](Event::VaultTransferFailed)
-		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
+		/// - [on_success](Event::VaultTransferFailed)
+		#[pallet::weight(T::WeightInfo::vault_transfer_failed())]
 		pub fn vault_transfer_failed(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
