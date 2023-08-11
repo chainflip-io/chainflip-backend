@@ -1,6 +1,6 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
+	common::{sqrt_price_at_tick, OrderValidity, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -89,11 +89,13 @@ fn mint_range_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
+	let order_validity = OrderValidity::<u32>::new(1, 1, 1);
 	assert_ok!(LiquidityPools::collect_and_mint_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
 		range,
 		RangeOrderSize::Liquidity(liquidity),
+		order_validity,
 	));
 	let new_unstable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
@@ -135,12 +137,14 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
+	let order_validity = OrderValidity::<u32>::new(1, 1, 1);
 	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
 		order,
 		tick,
 		amount,
+		order_validity,
 	));
 	let new_unstable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();

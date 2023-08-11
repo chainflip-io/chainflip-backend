@@ -192,7 +192,7 @@ pub async fn mint_range_order(
 	asset: Asset,
 	range: Range<Tick>,
 	order_size: RangeOrderSize,
-	validity: OrderValidity,
+	validity: OrderValidity<u32>,
 ) -> Result<MintRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
@@ -314,7 +314,7 @@ pub async fn mint_limit_order(
 	order: BuyOrSellOrder,
 	price: Tick,
 	amount: AssetAmount,
-	validity: OrderValidity,
+	validity: OrderValidity<u32>,
 ) -> Result<MintLimitOrderReturn> {
 	task_scope(|scope| {
 		async {

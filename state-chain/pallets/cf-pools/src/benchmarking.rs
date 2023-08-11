@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::common::{sqrt_price_at_tick, BlockOrTimestamp::Block, OrderValidity, ValidityWindow};
+use cf_amm::common::{sqrt_price_at_tick, OrderValidity, ValidityWindow};
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -19,11 +19,6 @@ fn new_lp_account<T: Chainflip>() -> T::AccountId {
 	T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 	caller
 }
-
-const ORDER_VALIDITY: OrderValidity = OrderValidity {
-	valid_at: ValidityWindow { open_after: Block(0), open_until: Block(100) },
-	valid_until: Block(100),
-};
 
 benchmarks! {
 	update_buy_interval {
@@ -82,7 +77,7 @@ benchmarks! {
 				desired: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([500_000, 500_000]),
 			},
-			ORDER_VALIDITY
+			OrderValidity::<T::BlockNumber>::new(T::BlockNumber::one(), T::BlockNumber::one(), T::BlockNumber::one())
 	)
 	verify {}
 
@@ -104,7 +99,7 @@ benchmarks! {
 			Asset::Eth,
 			-100..100,
 			RangeOrderSize::Liquidity(1_000),
-			ORDER_VALIDITY,
+			OrderValidity::<T::BlockNumber>::new(T::BlockNumber::one(), T::BlockNumber::one(), T::BlockNumber::one())
 		));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000)
 	verify {}
@@ -122,7 +117,7 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000, ORDER_VALIDITY)
+	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000, OrderValidity::<T::BlockNumber>::new(T::BlockNumber::one(), T::BlockNumber::one(), T::BlockNumber::one()))
 	verify {}
 
 	collect_and_burn_limit_order {
@@ -138,7 +133,7 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, ORDER_VALIDITY));
+		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, OrderValidity::<T::BlockNumber>::new(T::BlockNumber::one(), T::BlockNumber::one(), T::BlockNumber::one())));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
 	verify {}
 

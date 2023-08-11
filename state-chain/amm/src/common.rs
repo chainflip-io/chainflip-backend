@@ -1,4 +1,5 @@
-use codec::{Decode, Encode, MaxEncodedLen};
+use cf_primitives::BlockNumber;
+use codec::{Decode, Encode, MaxEncodedLen, WrapperTypeDecode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -30,25 +31,42 @@ impl core::ops::Not for Side {
 
 #[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ValidityWindow {
+pub struct ValidityWindow<BlockNumber> {
 	// Could be Option or we could just use MIN/MAX as defaults.
-	pub open_after: BlockOrTimestamp,
-	pub open_until: BlockOrTimestamp,
+	pub open_after: BlockNumber,
+	pub open_until: BlockNumber,
 }
 
+/// This is the actual type we use to determine if an order is valid.
+/// We can extend this later on with Price/Quantity constraints.
 #[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum BlockOrTimestamp {
-	Block(u64),
+pub struct OrderValidity<BlockNumber> {
+	pub valid_at: ValidityWindow<BlockNumber>,
+	pub valid_until: BlockNumber,
 }
 
-// This is the actual type we use to determine if an order is valid.
-// We can extend this later on with Price/Quantity constraints.
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct OrderValidity {
-	pub valid_at: ValidityWindow,
-	pub valid_until: BlockOrTimestamp,
+impl<BlockNumber> OrderValidity<BlockNumber> {
+	pub fn new(valid_until: BlockNumber, open_after: BlockNumber, open_until: BlockNumber) -> Self {
+		Self { valid_at: ValidityWindow { open_after, open_until }, valid_until }
+	}
+	/// Returns true if the order is expired what means that it already passed the defined creation
+	/// window.
+	pub fn is_expired(&self, block_number: BlockNumber) -> bool {
+		false
+	}
+	/// Returns true if the order is valid and can go immediately live.
+	pub fn is_valid(&self, block_number: BlockNumber) -> bool {
+		true
+	}
+	/// Returns the block number at which the order gets valid.
+	pub fn gets_valid_at(&self) -> BlockNumber {
+		todo!()
+	}
+	/// Returns the block number at which the order expires.
+	pub fn is_valid_until(&self) -> BlockNumber {
+		todo!()
+	}
 }
 
 #[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]

@@ -121,7 +121,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		order_size: rpc_types::RangeOrderSize,
-		validity: OrderValidity,
+		validity: OrderValidity<u32>,
 	) -> Result<MintRangeOrderReturn, Error>;
 
 	#[method(name = "burnRangeOrder")]
@@ -140,7 +140,7 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-		validity: OrderValidity,
+		validity: OrderValidity<u32>,
 	) -> Result<MintLimitOrderReturn, Error>;
 
 	#[method(name = "burnLimitOrder")]
@@ -247,7 +247,7 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		order_size: rpc_types::RangeOrderSize,
-		validity: OrderValidity,
+		validity: OrderValidity<u32>,
 	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
 			return Err(anyhow!("Invalid tick range").into())
@@ -293,7 +293,7 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-		validity: OrderValidity,
+		validity: OrderValidity<u32>,
 	) -> Result<MintLimitOrderReturn, Error> {
 		Ok(lp::mint_limit_order(
 			&self.state_chain_settings,
