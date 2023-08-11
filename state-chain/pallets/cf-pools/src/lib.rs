@@ -177,8 +177,6 @@ pub mod pallet {
 		InvalidTick,
 		/// One of the referenced ticks reached its maximum gross liquidity
 		MaximumGrossLiquidity,
-		/// User's position does not have enough liquidity.
-		PositionLacksLiquidity,
 		/// The user's position does not exist.
 		PositionDoesNotExist,
 		/// It is no longer possible to mint limit orders due to reaching the maximum pool
@@ -505,7 +503,6 @@ pub mod pallet {
 		/// - [PoolDisabled](pallet_cf_pools::Error::PoolDisabled)
 		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
-		/// - [PositionLacksLiquidity](pallet_cf_pools::Error::PositionLacksLiquidity)
 		/// - [BurningRangeOrderDisabled](pallet_cf_lp::Error::BurningRangeOrderDisabled)
 		#[pallet::weight(T::WeightInfo::collect_and_burn_range_order())]
 		pub fn collect_and_burn_range_order(
@@ -520,7 +517,7 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
+				let (assets_withdrawn, range_orders::CollectedFees { fees }, _) = pool_state
 					.range_orders
 					.collect_and_burn(
 						&lp,
@@ -533,9 +530,7 @@ pub mod pallet {
 							Error::<T>::InvalidTickRange,
 						range_orders::PositionError::NonExistent =>
 							Error::<T>::PositionDoesNotExist,
-						range_orders::PositionError::Other(
-							range_orders::BurnError::PositionLacksLiquidity,
-						) => Error::<T>::PositionLacksLiquidity,
+						range_orders::PositionError::Other(e) => match e {},
 					})?;
 
 				let assets_credited =
@@ -590,7 +585,7 @@ pub mod pallet {
 
 				Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
-				let limit_orders::CollectedAmounts { fees, swapped_liquidity } =
+				let (limit_orders::CollectedAmounts { fees, swapped_liquidity }, _) =
 					(match side {
 						Side::Zero =>
 							cf_amm::limit_orders::PoolState::collect_and_mint::<OneToZero>,
@@ -642,7 +637,6 @@ pub mod pallet {
 		/// - [PoolDisabled](pallet_cf_pools::Error::PoolDisabled)
 		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
-		/// - [PositionLacksLiquidity](pallet_cf_pools::Error::PositionLacksLiquidity)
 		/// - [BurningLimitOrderDisabled](pallet_cf_lp::Error::BurningLimitOrderDisabled)
 		#[pallet::weight(T::WeightInfo::collect_and_burn_limit_order())]
 		pub fn collect_and_burn_limit_order(
@@ -660,20 +654,19 @@ pub mod pallet {
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 				let side = utilities::order_to_side(order);
 
-				let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }) =
-					(match side {
-						Side::Zero =>
-							cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
-						Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
-					})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
-					.map_err(|e| match e {
-						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-						limit_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist,
-						limit_orders::PositionError::Other(
-							limit_orders::BurnError::PositionLacksLiquidity,
-						) => Error::<T>::PositionLacksLiquidity,
-					})?;
+				let (
+					assets_credited,
+					limit_orders::CollectedAmounts { fees, swapped_liquidity },
+					_,
+				) = (match side {
+					Side::Zero => cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
+					Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
+				})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
+				.map_err(|e| match e {
+					limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
+					limit_orders::PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
+					limit_orders::PositionError::Other(e) => match e {},
+				})?;
 
 				let collected_fees =
 					Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
