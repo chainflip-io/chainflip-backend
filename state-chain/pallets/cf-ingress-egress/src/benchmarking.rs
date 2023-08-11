@@ -71,5 +71,18 @@ benchmarks_instance_pallet! {
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 
+	vault_transfer_failed {
+		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let asset: TargetChainAsset<T, I> = BenchmarkValue::benchmark_value();
+		let amount: TargetChainAmount<T, I> = BenchmarkValue::benchmark_value();
+		let destination_address: TargetChainAccount<T, I> = BenchmarkValue::benchmark_value();
+	}: { let _ = Pallet::<T, I>::vault_transfer_failed(origin, asset, amount, destination_address.clone()); }
+	verify {
+		assert_eq!(FailedVaultTransfers::<T, I>::get(),
+		vec![VaultTransfer {
+			asset, amount, destination_address,
+		}]);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
