@@ -78,13 +78,11 @@ where
 
 	let supported_arb_erc20_assets: HashMap<cf_primitives::chains::assets::arb::Asset, H160> =
 		state_chain_client
-			.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>>(
+			.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>, _>(
 				state_chain_client.latest_finalized_hash(),
 			)
 			.await
-			.context("Failed to fetch Arbitrum supported assets")?
-			.into_iter()
-			.collect();
+			.context("Failed to fetch Arbitrum supported assets")?;
 
 	let usdc_contract_address = *supported_arb_erc20_assets
 		.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
