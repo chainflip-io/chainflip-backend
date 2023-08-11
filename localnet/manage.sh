@@ -3,6 +3,8 @@
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
+INITIAL_CONTAINERS="bitcoin geth polkadot redis"
+ARB_CONTAINERS="sequencer staker-unsafe poster"
 
 source ./localnet/helper.sh
 
@@ -71,17 +73,28 @@ build-localnet() {
     fi
   done
 
+  if ! which wscat > /dev/null; then
+      echo "wscat is not installed. Installing now..."
+      npm install -g wscat
+  else
+      echo "wscat is already installed."
+  fi
+
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up -d $additional_docker_compose_up_args
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
 
   echo "💎 Waiting for ETH node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🦑 Starting Arbitrum ..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
@@ -100,7 +113,7 @@ build-localnet() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "Engine is running!"
           break
       fi
       sleep 1
@@ -125,16 +138,20 @@ build-localnet-in-ci() {
   done
 
   echo "🏗 Building network"
-  docker compose -f ./localnet/docker-compose.yml -p "chainflip-localnet" up -d $additional_docker_compose_up_args
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
-  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
+  check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
 
   echo "💎 Waiting for ETH node to start"
-  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🦑 Starting Arbitrum ..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
@@ -152,7 +169,7 @@ build-localnet-in-ci() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "Engine is running!"
           break
       fi
       sleep 1
