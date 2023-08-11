@@ -76,24 +76,25 @@ where
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
-	let usdc_contract_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-			&cf_primitives::chains::assets::arb::Asset::ArbUsdc,
-		)
-		.await
-		.expect(STATE_CHAIN_CONNECTION)
-		.with_context(|| "EthereumSupportedAssets does not include USDC")?;
+	let supported_arb_erc20_assets: HashMap<cf_primitives::chains::assets::arb::Asset, H160> =
+		state_chain_client
+			.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>>(
+				state_chain_client.latest_finalized_hash(),
+			)
+			.await
+			.context("Failed to fetch Arbitrum supported assets")?
+			.into_iter()
+			.collect();
 
-	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> = state_chain_client
-		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-		)
-		.await
-		.context("Failed to fetch Ethereum supported assets")?
-		.into_iter()
-		.map(|(asset, address)| (address, asset.into()))
-		.collect();
+	let usdc_contract_address = *supported_arb_erc20_assets
+		.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
+		.context("ArbitrumSupportedAssets does not include USDC")?;
+
+	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> =
+		supported_arb_erc20_assets
+			.into_iter()
+			.map(|(asset, address)| (address, asset.into()))
+			.collect();
 
 	let arb_client = EthersRetryRpcClient::new(
 		scope,
