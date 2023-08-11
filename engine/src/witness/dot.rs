@@ -2,18 +2,17 @@ mod dot_chain_tracking;
 mod dot_source;
 
 use cf_chains::{
-	dot::{
-		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotProxyType,
-		PolkadotUncheckedExtrinsic,
-	},
+	dot::{PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotUncheckedExtrinsic},
 	Polkadot,
 };
 use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
-use codec::{Decode, Encode};
-use frame_support::scale_info::TypeInfo;
+use codec::Encode;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::PolkadotInstance;
-use subxt::events::{EventDetails, Phase, StaticEvent};
+use subxt::{
+	config::PolkadotConfig,
+	events::{EventDetails, Phase, StaticEvent},
+};
 
 use tracing::error;
 
@@ -39,57 +38,23 @@ use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
 use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
-/// This event represents a rotation of the agg key. We have handed over control of the vault
-/// to the new aggregrate at this event.
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-pub struct ProxyAdded {
-	pub delegator: PolkadotAccountId,
-	pub delegatee: PolkadotAccountId,
-	pub proxy_type: PolkadotProxyType,
-	pub delay: PolkadotBlockNumber,
-}
+#[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
+pub mod polkadot {}
 
-impl StaticEvent for ProxyAdded {
-	const PALLET: &'static str = "Proxy";
-	const EVENT: &'static str = "ProxyAdded";
-}
-
-/// This event must match the Transfer event definition of the Polkadot chain.
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-pub struct Transfer {
-	pub from: PolkadotAccountId,
-	pub to: PolkadotAccountId,
-	pub amount: PolkadotBalance,
-}
-
-impl StaticEvent for Transfer {
-	const PALLET: &'static str = "Balances";
-	const EVENT: &'static str = "Transfer";
-}
-
-/// This event must match the TransactionFeePaid event definition of the Polkadot chain.
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-pub struct TransactionFeePaid {
-	pub who: PolkadotAccountId,
-	// includes the tip
-	pub actual_fee: PolkadotBalance,
-	pub tip: PolkadotBalance,
-}
-
-impl StaticEvent for TransactionFeePaid {
-	const PALLET: &'static str = "TransactionPayment";
-	const EVENT: &'static str = "TransactionFeePaid";
-}
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
 	TransactionFeePaid(TransactionFeePaid),
 }
 
+use polkadot::{
+	balances::events::Transfer, proxy::events::ProxyAdded,
+	transaction_payment::events::TransactionFeePaid,
+};
+
 fn filter_map_events(
-	res_event_details: Result<EventDetails, subxt::Error>,
+	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
 ) -> Option<(Phase, EventWrapper)> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {
@@ -309,17 +274,18 @@ fn deposit_witnesses(
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
 			if let EventWrapper::Transfer(Transfer { to, amount, from }) = wrapped_event {
-				if monitored_addresses.contains(to) {
+				let deposit_address = PolkadotAccountId::from_aliased(to.0);
+				if monitored_addresses.contains(&deposit_address) {
 					deposit_witnesses.push(DepositWitness {
-						deposit_address: *to,
+						deposit_address,
 						asset: assets::dot::Asset::Dot,
 						amount: *amount,
 						deposit_details: (),
 					});
-				} else if from == our_vault {
+				} else if &PolkadotAccountId::from_aliased(from.0) == our_vault {
 					tracing::info!("Transfer from our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 					extrinsic_indices.insert(*extrinsic_index);
-				} else if to == our_vault {
+				} else if &deposit_address == our_vault {
 					tracing::info!("Transfer to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 					extrinsic_indices.insert(*extrinsic_index);
 				}
@@ -360,7 +326,7 @@ fn proxy_addeds(
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			if let EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) = wrapped_event
 			{
-				if delegator != our_vault {
+				if &PolkadotAccountId::from_aliased(delegator.0) != our_vault {
 					continue
 				}
 
@@ -383,24 +349,26 @@ fn proxy_addeds(
 
 #[cfg(test)]
 mod test {
-	use cf_chains::dot::{PolkadotBalance, PolkadotExtrinsicIndex, PolkadotProxyType};
-
-	use super::*;
+	use super::{polkadot::runtime_types::polkadot_runtime::ProxyType as PolkadotProxyType, *};
 
 	fn mock_transfer(
 		from: &PolkadotAccountId,
 		to: &PolkadotAccountId,
 		amount: PolkadotBalance,
 	) -> EventWrapper {
-		EventWrapper::Transfer(Transfer { from: *from, to: *to, amount })
+		EventWrapper::Transfer(Transfer {
+			from: from.aliased_ref().to_owned().into(),
+			to: to.aliased_ref().to_owned().into(),
+			amount,
+		})
 	}
 
 	fn phase_and_events(
-		events: &[(PolkadotExtrinsicIndex, EventWrapper)],
+		events: Vec<(PolkadotExtrinsicIndex, EventWrapper)>,
 	) -> Vec<(Phase, EventWrapper)> {
 		events
-			.iter()
-			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(*xt_index), event.clone()))
+			.into_iter()
+			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(xt_index), event))
 			.collect()
 	}
 
@@ -409,8 +377,8 @@ mod test {
 		delegatee: &PolkadotAccountId,
 	) -> EventWrapper {
 		EventWrapper::ProxyAdded(ProxyAdded {
-			delegator: *delegator,
-			delegatee: *delegatee,
+			delegator: delegator.aliased_ref().to_owned().into(),
+			delegatee: delegatee.aliased_ref().to_owned().into(),
 			proxy_type: PolkadotProxyType::Any,
 			delay: 0,
 		})
@@ -419,7 +387,7 @@ mod test {
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid(TransactionFeePaid {
 			actual_fee,
-			who: PolkadotAccountId::from_aliased([0xab; 32]),
+			who: [0xab; 32].into(),
 			tip: Default::default(),
 		})
 	}
@@ -440,7 +408,7 @@ mod test {
 		const TRANSFER_FROM_OUR_VAULT_INDEX: u32 = 7;
 		const TRANFER_TO_OUR_VAULT_INDEX: u32 = 8;
 
-		let block_event_details = phase_and_events(&[
+		let block_event_details = phase_and_events(vec![
 			// we'll be witnessing this from the start
 			(
 				TRANSFER_1_INDEX,
@@ -501,7 +469,7 @@ mod test {
 		let other_acct = PolkadotAccountId::from_aliased([1; 32]);
 		let our_proxy_added_index = 1u32;
 		let fee_paid = 10000;
-		let block_event_details = phase_and_events(&[
+		let block_event_details = phase_and_events(vec![
 			// we should witness this one
 			(our_proxy_added_index, mock_proxy_added(&our_vault, &other_acct)),
 			(our_proxy_added_index, mock_tx_fee_paid(fee_paid)),
