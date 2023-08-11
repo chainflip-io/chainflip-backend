@@ -11,6 +11,9 @@ LABEL org.opencontainers.image.created="${BUILD_DATETIME}"
 LABEL org.opencontainers.image.environment="development"
 LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
 
+RUN apt-get update && apt-get install -y \
+    ca-certificates
+
 COPY chainflip-engine /usr/local/bin/chainflip-engine
 
 WORKDIR /etc/chainflip
