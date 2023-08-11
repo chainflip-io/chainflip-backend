@@ -25,7 +25,7 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 
 	type Client: ChainClient<Index = Self::Index, Hash = Self::Hash, Data = Self::Data>;
 
-	type Chain: ExternalChain<ChainBlockNumber = Self::Index>;
+	type Chain: ExternalChain<ChainBlockNumber = Self::Index> + Send + Sync + 'static;
 
 	type Parameters: Send;
 

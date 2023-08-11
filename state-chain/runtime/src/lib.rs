@@ -853,12 +853,6 @@ impl_runtime_apis! {
 		fn cf_eth_flip_token_address() -> EthereumAddress {
 			Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip).expect("FLIP token address should exist")
 		}
-		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset> {
-			use pallet_cf_environment::EthereumSupportedAssets;
-			EthereumSupportedAssets::<Runtime>::iter()
-				.find(|(_, address)| *address == token_address)
-				.map(|(asset, _)| asset.into())
-		}
 		fn cf_eth_state_chain_gateway_address() -> EthereumAddress {
 			Environment::state_chain_gateway_address()
 		}
@@ -1026,7 +1020,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
 			LiquidityPools::get_pool(asset)
 		}
 

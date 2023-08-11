@@ -88,7 +88,6 @@ decl_runtime_apis!(
 		fn cf_is_auction_phase() -> bool;
 		fn cf_eth_flip_token_address() -> EthereumAddress;
 		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset>;
 		fn cf_eth_key_manager_address() -> EthereumAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
@@ -115,7 +114,7 @@ decl_runtime_apis!(
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
 		fn cf_environment() -> Environment;
-		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 	}
 );

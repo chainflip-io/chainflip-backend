@@ -164,7 +164,7 @@ fn deposit_witnesses(
 }
 
 fn script_addresses(
-	addresses: Vec<DepositChannelDetails<Bitcoin>>,
+	addresses: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
 ) -> HashMap<Vec<u8>, ScriptPubkey> {
 	addresses
 		.into_iter()
@@ -209,9 +209,12 @@ mod tests {
 		}
 	}
 
-	fn fake_details(address: ScriptPubkey) -> DepositChannelDetails<Bitcoin> {
-		DepositChannelDetails {
+	fn fake_details(
+		address: ScriptPubkey,
+	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
+		DepositChannelDetails::<_, BitcoinInstance> {
 			opened_at: 1,
+			expires_at: 10,
 			deposit_channel: DepositChannel {
 				channel_id: 1,
 				address,

@@ -91,6 +91,7 @@ fn insert_swaps(swaps: &[Swap]) {
 		if let SwapType::Swap(destination_address) = &swap.swap_type {
 			<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 				ForeignChainAddress::Eth([2; 20].into()),
+				Default::default(),
 				swap.from,
 				swap.to,
 				swap.amount,
@@ -152,6 +153,7 @@ fn expect_earned_fees_to_be_recorded() {
 		const ALICE: u64 = 2_u64;
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20].into()),
+			Default::default(),
 			Asset::Flip,
 			Asset::Usdc,
 			100,
@@ -163,6 +165,7 @@ fn expect_earned_fees_to_be_recorded() {
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20].into()),
+			Default::default(),
 			Asset::Flip,
 			Asset::Usdc,
 			100,
@@ -182,6 +185,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 		const ALICE: u64 = 1_u64;
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20].into()),
+			Default::default(),
 			Asset::Eth,
 			Asset::Dot,
 			10,
@@ -209,6 +213,7 @@ fn expect_swap_id_to_be_emitted() {
 		// 2. Schedule the swap -> SwapScheduled
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
+			Default::default(),
 			Asset::Eth,
 			Asset::Usdc,
 			500,
@@ -228,6 +233,7 @@ fn expect_swap_id_to_be_emitted() {
 				source_asset: Asset::Eth,
 				destination_asset: Asset::Usdc,
 				channel_id: 0,
+				..
 			}) if expiry_block == SwapTTL::<Test>::get() + System::current_block_number(),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
@@ -237,10 +243,10 @@ fn expect_swap_id_to_be_emitted() {
 				destination_address: EncodedAddress::Eth(..),
 				origin: SwapOrigin::DepositChannel {
 					deposit_address: EncodedAddress::Eth(..),
-					channel_id: 1
+					channel_id: 1,
+					deposit_block_height: 0
 				},
-				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..))
-			}),
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)), broker_commission: _ }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
@@ -304,6 +310,7 @@ fn can_swap_using_witness_origin() {
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+			broker_commission: None,
 		}));
 	});
 }
@@ -334,6 +341,7 @@ fn swap_expires() {
 			broker_commission_bps: 0,
 			broker_id: ALICE,
 			channel_metadata: None,
+			expiry,
 		};
 
 		assert_eq!(
@@ -980,6 +988,7 @@ fn swap_by_witnesser_happy_path() {
 			asset: from,
 			amount,
 			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 		}));
 		// Fund is confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
@@ -1016,6 +1025,7 @@ fn swap_by_witnesser_happy_path() {
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+			broker_commission: None,
 		}));
 
 		// Confiscated fund is unchanged
@@ -1035,6 +1045,7 @@ fn swap_by_deposit_happy_path() {
 
 		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
+			Default::default(),
 			from,
 			to,
 			amount,
@@ -1050,6 +1061,11 @@ fn swap_by_deposit_happy_path() {
 			asset: from,
 			amount,
 			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::DepositChannel {
+				deposit_address: EncodedAddress::Eth(Default::default()),
+				channel_id: 1,
+				deposit_block_height: 0,
+			},
 		}));
 		// Fund is confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
@@ -1060,6 +1076,7 @@ fn swap_by_deposit_happy_path() {
 
 		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
+			Default::default(),
 			from,
 			to,
 			amount,
@@ -1089,8 +1106,10 @@ fn swap_by_deposit_happy_path() {
 			origin: SwapOrigin::DepositChannel {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
+				deposit_block_height: Default::default(),
 			},
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+			broker_commission: Some(0),
 		}));
 
 		// Confiscated fund is unchanged
@@ -1577,6 +1596,7 @@ fn ccm_swaps_emits_events() {
 				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				swap_type: SwapType::CcmPrincipal(1),
+				broker_commission: _
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_type: SwapType::CcmGas(1),
@@ -1728,6 +1748,7 @@ fn can_handle_swaps_with_zero_outputs() {
 
 			Swapping::schedule_swap_from_channel(
 				eth_address.clone(),
+				Default::default(),
 				Asset::Usdc,
 				Asset::Eth,
 				100,
@@ -1738,6 +1759,7 @@ fn can_handle_swaps_with_zero_outputs() {
 			);
 			Swapping::schedule_swap_from_channel(
 				eth_address.clone(),
+				Default::default(),
 				Asset::Usdc,
 				Asset::Eth,
 				1,
