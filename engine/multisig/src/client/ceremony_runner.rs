@@ -17,9 +17,12 @@ use tokio::sync::{
 use tracing::{debug, warn, Instrument};
 use utilities::format_iterator;
 
-use crate::client::{
-	ceremony_id_string,
-	common::{ProcessMessageResult, StageResult},
+use crate::{
+	client::{
+		ceremony_id_string,
+		common::{ProcessMessageResult, StageResult},
+	},
+	ChainSigning,
 };
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
@@ -37,7 +40,11 @@ type OptionalCeremonyReturn<C> = Option<
 	>,
 >;
 
-pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
+pub struct CeremonyRunner<Ceremony, Chain>
+where
+	Ceremony: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+{
 	// `None` means that the ceremony is not yet authorised (but may start delaying messages)
 	stage: Option<DynStage<Ceremony>>,
 	// Note that because we use a map here, the number of messages
@@ -46,9 +53,14 @@ pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
 	/// This will fire on stage timeout
 	timeout_handle: Pin<Box<tokio::time::Sleep>>,
 	outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
+	_phantom: std::marker::PhantomData<Chain>,
 }
 
-impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
+impl<Ceremony, Chain> CeremonyRunner<Ceremony, Chain>
+where
+	Ceremony: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+{
 	/// Listen for requests until the ceremony is finished
 	/// Returns the id of the ceremony to make it easier to identify
 	/// which ceremony is finished when many are running
@@ -60,7 +72,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	) -> Result<()> {
 		let span = tracing::info_span!(
 			"CeremonyRunner",
-			ceremony_id = ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+			ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 		);
 
 		// We always create unauthorised first, it can get promoted to
@@ -113,6 +125,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			// Unauthorised ceremonies cannot timeout, so just set the timeout to 0 for now.
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
+			_phantom: Default::default(),
 		}
 	}
 
@@ -208,7 +221,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 					return None
 				}
 
-				if !data.initial_stage_data_size_is_valid::<Ceremony::Crypto>() {
+				if !data.is_initial_stage_data_size_valid::<Chain>() {
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: incorrect number of elements"
@@ -230,8 +243,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				};
 
 				// Check that the number of elements in the data is what we expect
-				if !data.data_size_is_valid::<Ceremony::Crypto>(
+				if !data.is_data_size_valid::<Chain>(
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
+					stage.ceremony_common().number_of_signing_payloads,
 				) {
 					debug!(
 						from_id = sender_id.to_string(),
@@ -332,7 +346,11 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 }
 
 #[cfg(test)]
-impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
+impl<Ceremony, Chain> CeremonyRunner<Ceremony, Chain>
+where
+	Ceremony: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+{
 	/// This is to allow calling a private method from tests
 	pub fn new_unauthorised_for_test() -> Self {
 		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)

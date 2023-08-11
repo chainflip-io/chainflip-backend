@@ -4,6 +4,12 @@ pub mod api;
 
 pub mod benchmarking;
 
+#[cfg(feature = "std")]
+pub mod serializable_address;
+
+#[cfg(feature = "std")]
+pub use serializable_address::*;
+
 pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
@@ -16,7 +22,7 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature,
+	AccountId32, MultiAddress, MultiSignature,
 };
 
 #[cfg_attr(feature = "std", derive(Hash))]
@@ -91,7 +97,12 @@ impl PolkadotPair {
 	MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(
+	feature = "std",
+	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
+)]
 pub struct PolkadotAccountId([u8; 32]);
+
 impl PolkadotAccountId {
 	pub const fn from_aliased(account_id: [u8; 32]) -> Self {
 		Self(account_id)
@@ -99,12 +110,6 @@ impl PolkadotAccountId {
 
 	pub fn aliased_ref(&self) -> &[u8; 32] {
 		&self.0
-	}
-
-	#[cfg(feature = "std")]
-	pub fn from_ss58check(s: &str) -> Result<Self, sp_core::crypto::PublicError> {
-		use sp_core::crypto::Ss58Codec;
-		sp_runtime::AccountId32::from_ss58check(s).map(|id| Self(*id.as_ref()))
 	}
 }
 
@@ -114,7 +119,7 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
@@ -212,8 +217,17 @@ pub struct EpochStartData {
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PolkadotTrackedData {
 	pub median_tip: PolkadotBalance,
+	pub runtime_version: RuntimeVersion,
+}
+
+impl Default for PolkadotTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.")
+	}
 }
 
 impl Chain for Polkadot {
@@ -228,6 +242,18 @@ impl Chain for Polkadot {
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
+	type DepositChannelState = PolkadotChannelState;
+	type DepositDetails = ();
+}
+
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
+pub struct PolkadotChannelState;
+
+/// Polkadot channels should always be recycled because we are limited to u16::MAX channels.
+impl ChannelLifecycleHooks for PolkadotChannelState {
+	fn maybe_recycle(self) -> Option<Self> {
+		Some(self)
+	}
 }
 
 impl ChainCrypto for Polkadot {
@@ -844,18 +870,6 @@ pub struct PolkadotReplayProtection {
 	pub nonce: PolkadotIndex,
 }
 
-impl ChannelIdConstructor for PolkadotChannelId {
-	type Address = PolkadotAccountId;
-
-	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
-		channel_id
-	}
-
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		channel_id
-	}
-}
-
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for PolkadotChannelId {
 	fn benchmark_value_by_id(id: u8) -> Self {
@@ -907,43 +921,6 @@ mod test_polkadot_extrinsics {
 		println!(
 			"encoded extrinsic: {:?}",
 			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
-		);
-	}
-
-	#[ignore]
-	#[test]
-	fn get_public_keys() {
-		println!(
-			"Public Key 1: {:?}",
-			PolkadotAccountId::from_ss58check("5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe")
-				.unwrap()
-		);
-		println!(
-			"Public Key 2: {:?}",
-			PolkadotAccountId::from_ss58check("5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA")
-				.unwrap()
-		);
-
-		println!(
-			"Public Key 3: {:?}",
-			PolkadotAccountId::from_ss58check("5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK")
-				.unwrap()
-		);
-
-		let keypair_1 = PolkadotPair::from_seed(&RAW_SEED_1);
-		let account_id_1 = keypair_1.public_key();
-
-		assert_eq!(
-			account_id_1,
-			PolkadotAccountId::from_ss58check("5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe")
-				.unwrap()
-		);
-
-		assert_eq!(
-			PolkadotAccountId::from_aliased(hex_literal::hex!(
-				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
-			)),
-			account_id_1
 		);
 	}
 }

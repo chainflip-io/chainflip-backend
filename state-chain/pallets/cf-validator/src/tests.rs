@@ -4,10 +4,10 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
-		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
+		funding_info::MockFundingInfo, reputation_resetter::MockReputationResetter,
 		vault_rotator::MockVaultRotatorA,
 	},
-	AccountRoleRegistry, AuctionOutcome, SafeMode, SetSafeMode,
+	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -42,32 +42,27 @@ fn simple_rotation_state(
 	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 		winners: auction_winners,
 		bond: bond.unwrap_or(100),
-		losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
+		losers: AUCTION_LOSERS.to_vec(),
 	})
 }
 
 #[test]
 fn changing_epoch_block_size() {
 	new_test_ext().execute_with(|| {
-		let min_duration = <Test as Config>::MinEpoch::get();
-		assert_eq!(min_duration, 1);
-		// Throw up an error if we supply anything less than this
 		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration - 1),
-			Error::<Test>::InvalidEpoch
+			ValidatorPallet::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::EpochDuration { blocks: 0 }
+			),
+			Error::<Test>::InvalidEpochDuration
 		);
-		assert_ok!(ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration));
+		const UPDATE: PalletConfigUpdate = PalletConfigUpdate::EpochDuration { blocks: 100 };
+		assert_ok!(ValidatorPallet::update_pallet_config(RuntimeOrigin::root(), UPDATE));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::EpochDurationChanged(
-				EPOCH_DURATION,
-				min_duration
-			)),
-		);
-		// We throw up an error if we try to set it to the current
-		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration),
-			Error::<Test>::InvalidEpoch
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PalletConfigUpdated {
+				update: UPDATE
+			}),
 		);
 	});
 }
@@ -84,7 +79,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Now that we have bidders, we should succeed the auction, and complete the rotation
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 
 		move_forward_blocks(1);
 		assert!(matches!(
@@ -115,7 +110,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 #[test]
 fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_noop!(
 			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
@@ -127,7 +122,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 #[test]
 fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
@@ -150,7 +145,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
 			ValidatorPallet::current_authorities(),
@@ -205,16 +200,14 @@ fn send_cfe_version() {
 		let authority = GENESIS_AUTHORITIES[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
-		assert_ok!(
-			ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), version.clone(),)
-		);
+		assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), version,));
 
 		assert_eq!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: SemVer::default(),
-				new_version: version.clone(),
+				new_version: version,
 			}),
 			"should emit event on updated version"
 		);
@@ -227,17 +220,14 @@ fn send_cfe_version() {
 
 		// We submit a new version
 		let new_version = SemVer { major: 5, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(
-			RuntimeOrigin::signed(authority),
-			new_version.clone()
-		));
+		assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), new_version));
 
 		assert_eq!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: version,
-				new_version: new_version.clone(),
+				new_version,
 			}),
 			"should emit event on updated version"
 		);
@@ -250,10 +240,7 @@ fn send_cfe_version() {
 
 		// When we submit the same version we should see no `CFEVersionUpdated` event
 		frame_system::Pallet::<Test>::reset_events();
-		assert_ok!(ValidatorPallet::cfe_version(
-			RuntimeOrigin::signed(authority),
-			new_version.clone()
-		));
+		assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), new_version));
 
 		assert_eq!(
 			0,
@@ -411,19 +398,41 @@ fn register_peer_id() {
 fn rerun_auction_if_not_enough_participants() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		// Unqualify one of the auction winners
-		QualifyAll::<u64>::except([AUCTION_WINNERS[0]]);
 		// Change the auction parameters to simulate a shortage in available candidates
-		assert_ok!(ValidatorPallet::set_auction_parameters(
+		MockBidderProvider::set_default_test_bids();
+		let num_bidders = <MockBidderProvider as BidderProvider>::get_bidders().len() as u32;
+
+		assert_ok!(ValidatorPallet::update_pallet_config(
 			RuntimeOrigin::root(),
-			SetSizeParameters { min_size: 3, max_size: 3, max_expansion: 3 }
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: num_bidders + 1,
+					max_size: 150,
+					max_expansion: 150
+				}
+			}
 		));
 		// Run to the epoch boundary
-		MockBidderProvider::set_winning_bids();
 		run_to_block(EPOCH_DURATION);
+		cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
+			Event::RotationAborted,
+		));
 		// Assert that we still in the idle phase
-		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
-		// Set some over node to requalify the first auction winner
-		QualifyAll::<u64>::except([AUCTION_LOSERS[0]]);
+		assert!(
+			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle),
+			"Expected idle phase, got {:?}",
+			CurrentRotationPhase::<Test>::get()
+		);
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			RuntimeOrigin::root(),
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: num_bidders - 1,
+					max_size: 150,
+					max_expansion: 150
+				}
+			}
+		));
 		// Run to the next block - we expect and immediate retry
 		run_to_block(EPOCH_DURATION + 1);
 		// Expect a resolved auction and kickedoff key-gen
@@ -520,7 +529,7 @@ fn test_missing_author_punishment() {
 }
 
 #[test]
-fn no_validator_rotation_during_safe_mode_code_red() {
+fn no_validator_rotation_when_disabled_by_safe_mode() {
 	new_test_ext().execute_with(|| {
 		// Activate Safe Mode: CODE RED
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -529,7 +538,10 @@ fn no_validator_rotation_during_safe_mode_code_red() {
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
-		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
+		assert_noop!(
+			ValidatorPallet::force_rotation(RawOrigin::Root.into()),
+			Error::<Test>::RotationsDisabled
+		);
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Change safe mode to CODE GREEN
@@ -537,7 +549,7 @@ fn no_validator_rotation_during_safe_mode_code_red() {
 		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_GREEN);
 
 		// Try to start a rotation.
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
@@ -549,7 +561,7 @@ fn no_validator_rotation_during_safe_mode_code_red() {
 #[test]
 fn rotating_during_rotation_is_noop() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
 		// We attempt an auction when we force a rotation
 		assert!(matches!(
@@ -628,21 +640,23 @@ mod bond_expiry {
 fn auction_params_must_be_valid_when_set() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			ValidatorPallet::set_auction_parameters(
+			ValidatorPallet::update_pallet_config(
 				RuntimeOrigin::root(),
-				SetSizeParameters::default()
+				PalletConfigUpdate::AuctionParameters { parameters: SetSizeParameters::default() }
 			),
 			Error::<Test>::InvalidAuctionParameters
 		);
 
-		assert_ok!(ValidatorPallet::set_auction_parameters(
+		assert_ok!(ValidatorPallet::update_pallet_config(
 			RuntimeOrigin::root(),
-			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
+			}
 		));
 		// Confirm we have an event
 		assert!(matches!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::AuctionParametersChanged(..)),
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PalletConfigUpdated { .. }),
 		));
 	});
 }
@@ -657,10 +671,47 @@ fn test_validator_registration_min_balance() {
 #[test]
 fn test_expect_validator_register_fails() {
 	new_test_ext().execute_with(|| {
-		Backups::<Test>::put(BTreeMap::from_iter([(ALICE, 100), (BOB, 80)]));
+		const ID: u64 = 42;
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::RegistrationBondPercentage {
+				percentage: Percent::from_percent(60),
+			},
+		));
+		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
+		// Reduce the set size target to the current authority count.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: MIN_AUTHORITY_SIZE,
+					max_size: <Pallet<Test> as EpochInfo>::current_authority_count(),
+					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+				},
+			},
+		));
 		assert_noop!(
-			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(3),),
+			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID),),
 			crate::Error::<Test>::NotEnoughFunds
+		);
+		// Now set it back to the default.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: MIN_AUTHORITY_SIZE,
+					max_size: MAX_AUTHORITY_SIZE,
+					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+				},
+			},
+		));
+		// It should be possible to register now since the acutal size is below the target.
+		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
+		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
+		// Trying to register again passes the funding check but fails for other reasons.
+		assert_noop!(
+			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
+			DispatchError::Other("Account already registered")
 		);
 	});
 }
@@ -740,5 +791,123 @@ fn key_handover_should_repeat_until_below_authority_threshold() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::KeygensInProgress(..)
 		));
+	});
+}
+
+#[test]
+fn safe_mode_can_aborts_authority_rotation_before_key_handover() {
+	new_test_ext().execute_with(|| {
+		MockBidderProvider::set_default_test_bids();
+		ValidatorPallet::start_authority_rotation();
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeygensInProgress(..)
+		));
+		MockVaultRotatorA::keygen_success();
+
+		System::reset_events();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::Idle
+			}),
+			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+		);
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+	});
+}
+
+#[test]
+fn safe_mode_does_not_aborts_authority_rotation_after_key_handover() {
+	new_test_ext().execute_with(|| {
+		MockBidderProvider::set_default_test_bids();
+		ValidatorPallet::start_authority_rotation();
+		MockVaultRotatorA::keygen_success();
+		ValidatorPallet::on_initialize(1);
+		MockVaultRotatorA::key_handover_success();
+
+		System::reset_events();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::ActivatingKeys(..)
+			}),
+		);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::ActivatingKeys(..)
+		));
+	});
+}
+
+#[test]
+fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
+	new_test_ext().execute_with(|| {
+		MockBidderProvider::set_default_test_bids();
+		ValidatorPallet::start_authority_rotation();
+		MockVaultRotatorA::keygen_success();
+		ValidatorPallet::on_initialize(1);
+		MockVaultRotatorA::key_handover_success();
+		ValidatorPallet::on_initialize(1);
+		MockVaultRotatorA::keys_activated();
+
+		System::reset_events();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::NewKeysActivated(..)
+			}),
+		);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::NewKeysActivated(..)
+		));
+	});
+}
+
+#[test]
+fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
+	new_test_ext().execute_with(|| {
+		MockBidderProvider::set_default_test_bids();
+		// Abort authority rotation using Safe Mode.
+		ValidatorPallet::start_authority_rotation();
+		MockVaultRotatorA::keygen_success();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+
+		// Restart the authority Rotation.
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		ValidatorPallet::start_authority_rotation();
+		ValidatorPallet::on_initialize(1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeygensInProgress(..)
+		));
+
+		MockVaultRotatorA::keygen_success();
+		ValidatorPallet::on_initialize(1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeyHandoversInProgress(..)
+		));
+
+		MockVaultRotatorA::key_handover_success();
+		ValidatorPallet::on_initialize(1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::ActivatingKeys(..)
+		));
+
+		MockVaultRotatorA::keys_activated();
+		ValidatorPallet::on_initialize(1);
+		move_forward_blocks(2);
+		assert_default_rotation_outcome!();
 	});
 }

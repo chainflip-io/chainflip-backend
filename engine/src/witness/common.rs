@@ -1,12 +1,19 @@
+pub mod chain_source;
+pub mod chunked_chain_source;
+pub mod epoch_source;
+
 use cf_chains::{Chain, ChainAbi};
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
 
-use super::chain_source::ChainSourceWithClient;
+use chain_source::ChainSource;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 
+pub const STATE_CHAIN_BEHAVIOUR: &str = "State Chain client behavioural assumption not upheld";
+
+#[derive(Clone)]
 pub struct ActiveAndFuture<It: Iterator, St: Stream<Item = It::Item>> {
 	pub active: It,
 	pub future: St,
@@ -54,7 +61,10 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 	+ pallet_cf_chain_tracking::Config<
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
-	>
+	> + pallet_cf_ingress_egress::Config<
+		<TChain as PalletInstanceAlias>::Instance,
+		TargetChain = TChain,
+	> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
@@ -62,7 +72,10 @@ impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Run
 		+ pallet_cf_chain_tracking::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
-		>
+		> + pallet_cf_ingress_egress::Config<
+			<TChain as PalletInstanceAlias>::Instance,
+			TargetChain = TChain,
+		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 
@@ -70,6 +83,10 @@ pub trait RuntimeCallHasChain<Runtime: RuntimeHasChain<TChain>, TChain: External
 	std::convert::From<pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>>
 	+ std::convert::From<
 		pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+	> + std::convert::From<
+		pallet_cf_broadcast::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+	> + std::convert::From<
+		pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 	>
 {
 }
@@ -80,6 +97,10 @@ where
 			pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 		> + std::convert::From<
 			pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+		> + std::convert::From<
+			pallet_cf_broadcast::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+		> + std::convert::From<
+			pallet_cf_ingress_egress::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
 		>,
 {
 }
@@ -88,9 +109,7 @@ pub trait ExternalChain: ChainAbi + PalletInstanceAlias {}
 impl<T: ChainAbi + PalletInstanceAlias> ExternalChain for T {}
 
 pub trait ExternalChainSource:
-	ChainSourceWithClient<Index = <Self::Chain as Chain>::ChainBlockNumber>
-where
-	state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
+	ChainSource<Index = <Self::Chain as Chain>::ChainBlockNumber>
 {
 	type Chain: ExternalChain;
 }

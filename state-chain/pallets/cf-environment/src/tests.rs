@@ -1,9 +1,9 @@
 #![cfg(test)]
 use cf_chains::{
 	btc::{api::UtxoSelectionType, deposit_address::DepositAddress, ScriptPubkey, Utxo},
-	dot::{RuntimeVersion, TEST_RUNTIME_VERSION},
+	eth::Address as EthereumAddress,
 };
-use cf_primitives::chains::assets::eth::Asset;
+use cf_primitives::{chains::assets::eth::Asset, SemVer};
 use cf_traits::SafeMode;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
@@ -17,22 +17,22 @@ fn genesis_config() {
 		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, Environment::state_chain_gateway_address());
 		assert_eq!(KEY_MANAGER_ADDRESS, Environment::key_manager_address());
 		assert_eq!(ETH_CHAIN_ID, Environment::ethereum_chain_id());
-		assert_eq!(CFE_SETTINGS, Environment::cfe_settings());
 	});
 }
 
 #[test]
 fn update_supported_eth_assets() {
 	new_test_ext().execute_with(|| {
+		const ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(2);
 		// Expect the FLIP token address to be set after genesis
 		assert!(EthereumSupportedAssets::<Test>::contains_key(Asset::Flip));
 		// Update the address for Usdc
 		assert_ok!(Environment::update_supported_eth_assets(
 			RuntimeOrigin::root(),
 			Asset::Usdc,
-			[2; 20]
+			ADDRESS
 		));
-		assert_eq!(EthereumSupportedAssets::<Test>::get(Asset::Usdc), Some([2; 20]));
+		assert_eq!(EthereumSupportedAssets::<Test>::get(Asset::Usdc), Some(ADDRESS));
 		assert_eq!(
 			frame_system::Pallet::<Test>::events()
 				.pop()
@@ -40,37 +40,18 @@ fn update_supported_eth_assets() {
 				.event,
 			crate::mock::RuntimeEvent::Environment(crate::Event::UpdatedEthAsset(
 				Asset::Usdc,
-				[2; 20]
+				ADDRESS
 			),)
 		);
 		// Last but not least - verify we can not add an address for ETH
 		assert_noop!(
-			Environment::update_supported_eth_assets(RuntimeOrigin::root(), Asset::Eth, [3; 20]),
+			Environment::update_supported_eth_assets(
+				RuntimeOrigin::root(),
+				Asset::Eth,
+				EthereumAddress::repeat_byte(3)
+			),
 			<Error<Test>>::EthAddressNotUpdateable
 		);
-	});
-}
-
-#[test]
-fn test_update_polkadot_runtime_version() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(Environment::polkadot_runtime_version(), TEST_RUNTIME_VERSION);
-
-		// This should be a noop since the version is the same as the genesis version
-		assert_noop!(
-			Environment::update_polkadot_runtime_version(
-				RuntimeOrigin::root(),
-				TEST_RUNTIME_VERSION,
-			),
-			Error::<Test>::InvalidPolkadotRuntimeVersion
-		);
-
-		let update_to = RuntimeVersion {
-			spec_version: TEST_RUNTIME_VERSION.spec_version + 1,
-			transaction_version: 1,
-		};
-		assert_ok!(Environment::update_polkadot_runtime_version(RuntimeOrigin::root(), update_to));
-		assert_eq!(Environment::polkadot_runtime_version(), update_to);
 	});
 }
 
@@ -117,6 +98,24 @@ fn test_btc_utxo_selection() {
 				.unwrap(),
 			(vec![utxo(5000000), utxo(120080),], 5116060)
 		);
+
+		// add some more utxos to the list
+		Environment::add_bitcoin_utxo_to_list(5000, Default::default(), SCRIPT_PUBKEY);
+		Environment::add_bitcoin_utxo_to_list(15000, Default::default(), SCRIPT_PUBKEY);
+
+		// request a larger amount than what is available
+		assert!(Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
+			output_amount: 20100,
+			number_of_outputs: 1
+		})
+		.is_none());
+
+		// Ensure the previous failure didn't wipe the utxo list
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
+				.unwrap(),
+			(vec![utxo(5000), utxo(15000),], 15980)
+		);
 	});
 }
 
@@ -147,6 +146,28 @@ fn update_safe_mode() {
 			crate::Event::<Test>::RuntimeSafeModeUpdated {
 				safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
 			},
+		));
+	});
+}
+
+#[test]
+fn can_set_next_compatibility_version() {
+	new_test_ext().execute_with(|| {
+		assert!(Environment::next_compatibility_version().is_none());
+
+		// Set the next cfe version
+		let version = Some(SemVer { major: 1u8, minor: 3u8, patch: 10u8 });
+		assert_ok!(Environment::set_next_compatibility_version(RuntimeOrigin::root(), version));
+		assert_eq!(Environment::next_compatibility_version(), version);
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::NextCompatibilityVersionSet { version },
+		));
+
+		// Unset the net cfe version
+		assert_ok!(Environment::set_next_compatibility_version(RuntimeOrigin::root(), None));
+		assert!(Environment::next_compatibility_version().is_none());
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::NextCompatibilityVersionSet { version: None },
 		));
 	});
 }

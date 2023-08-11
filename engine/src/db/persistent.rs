@@ -4,10 +4,12 @@ mod tests;
 
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
+use cf_primitives::EpochIndex;
+use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info, info_span};
+use utilities::rle_bitmap::RleBitmap;
 
-use crate::witnesser::checkpointing::WitnessedUntil;
-use multisig::{client::KeygenResultInfo, ChainTag, CryptoScheme, KeyId, CHAIN_TAG_SIZE};
+use multisig::{client::KeygenResultInfo, ChainSigning, KeyId, CHAIN_TAG_SIZE};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -25,9 +27,9 @@ const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
-/// The Witnesser checkpoint uses a prefix that is a combination of a checkpoint prefix and the
-/// chain tag
-const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
+/// The continuous adapter uses a prefix that is a combination of a prefix, and the
+/// witnesser name
+const PROCESSED_BLOCKS_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"seen____";
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
@@ -45,8 +47,6 @@ pub struct PersistentKeyDB {
 	/// Underlying key-value database instance
 	kv_db: RocksDBKeyValueStore,
 }
-
-const CHECKPOINTING_KEY: () = ();
 
 impl PersistentKeyDB {
 	/// Open a key database or create one if it doesn't exist. If the schema version of the
@@ -99,17 +99,17 @@ impl PersistentKeyDB {
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
-	pub fn update_key<C: CryptoScheme>(
+	pub fn update_key<C: ChainSigning>(
 		&self,
 		key_id: &KeyId,
-		keygen_result_info: &KeygenResultInfo<C>,
+		keygen_result_info: &KeygenResultInfo<C::CryptoScheme>,
 	) {
 		self.kv_db
 			.put_data(&keygen_data_prefix::<C>(), &key_id, &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
-	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
+	pub fn load_keys<C: ChainSigning>(&self) -> HashMap<KeyId, KeygenResultInfo<C::CryptoScheme>> {
 		let span = info_span!("PersistentKeyDB");
 		let _entered = span.enter();
 
@@ -127,19 +127,29 @@ impl PersistentKeyDB {
 		keys
 	}
 
-	/// Write the witnesser checkpoint to the db
-	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
+	pub fn update_processed_blocks<Index: Ord + Serialize>(
+		&self,
+		witnesser_name: &str,
+		epoch: EpochIndex,
+		map: &RleBitmap<Index>,
+	) -> Result<()> {
 		self.kv_db
-			.put_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY, checkpoint)
-			.unwrap_or_else(|e| {
-				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
-			});
+			.put_data(&processed_blocks_prefix(witnesser_name), &epoch, &map)
+			.with_context(|| {
+				format!("Failed to update processed blocks for {witnesser_name} at epoch: {epoch}")
+			})
 	}
 
-	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
+	pub fn load_processed_blocks<Index: Ord + DeserializeOwned>(
+		&self,
+		witnesser_name: &str,
+		epoch: EpochIndex,
+	) -> Result<Option<RleBitmap<Index>>> {
 		self.kv_db
-			.get_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY)
-			.context("Failed to load {chain_tag} checkpoint")
+			.get_data::<_, RleBitmap<Index>>(&processed_blocks_prefix(witnesser_name), &epoch)
+			.with_context(|| {
+				format!("Failed to load processed blocks for {witnesser_name} at epoch: {epoch}")
+			})
 	}
 
 	/// Get the genesis hash from the metadata column in the db.
@@ -178,12 +188,12 @@ impl PersistentKeyDB {
 	}
 }
 
-fn keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
+fn keygen_data_prefix<C: ChainSigning>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 
-fn checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
-	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
+fn processed_blocks_prefix(witnessner_name: &str) -> Vec<u8> {
+	[PROCESSED_BLOCKS_PARTIAL_PREFIX, witnessner_name.as_bytes()].concat()
 }
 
 /// Reads the schema version and migrates the db to the latest schema version if required

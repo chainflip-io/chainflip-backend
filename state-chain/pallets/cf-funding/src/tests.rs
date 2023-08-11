@@ -8,6 +8,7 @@ use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
 	Bonding, SetSafeMode,
 };
+use sp_core::H160;
 
 use crate::BoundAddress;
 use frame_support::{assert_noop, assert_ok};
@@ -16,8 +17,8 @@ use sp_runtime::{traits::BadOrigin, DispatchError};
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
-const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
-const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
+const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 
 #[test]
@@ -550,7 +551,7 @@ fn runtime_safe_mode_blocks_redemption_requests() {
 fn restricted_funds_getting_recorded() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
-		const RESTRICTED_ADDRESS: EthereumAddress = [0xff; 20];
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0xff; 20]);
 
 		// Add Address to list of restricted contracts
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
@@ -588,9 +589,9 @@ fn can_update_redemption_tax() {
 #[test]
 fn restricted_funds_getting_reduced() {
 	new_test_ext().execute_with(|| {
-		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x42; 20]);
 		const RESTRICTED_AMOUNT: FlipBalance = 50;
-		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 		const UNRESTRICTED_AMOUNT: FlipBalance = 20;
 		const REDEEM_AMOUNT: FlipBalance = 10;
 
@@ -639,9 +640,9 @@ fn redemption_tax_cannot_be_larger_than_minimum_funding() {
 fn vesting_contracts_test_case() {
 	new_test_ext().execute_with(|| {
 		// Contracts
-		const VESTING_CONTRACT_1: EthereumAddress = [0x01; 20];
-		const VESTING_CONTRACT_2: EthereumAddress = [0x02; 20];
-		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const VESTING_CONTRACT_1: EthereumAddress = H160([0x01; 20]);
+		const VESTING_CONTRACT_2: EthereumAddress = H160([0x02; 20]);
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		// Balances
 		const CONTRACT_1_FUNDS: u128 = 200;
 		const CONTRACT_2_FUNDS: u128 = 800;
@@ -690,9 +691,9 @@ fn vesting_contracts_test_case() {
 fn can_withdraw_unrestricted_to_restricted() {
 	new_test_ext().execute_with(|| {
 		// Contracts
-		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
-		const RESTRICTED_ADDRESS_2: EthereumAddress = [0x02; 20];
-		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const RESTRICTED_ADDRESS_2: EthereumAddress = H160([0x02; 20]);
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		// Balances
 		const AMOUNT: u128 = 100;
 		// Add restricted addresses.
@@ -724,8 +725,8 @@ fn can_withdraw_unrestricted_to_restricted() {
 #[test]
 fn can_withdrawal_also_free_funds_to_restricted_address() {
 	new_test_ext().execute_with(|| {
-		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
-		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		const AMOUNT_1: u128 = 100;
 		const AMOUNT_2: u128 = 50;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
@@ -755,9 +756,9 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 #[test]
 fn can_only_redeem_funds_to_bound_address() {
 	new_test_ext().execute_with(|| {
-		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
-		const BOUND_ADDRESS: EthereumAddress = [0x02; 20];
-		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
+		const BOUND_ADDRESS: EthereumAddress = H160([0x02; 20]);
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
 		BoundAddress::<Test>::insert(ALICE, BOUND_ADDRESS);
@@ -786,9 +787,9 @@ fn can_only_redeem_funds_to_bound_address() {
 #[test]
 fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_address() {
 	new_test_ext().execute_with(|| {
-		const RESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
-		const REDEEM_ADDRESS: EthereumAddress = [0x02; 20];
-		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		const REDEEM_ADDRESS: EthereumAddress = H160([0x02; 20]);
+		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
 		BoundAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
@@ -825,13 +826,15 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 
 #[cfg(test)]
 mod test_restricted_balances {
+	use sp_core::H160;
+
 	use super::*;
 
-	const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+	const RESTRICTED_ADDRESS_1: EthereumAddress = H160([0x01; 20]);
 	const RESTRICTED_BALANCE_1: u128 = 200;
-	const RESTRICTED_ADDRESS_2: EthereumAddress = [0x02; 20];
+	const RESTRICTED_ADDRESS_2: EthereumAddress = H160([0x02; 20]);
 	const RESTRICTED_BALANCE_2: u128 = 800;
-	const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+	const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 	const UNRESTRICTED_BALANCE: u128 = 100;
 	const TOTAL_BALANCE: u128 = RESTRICTED_BALANCE_1 + RESTRICTED_BALANCE_2 + UNRESTRICTED_BALANCE;
 
@@ -844,7 +847,7 @@ mod test_restricted_balances {
 	fn run_test<E: Into<DispatchError>>(
 		bond: FlipBalance,
 		redeem_amount: RedemptionAmount<FlipBalance>,
-		redeem_address: EthereumAddress,
+		bound_redeem_address: EthereumAddress,
 		maybe_error: Option<E>,
 	) {
 		new_test_ext().execute_with(|| {
@@ -875,7 +878,7 @@ mod test_restricted_balances {
 					assert_ok!(Funding::redeem(
 						RuntimeOrigin::signed(ALICE),
 						redeem_amount,
-						redeem_address
+						bound_redeem_address
 					));
 					let expected_redeemed_amount =
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
@@ -892,7 +895,7 @@ mod test_restricted_balances {
 						Funding::redeem(
 							RuntimeOrigin::signed(ALICE),
 							redeem_amount,
-							redeem_address
+							bound_redeem_address
 						),
 						e.into(),
 					);
@@ -1139,8 +1142,15 @@ fn cannot_redeem_lower_than_redemption_tax() {
 #[test]
 fn can_bind_redeem_address() {
 	new_test_ext().execute_with(|| {
-		const REDEEM_ADDRESS: EthereumAddress = [0x01; 20];
+		const REDEEM_ADDRESS: EthereumAddress = H160([0x01; 20]);
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Funding(crate::Event::BoundRedeemAddress {
+				account_id: ALICE,
+				address,
+			}) if address == REDEEM_ADDRESS,
+		);
 		assert!(BoundAddress::<Test>::contains_key(ALICE));
 		assert_eq!(BoundAddress::<Test>::get(ALICE).unwrap(), REDEEM_ADDRESS);
 	});
@@ -1149,7 +1159,7 @@ fn can_bind_redeem_address() {
 #[test]
 fn cannot_bind_redeem_address_twice() {
 	new_test_ext().execute_with(|| {
-		const REDEEM_ADDRESS: EthereumAddress = [0x01; 20];
+		const REDEEM_ADDRESS: EthereumAddress = H160([0x01; 20]);
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
 		assert_noop!(
 			Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS),
@@ -1163,8 +1173,8 @@ fn max_redemption_is_net_exact_is_gross() {
 	const UNRESTRICTED_AMOUNT: FlipBalance = 100;
 	const RESTRICTED_AMOUNT: FlipBalance = 100;
 	const TOTAL_BALANCE: FlipBalance = UNRESTRICTED_AMOUNT + RESTRICTED_AMOUNT;
-	const UNRESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
-	const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+	const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+	const RESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
 
 	#[track_caller]
 	fn do_test(
@@ -1226,7 +1236,7 @@ fn max_redemption_is_net_exact_is_gross() {
 fn bond_should_count_toward_restricted_balance() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: FlipBalance = 50;
-		const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
 		// Set restricted addresses.
 		assert_ok!(Funding::update_restricted_addresses(
 			RuntimeOrigin::root(),
@@ -1265,5 +1275,66 @@ fn bond_should_count_toward_restricted_balance() {
 			pallet::RedemptionAmount::Exact(AMOUNT / 2),
 			RESTRICTED_ADDRESS
 		));
+	});
+}
+
+#[test]
+fn skip_redemption_of_zero_flip() {
+	#[track_caller]
+	fn inner_test(funding_amount: FlipBalance, redemption_amount: RedemptionAmount<FlipBalance>) {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				funding_amount,
+				Default::default(),
+				Default::default(),
+			));
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				redemption_amount,
+				Default::default()
+			));
+			assert_event_sequence! {
+				Test,
+				_,
+				RuntimeEvent::Funding(crate::Event::Funded {..}),
+				RuntimeEvent::Funding(crate::Event::RedemptionAmountZero {..}),
+			};
+		});
+	}
+
+	inner_test(100, RedemptionAmount::Exact(0));
+	inner_test(REDEMPTION_TAX, RedemptionAmount::Max);
+}
+
+#[test]
+fn check_restricted_balances_are_getting_removed() {
+	new_test_ext().execute_with(|| {
+		// - Fund account with some restricted balances.
+		const AMOUNT: FlipBalance = 50;
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x02; 20]);
+		// Set restricted addresses.
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			Default::default(),
+		));
+		// Fund the restricted address.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			Default::default(),
+		));
+		assert!(RestrictedBalances::<Test>::contains_key(ALICE));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![],
+			vec![RESTRICTED_ADDRESS],
+		));
+		assert!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).is_none());
 	});
 }

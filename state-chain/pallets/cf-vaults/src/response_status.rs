@@ -55,6 +55,11 @@ where
 		&self.success_votes
 	}
 
+	#[cfg(test)]
+	pub fn blame_votes(&self) -> &BTreeMap<T::ValidatorId, AuthorityCount> {
+		&self.blame_votes
+	}
+
 	fn super_majority_threshold(&self) -> AuthorityCount {
 		utilities::success_threshold_from_share_count(self.candidate_count())
 	}

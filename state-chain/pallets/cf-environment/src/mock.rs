@@ -1,21 +1,21 @@
 #![cfg(test)]
 
-use crate::{self as pallet_cf_environment, cfe, Decode, Encode, TypeInfo};
+use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},
-	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
-	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
+	dot::api::CreatePolkadotVault,
+	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
-	BroadcastId, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
+	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	BroadcastCleanup, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
-use sp_core::H256;
+use sp_core::{H160, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -122,12 +122,6 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 }
-impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {
-	fn clean_up_broadcast(_broadcast_id: BroadcastId) -> sp_runtime::DispatchResult {
-		unimplemented!()
-	}
-}
-
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
@@ -147,6 +141,11 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 
 parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
+	pub CurrentCompatibilityVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
 }
 
 pub struct MockBitcoinFeeInfo;
@@ -165,27 +164,20 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type CreatePolkadotVault = MockCreatePolkadotVault;
-	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
+	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
 	type WeightInfo = ();
 }
 
-pub const STATE_CHAIN_GATEWAY_ADDRESS: [u8; 20] = [0u8; 20];
-pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
-pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
-pub const ADDRESS_CHECKER: [u8; 20] = [3u8; 20];
+pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
+pub const KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
+pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
+pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
-
-pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
-	eth_block_safety_margin: 1,
-	max_ceremony_stage_duration: 1,
-	eth_priority_fee_percentile: 50,
-};
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -197,13 +189,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			ethereum_chain_id: ETH_CHAIN_ID,
 			eth_vault_address: VAULT_ADDRESS,
 			eth_address_checker_address: ADDRESS_CHECKER,
-			cfe_settings: CFE_SETTINGS,
-			flip_token_address: [0u8; 20],
-			eth_usdc_address: [0x2; 20],
+			flip_token_address: [0u8; 20].into(),
+			eth_usdc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
-			polkadot_runtime_version: TEST_RUNTIME_VERSION,
-			bitcoin_network: Default::default(),
+			network_environment: Default::default(),
 		},
 	};
 

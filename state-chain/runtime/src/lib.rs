@@ -15,16 +15,15 @@ use crate::{
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot,
-	dot::{api::PolkadotApi, PolkadotHash},
-	eth,
-	eth::{api::EthereumApi, Ethereum},
+	dot::{self, PolkadotHash},
+	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use sp_runtime::AccountId32;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -43,7 +42,6 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-pub use pallet_cf_environment::cfe::CfeSettings;
 use pallet_cf_funding::MinimumFunding;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -71,9 +69,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SwapOutput,
-};
+pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
@@ -139,10 +135,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 5,
+	spec_version: 12,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 2,
+	transaction_version: 3,
 	state_version: 1,
 };
 
@@ -152,16 +148,10 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-parameter_types! {
-	pub const MinEpoch: BlockNumber = 1;
-
-}
-
 impl pallet_cf_validator::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
-	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault, BitcoinVault>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
@@ -192,17 +182,22 @@ parameter_types! {
 	// )
 
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
+
+	pub CurrentCompatibilityVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
+	};
 }
 
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
-	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = chainflip::RuntimeSafeMode;
+	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -277,6 +272,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
@@ -292,6 +288,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
@@ -307,6 +304,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
@@ -325,6 +323,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
 	type NetworkFee = NetworkFee;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = ();
 }
 
@@ -599,6 +598,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type Slasher = FlipSlasher<Self>;
 	type WeightInfo = pallet_cf_reputation::weights::PalletWeight<Runtime>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
+	type SafeMode = chainflip::RuntimeSafeMode;
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
@@ -853,12 +853,6 @@ impl_runtime_apis! {
 		fn cf_eth_flip_token_address() -> EthereumAddress {
 			Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip).expect("FLIP token address should exist")
 		}
-		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset> {
-			use pallet_cf_environment::EthereumSupportedAssets;
-			EthereumSupportedAssets::<Runtime>::iter()
-				.find(|(_, address)| *address == token_address)
-				.map(|(asset, _)| asset.into())
-		}
 		fn cf_eth_state_chain_gateway_address() -> EthereumAddress {
 			Environment::state_chain_gateway_address()
 		}
@@ -884,6 +878,10 @@ impl_runtime_apis! {
 		}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
+		}
+		fn cf_current_compatibility_version() -> SemVer {
+			use cf_traits::CompatibleVersions;
+			Environment::current_compatibility_version()
 		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()
@@ -915,7 +913,8 @@ impl_runtime_apis! {
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
-			let account_info_v1 = Self::cf_account_info(account_id);
+			let account_info_v1 = Self::cf_account_info(account_id.clone());
+			let bound_redeem_address = pallet_cf_funding::BoundAddress::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
@@ -928,6 +927,7 @@ impl_runtime_apis! {
 				is_qualified: is_bidding && is_qualified,
 				is_online: account_info_v1.is_live,
 				is_bidding,
+				bound_redeem_address,
 			}
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
@@ -987,7 +987,7 @@ impl_runtime_apis! {
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
-				redemption_period_as_percentage: Validator::redemption_period_as_percentage(),
+				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
@@ -1014,10 +1014,18 @@ impl_runtime_apis! {
 
 		fn cf_environment() -> runtime_apis::Environment {
 			runtime_apis::Environment {
-				bitcoin_network: Environment::bitcoin_network(),
+				bitcoin_network: Environment::network_environment().into(),
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
+		}
+
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+			LiquidityPools::get_pool(asset)
+		}
+
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
+			Swapping::minimum_swap_amount(asset)
 		}
 	}
 

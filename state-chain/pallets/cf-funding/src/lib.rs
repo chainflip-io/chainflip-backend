@@ -15,10 +15,9 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::RegisterRedemption;
+use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
 #[cfg(feature = "std")]
 use cf_primitives::AccountRole;
-use cf_primitives::EthereumAddress;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
 	Chainflip, EpochInfo, FeePayment, Funding,
@@ -44,7 +43,7 @@ use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled, start_bidding_enabled, stop_bidding_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -230,6 +229,12 @@ pub mod pallet {
 
 		/// The Withdrawal Tax has been updated.
 		RedemptionTaxAmountUpdated { amount: T::Amount },
+
+		/// The redemption amount was zero, so no redemption was made. The tax was still levied.
+		RedemptionAmountZero { account_id: AccountId<T> },
+
+		/// An account has been bound to an address.
+		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
 	}
 
 	#[pallet::error]
@@ -259,14 +264,8 @@ pub mod pallet {
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
 
-		/// The redemption signature could not be found.
-		SignatureNotReady,
-
 		/// There are not enough unrestricted funds to process the redemption.
 		InsufficientUnrestrictedFunds,
-
-		/// The requested redemption amount is too low to pay for the redemption tax.
-		RedemptionAmountTooLow,
 
 		/// Minimum funding amount must be greater than the redemption tax.
 		InvalidMinimumFundingUpdate,
@@ -285,6 +284,12 @@ pub mod pallet {
 
 		/// Redeem is disabled due to Safe Mode.
 		RedeemDisabled,
+
+		/// Start Bidding is disabled due to Safe Mode.
+		StartBiddingDisabled,
+
+		/// Stop Bidding is disabled due to Safe Mode.
+		StopBiddingDisabled,
 	}
 
 	#[pallet::call]
@@ -425,25 +430,30 @@ pub mod pallet {
 			);
 
 			// Update the account balance.
-			T::Flip::try_initiate_redemption(&account_id, net_amount)?;
+			if net_amount > Zero::zero() {
+				T::Flip::try_initiate_redemption(&account_id, net_amount)?;
 
-			// Send the transaction.
-			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
-			let call = T::RegisterRedemption::new_unsigned(
-				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-				net_amount.unique_saturated_into(),
-				&address,
-				contract_expiry,
-			);
+				// Send the transaction.
+				let contract_expiry =
+					T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
+				let call = T::RegisterRedemption::new_unsigned(
+					<T as Config>::FunderId::from_ref(&account_id).as_ref(),
+					net_amount.unique_saturated_into(),
+					address.as_fixed_bytes(),
+					contract_expiry,
+				);
 
-			PendingRedemptions::<T>::insert(&account_id, ());
+				PendingRedemptions::<T>::insert(&account_id, ());
 
-			Self::deposit_event(Event::RedemptionRequested {
-				account_id,
-				amount: net_amount,
-				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
-				expiry_time: contract_expiry,
-			});
+				Self::deposit_event(Event::RedemptionRequested {
+					account_id,
+					amount: net_amount,
+					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
+					expiry_time: contract_expiry,
+				});
+			} else {
+				Self::deposit_event(Event::RedemptionAmountZero { account_id })
+			}
 
 			Ok(().into())
 		}
@@ -531,6 +541,8 @@ pub mod pallet {
 		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
 		#[pallet::weight(T::WeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
+
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
@@ -559,6 +571,7 @@ pub mod pallet {
 		/// - [AlreadyBidding](Error::AlreadyBidding)
 		#[pallet::weight(T::WeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::activate_bidding(&account_id)?;
 			Self::deposit_event(Event::StartedBidding { account_id });
@@ -613,6 +626,13 @@ pub mod pallet {
 			}
 			for address in addresses_to_remove {
 				RestrictedAddresses::<T>::remove(address);
+				for account_id in RestrictedBalances::<T>::iter_keys() {
+					RestrictedBalances::<T>::mutate(&account_id, |balances| {
+						if balances.contains_key(&address) {
+							balances.remove(&address);
+						}
+					});
+				}
 				Self::deposit_event(Event::RemovedRestrictedAddress { address });
 			}
 			Ok(().into())
@@ -633,6 +653,7 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
 			BoundAddress::<T>::insert(&account_id, address);
+			Self::deposit_event(Event::BoundRedeemAddress { account_id, address });
 			Ok(().into())
 		}
 

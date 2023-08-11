@@ -1,4 +1,4 @@
-use super::{Ethereum, EthereumChannelId, SchnorrVerificationComponents};
+use super::{Ethereum, EthereumFetchId, SchnorrVerificationComponents};
 use crate::*;
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
@@ -369,10 +369,19 @@ where
 		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
 			if let Some(token_address) = E::token_address(asset) {
 				match deposit_fetch_id {
-					EthereumChannelId::Deployed(contract_address) => fetch_only_params
-						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
-					EthereumChannelId::UnDeployed(channel_id) => fetch_deploy_params
+					EthereumFetchId::Fetch(contract_address) => {
+						debug_assert!(
+							asset != assets::eth::Asset::Eth,
+							"Eth should not be fetched. It is auto-fetched in the smart contract."
+						);
+						fetch_only_params.push(EncodableFetchAssetParams {
+							contract_address,
+							asset: token_address,
+						})
+					},
+					EthereumFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
 						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
+					EthereumFetchId::NotRequired => (),
 				};
 			} else {
 				return Err(AllBatchError::Other)
@@ -407,7 +416,8 @@ where
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Ethereum>,
-		source_address: ForeignChainAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
@@ -421,6 +431,7 @@ where
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				egress_id,
 				transfer_param,
+				source_chain,
 				source_address,
 				message,
 			),

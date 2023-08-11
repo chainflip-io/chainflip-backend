@@ -1,8 +1,13 @@
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, EthereumAddress, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::PolkadotHash,
+	eth::{api::EthereumChainId, Address as EthereumAddress},
+};
+use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_pools::Pool;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -13,7 +18,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -40,6 +45,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
+	pub bound_redeem_address: Option<EthereumAddress>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -109,12 +115,6 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<String>;
-	#[method(name = "cf_eth_asset")]
-	fn cf_eth_asset(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-		token_address: EthereumAddress,
-	) -> RpcResult<Option<Asset>>;
 	#[method(name = "eth_flip_token_address")]
 	fn cf_eth_flip_token_address(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<String>;
@@ -123,6 +123,12 @@ pub trait CustomApi {
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[method(name = "eth_vault")]
 	fn cf_eth_vault(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<(String, u32)>;
+	#[method(name = "pools")]
+	fn cf_pools(
+		&self,
+		assert: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<HashMap<Asset, Option<Pool<AccountId32>>>>;
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -202,6 +208,10 @@ pub trait CustomApi {
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
+	#[method(name = "current_compatibility_version")]
+	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
+	#[method(name = "min_swap_amount")]
+	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 }
 
 /// An RPC extension for the state chain node.
@@ -243,16 +253,6 @@ where
 			.cf_eth_flip_token_address(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(hex::encode)
-	}
-	fn cf_eth_asset(
-		&self,
-		at: Option<<B as BlockT>::Hash>,
-		token_address: EthereumAddress,
-	) -> RpcResult<Option<Asset>> {
-		self.client
-			.runtime_api()
-			.cf_eth_asset(&self.query_block_id(at), token_address)
-			.map_err(to_rpc_error)
 	}
 	fn cf_eth_state_chain_gateway_address(
 		&self,
@@ -411,6 +411,7 @@ where
 			is_qualified: account_info.is_qualified,
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
+			bound_redeem_address: account_info.bound_redeem_address,
 		})
 	}
 	fn cf_penalties(
@@ -493,7 +494,13 @@ where
 				&self.query_block_id(at),
 				from,
 				to,
-				cf_utilities::try_parse_number_or_hex(amount)?,
+				cf_utilities::try_parse_number_or_hex(amount).and_then(|amount| {
+					if amount == 0 {
+						Err(anyhow::anyhow!("Swap input amount cannot be zero."))
+					} else {
+						Ok(amount)
+					}
+				})?,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
@@ -508,5 +515,47 @@ where
 			.cf_environment(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(RpcEnvironment::from)
+	}
+
+	fn cf_pools(
+		&self,
+		asset: Option<Asset>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<HashMap<Asset, Option<Pool<AccountId32>>>> {
+		let mut pools = HashMap::<Asset, Option<Pool<AccountId32>>>::new();
+		if let Some(asset) = asset {
+			pools.insert(
+				asset,
+				self.client
+					.runtime_api()
+					.cf_get_pool(&self.query_block_id(at), asset)
+					.map_err(to_rpc_error)?,
+			);
+		} else {
+			for asset in Asset::all().iter() {
+				pools.insert(
+					*asset,
+					self.client
+						.runtime_api()
+						.cf_get_pool(&self.query_block_id(at), *asset)
+						.map_err(to_rpc_error)?,
+				);
+			}
+		}
+		Ok(pools)
+	}
+
+	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
+		self.client
+			.runtime_api()
+			.cf_current_compatibility_version(&self.query_block_id(None))
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {
+		self.client
+			.runtime_api()
+			.cf_min_swap_amount(&self.query_block_id(None), asset)
+			.map_err(to_rpc_error)
 	}
 }

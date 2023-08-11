@@ -12,8 +12,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastCleanup, Broadcaster, Chainflip, EpochInfo,
-	EpochKey, OnBroadcastReady, SingleSignerNomination, ThresholdSigner,
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, EpochKey,
+	OnBroadcastReady, SingleSignerNomination, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -146,7 +146,7 @@ pub mod pallet {
 		type TargetChain: ChainAbi;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue;
+		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue + Send + Sync;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
@@ -640,9 +640,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::TransactionBuilder::is_valid_for_rebroadcast(
 				&api_call,
 				&broadcast_attempt.threshold_signature_payload,
-			) && <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 				&key,
-				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
 				let next_broadcast_attempt_id =
@@ -740,12 +738,5 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::threshold_sign_and_broadcast(api_call, Some(callback))
-	}
-}
-
-impl<T: Config<I>, I: 'static> BroadcastCleanup<T::TargetChain> for Pallet<T, I> {
-	fn clean_up_broadcast(broadcast_id: BroadcastId) -> DispatchResult {
-		Self::clean_up_broadcast_storage(broadcast_id);
-		Ok(())
 	}
 }

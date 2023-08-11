@@ -49,7 +49,7 @@ jobs:
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
 
       - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
@@ -78,10 +78,12 @@ jobs:
           if [[ '${{ inputs.environment }}' == 'prod' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
+            echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX={user}:{pass}@" >> $GITHUB_ENV
+            echo "REPO_BASIC_AUTH=flip:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
           fi
 
@@ -91,19 +93,18 @@ jobs:
       - name: Setup aptly
         run: |
           export AWS_SDK_LOAD_CONFIG=1
-          aptly repo create local
+          gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys ${{ env.GPG_KEY_ID }}
+          aptly repo create -distribution=${{ steps.vars.outputs.codename }} local
+          if aptly mirror create chainflip-${{ inputs.environment }} https://${REPO_BASIC_AUTH}@${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main; then
+            aptly mirror update chainflip-${{ inputs.environment }}
+            aptly repo import chainflip-${{ inputs.environment }} local 'Name'
+          fi
           aptly repo add local packages/*.deb
-          aptly snapshot create snap from repo local
+          aptly repo search local
 
-      - name: Publish prod
-        if: inputs.environment == 'prod'
+      - name: Publish packages to chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}
         run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
-
-      - name: Publish dev
-        if: inputs.environment == 'dev'
-        run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
+          aptly publish -gpg-key=${{ env.GPG_KEY_ID }} repo local "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Set Summary Title
         if: inputs.environment == 'prod'

@@ -1,18 +1,22 @@
 use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
-	address::ForeignChainAddress,
-	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
+	address::{AddressDerivationApi, ForeignChainAddress},
+	eth::{
+		api::{EthereumApi, EthereumReplayProtection},
+		Address as EthereumAddress,
+	},
+	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount, EthereumAddress, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount,
 };
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
+		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
@@ -88,19 +92,31 @@ impl GetBlockHeight<Ethereum> for BlockNumberProvider {
 	}
 }
 
+pub struct MockAddressDerivation;
+
+impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
+	fn generate_address(
+		_source_asset: assets::eth::Asset,
+		channel_id: ChannelId,
+	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+		Ok([channel_id as u8; 20].into())
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
-	type AddressDerivation = ();
+	type AddressDerivation = MockAddressDerivation;
+	type AddressConverter = MockAddressConverter;
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
-	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
 	type ChainTracking = BlockNumberProvider;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -115,7 +131,12 @@ type TestChainAsset = <<Test as crate::Config>::TargetChain as Chain>::ChainAsse
 pub trait RequestAddressAndDeposit {
 	fn request_address_and_deposit(
 		self,
-		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset, TestChainAmount)],
+		requests: &[(
+			<Test as frame_system::Config>::AccountId,
+			TestChainAsset,
+			TestChainAmount,
+			<Test as frame_system::Config>::BlockNumber,
+		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
@@ -130,6 +151,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 			<Test as frame_system::Config>::AccountId,
 			TestChainAsset,
 			TestChainAmount,
+			<Test as frame_system::Config>::BlockNumber,
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
@@ -139,7 +161,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
 			.iter()
 			.copied()
-			.map(|(acct, asset, amount)| ((acct, asset), amount))
+			.map(|(acct, asset, amount, expiry)| ((acct, asset, expiry), amount))
 			.unzip();
 
 		self.request_deposit_addresses(&requests[..])
@@ -147,7 +169,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 				channel
 					.iter()
 					.zip(amounts)
-					.filter_map(|(&(_channel_id, deposit_address, asset), amount)| {
+					.filter_map(|(&(_channel_id, deposit_address, asset, ..), amount)| {
 						(!amount.is_zero()).then_some((
 							OriginTrait::none(),
 							RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
@@ -155,8 +177,9 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 									deposit_address,
 									asset,
 									amount,
-									tx_id: Default::default(),
+									deposit_details: Default::default(),
 								}],
+								block_height: Default::default(),
 							}),
 							Ok(()),
 						))
@@ -169,7 +192,11 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 pub trait RequestAddress {
 	fn request_deposit_addresses(
 		self,
-		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset)],
+		requests: &[(
+			<Test as frame_system::Config>::AccountId,
+			TestChainAsset,
+			<Test as frame_system::Config>::BlockNumber,
+		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
@@ -182,7 +209,11 @@ impl<Ctx: Clone> RequestAddress
 {
 	fn request_deposit_addresses(
 		self,
-		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset)],
+		requests: &[(
+			<Test as frame_system::Config>::AccountId,
+			TestChainAsset,
+			<Test as frame_system::Config>::BlockNumber,
+		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
@@ -192,8 +223,8 @@ impl<Ctx: Clone> RequestAddress
 			requests
 				.iter()
 				.copied()
-				.map(|(broker, asset)| {
-					IngressEgress::request_liquidity_deposit_address(broker, asset)
+				.map(|(broker, asset, expiry)| {
+					IngressEgress::request_liquidity_deposit_address(broker, asset, expiry)
 						.map(|(id, addr)| (id, TestChainAccount::try_from(addr).unwrap(), asset))
 						.unwrap()
 				})

@@ -17,8 +17,9 @@ use crate::{
 		SigningRequestDetails,
 	},
 	crypto::{CryptoScheme, Rng},
-	eth::EthSigning,
+	eth::{EthSigning, EvmCryptoScheme},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
+	ChainSigning,
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
@@ -29,16 +30,17 @@ use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{task_scope::task_scope, threshold_from_share_count};
 
-use super::CEREMONY_ID_WINDOW;
-
 /// Run on_request_to_sign on a ceremony manager, using a dummy key and default ceremony id and
 /// data.
-async fn run_on_request_to_sign<C: CryptoScheme>(
-	ceremony_manager: &mut CeremonyManager<C>,
+async fn run_on_request_to_sign<Chain: ChainSigning>(
+	ceremony_manager: &mut CeremonyManager<Chain>,
 	participants: BTreeSet<sp_runtime::AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> oneshot::Receiver<
-	Result<Vec<<C as CryptoScheme>::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
+	Result<
+		Vec<<Chain::CryptoScheme as CryptoScheme>::Signature>,
+		(BTreeSet<AccountId32>, SigningFailureReason),
+	>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 	task_scope(|scope| {
@@ -47,8 +49,10 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 				ceremony_id,
 				participants,
 				vec![(
-					get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
-					C::signing_payload_for_test(),
+					get_key_data_for_test::<Chain::CryptoScheme>(BTreeSet::from_iter(
+						ACCOUNT_IDS.iter().cloned(),
+					)),
+					<Chain::CryptoScheme as CryptoScheme>::signing_payload_for_test(),
 				)],
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
@@ -104,11 +108,11 @@ fn send_signing_request<C: CryptoScheme>(
 	result_receiver
 }
 
-fn spawn_ceremony_manager<C: CryptoScheme>(
+fn spawn_ceremony_manager<Chain: ChainSigning>(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
 ) -> (
-	mpsc::UnboundedSender<CeremonyRequest<C>>,
+	mpsc::UnboundedSender<CeremonyRequest<Chain::CryptoScheme>>,
 	mpsc::UnboundedSender<(AccountId32, VersionedCeremonyMessage)>,
 	mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
@@ -116,7 +120,7 @@ fn spawn_ceremony_manager<C: CryptoScheme>(
 	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::unbounded_channel();
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
 	let ceremony_manager =
-		CeremonyManager::<C>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
+		CeremonyManager::<Chain>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
 	tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
 
 	(ceremony_request_sender, incoming_p2p_sender, outgoing_p2p_receiver)
@@ -234,8 +238,9 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
 	let past_ceremony_id = latest_ceremony_id; // Invalid, because it was used already (<=latest_ceremony_id)
-	let future_ceremony_id = latest_ceremony_id + CEREMONY_ID_WINDOW; // Valid, because its within the window
-	let future_ceremony_id_too_large = latest_ceremony_id + CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
+	let future_ceremony_id = latest_ceremony_id + <EthSigning as ChainSigning>::CEREMONY_ID_WINDOW; // Valid, because its within the window
+	let future_ceremony_id_too_large =
+		latest_ceremony_id + <EthSigning as ChainSigning>::CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
 
 	// Dummy stage 1 data to use for the test
 	let stage_1_data = MultisigData::Keygen(gen_keygen_data_hash_comm1());
@@ -342,13 +347,15 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				oneshot::channel();
 			const CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 
-			let task_handle =
-				scope.spawn_with_handle(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
-					CEREMONY_ID,
-					ceremony_runner_p2p_receiver,
-					ceremony_runner_request_receiver,
-					mpsc::unbounded_channel().0,
-				));
+			let task_handle = scope.spawn_with_handle(CeremonyRunner::<
+				SigningCeremony<EvmCryptoScheme>,
+				EthSigning,
+			>::run(
+				CEREMONY_ID,
+				ceremony_runner_p2p_receiver,
+				ceremony_runner_request_receiver,
+				mpsc::unbounded_channel().0,
+			));
 
 			// Turn the task handle into a ceremony handle and insert it into the ceremony manager
 			let ceremony_handle = CeremonyHandle {

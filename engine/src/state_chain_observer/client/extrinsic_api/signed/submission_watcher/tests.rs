@@ -1,9 +1,7 @@
-use cf_chains::dot;
 use frame_system::AccountInfo;
 use jsonrpsee::types::ErrorObject;
 use lazy_static::lazy_static;
 use mockall::predicate::eq;
-use pallet_cf_chain_tracking::ChainState;
 use sp_core::{
 	storage::{StorageData, StorageKey},
 	Encode,
@@ -22,12 +20,9 @@ const INITIAL_BLOCK_NUMBER: BlockNumber = 0;
 lazy_static! {
 	// Just some dummy call to test with
 	static ref DUMMY_CALL: state_chain_runtime::RuntimeCall = state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-		call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
-			pallet_cf_chain_tracking::Call::update_chain_state {
-				new_chain_state: ChainState {
-					block_height: 0,
-					tracked_data: dot::PolkadotTrackedData { median_tip: 0 },
-				},
+		call: Box::new(state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+			pallet_cf_broadcast::Call::transaction_signing_failure {
+				broadcast_attempt_id: Default::default(),
 			},
 		)),
 		epoch_index: 0,
@@ -397,6 +392,7 @@ fn test_cleanup_expired_submissions() {
 		genesis_hash: Default::default(),
 		extrinsic_lifetime: SIGNED_EXTRINSIC_LIFETIME,
 		base_rpc_client: Arc::new(mock_rpc_api),
+		error_decoder: Default::default(),
 	};
 
 	// Sanity check that the number of submissions match up
@@ -601,6 +597,7 @@ fn test_find_submission_and_process() {
 		genesis_hash: Default::default(),
 		extrinsic_lifetime: SIGNED_EXTRINSIC_LIFETIME,
 		base_rpc_client: Arc::new(mock_rpc_api),
+		error_decoder: Default::default(),
 	};
 
 	watcher.find_submission_and_process(&extrinsic, events.iter().cloned(), &mut requests, &block);

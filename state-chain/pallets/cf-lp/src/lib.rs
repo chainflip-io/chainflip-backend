@@ -45,6 +45,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
+			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
 		/// API for handling asset egress.
@@ -87,8 +88,8 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = LiquidityChannelExpiries::<T>::take(n);
 			let expired_count = expired.len();
-			for (channel_id, address) in expired {
-				T::DepositHandler::expire_channel(channel_id, address.clone());
+			for (_, address) in expired {
+				T::DepositHandler::expire_channel(address.clone());
 				Self::deposit_event(Event::LiquidityDepositAddressExpired {
 					address: T::AddressConverter::to_encoded_address(address),
 				});
@@ -209,11 +210,16 @@ pub mod pallet {
 				Error::<T>::NoEmergencyWithdrawalAddressRegistered
 			);
 
-			let (channel_id, deposit_address) =
-				T::DepositHandler::request_liquidity_deposit_address(account_id, asset)?;
-
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
+
+			let (channel_id, deposit_address) =
+				T::DepositHandler::request_liquidity_deposit_address(
+					account_id,
+					asset,
+					expiry_block,
+				)?;
+
 			LiquidityChannelExpiries::<T>::append(
 				expiry_block,
 				(channel_id, deposit_address.clone()),

@@ -7,24 +7,26 @@ description = 'Common primitive types used across Chainflip'
 
 [dependencies]
 serde = { optional = true, version = '1.0.126', features = ['derive'] }
-hex = { optional = true, version = '0.4'}
-ethabi = {default-features = false, version = '18.0'}
-strum = {default-features = false, version = '0.24'}
-strum_macros = {default-features = false, version = '0.24'}
+hex = { optional = true, version = '0.4' }
+strum = { default-features = false, version = '0.24' }
+strum_macros = { default-features = false, version = '0.24' }
 
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 
-codec = { package = 'parity-scale-codec', version = '3.1.1', default-features = false, features = ['derive'] }
-scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+codec = { package = 'parity-scale-codec', version = '3.1.1', default-features = false, features = [
+  'derive',
+] }
+scale-info = { version = "2.1.1", default-features = false, features = [
+  "derive",
+] }
 
 [features]
 default = ['std']
 std = [
   'codec/std',
-  'ethabi/full-serde',
   'scale-info/std',
   'hex',
   'serde',

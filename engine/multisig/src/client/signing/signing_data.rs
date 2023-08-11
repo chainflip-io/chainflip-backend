@@ -9,7 +9,7 @@ use crate::{
 		SigningStageName,
 	},
 	crypto::{ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
-	ChainTag, CryptoScheme,
+	ChainSigning, ChainTag, MAX_BTC_SIGNING_PAYLOADS,
 };
 
 #[cfg(test)]
@@ -29,56 +29,68 @@ pub struct SigningCommitment<P: ECPoint> {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Comm1Inner<P: ECPoint>(#[serde(bound = "")] pub Vec<SigningCommitment<P>>);
 
-// Signing commitment is 2 points plus length of vector
-pub const SIGNING_COMMITMENT_MAX_SIZE: usize = 2 * MAX_POINT_SIZE + 8;
-// Local sig is 1 scalar plus length of vector
-pub const LOCAL_SIG_MAX_SIZE: usize = MAX_SCALAR_SIZE + 8;
+/// Calculate the size limit of the signing commitments. This scales with the number of payloads in
+/// the ceremony.
+const fn max_signing_commitments_size(number_of_payloads: usize) -> usize {
+	// 2 points * payloads + length of vector
+	2 * MAX_POINT_SIZE * number_of_payloads + 8
+}
+
+/// Calculate the size limit of the local sigs. This scales with the number of payloads in the
+/// ceremony.
+fn max_local_sigs_size(number_of_payloads: usize) -> usize {
+	// 1 scalar * payloads + length of vector
+	MAX_SCALAR_SIZE * number_of_payloads + 8
+}
 
 #[cfg(test)]
-
 mod serialisation {
 	use super::*;
 	use crate::{
-		client::helpers::{self, test_all_crypto_schemes},
+		client::helpers::{self, test_all_crypto_chains},
 		CryptoScheme,
 	};
 	use rand::SeedableRng;
 
-	fn test_signing_commitment_size_for_scheme<C: CryptoScheme>() {
+	fn test_signing_commitment_size_for_scheme<Chain: ChainSigning>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-		let comm1 = helpers::gen_dummy_signing_comm1::<C::Point>(&mut rng, 1);
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		let comm1 = helpers::gen_dummy_signing_comm1::<
+			<<Chain as ChainSigning>::CryptoScheme as CryptoScheme>::Point,
+		>(&mut rng, 1);
+		if matches!(<Chain as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
-			assert!(comm1.payload.len() == SIGNING_COMMITMENT_MAX_SIZE);
+			assert!(comm1.payload.len() == max_signing_commitments_size(1));
 		} else {
 			// Other chains might use a more compact serialization of primitives:
-			assert!(comm1.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE);
+			assert!(comm1.payload.len() <= max_signing_commitments_size(1));
 		}
 	}
 
 	#[test]
 	fn test_signing_commitment_size() {
-		test_all_crypto_schemes!(test_signing_commitment_size_for_scheme());
+		test_all_crypto_chains!(test_signing_commitment_size_for_scheme());
 	}
 
-	fn test_local_sig_size_for_scheme<C: CryptoScheme>() {
+	fn test_local_sig_size_for_scheme<Chain: ChainSigning>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-		let sig = helpers::gen_dummy_local_sig::<C::Point>(&mut rng);
+		let sig = helpers::gen_dummy_local_sig::<
+			<<Chain as ChainSigning>::CryptoScheme as CryptoScheme>::Point,
+		>(&mut rng, 1);
 
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<Chain as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
-			assert!(sig.payload.len() == LOCAL_SIG_MAX_SIZE);
+			assert!(sig.payload.len() == max_local_sigs_size(1));
 		} else {
 			// Other chains might use a more compact serialization of primitives:
-			assert!(sig.payload.len() <= LOCAL_SIG_MAX_SIZE);
+			assert!(sig.payload.len() <= max_local_sigs_size(1));
 		}
 	}
 
 	#[test]
 	fn test_local_sig_size() {
-		test_all_crypto_schemes!(test_local_sig_size_for_scheme());
+		test_all_crypto_chains!(test_local_sig_size_for_scheme());
 	}
 }
 
@@ -132,31 +144,36 @@ impl<P: ECPoint> Display for SigningData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
-	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
+	fn is_data_size_valid<Chain: ChainSigning>(
+		&self,
+		num_of_parties: AuthorityCount,
+		num_of_payloads: Option<usize>,
+	) -> bool {
+		let num_of_parties = num_of_parties as usize;
 		match self {
-			SigningData::CommStage1(_) => self.initial_stage_data_size_is_valid::<C>(),
-			SigningData::BroadcastVerificationStage2(message) =>
-				message.data.len() == num_of_parties as usize,
-			SigningData::LocalSigStage3(message) => match C::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
-					message.payload.len() <= LOCAL_SIG_MAX_SIZE,
-				// TODO: Find out what a realistic maximum is for the number of payloads we
-				// can handle is for btc
-				ChainTag::Bitcoin => true,
-			},
-			SigningData::VerifyLocalSigsStage4(message) =>
-				message.data.len() == num_of_parties as usize,
+			SigningData::CommStage1(_) => self.is_initial_stage_data_size_valid::<Chain>(),
+			// It is safe to unwrap after the first stage because the number of payloads is always
+			// known from then on (only for signing ceremonies)
+			SigningData::BroadcastVerificationStage2(message) => message.is_data_size_valid(
+				num_of_parties,
+				max_signing_commitments_size(num_of_payloads.unwrap()),
+			),
+			SigningData::LocalSigStage3(message) =>
+				message.payload.len() <= max_local_sigs_size(num_of_payloads.unwrap()),
+
+			SigningData::VerifyLocalSigsStage4(message) => message
+				.is_data_size_valid(num_of_parties, max_local_sigs_size(num_of_payloads.unwrap())),
 		}
 	}
 
-	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
+	fn is_initial_stage_data_size_valid<Chain: ChainSigning>(&self) -> bool {
 		match self {
-			SigningData::CommStage1(message) => match C::CHAIN_TAG {
+			SigningData::CommStage1(message) => match Chain::CHAIN_TAG {
 				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
-					message.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE,
-				// TODO: Find out what a realistic maximum is for the number of payloads we
-				// can handle is for btc
-				ChainTag::Bitcoin => true,
+					message.payload.len() <= max_signing_commitments_size(1),
+				ChainTag::Bitcoin =>
+				// At this stage we may not know the number of payloads, so we use a maximum
+					message.payload.len() <= max_signing_commitments_size(MAX_BTC_SIGNING_PAYLOADS),
 			},
 			_ => panic!("unexpected stage"),
 		}
@@ -194,7 +211,7 @@ mod tests {
 		crypto::eth::Point,
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		Rng,
+		ChainSigning, Rng,
 	};
 
 	use rand::SeedableRng;
@@ -206,20 +223,44 @@ mod tests {
 		SigningData::<Point>::CommStage1(gen_dummy_signing_comm1(&mut rng, number_of_commitments))
 	}
 
-	pub fn gen_signing_data_stage2(participant_count: AuthorityCount) -> SigningData<Point> {
+	pub fn gen_signing_data_stage2(
+		participant_count: AuthorityCount,
+		number_of_commitments: usize,
+	) -> SigningData<Point> {
 		let mut rng = Rng::from_seed([0; 32]);
 		SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
 			data: (1..=participant_count)
-				.map(|i| (i as AuthorityCount, Some(gen_dummy_signing_comm1(&mut rng, 1))))
+				.map(|i| {
+					(
+						i as AuthorityCount,
+						Some(gen_dummy_signing_comm1(&mut rng, number_of_commitments as u64)),
+					)
+				})
 				.collect(),
 		})
 	}
 
-	pub fn gen_signing_data_stage4(participant_count: AuthorityCount) -> SigningData<Point> {
+	pub fn gen_signing_data_stage3(number_of_responses: usize) -> SigningData<Point> {
+		let mut rng = Rng::from_seed([0; 32]);
+		SigningData::<Point>::LocalSigStage3(gen_dummy_local_sig(
+			&mut rng,
+			number_of_responses as u64,
+		))
+	}
+
+	pub fn gen_signing_data_stage4(
+		participant_count: AuthorityCount,
+		number_of_responses: usize,
+	) -> SigningData<Point> {
 		let mut rng = Rng::from_seed([0; 32]);
 		SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
 			data: (1..=participant_count)
-				.map(|i| (i as AuthorityCount, Some(gen_dummy_local_sig(&mut rng))))
+				.map(|i| {
+					(
+						i as AuthorityCount,
+						Some(gen_dummy_local_sig(&mut rng, number_of_responses as u64)),
+					)
+				})
 				.collect(),
 		})
 	}
@@ -227,34 +268,71 @@ mod tests {
 	#[test]
 	fn check_data_size_stage1() {
 		// Should only pass if the message contains exactly one commitment for ethereum and Polkadot
-		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotSigning>());
+		assert!(gen_signing_data_stage1(1).is_initial_stage_data_size_valid::<EthSigning>());
+		assert!(!gen_signing_data_stage1(2).is_initial_stage_data_size_valid::<EthSigning>());
+		assert!(!gen_signing_data_stage1(2).is_initial_stage_data_size_valid::<PolkadotSigning>());
 
-		// No limit on bitcoin for now
-		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcSigning>());
+		// Because we might not know the number of payloads yet, we limit btc to a constant
+		assert!(gen_signing_data_stage1(MAX_BTC_SIGNING_PAYLOADS as u64)
+			.is_initial_stage_data_size_valid::<BtcSigning>());
+		assert!(gen_signing_data_stage1((MAX_BTC_SIGNING_PAYLOADS - 1) as u64)
+			.is_initial_stage_data_size_valid::<BtcSigning>());
+		assert!(!gen_signing_data_stage1((MAX_BTC_SIGNING_PAYLOADS + 1) as u64)
+			.is_initial_stage_data_size_valid::<BtcSigning>());
 	}
 
 	#[test]
 	fn check_data_size_stage2() {
-		let test_size = 4;
-		let data_to_check = gen_signing_data_stage2(test_size);
+		const PARTIES: AuthorityCount = 4;
+		const PAYLOAD_COUNT: usize = 3;
 
-		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
+		// Outer collection should fail on sizes larger or smaller than expected
+		assert!(gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage2(PARTIES - 1, PAYLOAD_COUNT)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage2(PARTIES + 1, PAYLOAD_COUNT)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+
+		// Inner collection should fail on sizes larger than the maximum size
+		assert!(gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT - 1)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT + 1)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+	}
+
+	#[test]
+	fn check_data_size_stage3() {
+		const PARTIES: AuthorityCount = 4;
+		const PAYLOAD_COUNT: usize = 3;
+
+		// Should fail if it has too many responses
+		assert!(gen_signing_data_stage3(PAYLOAD_COUNT)
+			.is_data_size_valid::<EthSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(gen_signing_data_stage3(PAYLOAD_COUNT - 1)
+			.is_data_size_valid::<EthSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage3(PAYLOAD_COUNT + 1)
+			.is_data_size_valid::<EthSigning>(PARTIES, Some(PAYLOAD_COUNT)));
 	}
 
 	#[test]
 	fn check_data_size_stage4() {
-		let test_size = 4;
-		let data_to_check = gen_signing_data_stage4(test_size);
+		const PARTIES: AuthorityCount = 4;
+		const PAYLOAD_COUNT: usize = 3;
 
-		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
+		// Outer collection should fail on sizes larger or smaller than expected
+		assert!(gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage4(PARTIES - 1, PAYLOAD_COUNT)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage4(PARTIES + 1, PAYLOAD_COUNT)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+
+		// Inner collection should fail on sizes larger than the maximum size
+		assert!(gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT - 1)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
+		assert!(!gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT + 1)
+			.is_data_size_valid::<BtcSigning>(PARTIES, Some(PAYLOAD_COUNT)));
 	}
 
 	#[test]
@@ -270,9 +348,9 @@ mod tests {
 		];
 		let stage_data = [
 			gen_signing_data_stage1(default_length as u64),
-			gen_signing_data_stage2(default_length),
-			SigningData::<Point>::LocalSigStage3(gen_dummy_local_sig(&mut rng)),
-			gen_signing_data_stage4(default_length),
+			gen_signing_data_stage2(default_length, default_length as usize),
+			SigningData::<Point>::LocalSigStage3(gen_dummy_local_sig(&mut rng, 1)),
+			gen_signing_data_stage4(default_length, default_length as usize),
 		];
 
 		for (stage_index, name) in stage_name.iter().enumerate() {
@@ -286,5 +364,29 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	/// Check that each chain does not exceed an acceptable limit to the amount of ceremony data
+	/// that a single node can force us to store as delayed initial stage messages.
+	fn should_not_exceed_spam_limits() {
+		const MULTI_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 100_000_000; // ~100mb
+		assert!(
+			max_signing_commitments_size(MAX_BTC_SIGNING_PAYLOADS) as u64 *
+				<BtcSigning as ChainSigning>::CEREMONY_ID_WINDOW <=
+				MULTI_PAYLOAD_SPAM_LIMIT_BYTES
+		);
+
+		const SINGLE_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 500_000; // ~0.5mb
+		assert!(
+			max_signing_commitments_size(1) as u64 *
+				<EthSigning as ChainSigning>::CEREMONY_ID_WINDOW <=
+				SINGLE_PAYLOAD_SPAM_LIMIT_BYTES
+		);
+		assert!(
+			max_signing_commitments_size(1) as u64 *
+				<PolkadotSigning as ChainSigning>::CEREMONY_ID_WINDOW <=
+				SINGLE_PAYLOAD_SPAM_LIMIT_BYTES
+		);
 	}
 }

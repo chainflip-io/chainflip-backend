@@ -11,8 +11,8 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress,
-	PolkadotInstance, Runtime, RuntimeCall, System, Validator,
+	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
+	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -31,15 +31,14 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
+		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
-	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
-	TransactionBuilder,
+	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
@@ -53,8 +52,6 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use pallet_cf_chain_tracking::ChainState;
-use pallet_cf_vaults::VaultRotationStatus;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -81,6 +78,9 @@ impl_runtime_safe_mode! {
 	swapping: pallet_cf_swapping::PalletSafeMode,
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
 	validator: pallet_cf_validator::PalletSafeMode,
+	pools: pallet_cf_pools::PalletSafeMode,
+	reputation: pallet_cf_reputation::PalletSafeMode,
+	vault: pallet_cf_vaults::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -146,34 +146,47 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	fn build_transaction(
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
+		// TODO: This should take into account the ccm gas budget. (See PRO-161)
+		const CCM_GAS_LIMIT: u64 = 400_000;
+		const DEFAULT_GAS_LIMIT: u64 = 15_000_000;
+		let gas_limit = match signed_call {
+			EthereumApi::ExecutexSwapAndCall(_) => Some(CCM_GAS_LIMIT.into()),
+			// None means there is no gas limit.
+			_ => Some(DEFAULT_GAS_LIMIT.into()),
+		};
 		eth::Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
+			gas_limit,
 			..Default::default()
 		}
 	}
 
 	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
-		if let Some(ChainState { tracked_data, .. }) = EthereumChainTracking::chain_state() {
-			// double the last block's base fee. This way we know it'll be selectable for at least 6
-			// blocks (12.5% increase on each block)
-			let max_fee_per_gas = tracked_data
-				.base_fee
-				.saturating_mul(2)
-				.saturating_add(tracked_data.priority_fee);
-			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
-		}
-		// if we don't have CurrentChainState, we leave it unmodified
+		let tracked_data = EthereumChainTracking::chain_state().unwrap().tracked_data;
+		// double the last block's base fee. This way we know it'll be selectable for at least 6
+		// blocks (12.5% increase on each block)
+		let max_fee_per_gas = tracked_data
+			.base_fee
+			.saturating_mul(2)
+			.saturating_add(tracked_data.priority_fee);
+		unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+		unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
 	}
 
 	fn is_valid_for_rebroadcast(
-		_call: &EthereumApi<EthEnvironment>,
+		call: &EthereumApi<EthEnvironment>,
 		_payload: &<Ethereum as ChainCrypto>::Payload,
+		current_key: &<Ethereum as ChainCrypto>::AggKey,
+		signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Nothing to validate for Ethereum
-		true
+		// Check if signature is valid
+		<Ethereum as ChainCrypto>::verify_threshold_signature(
+			current_key,
+			&call.threshold_signature_payload(),
+			signature,
+		)
 	}
 }
 
@@ -192,8 +205,17 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<Polkadot as ChainCrypto>::Payload,
+		current_key: &<Polkadot as ChainCrypto>::AggKey,
+		signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		&call.threshold_signature_payload() == payload
+		// First check if the payload is still valid. If it is, check if the signature is still
+		// valid
+		(&call.threshold_signature_payload() == payload) &&
+			<Polkadot as ChainCrypto>::verify_threshold_signature(
+				current_key,
+				payload,
+				signature,
+			)
 	}
 }
 
@@ -206,17 +228,23 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 
 	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
-		// We might need to restructure the tx depending on the current fee per utxo. no-op until we
-		// have chain tracking
+		// Since BTC txs are chained and the subsequent tx depends on the success of the previous
+		// one, changing the BTC tx fee will mean all subsequent txs are also invalid and so
+		// refreshing btc tx is not trivial. We leave it a no-op for now.
 	}
 
 	fn is_valid_for_rebroadcast(
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<Bitcoin as ChainCrypto>::Payload,
+		_current_key: &<Bitcoin as ChainCrypto>::AggKey,
+		_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// Todo: The transaction wont be valid for rebroadcast as soon as we transition to new epoch
-		// since the input utxo set will change and the whole apicall would be invalid. This case
-		// will be handled later
+		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
+		// checked here. We also dont need to check for the signature here because even if we are in
+		// the next epoch and the key has changed, the old signature for the btc tx is still valid
+		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
+		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
+		// to check anything here and just rebroadcast.
 		true
 	}
 }
@@ -256,17 +284,16 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 impl EthEnvironmentProvider for EthEnvironment {
 	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 		match asset {
-			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
+			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
 	fn contract_address(contract: EthereumContract) -> eth::Address {
 		match contract {
-			EthereumContract::StateChainGateway =>
-				Environment::state_chain_gateway_address().into(),
-			EthereumContract::KeyManager => Environment::key_manager_address().into(),
-			EthereumContract::Vault => Environment::eth_vault_address().into(),
+			EthereumContract::StateChainGateway => Environment::state_chain_gateway_address(),
+			EthereumContract::KeyManager => Environment::key_manager_address(),
+			EthereumContract::Vault => Environment::eth_vault_address(),
 		}
 	}
 
@@ -295,7 +322,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 
 impl Get<RuntimeVersion> for DotEnvironment {
 	fn get() -> RuntimeVersion {
-		Environment::polkadot_runtime_version()
+		PolkadotChainTracking::chain_state().unwrap().tracked_data.runtime_version
 	}
 }
 
@@ -305,18 +332,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
 				<PolkadotVault as KeyProvider<Polkadot>>::active_epoch_key()
-					.map(|epoch_key| epoch_key.key)
-					// This is temporary workaround to make the dot key available for the
-					// createPure request.
-					// TODO: remove createPure.
-					.or_else(|| {
-						pallet_cf_vaults::PendingVaultRotation::<Runtime, PolkadotInstance>::get()
-							.and_then(|rotation| match rotation {
-								VaultRotationStatus::AwaitingActivation { new_public_key } =>
-									Some(new_public_key),
-								_ => None,
-							})
-					}),
+					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
@@ -419,10 +435,12 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
+			type BlockNumber = <Runtime as frame_system::Config>::BlockNumber;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
+				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -430,6 +448,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
+								expiry,
 							),
 					)+
 				}
@@ -441,7 +460,8 @@ macro_rules! impl_deposit_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
-				message_metadata: Option<CcmDepositMetadata>,
+				channel_metadata: Option<CcmChannelMetadata>,
+				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -451,13 +471,14 @@ macro_rules! impl_deposit_api_for_anychain {
 							destination_address,
 							broker_commission_bps,
 							broker_id,
-							message_metadata,
+							channel_metadata,
+							expiry,
 						),
 					)+
 				}
 			}
 
-			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+			fn expire_channel(address: ForeignChainAddress) {
 				if address.chain() == ForeignChain::Bitcoin {
 					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
 				}
@@ -465,7 +486,6 @@ macro_rules! impl_deposit_api_for_anychain {
 					$(
 						ForeignChain::$chain => {
 							<$pallet as DepositApi<$chain>>::expire_channel(
-								channel_id,
 								address.try_into().expect("Checked for address compatibility")
 							);
 						},
@@ -528,7 +548,7 @@ impl DepositHandler<Polkadot> for DotDepositHandler {}
 pub struct BtcDepositHandler;
 impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
-		utxo_id: <Bitcoin as ChainCrypto>::TransactionInId,
+		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
 		address: <Bitcoin as Chain>::ChainAccount,
 		_asset: <Bitcoin as Chain>::ChainAsset,
@@ -560,13 +580,13 @@ pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
 	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress {
-		to_encoded_address(address, Environment::bitcoin_network)
+		to_encoded_address(address, Environment::network_environment)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
+		try_from_encoded_address(encoded_address, Environment::network_environment)
 	}
 }
 
@@ -602,9 +622,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 pub struct BitcoinFeeGetter;
 impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
-		BitcoinChainTracking::chain_state()
-			.map(|chain_state| chain_state.tracked_data.btc_fee_info)
-			.unwrap_or(Default::default())
+		BitcoinChainTracking::chain_state().unwrap().tracked_data.btc_fee_info
 	}
 }
 

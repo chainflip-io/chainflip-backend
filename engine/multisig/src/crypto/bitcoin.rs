@@ -1,5 +1,7 @@
 pub use super::secp256k1::{Point, Scalar};
-use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use super::{
+	ChainSigning, ChainTag, CryptoScheme, CryptoTag, ECPoint, SignatureToThresholdSignature,
+};
 use crate::crypto::ECScalar;
 use anyhow::Context;
 use cf_chains::Bitcoin;
@@ -36,7 +38,6 @@ impl SignatureToThresholdSignature<Bitcoin> for Vec<BtcSchnorrSignature> {
 	}
 }
 
-/// Bitcoin crypto scheme (as defined by BIP 340)
 #[derive(Clone, Debug, PartialEq)]
 pub struct BtcSigning {}
 
@@ -55,15 +56,28 @@ impl AsRef<[u8]> for SigningPayload {
 	}
 }
 
-impl CryptoScheme for BtcSigning {
+#[derive(Clone, Debug, PartialEq)]
+/// Bitcoin crypto scheme (as defined by BIP 340)
+pub struct BtcCryptoScheme;
+
+impl ChainSigning for BtcSigning {
+	type CryptoScheme = BtcCryptoScheme;
+	type Chain = cf_chains::Bitcoin;
+	const NAME: &'static str = "Bitcoin";
+	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
+
+	/// The window is smaller for bitcoin because its block time is a lot longer and it supports
+	/// multiple signing payloads
+	const CEREMONY_ID_WINDOW: u64 = 1500;
+}
+
+impl CryptoScheme for BtcCryptoScheme {
 	type Point = Point;
 	type Signature = BtcSchnorrSignature;
 	type PublicKey = secp256k1::XOnlyPublicKey;
 	type SigningPayload = SigningPayload;
-	type Chain = cf_chains::Bitcoin;
-
-	const NAME: &'static str = "Bitcoin";
-	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Bitcoin;
+	const NAME: &'static str = "Bitcoin Crypto";
 
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		BtcSchnorrSignature { s: z, r: group_commitment }
@@ -148,22 +162,23 @@ mod test {
 	fn test_sig_verification() {
 		// These are some random values fed through a reference implementation for bitcoin signing
 		// to test that our verification works correctly
+		type BtcCryptoScheme = <BtcSigning as ChainSigning>::CryptoScheme;
 		let r = Point::from_scalar(&Scalar::from_hex(
 			"8F78522655F02F46F55103BC6EE2242E04553DAA65BF18D0E329EC6B49FD3788",
 		));
 		let s =
 			Scalar::from_hex("ED7A468DBE45823D91CC1276F9E9F1DD3A1DB8E4C9EFE8F5DBA43B63E4C02FAD");
-		let signature = BtcSigning::build_signature(s, r);
+		let signature = BtcCryptoScheme::build_signature(s, r);
 		let pubkey = secp256k1::XOnlyPublicKey::from_slice(
 			hex::decode("59B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E")
 				.unwrap()
 				.as_slice(),
 		)
 		.unwrap();
-		assert!(BtcSigning::verify_signature(
+		assert!(BtcCryptoScheme::verify_signature(
 			&signature,
 			&pubkey,
-			&BtcSigning::signing_payload_for_test()
+			&BtcCryptoScheme::signing_payload_for_test()
 		)
 		.is_ok());
 	}
@@ -175,7 +190,7 @@ mod test {
 		let s =
 			Scalar::from_hex("626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543");
 		let r = Point::from_scalar(&s);
-		let sig = BtcSigning::build_signature(s, r);
+		let sig = BtcCryptoScheme::build_signature(s, r);
 		assert_eq!(
 			sig.to_raw(),
 			[
@@ -199,10 +214,10 @@ mod test {
 			"EB3F18E13AEFBF7AC9347F38B6E5D5576848B4E7927F6233222BA9286BB24F31",
 		));
 		assert_eq!(
-			BtcSigning::build_challenge(
+			BtcCryptoScheme::build_challenge(
 				public,
 				commitment,
-				&BtcSigning::signing_payload_for_test()
+				&BtcCryptoScheme::signing_payload_for_test()
 			),
 			Scalar::from_hex("1FCA6ED81348426626DA247A3B0810F61EA46C592442F81FC9DFFDB43ABBE439")
 		);

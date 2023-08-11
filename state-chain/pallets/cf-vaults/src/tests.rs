@@ -1,9 +1,11 @@
 #![cfg(test)]
 
+use core::panic;
+
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
-	KeygenFailureVoters, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters,
-	PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
+	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout,
+	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::{
 	eth::Ethereum,
@@ -13,7 +15,7 @@ use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
-	EpochInfo, KeyProvider, SafeMode, VaultRotator, VaultStatus,
+	EpochInfo, KeyProvider, SafeMode, SetSafeMode, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
@@ -141,11 +143,7 @@ fn keygen_failure(bad_candidates: &[<MockRuntime as Chainflip>::ValidatorId]) {
 
 	let ceremony_id = current_ceremony_id();
 
-	VaultsPallet::terminate_rotation(
-		bad_candidates,
-		PalletOffence::FailedKeygen,
-		PalletEvent::KeygenFailure(ceremony_id),
-	);
+	VaultsPallet::terminate_rotation(bad_candidates, PalletEvent::KeygenFailure(ceremony_id));
 
 	assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
@@ -332,25 +330,33 @@ fn only_candidates_can_report_keygen_outcome() {
 }
 
 #[test]
-fn can_only_report_keygen_candidates() {
+fn can_only_blame_keygen_candidates() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(
-			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-			GENESIS_EPOCH,
-		);
+		let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+		let valid_blames = BTreeSet::from_iter([BOB, CHARLIE]);
+		let invalid_blames = BTreeSet::from_iter([u64::MAX - 1, u64::MAX]);
+		assert!(valid_blames.is_subset(&candidates));
+		assert!(invalid_blames.is_disjoint(&candidates));
 
-		let non_candidate = u64::MAX;
-		assert!(!ALL_CANDIDATES.contains(&non_candidate));
-		assert_noop!(
-			VaultsPallet::report_keygen_outcome(
-				RuntimeOrigin::signed(ALICE),
-				current_ceremony_id(),
-				// Report the non-candidate
-				Err(BTreeSet::from_iter([non_candidate]))
-			),
-			Error::<MockRuntime, _>::InvalidBlame
-		);
-		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+		<VaultsPallet as VaultRotator>::keygen(candidates, GENESIS_EPOCH);
+
+		VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(ALICE),
+			current_ceremony_id(),
+			// Report both the valid and invalid offenders
+			Err(valid_blames.iter().cloned().chain(invalid_blames.clone()).collect()),
+		)
+		.unwrap();
+
+		match PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+			VaultRotationStatus::AwaitingKeygen { response_status, .. } => {
+				let blamed: BTreeSet<_> = response_status.blame_votes().keys().cloned().collect();
+
+				assert_eq!(&valid_blames, &blamed);
+				assert!(invalid_blames.is_disjoint(&blamed));
+			},
+			_ => panic!("Expected to be in AwaitingKeygen state"),
+		}
 	});
 }
 
@@ -653,12 +659,14 @@ fn test_key_handover_timeout_period() {
 	});
 }
 
-#[test]
-fn vault_key_rotated() {
+#[cfg(test)]
+mod vault_key_rotation {
+	use super::*;
+
 	const ACTIVATION_BLOCK_NUMBER: u64 = 42;
 	const TX_HASH: [u8; 4] = [0xab; 4];
 
-	fn setup() -> sp_io::TestExternalities {
+	fn setup(outcome: KeygenOutcomeFor<MockRuntime>) -> sp_io::TestExternalities {
 		let mut ext = new_test_ext();
 		ext.execute_with(|| {
 			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
@@ -697,7 +705,7 @@ fn vault_key_rotated() {
 				assert_ok!(VaultsPallet::report_key_handover_outcome(
 					RuntimeOrigin::signed(candidate),
 					current_ceremony_id(),
-					Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
+					outcome.clone()
 				));
 			}
 
@@ -755,61 +763,98 @@ fn vault_key_rotated() {
 		});
 	}
 
-	// Non-optimistic activation is the default.
-	let mut non_optimistic_activation = setup();
-	non_optimistic_activation.execute_with(|| {
-		MockOptimisticActivation::set(false);
-		VaultsPallet::activate();
+	#[test]
+	fn non_optimistic_activation() {
+		let mut ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER));
+		ext.execute_with(|| {
+			MockOptimisticActivation::set(false);
+			VaultsPallet::activate();
 
-		assert!(matches!(
-			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::AwaitingActivation { .. }
-		));
+			assert!(matches!(
+				PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+				VaultRotationStatus::AwaitingActivation { .. }
+			));
 
-		assert_ok!(VaultsPallet::vault_key_rotated(
-			RuntimeOrigin::root(),
-			ACTIVATION_BLOCK_NUMBER,
-			TX_HASH,
-		));
-	});
-	final_checks(&mut non_optimistic_activation, ACTIVATION_BLOCK_NUMBER);
-
-	// Test with optimistic activation.
-	let mut optimistic_activation = setup();
-	optimistic_activation.execute_with(|| {
-		MockOptimisticActivation::set(true);
-		VaultsPallet::activate();
-
-		// No need to call vault_key_rotated.
-		assert_noop!(
-			VaultsPallet::vault_key_rotated(
+			assert_ok!(VaultsPallet::vault_key_rotated(
 				RuntimeOrigin::root(),
 				ACTIVATION_BLOCK_NUMBER,
 				TX_HASH,
-			),
-			Error::<MockRuntime, _>::InvalidRotationStatus
-		);
+			));
+		});
+		final_checks(&mut ext, ACTIVATION_BLOCK_NUMBER);
+	}
 
-		assert!(matches!(
-			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::Complete,
-		));
-	});
-	final_checks(&mut optimistic_activation, HANDOVER_ACTIVATION_BLOCK);
+	#[test]
+	fn optimistic_activation() {
+		let mut ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER));
+		ext.execute_with(|| {
+			MockOptimisticActivation::set(true);
+			VaultsPallet::activate();
+
+			// No need to call vault_key_rotated.
+			assert_noop!(
+				VaultsPallet::vault_key_rotated(
+					RuntimeOrigin::root(),
+					ACTIVATION_BLOCK_NUMBER,
+					TX_HASH,
+				),
+				Error::<MockRuntime, _>::InvalidRotationStatus
+			);
+
+			assert!(matches!(
+				PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+				VaultRotationStatus::Complete,
+			));
+		});
+		final_checks(&mut ext, HANDOVER_ACTIVATION_BLOCK);
+	}
+
+	#[test]
+	fn handover_failure() {
+		let mut ext = setup(Err(Default::default()));
+		ext.execute_with(|| {
+			assert!(matches!(
+				PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+				VaultRotationStatus::KeyHandoverFailed { .. }
+			));
+
+			// Start handover again, but successful this time.
+			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+			VaultsPallet::key_handover(
+				btree_candidates.clone(),
+				btree_candidates.clone(),
+				<MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1,
+			);
+
+			for candidate in btree_candidates {
+				assert_ok!(VaultsPallet::report_key_handover_outcome(
+					RuntimeOrigin::signed(candidate),
+					current_ceremony_id(),
+					Ok(NEW_AGG_PUB_KEY_POST_HANDOVER),
+				));
+			}
+
+			VaultsPallet::on_initialize(1);
+
+			MockOptimisticActivation::set(true);
+			VaultsPallet::activate();
+		});
+		final_checks(&mut ext, HANDOVER_ACTIVATION_BLOCK);
+	}
 }
 
 #[test]
 fn test_vault_key_rotated_externally_triggers_code_red() {
 	new_test_ext().execute_with(|| {
 		const TX_HASH: [u8; 4] = [0xab; 4];
-		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_GREEN);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_GREEN);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			RuntimeOrigin::root(),
 			NEW_AGG_PUB_KEY_POST_HANDOVER,
 			1,
 			TX_HASH,
 		));
-		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_RED);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_RED);
 		assert_last_event!(crate::Event::VaultRotatedExternally(..));
 	});
 }
@@ -864,5 +909,212 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
 			VaultRotationStatus::Complete
 		))
+	})
+}
+
+#[test]
+fn dont_slash_in_safe_mode() {
+	new_test_ext().execute_with(|| {
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			vault: crate::PalletSafeMode { slashing_enabled: false },
+		});
+		keygen_failure(&[BOB, CHARLIE]);
+		assert!(MockSlasher::slash_count(BOB) == 0);
+		assert!(MockSlasher::slash_count(CHARLIE) == 0);
+
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			vault: crate::PalletSafeMode { slashing_enabled: true },
+		});
+		keygen_failure(&[BOB, CHARLIE]);
+		assert!(MockSlasher::slash_count(BOB) == 1);
+		assert!(MockSlasher::slash_count(CHARLIE) == 1);
+	});
+}
+
+fn do_full_key_rotation() {
+	let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+	// Start Key gen
+	<VaultsPallet as VaultRotator>::keygen(
+		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+		rotation_epoch,
+	);
+	let keygen_ceremony_id = current_ceremony_id();
+
+	for p in ALL_CANDIDATES {
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(*p),
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+		));
+	}
+
+	// Key verification
+	VaultsPallet::on_initialize(2);
+	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+	// Key handover
+	const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+	VaultsPallet::key_handover(
+		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		rotation_epoch,
+	);
+
+	let handover_ceremony_id = current_ceremony_id();
+	for p in HANDOVER_PARTICIPANTS {
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(p),
+			handover_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
+		));
+	}
+	VaultsPallet::on_initialize(3);
+
+	// Key activation
+	VaultsPallet::activate();
+
+	assert_last_event!(crate::Event::VaultRotationCompleted);
+	assert_eq!(PendingVaultRotation::<MockRuntime, _>::get(), Some(VaultRotationStatus::Complete));
+	assert_eq!(VaultsPallet::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+}
+
+#[test]
+fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
+	new_test_ext().execute_with(|| {
+		MockOptimisticActivation::set(true);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			rotation_epoch,
+		);
+		let keygen_ceremony_id = current_ceremony_id();
+
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(ALICE),
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+		));
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(BOB),
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+		));
+		assert_ok!(VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(CHARLIE),
+			keygen_ceremony_id,
+			Err(Default::default())
+		));
+		VaultsPallet::on_initialize(2);
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::Failed { .. })
+		);
+
+		// Abort the vault rotation now
+		VaultsPallet::abort_vault_rotation();
+
+		assert!(PendingVaultRotation::<MockRuntime, _>::get().is_none());
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 0);
+		assert_eq!(VaultsPallet::status(), AsyncResult::Void);
+
+		// Can restart the vault rotation and succeed.
+		do_full_key_rotation();
+	})
+}
+
+#[test]
+fn can_recover_from_abort_vault_rotation_after_key_verification() {
+	new_test_ext().execute_with(|| {
+		MockOptimisticActivation::set(true);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			rotation_epoch,
+		);
+		let keygen_ceremony_id = current_ceremony_id();
+
+		for p in ALL_CANDIDATES {
+			assert_ok!(VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(*p),
+				keygen_ceremony_id,
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::KeygenVerificationComplete { .. })
+		);
+
+		// Abort the vault rotation now
+		VaultsPallet::abort_vault_rotation();
+
+		assert!(PendingVaultRotation::<MockRuntime, _>::get().is_none());
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 0);
+		assert_eq!(VaultsPallet::status(), AsyncResult::Void);
+
+		// Can restart the vault rotation and succeed.
+		do_full_key_rotation();
+	})
+}
+
+#[test]
+fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
+	new_test_ext().execute_with(|| {
+		MockOptimisticActivation::set(true);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			rotation_epoch,
+		);
+		let keygen_ceremony_id = current_ceremony_id();
+		for p in ALL_CANDIDATES {
+			assert_ok!(VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(*p),
+				keygen_ceremony_id,
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// Key handover
+		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+		VaultsPallet::key_handover(
+			BTreeSet::from(HANDOVER_PARTICIPANTS),
+			BTreeSet::from(HANDOVER_PARTICIPANTS),
+			rotation_epoch,
+		);
+
+		let handover_ceremony_id = current_ceremony_id();
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(ALICE),
+			handover_ceremony_id,
+			Err(Default::default())
+		));
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(BOB),
+			handover_ceremony_id,
+			Err(Default::default())
+		));
+
+		VaultsPallet::on_initialize(2);
+		matches!(
+			PendingVaultRotation::<MockRuntime, _>::get(),
+			Some(VaultRotationStatus::KeyHandoverFailed { .. })
+		);
+
+		// Abort the vault rotation now
+		VaultsPallet::abort_vault_rotation();
+
+		assert!(PendingVaultRotation::<MockRuntime, _>::get().is_none());
+		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 0);
+		assert_eq!(VaultsPallet::status(), AsyncResult::Void);
+
+		// Can restart the vault rotation and succeed.
+		do_full_key_rotation();
 	})
 }

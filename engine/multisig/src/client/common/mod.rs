@@ -26,12 +26,13 @@ use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
-use crate::{
-	crypto::{ECPoint, KeyShare},
-	CryptoScheme,
-};
+use crate::crypto::{ChainSigning, CryptoScheme, ECPoint, KeyShare};
 
 use super::{signing::get_lagrange_coeff, utils::PartyIdxMapping, ThresholdParameters};
+
+pub type PublicKey<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey;
+pub type SigningPayload<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::SigningPayload;
+pub type Signature<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeygenResult<C: CryptoScheme> {
@@ -210,20 +211,12 @@ impl<C: CryptoScheme> ResharingContext<C> {
 
 		let sharing_participants: BTreeSet<_> = sharing_participants
 			.iter()
-			.map(|id| {
-				party_idx_mapping
-					.get_idx(id)
-					.expect("participant must be a known key share holder")
-			})
+			.map(|id| party_idx_mapping.get_idx(id).expect("must exist by construction"))
 			.collect();
 
 		let receiving_participants: BTreeSet<_> = receiving_participants
 			.iter()
-			.map(|id| {
-				party_idx_mapping
-					.get_idx(id)
-					.expect("participant must be a known key share holder")
-			})
+			.map(|id| party_idx_mapping.get_idx(id).expect("must exist by construction"))
 			.collect();
 
 		ResharingContext {

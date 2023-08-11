@@ -5,14 +5,14 @@ use crate::{
 	dot::{
 		BalancesCall, PolkadotAccountIdLookup, PolkadotChargeTransactionPayment,
 		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotRuntimeCall, PolkadotSignature,
-		PolkadotSignedExtra, PolkadotTransactionData, PolkadotUncheckedExtrinsic,
+		PolkadotSignedExtra, PolkadotTransactionData, PolkadotUncheckedExtrinsic, RuntimeVersion,
 	},
 };
 
 use sp_runtime::generic::Era;
 
 use super::{
-	api::{create_anonymous_vault, PolkadotApi},
+	api::{rotate_vault_proxy, PolkadotApi},
 	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
@@ -73,11 +73,14 @@ impl BenchmarkValueExtended for PolkadotAccountId {
 
 impl<E> BenchmarkValue for PolkadotApi<E> {
 	fn benchmark_value() -> Self {
-		PolkadotApi::CreateAnonymousVault(create_anonymous_vault::extrinsic_builder(
+		PolkadotApi::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			PolkadotReplayProtection {
 				genesis_hash: Default::default(),
 				nonce: Default::default(),
 			},
+			Some(Default::default()),
+			Default::default(),
+			Default::default(),
 		))
 	}
 }
@@ -96,6 +99,9 @@ impl BenchmarkValue for TxId {
 
 impl BenchmarkValue for PolkadotTrackedData {
 	fn benchmark_value() -> Self {
-		PolkadotTrackedData { median_tip: 2 }
+		PolkadotTrackedData {
+			median_tip: 2,
+			runtime_version: RuntimeVersion { spec_version: 17, transaction_version: 16 },
+		}
 	}
 }

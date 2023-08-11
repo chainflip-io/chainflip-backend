@@ -16,6 +16,7 @@ rand = "0.8.5"
 rand-v7 = { package = "rand", version = "0.7" }
 serde = { version = "1.0", features = ["derive"] }
 tiny-bip39 = "1.0.0"
+tokio = "1.28"
 tracing = "0.1"
 zeroize = "1.5.4"
 
@@ -31,10 +32,11 @@ custom-rpc = { path = "../../state-chain/custom-rpc" }
 pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
 pallet-cf-environment = { path = "../../state-chain/pallets/cf-environment" }
 pallet-cf-governance = { path = "../../state-chain/pallets/cf-governance" }
+pallet-cf-ingress-egress = { path = "../../state-chain/pallets/cf-ingress-egress" }
 pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
-pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
 pallet-cf-funding = { path = "../../state-chain/pallets/cf-funding" }
 pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
+pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
 pallet-cf-threshold-signature = { path = "../../state-chain/pallets/cf-threshold-signature" }
 pallet-cf-validator = { path = "../../state-chain/pallets/cf-validator" }
 state-chain-runtime = { path = "../../state-chain/runtime" }

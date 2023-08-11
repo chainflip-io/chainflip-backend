@@ -66,7 +66,7 @@ pub mod common {
 	pub const SECS_PER_MINUTE: u64 = 60;
 	// This should be the same as the `REDEMPTION_DELAY` in:
 	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StateChainGateway.sol
-	pub const REDEMPTION_DELAY_SECS: u64 = 5 * SECS_PER_MINUTE;
+	pub const REDEMPTION_DELAY_SECS: u64 = 2 * SECS_PER_MINUTE;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
@@ -80,7 +80,7 @@ pub mod common {
 	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
 
 	/// Percent of the epoch we are allowed to redeem
-	pub const PERCENT_OF_EPOCH_PERIOD_REDEEMABLE: u8 = 50;
+	pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
 
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.

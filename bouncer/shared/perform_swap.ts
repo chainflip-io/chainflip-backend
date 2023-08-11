@@ -1,90 +1,153 @@
 import { encodeAddress } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import { newSwap } from './new_swap';
-import { fund } from './fund';
+import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
-import { getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
+import {
+  getChainflipApi,
+  observeBalanceIncrease,
+  observeEvent,
+  observeCcmReceived,
+  assetToChain,
+  observeSwapScheduled,
+} from '../shared/utils';
+import { CcmDepositMetadata } from '../shared/new_swap';
 
-function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
-    const token = (destToken === 'USDC') ? 'ETH' : destToken;
-    return swapInfo[1][token.toLowerCase()];
+function encodeDestinationAddress(address: string, destAsset: Asset): string {
+  let destAddress = address;
+
+  if (destAddress && destAsset === 'DOT') {
+    destAddress = encodeAddress(destAddress);
+  }
+
+  return destAddress;
 }
 
-function encodeDestinationAddress(address: string, destToken: Asset): string {
+export type SwapParams = {
+  sourceAsset: Asset;
+  destAsset: Asset;
+  depositAddress: string;
+  destAddress: string;
+  channelId: number;
+};
 
-    let destAddress = address;
+export async function requestNewSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  tag = '',
+  messageMetadata?: CcmDepositMetadata,
+): Promise<SwapParams> {
+  const chainflipApi = await getChainflipApi();
 
-    if (destAddress && destToken === 'BTC') {
-        destAddress = destAddress.replace(/^0x/, '');
-        destAddress = Buffer.from(destAddress, 'hex').toString();
-    }
-    if (destAddress && destToken === 'DOT') {
-        destAddress = encodeAddress(destAddress);
-    }
+  const addressPromise = observeEvent(
+    'swapping:SwapDepositAddressReady',
+    chainflipApi,
 
-    return destAddress;
+    (event) => {
+      // Find deposit address for the right swap by looking at destination address:
+      const destAddressEvent = encodeDestinationAddress(
+        event.data.destinationAddress[assetToChain(destAsset)],
+        destAsset,
+      );
+      if (!destAddressEvent) return false;
+
+      const destAssetMatches = event.data.destinationAsset.toUpperCase() === destAsset;
+      const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === sourceAsset;
+      const destAddressMatches =
+        destAddressEvent.toLowerCase() ===
+        encodeDestinationAddress(destAddress, destAsset).toLowerCase();
+
+      return destAddressMatches && destAssetMatches && sourceAssetMatches;
+    },
+  );
+  await newSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+
+  const res = (await addressPromise).data;
+
+  const depositAddress = res.depositAddress[assetToChain(sourceAsset)];
+  const channelDestAddress = res.destinationAddress[assetToChain(destAsset)];
+  const channelId = Number(res.channelId);
+
+  console.log(`${tag} Swap address: ${depositAddress}`);
+  console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+
+  return {
+    sourceAsset,
+    destAsset,
+    depositAddress,
+    destAddress,
+    channelId,
+  };
 }
 
-export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS: string, swapTag?: string) {
-    const FEE = 100;
+export enum SenderType {
+  Address,
+  Contract,
+}
 
-    const tag = swapTag ?? '';
+export async function doPerformSwap(
+  { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
+  tag = '',
+  messageMetadata?: CcmDepositMetadata,
+  senderType = SenderType.Address,
+) {
+  const oldBalance = await getBalance(destAsset, destAddress);
 
-    const chainflipApi = await getChainflipApi();
+  console.log(`${tag} Old balance: ${oldBalance}`);
 
-    const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflipApi,
-        (swapInfo: any) => {
-            // Find deposit address for the right swap by looking at destination address:
-            const destAddress = extractDestinationAddress(swapInfo, destToken);
-            if (!destAddress) return false;
+  const swapScheduledHandle = observeSwapScheduled(sourceAsset, channelId);
 
-            const destAddressEncoded = encodeDestinationAddress(destAddress, destToken);
+  const ccmEventEmitted = messageMetadata
+    ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
+    : Promise.resolve();
 
-            return destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase()
-        });
+  await (senderType === SenderType.Address
+    ? send(sourceAsset, depositAddress)
+    : sendViaCfTester(sourceAsset, depositAddress));
 
+  console.log(`${tag} Funded the address`);
 
-    await newSwap(sourceToken, destToken, ADDRESS, FEE);
+  await swapScheduledHandle;
 
-    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE}`);
+  console.log(`${tag} Waiting for balance to update`);
 
-    let depositAddressToken = sourceToken;
-    if (sourceToken === 'USDC') {
-        depositAddressToken = 'ETH';
-    }
+  try {
+    const [newBalance] = await Promise.all([
+      observeBalanceIncrease(destAsset, destAddress, oldBalance),
+      ccmEventEmitted,
+    ]);
 
-    const swapInfo = JSON.parse((await addressPromise).toString());
-    let swapAddress = swapInfo[0][depositAddressToken.toLowerCase()];
-    const destAddress = extractDestinationAddress(swapInfo, destToken);
+    console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+  } catch (err) {
+    throw new Error(`${tag} ${err}`);
+  }
+}
 
-    console.log(`${tag} Destination address is: ${destAddress}`);
+export async function performSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  swapTag?: string,
+  messageMetadata?: CcmDepositMetadata,
+  senderType = SenderType.Address,
+) {
+  const tag = swapTag ?? '';
 
-    if (sourceToken === 'BTC') {
-        swapAddress = swapAddress.replace(/^0x/, '');
-        swapAddress = Buffer.from(swapAddress, 'hex').toString();
-    }
+  console.log(
+    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
+      messageMetadata ? `someMessage` : ''
+    }`,
+  );
 
-    console.log(`${tag} Swap address: ${swapAddress}`);
+  const swapParams = await requestNewSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    tag,
+    messageMetadata,
+  );
+  await doPerformSwap(swapParams, tag, messageMetadata, senderType);
 
-    const OLD_BALANCE = await getBalance(destToken, ADDRESS);
-
-    console.log(`${tag} Old balance: ${OLD_BALANCE}`);
-
-    const swapExecutedHandle = observeEvent('swapping:SwapExecuted', chainflipApi);
-
-    await fund(sourceToken, swapAddress.toLowerCase())
-    console.log(`${tag} Funded the address`);
-
-    await swapExecutedHandle;
-
-    console.log(`${tag} Waiting for balance to update`);
-
-    try {
-        const newBalance = await observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE);
-        console.log(`${tag} Swap success! New balance: ${newBalance}!`);
-    }
-    catch (err) {
-        console.error(`${tag}: ${err}`);
-    }
-
+  return swapParams;
 }

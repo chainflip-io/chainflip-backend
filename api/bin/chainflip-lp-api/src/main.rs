@@ -1,23 +1,105 @@
-use cf_utilities::try_parse_number_or_hex;
+use anyhow::anyhow;
+use cf_utilities::{
+	task_scope::{task_scope, Scope},
+	try_parse_number_or_hex,
+};
 use chainflip_api::{
 	self,
-	lp::{self, BuyOrSellOrder, Tick},
-	primitives::{AccountRole, Asset, ForeignChain},
+	lp::{
+		BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSellOrder, LpApi, MintLimitOrderReturn,
+		MintRangeOrderReturn, Tick,
+	},
+	primitives::{
+		chains::{Bitcoin, Ethereum, Polkadot},
+		AccountRole, Asset, ForeignChain, Hash,
+	},
+	queries::{Pool, RangeOrderPosition},
 	settings::StateChain,
+	AccountId32, OperatorApi, StateChainApi,
 };
 use clap::Parser;
+use futures::FutureExt;
 use jsonrpsee::{
-	core::{async_trait, Error, __reexports::serde_json},
+	core::{async_trait, Error},
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
-use std::{ops::Range, path::PathBuf};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf};
+use tracing::log;
+
+/// Contains RPC interface types that differ from internal types.
+pub mod rpc_types {
+	use super::*;
+	use chainflip_api::{lp, primitives::AssetAmount, queries::SwapChannelInfo};
+	use serde::{Deserialize, Serialize};
+	use sp_rpc::number::NumberOrHex;
+
+	#[derive(Serialize, Deserialize)]
+	pub struct AssetAmounts {
+		/// The amount of the unstable asset.
+		///
+		/// This is side `zero` in the AMM.
+		unstable: NumberOrHex,
+		/// The amount of the stable asset (USDC).
+		///
+		/// This is side `one` in the AMM.
+		stable: NumberOrHex,
+	}
+
+	impl TryFrom<AssetAmounts> for lp::SideMap<AssetAmount> {
+		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
+
+		fn try_from(value: AssetAmounts) -> Result<Self, Self::Error> {
+			Ok(lp::SideMap::from_array([value.unstable.try_into()?, value.stable.try_into()?]))
+		}
+	}
+
+	#[derive(Serialize, Deserialize)]
+	pub struct RangeOrder {
+		pub lower_tick: i32,
+		pub upper_tick: i32,
+		pub liquidity: u128,
+	}
+
+	/// Range Orders can be specified in terms of either asset amounts or pool liquidity.
+	///
+	/// If `AssetAmounts` is specified, the order requires desired and minimum amounts of the assets
+	/// pairs. This will attempt a mint of up to `desired` amounts of the assets, but will not mint
+	/// less than `minimum` amounts.
+	#[derive(Serialize, Deserialize)]
+	pub enum RangeOrderSize {
+		AssetAmounts { desired: AssetAmounts, minimum: AssetAmounts },
+		PoolLiquidity(NumberOrHex),
+	}
+
+	impl TryFrom<RangeOrderSize> for lp::RangeOrderSize {
+		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
+
+		fn try_from(value: RangeOrderSize) -> Result<Self, Self::Error> {
+			Ok(match value {
+				RangeOrderSize::AssetAmounts { desired, minimum } => Self::AssetAmounts {
+					desired: desired.try_into()?,
+					minimum: minimum.try_into()?,
+				},
+				RangeOrderSize::PoolLiquidity(liquidity) => Self::Liquidity(liquidity.try_into()?),
+			})
+		}
+	}
+
+	#[derive(Serialize, Deserialize)]
+	pub struct OpenSwapChannels {
+		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
+		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
+		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
+	}
+}
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<String, Error>;
+	async fn register_account(&self) -> Result<Hash, Error>;
 
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
@@ -27,7 +109,7 @@ pub trait Rpc {
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<String, Error>;
+	) -> Result<Hash, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -35,7 +117,7 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<String, Error>;
+	) -> Result<(ForeignChain, u64), Error>;
 
 	#[method(name = "mintRangeOrder")]
 	async fn mint_range_order(
@@ -43,8 +125,8 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amount: NumberOrHex,
-	) -> Result<String, Error>;
+		order_size: rpc_types::RangeOrderSize,
+	) -> Result<MintRangeOrderReturn, Error>;
 
 	#[method(name = "burnRangeOrder")]
 	async fn burn_range_order(
@@ -53,7 +135,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error>;
+	) -> Result<BurnRangeOrderReturn, Error>;
 
 	#[method(name = "mintLimitOrder")]
 	async fn mint_limit_order(
@@ -62,7 +144,7 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error>;
+	) -> Result<MintLimitOrderReturn, Error>;
 
 	#[method(name = "burnLimitOrder")]
 	async fn burn_limit_order(
@@ -71,21 +153,40 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error>;
+	) -> Result<BurnLimitOrderReturn, Error>;
 
 	#[method(name = "assetBalances")]
-	async fn asset_balances(&self) -> Result<String, Error>;
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<String, Error>;
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error>;
+
+	#[method(name = "getOpenSwapChannels")]
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
+
+	#[method(name = "getPools")]
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+
+	#[method(name = "getPool")]
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error>;
 }
+
 pub struct RpcServerImpl {
-	state_chain_settings: StateChain,
+	api: StateChainApi,
 }
 
 impl RpcServerImpl {
-	pub fn new(LPOptions { ws_endpoint, signing_key_file, .. }: LPOptions) -> Self {
-		Self { state_chain_settings: StateChain { ws_endpoint, signing_key_file } }
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		LPOptions { ws_endpoint, signing_key_file, .. }: LPOptions,
+	) -> Result<Self, anyhow::Error> {
+		Ok(Self {
+			api: StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
+				.await?,
+		})
 	}
 }
 
@@ -93,7 +194,9 @@ impl RpcServerImpl {
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
-		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
+		self.api
+			.lp_api()
+			.request_liquidity_deposit_address(asset)
 			.await
 			.map(|address| address.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
@@ -103,13 +206,10 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<String, Error> {
+	) -> Result<Hash, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
 			.map_err(|e| Error::Custom(e.to_string()))?;
-		lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
-			.await
-			.map(|tx_hash| tx_hash.to_string())
-			.map_err(|e| Error::Custom(e.to_string()))
+		Ok(self.api.lp_api().register_emergency_withdrawal_address(ewa_address).await?)
 	}
 
 	/// Returns an egress id
@@ -118,40 +218,28 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<String, Error> {
+	) -> Result<(ForeignChain, u64), Error> {
 		let destination_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
-				.map_err(|e| Error::Custom(e.to_string()))?;
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
 
-		lp::withdraw_asset(
-			&self.state_chain_settings,
-			try_parse_number_or_hex(amount)?,
-			asset,
-			destination_address,
-		)
-		.await
-		.map(|(_, id)| id.to_string())
-		.map_err(|e| Error::Custom(e.to_string()))
+		Ok(self
+			.api
+			.lp_api()
+			.withdraw_asset(try_parse_number_or_hex(amount)?, asset, destination_address)
+			.await?)
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<String, Error> {
-		lp::get_balances(&self.state_chain_settings)
-			.await
-			.map(|balances| {
-				serde_json::to_string(&balances).expect("Should output balances as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error> {
+		Ok(self.api.query_api().get_balances(None).await?)
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<String, Error> {
-		lp::get_range_orders(&self.state_chain_settings)
-			.await
-			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output range orders as json")
-			})
-			.map_err(|e| Error::Custom(e.to_string()))
+	async fn get_range_orders(
+		&self,
+		account_id: Option<AccountId32>,
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error> {
+		Ok(self.api.query_api().get_range_orders(None, account_id).await?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -161,24 +249,24 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		amount: NumberOrHex,
-	) -> Result<String, Error> {
+		order_size: rpc_types::RangeOrderSize,
+	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
-			return Err(Error::Custom("Invalid tick range".to_string()))
+			return Err(anyhow!("Invalid tick range").into())
 		}
 
-		lp::mint_range_order(
-			&self.state_chain_settings,
-			asset,
-			Range { start, end },
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		Ok(self
+			.api
+			.lp_api()
+			.mint_range_order(
+				asset,
+				Range { start, end },
+				order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
+			)
+			.await?)
 	}
 
-	/// Removes liquidity from a rage order.
+	/// Removes liquidity from a range order.
 	/// Returns the assets returned and fees harvested.
 	async fn burn_range_order(
 		&self,
@@ -186,20 +274,16 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error> {
+	) -> Result<BurnRangeOrderReturn, Error> {
 		if start >= end {
-			return Err(Error::Custom("Invalid tick range".to_string()))
+			return Err(anyhow!("Invalid tick range").into())
 		}
 
-		lp::burn_range_order(
-			&self.state_chain_settings,
-			asset,
-			Range { start, end },
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+		Ok(self
+			.api
+			.lp_api()
+			.burn_range_order(asset, Range { start, end }, try_parse_number_or_hex(amount)?)
+			.await?)
 	}
 
 	/// Creates or adds liquidity to a limit order.
@@ -210,17 +294,12 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error> {
-		lp::mint_limit_order(
-			&self.state_chain_settings,
-			asset,
-			order,
-			price,
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+	) -> Result<MintLimitOrderReturn, Error> {
+		Ok(self
+			.api
+			.lp_api()
+			.mint_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.await?)
 	}
 
 	/// Removes liquidity from a limit order.
@@ -231,28 +310,40 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<String, Error> {
-		lp::burn_limit_order(
-			&self.state_chain_settings,
-			asset,
-			order,
-			price,
-			try_parse_number_or_hex(amount)?,
-		)
-		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-		.map_err(|e| Error::Custom(e.to_string()))
+	) -> Result<BurnLimitOrderReturn, Error> {
+		Ok(self
+			.api
+			.lp_api()
+			.burn_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.await?)
 	}
 
 	/// Returns the tx hash that the account role was set
-	async fn register_account(&self) -> Result<String, Error> {
-		chainflip_api::register_account_role(
-			AccountRole::LiquidityProvider,
-			&self.state_chain_settings,
-		)
-		.await
-		.map(|tx_hash| format!("{tx_hash:#x}"))
-		.map_err(|e| Error::Custom(e.to_string()))
+	async fn register_account(&self) -> Result<Hash, Error> {
+		Ok(self
+			.api
+			.operator_api()
+			.register_account_role(AccountRole::LiquidityProvider)
+			.await?)
+	}
+
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
+		let api = self.api.query_api();
+
+		let (ethereum, bitcoin, polkadot) = tokio::try_join!(
+			api.get_open_swap_channels::<Ethereum>(None),
+			api.get_open_swap_channels::<Bitcoin>(None),
+			api.get_open_swap_channels::<Polkadot>(None),
+		)?;
+		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
+	}
+
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error> {
+		Ok(self.api.query_api().get_pools(None, Some(asset)).await?.get(&asset).cloned())
+	}
+
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+		Ok(self.api.query_api().get_pools(None, None).await?)
 	}
 }
 
@@ -293,13 +384,18 @@ async fn main() -> anyhow::Result<()> {
 		opts.signing_key_file.to_string_lossy()
 	);
 
-	let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
-	let server_addr = server.local_addr()?;
-	let server = server.start(RpcServerImpl::new(opts).into_rpc())?;
+	task_scope(|scope| {
+		async move {
+			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
+			let server_addr = server.local_addr()?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
-	println!("🎙 Server is listening on {server_addr}.");
+			log::info!("🎙 Server is listening on {server_addr}.");
 
-	server.stopped().await;
-
-	Ok(())
+			server.stopped().await;
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
 }

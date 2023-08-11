@@ -1,9 +1,11 @@
-#![cfg(feature = "std")]
+#![cfg(debug_assertions)]
 
 use crate::{
 	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
+use cf_utilities::SliceToArray;
+use sp_core::H160;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -60,18 +62,49 @@ impl Chain for MockEthereum {
 	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
+	type DepositChannelState = MockLifecycleHooks;
+	type DepositDetails = [u8; 4];
 }
 
-impl ChannelIdConstructor for MockEthereumChannelId {
-	type Address = u64;
+impl ToHumanreadableAddress for u64 {
+	type Humanreadable = u64;
 
-	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
-		unimplemented!()
+	fn to_humanreadable(
+		&self,
+		_network_environment: cf_primitives::NetworkEnvironment,
+	) -> Self::Humanreadable {
+		*self
 	}
+}
 
-	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
-		unimplemented!()
+impl TryFrom<ForeignChainAddress> for u64 {
+	type Error = ();
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Eth(addr) => Ok(u64::from_be_bytes(addr.0[12..].as_array())),
+			_ => Err(()),
+		}
 	}
+}
+
+impl From<u64> for ForeignChainAddress {
+	fn from(id: u64) -> Self {
+		ForeignChainAddress::Eth(H160::from_low_u64_be(id))
+	}
+}
+
+impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
+	fn from(channel: &DepositChannel<MockEthereum>) -> Self {
+		channel.channel_id as u128
+	}
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct MockLifecycleHooks;
+
+impl ChannelLifecycleHooks for MockLifecycleHooks {
+	// Default implementation is fine.
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -84,6 +117,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct MockTrackedData {
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
@@ -166,8 +200,6 @@ impl_default_benchmark_value!(MockTransaction);
 
 pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 
-pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionInId = [0xbc; 4];
-
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
@@ -245,7 +277,12 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(_call: &Call, _payload: &<Abi as ChainCrypto>::Payload) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &Call,
+		_payload: &<Abi as ChainCrypto>::Payload,
+		_current_key: &<Abi as ChainCrypto>::AggKey,
+		_signature: &<Abi as ChainCrypto>::ThresholdSignature,
+	) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
 }

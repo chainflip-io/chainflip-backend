@@ -23,11 +23,8 @@ impl<EventParameters: Debug> std::fmt::Display for Event<EventParameters> {
 	}
 }
 
-impl<EventParameters: Debug> Event<EventParameters> {
-	pub fn new_from_unparsed_logs<LogDecoder>(decode_log: &LogDecoder, log: Log) -> Result<Self>
-	where
-		LogDecoder: Fn(RawLog) -> Result<EventParameters>,
-	{
+impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParameters> {
+	pub fn new_from_unparsed_logs(log: Log) -> Result<Self> {
 		Ok(Self {
 			tx_hash: log
 				.transaction_hash
@@ -35,7 +32,7 @@ impl<EventParameters: Debug> Event<EventParameters> {
 			log_index: log
 				.log_index
 				.ok_or_else(|| anyhow!("Could not get log index from ETH log"))?,
-			event_parameters: decode_log(RawLog {
+			event_parameters: EventParameters::decode_log(&RawLog {
 				topics: log.topics.into_iter().map(core_h256).collect(),
 				data: log.data.0,
 			})?,

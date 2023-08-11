@@ -1,20 +1,21 @@
 #![feature(absolute_path)]
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
+use futures::FutureExt;
 use serde::Serialize;
-use std::{io::Write, path::PathBuf};
+use std::{io::Write, path::PathBuf, sync::Arc};
 
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands,
 };
 use api::{
-	primitives::{AccountRole, Asset, Hash, RedemptionAmount},
-	AccountId32, KeyPair,
+	lp::LpApi, primitives::RedemptionAmount, AccountId32, BrokerApi, GovernanceApi, KeyPair,
+	OperatorApi, StateChainApi, SwapDepositAddress,
 };
-use cf_chains::ForeignChain;
+use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
-use utilities::clean_eth_address;
+use utilities::{clean_hex_address, task_scope::task_scope};
 
 mod settings;
 
@@ -51,124 +52,93 @@ async fn run_cli() -> Result<()> {
 		cli_settings.state_chain.signing_key_file.display()
 	);
 
-	match command_line_opts.cmd {
-		Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) =>
-			request_swap_deposit_address(&cli_settings.state_chain, params).await,
-		LiquidityProvider(LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
-			asset,
-		}) => request_liquidity_deposit_address(&cli_settings.state_chain, asset).await,
-		LiquidityProvider(LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
-			chain,
-			address,
-		}) => register_emergency_withdrawal_address(&cli_settings.state_chain, chain, address).await,
-		Redeem { amount, eth_address } =>
-			request_redemption(amount, &eth_address, &cli_settings).await,
-		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
-		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
-		StopBidding {} => api::stop_bidding(&cli_settings.state_chain).await,
-		StartBidding {} => api::start_bidding(&cli_settings.state_chain).await,
-		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
-		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
-		ForceRotation {} => api::force_rotation(&cli_settings.state_chain).await,
-		GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
-	}
-}
-
-pub async fn request_swap_deposit_address(
-	state_chain_settings: &settings::StateChain,
-	params: settings::SwapRequestParams,
-) -> Result<()> {
-	let api::SwapDepositAddress { address, expiry_block, .. } = api::request_swap_deposit_address(
-		state_chain_settings,
-		params.source_asset,
-		params.destination_asset,
-		chainflip_api::clean_foreign_chain_address(
-			params.destination_asset.into(),
-			&params.destination_address,
-		)?,
-		params.broker_commission,
-		None,
-	)
-	.await?;
-	println!("Deposit Address: {address}");
-	println!("Address expires at block {expiry_block}");
-	Ok(())
-}
-
-pub async fn register_emergency_withdrawal_address(
-	state_chain_settings: &settings::StateChain,
-	chain: ForeignChain,
-	address: String,
-) -> Result<()> {
-	let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
-	let tx_hash =
-		api::lp::register_emergency_withdrawal_address(state_chain_settings, ewa_address).await?;
-	println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
-	Ok(())
-}
-
-pub async fn request_liquidity_deposit_address(
-	state_chain_settings: &settings::StateChain,
-	asset: Asset,
-) -> Result<()> {
-	let address = api::lp::request_liquidity_deposit_address(state_chain_settings, asset).await?;
-	println!("Deposit Address: {address}");
-	Ok(())
-}
-
-pub async fn request_block(
-	block_hash: Hash,
-	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
-	match api::request_block(block_hash, state_chain_settings).await {
-		Ok(block) => {
-			println!("{block:#?}");
+	task_scope(|scope| {
+		async move {
+			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
+			match command_line_opts.cmd {
+				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
+					let SwapDepositAddress { address, expiry_block, .. } = api
+						.broker_api()
+						.request_swap_deposit_address(
+							params.source_asset,
+							params.destination_asset,
+							chainflip_api::clean_foreign_chain_address(
+								params.destination_asset.into(),
+								&params.destination_address,
+							)?,
+							params.broker_commission,
+							None,
+						)
+						.await?;
+					println!("Deposit Address: {address}");
+					println!("Address expires at block {expiry_block}");
+				},
+				LiquidityProvider(
+					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset },
+				) => {
+					let address = api.lp_api().request_liquidity_deposit_address(asset).await?;
+					println!("Deposit Address: {address}");
+				},
+				LiquidityProvider(
+					LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
+						chain,
+						address,
+					},
+				) => {
+					let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
+					let tx_hash =
+						api.lp_api().register_emergency_withdrawal_address(ewa_address).await?;
+					println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
+				},
+				Redeem { amount, eth_address } => {
+					request_redemption(api.operator_api(), amount, &eth_address).await?;
+				},
+				RegisterAccountRole { role } => {
+					println!(
+					"Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
+				);
+					if !confirm_submit() {
+						return Ok(())
+					}
+					let tx_hash = api.operator_api().register_account_role(role).await?;
+					println!("Account role set at tx {tx_hash:#x}.");
+				},
+				Rotate {} => {
+					let tx_hash = api.operator_api().rotate_session_keys().await?;
+					println!("Session key rotated at tx {tx_hash:#x}.");
+				},
+				StopBidding {} => {
+					api.operator_api().stop_bidding().await?;
+				},
+				StartBidding {} => {
+					api.operator_api().start_bidding().await?;
+				},
+				VanityName { name } => {
+					api.operator_api().set_vanity_name(name).await?;
+				},
+				ForceRotation {} => {
+					api.governance_api().force_rotation().await?;
+				},
+				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
+			};
 			Ok(())
-		},
-		Err(err) => {
-			println!("Could not find block with block hash {block_hash:x?}");
-			Err(err)
-		},
-	}
-}
-
-async fn register_account_role(role: AccountRole, settings: &settings::CLISettings) -> Result<()> {
-	println!(
-        "Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
-    );
-
-	if !confirm_submit() {
-		return Ok(())
-	}
-
-	let tx_hash = api::register_account_role(role, &settings.state_chain).await?;
-	println!("Account role set at tx {tx_hash:#x}.");
-
-	Ok(())
-}
-
-pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
-	let tx_hash = api::rotate_keys(state_chain_settings).await?;
-	println!("Session key rotated at tx {tx_hash:#x}.");
-
-	Ok(())
+		}
+		.boxed()
+	})
+	.await
 }
 
 async fn request_redemption(
+	api: Arc<impl OperatorApi + Sync>,
 	amount: Option<f64>,
 	eth_address: &str,
-	settings: &CLISettings,
 ) -> Result<()> {
 	// Sanitise data
-	let eth_address: [u8; 20] = clean_eth_address(eth_address)
-		.context("Invalid ETH address supplied")
-		.and_then(|eth_address|
-			if eth_address == [0; 20] {
-				Err(anyhow!("Cannot submit redemption to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
-			} else {
-				Ok(eth_address)
-			}
-		)?;
+	let eth_address = EthereumAddress::from_slice(
+		clean_hex_address::<[u8; 20]>(eth_address)
+			.context("Invalid ETH address supplied")?
+			.as_slice(),
+	);
 
 	let amount = match amount {
 		Some(amount_float) => {
@@ -197,7 +167,7 @@ async fn request_redemption(
 		return Ok(())
 	}
 
-	let tx_hash = api::request_redemption(amount, eth_address, &settings.state_chain).await?;
+	let tx_hash = api.request_redemption(amount, eth_address).await?;
 
 	println!(
 		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
@@ -248,7 +218,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 		seed_phrase: String,
 		ethereum_key: KeyPair,
 		#[serde(with = "hex")]
-		ethereum_address: [u8; 20],
+		ethereum_address: EthereumAddress,
 		signing_key: KeyPair,
 		signing_account_id: AccountId32,
 	}
@@ -261,7 +231,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				"🔑 Ethereum public key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum address: 0x{}", hex::encode(self.ethereum_address))?;
+			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
 			writeln!(
 				f,
 				"🔑 Validator public key: 0x{}",

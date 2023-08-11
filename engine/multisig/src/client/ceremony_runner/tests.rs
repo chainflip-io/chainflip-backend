@@ -10,7 +10,7 @@ use crate::{
 		SigningFailureReason,
 	},
 	crypto::CryptoScheme,
-	eth::{EthSigning, Point},
+	eth::{EthSigning, EvmCryptoScheme, Point},
 	p2p::OutgoingMultisigStageMessages,
 	Rng,
 };
@@ -23,8 +23,8 @@ use super::*;
 
 type CeremonyRunnerChannels = (
 	UnboundedSender<(AccountId32, SigningData<Point>)>,
-	tokio::sync::oneshot::Sender<PreparedRequest<SigningCeremony<EthSigning>>>,
-	UnboundedReceiver<(CeremonyId, CeremonyOutcome<SigningCeremony<EthSigning>>)>,
+	tokio::sync::oneshot::Sender<PreparedRequest<SigningCeremony<EvmCryptoScheme>>>,
+	UnboundedReceiver<(CeremonyId, CeremonyOutcome<SigningCeremony<EvmCryptoScheme>>)>,
 );
 
 // For these tests the ceremony id does not matter
@@ -37,12 +37,13 @@ fn spawn_signing_ceremony_runner(
 	let (request_sender, request_receiver) = oneshot::channel();
 	let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
 
-	let task_handle = tokio::spawn(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
-		DEFAULT_CEREMONY_ID,
-		message_receiver,
-		request_receiver,
-		outcome_sender,
-	));
+	let task_handle =
+		tokio::spawn(CeremonyRunner::<SigningCeremony<EvmCryptoScheme>, EthSigning>::run(
+			DEFAULT_CEREMONY_ID,
+			message_receiver,
+			request_receiver,
+			outcome_sender,
+		));
 
 	(task_handle, (message_sender, request_sender, outcome_receiver))
 }
@@ -78,8 +79,10 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 	let num_of_participants = ACCOUNT_IDS.len() as u32;
 
 	// Create an unauthorised ceremony
-	let mut unauthorised_ceremony_runner: CeremonyRunner<KeygenCeremony<EthSigning>> =
-		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
+	let mut unauthorised_ceremony_runner: CeremonyRunner<
+		KeygenCeremony<EvmCryptoScheme>,
+		EthSigning,
+	> = CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
 
 	// Process a stage 2 message
 	assert_eq!(
@@ -102,7 +105,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 	let sender_account_id = ACCOUNT_IDS[2].clone();
 
 	// Create an unauthorised ceremony
-	let mut ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
+	let mut ceremony_runner: CeremonyRunner<SigningCeremony<EvmCryptoScheme>, EthSigning> =
 		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
 
 	// Process a stage 1 message (It should get delayed)
@@ -121,8 +124,8 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 		&our_account_id.clone(),
 		participants.clone(),
 		vec![(
-			get_key_data_for_test::<EthSigning>(participants),
-			EthSigning::signing_payload_for_test(),
+			get_key_data_for_test::<EvmCryptoScheme>(participants),
+			EvmCryptoScheme::signing_payload_for_test(),
 		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
@@ -157,7 +160,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 		ceremony_runner
 			.process_or_delay_message(
 				sender_account_id.clone(),
-				gen_signing_data_stage2(participants.len() as AuthorityCount)
+				gen_signing_data_stage2(participants.len() as AuthorityCount, 1)
 			)
 			.await,
 		None
@@ -182,7 +185,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 
 /// Sends a message to the state and makes sure it was ignored (not delayed or accepted)
 async fn ensure_message_is_ignored(
-	state: &mut CeremonyRunner<SigningCeremony<EthSigning>>,
+	state: &mut CeremonyRunner<SigningCeremony<EvmCryptoScheme>, EthSigning>,
 	sender_id: AccountId,
 	message: SigningData<Point>,
 ) {
@@ -198,8 +201,10 @@ async fn ensure_message_is_ignored(
 async fn gen_stage_1_signing_state(
 	our_account_id: AccountId,
 	participants: BTreeSet<AccountId>,
-) -> (CeremonyRunner<SigningCeremony<EthSigning>>, UnboundedReceiver<OutgoingMultisigStageMessages>)
-{
+) -> (
+	CeremonyRunner<SigningCeremony<EvmCryptoScheme>, EthSigning>,
+	UnboundedReceiver<OutgoingMultisigStageMessages>,
+) {
 	let mut ceremony_runner =
 		CeremonyRunner::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0);
 
@@ -209,8 +214,8 @@ async fn gen_stage_1_signing_state(
 		&our_account_id.clone(),
 		BTreeSet::from_iter(participants.clone()),
 		vec![(
-			get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(participants)),
-			EthSigning::signing_payload_for_test(),
+			get_key_data_for_test::<EvmCryptoScheme>(BTreeSet::from_iter(participants)),
+			EvmCryptoScheme::signing_payload_for_test(),
 		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
@@ -263,7 +268,7 @@ async fn should_ignore_duplicate_delayed_message() {
 		stage_1_state
 			.process_or_delay_message(
 				sender_account_id.clone(),
-				gen_signing_data_stage2(participants.len() as u32)
+				gen_signing_data_stage2(participants.len() as u32, 1)
 			)
 			.await,
 		None
@@ -276,7 +281,7 @@ async fn should_ignore_duplicate_delayed_message() {
 		stage_1_state
 			.process_or_delay_message(
 				sender_account_id.clone(),
-				gen_signing_data_stage2(participants.len() as u32)
+				gen_signing_data_stage2(participants.len() as u32, 1)
 			)
 			.await,
 		None
@@ -333,7 +338,7 @@ async fn should_ignore_message_from_unexpected_stage() {
 	ensure_message_is_ignored(
 		&mut stage_1_state,
 		sender_account_id,
-		gen_signing_data_stage4(participants.len() as u32),
+		gen_signing_data_stage4(participants.len() as u32, 1),
 	)
 	.await;
 }
@@ -361,10 +366,10 @@ async fn should_timeout_authorised_ceremony() {
 			&ACCOUNT_IDS[0],
 			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 			vec![(
-				get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
+				get_key_data_for_test::<EvmCryptoScheme>(BTreeSet::from_iter(
 					ACCOUNT_IDS.iter().cloned(),
 				)),
-				EthSigning::signing_payload_for_test(),
+				EvmCryptoScheme::signing_payload_for_test(),
 			)],
 			&outgoing_p2p_sender,
 			Rng::from_seed(DEFAULT_SIGNING_SEED),

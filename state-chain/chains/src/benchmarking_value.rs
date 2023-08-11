@@ -9,7 +9,7 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::eth::EthereumChannelId;
+use crate::eth::EthereumFetchId;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -89,7 +89,7 @@ impl BenchmarkValue for ForeignChainAddress {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for ForeignChainAddress {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		ForeignChainAddress::Eth([id; 20])
+		ForeignChainAddress::Eth([id; 20].into())
 	}
 }
 
@@ -101,16 +101,16 @@ impl BenchmarkValue for EncodedAddress {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for EthereumChannelId {
+impl BenchmarkValue for EthereumFetchId {
 	fn benchmark_value() -> Self {
-		Self::UnDeployed(1)
+		Self::DeployAndFetch(1)
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValueExtended for EthereumChannelId {
+impl BenchmarkValueExtended for EthereumFetchId {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		Self::UnDeployed(id as u64)
+		Self::DeployAndFetch(id as u64)
 	}
 }
 

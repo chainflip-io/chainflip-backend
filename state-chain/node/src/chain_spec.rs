@@ -1,13 +1,19 @@
 use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
-	eth,
+	dot::{PolkadotAccountId, PolkadotHash},
+	eth, ChainState,
 };
-use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount};
+use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment};
 
+use cf_chains::{
+	btc::{BitcoinFeeInfo, BitcoinTrackedData},
+	dot::{PolkadotTrackedData, RuntimeVersion},
+	eth::EthereumTrackedData,
+	Bitcoin, Ethereum, Polkadot,
+};
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
-use sc_service::{ChainType, Properties};
+pub use sc_service::{ChainType, Properties};
+use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
@@ -16,19 +22,24 @@ use sp_core::{
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
-	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
-	FundingConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
-	ValidatorConfig, WASM_BINARY,
+	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
+	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumThresholdSignerConfig,
+	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GenesisConfig, GovernanceConfig,
+	GrandpaConfig, PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
+	ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig, ValidatorConfig,
+	WASM_BINARY,
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
-use utilities::clean_eth_address;
+use utilities::clean_hex_address;
 
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	Percent,
+};
 
 pub mod common;
+pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
@@ -74,10 +85,6 @@ pub struct StateChainEnvironment {
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
 	min_funding: u128,
-	// CFE config values starts here
-	eth_block_safety_margin: u32,
-	max_ceremony_stage_duration: u32,
-
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
@@ -100,18 +107,16 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			.try_into()
 			.map_err(|_| "Incorrect length of hex string.".into())
 	}
-	from_env_var!(clean_eth_address, FLIP_TOKEN_ADDRESS, flip_token_address);
-	from_env_var!(clean_eth_address, ETH_USDC_ADDRESS, eth_usdc_address);
-	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
-	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
-	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
-	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
+	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
+	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
+	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
+	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, key_manager_address);
+	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
-	from_env_var!(FromStr::from_str, ETH_BLOCK_SAFETY_MARGIN, eth_block_safety_margin);
-	from_env_var!(FromStr::from_str, MAX_CEREMONY_STAGE_DURATION, max_ceremony_stage_duration);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
@@ -122,6 +127,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
 		Err(_) => defaults.dot_vault_account_id,
 	};
+
 	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
 		Ok(s) => s.parse().unwrap(),
 		Err(_) => defaults.dot_runtime_version.spec_version,
@@ -142,8 +148,6 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
-		eth_block_safety_margin,
-		max_ceremony_stage_duration,
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
@@ -174,8 +178,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
-		eth_block_safety_margin,
-		max_ceremony_stage_duration,
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
@@ -230,23 +232,16 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				1,
 				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
-					flip_token_address,
-					eth_usdc_address,
-					state_chain_gateway_address,
-					key_manager_address,
-					eth_vault_address,
-					eth_address_checker_address,
+					flip_token_address: flip_token_address.into(),
+					eth_usdc_address: eth_usdc_address.into(),
+					state_chain_gateway_address: state_chain_gateway_address.into(),
+					key_manager_address: key_manager_address.into(),
+					eth_vault_address: eth_vault_address.into(),
+					eth_address_checker_address: eth_address_checker_address.into(),
 					ethereum_chain_id,
-					cfe_settings: CfeSettings {
-						eth_block_safety_margin,
-						max_ceremony_stage_duration,
-						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
-					},
-
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
-					polkadot_runtime_version: dot_runtime_version,
-					bitcoin_network: BitcoinNetwork::Regtest,
+					network_environment: NetworkEnvironment::Development,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -260,13 +255,14 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				common::EXPIRY_SPAN_IN_SECONDS,
 				common::ACCRUAL_RATIO,
-				common::PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+				Percent::from_percent(common::REDEMPTION_PERIOD_AS_PERCENTAGE),
 				common::SUPPLY_UPDATE_INTERVAL,
 				common::PENALTIES.to_vec(),
 				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 				common::SWAP_TTL,
 				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
+				dot_runtime_version,
 			)
 		},
 		// Bootnodes
@@ -278,7 +274,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Fork ID
 		None,
 		// Properties
-		None,
+		Some(chainflip_properties()),
 		// Extensions
 		None,
 	))
@@ -310,8 +306,6 @@ macro_rules! network_spec {
 					eth_init_agg_key,
 					ethereum_deployment_block,
 					genesis_funding_amount,
-					eth_block_safety_margin,
-					max_ceremony_stage_duration,
 					min_funding,
 					dot_genesis_hash,
 					dot_vault_account_id,
@@ -349,23 +343,16 @@ macro_rules! network_spec {
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
 							EnvironmentConfig {
-								flip_token_address,
-								eth_usdc_address,
-								state_chain_gateway_address,
-								key_manager_address,
-								eth_vault_address,
-								eth_address_checker_address,
+								flip_token_address: flip_token_address.into(),
+								eth_usdc_address: eth_usdc_address.into(),
+								state_chain_gateway_address: state_chain_gateway_address.into(),
+								key_manager_address: key_manager_address.into(),
+								eth_vault_address: eth_vault_address.into(),
+								eth_address_checker_address: eth_address_checker_address.into(),
 								ethereum_chain_id,
-								cfe_settings: CfeSettings {
-									eth_block_safety_margin,
-									max_ceremony_stage_duration,
-									eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE,
-								},
-
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								polkadot_runtime_version: dot_runtime_version,
-								bitcoin_network: BITCOIN_NETWORK,
+								network_environment: NETWORK_ENVIRONMENT,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -379,13 +366,14 @@ macro_rules! network_spec {
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 							EXPIRY_SPAN_IN_SECONDS,
 							ACCRUAL_RATIO,
-							PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+							Percent::from_percent(REDEMPTION_PERIOD_AS_PERCENTAGE),
 							SUPPLY_UPDATE_INTERVAL,
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 							SWAP_TTL,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
+							dot_runtime_version,
 						)
 					},
 					// Bootnodes
@@ -407,6 +395,7 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
+network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
 
@@ -433,13 +422,14 @@ fn testnet_genesis(
 	backup_node_emission_inflation_perbill: u32,
 	expiry_span: u64,
 	accrual_ratio: (i32, u32),
-	percent_of_epoch_period_redeemable: u8,
+	redemption_period_as_percentage: Percent,
 	supply_update_interval: u32,
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
+	dot_runtime_version: RuntimeVersion,
 ) -> GenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -528,8 +518,8 @@ fn testnet_genesis(
 				.collect(),
 			genesis_vanity_names,
 			blocks_per_epoch,
-			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
-			backup_reward_node_percentage: 20,
+			redemption_period_as_percentage,
+			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
@@ -613,6 +603,31 @@ fn testnet_genesis(
 			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
 			supply_update_interval,
 		},
+		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
+		ethereum_chain_tracking: EthereumChainTrackingConfig {
+			init_chain_state: ChainState::<Ethereum> {
+				block_height: 0,
+				tracked_data: EthereumTrackedData {
+					base_fee: 1000000u32.into(),
+					priority_fee: 100u32.into(),
+				},
+			},
+		},
+		polkadot_chain_tracking: PolkadotChainTrackingConfig {
+			init_chain_state: ChainState::<Polkadot> {
+				block_height: 0,
+				tracked_data: PolkadotTrackedData {
+					median_tip: 0,
+					runtime_version: dot_runtime_version,
+				},
+			},
+		},
+		bitcoin_chain_tracking: BitcoinChainTrackingConfig {
+			init_chain_state: ChainState::<Bitcoin> {
+				block_height: 0,
+				tracked_data: BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(1000) },
+			},
+		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
 		swapping: SwappingConfig { swap_ttl, minimum_swap_amounts },
@@ -621,16 +636,15 @@ fn testnet_genesis(
 }
 
 pub fn chainflip_properties() -> Properties {
-	let mut properties = Properties::new();
-	properties.insert(
-		"ss58Format".into(),
-		state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX.into(),
-	);
-	properties.insert("tokenDecimals".into(), 18.into());
-	properties.insert("tokenSymbol".into(), "FLIP".into());
-	properties.insert("color".into(), "#61CFAA".into());
-
-	properties
+	json!({
+		"ss58Format": state_chain_runtime::constants::common::CHAINFLIP_SS58_PREFIX,
+		"tokenDecimals": 18,
+		"tokenSymbol": "FLIP",
+		"color": "#61CFAA",
+	})
+	.as_object()
+	.unwrap()
+	.clone()
 }
 
 /// Sets global that ensures SC AccountId's are printed correctly

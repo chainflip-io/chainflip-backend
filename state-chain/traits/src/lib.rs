@@ -14,12 +14,12 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
-	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChainCrypto, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -143,30 +143,6 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 	}
 }
 
-/// The outcome of a successful auction.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub struct AuctionOutcome<Id, Amount> {
-	/// The auction winners, sorted by in descending bid order.
-	pub winners: Vec<Id>,
-	/// The auction losers and their bids, sorted in descending bid order.
-	pub losers: Vec<Bid<Id, Amount>>,
-	/// The resulting bond for the next epoch.
-	pub bond: Amount,
-}
-
-pub type RuntimeAuctionOutcome<T> =
-	AuctionOutcome<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
-
-impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, BidAmount> {
-	fn default() -> Self {
-		AuctionOutcome {
-			winners: Default::default(),
-			losers: Default::default(),
-			bond: Default::default(),
-		}
-	}
-}
-
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
 pub enum VaultStatus<ValidatorId> {
 	KeygenComplete,
@@ -197,6 +173,10 @@ pub trait VaultRotator {
 	/// on the contract for a smart contract chain.
 	fn activate();
 
+	/// Terminate the current key rotation because of Safe Mode.
+	/// No validators are slashed.
+	fn abort_vault_rotation();
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
 }
@@ -217,10 +197,17 @@ pub trait ReputationResetter {
 
 /// Providing bidders for an auction
 pub trait BidderProvider {
-	type ValidatorId;
+	type ValidatorId: Ord;
 	type Amount;
 	/// Provide a list of validators whose accounts are in the `bidding` state.
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
+	fn get_qualified_bidders<Q: QualifyNode<Self::ValidatorId>>(
+	) -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
+		Self::get_bidders()
+			.into_iter()
+			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
+			.collect()
+	}
 }
 
 pub trait OnAccountFunded {
@@ -504,11 +491,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
-pub trait BroadcastCleanup<C: Chain> {
-	/// Triggers any necessary cleanup.
-	fn clean_up_broadcast(broadcast_id: BroadcastId) -> DispatchResult;
-}
-
 /// The heartbeat of the network
 pub trait Heartbeat {
 	type ValidatorId;
@@ -659,11 +641,13 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
+	type BlockNumber;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
+		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -673,37 +657,12 @@ pub trait DepositApi<C: Chain> {
 		destination_address: ForeignChainAddress,
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
-		message_metadata: Option<CcmDepositMetadata>,
+		channel_metadata: Option<CcmChannelMetadata>,
+		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
-	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
-}
-
-/// Generates a deterministic deposit address for some combination of asset, chain and channel id.
-pub trait AddressDerivationApi<C: Chain> {
-	fn generate_address(
-		source_asset: C::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<C::ChainAccount, DispatchError>;
-}
-
-impl AddressDerivationApi<Ethereum> for () {
-	fn generate_address(
-		source_asset: <Ethereum as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(Address::from_slice(&(source_asset, channel_id).encode().blake2_256()[..20]))
-	}
-}
-
-impl AddressDerivationApi<Polkadot> for () {
-	fn generate_address(
-		source_asset: <Polkadot as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok(PolkadotPublicKey::from_aliased((source_asset, channel_id).encode().blake2_256()))
-	}
+	fn expire_channel(address: C::ChainAccount);
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -807,16 +766,16 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait DepositHandler<C: ChainCrypto> {
+pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
-		_tx_id: <C as ChainCrypto>::TransactionInId,
-		_amount: <C as Chain>::ChainAmount,
-		_address: <C as Chain>::ChainAccount,
-		_asset: <C as Chain>::ChainAsset,
+		_deposit_details: C::DepositDetails,
+		_amount: C::ChainAmount,
+		_address: C::ChainAccount,
+		_asset: C::ChainAsset,
 	) {
 	}
 	fn on_channel_opened(
-		_address: <C as Chain>::ChainAccount,
+		_address: C::ChainAccount,
 		_channel_id: ChannelId,
 	) -> Result<(), DispatchError> {
 		Ok(())
@@ -831,7 +790,8 @@ pub trait CcmHandler {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		message_metadata: CcmDepositMetadata,
+		deposit_metadata: CcmDepositMetadata,
+		origin: SwapOrigin,
 	);
 }
 
@@ -841,7 +801,8 @@ impl CcmHandler for () {
 		_deposit_amount: AssetAmount,
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
-		_message_metadata: CcmDepositMetadata,
+		_deposit_metadata: CcmDepositMetadata,
+		_origin: SwapOrigin,
 	) {
 	}
 }
@@ -858,4 +819,8 @@ pub trait GetBitcoinFeeInfo {
 
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
+}
+pub trait CompatibleVersions {
+	fn current_compatibility_version() -> SemVer;
+	fn next_compatibility_version() -> Option<SemVer>;
 }

@@ -15,7 +15,6 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
-use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -48,7 +47,9 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type DepositFetchId = EthereumChannelId;
+	type DepositFetchId = EthereumFetchId;
+	type DepositChannelState = DeploymentStatus;
+	type DepositDetails = ();
 }
 
 impl ChainCrypto for Ethereum {
@@ -77,13 +78,19 @@ impl ChainCrypto for Ethereum {
 	}
 }
 
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[codec(mel_bound())]
 pub struct EthereumTrackedData {
 	pub base_fee: <Ethereum as Chain>::ChainAmount,
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
+}
+
+impl Default for EthereumTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.")
+	}
 }
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -186,12 +193,10 @@ pub struct AggKey {
 	pub pub_key_y_parity: ParityBit,
 }
 
-pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {
+pub fn to_ethereum_address(pubkey: PublicKey) -> eth::Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
-	let mut res = [0u8; 20];
-	res.copy_from_slice(&h.0[12..]);
-	res
+	eth::Address::from_slice(&h.0[12..])
 }
 
 impl AggKey {
@@ -274,7 +279,7 @@ impl AggKey {
 
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
-		let e = self.message_challenge_scalar(msg_hash, &k_times_g_address);
+		let e = self.message_challenge_scalar(msg_hash, k_times_g_address.as_fixed_bytes());
 
 		let d: Scalar = (*secret).into();
 		let k: Scalar = (*sig_nonce).into();
@@ -566,21 +571,88 @@ impl From<H256> for TransactionHash {
 		Self(x)
 	}
 }
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub enum EthereumChannelId {
-	Deployed(Address),
-	UnDeployed(ChannelId),
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug, Default)]
+pub enum DeploymentStatus {
+	#[default]
+	Undeployed,
+	Pending,
+	Deployed,
 }
 
-impl ChannelIdConstructor for EthereumChannelId {
-	type Address = H160;
-
-	fn deployed(_channel_id: u64, address: Self::Address) -> Self {
-		Self::Deployed(address)
+impl ChannelLifecycleHooks for DeploymentStatus {
+	/// Addresses that are Pending cannot be fetched.
+	fn can_fetch(&self) -> bool {
+		*self != Self::Pending
 	}
 
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		Self::UnDeployed(channel_id)
+	/// Undeployed addresses need to be marked as Pending until the fetch is made.
+	fn on_fetch_scheduled(&mut self) -> bool {
+		match self {
+			Self::Undeployed => {
+				*self = Self::Pending;
+				true
+			},
+			_ => false,
+		}
+	}
+
+	/// A completed fetch should be in either the pending or deployed state. Confirmation of a fetch
+	/// implies that the address is now deployed.
+	fn on_fetch_completed(&mut self) -> bool {
+		match self {
+			Self::Pending => {
+				*self = Self::Deployed;
+				true
+			},
+			Self::Deployed => false,
+			Self::Undeployed => {
+				#[cfg(debug_assertions)]
+				{
+					panic!("Cannot finalize fetch to an undeployed address")
+				}
+				#[cfg(not(debug_assertions))]
+				{
+					log::error!("Cannot finalize fetch to an undeployed address");
+					*self = Self::Deployed;
+					false
+				}
+			},
+		}
+	}
+
+	/// Undeployed Addresses should not be recycled.
+	/// Other address types *can* be recycled.
+	fn maybe_recycle(self) -> Option<Self> {
+		if self == Self::Undeployed {
+			None
+		} else {
+			Some(Self::Deployed)
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub enum EthereumFetchId {
+	/// If the contract is not yet deployed, we need to deploy and fetch using the channel id.
+	DeployAndFetch(ChannelId),
+	/// Once the contract is deployed, we can fetch from the address.
+	Fetch(Address),
+	/// Fetching is not required for Ethereum deposits into a deployed contract.
+	NotRequired,
+}
+
+impl From<&DepositChannel<Ethereum>> for EthereumFetchId {
+	fn from(channel: &DepositChannel<Ethereum>) -> Self {
+		match channel.state {
+			DeploymentStatus::Undeployed => EthereumFetchId::DeployAndFetch(channel.channel_id),
+			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+				if channel.asset == assets::eth::Asset::Eth {
+					EthereumFetchId::NotRequired
+				} else {
+					EthereumFetchId::Fetch(channel.address)
+				},
+		}
 	}
 }
 
@@ -658,7 +730,7 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		// Public agg key
 		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
@@ -679,7 +751,7 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k)).0;
 		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
 
 		// This should pass.
@@ -715,5 +787,64 @@ mod verification_tests {
 			),
 			AggKeyVerificationError::NoMatch
 		);
+	}
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+	use super::*;
+	const ETH: assets::eth::Asset = assets::eth::Asset::Eth;
+	const USDC: assets::eth::Asset = assets::eth::Asset::Usdc;
+
+	macro_rules! expect_deposit_state {
+		( $state:expr, $asset:expr, $pat:pat ) => {
+			assert!(matches!(
+				DepositChannel::<Ethereum> {
+					channel_id: Default::default(),
+					address: Default::default(),
+					asset: $asset,
+					state: $state,
+				}
+				.fetch_id(),
+				$pat
+			));
+		};
+	}
+	#[test]
+	fn eth_deposit_address_lifecycle() {
+		// Initial state is undeployed.
+		let mut state = DeploymentStatus::default();
+		assert_eq!(state, DeploymentStatus::Undeployed);
+		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::DeployAndFetch(..));
+		expect_deposit_state!(state, USDC, EthereumFetchId::DeployAndFetch(..));
+
+		// Pending channels can't be fetched from.
+		assert!(state.on_fetch_scheduled());
+		assert_eq!(state, DeploymentStatus::Pending);
+		assert!(!state.can_fetch());
+
+		// Trying to schedule the fetch on a pending channel has no effect.
+		assert!(!state.on_fetch_scheduled());
+		assert_eq!(state, DeploymentStatus::Pending);
+		assert!(!state.can_fetch());
+
+		// On completion, the pending channel is now deployed and be fetched from again.
+		assert!(state.on_fetch_completed());
+		assert_eq!(state, DeploymentStatus::Deployed);
+		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
+
+		// Channel is now in its final deployed state and be fetched from at any time.
+		assert!(!state.on_fetch_scheduled());
+		assert!(state.can_fetch());
+		assert!(!state.on_fetch_completed());
+		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
+
+		assert_eq!(state, DeploymentStatus::Deployed);
+		assert!(!state.on_fetch_scheduled());
 	}
 }

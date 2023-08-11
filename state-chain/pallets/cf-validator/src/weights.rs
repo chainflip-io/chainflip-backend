@@ -31,7 +31,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_validator.
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
-	fn set_backup_reward_node_percentage() -> Weight;
+	fn update_pallet_config() -> Weight;
 	fn set_authority_set_min_size() -> Weight;
 	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
@@ -40,7 +40,7 @@ pub trait WeightInfo {
 	fn missed_authorship_slots(m: u32, ) -> Weight;
 	fn rotation_phase_idle() -> Weight;
 	fn start_authority_rotation(a: u32, ) -> Weight;
-	fn start_authority_rotation_in_safe_mode_code_red() -> Weight;
+	fn start_authority_rotation_while_disabled_by_safe_mode() -> Weight;
 	fn rotation_phase_keygen(a: u32, ) -> Weight;
 	fn rotation_phase_activating_keys(a: u32, ) -> Weight;
 	fn set_auction_parameters() -> Weight;
@@ -59,7 +59,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
-	fn set_backup_reward_node_percentage() -> Weight {
+	fn update_pallet_config() -> Weight {
 		// Minimum execution time: 16_000 nanoseconds.
 		Weight::from_ref_time(16_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -162,7 +162,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(8))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
-	fn start_authority_rotation_in_safe_mode_code_red() -> Weight {
+	fn start_authority_rotation_while_disabled_by_safe_mode() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(13_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
@@ -232,7 +232,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
-	fn set_backup_reward_node_percentage() -> Weight {
+	fn update_pallet_config() -> Weight {
 		// Minimum execution time: 16_000 nanoseconds.
 		Weight::from_ref_time(16_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
@@ -335,7 +335,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(8))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
-	fn start_authority_rotation_in_safe_mode_code_red() -> Weight {
+	fn start_authority_rotation_while_disabled_by_safe_mode() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(13_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))

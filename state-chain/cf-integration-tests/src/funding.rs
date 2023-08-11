@@ -61,7 +61,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			}
 
 			let end_of_redemption_period =
-				EPOCH_BLOCKS * PERCENT_OF_EPOCH_PERIOD_REDEEMABLE as u32 / 100;
+				EPOCH_BLOCKS * REDEMPTION_PERIOD_AS_PERCENTAGE as u32 / 100;
 			// Move to end of the redemption period
 			System::set_block_number(end_of_redemption_period + 1);
 			// We will try to redeem

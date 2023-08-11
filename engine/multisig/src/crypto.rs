@@ -45,6 +45,17 @@ pub enum ChainTag {
 	Ed25519 = 0xffff,
 }
 
+#[repr(u16)]
+#[derive(Clone, Copy, Debug, FromPrimitive)]
+pub enum CryptoTag {
+	Evm = 0x0000,
+	Polkadot = 0x0001,
+	Bitcoin = 0x0002,
+
+	// Ed25519 placeholder
+	Ed25519 = 0xffff,
+}
+
 impl Display for ChainTag {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -107,7 +118,22 @@ pub trait ECPoint:
 		self == &Self::point_at_infinity()
 	}
 }
+pub trait ChainSigning: 'static + Clone + Send + Sync + Debug + PartialEq {
+	type CryptoScheme: CryptoScheme;
 
+	type Chain: cf_chains::ChainCrypto;
+
+	/// Name of the Chain
+	const NAME: &'static str;
+
+	/// A unique tag used to identify the chain.
+	/// Used in both p2p and database storage.
+	const CHAIN_TAG: ChainTag;
+
+	/// The number of ceremonies ahead of the latest authorized ceremony that
+	/// are allowed to create unauthorized ceremonies (delayed messages).
+	const CEREMONY_ID_WINDOW: u64 = 6000;
+}
 pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	type Point: ECPoint;
 
@@ -117,14 +143,11 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
-	type Chain: cf_chains::ChainCrypto;
+	/// A unique tag used to identify the crypto scheme.
+	const CRYPTO_TAG: CryptoTag;
 
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
-
-	/// A unique tag used to identify the chain.
-	/// Used in both p2p and database storage.
-	const CHAIN_TAG: ChainTag;
 
 	fn build_signature(
 		z: <Self::Point as ECPoint>::Scalar,
@@ -174,6 +197,15 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload;
+
+	#[cfg(feature = "test")]
+	/// Get an invalid signature for testing purposes
+	fn signature_for_test() -> Self::Signature {
+		use rand::{rngs::StdRng, SeedableRng};
+		let scalar = <Self::Point as ECPoint>::Scalar::random(&mut StdRng::from_seed([0_u8; 32]));
+		let point = <Self::Point as ECPoint>::from_scalar(&scalar);
+		Self::build_signature(scalar, point)
+	}
 }
 
 pub trait ECScalar:

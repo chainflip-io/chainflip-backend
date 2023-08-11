@@ -4,12 +4,13 @@ use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
+use address::{AddressDerivationApi, ToHumanreadableAddress};
+use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	traits::Get,
-	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
+	StorageHasher,
 };
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -28,6 +29,7 @@ use sp_std::{
 };
 
 pub use cf_primitives::chains::*;
+pub use frame_support::traits::Get;
 
 pub mod benchmarking_value;
 
@@ -38,6 +40,8 @@ pub mod eth;
 pub mod none;
 
 pub mod address;
+pub mod deposit_channel;
+pub use deposit_channel::*;
 
 pub mod mocks;
 
@@ -50,6 +54,7 @@ pub trait Chain: Member + Parameter {
 	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
+		+ Default
 		+ Member
 		+ Parameter
 		+ Copy
@@ -79,15 +84,23 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + BenchmarkValue;
+	type TrackedData: Default
+		+ MaybeSerializeDeserialize
+		+ Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Unpin
+		+ BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
+		+ FullCodec
 		+ Into<cf_primitives::Asset>
-		+ Into<cf_primitives::ForeignChain>;
+		+ Into<cf_primitives::ForeignChain>
+		+ Unpin;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -95,8 +108,12 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ Debug
+		+ Ord
+		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>;
+		+ Into<ForeignChainAddress>
+		+ Unpin
+		+ ToHumanreadableAddress;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -105,7 +122,12 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
-		+ ChannelIdConstructor<Address = Self::ChainAccount>;
+		+ for<'a> From<&'a DepositChannel<Self>>;
+
+	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+
+	/// Extra data associated with a deposit.
+	type DepositDetails: Member + Parameter + BenchmarkValue;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -120,13 +142,12 @@ pub trait ChainCrypto: Chain {
 		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	/// Must uniquely identify a transaction. On most chains this will be a transaction hash.
-	/// However, for example, in the case of Polkadot, the blocknumber-extrinsic-index is the unique
-	/// identifier.
-	type TransactionInId: Member + Parameter + BenchmarkValue;
+
+	/// Uniquely identifies a transaction on the incoming direction.
+	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outoing direction.
-	type TransactionOutId: Member + Parameter + BenchmarkValue;
+	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
@@ -191,7 +212,12 @@ where
 	fn refresh_unsigned_data(tx: &mut Abi::Transaction);
 
 	/// Checks if the payload is still valid for the call.
-	fn is_valid_for_rebroadcast(call: &Call, payload: &<Abi as ChainCrypto>::Payload) -> bool;
+	fn is_valid_for_rebroadcast(
+		call: &Call,
+		payload: &<Abi as ChainCrypto>::Payload,
+		current_key: &<Abi as ChainCrypto>::AggKey,
+		signature: &<Abi as ChainCrypto>::ThresholdSignature,
+	) -> bool;
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -262,10 +288,12 @@ pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[derive(Debug)]
 pub enum AllBatchError {
 	NotRequired,
 	Other,
 }
+
 #[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
@@ -279,7 +307,8 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		source_address: ForeignChainAddress,
+		source_chain: ForeignChain,
+		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
@@ -294,25 +323,45 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-/// Helper trait to avoid matching over chains in the generic pallet.
-pub trait ChannelIdConstructor {
-	type Address;
-	/// Constructs the ChannelId for the deployed case.
-	fn deployed(channel_id: u64, address: Self::Address) -> Self;
-	/// Constructs the ChannelId for the undeployed case.
-	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SwapOrigin {
+	DepositChannel {
+		deposit_address: address::EncodedAddress,
+		channel_id: ChannelId,
+		deposit_block_height: u64,
+	},
+	Vault {
+		tx_hash: TransactionHash,
+	},
 }
 
-/// Metadata as part of a Cross Chain Message.
+/// Deposit channel Metadata for Cross-Chain-Message.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CcmDepositMetadata {
+pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
 	pub message: Vec<u8>,
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
-	/// The address refunds will go to.
+	/// Additonal parameters for the cross chain message.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
 	pub cf_parameters: Vec<u8>,
-	/// The address the deposit was sent from.
-	pub source_address: ForeignChainAddress,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmDepositMetadata {
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
+	pub channel_metadata: CcmChannelMetadata,
+}
+
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, DebugNoBound,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ChainState<C: Chain> {
+	pub block_height: C::ChainBlockNumber,
+	pub tracked_data: C::TrackedData,
 }

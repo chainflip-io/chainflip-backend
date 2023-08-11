@@ -1,16 +1,20 @@
 #[cfg(test)]
 mod tests;
 
+use core::convert::Infallible;
+
 use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
+use sp_std::vec::Vec;
 
 use crate::common::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, Amount, OneToZero, SideMap,
-	SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_HUNDREDTH_PIPS,
-	SQRT_PRICE_FRACTIONAL_BITS,
+	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price, Amount,
+	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
+	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -30,6 +34,7 @@ fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 
 /// Represents a number exclusively between 0 and 1.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize, Default))]
 struct FloatBetweenZeroAndOne {
 	normalised_mantissa: U256,
 	negative_exponent: U256,
@@ -256,25 +261,53 @@ pub struct CollectedAmounts {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
+	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	amount: Amount,
+	#[cfg_attr(feature = "std", serde(skip))]
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct FixedPool {
+	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	available: Amount,
+	#[cfg_attr(feature = "std", serde(skip))]
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Deserialize))]
+#[cfg_attr(
+	feature = "std",
+	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
+)]
 pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+}
+
+#[cfg(feature = "std")]
+impl<L: Serialize + Clone> Serialize for PoolState<L> {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		use serde::ser::SerializeStruct;
+		let mut state = serializer.serialize_struct("PoolState", 4)?;
+		state.serialize_field("fee_hundredth_pips", &self.fee_hundredth_pips)?;
+		state.serialize_field(
+			"positions",
+			&self
+				.positions
+				.clone()
+				.map(|_side, positions| positions.into_iter().collect::<Vec<_>>()),
+		)?;
+		state.end()
+	}
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -678,5 +711,45 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		};
 
 		Ok(collected_amounts)
+	}
+
+	/// Returns all the assets associated with a position
+	///
+	/// This function never panics.
+	pub fn position<SD: SwapDirection>(
+		&self,
+		lp: &LiquidityProvider,
+		tick: Tick,
+	) -> Result<(CollectedAmounts, Amount), PositionError<Infallible>> {
+		let sqrt_price = Self::validate_tick(tick)?;
+		let price = sqrt_price_to_price(sqrt_price);
+
+		let positions = &self.positions[!SD::INPUT_SIDE];
+		let fixed_pools = &self.fixed_pools[!SD::INPUT_SIDE];
+
+		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
+			positions
+				.get(&(sqrt_price, lp.clone()))
+				.ok_or(PositionError::NonExistent)?
+				.clone(),
+			fixed_pools.get(&sqrt_price),
+			price,
+			self.fee_hundredth_pips,
+		);
+
+		Ok((
+			collected_amounts,
+			option_position.map_or(Default::default(), |position| position.amount),
+		))
+	}
+
+	/// Returns all the assets available for swaps in a given direction
+	///
+	/// This function never panics.
+	pub fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
+		self.fixed_pools[!SD::INPUT_SIDE]
+			.iter()
+			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
+			.collect()
 	}
 }

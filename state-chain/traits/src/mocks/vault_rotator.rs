@@ -73,6 +73,10 @@ macro_rules! mock_vault_rotator {
 				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
 			}
 
+			fn abort_vault_rotation() {
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Void);
+			}
+
 			#[cfg(feature = "runtime-benchmarks")]
 			fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 				unimplemented!()

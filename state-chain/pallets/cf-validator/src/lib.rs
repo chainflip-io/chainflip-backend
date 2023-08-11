@@ -17,12 +17,12 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
-	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SetSafeMode, VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, Bid, BidderProvider,
+	Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
+	HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter,
+	SetSafeMode, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -33,7 +33,7 @@ use frame_support::{
 pub use pallet::*;
 use sp_core::ed25519;
 use sp_runtime::{
-	traits::{BlockNumberProvider, CheckedDiv, One, Saturating, UniqueSaturatedInto, Zero},
+	traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
 	Percent,
 };
 use sp_std::{
@@ -45,25 +45,20 @@ use crate::rotation_state::RotationState;
 
 type SessionIndex = u32;
 
-#[derive(
-	Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen,
-)]
-pub struct SemVer {
-	pub major: u8,
-	pub minor: u8,
-	pub patch: u8,
-}
-
 type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
 type Ed25519Signature = ed25519::Signature;
 pub type Ipv6Addr = u128;
 
-/// A percentage range
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct PercentageRange {
-	pub top: u8,
-	pub bottom: u8,
+pub enum PalletConfigUpdate {
+	RegistrationBondPercentage { percentage: Percent },
+	AuctionBidCutoffPercentage { percentage: Percent },
+	RedemptionPeriodAsPercentage { percentage: Percent },
+	BackupRewardNodePercentage { percentage: Percent },
+	EpochDuration { blocks: u32 },
+	AuthoritySetMinSize { min_size: AuthorityCount },
+	AuctionParameters { parameters: SetSizeParameters },
 }
 
 type RuntimeRotationState<T> =
@@ -96,7 +91,6 @@ pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 
-pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -122,10 +116,6 @@ pub mod pallet {
 
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
-
-		/// Minimum amount of blocks an epoch can run for
-		#[pallet::constant]
-		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
@@ -163,7 +153,7 @@ pub mod pallet {
 	/// Percentage of epoch we allow redemptions.
 	#[pallet::storage]
 	#[pallet::getter(fn redemption_period_as_percentage)]
-	pub type RedemptionPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
+	pub type RedemptionPeriodAsPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
 
 	/// The starting block number for the current epoch.
 	#[pallet::storage]
@@ -263,7 +253,7 @@ pub mod pallet {
 	/// of the authority count.
 	#[pallet::storage]
 	#[pallet::getter(fn backup_reward_node_percentage)]
-	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
+	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percent, ValueQuery>;
 
 	/// The absolute minimum number of authority nodes for the next epoch.
 	#[pallet::storage]
@@ -275,6 +265,18 @@ pub mod pallet {
 	#[pallet::getter(fn auction_parameters)]
 	pub(super) type AuctionParameters<T: Config> = StorageValue<_, SetSizeParameters, ValueQuery>;
 
+	/// An account's balance must be at least this percentage of the current bond in order to
+	/// register as a validator.
+	#[pallet::storage]
+	#[pallet::getter(fn registration_mab_percentage)]
+	pub(super) type RegistrationBondPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
+
+	/// Auction losers whose bids are below this percentage of the MAB will not be excluded from
+	/// participating in Keygen.
+	#[pallet::storage]
+	#[pallet::getter(fn auction_bid_cutoff_percentage)]
+	pub(super) type AuctionBidCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -282,8 +284,6 @@ pub mod pallet {
 		RotationAborted,
 		/// A new epoch has started \[epoch_index\]
 		NewEpoch(EpochIndex),
-		/// The number of blocks has changed for our epoch \[from, to\]
-		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// Rotation phase updated.
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// The CFE version has been updated.
@@ -297,24 +297,18 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
-		/// Ratio of redemption period updated \[percentage\]
-		RedemptionPeriodUpdated(Percentage),
 		/// Vanity Name for a node has been set \[account_id, vanity_name\]
 		VanityNameSet(T::AccountId, VanityName),
-		/// The backup node percentage has been updated \[percentage\].
-		BackupRewardNodePercentageUpdated(Percentage),
-		/// The minimum authority set size has been updated.
-		AuthoritySetMinSizeUpdated { min_size: AuthorityCount },
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
-		/// The auction parameters have been changed \[new_parameters\]
-		AuctionParametersChanged(SetSizeParameters),
+		/// Some pallet configuration has been updated.
+		PalletConfigUpdated { update: PalletConfigUpdate },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Epoch block number supplied is invalid.
-		InvalidEpoch,
+		/// Epoch duration supplied is invalid.
+		InvalidEpochDuration,
 		/// A rotation is in progress.
 		RotationInProgress,
 		/// Validator Peer mapping overlaps with an existing mapping.
@@ -337,6 +331,8 @@ pub mod pallet {
 		NotEnoughBidders,
 		/// Not enough funds to register as a validator.
 		NotEnoughFunds,
+		/// Rotations are currently disabled through SafeMode.
+		RotationsDisabled,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -375,8 +371,8 @@ pub mod pallet {
 							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
-							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <=
-								Self::current_consensus_threshold() {
+							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
+								Self::current_consensus_success_threshold() {
 								log::warn!(
 									target: "cf-validator",
 									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
@@ -395,8 +391,6 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
-							Self::deposit_event(Event::<T>::RotationAborted);
-							// TODO: We should put the chain into safe mode here.
 							Self::abort_rotation();
 						},
 					};
@@ -414,7 +408,7 @@ pub mod pallet {
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
 							rotation_state.ban(offenders);
-							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
+							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) < Self::current_consensus_success_threshold() {
 								log::warn!(
 									target: "cf-validator",
 									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
@@ -442,7 +436,6 @@ pub mod pallet {
 								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
-							// TODO: We should put the chain into safe mode here.
 							Self::abort_rotation();
 						},
 					}
@@ -480,66 +473,53 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Update the percentage of the epoch period that redemptions are permitted
+		/// [GOVERNANCE] Update a pallet config item.
 		///
-		/// The dispatch origin of this function must be governance
-		///
-		/// ## Events
-		///
-		/// - [RedemptionPeriodUpdated](Event::RedemptionPeriodUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidRedemptionPeriod](Error::InvalidRedemptionPeriod)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
-		pub fn update_period_for_redemptions(
-			origin: OriginFor<T>,
-			percentage: Percentage,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(percentage <= 100, Error::<T>::InvalidRedemptionPeriod);
-			RedemptionPeriodAsPercentage::<T>::set(percentage);
-			Self::deposit_event(Event::RedemptionPeriodUpdated(percentage));
-
-			Ok(().into())
-		}
-		/// Sets the number of blocks an epoch should run for
-		///
-		/// The dispatch origin of this function must be root.
+		/// The dispatch origin of this function must be governance.
 		///
 		/// ## Events
 		///
-		/// - [EpochDurationChanged](Event::EpochDurationChanged)
-		///
-		/// ## Errors
-		///
-		/// - [RotationInProgress](Error::RotationInProgress)
-		/// - [InvalidEpoch](Error::InvalidEpoch)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
-		pub fn set_blocks_for_epoch(
+		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
+		#[pallet::weight(T::ValidatorWeightInfo::update_pallet_config())]
+		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			number_of_blocks: T::BlockNumber,
-		) -> DispatchResultWithPostInfo {
+			update: PalletConfigUpdate,
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(
-				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
-				Error::<T>::RotationInProgress
-			);
-			ensure!(number_of_blocks >= T::MinEpoch::get(), Error::<T>::InvalidEpoch);
-			let old_epoch = BlocksPerEpoch::<T>::get();
-			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
-			BlocksPerEpoch::<T>::set(number_of_blocks);
-			Self::deposit_event(Event::EpochDurationChanged(old_epoch, number_of_blocks));
 
-			Ok(().into())
+			match update {
+				PalletConfigUpdate::AuctionBidCutoffPercentage { percentage } => {
+					<AuctionBidCutoffPercentage<T>>::put(percentage);
+				},
+				PalletConfigUpdate::RedemptionPeriodAsPercentage { percentage } => {
+					<RedemptionPeriodAsPercentage<T>>::put(percentage);
+				},
+				PalletConfigUpdate::RegistrationBondPercentage { percentage } => {
+					<RegistrationBondPercentage<T>>::put(percentage);
+				},
+				PalletConfigUpdate::AuthoritySetMinSize { min_size } => {
+					ensure!(
+						min_size <= <Self as EpochInfo>::current_authority_count(),
+						Error::<T>::InvalidAuthoritySetMinSize
+					);
+
+					AuthoritySetMinSize::<T>::put(min_size);
+				},
+				PalletConfigUpdate::BackupRewardNodePercentage { percentage } => {
+					<BackupRewardNodePercentage<T>>::put(percentage);
+				},
+				PalletConfigUpdate::EpochDuration { blocks } => {
+					ensure!(blocks > 0, Error::<T>::InvalidEpochDuration);
+					BlocksPerEpoch::<T>::set(blocks.into());
+				},
+				PalletConfigUpdate::AuctionParameters { parameters } => {
+					Self::try_update_auction_parameters(parameters)?;
+				},
+			}
+
+			Self::deposit_event(Event::PalletConfigUpdated { update });
+
+			Ok(())
 		}
 
 		/// Force a new epoch. From the next block we will try to move to a new
@@ -569,6 +549,7 @@ pub mod pallet {
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
+			ensure!(T::SafeMode::get().authority_rotation_enabled, Error::<T>::RotationsDisabled,);
 			Self::start_authority_rotation();
 
 			Ok(().into())
@@ -700,8 +681,8 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: current_version.clone(),
-						new_version: new_version.clone(),
+						old_version: *current_version,
+						new_version,
 					});
 					*current_version = new_version;
 				}
@@ -741,104 +722,16 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow governance to set the percentage of Validators that should be set
-		/// as backup Validators. This percentage is relative to the total permitted
-		/// number of Authorities.
-		///
-		/// The dispatch origin of this function must be governance.
-		///
-		/// ## Events
-		///
-		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_backup_reward_node_percentage())]
-		pub fn set_backup_reward_node_percentage(
-			origin: OriginFor<T>,
-			percentage: Percentage,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			BackupRewardNodePercentage::<T>::put(percentage);
-
-			Self::deposit_event(Event::BackupRewardNodePercentageUpdated(percentage));
-			Ok(().into())
-		}
-
-		/// Allow governance to set the minimum size of the authority set.
-		///
-		/// The dispatch origin of this function must be governance.
-		///
-		/// ## Events
-		///
-		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [InvalidAuthoritySetSize](Error::InvalidAuthoritySetSize)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_authority_set_min_size())]
-		pub fn set_authority_set_min_size(
-			origin: OriginFor<T>,
-			min_size: AuthorityCount,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(
-				min_size <= <Self as EpochInfo>::current_authority_count(),
-				Error::<T>::InvalidAuthoritySetMinSize
-			);
-
-			AuthoritySetMinSize::<T>::put(min_size);
-
-			Self::deposit_event(Event::AuthoritySetMinSizeUpdated { min_size });
-			Ok(().into())
-		}
-
-		/// Sets the auction parameters.
-		///
-		/// The dispatch origin of this function must be Governance.
-		///
-		/// ## Events
-		///
-		/// - [AuctionParametersChanged](Event::AuctionParametersChanged)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidAuctionParameters](Error::InvalidAuctionParameters)
-		#[pallet::weight(T::ValidatorWeightInfo::set_auction_parameters())]
-		pub fn set_auction_parameters(
-			origin: OriginFor<T>,
-			parameters: SetSizeParameters,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::try_update_auction_parameters(parameters)?;
-			Self::deposit_event(Event::AuctionParametersChanged(parameters));
-			Ok(().into())
-		}
-
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;
-			ensure!(
-				T::FundingInfo::total_balance_of(&account_id) >=
-					Backups::<T>::get()
-						.into_values()
-						.min()
-						.unwrap_or_else(|| T::Amount::from(0_u32))
-						.checked_div(&T::Amount::from(2_u32))
-						.expect("Division by 2 can't fail."),
-				Error::<T>::NotEnoughFunds
-			);
+			if Self::current_authority_count() >= AuctionParameters::<T>::get().max_size {
+				ensure!(
+					T::FundingInfo::total_balance_of(&account_id) >=
+						RegistrationBondPercentage::<T>::get() * Self::bond(),
+					Error::<T>::NotEnoughFunds
+				);
+			}
 			T::AccountRoleRegistry::register_as_validator(&account_id)
 		}
 	}
@@ -850,8 +743,8 @@ pub mod pallet {
 		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
-		pub redemption_period_as_percentage: Percentage,
-		pub backup_reward_node_percentage: Percentage,
+		pub redemption_period_as_percentage: Percent,
+		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
 		pub min_size: AuthorityCount,
 		pub max_size: AuthorityCount,
@@ -945,12 +838,9 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		}
 
 		// start + ((epoch * percentage) / 100)
-		CurrentEpochStartedAt::<T>::get().saturating_add(
-			BlocksPerEpoch::<T>::get()
-				.saturating_mul(RedemptionPeriodAsPercentage::<T>::get().into())
-				.checked_div(&100u32.into())
-				.unwrap_or_default(),
-		) <= frame_system::Pallet::<T>::current_block_number()
+		CurrentEpochStartedAt::<T>::get()
+			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
+			frame_system::Pallet::<T>::current_block_number()
 	}
 
 	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
@@ -1095,15 +985,16 @@ impl<T: Config> Pallet<T> {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Can't start authority rotation. Runtime Safe Mode is in CODE RED."
+				"Failed to start Authority Rotation: Disabled due to Runtime Safe Mode."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
-		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
+		}
+		if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
 			log::error!(
 				target: "cf-validator",
-				"Can't start authority rotation. Authority rotation already in progress."
+				"Failed to start authority rotation: Authority rotation already in progress."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
+			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
@@ -1111,8 +1002,12 @@ impl<T: Config> Pallet<T> {
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| resolver.resolve_auction(T::BidderProvider::get_bidders()))
-		{
+		.and_then(|resolver| {
+			resolver.resolve_auction(
+				T::BidderProvider::get_qualified_bidders::<T::KeygenQualification>(),
+				AuctionBidCutoffPercentage::<T>::get(),
+			)
+		}) {
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
@@ -1149,6 +1044,8 @@ impl<T: Config> Pallet<T> {
 			},
 			Err(e) => {
 				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e);
+				Self::abort_rotation();
+
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
 					Self::current_authority_count() + Self::backup_reward_nodes_limit() as u32
@@ -1176,9 +1073,19 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_key_handover(rotation_state: RuntimeRotationState<T>, block_number: T::BlockNumber) {
+		if !T::SafeMode::get().authority_rotation_enabled {
+			log::warn!(
+				target: "cf-validator",
+				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
+			);
+			T::VaultRotator::abort_vault_rotation();
+			Self::abort_rotation();
+			return
+		}
+
 		let authority_candidates = rotation_state.authority_candidates();
 		if let Some(sharing_participants) = helpers::select_sharing_participants(
-			Self::current_consensus_threshold(),
+			Self::current_consensus_success_threshold(),
 			rotation_state.unbanned_current_authorities::<T>(),
 			&authority_candidates,
 			block_number.unique_saturated_into(),
@@ -1200,8 +1107,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Returns the number of backup nodes eligible for rewards
 	pub fn backup_reward_nodes_limit() -> usize {
-		Percent::from_percent(BackupRewardNodePercentage::<T>::get()) *
-			Self::current_authority_count() as usize
+		BackupRewardNodePercentage::<T>::get() * Self::current_authority_count() as usize
 	}
 
 	/// Returns the bids of the highest funded backup nodes, who are eligible for the backup rewards
@@ -1258,10 +1164,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	///Note that the resulting threshold is the maximum number of parties not enough to generate a
-	/// signature, i.e. at least t+1 parties are required.
-	fn current_consensus_threshold() -> AuthorityCount {
-		cf_utilities::threshold_from_share_count(Self::current_authority_count())
+	/// The smallest number of parties that can generate a signature.
+	fn current_consensus_success_threshold() -> AuthorityCount {
+		cf_utilities::success_threshold_from_share_count(Self::current_authority_count())
 	}
 }
 

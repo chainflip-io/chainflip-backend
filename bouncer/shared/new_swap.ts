@@ -1,34 +1,31 @@
-import { Keyring } from "@polkadot/api";
-import { u8aToHex } from "@polkadot/util";
-import { cryptoWaitReady } from "@polkadot/util-crypto";
-import { Mutex } from "async-mutex";
-import { Asset } from "@chainflip-io/cli/.";
-import { getChainflipApi } from "./utils";
+import { Asset, BrokerClient } from '@chainflip-io/cli';
+import { decodeDotAddressForContract, chainFromAsset } from './utils';
 
-const mutex = new Mutex();
+export interface CcmDepositMetadata {
+  message: string;
+  gasBudget: number;
+  cfParameters: string;
+}
 
-export async function newSwap(sourceToken: Asset, destToken: Asset,
-    destAddress: string, fee: any): Promise<void> {
-    await cryptoWaitReady();
-    const keyring = new Keyring({ type: 'sr25519' });
+export async function newSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  messageMetadata?: CcmDepositMetadata,
+): Promise<void> {
+  const destinationAddress =
+    destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
 
-    const chainflip = await getChainflipApi();
-    const destinationAddress =
-        destToken === 'DOT' ? u8aToHex(keyring.decodeAddress(destAddress)) : destAddress;
+  const client = await BrokerClient.create({
+    url: process.env.BROKER_ENDPOINT ?? 'ws://127.0.0.1:10997',
+  });
 
-    const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
-    const broker = keyring.createFromUri(brokerUri);
-
-    await mutex.runExclusive(async () => {
-        await chainflip.tx.swapping
-            .requestSwapDepositAddress(
-                sourceToken,
-                destToken,
-                { [destToken === 'USDC' ? 'ETH' : destToken]: destinationAddress },
-                fee,
-                null,
-            )
-            .signAndSend(broker, { nonce: -1 });
-    })
-
+  await client.requestSwapDepositAddress({
+    srcAsset: sourceAsset,
+    destAsset,
+    srcChain: chainFromAsset(sourceAsset),
+    destAddress: destinationAddress,
+    destChain: chainFromAsset(destAsset),
+    ccmMetadata: messageMetadata,
+  });
 }

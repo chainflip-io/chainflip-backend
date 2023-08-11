@@ -1,4 +1,3 @@
-use cf_chains::btc::BlockNumber;
 use thiserror::Error;
 
 use reqwest::Client;
@@ -9,7 +8,7 @@ use serde_json::json;
 
 use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
 
-use crate::{settings, witnesser::LatestBlockNumber};
+use crate::settings;
 
 use anyhow::{Context, Result};
 
@@ -109,10 +108,6 @@ impl BtcRpcClient {
 			Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
 		}
 	}
-
-	async fn block_count(&self) -> anyhow::Result<BlockNumber> {
-		Ok(self.call_rpc("getblockcount", vec![]).await?)
-	}
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -157,6 +152,11 @@ pub trait BtcRpcApi {
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>>;
 
+	async fn average_block_fee_rate(
+		&self,
+		block_hash: BlockHash,
+	) -> anyhow::Result<cf_chains::btc::BtcAmount>;
+
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
@@ -192,21 +192,30 @@ impl BtcRpcApi for BtcRpcClient {
 		Ok(fee_rate_response.feerate.map(|f| f.to_sat()))
 	}
 
+	async fn average_block_fee_rate(
+		&self,
+		block_hash: BlockHash,
+	) -> anyhow::Result<cf_chains::btc::BtcAmount> {
+		// https://developer.bitcoin.org/reference/rpc/getblockstats.html
+		#[derive(Deserialize, Serialize)]
+		pub struct BlockStats {
+			#[serde(with = "bitcoin::amount::serde::as_sat")]
+			pub avgfeerate: bitcoin::Amount,
+		}
+
+		let block_stats: BlockStats = self
+			.call_rpc("getblockstats", vec![json!(block_hash), json!(["avgfeerate"])])
+			.await?;
+
+		Ok(block_stats.avgfeerate.to_sat().saturating_mul(1024))
+	}
+
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
 		Ok(self.call_rpc("getbestblockhash", vec![]).await?)
 	}
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader> {
 		Ok(self.call_rpc("getblockheader", vec![json!(block_hash)]).await?)
-	}
-}
-
-#[async_trait::async_trait]
-impl LatestBlockNumber for BtcRpcClient {
-	type BlockNumber = BlockNumber;
-
-	async fn latest_block_number(&self) -> Result<BlockNumber> {
-		self.block_count().await
 	}
 }
 
@@ -224,11 +233,7 @@ mod tests {
 		})
 		.unwrap();
 
-		let block_count = client.block_count().await.unwrap();
-
-		println!("block_count: {:?}", block_count);
-
-		let block_hash_zero = client.block_hash(block_count).await.unwrap();
+		let block_hash_zero = client.block_hash(0).await.unwrap();
 
 		println!("block_hash_zero: {:?}", block_hash_zero);
 
@@ -239,6 +244,10 @@ mod tests {
 		let next_block_fee_rate = client.next_block_fee_rate().await.unwrap();
 
 		println!("next_block_fee_rate: {:?}", next_block_fee_rate);
+
+		let average_block_fee_rate = client.average_block_fee_rate(block_hash_zero).await.unwrap();
+
+		println!("average_block_fee_rate: {}", average_block_fee_rate);
 
 		let best_block_hash = client.best_block_hash().await.unwrap();
 

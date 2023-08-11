@@ -1,3 +1,4 @@
+#!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
 // Arguments:
@@ -10,24 +11,18 @@
 // If only a single event is listed as the succeed_on parameter, the event data will be printed
 // to stdout when it is observed
 //
-// For example: pnpm tsx ./commands/observe_events.ts --succeed_on ethereumThresholdSigner:ThresholdSignatureSuccess --fail_on ethereumThresholdSigner:SignersUnavailable
+// For example: ./commands/observe_events.ts --succeed_on ethereumThresholdSigner:ThresholdSignatureSuccess --fail_on ethereumThresholdSigner:SignersUnavailable
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
 import minimist from 'minimist';
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, getChainflipApi } from '../shared/utils';
 
 const args = minimist(process.argv.slice(2));
 
 async function main(): Promise<void> {
-
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   const expectedEvents = args.succeed_on.split(',');
   const printEvent = expectedEvents.length === 1;
   const badEvents = args.fail_on ? args.fail_on.split(',') : [];
-  const api = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-  });
+  const api = await getChainflipApi();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await api.query.system.events((events: any[]) => {
@@ -44,7 +39,7 @@ async function main(): Promise<void> {
         const expectedEvent = expectedEvents[i].split(':');
         if (event.section === expectedEvent[0] && event.method === expectedEvent[1]) {
           if (printEvent) {
-            console.log(event.data.toString());
+            console.log(JSON.stringify(event.toHuman()));
           }
           // remove the expected event from the list
           expectedEvents.splice(i, 1);

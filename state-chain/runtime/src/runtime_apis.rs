@@ -1,7 +1,11 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::PolkadotHash,
+	eth::{api::EthereumChainId, Address as EthereumAddress},
+};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -52,6 +56,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
+	pub bound_redeem_address: Option<EthereumAddress>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
@@ -83,7 +88,6 @@ decl_runtime_apis!(
 		fn cf_is_auction_phase() -> bool;
 		fn cf_eth_flip_token_address() -> EthereumAddress;
 		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset>;
 		fn cf_eth_key_manager_address() -> EthereumAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
@@ -92,6 +96,7 @@ decl_runtime_apis!(
 		fn cf_auction_parameters() -> (u32, u32);
 		fn cf_min_funding() -> u128;
 		fn cf_current_epoch() -> u32;
+		fn cf_current_compatibility_version() -> SemVer;
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u128;
@@ -109,5 +114,7 @@ decl_runtime_apis!(
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
 		fn cf_environment() -> Environment;
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 	}
 );

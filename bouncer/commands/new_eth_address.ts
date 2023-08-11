@@ -1,8 +1,9 @@
+#!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes one argument
 // It will take the provided seed turn it into a new ethereum address and return the address
-// For example: pnpm tsx ./commands/new_eth_address.ts foobar
+// For example: ./commands/new_eth_address.ts foobar
 // returns: 0xE16CCFc63368e8FC93f53ccE4e4f4b08c4C3E186
 
 import { newEthAddress } from '../shared/new_eth_address';

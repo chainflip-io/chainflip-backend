@@ -53,6 +53,9 @@ pub const BTC_HTTP_NODE_ENDPOINT: &str = "BTC__HTTP_NODE_ENDPOINT";
 pub const BTC_RPC_USER: &str = "BTC__RPC_USER";
 pub const BTC_RPC_PASSWORD: &str = "BTC__RPC_PASSWORD";
 
+pub const DOT_WS_NODE_ENDPOINT: &str = "DOT__WS_NODE_ENDPOINT";
+pub const DOT_HTTP_NODE_ENDPOINT: &str = "DOT__HTTP_NODE_ENDPOINT";
+
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";

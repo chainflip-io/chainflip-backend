@@ -1,7 +1,7 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
+use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
 
@@ -9,8 +9,7 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
-
-pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
+pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("8437f6b8BCACb632cC4dD627bA3a8E6E3326A418"),
@@ -26,8 +25,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	ethereum_deployment_block: 8304200u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
-	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
-	max_ceremony_stage_duration: 300,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a"
 	)),

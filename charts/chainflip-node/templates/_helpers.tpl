@@ -48,6 +48,7 @@ Selector labels
 {{- define "chainflip-node.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "chainflip-node.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+chainflip.io/unit: node
 {{- end }}
 
 {{/*

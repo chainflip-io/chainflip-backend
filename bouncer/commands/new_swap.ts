@@ -1,3 +1,4 @@
+#!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes four arguments.
@@ -5,22 +6,20 @@
 // Argument 1 is the source currency ("btc", "eth", "dot" or "usdc")
 // Argument 2 is the destination currency ("btc", "eth", "dot" or "usdc")
 // Argument 3 is the destination address
-// Argument 4 is the broker fee in basis points
-// For example: pnpm tsx ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX 100
+// For example: ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
-import { Token, runWithTimeout } from '../shared/utils';
+import { Asset } from '@chainflip-io/cli';
+import { runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {
-
-  const sourceToken = process.argv[2].toUpperCase() as Token;
-  const destToken = process.argv[3].toUpperCase() as Token;
+  const sourceAsset = process.argv[2].toUpperCase() as Asset;
+  const destAsset = process.argv[3].toUpperCase() as Asset;
   const destAddress = process.argv[4];
-  const fee = process.argv[5];
 
-  console.log(`Requesting swap ${sourceToken} -> ${destToken}`);
+  console.log(`Requesting swap ${sourceAsset} -> ${destAsset}`);
 
-  await newSwap(sourceToken, destToken, destAddress, fee);
+  await newSwap(sourceAsset, destAsset, destAddress);
 
   process.exit(0);
 }

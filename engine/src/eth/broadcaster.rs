@@ -1,4 +1,4 @@
-use crate::eth::EthersRpcApi;
+use crate::eth::EthRpcApi;
 use anyhow::{Context, Result};
 use ethers::{
 	prelude::*,
@@ -9,7 +9,7 @@ use tracing::{info_span, Instrument};
 #[derive(Clone)]
 pub struct EthBroadcaster<EthRpc>
 where
-	EthRpc: EthersRpcApi,
+	EthRpc: EthRpcApi,
 {
 	eth_rpc: EthRpc,
 	pub address: H160,
@@ -17,7 +17,7 @@ where
 
 impl<EthRpc> EthBroadcaster<EthRpc>
 where
-	EthRpc: EthersRpcApi,
+	EthRpc: EthRpcApi,
 {
 	pub fn new(eth_rpc: EthRpc) -> Self {
 		Self { address: eth_rpc.address(), eth_rpc }
@@ -44,7 +44,7 @@ where
 				value: Some(unsigned_tx.value),
 				max_fee_per_gas: unsigned_tx.max_fee_per_gas,
 				max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
-				gas: Some(U256::from(15_000_000u64)),
+				gas: unsigned_tx.gas_limit,
 				access_list: AccessList::default(),
 				from: Some(self.address),
 				nonce: None,

@@ -72,8 +72,8 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						asset,
 						amount,
 						destination_address,
-						message: message.message,
-						cf_parameters: message.cf_parameters,
+						message: message.channel_metadata.message,
+						cf_parameters: message.channel_metadata.cf_parameters,
 					},
 					None => MockEgressParameter::<C>::Swap { asset, amount, destination_address },
 				});

@@ -1,5 +1,4 @@
 pub mod batch_fetch_and_transfer;
-pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 
 use super::{PolkadotAccountId, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
@@ -13,7 +12,6 @@ use sp_std::marker::PhantomData;
 pub enum PolkadotApi<Environment: 'static> {
 	BatchFetchAndTransfer(PolkadotExtrinsicBuilder),
 	RotateVaultProxy(PolkadotExtrinsicBuilder),
-	CreateAnonymousVault(PolkadotExtrinsicBuilder),
 	ChangeGovKey(PolkadotExtrinsicBuilder),
 	ExecuteXSwapAndCall(PolkadotExtrinsicBuilder),
 	#[doc(hidden)]
@@ -112,17 +110,6 @@ where
 	}
 }
 
-impl<E> CreatePolkadotVault for PolkadotApi<E>
-where
-	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
-{
-	fn new_unsigned() -> Self {
-		Self::CreateAnonymousVault(
-			create_anonymous_vault::extrinsic_builder(E::replay_protection()),
-		)
-	}
-}
-
 impl<E> ExecutexSwapAndCall<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
@@ -130,7 +117,8 @@ where
 	fn new_unsigned(
 		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Polkadot>,
-		_source_address: ForeignChainAddress,
+		_source_chain: ForeignChain,
+		_source_address: Option<ForeignChainAddress>,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Not implemented"))
@@ -142,7 +130,6 @@ macro_rules! map_over_api_variants {
 		match $self {
 			PolkadotApi::BatchFetchAndTransfer($var) => $var_method,
 			PolkadotApi::RotateVaultProxy($var) => $var_method,
-			PolkadotApi::CreateAnonymousVault($var) => $var_method,
 			PolkadotApi::ChangeGovKey($var) => $var_method,
 			PolkadotApi::ExecuteXSwapAndCall($var) => $var_method,
 			PolkadotApi::_Phantom(..) => unreachable!(),
