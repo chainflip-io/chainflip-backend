@@ -1,7 +1,7 @@
 mod contract_common;
-mod erc20_deposits;
+pub mod erc20_deposits;
 mod eth_chain_tracking;
-mod eth_source;
+pub mod eth_source;
 mod ethereum_deposits;
 mod key_manager;
 mod state_chain_gateway;
