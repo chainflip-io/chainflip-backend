@@ -57,9 +57,9 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub enum Lifetime {
-		Activate,
-		Deactivate,
+	pub enum OrderLifetime {
+		Active,
+		Inactive,
 	}
 
 	// TODO: add needed fields to this struct for mint/burn.
@@ -90,7 +90,7 @@ pub mod pallet {
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub struct OrderDetails<AccountId> {
-		pub lifetime: Lifetime,
+		pub lifetime: OrderLifetime,
 		pub details: RangeOrLimitOrderDetails<AccountId>,
 	}
 
@@ -200,7 +200,7 @@ pub mod pallet {
 			if let Some(order) = OrderQueue::<T>::take(current_block) {
 				match order.lifetime {
 					// Order gets activated.
-					Lifetime::Activate => match order.details {
+					OrderLifetime::Active => match order.details {
 						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
 							let _ = Self::collect_and_mint_range_order_inner(
 								range_order.lp,
@@ -220,7 +220,7 @@ pub mod pallet {
 						},
 					},
 					// Order runs out of
-					Lifetime::Deactivate => match order.details {
+					OrderLifetime::Inactive => match order.details {
 						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
 							let _ = Self::collect_and_burn_range_order_inner(
 								range_order.lp,
@@ -509,7 +509,7 @@ pub mod pallet {
 				OrderQueue::<T>::insert(
 					order_validity.gets_valid_at(),
 					OrderDetails {
-						lifetime: Lifetime::Activate,
+						lifetime: OrderLifetime::Active,
 						details: RangeOrLimitOrderDetails::RangeOrder(RangeOrderDetails {
 							lp,
 							unstable_asset,
@@ -607,7 +607,7 @@ pub mod pallet {
 				OrderQueue::<T>::insert(
 					gets_active_at,
 					OrderDetails {
-						lifetime: Lifetime::Activate,
+						lifetime: OrderLifetime::Active,
 						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {
 							lp,
 							unstable_asset,
