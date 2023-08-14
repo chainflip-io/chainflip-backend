@@ -20,7 +20,7 @@ cf-runtime-utilities = { path = '../../runtime-utilities', default-features = fa
   'derive',
 ] }
 cf-traits = { path = '../../traits', default-features = false }
-utilities = { path = '../../../utilities', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -59,7 +59,7 @@ std = [
   'log/std',
   'scale-info/std',
   'sp-std/std',
-  'utilities/std',
+  'cf-utilities/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',

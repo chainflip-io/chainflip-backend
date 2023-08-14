@@ -61,7 +61,7 @@ where
 	}
 
 	fn super_majority_threshold(&self) -> AuthorityCount {
-		utilities::success_threshold_from_share_count(self.candidate_count())
+		cf_utilities::success_threshold_from_share_count(self.candidate_count())
 	}
 
 	pub fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) {

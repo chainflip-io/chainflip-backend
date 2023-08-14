@@ -20,7 +20,7 @@ cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
 # Local deps
-utilities = { path = '../../../utilities', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 
 # Non-substrate external deps
 bitvec = { default-features = false, version = '1.0', features = ['alloc'] }
@@ -50,6 +50,7 @@ std = [
   'bitvec/std',
   'cf-primitives/std',
   'cf-traits/std',
+  'cf-utilities/std',
   'codec/std',
   'frame-benchmarking?/std',
   'frame-support/std',

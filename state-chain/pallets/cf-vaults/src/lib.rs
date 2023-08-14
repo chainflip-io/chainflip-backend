@@ -784,7 +784,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(offenders) => {
 				let offenders_len = offenders.len();
 				let offenders = if (offenders_len as AuthorityCount) <
-					utilities::failure_threshold_from_share_count(candidate_count)
+					cf_utilities::failure_threshold_from_share_count(candidate_count)
 				{
 					offenders
 				} else {

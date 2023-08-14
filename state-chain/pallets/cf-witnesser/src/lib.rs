@@ -15,6 +15,7 @@ mod tests;
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
@@ -24,7 +25,6 @@ use frame_support::{
 	Hashable,
 };
 use sp_std::prelude::*;
-use utilities::success_threshold_from_share_count;
 
 pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
