@@ -119,8 +119,8 @@ where
 	arb_safe_vault_source
 		.clone()
 		.key_manager_witnessing(state_chain_client.clone(), arb_client.clone(), key_manager_address)
-		.continuous("KeyManager".to_string(), db.clone())
-		.logging("KeyManager")
+		.continuous("ArbKeyManager".to_string(), db.clone())
+		.logging("ArbKeyManager")
 		.spawn(scope);
 
 	arb_safe_vault_source
@@ -163,8 +163,8 @@ where
 			cf_primitives::ForeignChain::Arbitrum,
 			supported_arb_erc20_assets,
 		)
-		.continuous("Vault".to_string(), db)
-		.logging("Vault")
+		.continuous("ArbVault".to_string(), db)
+		.logging("ArbVault")
 		.spawn(scope);
 
 	Ok(())
