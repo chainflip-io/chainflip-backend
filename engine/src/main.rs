@@ -117,8 +117,8 @@ async fn start(
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
 	}
 
-	metrics::register_metrics();
 	if let Some(prometheus_metric_settings) = &settings.prometheus_metric {
+		metrics::register_metrics();
 		metrics::start(scope, prometheus_metric_settings).await?;
 	}
 
