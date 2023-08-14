@@ -5,7 +5,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
-	health, p2p, 
+	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -15,7 +15,6 @@ use chainflip_engine::{
 		},
 	},
 	witness,
-	metrics,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -28,7 +27,6 @@ use utilities::{
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };
-
 
 lazy_static::lazy_static! {
 	static ref CFE_VERSION: SemVer = SemVer {

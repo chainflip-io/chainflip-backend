@@ -5,21 +5,18 @@
 
 use std::net::IpAddr;
 
+use crate::settings;
+use lazy_static;
+use prometheus::{IntCounterVec, IntGauge, Opts, Registry};
 use tracing::info;
 use utilities::task_scope;
 use warp::Filter;
-use prometheus::{
-    IntCounterVec, IntGauge, Registry, Opts
-};
-use crate::settings;
-use lazy_static;
 
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
 	pub static ref METRIC_COUNTER: IntCounterVec = IntCounterVec::new(Opts::new("metric1", "help1"), &["rpcMethod"]).expect("Metric succesfully created");
 	pub static ref METRIC_GAUGE: IntGauge = IntGauge::new("metric2", "help2").expect("Metric succesfully created");
 }
-
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
 pub async fn start<'a, 'env>(
@@ -30,11 +27,13 @@ pub async fn start<'a, 'env>(
 
 	const PATH: &str = "metrics";
 
-	let future =
-		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(move || {
-			metrics_handler()
-		}))
-		.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
+	let future = warp::serve(
+		warp::any()
+			.and(warp::path(PATH))
+			.and(warp::path::end())
+			.map(move || metrics_handler()),
+	)
+	.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
 
 	scope.spawn_weak(async move {
 		future.await;
@@ -44,27 +43,30 @@ pub async fn start<'a, 'env>(
 	Ok(())
 }
 
-
 fn metrics_handler() -> String {
-    use prometheus::Encoder;
-    let encoder = prometheus::TextEncoder::new();
+	use prometheus::Encoder;
+	let encoder = prometheus::TextEncoder::new();
 
-    let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
-        eprintln!("could not encode custom metrics: {}", e);
-    };
-    let res = match String::from_utf8(buffer) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("custom metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    };
+	let mut buffer = Vec::new();
+	if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
+		eprintln!("could not encode custom metrics: {}", e);
+	};
+	let res = match String::from_utf8(buffer) {
+		Ok(v) => v,
+		Err(e) => {
+			eprintln!("custom metrics could not be from_utf8'd: {}", e);
+			String::default()
+		},
+	};
 
-    res
+	res
 }
 
 pub fn register_metrics() {
-	REGISTRY.register(Box::new(METRIC_COUNTER.clone())).expect("Metric succesfully register");
-	REGISTRY.register(Box::new(METRIC_GAUGE.clone())).expect("Metric succesfully register");
+	REGISTRY
+		.register(Box::new(METRIC_COUNTER.clone()))
+		.expect("Metric succesfully register");
+	REGISTRY
+		.register(Box::new(METRIC_GAUGE.clone()))
+		.expect("Metric succesfully register");
 }
