@@ -7,24 +7,24 @@
 12:15:31.180671 db@close closing
 12:15:31.180789 db@close done T·116.411µs
 =============== Aug 11, 2023 (UTC) ===============
-12:52:31.727105 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-12:52:31.727283 version@stat F·[] S·0B[] Sc·[]
-12:52:31.727331 db@open opening
-12:52:31.727390 journal@recovery F·1
-12:52:31.736793 journal@recovery recovering @1
-12:52:31.740061 memdb@flush created L0@2 N·54 S·12KiB "\x04\x0fZ..,\x19\x03,v26":"\xfb\rv..|\xf4\b,v15"
-12:52:31.742958 version@stat F·[1] S·12KiB[12KiB] Sc·[0.25]
-12:52:31.752582 db@janitor F·3 G·0
-12:52:31.752639 db@open done T·25.295832ms
+19:01:22.038284 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+19:01:22.038494 version@stat F·[] S·0B[] Sc·[]
+19:01:22.038538 db@open opening
+19:01:22.038604 journal@recovery F·1
+19:01:22.040931 journal@recovery recovering @1
+19:01:22.055144 memdb@flush created L0@2 N·54 S·12KiB "\x04\x0fZ..,\x19\x03,v26":"\xfb\rv..|\xf4\b,v15"
+19:01:22.057591 version@stat F·[1] S·12KiB[12KiB] Sc·[0.25]
+19:01:22.065977 db@janitor F·3 G·0
+19:01:22.066005 db@open done T·27.45472ms
 =============== Aug 11, 2023 (UTC) ===============
-13:12:37.011898 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-13:12:37.012030 version@stat F·[1] S·12KiB[12KiB] Sc·[0.25]
-13:12:37.012055 db@open opening
-13:12:37.012105 journal@recovery F·1
-13:12:37.014337 journal@recovery recovering @3
-13:12:37.020817 memdb@flush created L0@5 N·670 S·100KiB "\x01\xdcr..\xfe\xa4\x0f,v582":"\xff\xbdK..S\x1c\xda,v660"
-13:12:37.023078 version@stat F·[2] S·113KiB[113KiB] Sc·[0.50]
-13:12:37.034106 db@janitor F·4 G·0
-13:12:37.034146 db@open done T·22.081389ms
-13:36:17.651469 db@close closing
-13:36:17.655082 db@close done T·3.633922ms
+19:19:55.172465 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+19:19:55.172599 version@stat F·[1] S·12KiB[12KiB] Sc·[0.25]
+19:19:55.172639 db@open opening
+19:19:55.172692 journal@recovery F·1
+19:19:55.174959 journal@recovery recovering @3
+19:19:55.183275 memdb@flush created L0@5 N·668 S·101KiB "\x01;]..* \xba,v711":"\xff\xbdK..S\x1c\xda,v660"
+19:19:55.185501 version@stat F·[2] S·113KiB[113KiB] Sc·[0.50]
+19:19:55.203546 db@janitor F·4 G·0
+19:19:55.203596 db@open done T·30.917241ms
+19:43:47.277717 db@close closing
+19:43:47.277834 db@close done T·115.469µs
