@@ -231,7 +231,7 @@ async fn start(
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		EthBroadcaster::new(EthRpcClient::new(&settings.eth).await?),
+		EthBroadcaster::new(EthRpcClient::new(&settings.eth, 1337u64).await?),
 		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
 		BtcBroadcaster::new(btc_rpc_client.clone()),
 		eth_multisig_client,

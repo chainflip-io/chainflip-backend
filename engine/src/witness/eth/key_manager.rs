@@ -236,7 +236,7 @@ mod tests {
 					.unwrap(),
 				};
 
-				let client = EthRpcClient::new(&eth_settings).await.unwrap();
+				let client = EthRpcClient::new(&eth_settings, 1337u64).await.unwrap();
 
 				let chain_id = client.chain_id().await.unwrap();
 				println!("Here's the chain_id: {chain_id}");
