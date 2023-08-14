@@ -38,7 +38,7 @@ pub mod pallet {
 		range_orders::{self, AmountsToLiquidityError, Liquidity},
 	};
 	use cf_primitives::AccountId;
-	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+	use cf_traits::{liquidity, AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	use super::*;
@@ -89,8 +89,9 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct OrderDetails<AccountId> {
+	pub struct OrderDetails<AccountId, BlockNumber: PartialOrd + Copy> {
 		pub lifetime: OrderLifetime,
+		pub validity: OrderValidity<BlockNumber>,
 		pub details: RangeOrLimitOrderDetails<AccountId>,
 	}
 
@@ -140,8 +141,13 @@ pub mod pallet {
 
 	/// Lifetime of an order.
 	#[pallet::storage]
-	pub(super) type OrderQueue<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, OrderDetails<T::AccountId>, OptionQuery>;
+	pub(super) type OrderQueue<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::BlockNumber,
+		OrderDetails<T::AccountId, T::BlockNumber>,
+		OptionQuery,
+	>;
 
 	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
 	#[pallet::storage]
@@ -202,31 +208,57 @@ pub mod pallet {
 					// Order gets activated.
 					OrderLifetime::Active => match order.details {
 						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
-							let _ = Self::collect_and_mint_range_order_inner(
-								range_order.lp,
-								range_order.unstable_asset,
-								range_order.price_range_in_ticks,
-								range_order.order_size,
+							let range_order_2 = range_order.clone();
+							let liquidity = Self::collect_and_mint_range_order_inner(
+								range_order_2.lp,
+								range_order_2.unstable_asset,
+								range_order_2.price_range_in_ticks,
+								range_order_2.order_size,
+							);
+							OrderQueue::<T>::insert(
+								order.validity.is_valid_until(),
+								OrderDetails {
+									lifetime: OrderLifetime::Inactive,
+									validity: order.validity,
+									details: RangeOrLimitOrderDetails::RangeOrder(
+										RangeOrderDetails {
+											lp: range_order.lp,
+											unstable_asset: range_order.unstable_asset,
+											price_range_in_ticks: range_order.price_range_in_ticks,
+											order_size: range_order.order_size,
+											liquidity: Some(liquidity.unwrap()),
+										},
+									),
+								},
 							);
 						},
 						RangeOrLimitOrderDetails::LimitOrder(limit_order) => {
+							let limit_order_2 = limit_order.clone();
 							let _ = Self::collect_and_mint_limit_order_inner(
-								limit_order.lp,
-								limit_order.unstable_asset,
-								limit_order.order,
-								limit_order.price_as_tick,
-								limit_order.amount,
+								limit_order_2.lp,
+								limit_order_2.unstable_asset,
+								limit_order_2.order,
+								limit_order_2.price_as_tick,
+								limit_order_2.amount,
+							);
+							OrderQueue::<T>::insert(
+								order.validity.is_valid_until(),
+								OrderDetails {
+									lifetime: OrderLifetime::Inactive,
+									validity: order.validity,
+									details: RangeOrLimitOrderDetails::LimitOrder(limit_order),
+								},
 							);
 						},
 					},
 					// Order runs out of
 					OrderLifetime::Inactive => match order.details {
-						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
+						RangeOrLimitOrderDetails::RangeOrder(limit_order) => {
 							let _ = Self::collect_and_burn_range_order_inner(
-								range_order.lp,
-								range_order.unstable_asset,
-								range_order.price_range_in_ticks,
-								range_order.liquidity.unwrap(),
+								limit_order.lp,
+								limit_order.unstable_asset,
+								limit_order.price_range_in_ticks,
+								limit_order.liquidity.unwrap(),
 							);
 						},
 						RangeOrLimitOrderDetails::LimitOrder(limit_order) => {
@@ -499,17 +531,33 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			if order_validity.is_valid(<frame_system::Pallet<T>>::block_number()) {
-				Self::collect_and_mint_range_order_inner(
-					lp,
+				let liquidity = Self::collect_and_mint_range_order_inner(
+					lp.clone(),
 					unstable_asset,
-					price_range_in_ticks,
+					price_range_in_ticks.clone(),
 					order_size,
-				)
+				)?;
+				OrderQueue::<T>::insert(
+					order_validity.is_valid_until(),
+					OrderDetails {
+						lifetime: OrderLifetime::Inactive,
+						validity: order_validity,
+						details: RangeOrLimitOrderDetails::RangeOrder(RangeOrderDetails {
+							lp,
+							unstable_asset,
+							price_range_in_ticks,
+							order_size,
+							liquidity: Some(liquidity),
+						}),
+					},
+				);
+				Ok(())
 			} else {
 				OrderQueue::<T>::insert(
 					order_validity.gets_valid_at(),
 					OrderDetails {
 						lifetime: OrderLifetime::Active,
+						validity: order_validity,
 						details: RangeOrLimitOrderDetails::RangeOrder(RangeOrderDetails {
 							lp,
 							unstable_asset,
@@ -595,19 +643,34 @@ pub mod pallet {
 			// If order is already valid we can mint it straight away.
 			if order_validity.is_valid(current_block) {
 				Self::collect_and_mint_limit_order_inner(
-					lp,
+					lp.clone(),
 					unstable_asset,
 					order,
 					price_as_tick,
 					amount,
-				)
+				)?;
+				OrderQueue::<T>::insert(
+					order_validity.is_valid_until(),
+					OrderDetails {
+						lifetime: OrderLifetime::Inactive,
+						validity: order_validity,
+						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {
+							lp,
+							unstable_asset,
+							order,
+							price_as_tick,
+							amount,
+						}),
+					},
+				);
+				Ok(())
 			// If not pass it to the limit order queue.
 			} else {
-				let gets_active_at = order_validity.gets_valid_at();
 				OrderQueue::<T>::insert(
-					gets_active_at,
+					order_validity.gets_valid_at(),
 					OrderDetails {
 						lifetime: OrderLifetime::Active,
+						validity: order_validity,
 						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {
 							lp,
 							unstable_asset,
@@ -804,7 +867,7 @@ impl<T: Config> Pallet<T> {
 		unstable_asset: any::Asset,
 		price_range_in_ticks: core::ops::Range<Tick>,
 		order_size: RangeOrderSize,
-	) -> DispatchResult {
+	) -> Result<u128, DispatchError> {
 		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 			let liquidity = match order_size {
 				RangeOrderSize::Liquidity(liquidity) => liquidity,
@@ -883,7 +946,7 @@ impl<T: Config> Pallet<T> {
 				collected_fees,
 			});
 
-			Ok(())
+			Ok(liquidity)
 		})
 	}
 
