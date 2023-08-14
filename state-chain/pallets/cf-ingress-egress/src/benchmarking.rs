@@ -7,6 +7,7 @@ use cf_chains::{
 	DepositChannel,
 };
 use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 benchmarks_instance_pallet! {
 	disable_asset_egress {
@@ -29,7 +30,7 @@ benchmarks_instance_pallet! {
 				1,
 				source_asset,
 			).unwrap(),
-			expires_at: T::BlockNumber::from(1_000u32),
+			expires_at: BlockNumberFor::<T>::from(1_000u32),
 		});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0),
@@ -63,7 +64,7 @@ benchmarks_instance_pallet! {
 					1,
 					source_asset,
 				).unwrap(),
-				expires_at: T::BlockNumber::from(1_000u32),
+				expires_at: BlockNumberFor::<T>::from(1_000u32),
 			};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
@@ -72,7 +73,7 @@ benchmarks_instance_pallet! {
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 
 	vault_transfer_failed {
-		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		let asset: TargetChainAsset<T, I> = BenchmarkValue::benchmark_value();
 		let amount: TargetChainAmount<T, I> = BenchmarkValue::benchmark_value();
 		let destination_address: TargetChainAccount<T, I> = BenchmarkValue::benchmark_value();

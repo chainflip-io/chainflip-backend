@@ -45,7 +45,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
-			BlockNumber = <Self as frame_system::Config>::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// API for handling asset egress.

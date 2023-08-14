@@ -65,8 +65,6 @@ std = [
   'pallet-cf-vaults/std',
   'pallet-session/std',
   'scale-info/std',
-  'dep:sp-application-crypto',
-  'sp-application-crypto?/std',
   'sp-core/std',
   'sp-std/std',
 ]

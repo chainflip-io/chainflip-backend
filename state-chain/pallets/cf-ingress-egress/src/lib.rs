@@ -30,6 +30,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{DispatchError, TransactionOutcome},
 };
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
 
@@ -92,14 +93,11 @@ pub mod pallet {
 	use cf_chains::ExecutexSwapAndCall;
 	use cf_primitives::BroadcastId;
 	use core::marker::PhantomData;
-	use sp_std::vec::Vec;
-
 	use frame_support::{
-		pallet_prelude::{OptionQuery, ValueQuery},
 		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
 	};
-	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+	use sp_std::vec::Vec;
 
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
@@ -129,7 +127,7 @@ pub mod pallet {
 		/// Chainflip-native block number.
 		// TODO: We should consider changing this to also be an external block number and expire
 		// based on external block numbers. See PRO-689.
-		pub expires_at: T::BlockNumber,
+		pub expires_at: BlockNumberFor<T>,
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
@@ -746,7 +744,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
 		channel_action: ChannelAction<T::AccountId>,
-		expires_at: T::BlockNumber,
+		expires_at: BlockNumberFor<T>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -852,12 +850,12 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		expiry_block: T::BlockNumber,
+		expiry_block: BlockNumberFor<T>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
@@ -876,7 +874,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry_block: T::BlockNumber,
+		expiry_block: BlockNumberFor<T>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,

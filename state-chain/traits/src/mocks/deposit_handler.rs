@@ -4,6 +4,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
@@ -29,7 +30,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub broker_commission_bps: BasisPoints,
 	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub channel_metadata: Option<CcmChannelMetadata>,
-	pub expiry: T::BlockNumber,
+	pub expiry: BlockNumberFor<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -37,7 +38,7 @@ pub struct LpChannel<C: Chain, T: Chainflip> {
 	pub deposit_address: ForeignChainAddress,
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub lp_account: <T as frame_system::Config>::AccountId,
-	pub expiry: T::BlockNumber,
+	pub expiry: BlockNumberFor<T>,
 }
 
 impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
@@ -79,7 +80,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 
 impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,

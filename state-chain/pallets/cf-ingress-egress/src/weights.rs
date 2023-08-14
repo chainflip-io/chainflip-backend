@@ -73,7 +73,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 
 	fn vault_transfer_failed() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::from_parts(1_000_000, 0)
 	}
 }
 
@@ -112,6 +112,6 @@ impl WeightInfo for () {
 	}
 	
 	fn vault_transfer_failed() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::from_parts(1_000_000, 0)
 	}
 }
