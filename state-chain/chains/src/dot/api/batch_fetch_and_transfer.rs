@@ -19,7 +19,7 @@ pub fn extrinsic_builder(
 		PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
 			real: PolkadotAccountIdLookup::from(vault_account),
 			force_proxy_type: Some(PolkadotProxyType::Any),
-			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch {
+			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::force_batch {
 				calls: [
 					fetch_params
 						.into_iter()

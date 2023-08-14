@@ -25,8 +25,6 @@ use sp_runtime::{
 	AccountId32, MultiAddress, MultiSignature,
 };
 
-pub const POLKADOT_EXISTENTIAL_DEPOSIT_AMOUNT: PolkadotBalance = 10_000_000_000; //1 DOT
-
 #[cfg_attr(feature = "std", derive(Hash))]
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotSignature(sr25519::Signature);
@@ -525,6 +523,25 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	batch_all {
+		#[allow(missing_docs)]
+		calls: Vec<PolkadotRuntimeCall>,
+	},
+	/// Send a batch of dispatch calls.
+	/// Unlike `batch`, it allows errors and won't interrupt.
+	///
+	/// May be called from any origin.
+	///
+	/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+	///   exceed the constant: `batched_calls_limit` (available in constant metadata).
+	///
+	/// If origin is root then call are dispatch without checking origin filter. (This includes
+	/// bypassing `frame_system::Config::BaseCallFilter`).
+	///
+	/// # <weight>
+	/// - Complexity: O(C) where C is the number of calls to be batched.
+	/// # </weight>
+	#[codec(index = 4u8)]
+	force_batch {
 		#[allow(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},
