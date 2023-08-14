@@ -161,17 +161,20 @@ pub trait StorageApi {
 		StorageDoubleMap::Key1: Sync,
 		StorageDoubleMap::Key2: Sync;
 
-	async fn storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
+	async fn storage_map<
+		StorageMap: StorageMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static,
+	>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;
+	) -> RpcResult<ReturnedIter>;
 
 	async fn storage_map_values<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<StorageMap::Value>> {
 		Ok(self
-			.storage_map::<StorageMap>(block_hash)
+			.storage_map::<StorageMap, Vec<_>>(block_hash)
 			.await?
 			.into_iter()
 			.map(|(_k, v)| v)
@@ -248,10 +251,13 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 	/// Gets all the storage pairs (key, value) of a StorageMap.
 	/// NB: Because this is an unbounded operation, it requires the node to have
 	/// the `--rpc-methods=unsafe` enabled.
-	async fn storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
+	async fn storage_map<
+		StorageMap: StorageMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>,
+	>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
+	) -> RpcResult<ReturnedIter> {
 		Ok(self
 			.storage_pairs(block_hash, StorageMap::_prefix_hash())
 			.await?
@@ -327,11 +333,14 @@ impl<
 			.await
 	}
 
-	async fn storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
+	async fn storage_map<
+		StorageMap: StorageMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static,
+	>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
-		self.base_rpc_client.storage_map::<StorageMap>(block_hash).await
+	) -> RpcResult<ReturnedIter> {
+		self.base_rpc_client.storage_map::<StorageMap, _>(block_hash).await
 	}
 }
 

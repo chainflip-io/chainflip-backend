@@ -49,16 +49,6 @@ where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = state_chain_client
-		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-		)
-		.await
-		.context("Failed to fetch Ethereum supported assets")?
-		.into_iter()
-		.map(|(asset, address)| (address, asset.into()))
-		.collect();
-
 	let expected_chain_id = web3::types::U256::from(
 		state_chain_client
 			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
@@ -96,23 +86,24 @@ where
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
-	let usdc_contract_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-			&cf_primitives::chains::assets::eth::Asset::Usdc,
-		)
-		.await
-		.expect(STATE_CHAIN_CONNECTION)
-		.with_context(|| "EthereumSupportedAssets does not include USDC")?;
+	let supported_erc20_tokens: HashMap<cf_primitives::chains::assets::eth::Asset, H160> =
+		state_chain_client
+			.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
+				state_chain_client.latest_finalized_hash(),
+			)
+			.await
+			.context("Failed to fetch Ethereum supported assets")?;
 
-	let flip_contract_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-			&cf_primitives::chains::assets::eth::Asset::Flip,
-		)
-		.await
-		.expect(STATE_CHAIN_CONNECTION)
-		.with_context(|| "EthereumSupportedAssets does not include FLIP")?;
+	let usdc_contract_address =
+		*supported_erc20_tokens.get(&eth::Asset::Usdc).context("USDC not supported")?;
+
+	let flip_contract_address =
+		*supported_erc20_tokens.get(&eth::Asset::Flip).context("FLIP not supported")?;
+
+	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
+		.into_iter()
+		.map(|(asset, address)| (address, asset.into()))
+		.collect();
 
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
