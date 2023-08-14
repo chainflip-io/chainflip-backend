@@ -9,14 +9,14 @@ use tracing::info;
 use utilities::task_scope;
 use warp::Filter;
 use prometheus::{
-    IntCounter, IntGauge, Registry,
+    IntCounterVec, IntGauge, Registry, Opts
 };
 use crate::settings;
 use lazy_static;
 
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
-	pub static ref METRIC_COUNTER: IntCounter = IntCounter::new("metric1", "help1").expect("Metric succesfully created");
+	pub static ref METRIC_COUNTER: IntCounterVec = IntCounterVec::new(Opts::new("metric1", "help1"), &["rpcMethod"]).expect("Metric succesfully created");
 	pub static ref METRIC_GAUGE: IntGauge = IntGauge::new("metric2", "help2").expect("Metric succesfully created");
 }
 
@@ -24,7 +24,7 @@ lazy_static::lazy_static! {
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
 pub async fn start<'a, 'env>(
 	scope: &'a task_scope::Scope<'env, anyhow::Error>,
-	prometheus_metric_settings: &'a settings::PrometheusMetric,
+	prometheus_settings: &'a settings::Prometheus,
 ) -> Result<(), anyhow::Error> {
 	info!("Starting");
 
@@ -34,7 +34,7 @@ pub async fn start<'a, 'env>(
 		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(move || {
 			metrics_handler()
 		}))
-		.bind((prometheus_metric_settings.hostname.parse::<IpAddr>()?, prometheus_metric_settings.port));
+		.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
 
 	scope.spawn_weak(async move {
 		future.await;
