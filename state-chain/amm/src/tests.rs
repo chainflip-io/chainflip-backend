@@ -3,7 +3,7 @@
 use cf_utilities::assert_ok;
 use core::convert::Infallible;
 
-use crate::common::{MAX_SQRT_PRICE, MIN_SQRT_PRICE};
+use crate::common::{PostOperationPositionExistence, MAX_SQRT_PRICE, MIN_SQRT_PRICE};
 
 use super::*;
 
@@ -40,7 +40,7 @@ fn test_basic_swaps() {
 					0,
 					liquidity
 				)),
-				Default::default()
+				(Default::default(), PostOperationPositionExistence::Exists)
 			);
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));
@@ -116,7 +116,7 @@ fn test_basic_swaps() {
 					0,
 					limit_order_liquidity
 				)),
-				Default::default()
+				(Default::default(), PostOperationPositionExistence::Exists)
 			);
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));
@@ -167,7 +167,7 @@ fn test_basic_swaps() {
 					0,
 					limit_order_liquidity
 				)),
-				Default::default()
+				(Default::default(), PostOperationPositionExistence::Exists)
 			);
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));

@@ -597,10 +597,10 @@ pub mod mocks {
 				StorageDoubleMap::Key1: Sync,
 				StorageDoubleMap::Key2: Sync;
 
-			async fn storage_map<StorageMap: storage_api::StorageMapAssociatedTypes + 'static>(
+			async fn storage_map<StorageMap: storage_api::StorageMapAssociatedTypes + 'static, ReturnedIter: FromIterator<(<StorageMap as storage_api::StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,
-			) -> RpcResult<Vec<(<StorageMap as storage_api::StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;
+			) -> RpcResult<ReturnedIter>;
 		}
 	}
 }
