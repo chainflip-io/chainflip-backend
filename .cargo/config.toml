@@ -30,9 +30,13 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2020-0071: This advisory is related to a potential segfault, which can only happen in very specific circumstances.
 # - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
+# - RUSTSEC-2021-0145: This advisory only affects the windows platform. It's a transitive dependency of `substrate`.
+# - RUSTSEC-2022-0093: This advisory is related to ed25519-dalek.
 cf-audit = '''
 audit --ignore RUSTSEC-2022-0061
       --ignore RUSTSEC-2020-0071
       --ignore RUSTSEC-2021-0139
       --ignore RUSTSEC-2020-0168
+      --ignore RUSTSEC-2021-0145
+    #   --ignore RUSTSEC-2022-0093
 '''
