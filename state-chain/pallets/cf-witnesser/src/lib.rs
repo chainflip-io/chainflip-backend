@@ -333,7 +333,14 @@ pub mod pallet {
 				(last_expired_epoch..=current_epoch)
 					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				Self::dispatch_or_schedule_call(epoch_index, current_epoch, *call, call_hash);
+				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
+					call.combine_and_inject(&mut extra_data)
+				}
+				if T::SafeMode::get().witness_calls_enabled {
+					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
+				} else {
+					WitnessedCallsScheduledForDispatch::<T>::append((epoch_index, call, call_hash));
+				}
 			}
 			Ok(().into())
 		}
@@ -363,12 +370,10 @@ pub mod pallet {
 			if let Some(extra_data) = extra_data {
 				ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
 			}
-			Self::dispatch_or_schedule_call(
-				epoch_index,
-				T::EpochInfo::epoch_index(),
-				*call,
-				call_hash,
-			);
+			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
+				call.combine_and_inject(&mut extra_data)
+			}
+			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
 			Ok(())
 		}
 	}
@@ -389,22 +394,6 @@ impl<T: Config> Pallet<T> {
 	fn split_calldata(call: &mut <T as Config>::RuntimeCall) -> (Option<Vec<u8>>, CallHash) {
 		let extra_data = call.extract();
 		(extra_data, CallHash(call.blake2_256()))
-	}
-
-	fn dispatch_or_schedule_call(
-		witnessed_at_epoch: EpochIndex,
-		current_epoch: EpochIndex,
-		mut call: <T as Config>::RuntimeCall,
-		call_hash: CallHash,
-	) {
-		if let Some(mut extra_data) = ExtraCallData::<T>::get(witnessed_at_epoch, call_hash) {
-			call.combine_and_inject(&mut extra_data)
-		}
-		if T::SafeMode::get().witness_calls_enabled {
-			Self::dispatch_call(witnessed_at_epoch, current_epoch, call, call_hash);
-		} else {
-			WitnessedCallsScheduledForDispatch::<T>::append((witnessed_at_epoch, call, call_hash));
-		}
 	}
 
 	fn dispatch_call(
