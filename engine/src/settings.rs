@@ -222,8 +222,8 @@ impl Default for CommandLineOptions {
 			btc_opts: BtcOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
-			prometheus_hostname: Some("http://localhost".to_string()),
-			prometheus_port: Some(9999),
+			prometheus_hostname: None,
+			prometheus_port: None,
 			signing_db_file: None,
 		}
 	}
