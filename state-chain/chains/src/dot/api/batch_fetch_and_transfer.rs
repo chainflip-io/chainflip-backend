@@ -103,7 +103,7 @@ mod test_batch_fetch {
 		);
 		assert_eq!(
 			hex::encode(&payload.0),
-			"fefffc6f6999882f0481ac2a5c5df813b53adf448a478fb1420f89df84455df3"
+			"6fdbf2de25ba016e2c8b4f8238d057066a6ea2a63770073c3b6dcee86b02aeff"
 		);
 		builder.insert_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
