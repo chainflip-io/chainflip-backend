@@ -1,6 +1,8 @@
 use core::fmt;
+#[cfg(feature = "std")]
 use std::path::PathBuf;
 
+#[cfg(feature = "std")]
 // We use PathBuf because the value must be Sized, Path is not Sized
 pub fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
 where

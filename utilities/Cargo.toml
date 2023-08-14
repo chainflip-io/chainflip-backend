@@ -51,11 +51,11 @@ std = [
   'dep:async-channel',
   'itertools/use_std',
   'dep:pin-project',
-  'serde/std',
+  'dep:serde',
+  'serde?/std',
   'dep:tracing',
   'dep:tracing-subscriber',
   'dep:warp',
   'dep:sp-rpc',
   'dep:num-traits',
 ]
-serde = ['dep:serde']

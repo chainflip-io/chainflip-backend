@@ -10,11 +10,12 @@ use warp::{Filter, Reply};
 pub mod future_map;
 pub mod loop_select;
 pub mod rle_bitmap;
-pub mod serde_helpers;
 pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
 pub use unending_stream::UnendingStream;
+
+pub mod serde_helpers;
 
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};

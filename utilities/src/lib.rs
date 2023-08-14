@@ -8,11 +8,6 @@ mod with_std;
 #[cfg(feature = "std")]
 pub use with_std::*;
 
-#[cfg(feature = "serde")]
-mod with_serde;
-#[cfg(feature = "serde")]
-pub use with_serde::*;
-
 #[cfg(any(feature = "test-utils", test))]
 pub mod testing;
 
