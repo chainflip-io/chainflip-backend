@@ -347,13 +347,13 @@ fn test_safe_mode() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
 		//the call should be stored for dispatching later when safe mode is deactivated.
-		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_some());
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
 		Witnesser::on_initialize(1);
 
 		// the call is still not dispatched and we do nothing in the on_initialize since we are
 		// still in safe mode
-		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_some());
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			witnesser: PalletSafeMode::CODE_GREEN,
@@ -362,7 +362,7 @@ fn test_safe_mode() {
 		// the call should now dispatch since we now deactivated the safe mode.
 		Witnesser::on_initialize(2);
 
-		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_none());
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});

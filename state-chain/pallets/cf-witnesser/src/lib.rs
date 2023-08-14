@@ -41,7 +41,7 @@ pub trait WitnessDataExtraction {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::{OptionQuery, *};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -104,10 +104,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochsToCull<T: Config> = StorageValue<_, Vec<EpochIndex>, ValueQuery>;
 
-	/// This stores (expired) epochs that needs to have its data culled.
+	/// This stores Calls that have already been witnessed but not yet dispatched due to safe mode
+	/// being on.
 	#[pallet::storage]
 	pub type WitnessedCallsScheduledForDispatch<T: Config> =
-		StorageValue<_, Vec<(EpochIndex, Box<<T as Config>::RuntimeCall>, CallHash)>, OptionQuery>;
+		StorageValue<_, Vec<(EpochIndex, <T as Config>::RuntimeCall, CallHash)>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -115,12 +116,12 @@ pub mod pallet {
 			if T::SafeMode::get().witness_calls_enabled &&
 				WitnessedCallsScheduledForDispatch::<T>::exists()
 			{
-				WitnessedCallsScheduledForDispatch::<T>::take().unwrap().into_iter().for_each(
+				WitnessedCallsScheduledForDispatch::<T>::take().into_iter().for_each(
 					|(witnessed_at_epoch, call, call_hash)| {
 						Self::dispatch_call(
 							witnessed_at_epoch,
 							T::EpochInfo::epoch_index(),
-							*call,
+							call,
 							call_hash,
 						)
 					},
@@ -332,7 +333,7 @@ pub mod pallet {
 				(last_expired_epoch..=current_epoch)
 					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				Self::dispatch_or_schedule_call(epoch_index, current_epoch, call, call_hash);
+				Self::dispatch_or_schedule_call(epoch_index, current_epoch, *call, call_hash);
 			}
 			Ok(().into())
 		}
@@ -365,7 +366,7 @@ pub mod pallet {
 			Self::dispatch_or_schedule_call(
 				epoch_index,
 				T::EpochInfo::epoch_index(),
-				call,
+				*call,
 				call_hash,
 			);
 			Ok(())
@@ -393,22 +394,16 @@ impl<T: Config> Pallet<T> {
 	fn dispatch_or_schedule_call(
 		witnessed_at_epoch: EpochIndex,
 		current_epoch: EpochIndex,
-		mut call: Box<<T as Config>::RuntimeCall>,
+		mut call: <T as Config>::RuntimeCall,
 		call_hash: CallHash,
 	) {
 		if let Some(mut extra_data) = ExtraCallData::<T>::get(witnessed_at_epoch, call_hash) {
 			call.combine_and_inject(&mut extra_data)
 		}
 		if T::SafeMode::get().witness_calls_enabled {
-			Self::dispatch_call(witnessed_at_epoch, current_epoch, *call, call_hash);
+			Self::dispatch_call(witnessed_at_epoch, current_epoch, call, call_hash);
 		} else {
-			WitnessedCallsScheduledForDispatch::<T>::mutate(|maybe_witnessed_calls| {
-				if let Some(witnessed_calls) = maybe_witnessed_calls.as_mut() {
-					witnessed_calls.push((witnessed_at_epoch, call, call_hash));
-				} else {
-					*maybe_witnessed_calls = Some(vec![(witnessed_at_epoch, call, call_hash)]);
-				}
-			});
+			WitnessedCallsScheduledForDispatch::<T>::append((witnessed_at_epoch, call, call_hash));
 		}
 	}
 
