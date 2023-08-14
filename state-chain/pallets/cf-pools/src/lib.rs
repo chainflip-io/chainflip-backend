@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
+	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne},
+	range_orders::{AmountsToLiquidityError, Liquidity},
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
@@ -30,9 +31,9 @@ impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limi
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
+		common::{OneToZero, Side, SqrtPriceQ64F96, ZeroToOne},
 		limit_orders,
-		range_orders::{self, AmountsToLiquidityError, Liquidity},
+		range_orders::{self, Liquidity},
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -851,6 +852,24 @@ impl<T: Config> Pallet<T> {
 				.and_then(|mut pool| pool.pool_state.current_sqrt_price::<ZeroToOne>()),
 			_ => None,
 		}
+	}
+
+	pub fn amounts_to_liquidity(
+		asset: Asset,
+		lower: Tick,
+		upper: Tick,
+		unstable_amount: AssetAmount,
+		stable_amount: AssetAmount,
+	) -> Option<Liquidity> {
+		Pools::<T>::get(asset)?
+			.pool_state
+			.range_orders
+			.desired_amounts_to_liquidity(
+				lower,
+				upper,
+				SideMap::from_array([unstable_amount.into(), stable_amount.into()]),
+			)
+			.ok()
 	}
 }
 

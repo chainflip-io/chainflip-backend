@@ -12,7 +12,10 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_amm::common::SqrtPriceQ64F96;
+use cf_amm::{
+	common::{SqrtPriceQ64F96, Tick},
+	range_orders::Liquidity,
+};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
@@ -1026,6 +1029,10 @@ impl_runtime_apis! {
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
+		}
+
+		fn cf_amounts_to_liquidity(asset: Asset, lower: Tick, upper: Tick, unstable_amount: AssetAmount, stable_amount: AssetAmount,) -> Option<Liquidity> {
+			LiquidityPools::amounts_to_liquidity(asset, lower, upper, unstable_amount, stable_amount)
 		}
 	}
 

@@ -1,4 +1,7 @@
-use cf_amm::common::SqrtPriceQ64F96;
+use cf_amm::{
+	common::{SqrtPriceQ64F96, Tick},
+	range_orders::Liquidity,
+};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::PolkadotHash,
@@ -212,6 +215,15 @@ pub trait CustomApi {
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
+	#[method(name = "amounts_to_liquidity")]
+	fn cf_amounts_to_liquidity(
+		&self,
+		asset: Asset,
+		lower: Tick,
+		upper: Tick,
+		unstable_amount: AssetAmount,
+		stable_amount: AssetAmount,
+	) -> RpcResult<Option<Liquidity>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -556,6 +568,27 @@ where
 		self.client
 			.runtime_api()
 			.cf_min_swap_amount(&self.query_block_id(None), asset)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_amounts_to_liquidity(
+		&self,
+		asset: Asset,
+		lower: Tick,
+		upper: Tick,
+		unstable_amount: AssetAmount,
+		stable_amount: AssetAmount,
+	) -> RpcResult<Option<Liquidity>> {
+		self.client
+			.runtime_api()
+			.cf_amounts_to_liquidity(
+				&self.query_block_id(None),
+				asset,
+				lower,
+				upper,
+				unstable_amount,
+				stable_amount,
+			)
 			.map_err(to_rpc_error)
 	}
 }

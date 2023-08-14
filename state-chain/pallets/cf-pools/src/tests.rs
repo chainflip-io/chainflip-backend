@@ -1,3 +1,5 @@
+use core::panic;
+
 use crate::{
 	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
 	RangeOrderSize, STABLE_ASSET,
@@ -240,6 +242,53 @@ fn test_network_fee_calculation() {
 		assert_eq!(
 			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
 			(2997, 3)
+		);
+	});
+}
+
+#[test]
+fn can_get_amount_to_liquidity() {
+	new_test_ext().execute_with(|| {
+		use cf_amm::common::Side;
+
+		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
+		const FLIP: Asset = Asset::Flip;
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			FLIP,
+			Default::default(),
+			sqrt_price_at_tick(0),
+		));
+
+		let (amount_map, liquidity) = crate::Pools::<Test>::get(FLIP)
+			.unwrap()
+			.pool_state
+			.range_orders
+			.liquidity_to_amounts::<false>(
+				1_000_000_000_000_000_000u128,
+				POSITION.start,
+				POSITION.end,
+			)
+			.unwrap();
+
+		fn assert_within_error(a: AssetAmount, b: AssetAmount, err: AssetAmount) {
+			if !(if a >= b { a - b <= err } else { b - a <= err }) {
+				panic!("assertion failed: (left: `{:?}`, right: `{:?}`, err: `{:?}`)", a, b, err);
+			}
+		}
+
+		assert_within_error(
+			liquidity,
+			LiquidityPools::amounts_to_liquidity(
+				FLIP,
+				POSITION.start,
+				POSITION.end,
+				amount_map[Side::Zero].as_u128(),
+				amount_map[Side::One].as_u128(),
+			)
+			.unwrap(),
+			1u128,
 		);
 	});
 }
