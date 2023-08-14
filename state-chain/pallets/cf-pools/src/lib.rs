@@ -551,40 +551,12 @@ pub mod pallet {
 				Error::<T>::BurningRangeOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
-					.range_orders
-					.collect_and_burn(
-						&lp,
-						price_range_in_ticks.start,
-						price_range_in_ticks.end,
-						liquidity,
-					)
-					.map_err(|e| match e {
-						range_orders::PositionError::InvalidTickRange =>
-							Error::<T>::InvalidTickRange,
-						range_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist,
-						range_orders::PositionError::Other(
-							range_orders::BurnError::PositionLacksLiquidity,
-						) => Error::<T>::PositionLacksLiquidity,
-					})?;
-
-				let assets_credited =
-					Self::try_credit_both_assets(&lp, unstable_asset, assets_withdrawn)?;
-				let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
-
-				Self::deposit_event(Event::<T>::RangeOrderBurned {
-					lp,
-					unstable_asset,
-					price_range_in_ticks,
-					liquidity,
-					assets_credited,
-					collected_fees,
-				});
-
-				Ok(())
-			})
+			Self::collect_and_burn_range_order_inner(
+				lp,
+				unstable_asset,
+				price_range_in_ticks,
+				liquidity,
+			)
 		}
 
 		/// Collects and mints a limit order.
@@ -750,7 +722,38 @@ impl<T: Config> Pallet<T> {
 		price_range_in_ticks: core::ops::Range<Tick>,
 		liquidity: Liquidity,
 	) -> DispatchResult {
-		todo!()
+		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+			let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
+				.range_orders
+				.collect_and_burn(
+					&lp,
+					price_range_in_ticks.start,
+					price_range_in_ticks.end,
+					liquidity,
+				)
+				.map_err(|e| match e {
+					range_orders::PositionError::InvalidTickRange => Error::<T>::InvalidTickRange,
+					range_orders::PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
+					range_orders::PositionError::Other(
+						range_orders::BurnError::PositionLacksLiquidity,
+					) => Error::<T>::PositionLacksLiquidity,
+				})?;
+
+			let assets_credited =
+				Self::try_credit_both_assets(&lp, unstable_asset, assets_withdrawn)?;
+			let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
+
+			Self::deposit_event(Event::<T>::RangeOrderBurned {
+				lp,
+				unstable_asset,
+				price_range_in_ticks,
+				liquidity,
+				assets_credited,
+				collected_fees,
+			});
+
+			Ok(())
+		})
 	}
 
 	pub fn collect_and_burn_limit_order_inner(
