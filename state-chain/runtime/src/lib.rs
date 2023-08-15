@@ -1031,8 +1031,8 @@ impl_runtime_apis! {
 			Swapping::minimum_swap_amount(asset)
 		}
 
-		fn cf_amounts_to_liquidity(asset: Asset, lower: Tick, upper: Tick, unstable_amount: AssetAmount, stable_amount: AssetAmount,) -> Option<Liquidity> {
-			LiquidityPools::amounts_to_liquidity(asset, lower, upper, unstable_amount, stable_amount)
+		fn cf_estimate_liquidity_from_ranged_order(asset: Asset, lower: Tick, upper: Tick, unstable_amount: AssetAmount, stable_amount: AssetAmount,) -> Option<Liquidity> {
+			LiquidityPools::estimate_liquidity_from_ranged_order(asset, lower, upper, unstable_amount, stable_amount)
 		}
 	}
 

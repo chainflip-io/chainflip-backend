@@ -120,7 +120,7 @@ decl_runtime_apis!(
 		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 		#[allow(clippy::too_many_arguments)]
-		fn cf_amounts_to_liquidity(
+		fn cf_estimate_liquidity_from_ranged_order(
 			asset: Asset,
 			lower: Tick,
 			upper: Tick,

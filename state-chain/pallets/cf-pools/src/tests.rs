@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_test_utilities::assert_events_match;
+use cf_test_utilities::{assert_events_match, assert_within_error};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_runtime::Permill;
 
@@ -272,15 +272,9 @@ fn can_get_amount_to_liquidity() {
 			)
 			.unwrap();
 
-		fn assert_within_error(a: AssetAmount, b: AssetAmount, err: AssetAmount) {
-			if !(if a >= b { a - b <= err } else { b - a <= err }) {
-				panic!("assertion failed: (left: `{:?}`, right: `{:?}`, err: `{:?}`)", a, b, err);
-			}
-		}
-
 		assert_within_error(
 			liquidity,
-			LiquidityPools::amounts_to_liquidity(
+			LiquidityPools::estimate_liquidity_from_ranged_order(
 				FLIP,
 				POSITION.start,
 				POSITION.end,

@@ -854,7 +854,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn amounts_to_liquidity(
+	pub fn estimate_liquidity_from_ranged_order(
 		asset: Asset,
 		lower: Tick,
 		upper: Tick,

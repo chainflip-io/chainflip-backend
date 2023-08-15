@@ -215,8 +215,9 @@ pub trait CustomApi {
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
-	#[method(name = "amounts_to_liquidity")]
-	fn cf_amounts_to_liquidity(
+	/// Estimate maximum amount of liquidity that can be minted from the given Tick range and asset amounts.
+	#[method(name = "estimate_liquidity_from_ranged_order")]
+	fn cf_estimate_liquidity_from_ranged_order(
 		&self,
 		asset: Asset,
 		lower: Tick,
@@ -571,7 +572,7 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_amounts_to_liquidity(
+	fn cf_estimate_liquidity_from_ranged_order(
 		&self,
 		asset: Asset,
 		lower: Tick,
@@ -581,7 +582,7 @@ where
 	) -> RpcResult<Option<Liquidity>> {
 		self.client
 			.runtime_api()
-			.cf_amounts_to_liquidity(
+			.cf_estimate_liquidity_from_ranged_order(
 				&self.query_block_id(None),
 				asset,
 				lower,
@@ -589,6 +590,10 @@ where
 				unstable_amount,
 				stable_amount,
 			)
-			.map_err(to_rpc_error)
+			.map_err(|_| {
+				jsonrpsee::core::Error::from(anyhow::anyhow!(
+					"Invalid Asset or invalid Tick range."
+				))
+			})
 	}
 }
