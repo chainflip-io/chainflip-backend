@@ -868,6 +868,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		upper_tick: Tick,
 		amounts: SideMap<Amount>,
 	) -> Result<Liquidity, AmountsToLiquidityError> {
+		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
+			.map_err(|_err| AmountsToLiquidityError::InvalidTickRange)?;
+		Ok(self.inner_amounts_to_liquidity(lower_tick, upper_tick, amounts))
+	}
+
+	fn inner_amounts_to_liquidity(
+		&self,
+		lower_tick: Tick,
+		upper_tick: Tick,
+		amounts: SideMap<Amount>,
+	) -> Liquidity {
 		// Inverse of `zero_amount_delta_ceil`
 		fn zero_amount_to_liquidity(
 			lower_sqrt_price: SqrtPriceQ64F96,
@@ -897,12 +908,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
 		}
 
-		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
-			.map_err(|_err| AmountsToLiquidityError::InvalidTickRange)?;
-
 		let [lower_sqrt_price, upper_sqrt_price] = [lower_tick, upper_tick].map(sqrt_price_at_tick);
 
-		Ok(core::cmp::min(
+		core::cmp::min(
 			MAX_TICK_GROSS_LIQUIDITY -
 				[lower_tick, upper_tick]
 					.into_iter()
@@ -921,7 +929,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			} else {
 				one_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
 			},
-		))
+		)
 	}
 
 	#[cfg(feature = "std")]
