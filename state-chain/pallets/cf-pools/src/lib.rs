@@ -64,16 +64,6 @@ pub mod pallet {
 
 	// TODO: add needed fields to this struct for mint/burn.
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct RangeOrderDetails<AccountId> {
-		pub lp: AccountId,
-		pub unstable_asset: any::Asset,
-		pub price_range_in_ticks: core::ops::Range<Tick>,
-		pub order_size: RangeOrderSize,
-		pub liquidity: Option<Liquidity>,
-	}
-
-	// TODO: add needed fields to this struct for mint/burn.
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub struct LimitOrderDetails<AccountId> {
 		pub lp: AccountId,
 		pub unstable_asset: any::Asset,
@@ -83,16 +73,10 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub enum RangeOrLimitOrderDetails<AccountId> {
-		RangeOrder(RangeOrderDetails<AccountId>),
-		LimitOrder(LimitOrderDetails<AccountId>),
-	}
-
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub struct OrderDetails<AccountId, BlockNumber: PartialOrd + Copy> {
 		pub lifetime: OrderLifetime,
 		pub validity: OrderValidity<BlockNumber>,
-		pub details: RangeOrLimitOrderDetails<AccountId>,
+		pub details: LimitOrderDetails<AccountId>,
 	}
 
 	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
@@ -203,77 +187,8 @@ pub mod pallet {
 					}
 				}
 			}
-			if let Some(order) = OrderQueue::<T>::take(current_block) {
-				match order.lifetime {
-					// Order gets activated.
-					OrderLifetime::Active => match order.details {
-						RangeOrLimitOrderDetails::RangeOrder(range_order) => {
-							let range_order_2 = range_order.clone();
-							let liquidity = Self::collect_and_mint_range_order_inner(
-								range_order_2.lp,
-								range_order_2.unstable_asset,
-								range_order_2.price_range_in_ticks,
-								range_order_2.order_size,
-							);
-							OrderQueue::<T>::insert(
-								order.validity.is_valid_until(),
-								OrderDetails {
-									lifetime: OrderLifetime::Inactive,
-									validity: order.validity,
-									details: RangeOrLimitOrderDetails::RangeOrder(
-										RangeOrderDetails {
-											lp: range_order.lp,
-											unstable_asset: range_order.unstable_asset,
-											price_range_in_ticks: range_order.price_range_in_ticks,
-											order_size: range_order.order_size,
-											liquidity: Some(liquidity.unwrap()),
-										},
-									),
-								},
-							);
-						},
-						RangeOrLimitOrderDetails::LimitOrder(limit_order) => {
-							let limit_order_2 = limit_order.clone();
-							let _ = Self::collect_and_mint_limit_order_inner(
-								limit_order_2.lp,
-								limit_order_2.unstable_asset,
-								limit_order_2.order,
-								limit_order_2.price_as_tick,
-								limit_order_2.amount,
-							);
-							OrderQueue::<T>::insert(
-								order.validity.is_valid_until(),
-								OrderDetails {
-									lifetime: OrderLifetime::Inactive,
-									validity: order.validity,
-									details: RangeOrLimitOrderDetails::LimitOrder(limit_order),
-								},
-							);
-						},
-					},
-					// Order runs out of
-					OrderLifetime::Inactive => match order.details {
-						RangeOrLimitOrderDetails::RangeOrder(limit_order) => {
-							let _ = Self::collect_and_burn_range_order_inner(
-								limit_order.lp,
-								limit_order.unstable_asset,
-								limit_order.price_range_in_ticks,
-								limit_order.liquidity.unwrap(),
-							);
-						},
-						RangeOrLimitOrderDetails::LimitOrder(limit_order) => {
-							let _ = Self::collect_and_burn_limit_order_inner(
-								limit_order.lp,
-								limit_order.unstable_asset,
-								limit_order.order,
-								limit_order.price_as_tick,
-								limit_order.amount,
-							);
-						},
-					},
-				}
-			}
-			weight_used
+			let mint_and_burn_orders_weight = Self::mint_or_burn_orders(current_block);
+			weight_used.saturating_add(mint_and_burn_orders_weight)
 		}
 	}
 
@@ -385,6 +300,22 @@ pub mod pallet {
 		LiquidityFeeUpdated {
 			unstable_asset: any::Asset,
 			fee_hundredth_pips: u32,
+		},
+		MintingLimitOrderFailed {
+			lp: T::AccountId,
+			error: DispatchError,
+		},
+		MintingRangeOrderFailed {
+			lp: T::AccountId,
+			error: DispatchError,
+		},
+		BurningLimitOrderFailed {
+			lp: T::AccountId,
+			error: DispatchError,
+		},
+		BurningRangeOrderFailed {
+			lp: T::AccountId,
+			error: DispatchError,
 		},
 	}
 
@@ -530,45 +461,13 @@ pub mod pallet {
 				Error::<T>::MintingRangeOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			if order_validity.is_valid(<frame_system::Pallet<T>>::block_number()) {
-				let liquidity = Self::collect_and_mint_range_order_inner(
-					lp.clone(),
-					unstable_asset,
-					price_range_in_ticks.clone(),
-					order_size,
-				)?;
-				OrderQueue::<T>::insert(
-					order_validity.is_valid_until(),
-					OrderDetails {
-						lifetime: OrderLifetime::Inactive,
-						validity: order_validity,
-						details: RangeOrLimitOrderDetails::RangeOrder(RangeOrderDetails {
-							lp,
-							unstable_asset,
-							price_range_in_ticks,
-							order_size,
-							liquidity: Some(liquidity),
-						}),
-					},
-				);
-				Ok(())
-			} else {
-				OrderQueue::<T>::insert(
-					order_validity.gets_valid_at(),
-					OrderDetails {
-						lifetime: OrderLifetime::Active,
-						validity: order_validity,
-						details: RangeOrLimitOrderDetails::RangeOrder(RangeOrderDetails {
-							lp,
-							unstable_asset,
-							price_range_in_ticks,
-							order_size,
-							liquidity: None,
-						}),
-					},
-				);
-				Ok(())
-			}
+			Self::collect_and_mint_range_order_inner(
+				lp.clone(),
+				unstable_asset,
+				price_range_in_ticks,
+				order_size,
+			)?;
+			Ok(())
 		}
 
 		/// Collects and burns a range order.
@@ -654,13 +553,13 @@ pub mod pallet {
 					OrderDetails {
 						lifetime: OrderLifetime::Inactive,
 						validity: order_validity,
-						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {
+						details: LimitOrderDetails {
 							lp,
 							unstable_asset,
 							order,
 							price_as_tick,
 							amount,
-						}),
+						},
 					},
 				);
 				Ok(())
@@ -671,13 +570,13 @@ pub mod pallet {
 					OrderDetails {
 						lifetime: OrderLifetime::Active,
 						validity: order_validity,
-						details: RangeOrLimitOrderDetails::LimitOrder(LimitOrderDetails {
+						details: LimitOrderDetails {
 							lp,
 							unstable_asset,
 							order,
 							price_as_tick,
 							amount,
-						}),
+						},
 					},
 				);
 				Ok(())
@@ -779,6 +678,42 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn mint_or_burn_orders(current_block: T::BlockNumber) -> Weight {
+		if let Some(order) = OrderQueue::<T>::take(current_block) {
+			match order.lifetime {
+				// Order gets activated.
+				OrderLifetime::Active => {
+					let order_details = order.clone().details;
+					let _ = Self::collect_and_mint_limit_order_inner(
+						order_details.lp,
+						order_details.unstable_asset,
+						order_details.order,
+						order_details.price_as_tick,
+						order_details.amount,
+					);
+					OrderQueue::<T>::insert(
+						order.validity.is_valid_until(),
+						OrderDetails {
+							lifetime: OrderLifetime::Inactive,
+							validity: order.validity,
+							details: order.details,
+						},
+					);
+				},
+				OrderLifetime::Inactive => {
+					let _ = Self::collect_and_burn_limit_order_inner(
+						order.details.lp,
+						order.details.unstable_asset,
+						order.details.order,
+						order.details.price_as_tick,
+						order.details.amount,
+					);
+				},
+			}
+		}
+		Weight::default()
+	}
+
 	pub fn collect_and_burn_range_order_inner(
 		lp: T::AccountId,
 		unstable_asset: any::Asset,
