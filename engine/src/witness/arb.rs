@@ -116,7 +116,7 @@ where
 		.clone()
 		.key_manager_witnessing(state_chain_client.clone(), arb_client.clone(), key_manager_address)
 		.continuous("ArbKeyManager".to_string(), db.clone())
-		.logging("ArbKeyManager")
+		.logging("KeyManager")
 		.spawn(scope);
 
 	arb_safe_vault_source
@@ -131,7 +131,7 @@ where
 		)
 		.await?
 		.continuous("ArbUSDCDeposits".to_string(), db.clone())
-		.logging("ArbUSDCDeposits")
+		.logging("USDCDeposits")
 		.spawn(scope);
 
 	arb_safe_vault_source
@@ -147,7 +147,7 @@ where
 		)
 		.await
 		.continuous("ArbEthereumDeposits".to_string(), db.clone())
-		.logging("ArbEthereumDeposits")
+		.logging("EthereumDeposits")
 		.spawn(scope);
 
 	arb_safe_vault_source
@@ -160,7 +160,7 @@ where
 			supported_arb_erc20_assets,
 		)
 		.continuous("ArbVault".to_string(), db)
-		.logging("ArbVault")
+		.logging("Vault")
 		.spawn(scope);
 
 	Ok(())
