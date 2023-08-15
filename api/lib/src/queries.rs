@@ -54,23 +54,23 @@ impl QueryApi {
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 
 		let (channel_details, channel_actions, network_environment) = tokio::try_join!(
-			self.state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+				self.state_chain_client
+					.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+						state_chain_runtime::Runtime,
+						C::Instance,
+					>, Vec<_>>(block_hash)
+					.map(|result| {
+						result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
+					}),
+				self.state_chain_client.storage_map::<pallet_cf_ingress_egress::ChannelActions<
 					state_chain_runtime::Runtime,
 					C::Instance,
-				>>(block_hash)
-				.map(|result| {
-					result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
-				}),
-			self.state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::ChannelActions<state_chain_runtime::Runtime, C::Instance>>(
-					block_hash,
-				),
-			self.state_chain_client
-				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-					block_hash
-				),
-		)?;
+				>, Vec<_>>(block_hash,),
+				self.state_chain_client
+					.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+						state_chain_runtime::Runtime,
+					>>(block_hash),
+			)?;
 
 		Ok(channel_actions
 			.iter()
@@ -144,10 +144,8 @@ impl QueryApi {
 				.unwrap_or_default()
 		} else {
 			self.state_chain_client
-				.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+				.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>, _>(block_hash)
 				.await?
-				.into_iter()
-				.collect::<BTreeMap<_, _>>()
 		})
 	}
 
@@ -162,7 +160,7 @@ impl QueryApi {
 
 		Ok(self
 			.state_chain_client
-			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>, Vec<_>>(block_hash)
 			.await?
 			.into_iter()
 			.map(|(asset, pool)| {
