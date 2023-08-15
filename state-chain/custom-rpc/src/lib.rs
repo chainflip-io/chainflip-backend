@@ -215,7 +215,8 @@ pub trait CustomApi {
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
-	/// Estimate maximum amount of liquidity that can be minted from the given Tick range and asset amounts.
+	/// Estimate maximum amount of liquidity that can be minted from the given Tick range and asset
+	/// amounts.
 	#[method(name = "estimate_liquidity_from_ranged_order")]
 	fn cf_estimate_liquidity_from_ranged_order(
 		&self,
@@ -224,7 +225,7 @@ pub trait CustomApi {
 		upper: Tick,
 		unstable_amount: AssetAmount,
 		stable_amount: AssetAmount,
-	) -> RpcResult<Option<Liquidity>>;
+	) -> RpcResult<Liquidity>;
 }
 
 /// An RPC extension for the state chain node.
@@ -579,21 +580,20 @@ where
 		upper: Tick,
 		unstable_amount: AssetAmount,
 		stable_amount: AssetAmount,
-	) -> RpcResult<Option<Liquidity>> {
-		self.client
-			.runtime_api()
-			.cf_estimate_liquidity_from_ranged_order(
-				&self.query_block_id(None),
-				asset,
-				lower,
-				upper,
-				unstable_amount,
-				stable_amount,
-			)
-			.map_err(|_| {
-				jsonrpsee::core::Error::from(anyhow::anyhow!(
-					"Invalid Asset or invalid Tick range."
-				))
-			})
+	) -> RpcResult<Liquidity> {
+		match self.client.runtime_api().cf_estimate_liquidity_from_ranged_order(
+			&self.query_block_id(None),
+			asset,
+			lower,
+			upper,
+			unstable_amount,
+			stable_amount,
+		) {
+			Ok(Some(liquidity)) => Ok(liquidity),
+			Ok(None) => Err(jsonrpsee::core::Error::from(anyhow::anyhow!(
+				"Invalid Asset or invalid Tick range."
+			))),
+			Err(e) => Err(to_rpc_error(e)),
+		}
 	}
 }
