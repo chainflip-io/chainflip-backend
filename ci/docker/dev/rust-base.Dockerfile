@@ -8,8 +8,9 @@ FROM ubuntu:${UBUNTU_VERSION}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Substrate and rust compiler dependencies.
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends \
+RUN DEBIAN_FRONTEND=noninteractive && export DEBIAN_FRONTEND; \
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
     cmake \
     build-essential \
     clang \
@@ -28,23 +29,21 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     npm \
     ca-certificates \
     gnupg \
-    lsb-core;
+    lsb-core; \
+    # Add LLVM 14 Repository \
+    curl https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -; \
+    DEBIAN_CODENAME="$(lsb_release -sc)" && export DEBIAN_CODENAME; \
+    echo "deb     http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-"${DEBIAN_CODENAME}"-14.list; \
+    echo "deb-src http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-"${DEBIAN_CODENAME}"-14.list; \
+    apt-get update && \
+    apt-get -y install --no-install-recommends clang-14 lldb-14 lld-14 libclang-14-dev && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN \
-    # add clang 14 repo
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -; \
-    echo "deb     http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-$(lsb_release -sc)-14.list; \
-    echo "deb-src http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-$(lsb_release -sc)-14.list; \
-    apt-get -y update; \
-    apt-get install -y --no-install-recommends \
-        clang-14 lldb-14 lld-14 libclang-14-dev; \
-    # set a link to clang
-    update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 100; \
-    # set a link to ldd
-    update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld-14 100; \
-    apt-get autoremove -y \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Set a links to clang and ldd
+RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 100; \
+    update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld-14 100;
 
 RUN npm install -g pnpm
 
