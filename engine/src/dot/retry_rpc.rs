@@ -249,6 +249,7 @@ mod tests {
 			async move {
 				let dot_http_rpc_client =
 					DotHttpRpcClient::new("http://127.0.0.1:9945").await.unwrap();
+
 				let dot_sub_client = DotSubClient::new("ws://127.0.0.1:9945");
 				let dot_retry_rpc_client =
 					DotRetryRpcClient::new(scope, dot_http_rpc_client, dot_sub_client);

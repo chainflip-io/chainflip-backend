@@ -20,6 +20,9 @@ use subxt::{
 };
 
 use anyhow::Result;
+use utilities::make_periodic_tick;
+
+use crate::constants::DOT_AVERAGE_BLOCK_TIME;
 
 use super::rpc::DotRpcApi;
 
@@ -77,9 +80,26 @@ pub struct DotHttpRpcClient {
 
 impl DotHttpRpcClient {
 	pub async fn new(url: &str) -> Result<Self> {
-		let polkadot_http_client = PolkadotHttpClient::new(url)?;
-		let online_client =
-			OnlineClient::<PolkadotConfig>::from_rpc_client(Arc::new(polkadot_http_client)).await?;
+		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(url)?);
+
+		// We don't want to return an error here. Returning an error means that we'll exit the CFE.
+		// So on client creation we wait until we can be successfully connected to the ETH node. So
+		// the other chains are unaffected
+		let mut poll_interval = make_periodic_tick(DOT_AVERAGE_BLOCK_TIME, true);
+		let online_client = loop {
+			poll_interval.tick().await;
+			match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
+				.await
+			{
+				Ok(online_client) => break online_client,
+				Err(e) => {
+					tracing::error!(
+						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE configuration file. Retrying in {:?}...",
+						poll_interval.period()
+					);
+				},
+			}
+		};
 
 		Ok(Self { online_client })
 	}

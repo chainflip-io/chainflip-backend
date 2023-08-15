@@ -39,7 +39,7 @@ pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;
 
 // ======= Dot Rpc Client =======
 
-pub const DOT_AVERAGE_BLOCK_TIME_SECONDS: u64 = 6;
+pub const DOT_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(6);
 
 // ======= Settings environment variables =======
 

@@ -4,15 +4,10 @@ use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTran
 
 use crate::{
 	constants::{ETH_AVERAGE_BLOCK_TIME, SYNC_POLL_INTERVAL},
-	retrier::RetrierClient,
 	settings,
 };
-use anyhow::{anyhow, Context, Ok, Result};
-use std::{
-	str::FromStr,
-	sync::Arc,
-	time::{Duration, Instant},
-};
+use anyhow::{anyhow, Context, Result};
+use std::{str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use utilities::make_periodic_tick;
 
@@ -55,13 +50,13 @@ impl EthRpcClient {
 				Ok(chain_id) if chain_id == expected_chain_id.into() => break,
 				Ok(chain_id) => {
 					tracing::warn!(
-						"Connected to ETH node but with chain_id {}, expected {}. Please check your CFE configuration file...",
+						"Connected to Ethereum node but with chain_id {}, expected {}. Please check your CFE configuration file...",
 						chain_id,
 						expected_chain_id
 					);
 				},
-				_ => tracing::error!(
-					"Cannot connect to an ETH node at {}. Please check your CFE configuration file. Retrying...",
+				Err(e) => tracing::error!(
+					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE configuration file. Retrying...",
 					eth_settings.http_node_endpoint
 				),
 			}
