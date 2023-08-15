@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-	eth::vault::VaultEvents,
+	evm::vault::VaultEvents,
 };
 
 use std::collections::BTreeMap;

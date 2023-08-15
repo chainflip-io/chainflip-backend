@@ -17,7 +17,7 @@ use crate::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witness::eth::erc20_deposits::usdc::UsdcEvents,
+	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use self::arb_source::ArbSource;
@@ -28,8 +28,6 @@ use super::common::{
 };
 
 use anyhow::{Context, Result};
-
-const SAFETY_MARGIN: usize = 7;
 
 // Most of this is the same as engine/src/witness/eth.rs
 pub async fn start<StateChainClient, StateChainStream>(

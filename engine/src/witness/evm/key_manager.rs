@@ -210,11 +210,9 @@ mod tests {
 
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
-	use sp_core::H160;
 	use utilities::task_scope::task_scope;
 
 	use crate::{
-		db::PersistentKeyDB,
 		eth::{
 			retry_rpc::EthersRetryRpcClient,
 			rpc::{EthRpcApi, EthRpcClient, ReconnectSubscriptionClient},
@@ -224,10 +222,6 @@ mod tests {
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
 
-	use ethers::contract::EthEvent;
-
-	use super::*;
-
 	use super::super::super::arb::arb_source::ArbSource;
 
 	#[ignore = "requires connection to live network"]
@@ -235,7 +229,7 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let arb_settings = settings::Arb {
+				let arb_settings = settings::Eth {
 					ws_node_endpoint: "ws://localhost:8548".to_string(),
 					http_node_endpoint: "http://localhost:8547".to_string(),
 					private_key_file: PathBuf::from_str(
@@ -279,7 +273,7 @@ mod tests {
 
 				ArbSource::new(retry_client.clone())
 					.chunk_by_vault(vault_source)
-					.key_manager_witnessing(state_chain_client, retry_client, contract_address)
+					.key_manager_witnessing(state_chain_client, retry_client, Default::default())
 					.spawn(scope);
 
 				Ok(())

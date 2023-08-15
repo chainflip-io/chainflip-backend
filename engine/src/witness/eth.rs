@@ -1,11 +1,6 @@
-mod contract_common;
-pub mod erc20_deposits;
 mod eth_chain_tracking;
 pub mod eth_source;
-mod ethereum_deposits;
-mod key_manager;
 mod state_chain_gateway;
-pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -24,7 +19,7 @@ use crate::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
 use super::common::{
