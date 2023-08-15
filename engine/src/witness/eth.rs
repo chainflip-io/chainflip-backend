@@ -1,5 +1,5 @@
 mod eth_chain_tracking;
-pub mod eth_source;
+pub mod source;
 mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
@@ -26,7 +26,7 @@ use super::common::{
 	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
 	STATE_CHAIN_CONNECTION,
 };
-use eth_source::EthSource;
+use source::EthSource;
 
 use anyhow::{Context, Result};
 

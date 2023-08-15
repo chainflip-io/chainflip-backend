@@ -222,7 +222,7 @@ mod tests {
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
 
-	use super::super::super::arb::arb_source::ArbSource;
+	use super::super::super::arb::source::ArbSource;
 
 	#[ignore = "requires connection to live network"]
 	#[tokio::test]

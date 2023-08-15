@@ -1,5 +1,5 @@
 mod arb_chain_tracking;
-pub mod arb_source;
+pub mod source;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -20,7 +20,7 @@ use crate::{
 	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
-use self::arb_source::ArbSource;
+use self::source::ArbSource;
 
 use super::common::{
 	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
