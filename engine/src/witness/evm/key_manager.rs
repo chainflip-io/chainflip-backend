@@ -250,6 +250,7 @@ mod tests {
 						arb_settings.ws_node_endpoint,
 						web3::types::U256::from(412346),
 					),
+					"eth",
 				);
 
 				let (state_chain_stream, state_chain_client) =

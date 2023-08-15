@@ -329,6 +329,7 @@ mod tests {
 						settings.eth.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
+					"eth",
 				);
 
 				let addresses = vec![

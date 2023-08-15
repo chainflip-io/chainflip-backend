@@ -104,6 +104,7 @@ where
 		scope,
 		EthRpcClient::new(settings).await?,
 		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
+		"eth",
 	);
 
 	let eth_source = EthSource::new(eth_client.clone()).shared(scope);

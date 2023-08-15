@@ -93,6 +93,7 @@ where
 		scope,
 		EthRpcClient::new(settings).await?,
 		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
+		"arb",
 	);
 
 	let arb_source = ArbSource::new(arb_client.clone()).shared(scope);

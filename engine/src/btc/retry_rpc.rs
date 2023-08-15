@@ -23,7 +23,7 @@ impl BtcRetryRpcClient {
 		Self {
 			retry_client: RetrierClient::new(
 				scope,
-				"btc_rpc",
+				"btc_rpc".to_string(),
 				btc_client,
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
