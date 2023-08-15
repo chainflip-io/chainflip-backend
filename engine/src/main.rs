@@ -129,9 +129,6 @@ async fn start(
 		)
 		.await?;
 
-	let btc_rpc_client =
-		BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
-
 	state_chain_client
 		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
 			new_version: *CFE_VERSION,
@@ -233,7 +230,9 @@ async fn start(
 		state_chain_stream.clone(),
 		EthBroadcaster::new(EthRpcClient::new(&settings.eth, 1337u64).await?),
 		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
-		BtcBroadcaster::new(btc_rpc_client.clone()),
+		BtcBroadcaster::new(
+			BtcRpcClient::new(&settings.btc)?,
+		),
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,
