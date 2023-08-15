@@ -1,5 +1,5 @@
 mod arb_chain_tracking;
-mod arb_source;
+pub mod arb_source;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -111,7 +111,6 @@ where
 
 	let arb_safe_vault_source = arb_source
 		.strictly_monotonic()
-		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
 		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await);
