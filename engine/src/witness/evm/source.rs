@@ -16,6 +16,7 @@ const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 pub async fn inner_stream_and_client<'a, C>(
 	client: C,
+	// The maximum amount of time we wait for a block to be pulled from the stream.
 	block_pull_timeout: Duration,
 ) -> (BoxChainStream<'a, u64, H256, Bloom>, C)
 where
