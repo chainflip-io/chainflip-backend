@@ -56,7 +56,7 @@ impl Position {
 		lower_delta: &TickDelta,
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
-	) -> CollectedFees {
+	) -> Collected {
 		let fee_growth_inside = SideMap::default().map(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
@@ -72,7 +72,7 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let collected_fees = CollectedFees {
+		let collected_fees = Collected {
 			fees: SideMap::default().map(|side, ()| {
 				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
 				// calculate fees, therefore it is not possible to overflow the fees here.
@@ -101,7 +101,7 @@ impl Position {
 		lower_delta: &TickDelta,
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
-	) -> CollectedFees {
+	) -> Collected {
 		let collected_fees =
 			self.collect_fees(pool_state, lower_tick, lower_delta, upper_tick, upper_delta);
 		self.liquidity = new_liquidity;
@@ -357,7 +357,7 @@ pub enum AmountsToLiquidityError {
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
-pub struct CollectedFees {
+pub struct Collected {
 	pub fees: SideMap<Amount>,
 }
 
@@ -449,7 +449,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
 		try_debit: TryDebit,
-	) -> Result<(T, CollectedFees), PositionError<MintError<E>>> {
+	) -> Result<(T, Collected), PositionError<MintError<E>>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		let option_position = self.positions.get(&(lp.clone(), lower_tick, upper_tick));
 		if option_position.is_some() || minted_liquidity != 0 {
@@ -536,7 +536,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
 	) -> Result<
-		(SideMap<Amount>, CollectedFees, PostOperationPositionExistence),
+		(SideMap<Amount>, Collected, PostOperationPositionExistence),
 		PositionError<BurnError>,
 	> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
@@ -618,7 +618,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<CollectedFees, PositionError<CollectError>> {
+	) -> Result<Collected, PositionError<CollectError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()

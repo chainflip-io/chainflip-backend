@@ -253,7 +253,7 @@ pub enum BurnError {}
 pub enum CollectError {}
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
-pub struct CollectedAmounts {
+pub struct Collected {
 	pub fees: Amount,
 	pub swapped_liquidity: Amount,
 }
@@ -337,7 +337,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		SideMap<
 			BTreeMap<
 				(SqrtPriceQ64F96, LiquidityProvider),
-				(CollectedAmounts, PostOperationPositionExistence),
+				(Collected, PostOperationPositionExistence),
 			>,
 		>,
 		SetFeesError,
@@ -481,7 +481,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		fixed_pool: Option<&FixedPool>,
 		price: Price,
 		fee_hundredth_pips: u32,
-	) -> (CollectedAmounts, Option<Position>) {
+	) -> (Collected, Option<Position>) {
 		let (used_liquidity, option_position) = if let Some(fixed_pool) =
 			fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance)
 		{
@@ -512,7 +512,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		let swapped_liquidity = SD::input_amount_floor(used_liquidity, price);
 		(
-			CollectedAmounts {
+			Collected {
 				fees: /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */ mul_div_floor(
 					swapped_liquidity,
 					U256::from(fee_hundredth_pips),
@@ -534,7 +534,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<MintError>> {
+	) -> Result<(Collected, PostOperationPositionExistence), PositionError<MintError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> MintError { match e {} }))
@@ -625,8 +625,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, CollectedAmounts, PostOperationPositionExistence), PositionError<BurnError>>
-	{
+	) -> Result<(Amount, Collected, PostOperationPositionExistence), PositionError<BurnError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> BurnError { match e {} }))
@@ -693,7 +692,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<CollectError>> {
+	) -> Result<(Collected, PostOperationPositionExistence), PositionError<CollectError>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		self.inner_collect::<SD>(lp, sqrt_price)
 	}
@@ -702,7 +701,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
-	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<CollectError>> {
+	) -> Result<(Collected, PostOperationPositionExistence), PositionError<CollectError>> {
 		let price = sqrt_price_to_price(sqrt_price);
 
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
@@ -737,7 +736,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(CollectedAmounts, Amount), PositionError<Infallible>> {
+	) -> Result<(Collected, Amount), PositionError<Infallible>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		let price = sqrt_price_to_price(sqrt_price);
 
