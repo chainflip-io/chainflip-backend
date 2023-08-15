@@ -1,6 +1,3 @@
-// TODO: Deduplicate this with Ethereum. We need a separate source because of the
-// ExternalChainSource trait.
-
 use ethers::types::Bloom;
 use sp_core::H256;
 
@@ -30,7 +27,10 @@ impl<C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = B
 	}
 }
 
-const TIMEOUT: Duration = Duration::from_secs(60);
+/// The maximum amount of time we wait for a block to be pulled from the stream.
+const BLOCK_PULL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// The time we wait before restarting the stream if we didn't get a block.
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
@@ -57,7 +57,7 @@ where
 			Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
 				loop {
 					while let Ok(Some(header)) =
-						tokio::time::timeout(TIMEOUT, state.stream.next()).await
+						tokio::time::timeout(BLOCK_PULL_TIMEOUT, state.stream.next()).await
 					{
 						if let Ok(header) = header {
 							let (Some(index), Some(hash)) = (header.number, header.hash) else {
