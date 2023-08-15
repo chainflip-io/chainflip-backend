@@ -15,7 +15,6 @@
 //! ```
 use super::*;
 
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
 use strum_macros::EnumIter;
@@ -43,8 +42,9 @@ pub mod any {
 		PartialOrd,
 		Ord,
 		EnumIter,
+		Serialize,
+		Deserialize,
 	)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[repr(u32)]
 	// !!!!!! IMPORTANT !!!!!!
 	// Do not change these indices.
@@ -124,8 +124,7 @@ macro_rules! chain_assets {
 
 			pub type Chain = $chain;
 
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash)]
-			#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, serde::Serialize, serde::Deserialize)]
 			pub enum Asset {
 				$(
 					$asset,

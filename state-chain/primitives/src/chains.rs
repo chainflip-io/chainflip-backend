@@ -30,7 +30,7 @@ macro_rules! chains {
 		)+
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+		#[derive(Serialize, Deserialize)]
 		#[repr(u32)]
 		pub enum ForeignChain {
 			$(
@@ -62,8 +62,19 @@ chains! {
 }
 
 /// Can be any Chain.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Copy,
+	Serialize,
+	Deserialize,
+)]
 pub struct AnyChain;
 
 impl ForeignChain {

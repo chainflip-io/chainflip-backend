@@ -9,11 +9,11 @@ use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
 	ensure,
 	pallet_prelude::DispatchResultWithPostInfo,
+	sp_runtime::{DispatchError, TransactionOutcome},
 	storage::with_transaction,
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
 pub use pallet::*;
-use sp_runtime::{DispatchError, TransactionOutcome};
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 mod benchmarking;
@@ -104,7 +104,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Proposals.
@@ -165,12 +164,12 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
@@ -229,6 +228,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [NotMember](Error::NotMember)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
@@ -259,6 +259,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::new_membership_set())]
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
@@ -280,6 +281,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [UpgradeConditionsNotMet](Error::UpgradeConditionsNotMet)
+		#[pallet::call_index(2)]
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn chainflip_runtime_upgrade(
 			origin: OriginFor<T>,
@@ -303,6 +305,7 @@ pub mod pallet {
 		/// - [NotMember](Error::NotMember)
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(
 			origin: OriginFor<T>,
@@ -327,6 +330,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(clippy::boxed_local)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
@@ -349,6 +353,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
 		pub fn set_whitelisted_call_hash(
 			origin: OriginFor<T>,
@@ -372,6 +377,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
@@ -407,7 +413,6 @@ pub mod pallet {
 		pub expiry_span: u64,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			const FIVE_DAYS_IN_SECONDS: u64 = 5 * 24 * 60 * 60;
@@ -417,7 +422,7 @@ pub mod pallet {
 
 	/// Sets the genesis governance
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Members::<T>::set(self.members.clone());
 			ExpiryTime::<T>::set(self.expiry_span);
@@ -455,8 +460,8 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		RawOrigin::GovernanceApproval.into()
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::GovernanceApproval.into())
 	}
 }
 

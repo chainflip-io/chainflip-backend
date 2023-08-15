@@ -22,25 +22,18 @@ pub use frame_support::{
 	parameter_types,
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
-use frame_system;
+use frame_system::{self, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub enum Test {
 		System: frame_system,
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
@@ -58,13 +51,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
@@ -140,7 +132,7 @@ pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
 	MockThresholdSignature::<_, _> { signing_key: MockAggKey(*b"BAD!"), signed_payload: *b"BAD!" };
 
 parameter_types! {
-	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 4;
+	pub const CeremonyRetryDelay: BlockNumberFor<Test> = 4;
 }
 
 pub type MockOffenceReporter =
@@ -281,7 +273,7 @@ impl TestExternalitiesWithCheck {
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
-		GenesisConfig::default().build_storage().unwrap().into();
+		RuntimeGenesisConfig::default().build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

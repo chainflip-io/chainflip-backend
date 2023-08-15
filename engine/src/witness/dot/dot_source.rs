@@ -38,8 +38,7 @@ macro_rules! polkadot_source {
 					{
 						if let Ok(header) = header {
 							let Some(events) = state.client.events(header.hash()).await else {
-
-								continue;
+								continue
 							};
 
 							return Some((

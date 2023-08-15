@@ -62,12 +62,12 @@ benchmarks! {
 	}
 
 	set_lp_ttl {
-		let ttl = T::BlockNumber::from(1_000u32);
+		let ttl = BlockNumberFor::<T>::from(1_000u32);
 		let call = Call::<T>::set_lp_ttl {
 			ttl,
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert_eq!(crate::LpTTL::<T>::get(), ttl);
 	}

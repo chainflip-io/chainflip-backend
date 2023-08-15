@@ -9,16 +9,16 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			members.map(|members| members.into_iter().collect())
 		})
 		.expect("Decoding of old type should not fail");
-		Weight::from_ref_time(0)
+		Weight::from_parts(0, 0)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok(Default::default())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		Ok(())
 	}
 }

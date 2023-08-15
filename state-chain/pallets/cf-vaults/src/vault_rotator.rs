@@ -2,7 +2,7 @@ use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{CeremonyIdProvider, GetBlockHeight};
-use sp_runtime::traits::BlockNumberProvider;
+use frame_support::sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;

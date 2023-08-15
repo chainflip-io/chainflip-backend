@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
-use jsonrpsee_subxt::{
+use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
 	http_client::{HttpClient, HttpClientBuilder},
 };
@@ -83,8 +83,8 @@ impl DotHttpRpcClient {
 		Ok(Self { online_client })
 	}
 
-	pub async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
-		Ok(self.online_client.rpc().metadata(Some(block_hash)).await?)
+	pub async fn metadata(&self) -> Result<subxt::Metadata> {
+		Ok(self.online_client.rpc().metadata().await?)
 	}
 }
 
@@ -120,7 +120,7 @@ impl DotRpcApi for DotHttpRpcClient {
 			chain_runtime_version.transaction_version !=
 				client_runtime_version.transaction_version
 		{
-			let new_metadata = self.metadata(block_hash).await?;
+			let new_metadata = self.metadata().await?;
 
 			self.online_client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
 				spec_version: chain_runtime_version.spec_version,
@@ -132,10 +132,10 @@ impl DotRpcApi for DotHttpRpcClient {
 
 		// If we've succeeded in getting the current runtime version then we assume
 		// the connection is stable (or has just been refreshed), no need to retry again.
-		match EventsClient::new(self.online_client.clone()).at(Some(block_hash)).await {
+		match EventsClient::new(self.online_client.clone()).at(block_hash).await {
 			Ok(events) => Ok(Some(events)),
 			Err(e) => match e {
-				subxt::Error::Block(BlockError::BlockHashNotFound(_)) => Ok(None),
+				subxt::Error::Block(BlockError::NotFound(_)) => Ok(None),
 				_ => Err(e.into()),
 			},
 		}

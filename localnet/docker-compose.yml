@@ -93,7 +93,6 @@ services:
       - --validator
       - --ws-external
     ports:
-      # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
       - 9945:9944 # ws port
     healthcheck:
