@@ -1,7 +1,7 @@
 use crate::chainflip::Offence;
 use cf_amm::{
 	common::{SqrtPriceQ64F96, Tick},
-	range_orders::Liquidity,
+	range_orders::{AmountsToLiquidityError, Liquidity},
 };
 use cf_chains::{
 	btc::BitcoinNetwork,
@@ -11,6 +11,7 @@ use cf_chains::{
 use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_pools::PoolQueryError;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
@@ -126,6 +127,6 @@ decl_runtime_apis!(
 			upper: Tick,
 			unstable_amount: AssetAmount,
 			stable_amount: AssetAmount,
-		) -> Option<Liquidity>;
+		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>>;
 	}
 );

@@ -10,7 +10,7 @@ use cf_chains::{
 use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::Pool;
+use pallet_cf_pools::{Pool, PoolQueryError};
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -589,10 +589,14 @@ where
 			unstable_amount,
 			stable_amount,
 		) {
-			Ok(Some(liquidity)) => Ok(liquidity),
-			Ok(None) => Err(jsonrpsee::core::Error::from(anyhow::anyhow!(
-				"Invalid Asset or invalid Tick range."
-			))),
+			Ok(Ok(liquidity)) => Ok(liquidity),
+			Ok(Err(e)) => Err(match e {
+				PoolQueryError::PoolDoesNotExist => anyhow::anyhow!("Pool does not exist.").into(),
+				PoolQueryError::Inner(e) => match e {
+					cf_amm::range_orders::AmountsToLiquidityError::InvalidTickRange =>
+						anyhow::anyhow!("Invalid tick range.").into(),
+				},
+			}),
 			Err(e) => Err(to_rpc_error(e)),
 		}
 	}

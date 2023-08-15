@@ -690,6 +690,15 @@ pub mod pallet {
 			})
 		}
 	}
+
+	impl<T: Config> From<cf_amm::range_orders::AmountsToLiquidityError> for Error<T> {
+		fn from(error: cf_amm::range_orders::AmountsToLiquidityError) -> Self {
+			match error {
+				cf_amm::range_orders::AmountsToLiquidityError::InvalidTickRange =>
+					Error::<T>::InvalidTickRange,
+			}
+		}
+	}
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
@@ -860,8 +869,9 @@ impl<T: Config> Pallet<T> {
 		upper: Tick,
 		unstable_amount: AssetAmount,
 		stable_amount: AssetAmount,
-	) -> Option<Liquidity> {
-		Pools::<T>::get(asset)?
+	) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>> {
+		Ok(Pools::<T>::get(asset)
+			.ok_or(PoolQueryError::PoolDoesNotExist)?
 			.pool_state
 			.range_orders
 			.desired_amounts_to_liquidity(
@@ -869,8 +879,14 @@ impl<T: Config> Pallet<T> {
 				upper,
 				SideMap::from_array([unstable_amount.into(), stable_amount.into()]),
 			)
-			.ok()
+			.map_err(PoolQueryError::Inner)?)
 	}
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode)]
+pub enum PoolQueryError<Inner> {
+	PoolDoesNotExist,
+	Inner(Inner),
 }
 
 pub mod utilities {
