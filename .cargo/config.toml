@@ -7,14 +7,14 @@ CF_ETH_CONTRACT_ABI_TAG = "perseverance-0.9-rc4"
 # `rustup completions --help` to find out how to set this up.
 
 [alias]
-cf-test =     "test --lib --features runtime-benchmarks"
-cf-test-ci =  "test --lib --features runtime-benchmarks,slow-tests"
+cf-test = "test --lib --features runtime-benchmarks"
+cf-test-ci = "test --lib --features runtime-benchmarks,slow-tests"
 cf-test-cfe = "test --lib --package chainflip-engine --package multisig"
 
-cf-clippy =    "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
+cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 
-cf-build =    "build --features runtime-benchmarks"
+cf-build = "build --features runtime-benchmarks"
 cf-build-ci = "build --release --features runtime-benchmarks"
 
 # Check for feature inconsistencies.
@@ -35,6 +35,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0080: This advisory comes from `parity-util-mem`, which is unmaintained but not a security issue. It's a dependency of `substrate`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
+# - RUSTSEC-2022-0093: This is a known vulnerability in sr25519-dalek, we are not exposed to this.
 cf-audit = '''
 audit --ignore RUSTSEC-2022-0070
       --ignore RUSTSEC-2021-0145
@@ -46,4 +47,5 @@ audit --ignore RUSTSEC-2022-0070
       --ignore RUSTSEC-2020-0168
       --ignore RUSTSEC-2022-0080
       --ignore RUSTSEC-2022-0061
+      --ignore RUSTSEC-2022-0093
 '''
