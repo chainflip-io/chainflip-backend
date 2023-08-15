@@ -903,7 +903,7 @@ impl<T: Config> Pallet<T> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
-pub enum PoolQueryError<Inner> {
+pub enum PoolQueryError<Inner: PartialEq> {
 	PoolDoesNotExist,
 	Inner(Inner),
 }

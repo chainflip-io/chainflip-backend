@@ -1,12 +1,15 @@
 use core::panic;
 
 use crate::{
-	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
-	RangeOrderSize, STABLE_ASSET,
+	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, PoolQueryError,
+	Pools, RangeOrderSize, STABLE_ASSET,
 };
-use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
+use cf_amm::{
+	common::{sqrt_price_at_tick, SideMap, Tick},
+	range_orders::AmountsToLiquidityError,
+};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_test_utilities::{assert_events_match, assert_within_error};
+use cf_test_utilities::assert_events_match;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::Permill;
@@ -248,42 +251,49 @@ fn test_network_fee_calculation() {
 }
 
 #[test]
-fn can_get_amount_to_liquidity() {
+fn can_get_liquidity_from_range_order() {
 	new_test_ext().execute_with(|| {
-		use cf_amm::common::Side;
-
 		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
-		const FLIP: Asset = Asset::Flip;
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			FLIP,
+			Asset::Flip,
 			Default::default(),
 			sqrt_price_at_tick(0),
 		));
 
-		let (amount_map, liquidity) = crate::Pools::<Test>::get(FLIP)
-			.unwrap()
-			.pool_state
-			.range_orders
-			.liquidity_to_amounts::<false>(
-				1_000_000_000_000_000_000u128,
-				POSITION.start,
-				POSITION.end,
-			)
-			.unwrap();
+		// Can get liquidity correctly.
+		assert!(LiquidityPools::estimate_liquidity_from_range_order(
+			Asset::Flip,
+			POSITION.start,
+			POSITION.end,
+			1_000u128,
+			1_000u128,
+		)
+		.is_ok());
 
-		assert_within_error(
-			liquidity,
+		// Returns the correct error if pool does not exist
+		assert_noop!(
 			LiquidityPools::estimate_liquidity_from_range_order(
-				FLIP,
+				Asset::Eth,
 				POSITION.start,
 				POSITION.end,
-				amount_map[Side::Zero].as_u128(),
-				amount_map[Side::One].as_u128(),
-			)
-			.unwrap(),
-			1u128,
+				1_000u128,
+				1_000u128,
+			),
+			PoolQueryError::PoolDoesNotExist,
+		);
+
+		// Returns the correct error if pool does not exist
+		assert_noop!(
+			LiquidityPools::estimate_liquidity_from_range_order(
+				Asset::Flip,
+				POSITION.end,
+				POSITION.start,
+				1_000u128,
+				1_000u128,
+			),
+			PoolQueryError::Inner(AmountsToLiquidityError::InvalidTickRange),
 		);
 	});
 }

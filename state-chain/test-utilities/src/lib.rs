@@ -119,17 +119,3 @@ macro_rules! impl_test_helpers {
 		}
 	};
 }
-
-#[track_caller]
-pub fn assert_within_error<T>(a: T, b: T, err: T)
-where
-	T: std::ops::Sub<Output = T> + std::cmp::PartialOrd + std::fmt::Debug + Copy,
-{
-	assert!(
-		if a >= b { a - b <= err } else { b - a <= err },
-		"assertion failed: (left: `{:?}`, right: `{:?}`, err: `{:?}`)",
-		a,
-		b,
-		err
-	);
-}

@@ -350,7 +350,7 @@ pub enum LiquidityToAmountsError {
 	InvalidLiquidityAmount,
 }
 
-#[derive(Debug, Encode, Decode, TypeInfo)]
+#[derive(Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub enum AmountsToLiquidityError {
 	/// Invalid Tick range
 	InvalidTickRange,
