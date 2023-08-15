@@ -55,16 +55,14 @@ where
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
-		.context("Failed to get KeyManager address from SC")?
-		.into();
+		.context("Failed to get KeyManager address from SC")?;
 
 	let vault_address = state_chain_client
 		.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
-		.context("Failed to get Vault contract address from SC")?
-		.into();
+		.context("Failed to get Vault contract address from SC")?;
 
 	let address_checker_address = state_chain_client
 		.storage_value::<pallet_cf_environment::ArbitrumAddressCheckerAddress<state_chain_runtime::Runtime>>(
