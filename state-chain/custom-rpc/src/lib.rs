@@ -217,8 +217,8 @@ pub trait CustomApi {
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 	/// Estimate maximum amount of liquidity that can be minted from the given Tick range and asset
 	/// amounts.
-	#[method(name = "estimate_liquidity_from_ranged_order")]
-	fn cf_estimate_liquidity_from_ranged_order(
+	#[method(name = "estimate_liquidity_from_range_order")]
+	fn cf_estimate_liquidity_from_range_order(
 		&self,
 		asset: Asset,
 		lower: Tick,
@@ -573,7 +573,7 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_estimate_liquidity_from_ranged_order(
+	fn cf_estimate_liquidity_from_range_order(
 		&self,
 		asset: Asset,
 		lower: Tick,
@@ -581,7 +581,7 @@ where
 		unstable_amount: AssetAmount,
 		stable_amount: AssetAmount,
 	) -> RpcResult<Liquidity> {
-		match self.client.runtime_api().cf_estimate_liquidity_from_ranged_order(
+		match self.client.runtime_api().cf_estimate_liquidity_from_range_order(
 			&self.query_block_id(None),
 			asset,
 			lower,

@@ -274,7 +274,7 @@ fn can_get_amount_to_liquidity() {
 
 		assert_within_error(
 			liquidity,
-			LiquidityPools::estimate_liquidity_from_ranged_order(
+			LiquidityPools::estimate_liquidity_from_range_order(
 				FLIP,
 				POSITION.start,
 				POSITION.end,
