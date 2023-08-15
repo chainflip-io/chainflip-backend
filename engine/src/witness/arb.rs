@@ -29,7 +29,6 @@ use super::common::{
 
 use anyhow::{Context, Result};
 
-// Most of this is the same as engine/src/witness/eth.rs
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Eth,
