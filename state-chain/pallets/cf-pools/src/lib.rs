@@ -681,33 +681,50 @@ impl<T: Config> Pallet<T> {
 	pub fn mint_or_burn_orders(current_block: T::BlockNumber) -> Weight {
 		if let Some(order) = OrderQueue::<T>::take(current_block) {
 			match order.lifetime {
-				// Order gets activated.
 				OrderLifetime::Active => {
-					let order_details = order.clone().details;
-					let _ = Self::collect_and_mint_limit_order_inner(
-						order_details.lp,
-						order_details.unstable_asset,
-						order_details.order,
-						order_details.price_as_tick,
-						order_details.amount,
-					);
-					OrderQueue::<T>::insert(
-						order.validity.is_valid_until(),
-						OrderDetails {
-							lifetime: OrderLifetime::Inactive,
-							validity: order.validity,
-							details: order.details,
-						},
-					);
-				},
-				OrderLifetime::Inactive => {
-					let _ = Self::collect_and_burn_limit_order_inner(
+					let details_copy = order.clone().details;
+					match Self::collect_and_mint_limit_order_inner(
 						order.details.lp,
 						order.details.unstable_asset,
 						order.details.order,
 						order.details.price_as_tick,
 						order.details.amount,
-					);
+					) {
+						Ok(_) => {
+							OrderQueue::<T>::insert(
+								order.validity.is_valid_until(),
+								OrderDetails {
+									lifetime: OrderLifetime::Inactive,
+									validity: order.validity,
+									details: details_copy,
+								},
+							);
+						},
+						Err(err) => {
+							Self::deposit_event(Event::<T>::MintingLimitOrderFailed {
+								lp: details_copy.lp,
+								error: err,
+							});
+						},
+					}
+				},
+				OrderLifetime::Inactive => {
+					let details_copy = order.clone().details;
+					match Self::collect_and_burn_limit_order_inner(
+						order.details.lp,
+						order.details.unstable_asset,
+						order.details.order,
+						order.details.price_as_tick,
+						order.details.amount,
+					) {
+						Err(err) => {
+							Self::deposit_event(Event::<T>::BurningLimitOrderFailed {
+								lp: details_copy.lp,
+								error: err,
+							});
+						},
+						_ => (),
+					}
 				},
 			}
 		}
