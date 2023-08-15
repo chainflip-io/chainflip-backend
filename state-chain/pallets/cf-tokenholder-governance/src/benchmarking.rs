@@ -5,7 +5,7 @@ use super::*;
 use cf_traits::{Chainflip, FeePayment};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::sp_runtime::traits::UniqueSaturatedFrom;
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_std::collections::btree_set::BTreeSet;
 
 fn generate_proposal() -> Proposal {
@@ -18,7 +18,7 @@ benchmarks! {
 		let a in 10..1000;
 		let proposal = generate_proposal();
 		Proposals::<T>::insert(
-			T::BlockNumber::from(1u32),
+			BlockNumberFor::<T>::from(1u32),
 			proposal.clone(),
 		);
 		let backers = (0..a).map(|i| account("doogle", i, 0)).collect::<BTreeSet<_>>();

@@ -26,29 +26,29 @@ base58 = '0.2.0'
 
 # Other
 hex = { default-features = false, version = '0.4' }
-hex-literal = { version = '0.3', default-features = false }
-serde = { optional = true, version = '1.0.126', features = [
+hex-literal = { version = '0.4.1', default-features = false }
+serde = { version = '1.0.126', default-features = false, features = [
+  'alloc',
   'derive',
-], default-features = false }
+] }
 log = { version = '0.4.16', default-features = false }
 itertools = { version = '0.10.0', default-features = false }
 arrayref = '0.3.6'
 
 # Substrate packages
 ss58-registry = { version = '1.41', optional = true }
-codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = [
+codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
   'derive',
 ] }
-scale-info = { version = '2.1.1', default-features = false, features = [
+scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-frame-system = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12+2', default-features = false, optional = true }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
 
 [dev-dependencies]
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
 cf-test-utilities = { path = '../test-utilities' }
 rand = { version = '0.8.4' }
 
@@ -56,28 +56,26 @@ rand = { version = '0.8.4' }
 default = ['std']
 std = [
   'cf-primitives/std',
+  'cf-utilities/std',
   'scale-info/std',
   'codec/std',
   'ethabi/full-serde',
   'ethereum/std',
   'ethereum-types/std',
   'frame-support/std',
-  'frame-system/std',
   'hex/std',
   'hex/serde',
   'libsecp256k1/std',
   'log/std',
   'rlp/std',
-  'serde',
-  'sp-runtime/std',
+  'serde/std',
   'sp-std/std',
   'sp-core/std',
   'sp-core/full_crypto',
-  'ss58-registry',
+  'dep:ss58-registry',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
 ]
-runtime-integration-tests = []
+runtime-integration-tests = ['std']

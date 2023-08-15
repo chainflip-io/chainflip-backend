@@ -39,7 +39,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumChainTracking CurrentChainState (r:1 w:1)
 	fn update_chain_state() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::from_parts(15_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -50,7 +50,7 @@ impl WeightInfo for () {
 	// Storage: EthereumChainTracking CurrentChainState (r:1 w:1)
 	fn update_chain_state() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::from_parts(15_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}

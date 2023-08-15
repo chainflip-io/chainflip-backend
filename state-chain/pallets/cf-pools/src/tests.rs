@@ -8,6 +8,7 @@ use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{assert_events_match, assert_within_error};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::Permill;
 
 #[test]
@@ -176,7 +177,7 @@ fn test_buy_back_flip_2() {
 #[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
-		const INTERVAL: <Test as frame_system::Config>::BlockNumber = 5;
+		const INTERVAL: BlockNumberFor<Test> = 5;
 		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
 		const FLIP: Asset = Asset::Flip;
 

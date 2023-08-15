@@ -11,7 +11,7 @@ impl<T: frame_system::Config> frame_support::traits::EnsureOrigin<T::RuntimeOrig
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
-		frame_system::RawOrigin::Root.into()
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
+		Ok(frame_system::RawOrigin::Root.into())
 	}
 }

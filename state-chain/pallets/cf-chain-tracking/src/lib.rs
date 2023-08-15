@@ -15,7 +15,7 @@ use cf_traits::{Chainflip, GetBlockHeight};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, traits::OnRuntimeUpgrade,
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
 
@@ -43,22 +43,21 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_runtime_upgrade() -> Weight {
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			migrations::PalletMigration::<T, I>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
@@ -92,16 +91,15 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			CurrentChainState::<T, I>::put(self.init_chain_state.clone());
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			use sp_runtime::traits::Zero;
+			use frame_support::sp_runtime::traits::Zero;
 			Self {
 				init_chain_state: ChainState {
 					block_height: <T::TargetChain as Chain>::ChainBlockNumber::zero(),
@@ -122,6 +120,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [Error::StaleDataSubmitted]
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_chain_state())]
 		pub fn update_chain_state(
 			origin: OriginFor<T>,

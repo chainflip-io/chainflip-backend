@@ -235,12 +235,13 @@ impl ChainClient for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						let block = client.block(index.into()).await?;
-						let (Some(block_number), Some(block_hash)) = (block.number, block.hash) else {
-						return Err(anyhow::anyhow!(
-							"Block number or hash is none for block number: {}",
-							index
-						))
-					};
+						let (Some(block_number), Some(block_hash)) = (block.number, block.hash)
+						else {
+							return Err(anyhow::anyhow!(
+								"Block number or hash is none for block number: {}",
+								index
+							))
+						};
 
 						assert_eq!(block_number.as_u64(), index);
 						Ok(Header {

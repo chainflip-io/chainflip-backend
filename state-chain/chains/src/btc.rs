@@ -27,7 +27,6 @@ use frame_support::{
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_std::{vec, vec::Vec};
 
@@ -64,8 +63,9 @@ pub type Hash = [u8; 32];
 	TypeInfo,
 	Ord,
 	PartialOrd,
+	serde::Serialize,
+	serde::Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 /// A Bitcoin AggKey is made up of the previous and current public key x coordinates.
 /// The y parity bits are assumed to be always equal to 0x02.
 pub struct AggKey {
@@ -87,8 +87,19 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
 	pub btc_fee_info: BitcoinFeeInfo,
@@ -101,8 +112,19 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub struct BitcoinFeeInfo {
 	pub fee_per_input_utxo: BtcAmount,
 	pub fee_per_output_utxo: BtcAmount,
@@ -349,8 +371,9 @@ fn to_varint(value: u64) -> Vec<u8> {
 	PartialOrd,
 	Ord,
 	Default,
+	serde::Serialize,
+	serde::Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
 	Mainnet,
 	Testnet,
@@ -398,8 +421,20 @@ const SEGWIT_VERSION_MAX: u8 = 16;
 const MIN_SEGWIT_PROGRAM_BYTES: u32 = 2;
 const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
 pub enum ScriptPubkey {
 	P2PKH([u8; 20]),
 	P2SH([u8; 20]),

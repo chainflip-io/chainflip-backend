@@ -29,25 +29,6 @@ macro_rules! assert_err {
 	};
 }
 
-#[cfg(test)]
-mod test_asserts {
-	use crate::assert_panics;
-
-	#[test]
-	fn test_assert_ok_unwrap_ok() {
-		fn works() -> Result<i32, i32> {
-			Ok(1)
-		}
-		let result = assert_ok!(works());
-		assert_eq!(result, 1);
-	}
-
-	#[test]
-	fn test_assert_ok_err() {
-		assert_panics!(assert_ok!(Err::<u32, u32>(1)));
-	}
-}
-
 /// Note that the resulting `threshold` is the maximum number
 /// of parties *not* enough to generate a signature,
 /// i.e. at least `t+1` parties are required.
@@ -289,4 +270,23 @@ fn test_split_at() {
 
 	assert_eq!(&left[..], &[4, 5, 6]);
 	assert_eq!(&right[..], &[3, 4, 5]);
+}
+
+#[cfg(test)]
+mod test_asserts {
+	use crate::assert_panics;
+
+	#[test]
+	fn test_assert_ok_unwrap_ok() {
+		fn works() -> Result<i32, i32> {
+			Ok(1)
+		}
+		let result = assert_ok!(works());
+		assert_eq!(result, 1);
+	}
+
+	#[test]
+	fn test_assert_ok_err() {
+		assert_panics!(assert_ok!(Err::<u32, u32>(1)));
+	}
 }

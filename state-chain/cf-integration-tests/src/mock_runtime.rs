@@ -1,7 +1,7 @@
 use chainflip_node::test_account_from_seed;
 use frame_support::sp_io::TestExternalities;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{BuildStorage, Percent};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
@@ -92,12 +92,12 @@ impl ExtBuilder {
 	/// Default ext configuration with BlockNumber 1
 	pub fn build(&self) -> TestExternalities {
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH);
 		let ethereum_vault_key = key_components.agg_key();
 
-		state_chain_runtime::GenesisConfig {
+		state_chain_runtime::RuntimeGenesisConfig {
 			// These are set indirectly via the session pallet.
 			aura: Default::default(),
 			// These are set indirectly via the session pallet.
@@ -172,6 +172,7 @@ impl ExtBuilder {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
+				..Default::default()
 			},
 			account_roles: AccountRolesConfig {
 				initial_account_roles: self

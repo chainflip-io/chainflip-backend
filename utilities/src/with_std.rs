@@ -1,21 +1,21 @@
 use anyhow::{anyhow, Context};
-use core::{fmt, time::Duration};
+use core::time::Duration;
 use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
-use std::path::PathBuf;
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{Filter, Reply};
 
 pub mod future_map;
 pub mod loop_select;
 pub mod rle_bitmap;
-pub mod serde_helpers;
 pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
 pub use unending_stream::UnendingStream;
+
+pub mod serde_helpers;
 
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
@@ -391,32 +391,6 @@ pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Er
 			Ok(())
 		});
 	}
-}
-
-// We use PathBuf because the value must be Sized, Path is not Sized
-pub fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
-where
-	D: serde::Deserializer<'de>,
-{
-	struct PathVisitor;
-
-	impl<'de> serde::de::Visitor<'de> for PathVisitor {
-		type Value = PathBuf;
-
-		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-			formatter.write_str("A string containing a path")
-		}
-
-		fn visit_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
-		where
-			E: serde::de::Error,
-		{
-			Ok(PathBuf::from(v))
-		}
-	}
-
-	// use our visitor to deserialize a `PathBuf`
-	deserializer.deserialize_any(PathVisitor)
 }
 
 pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(

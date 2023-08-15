@@ -6,13 +6,14 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
-use frame_support::{pallet_prelude::*, transactional};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{Permill, Saturating},
+	transactional,
+};
 use frame_system::pallet_prelude::OriginFor;
-use sp_arithmetic::traits::Zero;
-use sp_runtime::{Permill, Saturating};
-
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::Zero;
 
 pub use pallet::*;
 
@@ -51,15 +52,27 @@ pub mod pallet {
 		pub pool_state: PoolState<LiquidityProvider>,
 	}
 
-	#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
-	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	#[derive(
+		PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Deserialize, Serialize,
+	)]
 	pub enum Order {
 		Buy,
 		Sell,
 	}
 
-	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		PartialEq,
+		Eq,
+		Deserialize,
+		Serialize,
+	)]
 	pub enum RangeOrderSize {
 		AssetAmounts { desired: SideMap<AssetAmount>, minimum: SideMap<AssetAmount> },
 		Liquidity(Liquidity),
@@ -100,7 +113,7 @@ pub mod pallet {
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
-	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
 	#[pallet::storage]
@@ -108,20 +121,19 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub flip_buy_interval: T::BlockNumber,
+		pub flip_buy_interval: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: T::BlockNumber::zero() }
+			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
 		}
 	}
 
@@ -205,7 +217,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		UpdatedBuyInterval {
-			buy_interval: T::BlockNumber,
+			buy_interval: BlockNumberFor<T>,
 		},
 		PoolStateUpdated {
 			unstable_asset: any::Asset,
@@ -277,10 +289,11 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_buy_interval())]
 		pub fn update_buy_interval(
 			origin: OriginFor<T>,
-			new_buy_interval: T::BlockNumber,
+			new_buy_interval: BlockNumberFor<T>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
@@ -300,6 +313,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_pool_enabled())]
 		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
@@ -329,6 +343,7 @@ pub mod pallet {
 		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
 		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
 		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
 			origin: OriginFor<T>,
@@ -394,6 +409,7 @@ pub mod pallet {
 		/// - [BelowMinimumAmount](pallet_cf_lp::Error::BelowMinimumAmount)
 		/// - [DesiredBelowMinimumAmount](pallet_cf_lp::Error::DesiredBelowMinimumAmount)
 		/// - [MintingRangeOrderDisabled](pallet_cf_lp::Error::MintingRangeOrderDisabled)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_range_order())]
 		pub fn collect_and_mint_range_order(
 			origin: OriginFor<T>,
@@ -505,6 +521,7 @@ pub mod pallet {
 		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [BurningRangeOrderDisabled](pallet_cf_lp::Error::BurningRangeOrderDisabled)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::collect_and_burn_range_order())]
 		pub fn collect_and_burn_range_order(
 			origin: OriginFor<T>,
@@ -568,6 +585,7 @@ pub mod pallet {
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [MaximumGrossLiquidity](pallet_cf_pools::Error::MaximumGrossLiquidity)
 		/// - [MintingLimitOrderDisabled](pallet_cf_lp::Error::MintingLimitOrderDisabled)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_limit_order())]
 		pub fn collect_and_mint_limit_order(
 			origin: OriginFor<T>,
@@ -639,6 +657,7 @@ pub mod pallet {
 		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [BurningLimitOrderDisabled](pallet_cf_lp::Error::BurningLimitOrderDisabled)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::collect_and_burn_limit_order())]
 		pub fn collect_and_burn_limit_order(
 			origin: OriginFor<T>,
@@ -870,7 +889,7 @@ impl<T: Config> Pallet<T> {
 		unstable_amount: AssetAmount,
 		stable_amount: AssetAmount,
 	) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>> {
-		Ok(Pools::<T>::get(asset)
+		Pools::<T>::get(asset)
 			.ok_or(PoolQueryError::PoolDoesNotExist)?
 			.pool_state
 			.range_orders
@@ -879,11 +898,11 @@ impl<T: Config> Pallet<T> {
 				upper,
 				SideMap::from_array([unstable_amount.into(), stable_amount.into()]),
 			)
-			.map_err(PoolQueryError::Inner)?)
+			.map_err(PoolQueryError::Inner)
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
 pub enum PoolQueryError<Inner> {
 	PoolDoesNotExist,
 	Inner(Inner),

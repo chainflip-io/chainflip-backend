@@ -48,6 +48,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
 	traits::Get,
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -55,7 +56,6 @@ pub use offences::*;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
-use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
 impl Chainflip for Runtime {
@@ -435,7 +435,7 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
-			type BlockNumber = <Runtime as frame_system::Config>::BlockNumber;
+			type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Runtime>;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,

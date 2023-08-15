@@ -52,7 +52,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `b` is `[1, 100]`.
 	fn on_initialize_failure(_b: u32, ) -> Weight {
 		// Minimum execution time: 42_000 nanoseconds.
-		Weight::from_ref_time(140_533_616)
+		Weight::from_parts(140_533_616, 0)
 			.saturating_add(T::DbWeight::get().reads(28))
 			.saturating_add(T::DbWeight::get().writes(27))
 	}
@@ -68,7 +68,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		// Minimum execution time: 74_000 nanoseconds.
-		Weight::from_ref_time(92_000_000)
+		Weight::from_parts(92_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(9))
 	}
@@ -77,7 +77,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault SuccessVoters (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
 		// Minimum execution time: 44_000 nanoseconds.
-		Weight::from_ref_time(47_000_000)
+		Weight::from_parts(47_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -85,7 +85,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault PendingVaultRotation (r:0 w:1)
 	fn on_keygen_verification_result() -> Weight {
 		// Minimum execution time: 18_000 nanoseconds.
-		Weight::from_ref_time(19_000_000)
+		Weight::from_parts(19_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -95,7 +95,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
 	fn vault_key_rotated() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
-		Weight::from_ref_time(22_000_000)
+		Weight::from_parts(22_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -105,14 +105,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(25_000_000)
+		Weight::from_parts(25_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
 	fn set_keygen_response_timeout() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::from_parts(15_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -130,7 +130,7 @@ impl WeightInfo for () {
 	/// The range of component `b` is `[1, 100]`.
 	fn on_initialize_failure(_b: u32, ) -> Weight {
 		// Minimum execution time: 42_000 nanoseconds.
-		Weight::from_ref_time(140_533_616)
+		Weight::from_parts(140_533_616, 0)
 			.saturating_add(RocksDbWeight::get().reads(28))
 			.saturating_add(RocksDbWeight::get().writes(27))
 	}
@@ -146,7 +146,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		// Minimum execution time: 74_000 nanoseconds.
-		Weight::from_ref_time(92_000_000)
+		Weight::from_parts(92_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().writes(9))
 	}
@@ -155,7 +155,7 @@ impl WeightInfo for () {
 	// Storage: EthereumVault SuccessVoters (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
 		// Minimum execution time: 44_000 nanoseconds.
-		Weight::from_ref_time(47_000_000)
+		Weight::from_parts(47_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -163,7 +163,7 @@ impl WeightInfo for () {
 	// Storage: EthereumVault PendingVaultRotation (r:0 w:1)
 	fn on_keygen_verification_result() -> Weight {
 		// Minimum execution time: 18_000 nanoseconds.
-		Weight::from_ref_time(19_000_000)
+		Weight::from_parts(19_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -173,7 +173,7 @@ impl WeightInfo for () {
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
 	fn vault_key_rotated() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
-		Weight::from_ref_time(22_000_000)
+		Weight::from_parts(22_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -183,14 +183,14 @@ impl WeightInfo for () {
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(25_000_000)
+		Weight::from_parts(25_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
 	fn set_keygen_response_timeout() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
-		Weight::from_ref_time(15_000_000)
+		Weight::from_parts(15_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}

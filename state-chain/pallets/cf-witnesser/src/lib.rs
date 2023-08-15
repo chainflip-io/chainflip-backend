@@ -15,6 +15,7 @@ mod tests;
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
@@ -24,7 +25,6 @@ use frame_support::{
 	Hashable,
 };
 use sp_std::prelude::*;
-use utilities::success_threshold_from_share_count;
 
 pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
@@ -229,6 +229,7 @@ pub mod pallet {
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[allow(clippy::boxed_local)]
+		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
@@ -312,7 +313,10 @@ pub mod pallet {
 		/// checkpointing issues or similar.
 		///
 		/// Note this does not protect against replays, so should be used with care.
-		#[pallet::weight(0)]
+		#[pallet::call_index(1)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
 		pub fn force_witness(
 			origin: OriginFor<T>,
 			mut call: Box<<T as Config>::RuntimeCall>,
@@ -413,8 +417,8 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		RawOrigin::HistoricalActiveEpochWitnessThreshold.into()
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::HistoricalActiveEpochWitnessThreshold.into())
 	}
 }
 
@@ -446,7 +450,7 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin {
-		RawOrigin::CurrentEpochWitnessThreshold.into()
+	fn try_successful_origin() -> Result<OuterOrigin, ()> {
+		Ok(RawOrigin::CurrentEpochWitnessThreshold.into())
 	}
 }

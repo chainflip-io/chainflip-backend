@@ -18,13 +18,9 @@ use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type AccountId = u64;
 
@@ -33,14 +29,11 @@ pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
+type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub enum Test {
 		System: frame_system,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
@@ -59,13 +52,12 @@ impl system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
@@ -221,7 +213,7 @@ impl pallet_cf_emissions::Config for Test {
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
 	let total_issuance = issuance.unwrap_or(TOTAL_ISSUANCE);
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance },
 		emissions: {
@@ -229,6 +221,7 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 				current_authority_emission_inflation: 2720,
 				backup_node_emission_inflation: 284,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL,
+				..Default::default()
 			}
 		},
 	};
