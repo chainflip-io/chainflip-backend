@@ -12,10 +12,9 @@ $binary_location/chainflip-node --chain=dev \
   --validator \
   --force-authoring \
   --rpc-cors=all \
-  --ws-external \
-  --rpc-methods=Unsafe \
+  --unsafe-rpc-external \
+  --rpc-methods=unsafe \
   --name=bashful \
-  --execution=Native \
   --blocks-pruning=archive \
   --state-pruning=archive \
-  --state-cache-size=0 > /tmp/chainflip/chainflip-node.log 2>&1 &
+  --trie-cache-size=0 > /tmp/chainflip/chainflip-node.log 2>&1 &
