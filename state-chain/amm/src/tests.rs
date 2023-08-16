@@ -70,7 +70,7 @@ fn test_basic_swaps() {
 					&LiquidityProvider::from([0; 32]),
 					-100,
 					100,
-					liquidity,
+					range_orders::Size::Liquidity { liquidity },
 					Result::<_, Infallible>::Ok
 				));
 			assert_eq!(collected_fees, Default::default());
@@ -106,7 +106,7 @@ fn test_basic_swaps() {
 					&LiquidityProvider::from([0; 32]),
 					-100,
 					100,
-					range_order_liquidity,
+					range_orders::Size::Liquidity { liquidity: range_order_liquidity },
 					Result::<_, Infallible>::Ok
 				));
 			assert_eq!(collected_fees, Default::default());
@@ -154,7 +154,7 @@ fn test_basic_swaps() {
 						&LiquidityProvider::from([0; 32]),
 						lower_tick,
 						upper_tick,
-						100000,
+						range_orders::Size::Liquidity { liquidity: 100000 },
 						Result::<_, Infallible>::Ok
 					));
 				assert_eq!(collected_fees, Default::default());

@@ -33,7 +33,7 @@ pub mod pallet {
 	use cf_amm::{
 		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
 		limit_orders,
-		range_orders::{self, AmountsToLiquidityError, Liquidity},
+		range_orders::{self, Liquidity},
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -198,10 +198,9 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
 		OutputOverflow,
-		/// Calculated Amounts are below the requested minimum
-		BelowMinimumAmount,
-		/// Minimum must be below desired amount
-		DesiredBelowMinimumAmount,
+		/// There are no amounts between the specified maximum and minimum that match the required
+		/// ratio of assets
+		AssetRatioUnachieveable,
 		/// Minting Range Order is disabled
 		MintingRangeOrderDisabled,
 		/// Burning Range Order is disabled
@@ -406,7 +405,6 @@ pub mod pallet {
 		/// - [MaximumGrossLiquidity](pallet_cf_pools::Error::MaximumGrossLiquidity)
 		/// - [InsufficientBalance](pallet_cf_lp::Error::InsufficientBalance)
 		/// - [BelowMinimumAmount](pallet_cf_lp::Error::BelowMinimumAmount)
-		/// - [DesiredBelowMinimumAmount](pallet_cf_lp::Error::DesiredBelowMinimumAmount)
 		/// - [MintingRangeOrderDisabled](pallet_cf_lp::Error::MintingRangeOrderDisabled)
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_range_order())]
@@ -424,55 +422,21 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let liquidity = match order_size {
-					RangeOrderSize::Liquidity(liquidity) => liquidity,
-					RangeOrderSize::AssetAmounts { desired, minimum } => {
-						ensure!(
-							desired[Side::Zero] >= minimum[Side::Zero] &&
-								desired[Side::One] >= minimum[Side::One],
-							Error::<T>::DesiredBelowMinimumAmount
-						);
-
-						let liquidity = pool_state
-							.range_orders
-							.desired_amounts_to_liquidity(
-								price_range_in_ticks.start,
-								price_range_in_ticks.end,
-								desired.map(|_side, amount| amount.into()),
-							)
-							.map_err(|error| match error {
-								AmountsToLiquidityError::InvalidTickRange =>
-									Error::<T>::InvalidTickRange,
-							})?;
-
-						let true_amounts = pool_state
-							.range_orders
-							.liquidity_to_amounts::<false>(
-								liquidity,
-								price_range_in_ticks.start,
-								price_range_in_ticks.end,
-							)
-							.expect("Cannot fail because liquidity input was calculated above, and therefore the tick range and liquidity must be valid.")
-							.0;
-
-						let minimum = minimum.map(|_side, amount| amount.into());
-						ensure!(
-							true_amounts[Side::Zero] >= minimum[Side::Zero] &&
-								true_amounts[Side::One] >= minimum[Side::One],
-							Error::<T>::BelowMinimumAmount
-						);
-
-						liquidity
-					},
-				};
-
-				let (assets_debited, range_orders::Collected { fees }, _) = pool_state
+				let (assets_debited, range_orders::Collected { fees }, position_info) = pool_state
 					.range_orders
 					.collect_and_mint(
 						&lp,
 						price_range_in_ticks.start,
 						price_range_in_ticks.end,
-						liquidity,
+						match order_size {
+							RangeOrderSize::Liquidity(liquidity) =>
+								range_orders::Size::Liquidity { liquidity },
+							RangeOrderSize::AssetAmounts { desired, minimum } =>
+								range_orders::Size::Amount {
+									maximum: desired.map(|_, amount| amount.into()),
+									minimum: minimum.map(|_, amount| amount.into()),
+								},
+						},
 						|required_amounts| {
 							Self::try_debit_both_assets(&lp, unstable_asset, required_amounts)
 						},
@@ -488,6 +452,9 @@ pub mod pallet {
 						range_orders::PositionError::Other(
 							range_orders::MintError::MaximumGrossLiquidity,
 						) => Error::<T>::MaximumGrossLiquidity.into(),
+						range_orders::PositionError::Other(
+							cf_amm::range_orders::MintError::AssetRatioUnachieveable,
+						) => Error::<T>::AssetRatioUnachieveable.into(),
 					})?;
 
 				let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
@@ -496,7 +463,7 @@ pub mod pallet {
 					lp,
 					unstable_asset,
 					price_range_in_ticks,
-					liquidity,
+					liquidity: todo!(),
 					assets_debited,
 					collected_fees,
 				});
@@ -540,14 +507,17 @@ pub mod pallet {
 						&lp,
 						price_range_in_ticks.start,
 						price_range_in_ticks.end,
-						liquidity,
+						range_orders::Size::Liquidity { liquidity },
 					)
 					.map_err(|e| match e {
 						range_orders::PositionError::InvalidTickRange =>
 							Error::<T>::InvalidTickRange,
 						range_orders::PositionError::NonExistent =>
 							Error::<T>::PositionDoesNotExist,
-						range_orders::PositionError::Other(e) => match e {},
+						range_orders::PositionError::Other(e) => match e {
+							range_orders::BurnError::AssetRatioUnachieveable =>
+								Error::<T>::AssetRatioUnachieveable,
+						},
 					})?;
 
 				let assets_credited =

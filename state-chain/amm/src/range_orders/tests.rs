@@ -78,6 +78,8 @@ fn output_amounts_bounded() {
 #[cfg(feature = "slow-tests")]
 #[test]
 fn maximum_liquidity_swap() {
+	use crate::range_orders::Size;
+
 	let mut pool_state = PoolState::new(0, MIN_SQRT_PRICE).unwrap();
 
 	let minted_amounts: SideMap<Amount> = (MIN_TICK..0)
@@ -88,7 +90,7 @@ fn maximum_liquidity_swap() {
 					&LiquidityProvider::from([0; 32]),
 					lower_tick,
 					upper_tick,
-					MAX_TICK_GROSS_LIQUIDITY,
+					Size::Liquidity { liquidity: MAX_TICK_GROSS_LIQUIDITY },
 					Result::<_, Infallible>::Ok,
 				)
 				.unwrap()
@@ -153,7 +155,7 @@ fn test_amounts_to_liquidity() {
 						.0;
 
 					let resultant_liquidity =
-						pool_state.desired_amounts_to_liquidity(lower, upper, amounts).unwrap();
+						pool_state.inner_amounts_to_liquidity(lower, upper, amounts);
 
 					let maximum_error_from_rounding_amount =
 						[amounts[Side::Zero], amounts[Side::One]]
