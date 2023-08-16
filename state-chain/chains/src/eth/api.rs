@@ -8,8 +8,8 @@ use frame_support::{
 		DispatchError,
 	},
 	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
-use ethereum_types::H160;
 };
+use ethereum_types::H160;
 use sp_std::marker::PhantomData;
 
 pub use tokenizable::Tokenizable;
