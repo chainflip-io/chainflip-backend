@@ -112,46 +112,52 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_current_block: BlockNumberFor<T>) -> Weight {
+		/// Clear stale data from expired epochs
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let mut used_weight = Weight::zero();
 			if T::SafeMode::get().witness_calls_enabled &&
 				WitnessedCallsScheduledForDispatch::<T>::exists()
 			{
-				WitnessedCallsScheduledForDispatch::<T>::take().into_iter().for_each(
-					|(witnessed_at_epoch, call, call_hash)| {
-						Self::dispatch_call(
-							witnessed_at_epoch,
-							T::EpochInfo::epoch_index(),
-							call,
-							call_hash,
-						)
-					},
-				);
-				Weight::zero().saturating_add(T::DbWeight::get().reads(1))
-			} else {
-				Weight::zero()
+				used_weight
+					.saturating_add(T::DbWeight::get().reads(1))
+					.saturating_add(T::DbWeight::get().writes(1));
+				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls| {
+					while let Some((witnessed_at_epoch, call, call_hash)) = witnessed_calls.pop() {
+						let call_weight = call.get_dispatch_info().weight;
+						if remaining_weight.ref_time() > (used_weight + call_weight).ref_time() {
+							Self::dispatch_call(
+								witnessed_at_epoch,
+								T::EpochInfo::epoch_index(),
+								call,
+								call_hash,
+							);
+							used_weight.saturating_add(call_weight);
+						} else {
+							witnessed_calls.push((witnessed_at_epoch, call, call_hash));
+							break
+						}
+					}
+				});
 			}
-		}
 
-		/// Clear stale data from expired epochs
-		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
 			let epoch = if let Some(epoch) = epochs_to_cull.pop() {
 				epoch
 			} else {
-				return T::WeightInfo::on_idle_with_nothing_to_remove()
+				return used_weight.saturating_add(T::WeightInfo::on_idle_with_nothing_to_remove())
 			};
 
 			let max_deletions_count_remaining = remaining_weight
+				.saturating_sub(used_weight)
 				.ref_time()
 				.checked_div(T::WeightInfo::remove_storage_items(1).ref_time())
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
-				return T::WeightInfo::on_idle_with_nothing_to_remove()
+				return used_weight.saturating_add(T::WeightInfo::on_idle_with_nothing_to_remove())
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;
-			let mut used_weight: Weight = Weight::zero();
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
