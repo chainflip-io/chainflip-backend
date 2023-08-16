@@ -47,6 +47,12 @@ impl Get<bool> for MockOptimisticActivation {
 	}
 }
 
+impl IntoForeignChainAddress<MockEthereum> for u64 {
+	fn into_foreign_chain_address(address: u64) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(H160::repeat_byte(address as u8))
+	}
+}
+
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";

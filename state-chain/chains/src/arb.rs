@@ -14,10 +14,10 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
+use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
-use frame_support::sp_runtime::RuntimeDebug;
 use sp_std::str;
 
 // Reference constants for the chain spec

@@ -97,6 +97,7 @@ impl FromStr for ForeignChain {
 			"ethereum" => Ok(ForeignChain::Ethereum),
 			"bitcoin" => Ok(ForeignChain::Bitcoin),
 			"polkadot" => Ok(ForeignChain::Polkadot),
+			"arbitrum" => Ok(ForeignChain::Arbitrum),
 			_ => Err("Unrecognized Chain"),
 		}
 	}
