@@ -287,7 +287,7 @@ impl ChainCrypto for Polkadot {
 		signature.verify(payload, agg_key)
 	}
 
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
 	}
 }

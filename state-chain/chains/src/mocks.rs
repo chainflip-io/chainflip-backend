@@ -199,7 +199,7 @@ impl ChainCrypto for MockEthereum {
 		signature.signing_key == *agg_key && signature.signed_payload == *payload
 	}
 
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		agg_key.0
 	}
 }

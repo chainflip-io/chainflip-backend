@@ -37,7 +37,7 @@ impl ChainCrypto for NoneChain {
 		unimplemented!()
 	}
 
-	fn agg_key_to_payload(_agg_key: Self::AggKey) -> Self::Payload {
+	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		unimplemented!()
 	}
 }
