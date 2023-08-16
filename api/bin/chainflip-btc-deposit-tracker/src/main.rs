@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use futures::future;
-use jsonrpsee::{server::Server, RpcModule};
+use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
 	collections::HashMap,
@@ -63,7 +63,14 @@ struct QueryResult {
 	tx_hash: String,
 }
 
+#[derive(Default, Clone)]
+struct Cache {
+	best_block_hash: String,
+	transactions: HashMap<String, QueryResult>,
+}
+
 const SAFETY_MARGIN: u32 = 7;
+const REFRESH_INTERVAL: u64 = 10;
 
 async fn btc_call<T: DeserializeOwned>(method: &str, params: &str) -> anyhow::Result<T> {
 	let url = env::var("BTC_ENDPOINT").unwrap_or("http://127.0.0.1:8332".to_string());
@@ -79,7 +86,7 @@ async fn btc_call<T: DeserializeOwned>(method: &str, params: &str) -> anyhow::Re
 		.map_err(|err| anyhow!(err))
 }
 
-async fn get_updated_cache() -> anyhow::Result<HashMap<String, QueryResult>> {
+async fn get_updated_cache(current_cache: Cache) -> anyhow::Result<Cache> {
 	let mempool = btc_call::<MemPoolResult>("getrawmempool", "").await?.result;
 	let mut cache: HashMap<String, QueryResult> = Default::default();
 	for tx_hash in mempool {
@@ -87,9 +94,11 @@ async fn get_updated_cache() -> anyhow::Result<HashMap<String, QueryResult>> {
 			"getrawtransaction",
 			format!("\"{}\", true", tx_hash.clone()).as_str(),
 		)
-		.await?
-		.result
-		.vout;
+		.await
+		.map(|tx| tx.result.vout)
+		// Don't error here. It could be that the transaction was already removed from the mempool
+		// by the time we tried to query it.
+		.unwrap_or_default();
 		for vout in vouts {
 			if let Some(destination) = vout.script_pub_key.address {
 				cache.insert(
@@ -100,24 +109,48 @@ async fn get_updated_cache() -> anyhow::Result<HashMap<String, QueryResult>> {
 		}
 	}
 
-	let mut block_hash = btc_call::<BestBlockResult>("getbestblockhash", "").await?.result;
-	for confirmations in 1..SAFETY_MARGIN {
-		let block = btc_call::<BlockResult>("getblock", format!("\"{}\", 2", block_hash).as_str())
-			.await?
-			.result;
-		for tx in block.tx {
-			for vout in tx.vout {
-				if let Some(destination) = vout.script_pub_key.address {
-					cache.insert(
-						destination,
-						QueryResult { confirmations, value: vout.value, tx_hash: tx.txid.clone() },
-					);
-				}
+	let block_hash = btc_call::<BestBlockResult>("getbestblockhash", "").await?.result;
+	if current_cache.best_block_hash == block_hash {
+		for entry in current_cache.transactions {
+			if entry.1.confirmations > 0 {
+				cache.insert(entry.0, entry.1);
 			}
 		}
-		block_hash = block.previousblockhash;
+	} else {
+		println!("New block found: {}", block_hash);
+		let mut block_hash_to_query = block_hash.clone();
+		for confirmations in 1..SAFETY_MARGIN {
+			let block = btc_call::<BlockResult>(
+				"getblock",
+				format!("\"{}\", 2", block_hash_to_query).as_str(),
+			)
+			.await?
+			.result;
+			for tx in block.tx {
+				for vout in tx.vout {
+					if let Some(destination) = vout.script_pub_key.address {
+						cache.insert(
+							destination,
+							QueryResult {
+								confirmations,
+								value: vout.value,
+								tx_hash: tx.txid.clone(),
+							},
+						);
+					}
+				}
+			}
+			block_hash_to_query = block.previousblockhash;
+		}
 	}
-	Ok(cache)
+	Ok(Cache { best_block_hash: block_hash, transactions: cache })
+}
+
+fn lookup_transactions(cache: Cache, addresses: Vec<String>) -> Vec<Option<QueryResult>> {
+	addresses
+		.iter()
+		.map(|address| cache.transactions.get(address).map(Clone::clone))
+		.collect::<Vec<Option<QueryResult>>>()
 }
 
 #[tokio::main]
@@ -126,18 +159,19 @@ async fn main() -> anyhow::Result<()> {
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
-	let cache: Arc<Mutex<HashMap<String, QueryResult>>> = Default::default();
+	let cache: Arc<Mutex<Cache>> = Default::default();
 	let updater = task::spawn({
 		let cache = cache.clone();
 		async move {
-			let mut interval = time::interval(Duration::from_secs(10));
+			let mut interval = time::interval(Duration::from_secs(REFRESH_INTERVAL));
 			loop {
-				match get_updated_cache().await {
+				let cache_copy = cache.lock().unwrap().clone();
+				match get_updated_cache(cache_copy).await {
 					Ok(updated_cache) => {
 						let mut cache = cache.lock().unwrap();
 						*cache = updated_cache;
 					},
-					anyhow::Result::Err(err) => {
+					Err(err) => {
 						log::error!("Error when querying Bitcoin chain: {}", err);
 					},
 				}
@@ -145,19 +179,20 @@ async fn main() -> anyhow::Result<()> {
 			}
 		}
 	});
-	let server = Server::builder().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
+	let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 	module.register_async_method("status", move |arguments, _context| {
 		let cache = cache.clone();
 		async move {
 			arguments
-				.parse::<String>()
-				.map(|address| cache.lock().unwrap().get(&address).cloned())
+				.parse::<Vec<String>>()
+				.map(|addresses| lookup_transactions(cache.lock().unwrap().clone(), addresses))
+				.map_err(|err| Error::Call(err))
 		}
 	})?;
 	let addr = server.local_addr()?;
 	log::info!("Listening on http://{}", addr);
-	let handle = server.start(module);
+	let handle = server.start(module)?;
 	let _ = future::join(handle.stopped(), updater).await;
 	Ok(())
 }
