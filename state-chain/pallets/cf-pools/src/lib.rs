@@ -13,6 +13,8 @@ use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{Permill, Saturating};
 
+use sp_std::vec;
+
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +42,7 @@ pub mod pallet {
 	use cf_primitives::AccountId;
 	use cf_traits::{liquidity, AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_std::{vec, vec::Vec};
 
 	use super::*;
 
@@ -129,7 +132,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		OrderDetails<T::AccountId, T::BlockNumber>,
+		Vec<OrderDetails<T::AccountId, T::BlockNumber>>,
 		OptionQuery,
 	>;
 
@@ -461,13 +464,87 @@ pub mod pallet {
 				Error::<T>::MintingRangeOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::collect_and_mint_range_order_inner(
-				lp.clone(),
-				unstable_asset,
-				price_range_in_ticks,
-				order_size,
-			)?;
-			Ok(())
+
+			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+				let liquidity = match order_size {
+					RangeOrderSize::Liquidity(liquidity) => liquidity,
+					RangeOrderSize::AssetAmounts { desired, minimum } => {
+						ensure!(
+							desired[Side::Zero] >= minimum[Side::Zero] &&
+								desired[Side::One] >= minimum[Side::One],
+							Error::<T>::DesiredBelowMinimumAmount
+						);
+
+						let liquidity = pool_state
+							.range_orders
+							.desired_amounts_to_liquidity(
+								price_range_in_ticks.start,
+								price_range_in_ticks.end,
+								desired.map(|_side, amount| amount.into()),
+							)
+							.map_err(|error| match error {
+								AmountsToLiquidityError::InvalidTickRange =>
+									Error::<T>::InvalidTickRange,
+							})?;
+
+						let true_amounts = pool_state
+						.range_orders
+						.liquidity_to_amounts::<false>(
+							liquidity,
+							price_range_in_ticks.start,
+							price_range_in_ticks.end,
+						)
+						.expect("Cannot fail because liquidity input was calculated above, and therefore the tick range and liquidity must be valid.")
+						.0;
+
+						let minimum = minimum.map(|_side, amount| amount.into());
+						ensure!(
+							true_amounts[Side::Zero] >= minimum[Side::Zero] &&
+								true_amounts[Side::One] >= minimum[Side::One],
+							Error::<T>::BelowMinimumAmount
+						);
+
+						liquidity
+					},
+				};
+
+				let (assets_debited, range_orders::CollectedFees { fees }) = pool_state
+					.range_orders
+					.collect_and_mint(
+						&lp,
+						price_range_in_ticks.start,
+						price_range_in_ticks.end,
+						liquidity,
+						|required_amounts| {
+							Self::try_debit_both_assets(&lp, unstable_asset, required_amounts)
+						},
+					)
+					.map_err(|e| match e {
+						range_orders::PositionError::InvalidTickRange =>
+							Error::<T>::InvalidTickRange.into(),
+						range_orders::PositionError::NonExistent =>
+							Error::<T>::PositionDoesNotExist.into(),
+						range_orders::PositionError::Other(
+							range_orders::MintError::CallbackFailed(e),
+						) => e,
+						range_orders::PositionError::Other(
+							range_orders::MintError::MaximumGrossLiquidity,
+						) => Error::<T>::MaximumGrossLiquidity.into(),
+					})?;
+
+				let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
+
+				Self::deposit_event(Event::<T>::RangeOrderMinted {
+					lp,
+					unstable_asset,
+					price_range_in_ticks,
+					liquidity,
+					assets_debited,
+					collected_fees,
+				});
+
+				Ok(())
+			})
 		}
 
 		/// Collects and burns a range order.
@@ -498,12 +575,41 @@ pub mod pallet {
 				Error::<T>::BurningRangeOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::collect_and_burn_range_order_inner(
-				lp,
-				unstable_asset,
-				price_range_in_ticks,
-				liquidity,
-			)
+
+			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+				let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
+					.range_orders
+					.collect_and_burn(
+						&lp,
+						price_range_in_ticks.start,
+						price_range_in_ticks.end,
+						liquidity,
+					)
+					.map_err(|e| match e {
+						range_orders::PositionError::InvalidTickRange =>
+							Error::<T>::InvalidTickRange,
+						range_orders::PositionError::NonExistent =>
+							Error::<T>::PositionDoesNotExist,
+						range_orders::PositionError::Other(
+							range_orders::BurnError::PositionLacksLiquidity,
+						) => Error::<T>::PositionLacksLiquidity,
+					})?;
+
+				let assets_credited =
+					Self::try_credit_both_assets(&lp, unstable_asset, assets_withdrawn)?;
+				let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
+
+				Self::deposit_event(Event::<T>::RangeOrderBurned {
+					lp,
+					unstable_asset,
+					price_range_in_ticks,
+					liquidity,
+					assets_credited,
+					collected_fees,
+				});
+
+				Ok(())
+			})
 		}
 
 		/// Collects and mints a limit order.
@@ -537,6 +643,7 @@ pub mod pallet {
 				Error::<T>::MintingLimitOrderDisabled
 			);
 			let current_block = <frame_system::Pallet<T>>::block_number();
+
 			ensure!(!order_validity.is_expired(current_block), Error::<T>::OrderValidityExpired);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			// If order is already valid we can mint it straight away.
@@ -548,7 +655,7 @@ pub mod pallet {
 					price_as_tick,
 					amount,
 				)?;
-				OrderQueue::<T>::insert(
+				Self::add_to_order_queue(
 					order_validity.is_valid_until(),
 					OrderDetails {
 						lifetime: OrderLifetime::Inactive,
@@ -565,7 +672,7 @@ pub mod pallet {
 				Ok(())
 			// If not pass it to the limit order queue.
 			} else {
-				OrderQueue::<T>::insert(
+				Self::add_to_order_queue(
 					order_validity.gets_valid_at(),
 					OrderDetails {
 						lifetime: OrderLifetime::Active,
@@ -678,97 +785,72 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn add_to_order_queue(
+		block_number: T::BlockNumber,
+		order: OrderDetails<T::AccountId, T::BlockNumber>,
+	) {
+		OrderQueue::<T>::mutate(block_number, |orders| {
+			if let Some(orders) = orders {
+				orders.push(order);
+			} else {
+				*orders = Some(vec![order]);
+			}
+		});
+	}
+
 	pub fn mint_or_burn_orders(current_block: T::BlockNumber) -> Weight {
-		if let Some(order) = OrderQueue::<T>::take(current_block) {
-			match order.lifetime {
-				OrderLifetime::Active => {
-					let details_copy = order.clone().details;
-					match Self::collect_and_mint_limit_order_inner(
-						order.details.lp,
-						order.details.unstable_asset,
-						order.details.order,
-						order.details.price_as_tick,
-						order.details.amount,
-					) {
-						Ok(_) => {
-							OrderQueue::<T>::insert(
-								order.validity.is_valid_until(),
-								OrderDetails {
-									lifetime: OrderLifetime::Inactive,
-									validity: order.validity,
-									details: details_copy,
-								},
-							);
-						},
-						Err(err) => {
-							Self::deposit_event(Event::<T>::MintingLimitOrderFailed {
-								lp: details_copy.lp,
-								error: err,
-							});
-						},
-					}
-				},
-				OrderLifetime::Inactive => {
-					let details_copy = order.clone().details;
-					match Self::collect_and_burn_limit_order_inner(
-						order.details.lp,
-						order.details.unstable_asset,
-						order.details.order,
-						order.details.price_as_tick,
-						order.details.amount,
-					) {
-						Err(err) => {
-							Self::deposit_event(Event::<T>::BurningLimitOrderFailed {
-								lp: details_copy.lp,
-								error: err,
-							});
-						},
-						_ => (),
-					}
-				},
+		if let Some(orders) = OrderQueue::<T>::take(current_block) {
+			for order in orders.into_iter() {
+				match order.lifetime {
+					OrderLifetime::Active => {
+						let details_copy = order.clone().details;
+						match Self::collect_and_mint_limit_order_inner(
+							order.details.lp,
+							order.details.unstable_asset,
+							order.details.order,
+							order.details.price_as_tick,
+							order.details.amount,
+						) {
+							Ok(_) => {
+								Self::add_to_order_queue(
+									order.validity.is_valid_until(),
+									OrderDetails {
+										lifetime: OrderLifetime::Inactive,
+										validity: order.validity,
+										details: details_copy,
+									},
+								);
+							},
+							Err(err) => {
+								Self::deposit_event(Event::<T>::MintingLimitOrderFailed {
+									lp: details_copy.lp,
+									error: err,
+								});
+							},
+						}
+					},
+					OrderLifetime::Inactive => {
+						let details_copy = order.clone().details;
+						match Self::collect_and_burn_limit_order_inner(
+							order.details.lp,
+							order.details.unstable_asset,
+							order.details.order,
+							order.details.price_as_tick,
+							order.details.amount,
+						) {
+							Err(err) => {
+								Self::deposit_event(Event::<T>::BurningLimitOrderFailed {
+									lp: details_copy.lp,
+									error: err,
+								});
+							},
+							_ => (),
+						}
+					},
+				}
 			}
 		}
 		Weight::default()
-	}
-
-	pub fn collect_and_burn_range_order_inner(
-		lp: T::AccountId,
-		unstable_asset: any::Asset,
-		price_range_in_ticks: core::ops::Range<Tick>,
-		liquidity: Liquidity,
-	) -> DispatchResult {
-		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-			let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
-				.range_orders
-				.collect_and_burn(
-					&lp,
-					price_range_in_ticks.start,
-					price_range_in_ticks.end,
-					liquidity,
-				)
-				.map_err(|e| match e {
-					range_orders::PositionError::InvalidTickRange => Error::<T>::InvalidTickRange,
-					range_orders::PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
-					range_orders::PositionError::Other(
-						range_orders::BurnError::PositionLacksLiquidity,
-					) => Error::<T>::PositionLacksLiquidity,
-				})?;
-
-			let assets_credited =
-				Self::try_credit_both_assets(&lp, unstable_asset, assets_withdrawn)?;
-			let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
-
-			Self::deposit_event(Event::<T>::RangeOrderBurned {
-				lp,
-				unstable_asset,
-				price_range_in_ticks,
-				liquidity,
-				assets_credited,
-				collected_fees,
-			});
-
-			Ok(())
-		})
 	}
 
 	pub fn collect_and_burn_limit_order_inner(
@@ -811,94 +893,6 @@ impl<T: Config> Pallet<T> {
 			});
 
 			Ok(())
-		})
-	}
-
-	pub fn collect_and_mint_range_order_inner(
-		lp: T::AccountId,
-		unstable_asset: any::Asset,
-		price_range_in_ticks: core::ops::Range<Tick>,
-		order_size: RangeOrderSize,
-	) -> Result<u128, DispatchError> {
-		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-			let liquidity = match order_size {
-				RangeOrderSize::Liquidity(liquidity) => liquidity,
-				RangeOrderSize::AssetAmounts { desired, minimum } => {
-					ensure!(
-						desired[Side::Zero] >= minimum[Side::Zero] &&
-							desired[Side::One] >= minimum[Side::One],
-						Error::<T>::DesiredBelowMinimumAmount
-					);
-
-					let liquidity = pool_state
-						.range_orders
-						.desired_amounts_to_liquidity(
-							price_range_in_ticks.start,
-							price_range_in_ticks.end,
-							desired.map(|_side, amount| amount.into()),
-						)
-						.map_err(|error| match error {
-							AmountsToLiquidityError::InvalidTickRange =>
-								Error::<T>::InvalidTickRange,
-						})?;
-
-					let true_amounts = pool_state
-						.range_orders
-						.liquidity_to_amounts::<false>(
-							liquidity,
-							price_range_in_ticks.start,
-							price_range_in_ticks.end,
-						)
-						.expect("Cannot fail because liquidity input was calculated above, and therefore the tick range and liquidity must be valid.")
-						.0;
-
-					let minimum = minimum.map(|_side, amount| amount.into());
-					ensure!(
-						true_amounts[Side::Zero] >= minimum[Side::Zero] &&
-							true_amounts[Side::One] >= minimum[Side::One],
-						Error::<T>::BelowMinimumAmount
-					);
-
-					liquidity
-				},
-			};
-
-			let (assets_debited, range_orders::CollectedFees { fees }) = pool_state
-				.range_orders
-				.collect_and_mint(
-					&lp,
-					price_range_in_ticks.start,
-					price_range_in_ticks.end,
-					liquidity,
-					|required_amounts| {
-						Self::try_debit_both_assets(&lp, unstable_asset, required_amounts)
-					},
-				)
-				.map_err(|e| match e {
-					range_orders::PositionError::InvalidTickRange =>
-						Error::<T>::InvalidTickRange.into(),
-					range_orders::PositionError::NonExistent =>
-						Error::<T>::PositionDoesNotExist.into(),
-					range_orders::PositionError::Other(
-						range_orders::MintError::CallbackFailed(e),
-					) => e,
-					range_orders::PositionError::Other(
-						range_orders::MintError::MaximumGrossLiquidity,
-					) => Error::<T>::MaximumGrossLiquidity.into(),
-				})?;
-
-			let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
-
-			Self::deposit_event(Event::<T>::RangeOrderMinted {
-				lp,
-				unstable_asset,
-				price_range_in_ticks,
-				liquidity,
-				assets_debited,
-				collected_fees,
-			});
-
-			Ok(liquidity)
 		})
 	}
 
