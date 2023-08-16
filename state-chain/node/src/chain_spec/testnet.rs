@@ -10,6 +10,7 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Testnet";
 pub const CHAIN_TYPE: ChainType = ChainType::Development;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Development;
+pub const PROTOCOL_ID: &str = "flip-test";
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
