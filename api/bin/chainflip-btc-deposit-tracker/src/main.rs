@@ -187,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
 			arguments
 				.parse::<Vec<String>>()
 				.map(|addresses| lookup_transactions(cache.lock().unwrap().clone(), addresses))
-				.map_err(|err| Error::Call(err))
+				.map_err(Error::Call)
 		}
 	})?;
 	let addr = server.local_addr()?;
