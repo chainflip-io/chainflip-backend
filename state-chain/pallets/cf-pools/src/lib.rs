@@ -839,20 +839,17 @@ impl<T: Config> Pallet<T> {
 					},
 					OrderLifetime::Inactive => {
 						let details_copy = order.clone().details;
-						match Self::collect_and_burn_limit_order_inner(
+						if let Err(err) = Self::collect_and_burn_limit_order_inner(
 							order.details.lp,
 							order.details.unstable_asset,
 							order.details.order,
 							order.details.price_as_tick,
 							order.details.amount,
 						) {
-							Err(err) => {
-								Self::deposit_event(Event::<T>::BurningLimitOrderFailed {
-									lp: details_copy.lp,
-									error: err,
-								});
-							},
-							_ => (),
+							Self::deposit_event(Event::<T>::BurningLimitOrderFailed {
+								lp: details_copy.lp,
+								error: err,
+							});
 						}
 					},
 				}

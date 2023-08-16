@@ -2,12 +2,11 @@ use crate::{
 	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
 	RangeOrderSize, STABLE_ASSET,
 };
-use cf_amm::common::{sqrt_price_at_tick, OrderValidity, SideMap, Tick, ValidityWindow};
+use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::assert_events_match;
-use cf_traits::Chainflip;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
-use sp_runtime::{traits::One, Permill};
+use sp_runtime::Permill;
 
 #[test]
 fn can_create_new_trading_pool() {
