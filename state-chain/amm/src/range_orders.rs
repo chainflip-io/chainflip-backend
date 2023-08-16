@@ -516,9 +516,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				&upper_delta,
 			);
 
-			let (amounts_required, current_liquidity_delta) = self
-				.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick)
-				.unwrap();
+			let (amounts_required, current_liquidity_delta) =
+				self.inner_liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
 			let t = try_debit(amounts_required)
 				.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
@@ -576,9 +575,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				&upper_delta,
 			);
 
-			let (amounts_owed, current_liquidity_delta) = self
-				.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick)
-				.unwrap();
+			let (amounts_owed, current_liquidity_delta) =
+				self.inner_liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
 			// Will not underflow as current_liquidity_delta must have previously been added to
 			// current_liquidity for it to need to be substrated now
 			self.current_liquidity -= current_liquidity_delta;
@@ -808,8 +806,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.ok_or(LiquidityToAmountsError::InvalidLiquidityAmount)?;
 		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
 			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
+		Ok(self.inner_liquidity_to_amounts::<ROUND_UP>(liquidity, lower_tick, upper_tick))
+	}
 
-		Ok(if self.current_tick < lower_tick {
+	fn inner_liquidity_to_amounts<const ROUND_UP: bool>(
+		&self,
+		liquidity: Liquidity,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> (SideMap<Amount>, Liquidity) {
+		if self.current_tick < lower_tick {
 			(
 				SideMap::from_array([
 					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
@@ -849,7 +855,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				]),
 				0,
 			)
-		})
+		}
 	}
 
 	/// Returns the maximum possible liquidity given an amount of assets, in a particular range,
