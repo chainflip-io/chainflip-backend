@@ -635,56 +635,69 @@ pub mod pallet {
 			order: Order,
 			price_as_tick: Tick,
 			amount: AssetAmount,
-			order_validity: OrderValidity<T::BlockNumber>,
+			order_validity: Option<OrderValidity<T::BlockNumber>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_limit_order_enabled,
 				Error::<T>::MintingLimitOrderDisabled
 			);
-			let current_block = <frame_system::Pallet<T>>::block_number();
-
-			ensure!(!order_validity.is_expired(current_block), Error::<T>::OrderValidityExpired);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			// If order is already valid we can mint it straight away.
-			if order_validity.is_valid(current_block) {
+			if let Some(order_validity) = order_validity {
+				let current_block = <frame_system::Pallet<T>>::block_number();
+				ensure!(
+					!order_validity.is_expired(current_block),
+					Error::<T>::OrderValidityExpired
+				);
+				// If order is already valid we can mint it straight away.
+				if order_validity.is_valid(current_block) {
+					Self::collect_and_mint_limit_order_inner(
+						lp.clone(),
+						unstable_asset,
+						order,
+						price_as_tick,
+						amount,
+					)?;
+					Self::add_to_order_queue(
+						order_validity.is_valid_until(),
+						OrderDetails {
+							lifetime: OrderLifetime::Inactive,
+							validity: order_validity,
+							details: LimitOrderDetails {
+								lp,
+								unstable_asset,
+								order,
+								price_as_tick,
+								amount,
+							},
+						},
+					);
+					Ok(())
+				// If not pass it to the limit order queue.
+				} else {
+					Self::add_to_order_queue(
+						order_validity.gets_valid_at(),
+						OrderDetails {
+							lifetime: OrderLifetime::Active,
+							validity: order_validity,
+							details: LimitOrderDetails {
+								lp,
+								unstable_asset,
+								order,
+								price_as_tick,
+								amount,
+							},
+						},
+					);
+					Ok(())
+				}
+			} else {
 				Self::collect_and_mint_limit_order_inner(
-					lp.clone(),
+					lp,
 					unstable_asset,
 					order,
 					price_as_tick,
 					amount,
 				)?;
-				Self::add_to_order_queue(
-					order_validity.is_valid_until(),
-					OrderDetails {
-						lifetime: OrderLifetime::Inactive,
-						validity: order_validity,
-						details: LimitOrderDetails {
-							lp,
-							unstable_asset,
-							order,
-							price_as_tick,
-							amount,
-						},
-					},
-				);
-				Ok(())
-			// If not pass it to the limit order queue.
-			} else {
-				Self::add_to_order_queue(
-					order_validity.gets_valid_at(),
-					OrderDetails {
-						lifetime: OrderLifetime::Active,
-						validity: order_validity,
-						details: LimitOrderDetails {
-							lp,
-							unstable_asset,
-							order,
-							price_as_tick,
-							amount,
-						},
-					},
-				);
 				Ok(())
 			}
 		}

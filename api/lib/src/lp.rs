@@ -312,7 +312,7 @@ pub async fn mint_limit_order(
 	order: BuyOrSellOrder,
 	price: Tick,
 	amount: AssetAmount,
-	validity: OrderValidity<u32>,
+	validity: Option<OrderValidity<u32>>,
 ) -> Result<MintLimitOrderReturn> {
 	task_scope(|scope| {
 		async {

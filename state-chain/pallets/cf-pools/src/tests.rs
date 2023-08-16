@@ -64,12 +64,6 @@ fn can_enable_disable_trading_pool() {
 		let unstable_asset = Asset::Eth;
 		let default_sqrt_price = sqrt_price_at_tick(0);
 
-		let order_validity = OrderValidity::<<Test as frame_system::Config>::BlockNumber>::new(
-			<Test as frame_system::Config>::BlockNumber::one(),
-			<Test as frame_system::Config>::BlockNumber::one(),
-			<Test as frame_system::Config>::BlockNumber::one(),
-		);
-
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
@@ -94,7 +88,6 @@ fn can_enable_disable_trading_pool() {
 				unstable_asset,
 				range.clone(),
 				RangeOrderSize::Liquidity(1_000_000),
-				order_validity,
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -114,7 +107,6 @@ fn can_enable_disable_trading_pool() {
 			unstable_asset,
 			range,
 			RangeOrderSize::Liquidity(1_000_000),
-			order_validity,
 		));
 	});
 }
@@ -146,12 +138,6 @@ fn test_buy_back_flip_2() {
 		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
 		const FLIP: Asset = Asset::Flip;
 
-		let order_validity = OrderValidity::<<Test as frame_system::Config>::BlockNumber>::new(
-			<Test as frame_system::Config>::BlockNumber::one(),
-			<Test as frame_system::Config>::BlockNumber::one(),
-			<Test as frame_system::Config>::BlockNumber::one(),
-		);
-
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
@@ -167,7 +153,6 @@ fn test_buy_back_flip_2() {
 				desired: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([900_000, 900_000]),
 			},
-			order_validity,
 		));
 		let liquidity = assert_events_match!(
 			Test,
@@ -194,12 +179,6 @@ fn test_buy_back_flip() {
 		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
 		const FLIP: Asset = Asset::Flip;
 
-		let order_validity = OrderValidity::<<Test as frame_system::Config>::BlockNumber>::new(
-			<Test as frame_system::Config>::BlockNumber::one(),
-			<Test as frame_system::Config>::BlockNumber::one(),
-			<Test as frame_system::Config>::BlockNumber::one(),
-		);
-
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
@@ -212,7 +191,6 @@ fn test_buy_back_flip() {
 			FLIP,
 			POSITION,
 			RangeOrderSize::Liquidity(1_000_000),
-			order_validity,
 		));
 
 		// Swapping should cause the network fee to be collected.

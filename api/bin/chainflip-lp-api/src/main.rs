@@ -139,7 +139,7 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-		validity: OrderValidity<u32>,
+		validity: Option<OrderValidity<u32>>,
 	) -> Result<MintLimitOrderReturn, Error>;
 
 	#[method(name = "burnLimitOrder")]
@@ -290,7 +290,7 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-		validity: OrderValidity<u32>,
+		validity: Option<OrderValidity<u32>>,
 	) -> Result<MintLimitOrderReturn, Error> {
 		Ok(lp::mint_limit_order(
 			&self.state_chain_settings,

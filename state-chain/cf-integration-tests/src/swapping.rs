@@ -89,13 +89,11 @@ fn mint_range_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	let order_validity = OrderValidity::<u32>::new(1, 1, 1);
 	assert_ok!(LiquidityPools::collect_and_mint_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
 		range,
 		RangeOrderSize::Liquidity(liquidity),
-		order_validity,
 	));
 	let new_unstable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
@@ -144,7 +142,7 @@ fn mint_limit_order(
 		order,
 		tick,
 		amount,
-		order_validity,
+		Some(order_validity),
 	));
 	let new_unstable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
