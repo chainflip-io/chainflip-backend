@@ -117,7 +117,7 @@ async fn get_updated_cache(current_cache: Cache) -> anyhow::Result<Cache> {
 			}
 		}
 	} else {
-		println!("New block found: {}", block_hash);
+		log::info!("New block found: {}", block_hash);
 		let mut block_hash_to_query = block_hash.clone();
 		for confirmations in 1..SAFETY_MARGIN {
 			let block = btc_call::<BlockResult>(
