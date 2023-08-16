@@ -26,8 +26,8 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToUse: number) {
     sourceAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToUse]),
     // Very small gas budget since gasPrice in testnet is extremely low (~7wei)
-    // 10 ** 9, // => This causes runtime pannic!!
-    1,
+    10 ** 9, // => This causes runtime panic!!
+    // 1,
   );
 }
 
