@@ -192,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
 	})?;
 	let addr = server.local_addr()?;
 	log::info!("Listening on http://{}", addr);
-	let handle = server.start(module)?;
-	let _ = future::join(handle.stopped(), updater).await;
+	let serverhandle = Box::pin(server.start(module)?.stopped());
+	let _ = future::select(serverhandle, updater).await;
 	Ok(())
 }
