@@ -4,7 +4,7 @@ use cf_utilities::assert_ok;
 use core::convert::Infallible;
 
 use crate::{
-	common::{MAX_SQRT_PRICE, MIN_SQRT_PRICE},
+	common::{sqrt_price_to_price, Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE, PRICE_FRACTIONAL_BITS},
 	range_orders::Liquidity,
 };
 
@@ -193,4 +193,13 @@ fn test_basic_swaps() {
 
 	inner::<common::ZeroToOne>();
 	inner::<common::OneToZero>();
+}
+
+#[test]
+fn test_sqrt_price_to_price() {
+	assert_eq!(
+		sqrt_price_to_price(SqrtPriceQ64F96::from(1) << 96),
+		Price::from(1) << PRICE_FRACTIONAL_BITS
+	);
+	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
 }

@@ -13,25 +13,12 @@ use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price, Amount,
-	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
-	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
+	tick_at_sqrt_price, Amount, OneToZero, Price, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
+	ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
-
-type Price = U256;
-const PRICE_FRACTIONAL_BITS: u32 = 128;
-
-fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
-	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
-
-	mul_div_floor(
-		sqrt_price,
-		sqrt_price,
-		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
-	)
-}
 
 /// Represents a number exclusively between 0 and 1.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]

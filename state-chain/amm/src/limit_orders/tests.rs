@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use crate::{
-	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_TICK, MIN_TICK},
+	common::{
+		mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE,
+		MIN_TICK,
+	},
 	limit_orders, range_orders,
 	test_utilities::rng_u256_inclusive_bound,
 };
@@ -31,15 +34,6 @@ fn max_liquidity() {
 		checks!(ZeroToOne, price);
 		checks!(OneToZero, price);
 	}
-}
-
-#[test]
-fn test_sqrt_price_to_price() {
-	assert_eq!(
-		sqrt_price_to_price(SqrtPriceQ64F96::from(1) << 96),
-		Price::from(1) << PRICE_FRACTIONAL_BITS
-	);
-	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
 }
 
 #[test]

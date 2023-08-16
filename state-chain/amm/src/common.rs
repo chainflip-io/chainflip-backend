@@ -148,6 +148,19 @@ impl SwapDirection for OneToZero {
 	}
 }
 
+pub type Price = U256;
+pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+
+pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
+	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
+
+	mul_div_floor(
+		sqrt_price,
+		sqrt_price,
+		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
+	)
+}
+
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of
 /// 2**-128
 pub const MIN_TICK: Tick = -887272;
