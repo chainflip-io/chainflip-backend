@@ -4,9 +4,10 @@ pub mod test_utilities;
 mod tests;
 
 use codec::{Decode, Encode};
-use common::{Amount, SqrtPriceQ64F96};
+use common::{sqrt_price_to_price, Amount, Price, SqrtPriceQ64F96};
 use scale_info::TypeInfo;
 
+#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
 pub mod common;
@@ -25,11 +26,11 @@ pub struct PoolState<LiquidityProvider> {
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
-	pub fn current_sqrt_price<
+	pub fn current_price<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(
 		&mut self,
-	) -> Option<SqrtPriceQ64F96> {
+	) -> Option<Price> {
 		match (
 			self.limit_orders.current_sqrt_price::<SD>(),
 			self.range_orders.current_sqrt_price::<SD>(),
@@ -44,6 +45,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			(None, Some(range_order_sqrt_price)) => Some(range_order_sqrt_price),
 			(None, None) => None,
 		}
+		.map(sqrt_price_to_price)
 	}
 
 	pub fn swap<

@@ -511,9 +511,9 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
 
 		// Get current pool's liquidity
-		let eth_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
 			.expect("Eth pool should be set up with liquidity.");
-		let btc_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		let btc_price = LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
 			.expect("Btc pool should be set up with liquidity.");
 
 		let witness_swap_ingress =
@@ -572,26 +572,14 @@ fn failed_swaps_are_rolled_back() {
 		);
 
 		// Repeatedly processing Failed swaps should not impact pool liquidity
-		assert_eq!(
-			Some(eth_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
-		);
-		assert_eq!(
-			Some(btc_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
-		);
+		assert_eq!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
+		assert_eq!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
 		Swapping::on_finalize(2);
-		assert_eq!(
-			Some(eth_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
-		);
-		assert_eq!(
-			Some(btc_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
-		);
+		assert_eq!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
+		assert_eq!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
 
 		// All swaps can continue once the problematic pool is fixed
 		setup_pool_and_accounts(vec![Asset::Flip]);
@@ -599,14 +587,8 @@ fn failed_swaps_are_rolled_back() {
 
 		Swapping::on_finalize(3);
 
-		assert_ne!(
-			Some(eth_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
-		);
-		assert_ne!(
-			Some(btc_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
-		);
+		assert_ne!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
+		assert_ne!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
 
 		assert_events_match!(
 			Runtime,

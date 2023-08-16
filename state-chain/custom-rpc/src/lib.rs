@@ -1,4 +1,4 @@
-use cf_amm::common::SqrtPriceQ64F96;
+use cf_amm::common::Price;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::PolkadotHash,
@@ -190,13 +190,13 @@ pub trait CustomApi {
 	#[method(name = "auction_state")]
 	fn cf_auction_state(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<RpcAuctionState>;
-	#[method(name = "pool_sqrt_price")]
-	fn cf_pool_sqrt_price(
+	#[method(name = "pool_price")]
+	fn cf_pool_price(
 		&self,
 		from: Asset,
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SqrtPriceQ64F96>>;
+	) -> RpcResult<Option<Price>>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
 		&self,
@@ -468,15 +468,15 @@ where
 		})
 	}
 
-	fn cf_pool_sqrt_price(
+	fn cf_pool_price(
 		&self,
 		from: Asset,
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SqrtPriceQ64F96>> {
+	) -> RpcResult<Option<Price>> {
 		self.client
 			.runtime_api()
-			.cf_pool_sqrt_price(self.unwrap_or_best(at), from, to)
+			.cf_pool_price(self.unwrap_or_best(at), from, to)
 			.map_err(to_rpc_error)
 	}
 

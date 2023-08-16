@@ -1,5 +1,5 @@
 use crate::chainflip::Offence;
-use cf_amm::common::SqrtPriceQ64F96;
+use cf_amm::common::Price;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::PolkadotHash,
@@ -108,7 +108,7 @@ decl_runtime_apis!(
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
-		fn cf_pool_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96>;
+		fn cf_pool_price(from: Asset, to: Asset) -> Option<Price>;
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
 		fn cf_environment() -> Environment;

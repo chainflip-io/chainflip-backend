@@ -14,7 +14,7 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_amm::common::SqrtPriceQ64F96;
+use cf_amm::common::Price;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
@@ -989,11 +989,11 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_pool_sqrt_price(
+		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<SqrtPriceQ64F96> {
-			LiquidityPools::current_sqrt_price(from, to)
+		) -> Option<Price> {
+			LiquidityPools::current_price(from, to)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
