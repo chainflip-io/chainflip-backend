@@ -6,8 +6,8 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSellOrder, LpApi, MintLimitOrderReturn,
-		MintRangeOrderReturn, Tick,
+		BurnLimitOrderReturn, BurnRangeOrderReturn, LpApi, MintLimitOrderReturn,
+		MintRangeOrderReturn, Order, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -141,7 +141,7 @@ pub trait Rpc {
 	async fn mint_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		order: Order,
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<MintLimitOrderReturn, Error>;
@@ -150,7 +150,7 @@ pub trait Rpc {
 	async fn burn_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		order: Order,
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<BurnLimitOrderReturn, Error>;
@@ -291,7 +291,7 @@ impl RpcServer for RpcServerImpl {
 	async fn mint_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		order: Order,
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<MintLimitOrderReturn, Error> {
@@ -307,7 +307,7 @@ impl RpcServer for RpcServerImpl {
 	async fn burn_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		order: Order,
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<BurnLimitOrderReturn, Error> {

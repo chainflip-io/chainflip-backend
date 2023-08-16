@@ -10,6 +10,24 @@ pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+)]
+pub enum Order {
+	Buy,
+	Sell,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
 	Zero,
@@ -126,6 +144,10 @@ pub trait SwapDirection {
 		sqrt_price: SqrtPriceQ64F96,
 		sqrt_price_other: SqrtPriceQ64F96,
 	) -> bool;
+
+	/// Returns the equivalent saturated amount in the output asset to a given amount of the input
+	/// asset at a specific tick, will return None iff the tick is invalid
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for ZeroToOne {
 	const INPUT_SIDE: Side = Side::Zero;
@@ -136,6 +158,19 @@ impl SwapDirection for ZeroToOne {
 	) -> bool {
 		sqrt_price < sqrt_price_other
 	}
+
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
+		if is_tick_valid(tick) {
+			Some(
+				(U256::full_mul(amount, sqrt_price_to_price(sqrt_price_at_tick(tick))) /
+					(U256::one() << PRICE_FRACTIONAL_BITS))
+					.try_into()
+					.unwrap_or(U256::MAX),
+			)
+		} else {
+			None
+		}
+	}
 }
 impl SwapDirection for OneToZero {
 	const INPUT_SIDE: Side = Side::One;
@@ -145,6 +180,19 @@ impl SwapDirection for OneToZero {
 		sqrt_price_other: SqrtPriceQ64F96,
 	) -> bool {
 		sqrt_price > sqrt_price_other
+	}
+
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
+		if is_tick_valid(tick) {
+			Some(
+				(U256::full_mul(amount, U256::one() << PRICE_FRACTIONAL_BITS) /
+					sqrt_price_to_price(sqrt_price_at_tick(tick)))
+				.try_into()
+				.unwrap_or(U256::MAX),
+			)
+		} else {
+			None
+		}
 	}
 }
 

@@ -1,6 +1,6 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
+	common::{sqrt_price_at_tick, Order, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -16,7 +16,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::{Order, RangeOrderSize};
+use pallet_cf_pools::RangeOrderSize;
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{SideMap, Tick},
+	common::{Order, SideMap, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
@@ -11,7 +11,7 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 pub use core::ops::Range;
-pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, RangeOrderSize};
+pub use pallet_cf_pools::{utilities as pool_utilities, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
@@ -108,14 +108,14 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn mint_range_order(
 		&self,
 		asset: Asset,
-		range: Range<Tick>,
+		tick_range: Range<Tick>,
 		order_size: RangeOrderSize,
 	) -> Result<MintRangeOrderReturn> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 				unstable_asset: asset,
-				price_range_in_ticks: range,
+				tick_range,
 				order_size,
 			})
 			.await
@@ -139,7 +139,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn burn_range_order(
 		&self,
 		asset: Asset,
-		range: Range<Tick>,
+		tick_range: Range<Tick>,
 		amount: AssetAmount,
 	) -> Result<BurnRangeOrderReturn> {
 		// TODO: Re-enable this check after #3082 in implemented
@@ -154,7 +154,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
 				unstable_asset: asset,
-				price_range_in_ticks: range,
+				tick_range,
 				liquidity: amount,
 			})
 			.await
@@ -180,8 +180,8 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn mint_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
-		price: Tick,
+		order: Order,
+		tick: Tick,
 		amount: AssetAmount,
 	) -> Result<MintLimitOrderReturn> {
 		// Submit the mint order
@@ -189,7 +189,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_limit_order {
 				unstable_asset: asset,
 				order,
-				price_as_tick: price,
+				tick,
 				amount,
 			})
 			.await
@@ -217,8 +217,8 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn burn_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
-		price: Tick,
+		order: Order,
+		tick: Tick,
 		amount: AssetAmount,
 	) -> Result<BurnLimitOrderReturn> {
 		// TODO: get limit orders and see if there's enough liquidity to burn
@@ -228,7 +228,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_limit_order {
 				unstable_asset: asset,
 				order,
-				price_as_tick: price,
+				tick,
 				amount,
 			})
 			.await

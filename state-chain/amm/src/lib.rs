@@ -4,7 +4,10 @@ pub mod test_utilities;
 mod tests;
 
 use codec::{Decode, Encode};
-use common::{sqrt_price_to_price, Amount, Price, SqrtPriceQ64F96};
+use common::{
+	sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne,
+};
 use scale_info::TypeInfo;
 
 #[cfg(feature = "std")]
@@ -48,7 +51,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		.map(sqrt_price_to_price)
 	}
 
-	pub fn swap<
+	pub fn swap(&mut self, side: Side, order: Order, amount: Amount) -> (Amount, Amount) {
+		match (side, order) {
+			(Side::Zero, Order::Sell) => self.inner_swap::<ZeroToOne>(amount, None),
+			(Side::One, Order::Sell) => self.inner_swap::<OneToZero>(amount, None),
+			(_, Order::Buy) => unimplemented!(),
+		}
+	}
+
+	fn inner_swap<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(
 		&mut self,
@@ -93,5 +104,114 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 
 		(total_output_amount, amount)
+	}
+
+	pub fn collect_and_mint_limit_order(
+		&mut self,
+		lp: &LiquidityProvider,
+		side: Side,
+		order: Order,
+		tick: Tick,
+		amount: Amount,
+	) -> Result<
+		(limit_orders::Collected, limit_orders::PositionInfo),
+		limit_orders::PositionError<limit_orders::MintError>,
+	> {
+		match (side, order) {
+			(Side::Zero, Order::Sell) | (Side::One, Order::Buy) =>
+				self.inner_collect_and_mint_limit_order::<OneToZero>(lp, tick, side, amount),
+			(Side::Zero, Order::Buy) | (Side::One, Order::Sell) =>
+				self.inner_collect_and_mint_limit_order::<ZeroToOne>(lp, tick, side, amount),
+		}
+	}
+
+	fn inner_collect_and_mint_limit_order<SD: limit_orders::SwapDirection>(
+		&mut self,
+		lp: &LiquidityProvider,
+		tick: Tick,
+		amount_units: Side,
+		amount: Amount,
+	) -> Result<
+		(limit_orders::Collected, limit_orders::PositionInfo),
+		limit_orders::PositionError<limit_orders::MintError>,
+	> {
+		self.limit_orders.collect_and_mint::<SD>(lp, tick, {
+			if amount_units == SD::INPUT_SIDE {
+				SD::input_to_output_amount_floor(amount, tick)
+					.ok_or(limit_orders::PositionError::InvalidTick)?
+			} else {
+				amount
+			}
+		})
+	}
+
+	pub fn collect_and_burn_limit_order(
+		&mut self,
+		lp: &LiquidityProvider,
+		side: Side,
+		order: Order,
+		tick: Tick,
+		amount: Amount,
+	) -> Result<
+		(Amount, limit_orders::Collected, limit_orders::PositionInfo),
+		limit_orders::PositionError<limit_orders::BurnError>,
+	> {
+		match (side, order) {
+			(Side::Zero, Order::Sell) | (Side::One, Order::Buy) =>
+				self.inner_collect_and_burn_limit_order::<OneToZero>(lp, tick, side, amount),
+			(Side::Zero, Order::Buy) | (Side::One, Order::Sell) =>
+				self.inner_collect_and_burn_limit_order::<ZeroToOne>(lp, tick, side, amount),
+		}
+	}
+
+	fn inner_collect_and_burn_limit_order<SD: limit_orders::SwapDirection>(
+		&mut self,
+		lp: &LiquidityProvider,
+		tick: Tick,
+		amount_units: Side,
+		amount: Amount,
+	) -> Result<
+		(Amount, limit_orders::Collected, limit_orders::PositionInfo),
+		limit_orders::PositionError<limit_orders::BurnError>,
+	> {
+		self.limit_orders.collect_and_burn::<SD>(lp, tick, {
+			if amount_units == SD::INPUT_SIDE {
+				SD::input_to_output_amount_floor(amount, tick)
+					.ok_or(limit_orders::PositionError::InvalidTick)?
+			} else {
+				amount
+			}
+		})
+	}
+
+	pub fn collect_and_mint_range_order<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
+		&mut self,
+		lp: &LiquidityProvider,
+		tick_range: core::ops::Range<Tick>,
+		size: range_orders::Size,
+		try_debit: TryDebit,
+	) -> Result<
+		(T, range_orders::Liquidity, range_orders::Collected, range_orders::PositionInfo),
+		range_orders::PositionError<range_orders::MintError<E>>,
+	> {
+		self.range_orders
+			.collect_and_mint(lp, tick_range.start, tick_range.end, size, try_debit)
+	}
+
+	pub fn collect_and_burn_range_order(
+		&mut self,
+		lp: &LiquidityProvider,
+		tick_range: core::ops::Range<Tick>,
+		size: range_orders::Size,
+	) -> Result<
+		(
+			SideMap<Amount>,
+			range_orders::Liquidity,
+			range_orders::Collected,
+			range_orders::PositionInfo,
+		),
+		range_orders::PositionError<range_orders::BurnError>,
+	> {
+		self.range_orders.collect_and_burn(lp, tick_range.start, tick_range.end, size)
 	}
 }

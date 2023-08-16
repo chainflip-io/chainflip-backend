@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{OneToZero, Price, Side, SideMap, ZeroToOne},
+	common::{OneToZero, Order, Price, Side, SideMap, ZeroToOne},
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
@@ -31,7 +31,7 @@ impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limi
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
+		common::{SqrtPriceQ64F96, Tick},
 		limit_orders,
 		range_orders::{self, Liquidity},
 	};
@@ -49,14 +49,6 @@ pub mod pallet {
 	pub struct Pool<LiquidityProvider> {
 		pub enabled: bool,
 		pub pool_state: PoolState<LiquidityProvider>,
-	}
-
-	#[derive(
-		PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Deserialize, Serialize,
-	)]
-	pub enum Order {
-		Buy,
-		Sell,
 	}
 
 	#[derive(
@@ -229,7 +221,7 @@ pub mod pallet {
 		RangeOrderMinted {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			price_range_in_ticks: core::ops::Range<Tick>,
+			tick_range: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 			assets_debited: SideMap<AssetAmount>,
 			collected_fees: SideMap<AssetAmount>,
@@ -237,7 +229,7 @@ pub mod pallet {
 		RangeOrderBurned {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			price_range_in_ticks: core::ops::Range<Tick>,
+			tick_range: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 			assets_credited: SideMap<AssetAmount>,
 			collected_fees: SideMap<AssetAmount>,
@@ -246,7 +238,7 @@ pub mod pallet {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
 			order: Order,
-			price_as_tick: Tick,
+			tick: Tick,
 			assets_debited: AssetAmount,
 			collected_fees: AssetAmount,
 			swapped_liquidity: AssetAmount,
@@ -255,7 +247,7 @@ pub mod pallet {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
 			order: Order,
-			price_as_tick: Tick,
+			tick: Tick,
 			assets_credited: AssetAmount,
 			collected_fees: AssetAmount,
 			swapped_liquidity: AssetAmount,
@@ -411,7 +403,7 @@ pub mod pallet {
 		pub fn collect_and_mint_range_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			price_range_in_ticks: core::ops::Range<Tick>,
+			tick_range: core::ops::Range<Tick>,
 			order_size: RangeOrderSize,
 		) -> DispatchResult {
 			ensure!(
@@ -428,11 +420,9 @@ pub mod pallet {
 					range_orders::Collected { fees },
 					_position_info,
 				) = pool_state
-					.range_orders
-					.collect_and_mint(
+					.collect_and_mint_range_order(
 						&lp,
-						price_range_in_ticks.start,
-						price_range_in_ticks.end,
+						tick_range.clone(),
 						match order_size {
 							RangeOrderSize::Liquidity(liquidity) =>
 								range_orders::Size::Liquidity { liquidity },
@@ -467,7 +457,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::RangeOrderMinted {
 					lp,
 					unstable_asset,
-					price_range_in_ticks,
+					tick_range,
 					liquidity: minted_liquidity,
 					assets_debited,
 					collected_fees,
@@ -497,7 +487,7 @@ pub mod pallet {
 		pub fn collect_and_burn_range_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			price_range_in_ticks: core::ops::Range<Tick>,
+			tick_range: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 		) -> DispatchResult {
 			ensure!(
@@ -508,11 +498,9 @@ pub mod pallet {
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 				let (assets_withdrawn, burnt_liquidity, range_orders::Collected { fees }, _) =
 					pool_state
-						.range_orders
-						.collect_and_burn(
+						.collect_and_burn_range_order(
 							&lp,
-							price_range_in_ticks.start,
-							price_range_in_ticks.end,
+							tick_range.clone(),
 							range_orders::Size::Liquidity { liquidity },
 						)
 						.map_err(|e| match e {
@@ -533,7 +521,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::RangeOrderBurned {
 					lp,
 					unstable_asset,
-					price_range_in_ticks,
+					tick_range,
 					liquidity: burnt_liquidity,
 					assets_credited,
 					collected_fees,
@@ -566,7 +554,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
 			order: Order,
-			price_as_tick: Tick,
+			tick: Tick,
 			amount: AssetAmount,
 		) -> DispatchResult {
 			ensure!(
@@ -579,12 +567,8 @@ pub mod pallet {
 
 				Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
-				let (limit_orders::Collected { fees, swapped_liquidity }, _) =
-					(match side {
-						Side::Zero =>
-							cf_amm::limit_orders::PoolState::collect_and_mint::<OneToZero>,
-						Side::One => cf_amm::limit_orders::PoolState::collect_and_mint::<ZeroToOne>,
-					})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
+				let (limit_orders::Collected { fees, swapped_liquidity }, _) = pool_state
+					.collect_and_mint_limit_order(&lp, side, Order::Sell, tick, amount.into())
 					.map_err(|e| match e {
 						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
 						limit_orders::PositionError::NonExistent =>
@@ -606,7 +590,7 @@ pub mod pallet {
 					lp,
 					unstable_asset,
 					order,
-					price_as_tick,
+					tick,
 					assets_debited: amount,
 					collected_fees,
 					swapped_liquidity,
@@ -638,7 +622,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
 			order: Order,
-			price_as_tick: Tick,
+			tick: Tick,
 			amount: AssetAmount,
 		) -> DispatchResult {
 			ensure!(
@@ -650,17 +634,14 @@ pub mod pallet {
 				let side = utilities::order_to_side(order);
 
 				let (assets_credited, limit_orders::Collected { fees, swapped_liquidity }, _) =
-					(match side {
-						Side::Zero =>
-							cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
-						Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
-					})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
-					.map_err(|e| match e {
-						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-						limit_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist,
-						limit_orders::PositionError::Other(e) => match e {},
-					})?;
+					pool_state
+						.collect_and_burn_limit_order(&lp, side, Order::Sell, tick, amount.into())
+						.map_err(|e| match e {
+							limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
+							limit_orders::PositionError::NonExistent =>
+								Error::<T>::PositionDoesNotExist,
+							limit_orders::PositionError::Other(e) => match e {},
+						})?;
 
 				let collected_fees =
 					Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
@@ -673,7 +654,7 @@ pub mod pallet {
 					lp,
 					unstable_asset,
 					order,
-					price_as_tick,
+					tick,
 					assets_credited,
 					collected_fees,
 					swapped_liquidity,
@@ -708,7 +689,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			let (from, to, output_amount) = match leg {
 				SwapLeg::FromStable => (STABLE_ASSET, unstable_asset, {
 					let (output_amount, remaining_amount) =
-						pool_state.swap::<cf_amm::common::OneToZero>(input_amount.into(), None);
+						pool_state.swap(Side::One, Order::Sell, input_amount.into());
 					remaining_amount
 						.is_zero()
 						.then_some(())
@@ -717,7 +698,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 				}),
 				SwapLeg::ToStable => (unstable_asset, STABLE_ASSET, {
 					let (output_amount, remaining_amount) =
-						pool_state.swap::<cf_amm::common::ZeroToOne>(input_amount.into(), None);
+						pool_state.swap(Side::Zero, Order::Sell, input_amount.into());
 					remaining_amount
 						.is_zero()
 						.then_some(())
