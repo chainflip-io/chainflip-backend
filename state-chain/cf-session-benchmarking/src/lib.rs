@@ -2,11 +2,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, codec::Decode};
+use frame_support::{assert_ok, codec::Decode, sp_runtime::traits::Convert};
 use frame_system::RawOrigin;
 use pallet_session::*;
 use rand::{RngCore, SeedableRng};
-use sp_runtime::traits::Convert;
 use sp_std::{prelude::*, vec};
 
 pub struct Pallet<T: Config>(pallet_session::Pallet<T>);

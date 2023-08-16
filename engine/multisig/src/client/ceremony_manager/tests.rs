@@ -222,7 +222,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 	// Send a signing request with the modified participants
 	let mut result_receiver = run_on_request_to_sign(
 		&mut ceremony_manager,
-		BTreeSet::from_iter(participants.into_iter()),
+		BTreeSet::from_iter(participants),
 		INITIAL_LATEST_CEREMONY_ID + 1,
 	)
 	.await;

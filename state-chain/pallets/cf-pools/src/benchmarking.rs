@@ -8,10 +8,10 @@ use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,
+	sp_runtime::traits::One,
 	traits::{EnsureOrigin, OnNewAccount},
 };
-use frame_system::RawOrigin;
-use sp_runtime::traits::One;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
 fn new_lp_account<T: Chainflip>() -> T::AccountId {
 	let caller: T::AccountId = whitelisted_caller();
@@ -23,23 +23,23 @@ fn new_lp_account<T: Chainflip>() -> T::AccountId {
 benchmarks! {
 	update_buy_interval {
 		let call = Call::<T>::update_buy_interval{
-			new_buy_interval: T::BlockNumber::one(),
+			new_buy_interval: BlockNumberFor::<T>::one(),
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert_eq!(FlipBuyInterval::<T>::get(), T::BlockNumber::one());
+		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
 	}
 
 	update_pool_enabled {
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, sqrt_price_at_tick(0));
 		let call =  Call::<T>::update_pool_enabled{
 			unstable_asset: Asset::Eth,
 			enabled: false,
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert!(!Pools::<T>::get(Asset::Eth).unwrap().enabled);
 	}
@@ -51,14 +51,14 @@ benchmarks! {
 			initial_sqrt_price: sqrt_price_at_tick(0),
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert!(Pools::<T>::get(Asset::Eth).is_some());
 	}
 
 	collect_and_mint_range_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -82,7 +82,7 @@ benchmarks! {
 
 	collect_and_burn_range_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -104,7 +104,7 @@ benchmarks! {
 
 	collect_and_mint_limit_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -120,7 +120,7 @@ benchmarks! {
 
 	collect_and_burn_limit_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,

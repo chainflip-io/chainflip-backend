@@ -1,18 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
-use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
-pub use pallet::*;
-use sp_runtime::DispatchResult;
-
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi,
 };
-use sp_runtime::{traits::BlockNumberProvider, Saturating};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::BlockNumberProvider, DispatchResult, Saturating},
+};
+use frame_system::pallet_prelude::*;
+pub use pallet::*;
 use sp_std::vec::Vec;
 
 mod benchmarking;
@@ -45,7 +45,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
-			BlockNumber = <Self as frame_system::Config>::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// API for handling asset egress.
@@ -114,7 +114,7 @@ pub mod pallet {
 		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
 			deposit_address: EncodedAddress,
-			expiry_block: T::BlockNumber,
+			expiry_block: BlockNumberFor<T>,
 		},
 		LiquidityDepositAddressExpired {
 			address: EncodedAddress,
@@ -126,7 +126,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 		},
 		LpTtlSet {
-			ttl: T::BlockNumber,
+			ttl: BlockNumberFor<T>,
 		},
 		EmergencyWithdrawalAddressRegistered {
 			account_id: T::AccountId,
@@ -137,20 +137,19 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub lp_ttl: T::BlockNumber,
+		pub lp_ttl: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			LpTTL::<T>::put(self.lp_ttl);
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { lp_ttl: T::BlockNumber::from(1200u32) }
+			Self { lp_ttl: BlockNumberFor::<T>::from(1200u32) }
 		}
 	}
 
@@ -169,7 +168,7 @@ pub mod pallet {
 	pub(super) type LiquidityChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<(ChannelId, cf_chains::ForeignChainAddress)>,
 		ValueQuery,
 	>;
@@ -187,12 +186,13 @@ pub mod pallet {
 
 	/// The TTL for liquidity channels.
 	#[pallet::storage]
-	pub type LpTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type LpTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
 		/// Generates a new deposit address for the user to posit their assets.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_liquidity_deposit_address())]
 		pub fn request_liquidity_deposit_address(
 			origin: OriginFor<T>,
@@ -236,6 +236,7 @@ pub mod pallet {
 
 		/// For when the user wants to withdraw their free balances out of the chain.
 		/// Requires a valid foreign chain address.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw_asset())]
 		pub fn withdraw_asset(
 			origin: OriginFor<T>,
@@ -283,6 +284,7 @@ pub mod pallet {
 
 		/// Register the account as a Liquidity Provider.
 		/// Account roles are immutable once registered.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::register_lp_account())]
 		pub fn register_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
@@ -299,8 +301,9 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::LpTtlSet)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
-		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			LpTTL::<T>::set(ttl);
 
@@ -314,6 +317,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On Success](Event::EmergencyWithdrawalAddressRegistered)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::register_emergency_withdrawal_address())]
 		pub fn register_emergency_withdrawal_address(
 			origin: OriginFor<T>,

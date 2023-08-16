@@ -248,7 +248,7 @@ mod tests {
 		// Expect parties 2 and 4 to be reported
 		check_broadcast_verification(
 			all_messages,
-			Err((vec![2, 4].iter().copied().collect(), BroadcastFailureReason::Inconsistency)),
+			Err(([2, 4].iter().copied().collect(), BroadcastFailureReason::Inconsistency)),
 		);
 	}
 
@@ -267,7 +267,7 @@ mod tests {
 		// Expect party 2 to be reported
 		check_broadcast_verification(
 			all_messages,
-			Err((vec![2].iter().copied().collect(), BroadcastFailureReason::InsufficientMessages)),
+			Err(([2].iter().copied().collect(), BroadcastFailureReason::InsufficientMessages)),
 		);
 	}
 

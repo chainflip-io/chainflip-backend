@@ -58,7 +58,7 @@ where
 					{
 						if let Ok(header) = header {
 							let (Some(index), Some(hash)) = (header.number, header.hash) else {
-								continue;
+								continue
 							};
 
 							return Some((

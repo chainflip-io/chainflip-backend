@@ -38,7 +38,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::storage_version(PALLET_VERSION)]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	use frame_system::pallet_prelude::*;
@@ -178,12 +177,12 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
@@ -201,6 +200,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientLiquidity)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
 		pub fn submit_proposal(
 			origin: OriginFor<T>,
@@ -230,6 +230,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [ProposalDoesntExist](Error::ProposalDoesntExist)
 		/// - [AlreadyBacked](Error::AlreadyBacked)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
@@ -261,7 +262,7 @@ pub mod pallet {
 					match proposal.clone() {
 						Proposal::SetGovernanceKey(chain, key) => {
 							GovKeyUpdateAwaitingEnactment::<T>::put::<(
-								<T as frame_system::Config>::BlockNumber,
+								BlockNumberFor<T>,
 								(cf_chains::ForeignChain, Vec<u8>),
 							)>((enactment_block, (chain, key)));
 						},

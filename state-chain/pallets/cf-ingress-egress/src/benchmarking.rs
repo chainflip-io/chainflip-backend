@@ -7,10 +7,11 @@ use cf_chains::{
 	DepositChannel,
 };
 use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 benchmarks_instance_pallet! {
 	disable_asset_egress {
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 	} : { let _ = Pallet::<T, I>::enable_or_disable_egress(origin, destination_asset, true); }
 	verify {
@@ -29,7 +30,7 @@ benchmarks_instance_pallet! {
 				1,
 				source_asset,
 			).unwrap(),
-			expires_at: T::BlockNumber::from(1_000u32),
+			expires_at: BlockNumberFor::<T>::from(1_000u32),
 		});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0),
@@ -39,7 +40,7 @@ benchmarks_instance_pallet! {
 	}
 
 	set_minimum_deposit {
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount =  BenchmarkValue::benchmark_value();
 	} : { let _ = Pallet::<T, I>::set_minimum_deposit(origin, destination_asset, amount); }
@@ -52,7 +53,7 @@ benchmarks_instance_pallet! {
 	finalise_ingress {
 		let a in 1 .. 100;
 		let mut addresses = vec![];
-		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		for i in 1..a {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
@@ -63,7 +64,7 @@ benchmarks_instance_pallet! {
 					1,
 					source_asset,
 				).unwrap(),
-				expires_at: T::BlockNumber::from(1_000u32),
+				expires_at: BlockNumberFor::<T>::from(1_000u32),
 			};
 			channel.deposit_channel.state.on_fetch_scheduled();
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
@@ -72,7 +73,7 @@ benchmarks_instance_pallet! {
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 
 	vault_transfer_failed {
-		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		let asset: TargetChainAsset<T, I> = BenchmarkValue::benchmark_value();
 		let amount: TargetChainAmount<T, I> = BenchmarkValue::benchmark_value();
 		let destination_address: TargetChainAccount<T, I> = BenchmarkValue::benchmark_value();

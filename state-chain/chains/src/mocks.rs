@@ -115,9 +115,19 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 }
 
 #[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct MockTrackedData {
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
@@ -154,8 +164,9 @@ pub struct MockThresholdSignature<K, P> {
 	pub signed_payload: P,
 }
 
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
+	serde::Serialize,
+	serde::Deserialize,
 	Copy,
 	Clone,
 	Debug,

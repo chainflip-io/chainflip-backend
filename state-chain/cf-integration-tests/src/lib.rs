@@ -19,12 +19,11 @@ mod swapping;
 use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 use cf_traits::EpochInfo;
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{assert_noop, assert_ok, sp_runtime::AccountId32, traits::OnInitialize};
 use pallet_cf_funding::EthTransactionHash;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
-use sp_finality_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,
 	Reputation, Runtime, RuntimeOrigin, System, Validator,
@@ -56,7 +55,6 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	Backup,

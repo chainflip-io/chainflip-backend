@@ -7,31 +7,29 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
+use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-#[cfg(feature = "std")]
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 // TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
 	BackupOrPassive(BackupOrPassive),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiAccountInfo {
 	pub balance: u128,
 	pub bond: u128,
@@ -43,7 +41,7 @@ pub struct RuntimeApiAccountInfo {
 	pub state: ChainflipAccountStateWithPassive,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
@@ -59,13 +57,13 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub bound_redeem_address: Option<EthereumAddress>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiPenalty {
 	pub reputation_points: i32,
 	pub suspension_duration_blocks: u32,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
 	pub blocks_per_epoch: u32,
 	pub current_epoch_started_at: u32,
@@ -74,7 +72,7 @@ pub struct AuctionState {
 	pub auction_size_range: (u32, u32),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct Environment {
 	pub bitcoin_network: BitcoinNetwork,
 	pub ethereum_chain_id: EthereumChainId,

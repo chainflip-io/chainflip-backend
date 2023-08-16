@@ -343,7 +343,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(
 				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
 					.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap())
 			);
 		});
 }
@@ -405,7 +405,7 @@ fn fail_path_due_to_report_signature_failed() {
 			assert_eq!(
 				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
 					.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap())
 			);
 
 			System::set_block_number(timeout_block_for_next_retry);

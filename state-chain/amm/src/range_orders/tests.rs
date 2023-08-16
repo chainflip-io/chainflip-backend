@@ -110,11 +110,11 @@ fn test_amounts_to_liquidity() {
 		let low_range = MIN_TICK..tick;
 
 		if !upper_range.is_empty() {
-			(tick, rng.gen_range(upper_range.start, upper_range.end))
+			(tick, rng.gen_range(upper_range))
 		} else {
 			assert!(!low_range.is_empty());
 
-			(rng.gen_range(low_range.start, low_range.end), tick)
+			(rng.gen_range(low_range), tick)
 		}
 	}
 
@@ -126,7 +126,7 @@ fn test_amounts_to_liquidity() {
 				// Iterations have been decreased to ensure tests run in a reasonable time, but
 				// this has been run 100 billion times
 				for _i in 0..1000000 {
-					let tick = rng.gen_range(MIN_TICK, MAX_TICK);
+					let tick = rng.gen_range(MIN_TICK..MAX_TICK);
 
 					let pool_state = PoolState::new(
 						0,

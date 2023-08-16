@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -26,9 +26,12 @@ use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
 	EgressApi, GetBlockHeight, SwapDepositHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{DispatchError, TransactionOutcome},
+};
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::TransactionOutcome;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
@@ -90,14 +93,11 @@ pub mod pallet {
 	use cf_chains::ExecutexSwapAndCall;
 	use cf_primitives::BroadcastId;
 	use core::marker::PhantomData;
-	use sp_std::vec::Vec;
-
 	use frame_support::{
-		pallet_prelude::{OptionQuery, ValueQuery},
 		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
 	};
-	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+	use sp_std::vec::Vec;
 
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
@@ -127,7 +127,7 @@ pub mod pallet {
 		/// Chainflip-native block number.
 		// TODO: We should consider changing this to also be an external block number and expire
 		// based on external block numbers. See PRO-689.
-		pub expires_at: T::BlockNumber,
+		pub expires_at: BlockNumberFor<T>,
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
@@ -151,7 +151,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
-	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -355,6 +354,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Callback for when a signature is accepted by the chain.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
 		pub fn finalise_ingress(
 			origin: OriginFor<T>,
@@ -384,6 +384,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::AssetEgressStatusChanged)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
 		pub fn enable_or_disable_egress(
 			origin: OriginFor<T>,
@@ -416,6 +417,7 @@ pub mod pallet {
 		/// Called when funds have been deposited into the given address.
 		///
 		/// Requires `EnsureWitnessed` origin.
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
 		pub fn process_deposits(
 			origin: OriginFor<T>,
@@ -444,6 +446,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [on_success](Event::MinimumDepositSet)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
 		pub fn set_minimum_deposit(
 			origin: OriginFor<T>,
@@ -465,6 +468,7 @@ pub mod pallet {
 		///
 		/// - [on_success](Event::VaultTransferFailed)
 		#[pallet::weight(T::WeightInfo::vault_transfer_failed())]
+		#[pallet::call_index(4)]
 		pub fn vault_transfer_failed(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
@@ -498,7 +502,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
-					.drain_filter(|request| {
+					.extract_if(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch {
@@ -550,7 +554,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_fetch_id,
 				} => {
 					fetch_params.push(FetchAssetParams {
-						deposit_fetch_id: deposit_fetch_id.expect("Checked in drain_filter"),
+						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
 					});
 					addresses.push(deposit_address.clone());
@@ -601,7 +605,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
-				ccms.drain_filter(|ccm| !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()))
+				ccms.extract_if(|ccm| !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()))
 					.collect()
 			});
 		for ccm in ccms_to_send {
@@ -740,7 +744,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
 		channel_action: ChannelAction<T::AccountId>,
-		expires_at: T::BlockNumber,
+		expires_at: BlockNumberFor<T>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -846,12 +850,12 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		expiry_block: T::BlockNumber,
+		expiry_block: BlockNumberFor<T>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
@@ -870,7 +874,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry_block: T::BlockNumber,
+		expiry_block: BlockNumberFor<T>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,

@@ -6,7 +6,7 @@ use crate::btc::{AggKey, Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
 
 use crate::{ApiCall, ChainCrypto};
 
-use sp_runtime::RuntimeDebug;
+use frame_support::sp_runtime::RuntimeDebug;
 
 /// Represents all the arguments required to build the call to fetch assets for all given channel
 /// ids.

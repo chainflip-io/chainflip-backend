@@ -44,9 +44,7 @@ where
 				tokio_stream::wrappers::ReceiverStream::new(request_receiver);
 
 			loop {
-				let Some(response_sender) = request_receiver.next().await else {
-					break
-				};
+				let Some(response_sender) = request_receiver.next().await else { break };
 
 				let (mut inner_stream, inner_client) = inner_source.stream_and_client().await;
 				let (mut sender, receiver) = spmc::channel(1);
