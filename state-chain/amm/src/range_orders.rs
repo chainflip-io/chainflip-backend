@@ -479,7 +479,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		upper_tick: Tick,
 		size: Size,
 		try_debit: TryDebit,
-	) -> Result<(T, Collected, PositionInfo), PositionError<MintError<E>>> {
+	) -> Result<(T, Liquidity, Collected, PositionInfo), PositionError<MintError<E>>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		let option_position = self.positions.get(&(lp.clone(), lower_tick, upper_tick));
 
@@ -564,7 +564,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			self.liquidity_map.insert(lower_tick, lower_delta);
 			self.liquidity_map.insert(upper_tick, upper_delta);
 
-			Ok((t, collected_fees, position_info))
+			Ok((t, minted_liquidity, collected_fees, position_info))
 		} else {
 			Err(PositionError::NonExistent)
 		}
@@ -586,7 +586,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		size: Size,
-	) -> Result<(SideMap<Amount>, Collected, PositionInfo), PositionError<BurnError>> {
+	) -> Result<(SideMap<Amount>, Liquidity, Collected, PositionInfo), PositionError<BurnError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
@@ -650,7 +650,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
 			// owed in the position, instead it is returned here.
-			Ok((amounts_owed, collected_fees, position_info))
+			Ok((amounts_owed, burnt_liquidity, collected_fees, position_info))
 		} else {
 			Err(PositionError::NonExistent)
 		}

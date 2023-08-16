@@ -65,7 +65,7 @@ fn test_basic_swaps() {
 
 			let liquidity: range_orders::Liquidity = 10000;
 
-			let (minted_amounts, collected_fees, position_info) =
+			let (minted_amounts, minted_liquidity, collected_fees, position_info) =
 				assert_ok!(pool_state.range_orders.collect_and_mint(
 					&LiquidityProvider::from([0; 32]),
 					-100,
@@ -73,6 +73,7 @@ fn test_basic_swaps() {
 					range_orders::Size::Liquidity { liquidity },
 					Result::<_, Infallible>::Ok
 				));
+			assert_eq!(minted_liquidity, liquidity);
 			assert_eq!(collected_fees, Default::default());
 			assert_eq!(position_info, range_orders::PositionInfo::new(liquidity));
 
@@ -101,7 +102,7 @@ fn test_basic_swaps() {
 
 			let range_order_liquidity: Liquidity = 10000;
 
-			let (range_order_minted_amounts, collected_fees, position_info) =
+			let (range_order_minted_amounts, minted_liquidity, collected_fees, position_info) =
 				assert_ok!(pool_state.range_orders.collect_and_mint(
 					&LiquidityProvider::from([0; 32]),
 					-100,
@@ -109,6 +110,7 @@ fn test_basic_swaps() {
 					range_orders::Size::Liquidity { liquidity: range_order_liquidity },
 					Result::<_, Infallible>::Ok
 				));
+			assert_eq!(minted_liquidity, range_order_liquidity);
 			assert_eq!(collected_fees, Default::default());
 			assert_eq!(position_info, range_orders::PositionInfo::new(range_order_liquidity));
 
@@ -149,14 +151,16 @@ fn test_basic_swaps() {
 			};
 
 			let mut mint_range_order = |lower_tick, upper_tick| {
-				let (range_order_minted_amounts, collected_fees, position_info) =
+				let liquidity = 100000;
+				let (range_order_minted_amounts, minted_liquidity, collected_fees, position_info) =
 					assert_ok!(pool_state.range_orders.collect_and_mint(
 						&LiquidityProvider::from([0; 32]),
 						lower_tick,
 						upper_tick,
-						range_orders::Size::Liquidity { liquidity: 100000 },
+						range_orders::Size::Liquidity { liquidity },
 						Result::<_, Infallible>::Ok
 					));
+				assert_eq!(minted_liquidity, liquidity);
 				assert_eq!(collected_fees, Default::default());
 				assert_eq!(position_info, range_orders::PositionInfo::new(100000));
 

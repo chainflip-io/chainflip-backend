@@ -422,7 +422,12 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let (assets_debited, range_orders::Collected { fees }, position_info) = pool_state
+				let (
+					assets_debited,
+					minted_liquidity,
+					range_orders::Collected { fees },
+					_position_info,
+				) = pool_state
 					.range_orders
 					.collect_and_mint(
 						&lp,
@@ -463,7 +468,7 @@ pub mod pallet {
 					lp,
 					unstable_asset,
 					price_range_in_ticks,
-					liquidity: todo!(),
+					liquidity: minted_liquidity,
 					assets_debited,
 					collected_fees,
 				});
@@ -501,24 +506,25 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let (assets_withdrawn, range_orders::Collected { fees }, _) = pool_state
-					.range_orders
-					.collect_and_burn(
-						&lp,
-						price_range_in_ticks.start,
-						price_range_in_ticks.end,
-						range_orders::Size::Liquidity { liquidity },
-					)
-					.map_err(|e| match e {
-						range_orders::PositionError::InvalidTickRange =>
-							Error::<T>::InvalidTickRange,
-						range_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist,
-						range_orders::PositionError::Other(e) => match e {
-							range_orders::BurnError::AssetRatioUnachieveable =>
-								Error::<T>::AssetRatioUnachieveable,
-						},
-					})?;
+				let (assets_withdrawn, burnt_liquidity, range_orders::Collected { fees }, _) =
+					pool_state
+						.range_orders
+						.collect_and_burn(
+							&lp,
+							price_range_in_ticks.start,
+							price_range_in_ticks.end,
+							range_orders::Size::Liquidity { liquidity },
+						)
+						.map_err(|e| match e {
+							range_orders::PositionError::InvalidTickRange =>
+								Error::<T>::InvalidTickRange,
+							range_orders::PositionError::NonExistent =>
+								Error::<T>::PositionDoesNotExist,
+							range_orders::PositionError::Other(e) => match e {
+								range_orders::BurnError::AssetRatioUnachieveable =>
+									Error::<T>::AssetRatioUnachieveable,
+							},
+						})?;
 
 				let assets_credited =
 					Self::try_credit_both_assets(&lp, unstable_asset, assets_withdrawn)?;
@@ -528,7 +534,7 @@ pub mod pallet {
 					lp,
 					unstable_asset,
 					price_range_in_ticks,
-					liquidity,
+					liquidity: burnt_liquidity,
 					assets_credited,
 					collected_fees,
 				});
