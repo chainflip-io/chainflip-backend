@@ -5,12 +5,10 @@
 //! Primitive types to be used across Chainflip's various crates.
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::H160;
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
 };
-use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
@@ -71,7 +69,7 @@ pub struct TxId {
 	pub extrinsic_index: u32,
 }
 
-pub const ETHEREUM_ETH_ADDRESS: H160 = H160([0xEE; 20]);
+// pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = H160([0xEE; 20]);
 
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;

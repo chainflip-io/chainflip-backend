@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use crate::{
-	arb::ArbitrumAddress, btc::ScriptPubkey, dot::PolkadotAccountId,
+	arb::Address as ArbitrumAddress, btc::ScriptPubkey, dot::PolkadotAccountId,
 	eth::Address as EthereumAddress, Chain,
 };
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
@@ -203,6 +203,8 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 ) -> Result<ForeignChainAddress, ()> {
 	match encoded_address {
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes.into())),
+		EncodedAddress::Arb(address_bytes) =>
+			Ok(ForeignChainAddress::Arb(address_bytes.into())),
 		EncodedAddress::Dot(address_bytes) =>
 			Ok(ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(address_bytes))),
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
@@ -212,8 +214,7 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 			)
 			.map_err(|_| ())?,
 		)),
-		EncodedAddress::Arb(address_bytes) =>
-			Ok(ForeignChainAddress::Arb(ArbitrumAddress(address_bytes))),
+		
 	}
 }
 
@@ -243,16 +244,6 @@ impl ToHumanreadableAddress for EthereumAddress {
 	#[cfg(feature = "std")]
 	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
 		*self
-	}
-}
-
-impl ToHumanreadableAddress for ArbitrumAddress {
-	#[cfg(feature = "std")]
-	type Humanreadable = crate::arb::Address;
-
-	#[cfg(feature = "std")]
-	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
-		(*self).into()
 	}
 }
 
