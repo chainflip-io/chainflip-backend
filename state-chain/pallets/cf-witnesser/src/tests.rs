@@ -349,10 +349,7 @@ fn test_safe_mode() {
 		//the call should be stored for dispatching later when safe mode is deactivated.
 		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
-		Witnesser::on_idle(
-			1,
-			Weight::zero().saturating_add(Weight::from_ref_time(1_000_000_000_000)),
-		);
+		Witnesser::on_idle(1, Weight::zero().set_ref_time(1_000_000_000_000u64));
 
 		// the call is still not dispatched and we do nothing in the on_initialize since we are
 		// still in safe mode
@@ -364,15 +361,12 @@ fn test_safe_mode() {
 
 		// the call should now be able to dispatch since we now deactivated the safe mode but wont
 		// because there is not enough idle weight available.
-		Witnesser::on_idle(2, Weight::zero().saturating_add(Weight::from_ref_time(0)));
+		Witnesser::on_idle(2, Weight::zero().set_ref_time(0u64));
 
 		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
 		// The call should now dispatch since we have enough weight now.
-		Witnesser::on_idle(
-			3,
-			Weight::zero().saturating_add(Weight::from_ref_time(1_000_000_000_000)),
-		);
+		Witnesser::on_idle(3, Weight::zero().set_ref_time(1_000_000_000_000u64));
 
 		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
