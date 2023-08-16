@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::common::{sqrt_price_at_tick, OrderValidity, ValidityWindow};
+use cf_amm::common::{sqrt_price_at_tick, OrderValidity};
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};

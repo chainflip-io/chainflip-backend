@@ -1,10 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use crate::range_orders::Liquidity;
 use cf_amm::{
 	common::{OneToZero, OrderValidity, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne},
-	limit_orders,
-	range_orders::{self, AmountsToLiquidityError},
-	PoolState,
+	limit_orders, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -35,12 +32,11 @@ impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limi
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
+		common::{Side, SqrtPriceQ64F96, Tick},
 		limit_orders,
 		range_orders::{self, AmountsToLiquidityError, Liquidity},
 	};
-	use cf_primitives::AccountId;
-	use cf_traits::{liquidity, AccountRoleRegistry, LpBalanceApi};
+	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::{vec, vec::Vec};
 
