@@ -123,32 +123,6 @@ impl QueryApi {
 		.collect()
 	}
 
-	pub async fn get_pools(
-		&self,
-		block_hash: Option<state_chain_runtime::Hash>,
-		asset: Option<Asset>,
-	) -> Result<BTreeMap<Asset, Pool<AccountId32>>, anyhow::Error>
-	where
-		state_chain_runtime::Runtime: pallet_cf_pools::Config,
-	{
-		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
-
-		Ok(if let Some(asset) = asset {
-			self.state_chain_client
-				.storage_map_entry::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(
-					block_hash, &asset,
-				)
-				.await?
-				.map(|pool| BTreeMap::from([(asset, pool)]))
-				.unwrap_or_default()
-		} else {
-			self.state_chain_client
-				.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>, _>(block_hash)
-				.await?
-		})
-	}
-
 	pub async fn get_range_orders(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,

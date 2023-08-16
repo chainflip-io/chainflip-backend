@@ -13,7 +13,7 @@ use chainflip_api::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
-	queries::{Pool, RangeOrderPosition},
+	queries::RangeOrderPosition,
 	settings::StateChain,
 	AccountId32, OperatorApi, StateChainApi,
 };
@@ -166,12 +166,6 @@ pub trait Rpc {
 
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
-
-	#[method(name = "getPools")]
-	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
-
-	#[method(name = "getPool")]
-	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -336,14 +330,6 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Polkadot>(None),
 		)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
-	}
-
-	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error> {
-		Ok(self.api.query_api().get_pools(None, Some(asset)).await?.get(&asset).cloned())
-	}
-
-	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		Ok(self.api.query_api().get_pools(None, None).await?)
 	}
 }
 
