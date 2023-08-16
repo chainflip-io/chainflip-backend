@@ -121,7 +121,6 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		order_size: rpc_types::RangeOrderSize,
-		validity: OrderValidity<u32>,
 	) -> Result<MintRangeOrderReturn, Error>;
 
 	#[method(name = "burnRangeOrder")]
@@ -247,7 +246,6 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		order_size: rpc_types::RangeOrderSize,
-		validity: OrderValidity<u32>,
 	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
 			return Err(anyhow!("Invalid tick range").into())
@@ -258,7 +256,6 @@ impl RpcServer for RpcServerImpl {
 			asset,
 			Range { start, end },
 			order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
-			validity,
 		)
 		.await?)
 	}

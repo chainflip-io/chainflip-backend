@@ -192,7 +192,6 @@ pub async fn mint_range_order(
 	asset: Asset,
 	range: Range<Tick>,
 	order_size: RangeOrderSize,
-	validity: OrderValidity<u32>,
 ) -> Result<MintRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
@@ -212,7 +211,6 @@ pub async fn mint_range_order(
 					unstable_asset: asset,
 					price_range_in_ticks: range,
 					order_size,
-					order_validity: validity,
 				})
 				.await
 				.until_finalized()

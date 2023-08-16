@@ -457,7 +457,6 @@ pub mod pallet {
 			unstable_asset: any::Asset,
 			price_range_in_ticks: core::ops::Range<Tick>,
 			order_size: RangeOrderSize,
-			order_validity: OrderValidity<T::BlockNumber>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_range_order_enabled,

@@ -76,8 +76,7 @@ benchmarks! {
 			RangeOrderSize::AssetAmounts {
 				desired: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([500_000, 500_000]),
-			},
-			OrderValidity::<T::BlockNumber>::new(T::BlockNumber::one(), T::BlockNumber::one(), T::BlockNumber::one())
+			}
 	)
 	verify {}
 
@@ -99,7 +98,6 @@ benchmarks! {
 			Asset::Eth,
 			-100..100,
 			RangeOrderSize::Liquidity(1_000),
-			OrderValidity::<T::BlockNumber>::new(T::BlockNumber::one(), T::BlockNumber::one(), T::BlockNumber::one())
 		));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000)
 	verify {}
