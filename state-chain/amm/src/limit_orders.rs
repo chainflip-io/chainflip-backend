@@ -7,8 +7,6 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
@@ -261,53 +259,25 @@ impl<'a> From<&'a Position> for PositionInfo {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
-	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	amount: Amount,
-	#[cfg_attr(feature = "std", serde(skip))]
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct FixedPool {
-	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	available: Amount,
-	#[cfg_attr(feature = "std", serde(skip))]
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Deserialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
-)]
 pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
-}
-
-#[cfg(feature = "std")]
-impl<L: Serialize + Clone> Serialize for PoolState<L> {
-	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		use serde::ser::SerializeStruct;
-		let mut state = serializer.serialize_struct("PoolState", 4)?;
-		state.serialize_field("fee_hundredth_pips", &self.fee_hundredth_pips)?;
-		state.serialize_field(
-			"positions",
-			&self
-				.positions
-				.clone()
-				.map(|_side, positions| positions.into_iter().collect::<Vec<_>>()),
-		)?;
-		state.end()
-	}
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {

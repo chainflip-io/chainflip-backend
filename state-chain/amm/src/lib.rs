@@ -10,19 +10,11 @@ use common::{
 };
 use scale_info::TypeInfo;
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
 pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(bound = "LiquidityProvider: Clone + Ord + Serialize + serde::de::DeserializeOwned")
-)]
 pub struct PoolState<LiquidityProvider> {
 	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
 	pub range_orders: range_orders::PoolState<LiquidityProvider>,

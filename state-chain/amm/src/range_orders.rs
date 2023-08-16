@@ -25,8 +25,6 @@ use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
 use crate::common::{
@@ -41,10 +39,8 @@ type FeeGrowthQ128F128 = U256;
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct Position {
 	liquidity: Liquidity,
-	#[cfg_attr(feature = "std", serde(skip))]
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
 
@@ -117,22 +113,14 @@ pub struct TickDelta {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
-)]
 pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
-	#[cfg_attr(feature = "std", serde(skip))]
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
-	#[cfg_attr(feature = "std", serde(skip))]
 	liquidity_map: BTreeMap<Tick, TickDelta>,
-	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::map_as_seq"))]
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
