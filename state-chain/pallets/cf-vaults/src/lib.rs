@@ -860,7 +860,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature_callback_fn: impl FnOnce(ThresholdSignatureRequestId) -> <T as Config<I>>::RuntimeCall,
 		status_to_set: VaultRotationStatus<T, I>,
 	) -> ThresholdSignatureRequestId {
-		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
+		let request_id = T::ThresholdSigner::request_verification_signature(
 			T::Chain::agg_key_to_payload(new_agg_key, is_handover),
 			participants,
 			new_agg_key,
