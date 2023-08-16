@@ -110,7 +110,6 @@ impl Position {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
