@@ -1,17 +1,16 @@
 use anyhow::anyhow;
 use futures::future;
-use jsonrpsee::core::__reexports::serde_json::json;
-use jsonrpsee::types::error::ErrorCode;
-use jsonrpsee::types::ErrorObject;
 use jsonrpsee::{server::Server, RpcModule};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::env;
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    env,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::{task, time};
+use tracing::log;
 
 #[derive(Deserialize)]
 struct BestBlockResult {
@@ -57,7 +56,7 @@ struct BlockResult {
     result: Block,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct QueryResult {
     confirmations: u32,
     value: f64,
@@ -71,10 +70,7 @@ async fn btc_call<T: DeserializeOwned>(method: &str, params: &str) -> anyhow::Re
     reqwest::Client::new()
         .post(url)
         .header("Content-Type", "text/plain")
-        .body(format!(
-            r#"{{"jsonrpc":"1.0","id":0,"method":"{}","params":[{}]}}"#,
-            method, params
-        ))
+        .body(format!(r#"{{"jsonrpc":"1.0","id":0,"method":"{}","params":[{}]}}"#, method, params))
         .basic_auth("flip", Some("flip"))
         .send()
         .await?
@@ -98,19 +94,13 @@ async fn get_updated_cache() -> anyhow::Result<HashMap<String, QueryResult>> {
             if let Some(destination) = vout.script_pub_key.address {
                 cache.insert(
                     destination,
-                    QueryResult {
-                        confirmations: 0,
-                        value: vout.value,
-                        tx_hash: tx_hash.clone(),
-                    },
+                    QueryResult { confirmations: 0, value: vout.value, tx_hash: tx_hash.clone() },
                 );
             }
         }
     }
 
-    let mut block_hash = btc_call::<BestBlockResult>("getbestblockhash", "")
-        .await?
-        .result;
+    let mut block_hash = btc_call::<BestBlockResult>("getbestblockhash", "").await?.result;
     for confirmations in 1..SAFETY_MARGIN {
         let block = btc_call::<BlockResult>("getblock", format!("\"{}\", 2", block_hash).as_str())
             .await?
@@ -120,11 +110,7 @@ async fn get_updated_cache() -> anyhow::Result<HashMap<String, QueryResult>> {
                 if let Some(destination) = vout.script_pub_key.address {
                     cache.insert(
                         destination,
-                        QueryResult {
-                            confirmations,
-                            value: vout.value,
-                            tx_hash: tx.txid.clone(),
-                        },
+                        QueryResult { confirmations, value: vout.value, tx_hash: tx.txid.clone() },
                     );
                 }
             }
@@ -136,6 +122,10 @@ async fn get_updated_cache() -> anyhow::Result<HashMap<String, QueryResult>> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init()
+        .expect("setting default subscriber failed");
     let cache: Arc<Mutex<HashMap<String, QueryResult>>> = Default::default();
     let updater = task::spawn({
         let cache = cache.clone();
@@ -145,47 +135,28 @@ async fn main() -> anyhow::Result<()> {
                 match get_updated_cache().await {
                     Ok(updated_cache) => {
                         let mut cache = cache.lock().unwrap();
-                        cache.clear();
-                        for entry in updated_cache {
-                            cache.insert(entry.0, entry.1);
-                        }
-                    }
+                        *cache = updated_cache;
+                    },
                     anyhow::Result::Err(err) => {
-                        println!("Error when querying Bitcoin chain: {}", err);
-                    }
+                        log::error!("Error when querying Bitcoin chain: {}", err);
+                    },
                 }
                 interval.tick().await;
             }
         }
     });
-    let server = Server::builder()
-        .build("0.0.0.0:13337".parse::<SocketAddr>()?)
-        .await?;
+    let server = Server::builder().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
     let mut module = RpcModule::new(());
     module.register_async_method("status", move |arguments, _context| {
         let cache = cache.clone();
         async move {
             arguments
                 .parse::<String>()
-                .map(|address| {
-                    cache
-                        .lock()
-                        .unwrap()
-                        .get(address.as_str())
-                        .map(|x| json!(x))
-                        .unwrap_or(json!("unknown"))
-                })
-                .map_err(|_| {
-                    ErrorObject::owned(
-                        ErrorCode::InvalidParams.code(),
-                        "invalid parameters",
-                        None::<()>,
-                    )
-                })
+                .map(|address| cache.lock().unwrap().get(&address).cloned())
         }
     })?;
     let addr = server.local_addr()?;
-    println!("Listening on http://{}", addr);
+    log::info!("Listening on http://{}", addr);
     let handle = server.start(module);
     let _ = future::join(handle.stopped(), updater).await;
     Ok(())
