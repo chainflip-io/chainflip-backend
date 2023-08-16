@@ -96,7 +96,7 @@ export async function doPerformSwap(
 
   console.log(`${tag} Old balance: ${oldBalance}`);
 
-  const swapScheduledHandle = observeSwapScheduled(sourceAsset, channelId);
+  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, channelId);
 
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
