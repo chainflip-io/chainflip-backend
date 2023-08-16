@@ -16,10 +16,9 @@ pub use ethabi::{
 };
 use ethereum_types::H160;
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
-use sp_runtime::RuntimeDebug;
+use frame_support::sp_runtime::RuntimeDebug;
 use sp_std::str;
 
 // Reference constants for the chain spec
@@ -41,6 +40,7 @@ pub const CHAIN_ID_MAINNET: u64 = 42161;
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ArbitrumAddress(pub [u8; 20]);
+
 impl From<ArbitrumAddress> for H160 {
 	fn from(value: ArbitrumAddress) -> Self {
 		value.0.into()
@@ -100,12 +100,28 @@ impl ChainCrypto for Arbitrum {
 }
 
 #[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[codec(mel_bound())]
 pub struct ArbitrumTrackedData {
 	pub base_fee: <Arbitrum as Chain>::ChainAmount,
+}
+
+impl Default for ArbitrumTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.")
+	}
 }
 
 impl From<&DepositChannel<Arbitrum>> for EthereumFetchId {
