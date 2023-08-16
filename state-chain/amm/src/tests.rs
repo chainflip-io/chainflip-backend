@@ -3,7 +3,10 @@
 use cf_utilities::assert_ok;
 use core::convert::Infallible;
 
-use crate::common::{PostOperationPositionExistence, MAX_SQRT_PRICE, MIN_SQRT_PRICE};
+use crate::{
+	common::{MAX_SQRT_PRICE, MIN_SQRT_PRICE},
+	range_orders::Liquidity,
+};
 
 use super::*;
 
@@ -32,22 +35,19 @@ fn test_basic_swaps() {
 				range_orders: range_orders::PoolState::new(0, MIN_SQRT_PRICE).unwrap(),
 			};
 
-			let liquidity: Amount = 10000.into();
+			let amount: Amount = 10000.into();
 
 			assert_eq!(
 				assert_ok!(pool_state.limit_orders.collect_and_mint::<SD>(
 					&LiquidityProvider::from([0; 32]),
 					0,
-					liquidity
+					amount
 				)),
-				(Default::default(), PostOperationPositionExistence::Exists)
+				(Default::default(), limit_orders::PositionInfo::new(amount))
 			);
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));
-			assert_eq!(
-				pool_state.swap::<SD>(Amount::MAX, None),
-				(liquidity, Amount::MAX - liquidity)
-			);
+			assert_eq!(pool_state.swap::<SD>(Amount::MAX, None), (amount, Amount::MAX - amount));
 		}
 
 		{
@@ -65,7 +65,7 @@ fn test_basic_swaps() {
 
 			let liquidity: range_orders::Liquidity = 10000;
 
-			let (minted_amounts, collected_fees) =
+			let (minted_amounts, collected_fees, position_info) =
 				assert_ok!(pool_state.range_orders.collect_and_mint(
 					&LiquidityProvider::from([0; 32]),
 					-100,
@@ -74,6 +74,7 @@ fn test_basic_swaps() {
 					Result::<_, Infallible>::Ok
 				));
 			assert_eq!(collected_fees, Default::default());
+			assert_eq!(position_info, range_orders::PositionInfo::new(liquidity));
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
@@ -98,15 +99,18 @@ fn test_basic_swaps() {
 				.unwrap(),
 			};
 
-			let (range_order_minted_amounts, collected_fees) =
+			let range_order_liquidity: Liquidity = 10000;
+
+			let (range_order_minted_amounts, collected_fees, position_info) =
 				assert_ok!(pool_state.range_orders.collect_and_mint(
 					&LiquidityProvider::from([0; 32]),
 					-100,
 					100,
-					10000,
+					range_order_liquidity,
 					Result::<_, Infallible>::Ok
 				));
 			assert_eq!(collected_fees, Default::default());
+			assert_eq!(position_info, range_orders::PositionInfo::new(range_order_liquidity));
 
 			let limit_order_liquidity: Amount = 10000.into();
 
@@ -116,7 +120,7 @@ fn test_basic_swaps() {
 					0,
 					limit_order_liquidity
 				)),
-				(Default::default(), PostOperationPositionExistence::Exists)
+				(Default::default(), limit_orders::PositionInfo::new(limit_order_liquidity))
 			);
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));
@@ -145,7 +149,7 @@ fn test_basic_swaps() {
 			};
 
 			let mut mint_range_order = |lower_tick, upper_tick| {
-				let (range_order_minted_amounts, collected_fees) =
+				let (range_order_minted_amounts, collected_fees, position_info) =
 					assert_ok!(pool_state.range_orders.collect_and_mint(
 						&LiquidityProvider::from([0; 32]),
 						lower_tick,
@@ -154,6 +158,7 @@ fn test_basic_swaps() {
 						Result::<_, Infallible>::Ok
 					));
 				assert_eq!(collected_fees, Default::default());
+				assert_eq!(position_info, range_orders::PositionInfo::new(100000));
 
 				range_order_minted_amounts
 			};
@@ -167,7 +172,7 @@ fn test_basic_swaps() {
 					0,
 					limit_order_liquidity
 				)),
-				(Default::default(), PostOperationPositionExistence::Exists)
+				(Default::default(), limit_orders::PositionInfo::new(limit_order_liquidity))
 			);
 
 			assert_eq!(pool_state.swap::<SD>(0.into(), None), (0.into(), 0.into()));

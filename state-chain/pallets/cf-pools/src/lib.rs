@@ -466,7 +466,7 @@ pub mod pallet {
 					},
 				};
 
-				let (assets_debited, range_orders::Collected { fees }) = pool_state
+				let (assets_debited, range_orders::Collected { fees }, _) = pool_state
 					.range_orders
 					.collect_and_mint(
 						&lp,

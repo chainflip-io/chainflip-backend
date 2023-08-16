@@ -11,12 +11,6 @@ pub type SqrtPriceQ64F96 = U256;
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum PostOperationPositionExistence {
-	Exists,
-	DoesNotExist,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
 	Zero,
 	One,

@@ -14,8 +14,8 @@ use sp_std::vec::Vec;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price, Amount,
-	OneToZero, PostOperationPositionExistence, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
-	MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
+	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -258,6 +258,21 @@ pub struct Collected {
 	pub swapped_liquidity: Amount,
 }
 
+#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+pub struct PositionInfo {
+	amount: Amount,
+}
+impl PositionInfo {
+	pub fn new(amount: Amount) -> Self {
+		Self { amount }
+	}
+}
+impl<'a> From<&'a Position> for PositionInfo {
+	fn from(value: &'a Position) -> Self {
+		Self { amount: value.amount }
+	}
+}
+
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
@@ -334,12 +349,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		fee_hundredth_pips: u32,
 	) -> Result<
-		SideMap<
-			BTreeMap<
-				(SqrtPriceQ64F96, LiquidityProvider),
-				(Collected, PostOperationPositionExistence),
-			>,
-		>,
+		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), (Collected, PositionInfo)>>,
 		SetFeesError,
 	> {
 		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
@@ -534,7 +544,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Collected, PostOperationPositionExistence), PositionError<MintError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<MintError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> MintError { match e {} }))
@@ -600,11 +610,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			} else {
 				position.amount += amount;
 
+				let position_info = PositionInfo::from(&position);
+
 				self.next_pool_instance = next_pool_instance;
 				fixed_pools.insert(sqrt_price, fixed_pool);
 				positions.insert((sqrt_price, lp.clone()), position);
 
-				Ok((collected_amounts, PostOperationPositionExistence::Exists))
+				Ok((collected_amounts, position_info))
 			}
 		}
 	}
@@ -625,12 +637,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, Collected, PostOperationPositionExistence), PositionError<BurnError>> {
+	) -> Result<(Amount, Collected, PositionInfo), PositionError<BurnError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> BurnError { match e {} }))
-				.map(|(collected_amounts, post_operation_position_existence)| {
-					(Amount::zero(), collected_amounts, post_operation_position_existence)
+				.map(|(collected_amounts, position_info)| {
+					(Amount::zero(), collected_amounts, position_info)
 				})
 		} else {
 			let sqrt_price = Self::validate_tick(tick)?;
@@ -658,13 +670,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				position.amount -= amount;
 				fixed_pool.available -= amount;
 
-				let post_operation_position_existence = if position.amount.is_zero() {
+				let position_info = PositionInfo::from(&position);
+
+				if position.amount.is_zero() {
 					positions.remove(&(sqrt_price, lp.clone()));
-					PostOperationPositionExistence::DoesNotExist
 				} else {
 					assert!(!fixed_pool.available.is_zero());
 					positions.insert((sqrt_price, lp.clone()), position);
-					PostOperationPositionExistence::Exists
 				};
 				if fixed_pool.available.is_zero() {
 					fixed_pools.remove(&sqrt_price);
@@ -672,14 +684,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					fixed_pools.insert(sqrt_price, fixed_pool);
 				}
 
-				(amount, collected_amounts, post_operation_position_existence)
+				(amount, collected_amounts, position_info)
 			} else {
 				positions.remove(&(sqrt_price, lp.clone()));
-				(
-					Default::default(),
-					collected_amounts,
-					PostOperationPositionExistence::DoesNotExist,
-				)
+				(Default::default(), collected_amounts, PositionInfo::default())
 			})
 		}
 	}
@@ -692,7 +700,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(Collected, PostOperationPositionExistence), PositionError<CollectError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		self.inner_collect::<SD>(lp, sqrt_price)
 	}
@@ -701,7 +709,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
-	) -> Result<(Collected, PostOperationPositionExistence), PositionError<CollectError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		let price = sqrt_price_to_price(sqrt_price);
 
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
@@ -720,11 +728,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok((
 			collected_amounts,
 			if let Some(position) = option_position {
+				let position_info = PositionInfo::from(&position);
 				positions.insert((sqrt_price, lp.clone()), position);
-				PostOperationPositionExistence::Exists
+				position_info
 			} else {
 				positions.remove(&(sqrt_price, lp.clone()));
-				PostOperationPositionExistence::DoesNotExist
+				PositionInfo::default()
 			},
 		))
 	}
@@ -736,7 +745,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(Collected, Amount), PositionError<Infallible>> {
+	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		let price = sqrt_price_to_price(sqrt_price);
 
@@ -755,7 +764,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		Ok((
 			collected_amounts,
-			option_position.map_or(Default::default(), |position| position.amount),
+			option_position.map_or(Default::default(), |position| PositionInfo::from(&position)),
 		))
 	}
 
