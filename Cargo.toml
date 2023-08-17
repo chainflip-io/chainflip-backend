@@ -6,6 +6,7 @@ members = [
   'api/bin/chainflip-cli',
   'api/bin/chainflip-broker-api',
   'api/bin/chainflip-lp-api',
+  'api/bin/chainflip-btc-deposit-tracker',
   'state-chain/chains',
   'state-chain/node',
   'state-chain/amm',
