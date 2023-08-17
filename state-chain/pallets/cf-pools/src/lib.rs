@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{OneToZero, Order, Price, Side, SideMap, ZeroToOne},
+	common::{Order, Price, Side, SideMap},
 	NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
@@ -808,9 +808,9 @@ impl<T: Config> Pallet<T> {
 	pub fn current_price(from: Asset, to: Asset) -> Option<Price> {
 		match (from, to) {
 			(STABLE_ASSET, unstable_asset) => Pools::<T>::get(unstable_asset)
-				.and_then(|mut pool| pool.pool_state.current_price::<OneToZero>()),
+				.and_then(|mut pool| pool.pool_state.current_price(Side::One, Order::Sell)),
 			(unstable_asset, STABLE_ASSET) => Pools::<T>::get(unstable_asset)
-				.and_then(|mut pool| pool.pool_state.current_price::<ZeroToOne>()),
+				.and_then(|mut pool| pool.pool_state.current_price(Side::One, Order::Buy)),
 			_ => None,
 		}
 	}

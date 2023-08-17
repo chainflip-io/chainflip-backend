@@ -196,8 +196,24 @@ impl SwapDirection for OneToZero {
 	}
 }
 
+// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
+// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
+// cause any problems for the AMM code in terms of correctness
 pub type Price = U256;
 pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+
+pub(super) fn inverse_price(price: Price) -> Price {
+	if price == Price::from(1) {
+		// The inverse price of 1 is Price::MAX + 1
+		Price::MAX
+	} else {
+		mul_div_floor(
+			Price::one() << PRICE_FRACTIONAL_BITS,
+			Price::one() << PRICE_FRACTIONAL_BITS,
+			price,
+		)
+	}
+}
 
 pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));

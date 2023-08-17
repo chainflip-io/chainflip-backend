@@ -5,8 +5,8 @@ mod tests;
 
 use codec::{Decode, Encode};
 use common::{
-	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap,
-	SqrtPriceQ64F96, Tick, ZeroToOne,
+	inverse_price, price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side,
+	SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
 };
 use scale_info::TypeInfo;
 
@@ -41,7 +41,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
-	pub fn current_price<
+	/// Returns the current price for a given direction of swap. The price is measured in units of
+	/// the specified Side argument
+	pub fn current_price(&mut self, side: Side, order: Order) -> Option<Price> {
+		match (side, order) {
+			(Side::Zero, Order::Buy) => self.inner_current_price::<OneToZero>().map(inverse_price),
+			(Side::Zero, Order::Sell) => self.inner_current_price::<ZeroToOne>().map(inverse_price),
+			(Side::One, Order::Sell) => self.inner_current_price::<OneToZero>(),
+			(Side::One, Order::Buy) => self.inner_current_price::<ZeroToOne>(),
+		}
+	}
+
+	fn inner_current_price<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(
 		&mut self,
