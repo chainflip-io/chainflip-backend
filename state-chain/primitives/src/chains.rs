@@ -5,7 +5,7 @@ use sp_std::{fmt, fmt::Display, str::FromStr};
 pub mod assets;
 
 macro_rules! chains {
-	( $( $chain:ident = $index:literal, display = $display:expr);+ ) => {
+	( $( $chain:ident = $index:literal),+ ) => {
 		$(
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 			pub struct $chain;
@@ -55,9 +55,9 @@ macro_rules! chains {
 			type Err = &'static str;
 
 			fn from_str(s: &str) -> Result<Self, Self::Err> {
-				match s.to_lowercase().as_str() {
+				match s {
 					$(
-						$display => Ok(ForeignChain::$chain),
+						stringify!($chain) => Ok(ForeignChain::$chain),
 					)+
 					_ => Err("Unrecognized Chain"),
 				}
@@ -68,7 +68,7 @@ macro_rules! chains {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				match self {
 					$(
-						ForeignChain::$chain => write!(f, "{}", $display),
+						ForeignChain::$chain => write!(f, "{}", stringify!($chain)),
 					)+
 				}
 			}
@@ -79,9 +79,9 @@ macro_rules! chains {
 // !!!!! IMPORTANT !!!!!
 // Do not change these indices.
 chains! {
-	Ethereum = 1, display = "ethereum";
-	Polkadot = 2, display = "polkadot";
-	Bitcoin = 3, display = "bitcoin"
+	Ethereum = 1,
+	Polkadot = 2,
+	Bitcoin = 3
 }
 
 /// Can be any Chain.
