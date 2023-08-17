@@ -7,25 +7,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{
-	offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode, ReputationResetter,
-	Slashing,
-};
-
-pub mod weights;
-pub use weights::WeightInfo;
-
-use frame_support::{
-	pallet_prelude::*,
-	traits::{Get, OnKilledAccount},
-};
-pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
-use sp_std::{
-	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
-	iter::{self, Iterator},
-	prelude::*,
-};
 mod benchmarking;
 
 mod reporting_adapter;
@@ -34,8 +15,30 @@ mod reputation;
 pub use reporting_adapter::*;
 pub use reputation::*;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
+use cf_traits::{
+	impl_pallet_safe_mode, offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode,
+	ReputationResetter, Slashing,
+};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::traits::{BlockNumberProvider, Saturating, Zero},
+	traits::{Get, OnKilledAccount},
+};
+use frame_system::pallet_prelude::*;
+pub use pallet::*;
+use sp_std::{
+	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
+	iter::{self, Iterator},
+	prelude::*,
+};
+
+impl_pallet_safe_mode!(PalletSafeMode; reporting_enabled);
+
 impl<T: Config> ReputationParameters for T {
-	type OnlineCredits = T::BlockNumber;
+	type OnlineCredits = BlockNumberFor<T>;
 
 	fn bounds() -> (ReputationPoints, ReputationPoints) {
 		T::ReputationPointFloorAndCeiling::get()
@@ -55,7 +58,7 @@ type RuntimeReputationTracker<T> = reputation::ReputationTracker<T>;
 #[codec(mel_bound(T: Config))]
 pub struct Penalty<T: Config> {
 	pub reputation: ReputationPoints,
-	pub suspension: T::BlockNumber,
+	pub suspension: BlockNumberFor<T>,
 }
 
 impl<T: Config> sp_std::fmt::Debug for Penalty<T> {
@@ -83,10 +86,8 @@ pub mod pallet {
 	use super::*;
 	use cf_traits::{AccountRoleRegistry, EpochInfo, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -105,20 +106,20 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize;
 
 		/// When we have to, we slash
-		type Slasher: Slashing<
-			AccountId = Self::ValidatorId,
-			BlockNumber = <Self as frame_system::Config>::BlockNumber,
-		>;
+		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
 
 		/// Handle to allow us to trigger across any pallet on a heartbeat interval
-		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
+		type Heartbeat: Heartbeat<
+			ValidatorId = Self::ValidatorId,
+			BlockNumber = BlockNumberFor<Self>,
+		>;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
-		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
+		type HeartbeatBlockInterval: Get<BlockNumberFor<Self>>;
 
 		/// The floor and ceiling values for a reputation score
 		#[pallet::constant]
@@ -127,12 +128,17 @@ pub mod pallet {
 		/// The maximum number of reputation points that can be accrued
 		#[pallet::constant]
 		type MaximumAccruableReputation: Get<ReputationPoints>;
+
+		/// Safe mode access
+		type SafeMode: Get<PalletSafeMode>;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(current_block: T::BlockNumber) -> Weight {
-			if Self::blocks_since_new_interval(current_block) == Zero::zero() {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			if T::SafeMode::get().reporting_enabled &&
+				Self::blocks_since_new_interval(current_block) == Zero::zero()
+			{
 				// Reputation depends on heartbeats
 				Self::penalise_offline_authorities(Self::current_network_state().offline);
 				T::Heartbeat::on_heartbeat_interval();
@@ -146,7 +152,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn accrual_ratio)]
 	pub type AccrualRatio<T: Config> =
-		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
+		StorageValue<_, (ReputationPoints, BlockNumberFor<T>), ValueQuery>;
 
 	/// Reputation trackers for each node
 	#[pallet::storage]
@@ -161,7 +167,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::Offence,
-		VecDeque<(T::BlockNumber, T::ValidatorId)>,
+		VecDeque<(BlockNumberFor<T>, T::ValidatorId)>,
 		ValueQuery,
 	>;
 
@@ -180,7 +186,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn last_heartbeat)]
 	pub type LastHeartbeat<T: Config> =
-		StorageMap<_, Twox64Concat, T::ValidatorId, T::BlockNumber, OptionQuery>;
+		StorageMap<_, Twox64Concat, T::ValidatorId, BlockNumberFor<T>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -188,7 +194,10 @@ pub mod pallet {
 		/// An offence has been penalised.
 		OffencePenalty { offender: T::ValidatorId, offence: T::Offence, penalty: ReputationPoints },
 		/// The accrual rate for our reputation points has been updated.
-		AccrualRateUpdated { reputation_points: ReputationPoints, online_credits: T::BlockNumber },
+		AccrualRateUpdated {
+			reputation_points: ReputationPoints,
+			online_credits: BlockNumberFor<T>,
+		},
 		/// The penalty for missing a heartbeat has been updated.
 		MissedHeartbeatPenaltyUpdated { new_reputation_penalty: ReputationPoints },
 		/// The penalty for some offence has been updated.
@@ -213,11 +222,12 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidAccrualReputationPoints](Error::InvalidAccrualReputationPoints)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_accrual_ratio())]
 		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			reputation_points: ReputationPoints,
-			online_credits: T::BlockNumber,
+			online_credits: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -238,6 +248,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [MissedHeartbeatPenaltyUpdated](Event::MissedHeartbeatPenaltyUpdated)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
@@ -258,6 +269,7 @@ pub mod pallet {
 		}
 
 		/// Set the [Penalty] for an [Offence].
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_penalty())]
 		pub fn set_penalty(
 			origin: OriginFor<T>,
@@ -290,6 +302,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId =
@@ -321,7 +334,7 @@ pub mod pallet {
 		/// A node is considered online, and therefore qualified if fewer than
 		/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
 		fn is_qualified(validator_id: &T::ValidatorId) -> bool {
-			use sp_runtime::traits::Saturating;
+			use frame_support::sp_runtime::traits::Saturating;
 			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
 				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
 					T::HeartbeatBlockInterval::get()
@@ -333,7 +346,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Returns the number of blocks that have elapsed since the new HeartbeatBlockInterval
-		pub fn blocks_since_new_interval(block_number: T::BlockNumber) -> T::BlockNumber {
+		pub fn blocks_since_new_interval(block_number: BlockNumberFor<T>) -> BlockNumberFor<T> {
 			block_number % T::HeartbeatBlockInterval::get()
 		}
 
@@ -348,13 +361,12 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
+		pub accrual_ratio: (ReputationPoints, BlockNumberFor<T>),
 		#[allow(clippy::type_complexity)]
-		pub penalties: Vec<(T::Offence, (ReputationPoints, T::BlockNumber))>,
+		pub penalties: Vec<(T::Offence, (ReputationPoints, BlockNumberFor<T>))>,
 		pub genesis_validators: Vec<T::ValidatorId>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
@@ -366,7 +378,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			AccrualRatio::<T>::set(self.accrual_ratio);
 			for (offence, (reputation, suspension)) in self.penalties.iter() {
@@ -388,6 +400,9 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	type Offence = T::Offence;
 
 	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
+		if !T::SafeMode::get().reporting_enabled {
+			return
+		}
 		let offence = offence.into();
 		let penalty = Self::resolve_penalty_for(offence);
 
@@ -458,7 +473,7 @@ impl<T: Config> Pallet<T> {
 	pub fn suspend_all<'a>(
 		validators: impl IntoIterator<Item = &'a T::ValidatorId>,
 		offence: &T::Offence,
-		suspension: T::BlockNumber,
+		suspension: BlockNumberFor<T>,
 	) {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let mut suspensions = Suspensions::<T>::get(offence);

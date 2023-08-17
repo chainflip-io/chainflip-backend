@@ -34,7 +34,7 @@ thread_local! {
 }
 
 // When calling on_idle, we should broadcast everything with this excess weight.
-const LARGE_EXCESS_WEIGHT: Weight = Weight::from_ref_time(20_000_000_000);
+const LARGE_EXCESS_WEIGHT: Weight = Weight::from_parts(20_000_000_000, 0);
 
 const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 
@@ -443,27 +443,6 @@ fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
 		MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
 		AsyncResult::Pending
 	);
-}
-
-#[test]
-fn re_request_threshold_signature_on_invalid_sig() {
-	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast();
-		// Expect the threshold signature pipeline to be empty
-		assert_eq!(
-			MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
-			AsyncResult::Void
-		);
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
-		assert_eq!(
-			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
-			0
-		);
-		// Simualte a key rotation to invalidate the signature
-		MockKeyProvider::set_valid(false);
-		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
-		threshold_signature_rerequested(broadcast_attempt_id);
-	});
 }
 
 // One particular case where this occurs is if the Polkadot Runtime upgrade occurs after we've

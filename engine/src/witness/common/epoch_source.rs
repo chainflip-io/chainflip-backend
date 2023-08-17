@@ -97,7 +97,7 @@ impl EpochSource<(), ()> {
 			.expect(STATE_CHAIN_CONNECTION);
 		let mut historic_epochs = BTreeSet::from_iter(
 			state_chain_client
-				.storage_map::<pallet_cf_validator::EpochExpiries<state_chain_runtime::Runtime>>(
+				.storage_map::<pallet_cf_validator::EpochExpiries<state_chain_runtime::Runtime>, Vec<_>>(
 					initial_block_hash,
 				)
 				.await
@@ -134,7 +134,7 @@ impl EpochSource<(), ()> {
 						let old_historic_epochs = std::mem::replace(&mut historic_epochs, BTreeSet::from_iter(
 							state_chain_client.storage_map::<pallet_cf_validator::EpochExpiries<
 								state_chain_runtime::Runtime,
-							>>(block_hash).await.expect(STATE_CHAIN_CONNECTION).into_iter().map(|(_, index)| index)
+							>, Vec<_>>(block_hash).await.expect(STATE_CHAIN_CONNECTION).into_iter().map(|(_, index)| index)
 						));
 						assert!(!historic_epochs.contains(&current_epoch));
 						assert!(old_historic_epochs.is_superset(&historic_epochs));

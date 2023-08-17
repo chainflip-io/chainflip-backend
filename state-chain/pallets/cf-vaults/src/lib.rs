@@ -6,15 +6,18 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
-	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState, SafeMode, SetSafeMode,
-	Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult,
+	Broadcaster, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState,
+	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
+	VaultStatus, VaultTransitionHandler,
 };
-use frame_support::{pallet_prelude::*, traits::StorageVersion};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::traits::{One, Saturating},
+	traits::StorageVersion,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
@@ -54,6 +57,8 @@ pub type KeygenResponseStatus<T, I> =
 
 pub type KeyHandoverResponseStatus<T, I> =
 	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
+
+impl_pallet_safe_mode!(PalletSafeMode; slashing_enabled);
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
@@ -132,13 +137,12 @@ pub struct VaultEpochAndState {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use sp_runtime::Percent;
+	use frame_support::sp_runtime::Percent;
 
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -181,10 +185,10 @@ pub mod pallet {
 			Offence = Self::Offence,
 		>;
 
-		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
+		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
 
 		/// For activating Safe mode: CODE RED for the chain.
-		type SafeMode: SafeMode + SetSafeMode<Self::SafeMode>;
+		type SafeMode: Get<PalletSafeMode> + SafeMode + SetSafeMode<Self::SafeMode>;
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 
@@ -426,6 +430,8 @@ pub mod pallet {
 		KeyHandoverFailure {
 			ceremony_id: CeremonyId,
 		},
+		/// The vault rotation has been aborted early.
+		VaultRotationAborted,
 	}
 
 	#[pallet::error]
@@ -514,6 +520,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
@@ -532,6 +539,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
 		pub fn report_key_handover_outcome(
 			origin: OriginFor<T>,
@@ -561,6 +569,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [ThresholdSignatureUnavailable](Error::ThresholdSignatureUnavailable)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::on_keygen_verification_result())]
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
@@ -613,6 +622,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Epoch Info Trait](EpochInfo)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
@@ -646,6 +656,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Epoch Info Trait](EpochInfo)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vault_key_rotated_externally())]
 		pub fn vault_key_rotated_externally(
 			origin: OriginFor<T>,
@@ -664,10 +675,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
 		pub fn set_keygen_response_timeout(
 			origin: OriginFor<T>,
-			new_timeout: T::BlockNumber,
+			new_timeout: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -679,6 +691,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
 		pub fn set_keygen_slash_rate(
 			origin: OriginFor<T>,
@@ -699,10 +712,9 @@ pub mod pallet {
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			use sp_runtime::traits::Zero;
+			use frame_support::sp_runtime::traits::Zero;
 			Self {
 				vault_key: None,
 				deployment_block: Zero::zero(),
@@ -712,7 +724,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key {
 				Pallet::<T, I>::set_vault_key_for_epoch(
@@ -756,7 +768,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::debug!("Keygen response timeout has elapsed, attempting to resolve outcome...");
 			Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(ceremony_id));
 		} else {
-			return Weight::from_ref_time(0)
+			return Weight::from_parts(0, 0)
 		};
 
 		let candidate_count = response_status.candidate_count();
@@ -772,7 +784,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(offenders) => {
 				let offenders_len = offenders.len();
 				let offenders = if (offenders_len as AuthorityCount) <
-					utilities::failure_threshold_from_share_count(candidate_count)
+					cf_utilities::failure_threshold_from_share_count(candidate_count)
 				{
 					offenders
 				} else {
@@ -832,8 +844,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn terminate_rotation(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
-		for offender in offenders {
-			T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
+		if T::SafeMode::get().slashing_enabled {
+			for offender in offenders {
+				T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
+			}
 		}
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.iter().cloned().collect(),

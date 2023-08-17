@@ -25,12 +25,14 @@ use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
-	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	Amount, OneToZero, PostOperationPositionExistence, Side, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -39,10 +41,13 @@ type FeeGrowthQ128F128 = U256;
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-struct Position {
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+pub struct Position {
 	liquidity: Liquidity,
+	#[cfg_attr(feature = "std", serde(skip))]
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
+
 impl Position {
 	fn collect_fees<LiquidityProvider>(
 		&mut self,
@@ -105,6 +110,7 @@ impl Position {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
@@ -112,14 +118,22 @@ pub struct TickDelta {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+#[cfg_attr(
+	feature = "std",
+	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
+)]
 pub struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
+	#[cfg_attr(feature = "std", serde(skip))]
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
+	#[cfg_attr(feature = "std", serde(skip))]
 	liquidity_map: BTreeMap<Tick, TickDelta>,
+	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::map_as_seq"))]
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
@@ -323,10 +337,7 @@ pub enum PositionError<T> {
 }
 
 #[derive(Debug)]
-pub enum BurnError {
-	/// Position referenced does not contain the requested liquidity
-	PositionLacksLiquidity,
-}
+pub enum BurnError {}
 
 #[derive(Debug)]
 pub enum CollectError {}
@@ -524,71 +535,73 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<(SideMap<Amount>, CollectedFees), PositionError<BurnError>> {
+	) -> Result<
+		(SideMap<Amount>, CollectedFees, PostOperationPositionExistence),
+		PositionError<BurnError>,
+	> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
 			assert!(position.liquidity != 0);
-			if burnt_liquidity <= position.liquidity {
-				let mut lower_delta = self.liquidity_map.get(&lower_tick).unwrap().clone();
-				lower_delta.liquidity_gross -= burnt_liquidity;
-				lower_delta.liquidity_delta =
-					lower_delta.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
-				let mut upper_delta = self.liquidity_map.get(&upper_tick).unwrap().clone();
-				upper_delta.liquidity_gross -= burnt_liquidity;
-				upper_delta.liquidity_delta =
-					upper_delta.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
+			let burnt_liquidity = core::cmp::min(position.liquidity, burnt_liquidity);
 
-				let collected_fees = position.set_liquidity(
-					self,
-					position.liquidity - burnt_liquidity,
-					lower_tick,
-					&lower_delta,
-					upper_tick,
-					&upper_delta,
-				);
+			let mut lower_delta = self.liquidity_map.get(&lower_tick).unwrap().clone();
+			lower_delta.liquidity_gross -= burnt_liquidity;
+			lower_delta.liquidity_delta =
+				lower_delta.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
+			let mut upper_delta = self.liquidity_map.get(&upper_tick).unwrap().clone();
+			upper_delta.liquidity_gross -= burnt_liquidity;
+			upper_delta.liquidity_delta =
+				upper_delta.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
-				let (amounts_owed, current_liquidity_delta) = self
-					.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick)
-					.unwrap();
-				// Will not underflow as current_liquidity_delta must have previously been added to
-				// current_liquidity for it to need to be substrated now
-				self.current_liquidity -= current_liquidity_delta;
+			let collected_fees = position.set_liquidity(
+				self,
+				position.liquidity - burnt_liquidity,
+				lower_tick,
+				&lower_delta,
+				upper_tick,
+				&upper_delta,
+			);
 
-				if lower_delta.liquidity_gross == 0 &&
-					/*Guarantee MIN_TICK is always in map to simplify swap logic*/ lower_tick != MIN_TICK
-				{
-					assert_eq!(position.liquidity, 0);
-					self.liquidity_map.remove(&lower_tick);
-				} else {
-					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_delta;
-				}
-				if upper_delta.liquidity_gross == 0 &&
-					/*Guarantee MAX_TICK is always in map to simplify swap logic*/ upper_tick != MAX_TICK
-				{
-					assert_eq!(position.liquidity, 0);
-					self.liquidity_map.remove(&upper_tick);
-				} else {
-					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_delta;
-				}
+			let (amounts_owed, current_liquidity_delta) = self
+				.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick)
+				.unwrap();
+			// Will not underflow as current_liquidity_delta must have previously been added to
+			// current_liquidity for it to need to be substrated now
+			self.current_liquidity -= current_liquidity_delta;
 
-				if position.liquidity == 0 {
-					// DIFF: This behaviour is different than Uniswap's to ensure if a position
-					// exists its ticks also exist in the liquidity_map, by removing zero liquidity
-					// positions
-					self.positions.remove(&(lp.clone(), lower_tick, upper_tick));
-				} else {
-					*self.positions.get_mut(&(lp.clone(), lower_tick, upper_tick)).unwrap() =
-						position;
-				}
-
-				// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
-				// owed in the position, instead it is returned here.
-				Ok((amounts_owed, collected_fees))
+			if lower_delta.liquidity_gross == 0 &&
+				/*Guarantee MIN_TICK is always in map to simplify swap logic*/ lower_tick != MIN_TICK
+			{
+				assert_eq!(position.liquidity, 0);
+				self.liquidity_map.remove(&lower_tick);
 			} else {
-				Err(PositionError::Other(BurnError::PositionLacksLiquidity))
+				*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_delta;
 			}
+			if upper_delta.liquidity_gross == 0 &&
+				/*Guarantee MAX_TICK is always in map to simplify swap logic*/ upper_tick != MAX_TICK
+			{
+				assert_eq!(position.liquidity, 0);
+				self.liquidity_map.remove(&upper_tick);
+			} else {
+				*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_delta;
+			}
+
+			let post_operation_position_existence = if position.liquidity == 0 {
+				// DIFF: This behaviour is different than Uniswap's to ensure if a position
+				// exists its ticks also exist in the liquidity_map, by removing zero liquidity
+				// positions
+				self.positions.remove(&(lp.clone(), lower_tick, upper_tick));
+				PostOperationPositionExistence::DoesNotExist
+			} else {
+				*self.positions.get_mut(&(lp.clone(), lower_tick, upper_tick)).unwrap() = position;
+				PostOperationPositionExistence::Exists
+			};
+
+			// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
+			// owed in the position, instead it is returned here.
+			Ok((amounts_owed, collected_fees, post_operation_position_existence))
 		} else {
 			Err(PositionError::NonExistent)
 		}
@@ -892,6 +905,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				one_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
 			},
 		))
+	}
+
+	#[cfg(feature = "std")]
+	pub fn positions(&self) -> BTreeMap<(LiquidityProvider, Tick, Tick), Liquidity> {
+		self.positions.iter().map(|(k, v)| (k.clone(), v.liquidity)).collect()
 	}
 }
 

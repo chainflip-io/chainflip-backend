@@ -4,6 +4,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
@@ -29,6 +30,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub broker_commission_bps: BasisPoints,
 	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub channel_metadata: Option<CcmChannelMetadata>,
+	pub expiry: BlockNumberFor<T>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -36,6 +38,7 @@ pub struct LpChannel<C: Chain, T: Chainflip> {
 	pub deposit_address: ForeignChainAddress,
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub lp_account: <T as frame_system::Config>::AccountId,
+	pub expiry: BlockNumberFor<T>,
 }
 
 impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
@@ -57,7 +60,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 		(
 			channel_id,
 			match asset.into() {
-				ForeignChain::Ethereum => ForeignChainAddress::Eth([channel_id as u8; 20]),
+				ForeignChain::Ethereum => ForeignChainAddress::Eth([channel_id as u8; 20].into()),
 				ForeignChain::Polkadot => ForeignChainAddress::Dot(
 					PolkadotAccountId::from_aliased([channel_id as u8; 32]),
 				),
@@ -76,11 +79,13 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 }
 
 impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
-	type AccountId = <T as frame_system::Config>::AccountId;
+	type AccountId = T::AccountId;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
+		expiry: Self::BlockNumber,
 	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Lp, source_asset);
@@ -93,6 +98,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					deposit_address: deposit_address.clone(),
 					source_asset,
 					lp_account,
+					expiry,
 				});
 			}
 		});
@@ -106,6 +112,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		expiry: Self::BlockNumber,
 	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Swap, source_asset);
@@ -122,6 +129,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					broker_commission_bps,
 					broker_id,
 					channel_metadata,
+					expiry,
 				});
 			};
 		});

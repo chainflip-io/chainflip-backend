@@ -77,7 +77,7 @@ benchmarks_instance_pallet! {
 			attempt_count: 1
 		};
 		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
+		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
@@ -96,7 +96,7 @@ benchmarks_instance_pallet! {
 		let call = generate_on_signature_ready_call::<T, I>();
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
-	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
+	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 0);
 		assert_eq!(BroadcastAttemptCount::<T, I>::get(broadcast_id), 0);
@@ -144,7 +144,7 @@ benchmarks_instance_pallet! {
 		};
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
-	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())? }
+	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap())? }
 	verify {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
 		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the transaction_succeeded extrinsic").event;

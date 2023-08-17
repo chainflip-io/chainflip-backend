@@ -2,7 +2,7 @@ use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{CeremonyIdProvider, GetBlockHeight};
-use sp_runtime::traits::BlockNumberProvider;
+use frame_support::sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
@@ -203,6 +203,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		} else {
 			log_or_panic!("activate key called before key handover completed");
 		}
+	}
+
+	fn abort_vault_rotation() {
+		PendingVaultRotation::<T, I>::kill();
+		KeyHandoverResolutionPendingSince::<T, I>::kill();
+		KeygenResolutionPendingSince::<T, I>::kill();
+		Self::deposit_event(Event::<T, I>::VaultRotationAborted);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

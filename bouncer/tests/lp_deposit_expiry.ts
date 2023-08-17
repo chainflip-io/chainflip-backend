@@ -4,7 +4,6 @@ import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
   await testLpDepositExpiry();
-  console.log('=== Test complete ===');
   process.exit(0);
 }
 

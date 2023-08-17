@@ -40,7 +40,7 @@ impl<C: Chain> MockEgressParameter<C> {
 
 impl<C: Chain> PartialOrd for MockEgressParameter<C> {
 	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-		self.amount().partial_cmp(&other.amount())
+		Some(self.cmp(other))
 	}
 }
 impl<C: Chain> Ord for MockEgressParameter<C> {

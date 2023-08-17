@@ -1,6 +1,5 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
@@ -10,6 +9,12 @@ pub type Amount = U256;
 pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum PostOperationPositionExistence {
+	Exists,
+	DoesNotExist,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
@@ -69,8 +74,20 @@ impl<BlockNumber: PartialOrd + Copy> OrderValidity<BlockNumber> {
 	}
 }
 
-#[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Copy,
+	Clone,
+	Default,
+	Debug,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+)]
 pub struct SideMap<T> {
 	zero: T,
 	one: T,

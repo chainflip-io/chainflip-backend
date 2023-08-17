@@ -85,7 +85,7 @@ fn test_float() {
 		let initial_value = rng_u256(&mut rng);
 		let initial_float = FloatBetweenZeroAndOne::max();
 
-		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8, 256))
+		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8..256))
 			.map(|_| rng_u256_numerator_denominator(&mut rng))
 			.fold(
 				(initial_value, initial_value, initial_float.clone()),
@@ -306,7 +306,7 @@ fn mint() {
 					good,
 					1000.into()
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 		}
 
@@ -330,7 +330,7 @@ fn mint() {
 					0,
 					good
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 		}
 
@@ -390,7 +390,7 @@ fn burn() {
 					tick,
 					amount
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_burn::<SD>(
@@ -398,7 +398,7 @@ fn burn() {
 					tick,
 					amount
 				)),
-				(amount, CollectedAmounts::default())
+				(amount, CollectedAmounts::default(), PostOperationPositionExistence::DoesNotExist)
 			);
 		}
 		{
@@ -407,7 +407,7 @@ fn burn() {
 			let amount = U256::from(1000);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(&[1u8; 32].into(), tick, 56.into())),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(
@@ -415,11 +415,11 @@ fn burn() {
 					tick,
 					amount
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<SD>(&[2u8; 32].into(), tick, 16.into())),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_burn::<SD>(
@@ -427,7 +427,7 @@ fn burn() {
 					tick,
 					amount
 				)),
-				(amount, CollectedAmounts::default())
+				(amount, CollectedAmounts::default(), PostOperationPositionExistence::DoesNotExist)
 			);
 		}
 		{
@@ -440,7 +440,7 @@ fn burn() {
 					tick,
 					amount
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(pool_state.swap::<SD>(amount, None), (amount, 0.into()));
 			assert_eq!(
@@ -449,7 +449,11 @@ fn burn() {
 					tick,
 					0.into()
 				)),
-				(0.into(), CollectedAmounts { fees: 0.into(), swapped_liquidity: amount })
+				(
+					0.into(),
+					CollectedAmounts { fees: 0.into(), swapped_liquidity: amount },
+					PostOperationPositionExistence::DoesNotExist
+				)
 			);
 		}
 		{
@@ -464,7 +468,7 @@ fn burn() {
 					tick,
 					amount
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(pool_state.swap::<SD>(swap, None), (expected_output, 0.into()));
 			assert_eq!(
@@ -475,7 +479,8 @@ fn burn() {
 				)),
 				(
 					amount - swap,
-					CollectedAmounts { fees: 0.into(), swapped_liquidity: expected_output }
+					CollectedAmounts { fees: 0.into(), swapped_liquidity: expected_output },
+					PostOperationPositionExistence::DoesNotExist
 				)
 			);
 		}
@@ -499,7 +504,7 @@ fn swap() {
 						0,
 						1000.into()
 					)),
-					CollectedAmounts::default()
+					(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 				);
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
@@ -512,7 +517,7 @@ fn swap() {
 						tick,
 						500.into()
 					)),
-					CollectedAmounts::default()
+					(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 				);
 				assert_eq!(
 					assert_ok!(pool_state.collect_and_mint::<SD>(
@@ -520,7 +525,7 @@ fn swap() {
 						tick,
 						500.into()
 					)),
-					CollectedAmounts::default()
+					(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 				);
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
@@ -533,7 +538,7 @@ fn swap() {
 						tick,
 						500.into()
 					)),
-					CollectedAmounts::default()
+					(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 				);
 				assert_eq!(
 					assert_ok!(pool_state.collect_and_mint::<SD>(
@@ -541,7 +546,7 @@ fn swap() {
 						tick,
 						500.into()
 					)),
-					CollectedAmounts::default()
+					(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 				);
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
@@ -554,7 +559,7 @@ fn swap() {
 					0,
 					1000.into()
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(pool_state.swap::<SD>(1000.into(), None), (900.into(), 0.into()));
 		}
@@ -577,7 +582,7 @@ fn swap() {
 					tick,
 					100000000.into()
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
@@ -588,7 +593,7 @@ fn swap() {
 						),
 					100000000.into()
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			let (output, remaining) = pool_state.swap::<ZeroToOne>(75000000.into(), None);
 			assert!(range.contains(&output));
@@ -608,7 +613,7 @@ fn swap() {
 					tick,
 					100000000.into()
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			assert_eq!(
 				assert_ok!(pool_state.collect_and_mint::<OneToZero>(
@@ -619,7 +624,7 @@ fn swap() {
 						),
 					100000000.into()
 				)),
-				CollectedAmounts::default()
+				(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 			);
 			let (output, remaining) = pool_state.swap::<OneToZero>(180000000.into(), None);
 			assert!(range.contains(&output));
@@ -637,7 +642,7 @@ fn swap() {
 				tick,
 				100.into()
 			)),
-			CollectedAmounts::default()
+			(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 		);
 		assert_eq!(
 			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
@@ -645,7 +650,7 @@ fn swap() {
 				tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 				100.into()
 			)),
-			CollectedAmounts::default()
+			(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 		);
 		assert_eq!(pool_state.swap::<ZeroToOne>(150.into(), None), (200.into(), 24.into()));
 	}
@@ -658,7 +663,7 @@ fn swap() {
 				tick,
 				100.into()
 			)),
-			CollectedAmounts::default()
+			(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 		);
 		assert_eq!(
 			assert_ok!(pool_state.collect_and_mint::<OneToZero>(
@@ -666,7 +671,7 @@ fn swap() {
 				tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
 				100.into()
 			)),
-			CollectedAmounts::default()
+			(CollectedAmounts::default(), PostOperationPositionExistence::Exists)
 		);
 		assert_eq!(pool_state.swap::<OneToZero>(550.into(), None), (200.into(), 50.into()));
 	}
@@ -686,7 +691,7 @@ fn maximum_liquidity_swap() {
 					MAX_FIXED_POOL_LIQUIDITY
 				)
 				.unwrap(),
-			Default::default()
+			(Default::default(), PostOperationPositionExistence::Exists)
 		);
 	}
 

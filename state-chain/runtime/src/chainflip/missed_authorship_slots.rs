@@ -1,8 +1,7 @@
 use cf_traits::MissedAuthorshipSlots;
 use codec::Decode;
-use frame_support::storage_alias;
+use frame_support::{sp_runtime::DigestItem, storage_alias};
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use sp_runtime::DigestItem;
 
 use crate::System;
 
@@ -52,23 +51,16 @@ mod test_missed_authorship_slots {
 	use codec::Encode;
 	use frame_support::{
 		construct_runtime, parameter_types,
+		sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage, Digest},
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
-	use sp_runtime::{
-		testing::{Header, UintAuthorityId},
-		traits::IdentityLookup,
-		BuildStorage, Digest,
-	};
+	use sp_core::ConstBool;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
 			System: frame_system,
 			Timestamp: pallet_timestamp,
@@ -85,14 +77,13 @@ mod test_missed_authorship_slots {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u64;
-		type BlockNumber = u64;
+		type Nonce = u64;
 		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
@@ -119,10 +110,11 @@ mod test_missed_authorship_slots {
 		type AuthorityId = AuthorityId;
 		type DisabledValidators = ();
 		type MaxAuthorities = ConstU32<10>;
+		type AllowMultipleBlocksPerSlot = ConstBool<false>;
 	}
 
 	pub fn new_test_ext(authorities: Vec<u64>) -> frame_support::sp_io::TestExternalities {
-		GenesisConfig {
+		RuntimeGenesisConfig {
 			system: Default::default(),
 			aura: AuraConfig {
 				authorities: authorities

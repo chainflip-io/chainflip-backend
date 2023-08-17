@@ -1,8 +1,6 @@
 import {
   Asset,
   executeSwap,
-  executeCall,
-  ExecuteCallParams,
   ExecuteSwapParams,
   approveVault,
   assetChains,
@@ -45,33 +43,32 @@ export async function executeContractSwap(
     gasLimit: 200000,
   } as const;
 
-  const params = {
-    destChain,
-    destAsset,
-    // It is important that this is large enough to result in
-    // an amount larger than existential (e.g. on Polkadot):
-    amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
-    destAddress,
-    srcAsset,
-    srcChain: assetChains[srcAsset],
-  } as ExecuteSwapParams;
-
-  let receipt;
-  if (!messageMetadata) {
-    receipt = await executeSwap(params, options);
-  } else {
-    receipt = await executeCall(
-      {
-        ...params,
+  const receipt = await executeSwap(
+    {
+      destChain,
+      destAsset,
+      // It is important that this is large enough to result in
+      // an amount larger than existential (e.g. on Polkadot):
+      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
+      destAddress,
+      srcAsset,
+      srcChain: assetChains[srcAsset],
+      ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-      } as ExecuteCallParams,
-      options,
-    );
-  }
+      },
+    } as ExecuteSwapParams,
+    options,
+  );
 
   return receipt;
 }
+export type ContractSwapParams = {
+  sourceAsset: Asset;
+  destAsset: Asset;
+  destAddress: string;
+  txHash: string;
+};
 
 export async function performSwapViaContract(
   sourceAsset: Asset,
@@ -79,7 +76,7 @@ export async function performSwapViaContract(
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
-) {
+): Promise<ContractSwapParams> {
   const api = await getChainflipApi();
 
   const tag = swapTag ?? '';
@@ -112,6 +109,12 @@ export async function performSwapViaContract(
       ccmEventEmitted,
     ]);
     console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    return {
+      sourceAsset,
+      destAsset,
+      destAddress,
+      txHash: receipt.transactionHash,
+    };
   } catch (err) {
     throw new Error(`${tag} ${err}`);
   }
@@ -123,18 +126,19 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const nonce = await getNextEthNonce(true);
-  return approveVault(
-    {
-      amount,
-      srcAsset,
-    },
-    {
-      signer: wallet,
-      nonce,
-      network: 'localnet',
-      vaultContractAddress: getEthContractAddress('VAULT'),
-      srcTokenContractAddress: getEthContractAddress(srcAsset),
-    },
+  await getNextEthNonce((nextNonce) =>
+    approveVault(
+      {
+        amount,
+        srcAsset,
+      },
+      {
+        signer: wallet,
+        nonce: nextNonce,
+        network: 'localnet',
+        vaultContractAddress: getEthContractAddress('VAULT'),
+        srcTokenContractAddress: getEthContractAddress(srcAsset),
+      },
+    ),
   );
 }

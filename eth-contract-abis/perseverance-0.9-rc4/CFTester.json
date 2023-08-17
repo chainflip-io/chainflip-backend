@@ -30,6 +30,12 @@
         "internalType": "bytes",
         "name": "message",
         "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ccmTestGasUsed",
+        "type": "uint256"
       }
     ],
     "name": "ReceivedxCall",
@@ -73,6 +79,12 @@
         "internalType": "uint256",
         "name": "nativeReceived",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ccmTestGasUsed",
+        "type": "uint256"
       }
     ],
     "name": "ReceivedxSwapAndCall",
@@ -80,12 +92,25 @@
   },
   {
     "inputs": [],
-    "name": "GAS_MESSAGE",
+    "name": "GAS_MESSAGE_ENCODED",
     "outputs": [
       {
         "internalType": "bytes",
         "name": "",
         "type": "bytes"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "GAS_TEST",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -161,8 +186,45 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      }
+    ],
+    "name": "decodeGasTest",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
     "inputs": [],
-    "name": "gasIterations",
+    "name": "defaultNumIterations",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "defaultStepIterations",
     "outputs": [
       {
         "internalType": "uint256",

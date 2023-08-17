@@ -11,10 +11,9 @@ use cf_chains::{
 		CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
+	eth::Address as EthereumAddress,
 };
-use cf_primitives::{
-	chains::assets::eth::Asset as EthAsset, EthereumAddress, NetworkEnvironment, SemVer,
-};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
@@ -22,7 +21,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 mod benchmarking;
 
@@ -57,6 +56,7 @@ pub mod pallet {
 	use cf_chains::btc::{ScriptPubkey, Utxo};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
+	use frame_support::DefaultNoBound;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -191,7 +191,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
 			NextCompatibilityVersion::<T>::kill();
@@ -199,19 +199,19 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
 				if next_version != T::CurrentCompatibilityVersion::get() {
-					return Err("NextCompatibilityVersion does not match the current runtime")
+					return Err("NextCompatibilityVersion does not match the current runtime".into())
 				}
 			} else {
-				return Err("NextCompatibilityVersion is not set")
+				return Err("NextCompatibilityVersion is not set".into())
 			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
@@ -227,6 +227,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
@@ -264,7 +265,10 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
-		#[pallet::weight(0)]
+		#[pallet::call_index(1)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
@@ -298,7 +302,10 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
-		#[pallet::weight(0)]
+		#[pallet::call_index(2)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
 			block_number: cf_chains::btc::BlockNumber,
@@ -322,6 +329,7 @@ pub mod pallet {
 		/// Can only be dispatched from the governance origin.
 		///
 		/// See [SafeModeUpdate] for the different options.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_safe_mode())]
 		pub fn update_safe_mode(origin: OriginFor<T>, update: SafeModeUpdate<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -351,6 +359,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
 		pub fn set_next_compatibility_version(
 			origin: OriginFor<T>,
@@ -367,8 +376,8 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(Default))]
-	pub struct GenesisConfig {
+	#[derive(DefaultNoBound)]
+	pub struct GenesisConfig<T> {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
 		pub state_chain_gateway_address: EthereumAddress,
@@ -379,11 +388,12 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub network_environment: NetworkEnvironment,
+		pub _config: PhantomData<T>,
 	}
 
 	/// Sets the genesis config
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);

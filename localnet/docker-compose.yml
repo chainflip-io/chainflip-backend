@@ -8,7 +8,8 @@ services:
       - "/tmp/chainflip/data/redis/data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc3-1-node
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc4-1-node
+    container_name: geth
     platform: linux/amd64
     ports:
       - "127.0.0.1:8545:8545"
@@ -71,12 +72,27 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
+    volumes:
+      - ./init/polkadot/chainspec.json:/polkadot/chainspec.json
+    environment:
+      - RUST_BACKTRACE=full
+    command:
+      - --alice
+      - --blocks-pruning=archive
+      - --chain=/polkadot/chainspec.json
+      - --force-authoring
+      - --name=PolkaDocker
+      - --rpc-cors=all
+      - --rpc-external
+      - --rpc-methods=unsafe
+      - --state-pruning=archive
+      - --validator
+      - --ws-external
     ports:
-      # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
       - 9945:9944 # ws port
     healthcheck:

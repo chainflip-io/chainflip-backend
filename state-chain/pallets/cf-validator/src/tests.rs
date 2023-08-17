@@ -671,19 +671,48 @@ fn test_validator_registration_min_balance() {
 #[test]
 fn test_expect_validator_register_fails() {
 	new_test_ext().execute_with(|| {
+		const ID: u64 = 42;
 		assert_ok!(ValidatorPallet::update_pallet_config(
 			RawOrigin::Root.into(),
 			PalletConfigUpdate::RegistrationBondPercentage {
 				percentage: Percent::from_percent(60),
 			},
 		));
-		MockFundingInfo::<Test>::credit_funds(&42, Percent::from_percent(40) * GENESIS_BOND);
+		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(40) * GENESIS_BOND);
+		// Reduce the set size target to the current authority count.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: MIN_AUTHORITY_SIZE,
+					max_size: <Pallet<Test> as EpochInfo>::current_authority_count(),
+					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+				},
+			},
+		));
 		assert_noop!(
-			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(42),),
+			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID),),
 			crate::Error::<Test>::NotEnoughFunds
 		);
-		MockFundingInfo::<Test>::credit_funds(&42, Percent::from_percent(20) * GENESIS_BOND);
-		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(42),));
+		// Now set it back to the default.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: MIN_AUTHORITY_SIZE,
+					max_size: MAX_AUTHORITY_SIZE,
+					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+				},
+			},
+		));
+		// It should be possible to register now since the acutal size is below the target.
+		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
+		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
+		// Trying to register again passes the funding check but fails for other reasons.
+		assert_noop!(
+			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
+			DispatchError::Other("Account already registered")
+		);
 	});
 }
 
@@ -843,7 +872,7 @@ fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
 }
 
 #[test]
-fn authority_rotation_can_suceed_after_aborted_by_safe_mode() {
+fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_default_test_bids();
 		// Abort authority rotation using Safe Mode.

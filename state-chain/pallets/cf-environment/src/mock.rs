@@ -4,7 +4,7 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},
 	dot::api::CreatePolkadotVault,
-	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
+	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
 	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
@@ -15,24 +15,18 @@ use cf_traits::{
 	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
-use sp_core::H256;
+use sp_core::{H160, H256};
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub enum Test {
 		System: frame_system,
 		Environment: pallet_cf_environment,
 	}
@@ -50,13 +44,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
@@ -173,15 +166,15 @@ impl pallet_cf_environment::Config for Test {
 	type WeightInfo = ();
 }
 
-pub const STATE_CHAIN_GATEWAY_ADDRESS: [u8; 20] = [0u8; 20];
-pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
-pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
-pub const ADDRESS_CHECKER: [u8; 20] = [3u8; 20];
+pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
+pub const KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
+pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
+pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
+	let config = RuntimeGenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
 			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
@@ -189,11 +182,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			ethereum_chain_id: ETH_CHAIN_ID,
 			eth_vault_address: VAULT_ADDRESS,
 			eth_address_checker_address: ADDRESS_CHECKER,
-			flip_token_address: [0u8; 20],
-			eth_usdc_address: [0x2; 20],
+			flip_token_address: [0u8; 20].into(),
+			eth_usdc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			network_environment: Default::default(),
+			..Default::default()
 		},
 	};
 

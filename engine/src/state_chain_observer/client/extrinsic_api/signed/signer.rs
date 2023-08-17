@@ -36,7 +36,7 @@ where
 		current_hash: state_chain_runtime::Hash,
 		current_block_number: state_chain_runtime::BlockNumber,
 		lifetime: state_chain_runtime::BlockNumber,
-		nonce: state_chain_runtime::Index,
+		nonce: state_chain_runtime::Nonce,
 	) -> (
 		state_chain_runtime::UncheckedExtrinsic,
 		std::ops::RangeTo<state_chain_runtime::BlockNumber>,

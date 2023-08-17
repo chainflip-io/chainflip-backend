@@ -45,20 +45,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityPools FlipBuyInterval (r:0 w:1)
 	fn update_buy_interval() -> Weight {
 		// Minimum execution time: 25_000 nanoseconds.
-		Weight::from_ref_time(27_000_000)
+		Weight::from_parts(27_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: LiquidityPools Pools (r:1 w:1)
 	fn update_pool_enabled() -> Weight {
 		// Minimum execution time: 38_000 nanoseconds.
-		Weight::from_ref_time(40_000_000)
+		Weight::from_parts(40_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: LiquidityPools Pools (r:1 w:1)
 	fn new_pool() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
-		Weight::from_ref_time(36_000_000)
+		Weight::from_parts(36_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -67,7 +67,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:2 w:2)
 	fn collect_and_mint_range_order() -> Weight {
 		// Minimum execution time: 83_000 nanoseconds.
-		Weight::from_ref_time(85_000_000)
+		Weight::from_parts(85_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -76,7 +76,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:2 w:2)
 	fn collect_and_burn_range_order() -> Weight {
 		// Minimum execution time: 81_000 nanoseconds.
-		Weight::from_ref_time(87_000_000)
+		Weight::from_parts(87_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -85,7 +85,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn collect_and_mint_limit_order() -> Weight {
 		// Minimum execution time: 69_000 nanoseconds.
-		Weight::from_ref_time(71_000_000)
+		Weight::from_parts(71_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -94,7 +94,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn collect_and_burn_limit_order() -> Weight {
 		// Minimum execution time: 72_000 nanoseconds.
-		Weight::from_ref_time(74_000_000)
+		Weight::from_parts(74_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -105,20 +105,20 @@ impl WeightInfo for () {
 	// Storage: LiquidityPools FlipBuyInterval (r:0 w:1)
 	fn update_buy_interval() -> Weight {
 		// Minimum execution time: 25_000 nanoseconds.
-		Weight::from_ref_time(27_000_000)
+		Weight::from_parts(27_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: LiquidityPools Pools (r:1 w:1)
 	fn update_pool_enabled() -> Weight {
 		// Minimum execution time: 38_000 nanoseconds.
-		Weight::from_ref_time(40_000_000)
+		Weight::from_parts(40_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: LiquidityPools Pools (r:1 w:1)
 	fn new_pool() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
-		Weight::from_ref_time(36_000_000)
+		Weight::from_parts(36_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -127,7 +127,7 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:2 w:2)
 	fn collect_and_mint_range_order() -> Weight {
 		// Minimum execution time: 83_000 nanoseconds.
-		Weight::from_ref_time(85_000_000)
+		Weight::from_parts(85_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -136,7 +136,7 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:2 w:2)
 	fn collect_and_burn_range_order() -> Weight {
 		// Minimum execution time: 81_000 nanoseconds.
-		Weight::from_ref_time(87_000_000)
+		Weight::from_parts(87_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -145,7 +145,7 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn collect_and_mint_limit_order() -> Weight {
 		// Minimum execution time: 69_000 nanoseconds.
-		Weight::from_ref_time(71_000_000)
+		Weight::from_parts(71_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -154,7 +154,7 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn collect_and_burn_limit_order() -> Weight {
 		// Minimum execution time: 72_000 nanoseconds.
-		Weight::from_ref_time(74_000_000)
+		Weight::from_parts(74_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}

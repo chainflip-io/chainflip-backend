@@ -53,12 +53,14 @@ where
 		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
+		.logging("chain tracking")
 		.spawn(scope);
 
 	let btc_client = btc_client.clone();
 	btc_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
+		.logging("safe block produced")
 		.then(move |header| {
 			let btc_client = btc_client.clone();
 			async move {
@@ -131,6 +133,7 @@ where
 			}
 		})
 		.continuous("Bitcoin".to_string(), db)
+		.logging("witnessing")
 		.spawn(scope);
 
 	Ok(())
@@ -161,7 +164,7 @@ fn deposit_witnesses(
 }
 
 fn script_addresses(
-	addresses: Vec<DepositChannelDetails<Bitcoin>>,
+	addresses: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
 ) -> HashMap<Vec<u8>, ScriptPubkey> {
 	addresses
 		.into_iter()
@@ -206,9 +209,12 @@ mod tests {
 		}
 	}
 
-	fn fake_details(address: ScriptPubkey) -> DepositChannelDetails<Bitcoin> {
-		DepositChannelDetails {
+	fn fake_details(
+		address: ScriptPubkey,
+	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
+		DepositChannelDetails::<_, BitcoinInstance> {
 			opened_at: 1,
+			expires_at: 10,
 			deposit_channel: DepositChannel {
 				channel_id: 1,
 				address,

@@ -1,33 +1,35 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SemVer, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::PolkadotHash,
+	eth::{api::EthereumChainId, Address as EthereumAddress},
+};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
+use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-#[cfg(feature = "std")]
+use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum BackupOrPassive {
 	Backup,
 	Passive,
 }
 
 // TEMP: so frontend doesn't break after removal of passive from backend
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
 	BackupOrPassive(BackupOrPassive),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiAccountInfo {
 	pub balance: u128,
 	pub bond: u128,
@@ -39,7 +41,7 @@ pub struct RuntimeApiAccountInfo {
 	pub state: ChainflipAccountStateWithPassive,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
@@ -55,13 +57,13 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub bound_redeem_address: Option<EthereumAddress>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct RuntimeApiPenalty {
 	pub reputation_points: i32,
 	pub suspension_duration_blocks: u32,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
 	pub blocks_per_epoch: u32,
 	pub current_epoch_started_at: u32,
@@ -70,7 +72,7 @@ pub struct AuctionState {
 	pub auction_size_range: (u32, u32),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct Environment {
 	pub bitcoin_network: BitcoinNetwork,
 	pub ethereum_chain_id: EthereumChainId,
@@ -84,7 +86,6 @@ decl_runtime_apis!(
 		fn cf_is_auction_phase() -> bool;
 		fn cf_eth_flip_token_address() -> EthereumAddress;
 		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset>;
 		fn cf_eth_key_manager_address() -> EthereumAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
@@ -111,5 +112,7 @@ decl_runtime_apis!(
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
 		fn cf_environment() -> Environment;
+		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
+		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 	}
 );

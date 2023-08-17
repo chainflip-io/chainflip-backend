@@ -4,19 +4,16 @@
 //!
 //! Primitive types to be used across Chainflip's various crates.
 use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
 };
-
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	vec::Vec,
 };
-
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 
 pub mod chains;
 
@@ -38,8 +35,6 @@ pub type ChannelId = u64;
 pub type EgressCounter = u64;
 
 pub type EgressId = (ForeignChain, EgressCounter);
-
-pub type EthereumAddress = [u8; 20];
 
 pub type EthAmount = u128;
 
@@ -74,8 +69,6 @@ pub struct TxId {
 	pub extrinsic_index: u32,
 }
 
-pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
-
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
@@ -108,8 +101,9 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 	Default,
 	PartialOrd,
 	Ord,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountRole {
 	/// The default account type - indicates a bare account with no special role or permissions.
 	#[default]
@@ -126,8 +120,9 @@ pub enum AccountRole {
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct SwapOutput {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<AssetAmount>,
@@ -171,8 +166,9 @@ pub struct SemVer {
 }
 
 /// The network environment, used to determine which chains the Chainflip network is connected to.
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,
+)]
 pub enum NetworkEnvironment {
 	/// Chainflip is connected to public mainnet chains.
 	Mainnet,

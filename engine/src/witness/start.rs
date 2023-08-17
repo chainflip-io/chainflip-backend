@@ -12,7 +12,7 @@ use crate::{
 
 use crate::state_chain_observer::client::chain_api::ChainApi;
 
-use super::{common::epoch_source::EpochSource, eth::vault::EthAssetApi};
+use super::common::epoch_source::EpochSource;
 
 use anyhow::Result;
 
@@ -26,8 +26,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 ) -> Result<()>
 where
 	StateChainStream: StateChainStreamApi + Clone,
-	StateChainClient:
-		StorageApi + EthAssetApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let epoch_source =
 		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())

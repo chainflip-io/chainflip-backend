@@ -10,18 +10,20 @@ mod helper_functions;
 pub use helper_functions::*;
 
 #[cfg(feature = "try-runtime")]
+use frame_support::pallet_prelude::DispatchError;
+#[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
 /// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to version `TO`.
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:
 ///   1. `P`'s stored version should be equal to `FROM`.
-///   2.  The version supported by the pallet is greater or equal to `TO`.
+///   2. The version supported by the pallet is greater or equal to `TO`.
 ///
 /// As long as both conditions are met, the upgrade `U` will run and then the pallet's stored
 /// version is set to `TO`.
 pub struct VersionedMigration<
-	P: PalletInfoAccess + GetStorageVersion,
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
 	U: OnRuntimeUpgrade,
 	const FROM: u16,
 	const TO: u16,
@@ -109,14 +111,18 @@ mod try_runtime_helpers {
 	}
 }
 
-fn should_upgrade<P: GetStorageVersion, const FROM: u16, const TO: u16>() -> bool {
+fn should_upgrade<
+	P: GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	const FROM: u16,
+	const TO: u16,
+>() -> bool {
 	<P as GetStorageVersion>::on_chain_storage_version() == FROM &&
 		<P as GetStorageVersion>::current_storage_version() >= TO
 }
 
 impl<P, U, const FROM: u16, const TO: u16> OnRuntimeUpgrade for VersionedMigration<P, U, FROM, TO>
 where
-	P: PalletInfoAccess + GetStorageVersion,
+	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
 	U: OnRuntimeUpgrade,
 {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -144,7 +150,7 @@ where
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		if should_upgrade::<P, FROM, TO>() {
 			let state = U::pre_upgrade().map_err(|e| {
 				log::error!(
@@ -168,7 +174,7 @@ where
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		if let Some((lowest, highest)) = try_runtime_helpers::get_migration_bounds::<P>() {
 			assert_eq!(
 				<P as GetStorageVersion>::on_chain_storage_version(),
@@ -226,6 +232,8 @@ mod test_versioned_upgrade {
 	}
 
 	impl GetStorageVersion for Pallet {
+		type CurrentStorageVersion = StorageVersion;
+
 		fn current_storage_version() -> StorageVersion {
 			PALLET_VERSION
 		}
@@ -256,18 +264,18 @@ mod test_versioned_upgrade {
 	impl OnRuntimeUpgrade for DummyUpgrade {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			UPGRADES_COMPLETED.with(|cell| *cell.borrow_mut() += 1);
-			Weight::from_ref_time(0)
+			Weight::from_parts(0, 0)
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_data: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_data: Vec<u8>) -> Result<(), DispatchError> {
 			if Self::is_error_on_post_upgrade() {
-				Err("err")
+				Err("err".into())
 			} else {
 				Ok(())
 			}

@@ -33,7 +33,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let members = BTreeSet::from([caller]);
 		let call = Call::<T>::new_membership_set{ accounts: members.clone().into_iter().collect() };
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Members::<T>::get(), members);
@@ -41,7 +41,7 @@ benchmarks! {
 	call_as_sudo {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::set_code_without_checks{ code: vec![1, 2, 3, 4] }.into();
 		let sudo_call = Call::<T>::call_as_sudo{ call: Box::new(call) };
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
 	on_initialize {
 		// TODO: mock the time to end in the expire proposals case which is more expensive
@@ -74,7 +74,7 @@ benchmarks! {
 		};
 
 	} : {
-		call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())?;
+		call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap())?;
 	}
 	verify {
 		assert_eq!(GovKeyWhitelistedCallHash::<T>::get().unwrap(), call_hash);
@@ -99,7 +99,7 @@ benchmarks! {
 			call: Box::new(new_membership_set_call),
 		};
 	} : {
-		call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin())?;
+		call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())?;
 	}
 	verify {
 		assert_eq!(NextGovKeyCallHashNonce::<T>::get(), next_nonce + 1);

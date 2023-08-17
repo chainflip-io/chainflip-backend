@@ -1,7 +1,6 @@
 use cf_chains::address::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapLeg};
-use frame_support::dispatch::DispatchError;
-use sp_runtime::DispatchResult;
+use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -9,6 +8,7 @@ pub trait SwapDepositHandler {
 	#[allow(clippy::too_many_arguments)]
 	fn schedule_swap_from_channel(
 		deposit_address: ForeignChainAddress,
+		deposit_block_height: u64,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
@@ -70,6 +70,7 @@ impl<T: frame_system::Config> SwapDepositHandler for T {
 
 	fn schedule_swap_from_channel(
 		_deposit_address: ForeignChainAddress,
+		_deposit_block_height: u64,
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,

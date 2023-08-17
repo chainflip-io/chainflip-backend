@@ -14,16 +14,16 @@ pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
-use scale_info::TypeInfo;
-use sp_core::{sr25519, ConstBool, H256};
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
 	traits::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	AccountId32, MultiAddress, MultiSignature,
+	MultiAddress, MultiSignature,
 };
+use scale_info::TypeInfo;
+use sp_core::{sr25519, ConstBool, H256};
 
 #[cfg_attr(feature = "std", derive(Hash))]
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -44,7 +44,7 @@ impl PolkadotSignature {
 
 impl PartialOrd for PolkadotSignature {
 	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-		self.aliased_ref().partial_cmp(other.aliased_ref())
+		Some(self.cmp(other))
 	}
 }
 
@@ -95,8 +95,9 @@ impl PolkadotPair {
 	PartialOrd,
 	Ord,
 	MaxEncodedLen,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(
 	feature = "std",
 	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
@@ -119,8 +120,20 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+	Debug,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Default,
+	MaxEncodedLen,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
@@ -153,7 +166,7 @@ impl PolkadotUncheckedExtrinsic {
 		Self(UncheckedExtrinsic::new_signed(
 			function,
 			MultiAddress::Id(signed),
-			sp_runtime::MultiSignature::Sr25519(signature.0),
+			frame_support::sp_runtime::MultiSignature::Sr25519(signature.0),
 			extra,
 		))
 	}
@@ -216,8 +229,9 @@ pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Serialize, Deserialize,
+)]
 pub struct PolkadotTrackedData {
 	pub median_tip: PolkadotBalance,
 	pub runtime_version: RuntimeVersion,
@@ -523,6 +537,25 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	batch_all {
+		#[allow(missing_docs)]
+		calls: Vec<PolkadotRuntimeCall>,
+	},
+	/// Send a batch of dispatch calls.
+	/// Unlike `batch`, it allows errors and won't interrupt.
+	///
+	/// May be called from any origin.
+	///
+	/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+	///   exceed the constant: `batched_calls_limit` (available in constant metadata).
+	///
+	/// If origin is root then call are dispatch without checking origin filter. (This includes
+	/// bypassing `frame_system::Config::BaseCallFilter`).
+	///
+	/// # <weight>
+	/// - Complexity: O(C) where C is the number of calls to be batched.
+	/// # </weight>
+	#[codec(index = 4u8)]
+	force_batch {
 		#[allow(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},

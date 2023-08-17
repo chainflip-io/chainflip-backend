@@ -62,12 +62,12 @@ benchmarks! {
 	}
 
 	set_lp_ttl {
-		let ttl = T::BlockNumber::from(1_000u32);
+		let ttl = BlockNumberFor::<T>::from(1_000u32);
 		let call = Call::<T>::set_lp_ttl {
 			ttl,
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert_eq!(crate::LpTTL::<T>::get(), ttl);
 	}
@@ -78,7 +78,7 @@ benchmarks! {
 		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 	}: _(RawOrigin::Signed(caller.clone()), EncodedAddress::Eth([0x01; 20]))
 	verify {
-		assert_eq!(EmergencyWithdrawalAddress::<T>::get(caller, ForeignChain::Ethereum), Some(ForeignChainAddress::Eth([0x01; 20])));
+		assert_eq!(EmergencyWithdrawalAddress::<T>::get(caller, ForeignChain::Ethereum), Some(ForeignChainAddress::Eth([0x01; 20].into())));
 	}
 
 	impl_benchmark_test_suite!(

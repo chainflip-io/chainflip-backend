@@ -46,7 +46,7 @@ where
 			.storage_map::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 				state_chain_runtime::Runtime,
 				<Inner::Chain as PalletInstanceAlias>::Instance,
-			>>(block_hash)
+			>, Vec<_>>(block_hash)
 			.await
 			.expect(STATE_CHAIN_CONNECTION)
 			.into_iter()

@@ -26,14 +26,14 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
 	pallet_prelude::Member,
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
+	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
-};
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
 
 /// Common base config for Chainflip pallets.
@@ -172,6 +172,10 @@ pub trait VaultRotator {
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
 	fn activate();
+
+	/// Terminate the current key rotation because of Safe Mode.
+	/// No validators are slashed.
+	fn abort_vault_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
@@ -637,11 +641,13 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
+	type BlockNumber;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
+		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -652,6 +658,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.

@@ -5,10 +5,13 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
-use frame_support::{pallet_prelude::*, transactional};
-use frame_system::pallet_prelude::OriginFor;
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{Permill, Saturating},
+	transactional,
+};
+use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use sp_arithmetic::traits::Zero;
-use sp_runtime::{Permill, Saturating};
 
 use sp_std::vec;
 
@@ -43,6 +46,11 @@ pub mod pallet {
 	use super::*;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	#[cfg_attr(
+		feature = "std",
+		serde(bound = "LiquidityProvider: Clone + Ord + Serialize + serde::de::DeserializeOwned")
+	)]
 	pub struct Pool<LiquidityProvider> {
 		pub enabled: bool,
 		pub pool_state: PoolState<LiquidityProvider>,
@@ -111,7 +119,7 @@ pub mod pallet {
 	/// Pools are indexed by single asset since USDC is implicit.
 	/// The STABLE_ASSET is always PoolSide::Asset1
 	#[pallet::storage]
-	pub(super) type Pools<T: Config> =
+	pub type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, Pool<T::AccountId>, OptionQuery>;
 
 	/// FLIP ready to be burned.
@@ -120,15 +128,15 @@ pub mod pallet {
 
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
-	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Lifetime of an order.
 	#[pallet::storage]
 	pub(super) type OrderQueue<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
-		T::BlockNumber,
-		Vec<OrderDetails<T::AccountId, T::BlockNumber>>,
+		BlockNumberFor<T>,
+		Vec<OrderDetails<T::AccountId, BlockNumberFor<T>>>,
 		OptionQuery,
 	>;
 
@@ -138,20 +146,19 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub flip_buy_interval: T::BlockNumber,
+		pub flip_buy_interval: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: T::BlockNumber::zero() }
+			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
 		}
 	}
 
@@ -211,8 +218,6 @@ pub mod pallet {
 		InvalidTick,
 		/// One of the referenced ticks reached its maximum gross liquidity
 		MaximumGrossLiquidity,
-		/// User's position does not have enough liquidity.
-		PositionLacksLiquidity,
 		/// The user's position does not exist.
 		PositionDoesNotExist,
 		/// It is no longer possible to mint limit orders due to reaching the maximum pool
@@ -242,7 +247,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		UpdatedBuyInterval {
-			buy_interval: T::BlockNumber,
+			buy_interval: BlockNumberFor<T>,
 		},
 		PoolStateUpdated {
 			unstable_asset: any::Asset,
@@ -330,10 +335,11 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::update_buy_interval())]
 		pub fn update_buy_interval(
 			origin: OriginFor<T>,
-			new_buy_interval: T::BlockNumber,
+			new_buy_interval: BlockNumberFor<T>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
@@ -353,6 +359,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::update_pool_enabled())]
 		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
@@ -382,6 +389,7 @@ pub mod pallet {
 		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
 		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
 		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
 			origin: OriginFor<T>,
@@ -447,6 +455,7 @@ pub mod pallet {
 		/// - [BelowMinimumAmount](pallet_cf_lp::Error::BelowMinimumAmount)
 		/// - [DesiredBelowMinimumAmount](pallet_cf_lp::Error::DesiredBelowMinimumAmount)
 		/// - [MintingRangeOrderDisabled](pallet_cf_lp::Error::MintingRangeOrderDisabled)
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_range_order())]
 		pub fn collect_and_mint_range_order(
 			origin: OriginFor<T>,
@@ -556,8 +565,8 @@ pub mod pallet {
 		/// - [PoolDisabled](pallet_cf_pools::Error::PoolDisabled)
 		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
-		/// - [PositionLacksLiquidity](pallet_cf_pools::Error::PositionLacksLiquidity)
 		/// - [BurningRangeOrderDisabled](pallet_cf_lp::Error::BurningRangeOrderDisabled)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::collect_and_burn_range_order())]
 		pub fn collect_and_burn_range_order(
 			origin: OriginFor<T>,
@@ -572,7 +581,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
+				let (assets_withdrawn, range_orders::CollectedFees { fees }, _) = pool_state
 					.range_orders
 					.collect_and_burn(
 						&lp,
@@ -585,9 +594,7 @@ pub mod pallet {
 							Error::<T>::InvalidTickRange,
 						range_orders::PositionError::NonExistent =>
 							Error::<T>::PositionDoesNotExist,
-						range_orders::PositionError::Other(
-							range_orders::BurnError::PositionLacksLiquidity,
-						) => Error::<T>::PositionLacksLiquidity,
+						range_orders::PositionError::Other(e) => match e {},
 					})?;
 
 				let assets_credited =
@@ -624,6 +631,7 @@ pub mod pallet {
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [MaximumGrossLiquidity](pallet_cf_pools::Error::MaximumGrossLiquidity)
 		/// - [MintingLimitOrderDisabled](pallet_cf_lp::Error::MintingLimitOrderDisabled)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::collect_and_mint_limit_order())]
 		pub fn collect_and_mint_limit_order(
 			origin: OriginFor<T>,
@@ -631,7 +639,7 @@ pub mod pallet {
 			order: Order,
 			price_as_tick: Tick,
 			amount: AssetAmount,
-			order_validity: Option<OrderValidity<T::BlockNumber>>,
+			order_validity: Option<OrderValidity<BlockNumberFor<T>>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_limit_order_enabled,
@@ -713,8 +721,8 @@ pub mod pallet {
 		/// - [PoolDisabled](pallet_cf_pools::Error::PoolDisabled)
 		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
-		/// - [PositionLacksLiquidity](pallet_cf_pools::Error::PositionLacksLiquidity)
 		/// - [BurningLimitOrderDisabled](pallet_cf_lp::Error::BurningLimitOrderDisabled)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::collect_and_burn_limit_order())]
 		pub fn collect_and_burn_limit_order(
 			origin: OriginFor<T>,
@@ -734,7 +742,8 @@ pub mod pallet {
 				order,
 				price_as_tick,
 				amount,
-			)
+			)?;
+			Ok(())
 		}
 	}
 }
@@ -794,8 +803,8 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 
 impl<T: Config> Pallet<T> {
 	pub fn add_to_order_queue(
-		block_number: T::BlockNumber,
-		order: OrderDetails<T::AccountId, T::BlockNumber>,
+		block_number: BlockNumberFor<T>,
+		order: OrderDetails<T::AccountId, BlockNumberFor<T>>,
 	) {
 		OrderQueue::<T>::mutate(block_number, |orders| {
 			if let Some(orders) = orders {
@@ -806,7 +815,7 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	pub fn mint_or_burn_orders(current_block: T::BlockNumber) -> Weight {
+	pub fn mint_or_burn_orders(current_block: BlockNumberFor<T>) -> Weight {
 		if let Some(orders) = OrderQueue::<T>::take(current_block) {
 			for order in orders.into_iter() {
 				match order.lifetime {
@@ -868,7 +877,7 @@ impl<T: Config> Pallet<T> {
 		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 			let side = utilities::order_to_side(order);
 
-			let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }) =
+			let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }, _) =
 				(match side {
 					Side::Zero => cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
 					Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
@@ -876,9 +885,7 @@ impl<T: Config> Pallet<T> {
 				.map_err(|e| match e {
 					limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
 					limit_orders::PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
-					limit_orders::PositionError::Other(
-						limit_orders::BurnError::PositionLacksLiquidity,
-					) => Error::<T>::PositionLacksLiquidity,
+					limit_orders::PositionError::Other(e) => match e {},
 				})?;
 
 			let collected_fees = Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
@@ -913,7 +920,7 @@ impl<T: Config> Pallet<T> {
 
 			Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
-			let limit_orders::CollectedAmounts { fees, swapped_liquidity } =
+			let (limit_orders::CollectedAmounts { fees, swapped_liquidity }, _) =
 				(match side {
 					Side::Zero => cf_amm::limit_orders::PoolState::collect_and_mint::<OneToZero>,
 					Side::One => cf_amm::limit_orders::PoolState::collect_and_mint::<ZeroToOne>,
@@ -978,6 +985,10 @@ impl<T: Config> Pallet<T> {
 				}
 			},
 		})
+	}
+
+	pub fn get_pool(asset: Asset) -> Option<Pool<T::AccountId>> {
+		Pools::<T>::get(asset)
 	}
 
 	fn try_credit_single_asset(

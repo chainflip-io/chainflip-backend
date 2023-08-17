@@ -18,7 +18,7 @@ benchmarks_instance_pallet! {
 			new_chain_state: new_chain_state.clone(),
 		};
 
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		// Dispatch once to ensure we have a value already inserted - replacing a value is more expensive
 		// than inserting a new one.
 		assert_ok!(call.clone().dispatch_bypass_filter(origin.clone()));

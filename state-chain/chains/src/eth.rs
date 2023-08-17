@@ -15,15 +15,14 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
-use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
-use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-use sp_core::ConstBool;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
 };
+use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_core::ConstBool;
 use sp_std::{
 	cmp::min,
 	convert::{TryFrom, TryInto},
@@ -78,8 +77,19 @@ impl ChainCrypto for Ethereum {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 #[codec(mel_bound())]
 pub struct EthereumTrackedData {
 	pub base_fee: <Ethereum as Chain>::ChainAmount,
@@ -122,7 +132,6 @@ impl Display for AggKeyVerificationError {
 /// A parity bit can be either odd or even, but can have different representations depending on its
 /// use. Ethereum generaly assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(
 	Encode,
 	Decode,
@@ -135,6 +144,8 @@ impl Display for AggKeyVerificationError {
 	Eq,
 	PartialOrd,
 	Ord,
+	Serialize,
+	Deserialize,
 )]
 pub enum ParityBit {
 	Odd,
@@ -171,7 +182,6 @@ impl Default for ParityBit {
 }
 
 /// For encoding the `Key` type as defined in <https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol>
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(
 	Default,
 	Encode,
@@ -185,6 +195,8 @@ impl Default for ParityBit {
 	Eq,
 	PartialOrd,
 	Ord,
+	Serialize,
+	Deserialize,
 )]
 pub struct AggKey {
 	/// X coordinate of the public key as a 32-byte array.
@@ -193,12 +205,10 @@ pub struct AggKey {
 	pub pub_key_y_parity: ParityBit,
 }
 
-pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {
+pub fn to_ethereum_address(pubkey: PublicKey) -> eth::Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
-	let mut res = [0u8; 20];
-	res.copy_from_slice(&h.0[12..]);
-	res
+	eth::Address::from_slice(&h.0[12..])
 }
 
 impl AggKey {
@@ -281,7 +291,7 @@ impl AggKey {
 
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
-		let e = self.message_challenge_scalar(msg_hash, &k_times_g_address);
+		let e = self.message_challenge_scalar(msg_hash, k_times_g_address.as_fixed_bytes());
 
 		let d: Scalar = (*secret).into();
 		let k: Scalar = (*sig_nonce).into();
@@ -423,8 +433,9 @@ pub struct TransactionFee {
 /// The signer will need to add its account nonce and then sign and rlp-encode the transaction.
 ///
 /// We assume the access_list (EIP-2930) is not required.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
 pub struct Transaction {
 	pub chain_id: u64,
 	pub max_priority_fee_per_gas: Option<Uint>, // EIP-1559
@@ -732,7 +743,7 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		// Public agg key
 		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
@@ -753,7 +764,7 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
+		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k)).0;
 		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
 
 		// This should pass.

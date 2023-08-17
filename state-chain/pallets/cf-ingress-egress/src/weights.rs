@@ -34,6 +34,7 @@ pub trait WeightInfo {
 	fn process_single_deposit() -> Weight;
 	fn set_minimum_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
+	fn vault_transfer_failed() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -43,7 +44,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		// Minimum execution time: 26_000 nanoseconds.
-		Weight::from_ref_time(28_000_000)
+		Weight::from_parts(28_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 
@@ -53,22 +54,26 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn process_single_deposit() -> Weight {
 		// Minimum execution time: 114_000 nanoseconds.
-		Weight::from_ref_time(115_000_000)
+		Weight::from_parts(115_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 
 	fn set_minimum_deposit() -> Weight{
-		Weight::from_ref_time(1_000_000)
-} 
+		Weight::from_parts(1_000_000, 0)
+	} 
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {
 		// Minimum execution time: 7_000 nanoseconds.
-		Weight::from_ref_time(9_808_443)
+		Weight::from_parts(9_808_443, 0)
 			// Standard Error: 4_207
-			.saturating_add(Weight::from_ref_time(1_981_649).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(1_981_649, 0).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
+	}
+
+	fn vault_transfer_failed() -> Weight {
+		Weight::from_parts(1_000_000, 0)
 	}
 }
 
@@ -78,7 +83,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		// Minimum execution time: 26_000 nanoseconds.
-		Weight::from_ref_time(28_000_000)
+		Weight::from_parts(28_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 
@@ -88,21 +93,25 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn process_single_deposit() -> Weight {
 		// Minimum execution time: 114_000 nanoseconds.
-		Weight::from_ref_time(115_000_000)
+		Weight::from_parts(115_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 
 	fn set_minimum_deposit() -> Weight{
-		Weight::from_ref_time(1_000_000)
-}
+		Weight::from_parts(1_000_000, 0)
+	}
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {
 		// Minimum execution time: 7_000 nanoseconds.
-		Weight::from_ref_time(9_808_443)
+		Weight::from_parts(9_808_443, 0)
 			// Standard Error: 4_207
-			.saturating_add(Weight::from_ref_time(1_981_649).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(1_981_649, 0).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
+	}
+	
+	fn vault_transfer_failed() -> Weight {
+		Weight::from_parts(1_000_000, 0)
 	}
 }

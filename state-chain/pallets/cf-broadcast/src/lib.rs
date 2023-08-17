@@ -146,7 +146,7 @@ pub mod pallet {
 		type TargetChain: ChainAbi;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue;
+		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue + Send + Sync;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
@@ -189,7 +189,6 @@ pub mod pallet {
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -237,7 +236,7 @@ pub mod pallet {
 	/// block number.
 	#[pallet::storage]
 	pub type Timeouts<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<BroadcastAttemptId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttemptId>, ValueQuery>;
 
 	/// Stores all needed information to be able to re-request the signature
 	#[pallet::storage]
@@ -361,6 +360,7 @@ pub mod pallet {
 		///
 		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
 		/// - [InvalidSigner](Error::InvalidSigner)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::transaction_signing_failure())]
 		pub fn transaction_signing_failure(
 			origin: OriginFor<T>,
@@ -416,6 +416,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [Error::ThresholdSignatureUnavailable]
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::on_signature_ready())]
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,
@@ -464,6 +465,7 @@ pub mod pallet {
 		/// - [InvalidPayload](Event::InvalidPayload)
 		/// - [InvalidBroadcastAttemptId](Event::InvalidBroadcastAttemptId)
 		#[pallet::weight(T::WeightInfo::transaction_succeeded())]
+		#[pallet::call_index(2)]
 		pub fn transaction_succeeded(
 			origin: OriginFor<T>,
 			tx_out_id: TransactionOutIdFor<T, I>,
@@ -520,7 +522,9 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(0)]
+		// TODO: Remove this before mainnet (or use a feature flag?)
+		#[pallet::weight(Weight::zero())]
+		#[pallet::call_index(3)]
 		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -640,9 +644,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::TransactionBuilder::is_valid_for_rebroadcast(
 				&api_call,
 				&broadcast_attempt.threshold_signature_payload,
-			) && <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 				&key,
-				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
 				let next_broadcast_attempt_id =

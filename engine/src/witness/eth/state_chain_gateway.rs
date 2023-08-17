@@ -66,7 +66,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 												amount: amount
 													.try_into()
 													.expect("Funded amount should fit in u128"),
-												funder: funder.into(),
+												funder,
 												tx_hash: event.tx_hash.into(),
 											}
 											.into(),

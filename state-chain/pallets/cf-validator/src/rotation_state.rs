@@ -1,5 +1,5 @@
 use crate::*;
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
