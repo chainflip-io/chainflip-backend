@@ -282,11 +282,15 @@ fn deposit_witnesses(
 						amount: *amount,
 						deposit_details: (),
 					});
-				} else if &PolkadotAccountId::from_aliased(from.0) == our_vault {
-					tracing::info!("Transfer from our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
-					extrinsic_indices.insert(*extrinsic_index);
-				} else if &deposit_address == our_vault {
-					tracing::info!("Transfer to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+				}
+				// It's possible a transfer to one of the monitored addresses comes from our_vault,
+				// so this cannot be an else if
+				if &PolkadotAccountId::from_aliased(from.0) == our_vault ||
+					&deposit_address == our_vault
+				{
+					tracing::info!(
+						"Interesting transfer at block: {block_number}, extrinsic index: {extrinsic_index} from: {from:?} to: {to:?}", 
+					);
 					extrinsic_indices.insert(*extrinsic_index);
 				}
 			}
