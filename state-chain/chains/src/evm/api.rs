@@ -41,15 +41,8 @@ pub fn evm_all_batch_builder<
 	for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
 		if let Some(token_address) = token_address_fn(asset) {
 			match deposit_fetch_id {
-				EthereumFetchId::Fetch(contract_address) => {
-					// re-instate once types sorted out
-					// debug_assert!(
-					// 	asset != assets::eth::Asset::Eth,
-					// 	"Eth should not be fetched. It is auto-fetched in the smart contract."
-					// );
-					fetch_only_params
-						.push(EncodableFetchAssetParams { contract_address, asset: token_address })
-				},
+				EthereumFetchId::Fetch(contract_address) => fetch_only_params
+					.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
 				EthereumFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
 					.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
 				EthereumFetchId::NotRequired => (),
