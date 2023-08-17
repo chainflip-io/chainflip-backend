@@ -370,22 +370,16 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn force_witness(
 			origin: OriginFor<T>,
-			mut call: Box<<T as Config>::RuntimeCall>,
+			call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-			let (extra_data, call_hash) = Self::split_calldata(&mut call);
+			let (_, call_hash) = Self::split_calldata(&mut call.clone());
 			ensure!(Votes::<T>::contains_key(epoch_index, call_hash), Error::<T>::InvalidEpoch);
 
-			if let Some(extra_data) = extra_data {
-				ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
-			}
-			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
-				call.combine_and_inject(&mut extra_data)
-			}
 			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
 			Ok(())
 		}
