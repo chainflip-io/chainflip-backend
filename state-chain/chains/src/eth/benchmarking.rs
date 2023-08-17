@@ -1,9 +1,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::{
-	api::{EthereumTransactionBuilder},
-	TransactionFee,
-};
+use super::TransactionFee;
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::{
@@ -11,9 +8,9 @@ use crate::{
 		to_ethereum_address, Address, AggKey, EthereumTrackedData, SchnorrVerificationComponents,
 		Transaction, H256,
 	},
+	evm::api::{EthereumTransactionBuilder, EvmReplayProtection},
 	ApiCall,
 };
-use crate::evm::api::EvmReplayProtection;
 use cf_primitives::EthAmount;
 use ethabi::Uint;
 use libsecp256k1::{PublicKey, SecretKey};

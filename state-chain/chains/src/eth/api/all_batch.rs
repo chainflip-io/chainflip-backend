@@ -1,3 +1,5 @@
+use crate::evm::api::common::{EncodableFetchAssetParams, EncodableFetchDeployAssetParams};
+
 use super::*;
 use codec::{Decode, Encode};
 use ethabi::Token;
@@ -54,14 +56,23 @@ mod test_all_batch {
 	use super::*;
 	use crate::{
 		eth::{
-			self,
-			api::{abi::load_abi, EthereumTransactionBuilder},
-			EthereumFetchId, SchnorrVerificationComponents,
+			self, api::EthereumTransactionBuilder, EthereumFetchId, SchnorrVerificationComponents,
 		},
-		evm::{api::EvmReplayProtection, EthereumChainId},
+		evm::{
+			api::{
+				abi::load_abi,
+				common::{
+					EncodableFetchAssetParams, EncodableFetchDeployAssetParams,
+					EncodableTransferAssetParams,
+				},
+				EvmReplayProtection,
+			},
+			EthereumChainId,
+		},
 		AllBatch, ApiCall, FetchAssetParams,
 	};
 	use cf_primitives::chains::assets;
+	use ethabi::Address;
 
 	use super::EthereumApi;
 

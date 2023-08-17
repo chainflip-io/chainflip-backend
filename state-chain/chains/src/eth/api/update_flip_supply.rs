@@ -38,9 +38,12 @@ impl EthereumCall for UpdateFlipSupply {
 
 #[cfg(test)]
 mod test_update_flip_supply {
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EvmReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::{
+			api::{ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+			SchnorrVerificationComponents,
+		},
+		evm::api::abi::load_abi,
 	};
 
 	use super::*;

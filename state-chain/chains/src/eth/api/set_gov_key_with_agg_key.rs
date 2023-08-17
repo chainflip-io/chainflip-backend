@@ -33,12 +33,8 @@ impl EthereumCall for SetGovKeyWithAggKey {
 mod test_set_gov_key_with_agg_key {
 	use super::*;
 	use crate::{
-		eth::{
-			api::{abi::load_abi, ApiCall, EthereumTransactionBuilder},
-			tests::asymmetrise,
-			SchnorrVerificationComponents,
-		},
-		evm::api::EvmReplayProtection,
+		eth::{api::ApiCall, tests::asymmetrise, SchnorrVerificationComponents},
+		evm::api::{abi::load_abi, EthereumTransactionBuilder, EvmReplayProtection},
 	};
 
 	#[test]

@@ -61,9 +61,12 @@ impl EthereumCall for RegisterRedemption {
 
 #[cfg(test)]
 mod test_register_redemption {
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EvmReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::{
+			api::{ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+			SchnorrVerificationComponents,
+		},
+		evm::api::abi::load_abi,
 	};
 
 	use super::*;

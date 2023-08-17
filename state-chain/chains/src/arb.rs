@@ -4,7 +4,8 @@ pub mod api;
 pub mod benchmarking;
 
 use crate::{
-	eth::{DeploymentStatus, EthereumFetchId, SchnorrVerificationComponents},
+	eth::{DeploymentStatus, EthereumFetchId},
+	evm::SchnorrVerificationComponents,
 	*,
 };
 use cf_primitives::chains::assets;

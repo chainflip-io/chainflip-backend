@@ -25,3 +25,11 @@ pub trait EvmEnvironmentProvider<C: Chain> {
 		}
 	}
 }
+
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct SchnorrVerificationComponents {
+	/// Scalar component
+	pub s: [u8; 32],
+	/// The challenge, expressed as a truncated keccak hash of a pair of coordinates.
+	pub k_times_g_address: [u8; 20],
+}

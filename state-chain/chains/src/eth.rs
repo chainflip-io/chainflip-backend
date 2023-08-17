@@ -5,8 +5,10 @@ pub mod benchmarking;
 
 pub mod deposit_address;
 
-use self::api::tokenizable::Tokenizable;
-use crate::*;
+use crate::{
+	evm::{api::Tokenizable, SchnorrVerificationComponents},
+	*,
+};
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -385,14 +387,6 @@ impl Tokenizable for AggKey {
 	fn param_type() -> ethabi::ParamType {
 		ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)])
 	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct SchnorrVerificationComponents {
-	/// Scalar component
-	pub s: [u8; 32],
-	/// The challenge, expressed as a truncated keccak hash of a pair of coordinates.
-	pub k_times_g_address: [u8; 20],
 }
 
 /// Errors that can occur when verifying an Ethereum transaction.

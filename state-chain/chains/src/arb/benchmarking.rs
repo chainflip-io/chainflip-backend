@@ -5,10 +5,8 @@ use cf_primitives::chains::assets::arb;
 
 use crate::{
 	benchmarking_value::BenchmarkValue,
-	eth::{
-		api::{set_agg_key_with_agg_key::SetAggKeyWithAggKey, EthereumTransactionBuilder},
-		AggKey,
-	},
+	eth::{api::set_agg_key_with_agg_key::SetAggKeyWithAggKey, AggKey},
+	evm::api::EthereumTransactionBuilder,
 };
 
 use super::{api::ArbitrumApi, ArbitrumTrackedData};

@@ -4,10 +4,7 @@ use crate::{
 	btc::rpc::MockBtcRpcApi,
 	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
-use cf_chains::{
-	eth::{SchnorrVerificationComponents, Transaction},
-	ChainCrypto,
-};
+use cf_chains::{eth::Transaction, evm::SchnorrVerificationComponents, ChainCrypto};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};

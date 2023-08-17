@@ -1,9 +1,10 @@
 use crate::{
-	eth::api::{
-		common::EncodableTransferAssetParams, execute_x_swap_and_call, EthereumTransactionBuilder,
-	},
+	eth::api::execute_x_swap_and_call,
 	evm::{
-		api::{evm_all_batch_builder, EvmReplayProtection},
+		api::{
+			common::EncodableTransferAssetParams, evm_all_batch_builder,
+			EthereumTransactionBuilder, EvmReplayProtection,
+		},
 		EvmEnvironmentProvider,
 	},
 	*,

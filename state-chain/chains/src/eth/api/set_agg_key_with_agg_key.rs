@@ -34,9 +34,12 @@ impl EthereumCall for SetAggKeyWithAggKey {
 
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EvmReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::{
+			api::{ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+			SchnorrVerificationComponents,
+		},
+		evm::api::abi::load_abi,
 	};
 
 	use super::*;

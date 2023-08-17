@@ -33,11 +33,8 @@ impl EthereumCall for SetCommKeyWithAggKey {
 mod test_set_comm_key_with_agg_key {
 	use super::*;
 	use crate::{
-		eth::{
-			api::{abi::load_abi, EthereumTransactionBuilder},
-			tests::asymmetrise,
-			SchnorrVerificationComponents,
-		},
+		eth::{api::EthereumTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
+		evm::api::abi::load_abi,
 		ApiCall,
 	};
 
