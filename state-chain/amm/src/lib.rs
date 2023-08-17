@@ -7,7 +7,6 @@ use codec::{Decode, Encode};
 use common::{Amount, SqrtPriceQ64F96};
 use scale_info::TypeInfo;
 
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
 pub mod common;

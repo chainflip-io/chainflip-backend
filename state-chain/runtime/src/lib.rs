@@ -14,10 +14,7 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
-	range_orders::{AmountsToLiquidityError, Liquidity},
-};
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
@@ -26,7 +23,6 @@ use cf_chains::{
 };
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::PoolQueryError;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::AccountId32;
@@ -1026,16 +1022,6 @@ impl_runtime_apis! {
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
-		}
-
-		fn cf_estimate_liquidity_from_range_order(
-			asset: Asset,
-			lower: Tick,
-			upper: Tick,
-			unstable_amount: AssetAmount,
-			stable_amount: AssetAmount,
-		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>> {
-			LiquidityPools::estimate_liquidity_from_range_order(asset, lower, upper, unstable_amount, stable_amount)
 		}
 	}
 

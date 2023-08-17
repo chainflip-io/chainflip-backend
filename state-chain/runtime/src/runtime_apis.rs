@@ -1,8 +1,5 @@
 use crate::chainflip::Offence;
-use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
-	range_orders::{AmountsToLiquidityError, Liquidity},
-};
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::PolkadotHash,
@@ -12,7 +9,6 @@ use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::PoolQueryError;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
@@ -118,13 +114,5 @@ decl_runtime_apis!(
 		fn cf_environment() -> Environment;
 		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
-		#[allow(clippy::too_many_arguments)]
-		fn cf_estimate_liquidity_from_range_order(
-			asset: Asset,
-			lower: Tick,
-			upper: Tick,
-			unstable_amount: AssetAmount,
-			stable_amount: AssetAmount,
-		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>>;
 	}
 );

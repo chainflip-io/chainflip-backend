@@ -1,7 +1,4 @@
-use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
-	range_orders::Liquidity,
-};
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::PolkadotHash,
@@ -10,7 +7,7 @@ use cf_chains::{
 use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{Pool, PoolQueryError};
+use pallet_cf_pools::Pool;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -214,17 +211,6 @@ pub trait CustomApi {
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
-	/// Estimate maximum amount of liquidity that can be minted from the given Tick range and asset
-	/// amounts.
-	#[method(name = "estimate_liquidity_from_range_order")]
-	fn cf_estimate_liquidity_from_range_order(
-		&self,
-		asset: Asset,
-		lower: Tick,
-		upper: Tick,
-		unstable_amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> RpcResult<Liquidity>;
 }
 
 /// An RPC extension for the state chain node.
@@ -570,33 +556,5 @@ where
 			.runtime_api()
 			.cf_min_swap_amount(self.unwrap_or_best(None), asset)
 			.map_err(to_rpc_error)
-	}
-
-	fn cf_estimate_liquidity_from_range_order(
-		&self,
-		asset: Asset,
-		lower: Tick,
-		upper: Tick,
-		unstable_amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> RpcResult<Liquidity> {
-		match self.client.runtime_api().cf_estimate_liquidity_from_range_order(
-			self.unwrap_or_best(None),
-			asset,
-			lower,
-			upper,
-			unstable_amount,
-			stable_amount,
-		) {
-			Ok(Ok(liquidity)) => Ok(liquidity),
-			Ok(Err(e)) => Err(match e {
-				PoolQueryError::PoolDoesNotExist => anyhow::anyhow!("Pool does not exist.").into(),
-				PoolQueryError::Inner(e) => match e {
-					cf_amm::range_orders::AmountsToLiquidityError::InvalidTickRange =>
-						anyhow::anyhow!("Invalid tick range.").into(),
-				},
-			}),
-			Err(e) => Err(to_rpc_error(e)),
-		}
 	}
 }
