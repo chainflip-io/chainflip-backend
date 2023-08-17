@@ -5,7 +5,7 @@ use crate::{
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
 };
 use cf_chains::{
-	address::AddressConverter,
+	address::{AddressConverter, IntoForeignChainAddress},
 	eth::{Address as EthereumAddress, EthereumFetchId},
 	CcmChannelMetadata, DepositChannel, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
@@ -480,7 +480,9 @@ fn can_process_ccm_deposit() {
 				deposit_metadata: ccm,
 				origin: SwapOrigin::DepositChannel {
 					deposit_address: MockAddressConverter::to_encoded_address(
-						deposit_address.into()
+						<<Ethereum as cf_chains::Chain>::ChainAccount as IntoForeignChainAddress<
+							Ethereum,
+						>>::into_foreign_chain_address(deposit_address)
 					),
 					channel_id: 1,
 					deposit_block_height: Default::default()

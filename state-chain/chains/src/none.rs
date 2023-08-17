@@ -5,6 +5,12 @@ use frame_support::traits::ConstBool;
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum NoneChain {}
 
+impl IntoForeignChainAddress<NoneChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
+	}
+}
+
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
 	type KeyHandoverIsRequired = ConstBool<false>;
