@@ -1,11 +1,11 @@
 use super::*;
 pub use frame_support::traits::Get;
-use sp_std::str::FromStr;
+use sp_std::{fmt, fmt::Display, str::FromStr};
 
 pub mod assets;
 
 macro_rules! chains {
-	( $( $chain:ident = $value:literal),+ ) => {
+	( $( $chain:ident = $index:literal, display = $display:expr);+ ) => {
 		$(
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 			pub struct $chain;
@@ -34,19 +34,42 @@ macro_rules! chains {
 		#[repr(u32)]
 		pub enum ForeignChain {
 			$(
-				$chain = $value,
+				$chain = $index,
 			)+
 		}
 
 		impl TryFrom<u32> for ForeignChain {
 			type Error = &'static str;
 
-			fn try_from(value: u32) -> Result<Self, Self::Error> {
-				match value {
+			fn try_from(index: u32) -> Result<Self, Self::Error> {
+				match index {
 					$(
 						x if x == Self::$chain as u32 => Ok(Self::$chain),
 					)+
 					_ => Err("Invalid foreign chain"),
+				}
+			}
+		}
+
+		impl FromStr for ForeignChain {
+			type Err = &'static str;
+
+			fn from_str(s: &str) -> Result<Self, Self::Err> {
+				match s.to_lowercase().as_str() {
+					$(
+						$display => Ok(ForeignChain::$chain),
+					)+
+					_ => Err("Unrecognized Chain"),
+				}
+			}
+		}
+
+		impl Display for ForeignChain {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				match self {
+					$(
+						ForeignChain::$chain => write!(f, "{}", $display),
+					)+
 				}
 			}
 		}
@@ -56,9 +79,9 @@ macro_rules! chains {
 // !!!!! IMPORTANT !!!!!
 // Do not change these indices.
 chains! {
-	Ethereum = 1,
-	Polkadot = 2,
-	Bitcoin = 3
+	Ethereum = 1, display = "ethereum";
+	Polkadot = 2, display = "polkadot";
+	Bitcoin = 3, display = "bitcoin"
 }
 
 /// Can be any Chain.
@@ -83,19 +106,6 @@ impl ForeignChain {
 			ForeignChain::Ethereum => assets::any::Asset::Eth,
 			ForeignChain::Polkadot => assets::any::Asset::Dot,
 			ForeignChain::Bitcoin => assets::any::Asset::Btc,
-		}
-	}
-}
-
-impl FromStr for ForeignChain {
-	type Err = &'static str;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.to_lowercase().as_str() {
-			"ethereum" => Ok(ForeignChain::Ethereum),
-			"bitcoin" => Ok(ForeignChain::Bitcoin),
-			"polkadot" => Ok(ForeignChain::Polkadot),
-			_ => Err("Unrecognized Chain"),
 		}
 	}
 }
@@ -127,4 +137,20 @@ fn test_get_chain_identifier() {
 	assert_eq!(Ethereum::get(), ForeignChain::Ethereum);
 	assert_eq!(Polkadot::get(), ForeignChain::Polkadot);
 	assert_eq!(Bitcoin::get(), ForeignChain::Bitcoin);
+}
+
+#[test]
+fn test_chain_to_and_from_str() {
+	assert_eq!(
+		ForeignChain::from_str(ForeignChain::Ethereum.to_string().as_str()).unwrap(),
+		ForeignChain::Ethereum
+	);
+	assert_eq!(
+		ForeignChain::from_str(ForeignChain::Polkadot.to_string().as_str()).unwrap(),
+		ForeignChain::Polkadot
+	);
+	assert_eq!(
+		ForeignChain::from_str(ForeignChain::Bitcoin.to_string().as_str()).unwrap(),
+		ForeignChain::Bitcoin
+	);
 }
