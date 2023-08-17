@@ -14,7 +14,7 @@ use warp::Filter;
 
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
-	pub static ref METRIC_COUNTER: IntCounterVec = IntCounterVec::new(Opts::new("metric1", "help1"), &["rpcMethod"]).expect("Metric succesfully created");
+	pub static ref RPC_COUNTER: IntCounterVec = IntCounterVec::new(Opts::new("rpc_counter", "Count of all the rpc calls made by the rpcClient"), &["rpcClient", "rpcMethod"]).expect("Metric succesfully created");
 	pub static ref METRIC_GAUGE: IntGauge = IntGauge::new("metric2", "help2").expect("Metric succesfully created");
 }
 
@@ -66,7 +66,7 @@ fn metrics_handler() -> String {
 
 pub fn register_metrics() {
 	REGISTRY
-		.register(Box::new(METRIC_COUNTER.clone()))
+		.register(Box::new(RPC_COUNTER.clone()))
 		.expect("Metric succesfully register");
 	REGISTRY
 		.register(Box::new(METRIC_GAUGE.clone()))
