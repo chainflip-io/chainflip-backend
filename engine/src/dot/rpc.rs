@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
+use sp_core::H256;
 use std::sync::Arc;
 use subxt::{
 	events::Events,
@@ -95,7 +96,7 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>>;
 
-	async fn current_runtime_version(&self) -> Result<RuntimeVersion>;
+	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
@@ -114,8 +115,8 @@ impl DotRpcApi for DotRpcClient {
 		self.http_client.block(block_hash).await
 	}
 
-	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
-		self.http_client.current_runtime_version().await
+	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion> {
+		self.http_client.runtime_version(at).await
 	}
 
 	async fn extrinsics(
