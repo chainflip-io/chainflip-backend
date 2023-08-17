@@ -287,7 +287,7 @@ impl ChainCrypto for Polkadot {
 		signature.verify(payload, agg_key)
 	}
 
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
 	}
 }
@@ -537,6 +537,25 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	batch_all {
+		#[allow(missing_docs)]
+		calls: Vec<PolkadotRuntimeCall>,
+	},
+	/// Send a batch of dispatch calls.
+	/// Unlike `batch`, it allows errors and won't interrupt.
+	///
+	/// May be called from any origin.
+	///
+	/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+	///   exceed the constant: `batched_calls_limit` (available in constant metadata).
+	///
+	/// If origin is root then call are dispatch without checking origin filter. (This includes
+	/// bypassing `frame_system::Config::BaseCallFilter`).
+	///
+	/// # <weight>
+	/// - Complexity: O(C) where C is the number of calls to be batched.
+	/// # </weight>
+	#[codec(index = 4u8)]
+	force_batch {
 		#[allow(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},
