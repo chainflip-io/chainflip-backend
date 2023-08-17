@@ -285,7 +285,7 @@ mod tests {
 			}
 		}
 
-		let outcome = status.resolve_keygen_outcome(|key| Ok(key));
+		let outcome = status.resolve_keygen_outcome(Ok);
 		assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
 		assert!(!KeygenFailureVoters::<Test, _>::exists());
 		outcome

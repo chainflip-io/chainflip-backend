@@ -228,7 +228,7 @@ pub mod pallet {
 						ceremony_id,
 						current_block,
 						// no extra checks are necessary for regular keygen
-						|key| Ok(key),
+						Ok,
 						|new_public_key| {
 							Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 							Self::trigger_keygen_verification(
