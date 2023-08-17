@@ -1,9 +1,9 @@
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_traits::EpochInfo;
+use cf_traits::{AsyncResult, EpochInfo, VaultRotator, VaultStatus};
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::Validator;
+use state_chain_runtime::{EthereumVault, Validator};
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -89,7 +89,7 @@ fn auction_repeats_after_failure_because_of_liveness() {
 
 #[test]
 // An epoch has completed.  We have a genesis where the blocks per epoch are
-// set to 100
+// set to 1000
 // - When the epoch is reached an auction is started and completed
 // - All nodes add funds above the MAB
 // - We have two nodes that haven't registered their session keys
@@ -156,16 +156,55 @@ fn epoch_rotates() {
 
 			testnet.move_to_next_epoch();
 			testnet.submit_heartbeat_all_engines();
-			testnet.move_forward_blocks(1);
 
+			// Start the Authority and Vault rotation
+			// idle -> Keygen
+			testnet.move_forward_blocks(1);
 			assert!(matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeygensInProgress(..)
 			));
+			assert_eq!(EthereumVault::status(), AsyncResult::Pending);
 
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			// Key verification
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeygensInProgress(..)
+			));
+			assert_eq!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
 
+			// Key handover.
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeyHandoversInProgress(..)
+			));
+			assert_eq!(
+				EthereumVault::status(),
+				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
+			);
+
+			// Activate new key.
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::ActivatingKeys(..)
+			));
+			assert_eq!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+
+			// Rotating session
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::SessionRotating(..)
+			));
+			assert_eq!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+
+			// Rotation Completed.
+			testnet.move_forward_blocks(1);
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+			assert_eq!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
 
 			assert_eq!(
 				GENESIS_EPOCH + 1,
@@ -181,10 +220,10 @@ fn epoch_rotates() {
 
 			genesis_nodes.append(&mut backup_nodes);
 			assert_eq!(
-						Validator::current_authorities(),
-						genesis_nodes,
-						"the new winners should be those genesis authorities and the backup nodes that have keys set"
-					);
+				Validator::current_authorities(),
+				genesis_nodes,
+				"the new winners should be those genesis authorities and the backup nodes that have keys set"
+			);
 
 			for account in keyless_nodes.iter() {
 				// TODO: Check historical epochs
