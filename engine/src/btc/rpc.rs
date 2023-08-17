@@ -12,6 +12,8 @@ use crate::settings;
 
 use anyhow::{Context, Result};
 
+use crate::metrics::RPC_COUNTER;
+
 #[cfg(test)]
 use mockall::automock;
 
@@ -100,6 +102,8 @@ impl BtcRpcClient {
 			.json::<serde_json::Value>()
 			.await
 			.map_err(Error::Transport)?;
+
+		RPC_COUNTER.with_label_values(&["bitcoin", method]).inc();
 
 		let error = &response["error"];
 		if !error.is_null() {

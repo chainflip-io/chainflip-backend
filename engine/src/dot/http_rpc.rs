@@ -24,7 +24,6 @@ use anyhow::Result;
 use super::rpc::DotRpcApi;
 use crate::metrics::RPC_COUNTER;
 
-
 pub struct PolkadotHttpClient(HttpClient);
 
 impl PolkadotHttpClient {
@@ -167,7 +166,9 @@ impl DotRpcApi for DotHttpRpcClient {
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
 		let encoded_bytes: Bytes = encoded_bytes.into();
-		RPC_COUNTER.with_label_values(&["polkadot", "submit_raw_encoded_extrinsic"]).inc();
+		RPC_COUNTER
+			.with_label_values(&["polkadot", "submit_raw_encoded_extrinsic"])
+			.inc();
 		Ok(self
 			.online_client
 			.rpc()

@@ -116,9 +116,9 @@ async fn start(
 	}
 
 	// if let Some(prometheus_settings) = &settings.prometheus {
-		metrics::register_metrics();
-		metrics::start(scope).await?;
-		// metrics::start(scope, prometheus_settings).await?;
+	metrics::register_metrics();
+	metrics::start(scope).await?;
+	// metrics::start(scope, prometheus_settings).await?;
 	// }
 
 	let (state_chain_stream, state_chain_client) =
