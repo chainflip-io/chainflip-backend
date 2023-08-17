@@ -227,6 +227,8 @@ pub mod pallet {
 						response_status,
 						ceremony_id,
 						current_block,
+						// no extra checks are necessary for regular keygen
+						|key| Ok(key),
 						|new_public_key| {
 							Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 							Self::trigger_keygen_verification(
@@ -259,48 +261,58 @@ pub mod pallet {
 						response_status,
 						ceremony_id,
 						current_block,
-						|reported_new_public_key| {
-							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
-
+						// For key handover we also check that the key is the same as before
+						|reported_new_agg_key| {
 							let current_key = Self::active_epoch_key()
 								.expect("key must exist during handover")
 								.key;
 
 							if <T::Chain as ChainCrypto>::handover_key_matches(
-								current_key,
-								reported_new_public_key,
+								&current_key,
+								&reported_new_agg_key,
 							) {
-								Self::trigger_key_verification(
-									reported_new_public_key,
-									receiving_participants,
-									true,
-									next_epoch,
-									|req_id| {
-										Call::on_handover_verification_result {
-											handover_ceremony_id: ceremony_id,
-											threshold_request_id: req_id,
-											new_public_key: reported_new_public_key,
-										}
-										.into()
-									},
-									VaultRotationStatus::<T, I>::AwaitingKeyHandoverVerification {
-										new_public_key: reported_new_public_key,
-									},
-								);
+								Ok(reported_new_agg_key)
 							} else {
 								log::error!(
 									"Handover resulted in an unexpected key: {:?}",
-									reported_new_public_key
+									&reported_new_agg_key
 								);
-								Self::on_handover_failure(
-									ceremony_id,
-									Default::default(),
-									new_public_key,
-								);
+								Err(Default::default())
 							}
 						},
+						|reported_new_public_key| {
+							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
+
+							Self::trigger_key_verification(
+								reported_new_public_key,
+								receiving_participants,
+								true,
+								next_epoch,
+								|req_id| {
+									Call::on_handover_verification_result {
+										handover_ceremony_id: ceremony_id,
+										threshold_request_id: req_id,
+										new_public_key: reported_new_public_key,
+									}
+									.into()
+								},
+								VaultRotationStatus::<T, I>::AwaitingKeyHandoverVerification {
+									new_public_key: reported_new_public_key,
+								},
+							);
+						},
 						|offenders| {
-							Self::on_handover_failure(ceremony_id, offenders, new_public_key);
+							T::OffenceReporter::report_many(
+								PalletOffence::FailedKeyHandover,
+								offenders.iter().cloned().collect::<Vec<_>>().as_slice(),
+							);
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::KeyHandoverFailed {
+									new_public_key,
+									offenders,
+								},
+							);
+							Self::deposit_event(Event::KeyHandoverFailure { ceremony_id });
 						},
 					);
 				},
@@ -777,6 +789,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		response_status: ResponseStatus<T, SuccessVoters, FailureVoters, I>,
 		ceremony_id: CeremonyId,
 		current_block: BlockNumberFor<T>,
+		final_key_check: impl Fn(AggKeyFor<T, I>) -> KeygenOutcomeFor<T, I>,
 		on_success_outcome: impl FnOnce(AggKeyFor<T, I>),
 		on_failure_outcome: impl FnOnce(BTreeSet<T::ValidatorId>),
 	) -> Weight
@@ -804,7 +817,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		let candidate_count = response_status.candidate_count();
-		let weight = match response_status.resolve_keygen_outcome() {
+		let weight = match response_status.resolve_keygen_outcome(final_key_check) {
 			Ok(new_public_key) => {
 				debug_assert_eq!(
 					remaining_candidate_count, 0,
@@ -933,22 +946,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(offenders) => Self::terminate_rotation(&offenders[..], event_on_error),
 		};
 		Ok(().into())
-	}
-
-	fn on_handover_failure(
-		ceremony_id: CeremonyId,
-		offenders: BTreeSet<T::ValidatorId>,
-		new_public_key: AggKeyFor<T, I>,
-	) {
-		T::OffenceReporter::report_many(
-			PalletOffence::FailedKeyHandover,
-			offenders.iter().cloned().collect::<Vec<_>>().as_slice(),
-		);
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::KeyHandoverFailed {
-			new_public_key,
-			offenders,
-		});
-		Self::deposit_event(Event::KeyHandoverFailure { ceremony_id });
 	}
 
 	fn activate_new_key(new_agg_key: AggKeyFor<T, I>, block_number: ChainBlockNumberFor<T, I>) {
