@@ -182,6 +182,9 @@ pub struct MockThresholdSignature<K, P> {
 )]
 pub struct MockAggKey(pub [u8; 4]);
 
+/// A key that should be not accepted as handover result
+pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
+
 impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
@@ -201,6 +204,12 @@ impl ChainCrypto for MockEthereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		agg_key.0
+	}
+
+	fn handover_key_matches(_current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
+		// In tests we don't look to the current key, but instead
+		// compare to some "bad" value for simplicity
+		new_key != &BAD_AGG_KEY_POST_HANDOVER
 	}
 }
 

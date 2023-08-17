@@ -688,6 +688,8 @@ fn test_key_handover_timeout_period() {
 
 #[cfg(test)]
 mod vault_key_rotation {
+	use cf_chains::mocks::BAD_AGG_KEY_POST_HANDOVER;
+
 	use super::*;
 
 	const ACTIVATION_BLOCK_NUMBER: u64 = 42;
@@ -886,6 +888,19 @@ mod vault_key_rotation {
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get(),
 				Some(VaultRotationStatus::AwaitingKeyHandoverVerification { .. })
+			));
+		})
+	}
+
+	#[test]
+	fn key_handover_fails_on_key_mismatch() {
+		let mut ext = setup(Ok(BAD_AGG_KEY_POST_HANDOVER));
+
+		ext.execute_with(|| {
+			assert_last_event!(crate::Event::KeyHandoverFailure { .. });
+			assert!(matches!(
+				PendingVaultRotation::<Test, _>::get(),
+				Some(VaultRotationStatus::KeyHandoverFailed { .. })
 			));
 		})
 	}
