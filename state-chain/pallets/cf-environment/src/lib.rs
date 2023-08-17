@@ -116,7 +116,6 @@ pub mod pallet {
 	/// The address of the state chain gatweay contract on Ethereum.
 	pub type StateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
-	// eth_key_manager_address
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract
