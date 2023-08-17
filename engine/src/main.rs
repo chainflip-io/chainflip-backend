@@ -115,10 +115,11 @@ async fn start(
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
 	}
 
-	if let Some(prometheus_settings) = &settings.prometheus {
+	// if let Some(prometheus_settings) = &settings.prometheus {
 		metrics::register_metrics();
-		metrics::start(scope, prometheus_settings).await?;
-	}
+		metrics::start(scope).await?;
+		// metrics::start(scope, prometheus_settings).await?;
+	// }
 
 	let (state_chain_stream, state_chain_client) =
 		state_chain_observer::client::StateChainClient::connect_with_account(

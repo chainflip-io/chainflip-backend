@@ -21,10 +21,11 @@ lazy_static::lazy_static! {
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
 pub async fn start<'a, 'env>(
 	scope: &'a task_scope::Scope<'env, anyhow::Error>,
-	prometheus_settings: &'a settings::Prometheus,
+	// prometheus_settings: &'a settings::Prometheus,
 ) -> Result<(), anyhow::Error> {
 	info!("Starting");
-
+	let hostname = "127.0.0.1".to_string();
+	let port: u16 = 5566;
 	const PATH: &str = "metrics";
 
 	let future = warp::serve(
@@ -33,7 +34,8 @@ pub async fn start<'a, 'env>(
 			.and(warp::path::end())
 			.map(move || metrics_handler()),
 	)
-	.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
+	// .bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
+	.bind((hostname.parse::<IpAddr>()?, port));
 
 	scope.spawn_weak(async move {
 		future.await;
