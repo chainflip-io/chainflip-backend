@@ -348,7 +348,7 @@ impl EvmEnvironmentProvider<Ethereum> for EthEnvironment {
 
 pub struct StateChainGateway;
 
-impl StateChainGatewayProvider<Ethereum> for StateChainGateway {
+impl StateChainGatewayProvider for StateChainGateway {
 	fn state_chain_gateway_address() -> H160 {
 		Environment::state_chain_gateway_address()
 	}

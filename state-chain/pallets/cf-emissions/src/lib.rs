@@ -91,7 +91,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
-		type StateChainGatewayProvider: StateChainGatewayProvider<Self::HostChain>;
+		type StateChainGatewayProvider: StateChainGatewayProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;

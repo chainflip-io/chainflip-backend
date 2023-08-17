@@ -196,7 +196,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 pub struct MockStateChainGatewayProvider;
 
-impl StateChainGatewayProvider<MockEthereum> for MockStateChainGatewayProvider {
+impl StateChainGatewayProvider for MockStateChainGatewayProvider {
 	fn state_chain_gateway_address() -> cf_chains::eth::Address {
 		[0xcc; 20].into()
 	}

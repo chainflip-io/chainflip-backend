@@ -112,7 +112,7 @@ pub enum EthereumContract {
 	Vault,
 }
 
-pub trait StateChainGatewayProvider<C: Chain> {
+pub trait StateChainGatewayProvider {
 	fn state_chain_gateway_address() -> eth::Address;
 }
 
