@@ -15,8 +15,8 @@ use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_validator::RotationPhase;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, Authorship, BitcoinInstance, EthereumInstance, PolkadotInstance, RuntimeEvent,
-	RuntimeOrigin, Weight,
+	AccountRoles, AllPalletsWithSystem, BitcoinInstance, EthereumInstance, PolkadotInstance,
+	Runtime, RuntimeEvent, RuntimeOrigin, Timestamp, Weight,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -117,12 +117,10 @@ impl Cli {
 	}
 
 	pub fn register_as_validator(account: &NodeId) {
-		assert_ok!(
-			<AccountRoles as AccountRoleRegistry<state_chain_runtime::Runtime>>::register_account_role(
-				account,
-				AccountRole::Validator
-			)
-		);
+		assert_ok!(<AccountRoles as AccountRoleRegistry<Runtime>>::register_account_role(
+			account,
+			AccountRole::Validator
+		));
 	}
 }
 
@@ -324,8 +322,7 @@ impl Engine {
 				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
 				node_id: NodeId,
 			) where
-				<T as frame_system::Config>::RuntimeOrigin:
-					From<state_chain_runtime::RuntimeOrigin>,
+				<T as frame_system::Config>::RuntimeOrigin: From<RuntimeOrigin>,
 			{
 				if authorities.contains(&node_id) {
 					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
@@ -344,22 +341,22 @@ impl Engine {
 				events,
 				RuntimeEvent::EthereumVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
 				}
 
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, state_chain_runtime::Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
 				}
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
 						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
-							pallet_cf_vaults::Pallet::<state_chain_runtime::Runtime, BitcoinInstance>::report_key_handover_outcome(
+							pallet_cf_vaults::Pallet::<Runtime, BitcoinInstance>::report_key_handover_outcome(
 								RuntimeOrigin::signed(self.node_id.clone()),
 								*ceremony_id,
 								Ok(self.btc_threshold_signer.borrow_mut().current_agg_key()),
@@ -385,7 +382,7 @@ pub(crate) fn setup_account(node_id: &NodeId) {
 	let seed = &node_id.clone().to_string();
 
 	assert_ok!(state_chain_runtime::Session::set_keys(
-		state_chain_runtime::RuntimeOrigin::signed(node_id.clone()),
+		RuntimeOrigin::signed(node_id.clone()),
 		SessionKeys {
 			aura: test_account_from_seed::<AuraId>(seed),
 			grandpa: test_account_from_seed::<GrandpaId>(seed),
@@ -399,7 +396,7 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 	let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 	assert_ok!(state_chain_runtime::Validator::register_peer_id(
-		state_chain_runtime::RuntimeOrigin::signed(node_id.clone()),
+		RuntimeOrigin::signed(node_id.clone()),
 		peer_keypair.public(),
 		0,
 		0,
@@ -488,9 +485,7 @@ impl Network {
 
 	pub fn submit_heartbeat_all_engines(&self) {
 		for engine in self.engines.values() {
-			let _result = Reputation::heartbeat(state_chain_runtime::RuntimeOrigin::signed(
-				engine.node_id.clone(),
-			));
+			let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
 		}
 	}
 
@@ -508,22 +503,14 @@ impl Network {
 				digest
 			});
 
-			state_chain_runtime::AllPalletsWithoutSystem::on_initialize(block_number);
-			// We must finalise this to clear the previous author which is otherwise cached
-			Authorship::on_finalize(block_number);
+			AllPalletsWithSystem::on_initialize(block_number);
 
-			// Provide very large weight to ensure all on_idle processing can occur
-			state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-				block_number,
-				Weight::from_parts(1_000_000_000_000, 0),
-			);
-
+			// Process Engine responses
 			for event in self.state_chain_gateway_contract.events() {
 				for engine in self.engines.values() {
 					engine.on_contract_event(&event);
 				}
 			}
-
 			self.state_chain_gateway_contract.clear();
 
 			let events = frame_system::Pallet::<Runtime>::events()
@@ -531,12 +518,18 @@ impl Network {
 				.map(|e| e.event)
 				.skip(self.last_event)
 				.collect::<Vec<RuntimeEvent>>();
-
 			self.last_event += events.len();
-
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
 			}
+
+			// Provide very large weight to ensure all on_idle processing can occur
+			AllPalletsWithSystem::on_idle(block_number, Weight::from_parts(1_000_000_000_000, 0));
+
+			let _ = Timestamp::set(RuntimeOrigin::none(), (block_number as u64) * SLOT_DURATION);
+
+			// We must finalise this to clear the previous author which is otherwise cached
+			AllPalletsWithSystem::on_finalize(block_number);
 		}
 	}
 }
