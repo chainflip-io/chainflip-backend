@@ -162,7 +162,7 @@ pub trait ChainCrypto: Chain {
 	/// For a chain that supports key handover, check that the key produced during
 	/// the handover ceremony (stored in new_key) matches the current key. (Defaults
 	/// to always trivially returning `true` for chains without handover.)
-	fn check_handover_key_matches(_current_key: Self::AggKey, _new_key: Self::AggKey) -> bool {
+	fn handover_key_matches(_current_key: Self::AggKey, _new_key: Self::AggKey) -> bool {
 		true
 	}
 }

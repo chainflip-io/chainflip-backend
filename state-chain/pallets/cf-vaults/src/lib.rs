@@ -266,20 +266,10 @@ pub mod pallet {
 								.expect("key must exist during handover")
 								.key;
 
-							if !<T::Chain as ChainCrypto>::check_handover_key_matches(
+							if <T::Chain as ChainCrypto>::handover_key_matches(
 								current_key,
 								reported_new_public_key,
 							) {
-								log::error!(
-									"Handover resulted in an unexpected key: {:?}",
-									reported_new_public_key
-								);
-								Self::on_handover_failure(
-									ceremony_id,
-									Default::default(),
-									new_public_key,
-								);
-							} else {
 								Self::trigger_key_verification(
 									reported_new_public_key,
 									receiving_participants,
@@ -296,6 +286,16 @@ pub mod pallet {
 									VaultRotationStatus::<T, I>::AwaitingKeyHandoverVerification {
 										new_public_key: reported_new_public_key,
 									},
+								);
+							} else {
+								log::error!(
+									"Handover resulted in an unexpected key: {:?}",
+									reported_new_public_key
+								);
+								Self::on_handover_failure(
+									ceremony_id,
+									Default::default(),
+									new_public_key,
 								);
 							}
 						},

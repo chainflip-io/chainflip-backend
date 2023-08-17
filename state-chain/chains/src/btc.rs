@@ -237,7 +237,7 @@ impl ChainCrypto for Bitcoin {
 		vec![payload]
 	}
 
-	fn check_handover_key_matches(current_key: Self::AggKey, new_key: Self::AggKey) -> bool {
+	fn handover_key_matches(current_key: Self::AggKey, new_key: Self::AggKey) -> bool {
 		new_key.previous.is_some_and(|previous| current_key.current == previous)
 	}
 }
