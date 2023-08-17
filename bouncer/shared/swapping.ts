@@ -64,8 +64,7 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
         throw new Error(`Unsupported Solidity type: ${typesArray[i]}`);
     }
   }
-  const encodedMessage = web3.eth.abi.encodeParameters(typesArray, variables);
-  return encodedMessage;
+  return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
 export function newCcmMetadata(
@@ -76,11 +75,11 @@ export function newCcmMetadata(
 ) {
   const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  const gasBudgetFrac = gasFraction ?? 1;
+  const gasDiv = gasFraction ?? 100;
 
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
-      gasBudgetFrac,
+      gasDiv,
   );
 
   return {

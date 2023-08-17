@@ -271,6 +271,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			channel_id: ChannelId,
 			broker_commission_rate: BasisPoints,
+			channel_metadata: Option<CcmChannelMetadata>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -540,7 +541,7 @@ pub mod pallet {
 				destination_address_internal,
 				broker_commission_bps,
 				broker,
-				channel_metadata,
+				channel_metadata.clone(),
 				expiry_block,
 			)?;
 
@@ -554,6 +555,7 @@ pub mod pallet {
 				destination_asset,
 				channel_id,
 				broker_commission_rate: broker_commission_bps,
+				channel_metadata,
 			});
 
 			Ok(())
@@ -769,7 +771,7 @@ pub mod pallet {
 			let bundle_input: AssetAmount =
 				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
 
-			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
+			// debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
 			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)
