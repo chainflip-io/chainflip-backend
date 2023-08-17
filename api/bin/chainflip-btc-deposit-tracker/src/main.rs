@@ -64,7 +64,16 @@ struct QueryResult {
 }
 
 #[derive(Default, Clone)]
+enum CacheStatus {
+	#[default]
+	Init,
+	Ready,
+	Down,
+}
+
+#[derive(Default, Clone)]
 struct Cache {
+	status: CacheStatus,
 	best_block_hash: String,
 	transactions: HashMap<String, QueryResult>,
 }
@@ -143,20 +152,21 @@ async fn get_updated_cache(current_cache: Cache) -> anyhow::Result<Cache> {
 			block_hash_to_query = block.previousblockhash;
 		}
 	}
-	Ok(Cache { best_block_hash: block_hash, transactions: cache })
+	Ok(Cache { status: CacheStatus::Ready, best_block_hash: block_hash, transactions: cache })
 }
 
-fn lookup_transactions(cache: Cache, addresses: Vec<String>) -> Vec<Option<QueryResult>> {
-	addresses
-		.iter()
-		.map(|address| cache.transactions.get(address).map(Clone::clone))
-		.collect::<Vec<Option<QueryResult>>>()
-}
-
-enum CacheStatus {
-	Init,
-	Ready,
-	Down,
+fn lookup_transactions(
+	cache: Cache,
+	addresses: Vec<String>,
+) -> Result<Vec<Option<QueryResult>>, Error> {
+	match cache.status {
+		CacheStatus::Ready => Ok(addresses
+			.iter()
+			.map(|address| cache.transactions.get(address).map(Clone::clone))
+			.collect::<Vec<Option<QueryResult>>>()),
+		CacheStatus::Init => Err(anyhow!("Address cache is not intialised.").into()),
+		CacheStatus::Down => Err(anyhow!("Address cache is down - check btc connection.").into()),
+	}
 }
 
 #[tokio::main]
@@ -166,7 +176,6 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 	let cache: Arc<Mutex<Cache>> = Default::default();
-	let (btc_status_sender, btc_status_receiver) = tokio::sync::watch::channel(CacheStatus::Init);
 	let updater = task::spawn({
 		let cache = cache.clone();
 		async move {
@@ -179,11 +188,11 @@ async fn main() -> anyhow::Result<()> {
 					Ok(updated_cache) => {
 						let mut cache = cache.lock().unwrap();
 						*cache = updated_cache;
-						btc_status_sender.send(CacheStatus::Ready).unwrap();
 					},
 					Err(err) => {
 						log::error!("Error when querying Bitcoin chain: {}", err);
-						btc_status_sender.send(CacheStatus::Down).unwrap();
+						let mut cache = cache.lock().unwrap();
+						cache.status = CacheStatus::Down;
 					},
 				}
 			}
@@ -193,18 +202,11 @@ async fn main() -> anyhow::Result<()> {
 	let mut module = RpcModule::new(());
 	module.register_async_method("status", move |arguments, _context| {
 		let cache = cache.clone();
-		let btc_status_receiver = btc_status_receiver.clone();
 		async move {
 			arguments
 				.parse::<Vec<String>>()
-				.and_then(|addresses| match *btc_status_receiver.borrow() {
-					CacheStatus::Ready =>
-						Ok(lookup_transactions(cache.lock().unwrap().clone(), addresses)),
-					CacheStatus::Init => Err(anyhow!("Address cache is not intialised.").into()),
-					CacheStatus::Down =>
-						Err(anyhow!("Address cache is down - check btc connection.").into()),
-				})
 				.map_err(Error::Call)
+				.and_then(|addresses| lookup_transactions(cache.lock().unwrap().clone(), addresses))
 		}
 	})?;
 	let addr = server.local_addr()?;
