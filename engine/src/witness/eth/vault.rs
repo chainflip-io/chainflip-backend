@@ -1,7 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
-
 use ethers::types::Bloom;
-use sp_core::{H160, H256};
+use sp_core::H256;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
@@ -18,8 +17,9 @@ use super::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::{
-	address::EncodedAddress, eth::Address as EthereumAddress, CcmChannelMetadata,
-	CcmDepositMetadata,
+	address::{EncodedAddress, IntoForeignChainAddress},
+	eth::Address as EthereumAddress,
+	CcmChannelMetadata, CcmDepositMetadata,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthereumAsset, Asset, ForeignChain};
 use ethers::prelude::*;
@@ -27,13 +27,16 @@ use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-pub fn call_from_event(
+pub fn call_from_event<C: cf_chains::Chain<ChainAccount = EthereumAddress>>(
 	event: Event<VaultEvents>,
 	// can be different for different EVM chains
 	native_asset: Asset,
 	source_chain: ForeignChain,
 	supported_assets: &HashMap<EthereumAddress, Asset>,
-) -> Result<Option<RuntimeCall>> {
+) -> Result<Option<RuntimeCall>>
+where
+	EthereumAddress: IntoForeignChainAddress<C>,
+{
 	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
 		EncodedAddress::from_chain_bytes(chain, bytes)
 			.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
@@ -107,7 +110,11 @@ pub fn call_from_event(
 			)?,
 			deposit_metadata: CcmDepositMetadata {
 				source_chain,
-				source_address: Some(sender.into()),
+				source_address: Some(
+					<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
+						sender,
+					),
+				),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
 					gas_budget: try_into_primitive(gas_amount)?,
@@ -138,7 +145,11 @@ pub fn call_from_event(
 			)?,
 			deposit_metadata: CcmDepositMetadata {
 				source_chain,
-				source_address: Some(sender.into()),
+				source_address: Some(
+					<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
+						sender,
+					),
+				),
 				channel_metadata: CcmChannelMetadata {
 					message: message.to_vec(),
 					gas_budget: try_into_primitive(gas_amount)?,
@@ -190,10 +201,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		supported_assets: HashMap<EthereumAddress, Asset>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
-		Inner::Chain:
-			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
+		Inner::Chain: cf_chains::Chain<
+			ChainAmount = u128,
+			DepositDetails = (),
+			ChainAccount = EthereumAddress,
+		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
+		EthereumAddress: IntoForeignChainAddress<Inner::Chain>,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
@@ -203,7 +218,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				for event in
 					events_at_block::<VaultEvents, _>(header, contract_address, &eth_rpc).await?
 				{
-					match call_from_event(event, native_asset, source_chain, &supported_assets) {
+					match call_from_event::<Inner::Chain>(
+						event,
+						native_asset,
+						source_chain,
+						&supported_assets,
+					) {
 						Ok(option_call) =>
 							if let Some(call) = option_call {
 								state_chain_client

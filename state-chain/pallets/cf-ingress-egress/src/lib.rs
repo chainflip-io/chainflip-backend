@@ -13,7 +13,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi},
+	address::{AddressConverter, AddressDerivationApi, IntoForeignChainAddress},
 	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
 	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
@@ -686,7 +686,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broker_commission_bps,
 				..
 			} => T::SwapDepositHandler::schedule_swap_from_channel(
-				deposit_address.clone().into(),
+				<T::TargetChain as cf_chains::Chain>::ChainAccount::into_foreign_chain_address(deposit_address.clone()),
 				block_height.into(),
 				asset.into(),
 				destination_asset,
@@ -713,7 +713,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 				SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
-						deposit_address.clone().into(),
+						<T::TargetChain as cf_chains::Chain>::ChainAccount::into_foreign_chain_address(deposit_address.clone()),
 					),
 					channel_id,
 					deposit_block_height: block_height.into(),
@@ -863,7 +863,12 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			expiry_block,
 		)?;
 
-		Ok((channel_id, deposit_address.into()))
+		Ok((
+			channel_id,
+			<T::TargetChain as cf_chains::Chain>::ChainAccount::into_foreign_chain_address(
+				deposit_address,
+			),
+		))
 	}
 
 	// This should only be callable by the broker.
@@ -894,7 +899,12 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			expiry_block,
 		)?;
 
-		Ok((channel_id, deposit_address.into()))
+		Ok((
+			channel_id,
+			<T::TargetChain as cf_chains::Chain>::ChainAccount::into_foreign_chain_address(
+				deposit_address,
+			),
+		))
 	}
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet

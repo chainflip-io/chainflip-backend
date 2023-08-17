@@ -9,6 +9,7 @@ use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
 use super::{MockPallet, MockPalletStorage};
+use cf_chains::address::IntoForeignChainAddress;
 
 pub struct MockDepositHandler<C, T>(PhantomData<(C, T)>);
 
@@ -138,11 +139,13 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	}
 
 	fn expire_channel(address: <C as cf_chains::Chain>::ChainAccount) {
+		let address =
+			<C as cf_chains::Chain>::ChainAccount::into_foreign_chain_address(address.clone());
 		<Self as MockPalletStorage>::mutate_value(
 			b"SWAP_INGRESS_CHANNELS",
 			|storage: &mut Option<Vec<SwapChannel<C, T>>>| {
 				if let Some(inner) = storage.as_mut() {
-					inner.retain(|x| x.deposit_address != address.clone().into());
+					inner.retain(|x| x.deposit_address != address);
 				}
 			},
 		);
@@ -150,7 +153,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 			b"LP_INGRESS_CHANNELS",
 			|storage: &mut Option<Vec<LpChannel<C, T>>>| {
 				if let Some(inner) = storage.as_mut() {
-					inner.retain(|x| x.deposit_address != address.clone().into());
+					inner.retain(|x| x.deposit_address != address);
 				}
 			},
 		);

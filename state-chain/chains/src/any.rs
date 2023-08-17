@@ -1,10 +1,19 @@
-use crate::{address::ForeignChainAddress, Chain};
+use crate::{
+	address::{ForeignChainAddress, IntoForeignChainAddress},
+	Chain,
+};
 
 use cf_primitives::{
 	chains::{assets, AnyChain},
 	AssetAmount, ChannelId,
 };
 use frame_support::traits::ConstBool;
+
+impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
+	fn into_foreign_chain_address(address: ForeignChainAddress) -> ForeignChainAddress {
+		address
+	}
+}
 
 impl Chain for AnyChain {
 	const NAME: &'static str = "AnyChain";
