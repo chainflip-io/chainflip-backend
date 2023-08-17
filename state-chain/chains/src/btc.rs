@@ -580,10 +580,17 @@ impl BitcoinTransaction {
 				if deposit_address.pubkey_x == agg_key.current {
 					None
 				} else {
-					agg_key.previous.map(|previous| {
+					agg_key.previous.and_then(|previous| {
 						// TODO: enforce this assumption ie. ensure we never use unspendable utxos.
-						assert!(deposit_address.pubkey_x == previous);
-						i
+						if deposit_address.pubkey_x == previous {
+							Some(i)
+						} else {
+							log::error!(
+								"Ignoring unspendable output in bitcoin tx at index {i}: {:?}",
+								deposit_address
+							);
+							None
+						}
 					})
 				}
 			})
