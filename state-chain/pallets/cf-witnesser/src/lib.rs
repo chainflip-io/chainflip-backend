@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get},
 	Hashable,
 };
-use sp_std::prelude::*;
+use sp_std::{collections::vec_deque::VecDeque, prelude::*};
 
 impl_pallet_safe_mode!(PalletSafeMode; witness_calls_enabled);
 
@@ -108,34 +108,39 @@ pub mod pallet {
 	/// being on.
 	#[pallet::storage]
 	pub type WitnessedCallsScheduledForDispatch<T: Config> =
-		StorageValue<_, Vec<(EpochIndex, <T as Config>::RuntimeCall, CallHash)>, ValueQuery>;
+		StorageValue<_, VecDeque<(EpochIndex, <T as Config>::RuntimeCall, CallHash)>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
-			if T::SafeMode::get().witness_calls_enabled &&
-				WitnessedCallsScheduledForDispatch::<T>::exists()
-			{
-				used_weight
-					.saturating_add(T::DbWeight::get().reads(1))
-					.saturating_add(T::DbWeight::get().writes(1));
-				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls| {
-					while let Some((witnessed_at_epoch, call, call_hash)) = witnessed_calls.pop() {
-						let call_weight = call.get_dispatch_info().weight;
-						if remaining_weight.ref_time() > (used_weight + call_weight).ref_time() {
-							Self::dispatch_call(
-								witnessed_at_epoch,
-								T::EpochInfo::epoch_index(),
-								call,
-								call_hash,
-							);
+			if T::SafeMode::get().witness_calls_enabled {
+				let _ = WitnessedCallsScheduledForDispatch::<T>::try_mutate(|witnessed_calls| {
+					used_weight.saturating_add(T::DbWeight::get().reads(1));
+					if !witnessed_calls.is_empty() {
+						while let Some((witnessed_at_epoch, call, call_hash)) =
+							witnessed_calls.pop_front()
+						{
+							let call_weight = call.get_dispatch_info().weight;
 							used_weight.saturating_add(call_weight);
-						} else {
-							witnessed_calls.push((witnessed_at_epoch, call, call_hash));
-							break
+							if remaining_weight.ref_time() > used_weight.ref_time() {
+								Self::dispatch_call(
+									witnessed_at_epoch,
+									T::EpochInfo::epoch_index(),
+									call,
+									call_hash,
+								);
+							} else {
+								witnessed_calls.push_front((witnessed_at_epoch, call, call_hash));
+								used_weight.saturating_sub(call_weight);
+								break
+							}
 						}
+						used_weight.saturating_add(T::DbWeight::get().writes(1));
+						Ok(())
+					} else {
+						Err("no action needed when the scheduled witness calls list is empty")
 					}
 				});
 			}
@@ -345,7 +350,9 @@ pub mod pallet {
 				if T::SafeMode::get().witness_calls_enabled {
 					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
 				} else {
-					WitnessedCallsScheduledForDispatch::<T>::append((epoch_index, call, call_hash));
+					WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls| {
+						witnessed_calls.push_back((epoch_index, *call, call_hash))
+					});
 				}
 			}
 			Ok(().into())
