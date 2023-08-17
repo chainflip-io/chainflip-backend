@@ -164,7 +164,9 @@ async fn main() -> anyhow::Result<()> {
 		let cache = cache.clone();
 		async move {
 			let mut interval = time::interval(Duration::from_secs(REFRESH_INTERVAL));
+			interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 			loop {
+				interval.tick().await;
 				let cache_copy = cache.lock().unwrap().clone();
 				match get_updated_cache(cache_copy).await {
 					Ok(updated_cache) => {
@@ -173,9 +175,9 @@ async fn main() -> anyhow::Result<()> {
 					},
 					Err(err) => {
 						log::error!("Error when querying Bitcoin chain: {}", err);
+						break
 					},
 				}
-				interval.tick().await;
 			}
 		}
 	});
