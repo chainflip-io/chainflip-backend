@@ -21,7 +21,7 @@ use cf_chains::{
 		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
 		ForeignChainAddress,
 	},
-	arb::api::ArbitrumApi,
+	arb::{api::ArbitrumApi, ArbitrumContract},
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
@@ -31,10 +31,10 @@ use cf_chains::{
 		PolkadotTransactionData, RuntimeVersion,
 	},
 	eth::{
-		self, api::EthereumApi, deposit_address::ETHEREUM_ETH_ADDRESS, Ethereum,
+		self, api::EthereumApi, deposit_address::ETHEREUM_ETH_ADDRESS, Ethereum, EthereumContract,
 		StateChainGatewayProvider,
 	},
-	evm::{api::EvmReplayProtection, EthereumChainId, EthereumContract, EvmEnvironmentProvider},
+	evm::{api::EvmReplayProtection, EthereumChainId, EvmEnvironmentProvider},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
 	ChainCrypto, ChainEnvironment, ChainState, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
@@ -316,6 +316,8 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 }
 
 impl EvmEnvironmentProvider<Ethereum> for EthEnvironment {
+	type Contract = EthereumContract;
+
 	fn token_address(asset: assets::eth::Asset) -> Option<H160> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
@@ -338,6 +340,10 @@ impl EvmEnvironmentProvider<Ethereum> for EthEnvironment {
 	fn next_nonce() -> u64 {
 		Environment::next_ethereum_signature_nonce()
 	}
+
+	fn key_manager_address() -> ethabi::Address {
+		Environment::key_manager_address()
+	}
 }
 
 pub struct StateChainGateway;
@@ -351,6 +357,8 @@ impl StateChainGatewayProvider<Ethereum> for StateChainGateway {
 pub struct ArbEnvironment;
 
 impl EvmEnvironmentProvider<Arbitrum> for ArbEnvironment {
+	type Contract = ArbitrumContract;
+
 	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
 		match asset {
 			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
@@ -358,12 +366,10 @@ impl EvmEnvironmentProvider<Arbitrum> for ArbEnvironment {
 		}
 	}
 
-	fn contract_address(contract: EthereumContract) -> H160 {
+	fn contract_address(contract: Self::Contract) -> H160 {
 		match contract {
-			// we dont have a state chain gateway contract on arbitrum.
-			EthereumContract::StateChainGateway => unimplemented!(),
-			EthereumContract::KeyManager => Environment::arb_key_manager_address(),
-			EthereumContract::Vault => Environment::arb_vault_address(),
+			ArbitrumContract::KeyManager => Environment::arb_key_manager_address(),
+			ArbitrumContract::Vault => Environment::arb_vault_address(),
 		}
 	}
 
@@ -373,6 +379,10 @@ impl EvmEnvironmentProvider<Arbitrum> for ArbEnvironment {
 
 	fn next_nonce() -> u64 {
 		Environment::next_arbitrum_signature_nonce()
+	}
+
+	fn key_manager_address() -> ethabi::Address {
+		Environment::arb_key_manager_address()
 	}
 }
 

@@ -169,11 +169,13 @@ mod test_all_batch {
 	const CHANNEL_ID: u64 = 12345;
 
 	impl EvmEnvironmentProvider<Ethereum> for MockEnvironment {
+		type Contract = EthereumContract;
+
 		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 			Some(eth::Address::from_low_u64_be(asset as u64))
 		}
 
-		fn contract_address(contract: EthereumContract) -> eth::Address {
+		fn contract_address(contract: Self::Contract) -> eth::Address {
 			eth::Address::from_low_u64_be(contract as u64)
 		}
 
@@ -183,6 +185,10 @@ mod test_all_batch {
 
 		fn next_nonce() -> u64 {
 			NONCE
+		}
+
+		fn key_manager_address() -> Address {
+			eth::Address::from_low_u64_be(789)
 		}
 	}
 

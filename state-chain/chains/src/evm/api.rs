@@ -13,7 +13,7 @@ use crate::{
 	*,
 };
 
-use super::{EthereumChainId, EthereumContract};
+use super::EthereumChainId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EvmReplayProtection {
@@ -30,12 +30,11 @@ pub trait SCGatewayProvider {
 pub fn evm_all_batch_builder<
 	C: Chain<DepositFetchId = EthereumFetchId, ChainAccount = EvmAddress, ChainAmount = u128>,
 	F: Fn(<C as Chain>::ChainAsset) -> Option<EvmAddress>,
-	G: FnOnce(EthereumContract) -> EvmReplayProtection,
 >(
 	fetch_params: Vec<FetchAssetParams<C>>,
 	transfer_params: Vec<TransferAssetParams<C>>,
 	token_address_fn: F,
-	replay_protection_fn: G,
+	replay_protection: EvmReplayProtection,
 ) -> Result<EthereumTransactionBuilder<all_batch::AllBatch>, AllBatchError> {
 	let mut fetch_only_params = vec![];
 	let mut fetch_deploy_params = vec![];
@@ -60,7 +59,7 @@ pub fn evm_all_batch_builder<
 		}
 	}
 	Ok(EthereumTransactionBuilder::new_unsigned(
-		replay_protection_fn(EthereumContract::Vault),
+		replay_protection,
 		all_batch::AllBatch::new(
 			fetch_deploy_params,
 			fetch_only_params,

@@ -1,8 +1,8 @@
-use super::{Ethereum, SchnorrVerificationComponents};
+use super::{Ethereum, EthereumContract, SchnorrVerificationComponents};
 use crate::{
 	evm::{
 		api::{evm_all_batch_builder, EvmReplayProtection},
-		EthereumChainId, EthereumContract, EvmEnvironmentProvider,
+		EthereumChainId, EvmEnvironmentProvider,
 	},
 	*,
 };
@@ -266,7 +266,7 @@ impl ChainAbi for Ethereum {
 
 impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
@@ -281,7 +281,7 @@ where
 
 impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Ethereum as ChainCrypto>::GovKey>,
@@ -296,7 +296,7 @@ where
 
 impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
@@ -309,7 +309,7 @@ where
 // We actually don't need to pass chain in here. The only reason we have t
 impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
@@ -329,7 +329,7 @@ where
 
 impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self::UpdateFlipSupply(EthereumTransactionBuilder::new_unsigned(
@@ -341,7 +341,7 @@ where
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -351,14 +351,14 @@ where
 			fetch_params,
 			transfer_params,
 			E::token_address,
-			E::replay_protection,
+			E::replay_protection(EthereumContract::Vault),
 		)?))
 	}
 }
 
 impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
-	E: EvmEnvironmentProvider<Ethereum>,
+	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,

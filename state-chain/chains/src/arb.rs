@@ -103,3 +103,9 @@ impl From<&DepositChannel<Arbitrum>> for EthereumFetchId {
 		}
 	}
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum ArbitrumContract {
+	KeyManager,
+	Vault,
+}

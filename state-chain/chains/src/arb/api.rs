@@ -4,13 +4,15 @@ use crate::{
 	},
 	evm::{
 		api::{evm_all_batch_builder, EvmReplayProtection},
-		EthereumContract, EvmEnvironmentProvider,
+		EvmEnvironmentProvider,
 	},
 	*,
 };
 use eth::api::{all_batch, set_agg_key_with_agg_key};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::{cmp::min, marker::PhantomData};
+
+use super::ArbitrumContract;
 
 impl ChainAbi for Arbitrum {
 	type Transaction = eth::Transaction;
@@ -48,14 +50,14 @@ pub enum ArbitrumApi<Environment: 'static> {
 
 impl<E> SetAggKeyWithAggKey<Arbitrum> for ArbitrumApi<E>
 where
-	E: EvmEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum, Contract = ArbitrumContract>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Arbitrum as ChainCrypto>::AggKey>,
 		new_key: <Arbitrum as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::KeyManager),
+			E::replay_protection(ArbitrumContract::KeyManager),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
 		)))
 	}
@@ -63,7 +65,7 @@ where
 
 impl<E> AllBatch<Arbitrum> for ArbitrumApi<E>
 where
-	E: EvmEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum, Contract = ArbitrumContract>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
@@ -73,14 +75,14 @@ where
 			fetch_params,
 			transfer_params,
 			E::token_address,
-			E::replay_protection,
+			E::replay_protection(ArbitrumContract::Vault),
 		)?))
 	}
 }
 
 impl<E> ExecutexSwapAndCall<Arbitrum> for ArbitrumApi<E>
 where
-	E: EvmEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum, Contract = ArbitrumContract>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -96,7 +98,7 @@ where
 		};
 
 		Ok(Self::ExecutexSwapAndCall(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::Vault),
+			E::replay_protection(ArbitrumContract::Vault),
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				egress_id,
 				transfer_param,

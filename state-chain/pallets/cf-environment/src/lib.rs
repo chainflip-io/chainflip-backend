@@ -111,11 +111,13 @@ pub mod pallet {
 	pub type EthereumSupportedAssets<T: Config> =
 		StorageMap<_, Blake2_128Concat, EthAsset, EthereumAddress>;
 
+	// TODO: Rename
 	#[pallet::storage]
 	#[pallet::getter(fn state_chain_gateway_address)]
 	/// The address of the ETH state chain gatweay contract
 	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
+	// eth_
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract

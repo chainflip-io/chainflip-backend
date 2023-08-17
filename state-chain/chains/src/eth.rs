@@ -103,6 +103,13 @@ impl Default for EthereumTrackedData {
 	}
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum EthereumContract {
+	StateChainGateway,
+	KeyManager,
+	Vault,
+}
+
 pub trait StateChainGatewayProvider<C: Chain> {
 	fn state_chain_gateway_address() -> eth::Address;
 }
