@@ -5,7 +5,7 @@
 
 use std::net::IpAddr;
 
-use crate::settings;
+// use crate::settings;
 use lazy_static;
 use prometheus::{IntCounterVec, IntGauge, Opts, Registry};
 use tracing::info;
@@ -15,6 +15,7 @@ use warp::Filter;
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
 	pub static ref RPC_COUNTER: IntCounterVec = IntCounterVec::new(Opts::new("rpc_counter", "Count of all the rpc calls made by the rpcClient"), &["rpcClient", "rpcMethod"]).expect("Metric succesfully created");
+	// not used for now
 	pub static ref METRIC_GAUGE: IntGauge = IntGauge::new("metric2", "help2").expect("Metric succesfully created");
 }
 
