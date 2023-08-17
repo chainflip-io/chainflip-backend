@@ -124,7 +124,7 @@ pub struct PoolState<LiquidityProvider> {
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
-pub trait SwapDirection: crate::common::SwapDirection {
+pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Given the current_tick determines if the current price can increase further i.e. that there
 	/// is possibly liquidity past the current price
 	fn further_liquidity(current_tick: Tick) -> bool;
@@ -383,7 +383,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
 	/// This function never panics
-	pub fn new(fee_hundredth_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
+	pub(super) fn new(fee_hundredth_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
@@ -427,7 +427,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// fee is greater than 50%.
 	///
 	/// This function never panics
-	pub fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
+	#[allow(dead_code)]
+	pub(super) fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
@@ -443,7 +444,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// price cannot get worse.
 	///
 	/// This function never panics
-	pub fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
+	pub(super) fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
 		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
 	}
 
@@ -459,7 +460,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
+	pub(super) fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
@@ -567,7 +568,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
 	#[allow(clippy::type_complexity)]
-	pub fn collect_and_burn(
+	pub(super) fn collect_and_burn(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
@@ -649,7 +650,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect(
+	#[allow(dead_code)]
+	pub(super) fn collect(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
@@ -681,7 +683,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// `OneToZero`.
 	///
 	/// This function never panics
-	pub fn swap<SD: SwapDirection>(
+	pub(super) fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<U256>,
@@ -823,7 +825,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// liquidity level given the current price.
 	///
 	/// This function never panics
-	pub fn liquidity_to_amounts<const ROUND_UP: bool>(
+	#[allow(dead_code)]
+	pub(super) fn liquidity_to_amounts<const ROUND_UP: bool>(
 		&self,
 		liquidity: Liquidity,
 		lower_tick: Tick,
@@ -958,7 +961,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	#[cfg(feature = "std")]
-	pub fn positions(&self) -> BTreeMap<(LiquidityProvider, Tick, Tick), Liquidity> {
+	#[allow(dead_code)]
+	pub(super) fn positions(&self) -> BTreeMap<(LiquidityProvider, Tick, Tick), Liquidity> {
 		self.positions.iter().map(|(k, v)| (k.clone(), v.liquidity)).collect()
 	}
 }

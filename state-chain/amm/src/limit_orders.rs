@@ -139,7 +139,7 @@ impl FloatBetweenZeroAndOne {
 	}
 }
 
-pub trait SwapDirection: crate::common::SwapDirection {
+pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Calculates the swap input amount needed to produce an output amount at a price
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount;
 
@@ -266,14 +266,14 @@ struct Position {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-pub struct FixedPool {
+pub(super) struct FixedPool {
 	pool_instance: u128,
 	available: Amount,
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState<LiquidityProvider> {
+pub(super) struct PoolState<LiquidityProvider> {
 	fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
@@ -284,7 +284,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity.
 	///
 	/// This function never panics.
-	pub fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
+	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
 		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
@@ -302,7 +302,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
-	pub fn set_fees(
+	#[allow(dead_code)]
+	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
 	) -> Result<
@@ -350,7 +351,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns the current price of the pool, if some liquidity exists.
 	///
 	/// This function never panics.
-	pub fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
+	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
 		SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]).map(|entry| *entry.key())
 	}
 
@@ -360,7 +361,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// `OneToZero`. Note sqrt_price_limit is inclusive.
 	///
 	/// This function never panics
-	pub fn swap<SD: SwapDirection>(
+	pub(super) fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPriceQ64F96>,
@@ -496,7 +497,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// will be for.
 	///
 	/// This function never panics.
-	pub fn collect_and_mint<SD: SwapDirection>(
+	pub(super) fn collect_and_mint<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
@@ -589,7 +590,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// liquidity/position you're burning was for.
 	///
 	/// This function never panics.
-	pub fn collect_and_burn<SD: SwapDirection>(
+	pub(super) fn collect_and_burn<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
@@ -653,7 +654,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// direction of swaps the liquidity/position you're refering to is for.
 	///
 	/// This function never panics.
-	pub fn collect<SD: SwapDirection>(
+	pub(super) fn collect<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
@@ -698,7 +699,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets associated with a position
 	///
 	/// This function never panics.
-	pub fn position<SD: SwapDirection>(
+	#[allow(dead_code)]
+	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
@@ -728,7 +730,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets available for swaps in a given direction
 	///
 	/// This function never panics.
-	pub fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
+	#[allow(dead_code)]
+	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
 		self.fixed_pools[!SD::INPUT_SIDE]
 			.iter()
 			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))

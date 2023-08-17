@@ -105,16 +105,16 @@ impl<T: std::ops::Add<R>, R> std::ops::Add<SideMap<R>> for SideMap<T> {
 	}
 }
 
-pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+pub(super) fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	let c: U512 = c.into();
 	(U256::full_mul(a, b) / c).try_into().unwrap()
 }
 
-pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+pub(super) fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	mul_div(a, b, c).1
 }
 
-pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
+pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	let c: U512 = c.into();
 
 	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
@@ -133,10 +133,10 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	)
 }
 
-pub struct ZeroToOne {}
-pub struct OneToZero {}
+pub(super) struct ZeroToOne {}
+pub(super) struct OneToZero {}
 
-pub trait SwapDirection {
+pub(super) trait SwapDirection {
 	const INPUT_SIDE: Side;
 
 	/// Determines if a given sqrt_price is more than another
@@ -215,7 +215,7 @@ pub(super) fn inverse_price(price: Price) -> Price {
 	}
 }
 
-pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
+pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
 
 	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price
@@ -228,7 +228,7 @@ pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	)
 }
 
-pub fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
+pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
 	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
 		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
 		.try_into()
@@ -260,13 +260,13 @@ pub const MIN_TICK: Tick = -887272;
 pub const MAX_TICK: Tick = -MIN_TICK;
 /// The minimum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MIN_TICK)`
-pub const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]);
+pub(super) const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]);
 /// The maximum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MAX_TICK)`.
-pub const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
+pub(super) const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 	U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]);
 
-pub fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
+pub(super) fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
 	(MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price)
 }
 
@@ -274,7 +274,7 @@ pub fn is_tick_valid(tick: Tick) -> bool {
 	(MIN_TICK..=MAX_TICK).contains(&tick)
 }
 
-pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
+pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	assert!(is_tick_valid(tick));
 
 	let abs_tick = tick.unsigned_abs();
@@ -350,7 +350,7 @@ pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 }
 
 /// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
-pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
+pub(super) fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 	assert!(is_sqrt_price_valid(sqrt_price));
 
 	let sqrt_price_q64f128 = sqrt_price << 32u128;
