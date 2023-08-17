@@ -280,11 +280,22 @@ pub mod pallet {
 									new_public_key,
 								);
 							} else {
-								Self::trigger_handover_verification(
-									ceremony_id,
+								Self::trigger_key_verification(
 									reported_new_public_key,
 									receiving_participants,
+									true,
 									next_epoch,
+									|req_id| {
+										Call::on_handover_verification_result {
+											handover_ceremony_id: ceremony_id,
+											threshold_request_id: req_id,
+											new_public_key: reported_new_public_key,
+										}
+										.into()
+									},
+									VaultRotationStatus::<T, I>::AwaitingKeyHandoverVerification {
+										new_public_key: reported_new_public_key,
+									},
 								);
 							}
 						},
@@ -878,29 +889,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(status_to_set);
 
 		request_id
-	}
-
-	fn trigger_handover_verification(
-		handover_ceremony_id: CeremonyId,
-		new_public_key: AggKeyFor<T, I>,
-		participants: BTreeSet<T::ValidatorId>,
-		new_epoch_index: EpochIndex,
-	) -> ThresholdSignatureRequestId {
-		Self::trigger_key_verification(
-			new_public_key,
-			participants,
-			true,
-			new_epoch_index,
-			|req_id| {
-				Call::on_handover_verification_result {
-					handover_ceremony_id,
-					threshold_request_id: req_id,
-					new_public_key,
-				}
-				.into()
-			},
-			VaultRotationStatus::<T, I>::AwaitingKeyHandoverVerification { new_public_key },
-		)
 	}
 
 	fn terminate_rotation(offenders: &[T::ValidatorId], event: Event<T, I>) {
