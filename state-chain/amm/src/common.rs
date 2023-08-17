@@ -1,3 +1,5 @@
+use core::ops::Range;
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -33,44 +35,36 @@ impl core::ops::Not for Side {
 	}
 }
 
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ValidityWindow<BlockNumber> {
-	// Could be Option or we could just use MIN/MAX as defaults.
-	pub open_after: BlockNumber,
-	pub open_until: BlockNumber,
-}
-
 /// This is the actual type we use to determine if an order is valid.
 /// We can extend this later on with Price/Quantity constraints.
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OrderValidity<BlockNumber: PartialOrd + Copy> {
-	pub valid_at: ValidityWindow<BlockNumber>,
+	pub valid_at: Range<BlockNumber>,
 	pub valid_until: BlockNumber,
 }
 
 impl<BlockNumber: PartialOrd + Copy> OrderValidity<BlockNumber> {
 	/// Creates a new order validity with the given validity window and expiration block number.
-	pub fn new(valid_until: BlockNumber, open_after: BlockNumber, open_until: BlockNumber) -> Self {
-		Self { valid_at: ValidityWindow { open_after, open_until }, valid_until }
+	pub fn new(valid_until: BlockNumber, start: BlockNumber, end: BlockNumber) -> Self {
+		Self { valid_at: Range { start, end }, valid_until }
 	}
 	/// Returns true if the order is expired what means that it already passed the defined creation
 	/// window.
 	pub fn is_expired(&self, block_number: BlockNumber) -> bool {
-		block_number < self.valid_at.open_until
+		block_number < self.valid_at.end
 	}
 	/// Returns true if the order is valid and can go immediately live.
 	pub fn is_valid(&self, block_number: BlockNumber) -> bool {
-		block_number > self.valid_at.open_after
+		block_number > self.valid_at.start
 	}
 	/// Returns the block number at which the order gets valid.
 	pub fn gets_valid_at(&self) -> BlockNumber {
-		self.valid_at.open_after
+		self.valid_at.start
 	}
 	/// Returns the block number at which the order expires.
 	pub fn is_valid_until(&self) -> BlockNumber {
-		self.valid_at.open_until
+		self.valid_at.end
 	}
 }
 
