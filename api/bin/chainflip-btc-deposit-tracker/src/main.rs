@@ -153,6 +153,12 @@ fn lookup_transactions(cache: Cache, addresses: Vec<String>) -> Vec<Option<Query
 		.collect::<Vec<Option<QueryResult>>>()
 }
 
+enum CacheStatus {
+	Init,
+	Ready,
+	Down,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder()
@@ -160,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 	let cache: Arc<Mutex<Cache>> = Default::default();
+	let (btc_status_sender, btc_status_receiver) = tokio::sync::watch::channel(CacheStatus::Init);
 	let updater = task::spawn({
 		let cache = cache.clone();
 		async move {
@@ -172,10 +179,11 @@ async fn main() -> anyhow::Result<()> {
 					Ok(updated_cache) => {
 						let mut cache = cache.lock().unwrap();
 						*cache = updated_cache;
+						btc_status_sender.send(CacheStatus::Ready).unwrap();
 					},
 					Err(err) => {
 						log::error!("Error when querying Bitcoin chain: {}", err);
-						break
+						btc_status_sender.send(CacheStatus::Down).unwrap();
 					},
 				}
 			}
@@ -185,10 +193,17 @@ async fn main() -> anyhow::Result<()> {
 	let mut module = RpcModule::new(());
 	module.register_async_method("status", move |arguments, _context| {
 		let cache = cache.clone();
+		let btc_status_receiver = btc_status_receiver.clone();
 		async move {
 			arguments
 				.parse::<Vec<String>>()
-				.map(|addresses| lookup_transactions(cache.lock().unwrap().clone(), addresses))
+				.and_then(|addresses| match *btc_status_receiver.borrow() {
+					CacheStatus::Ready =>
+						Ok(lookup_transactions(cache.lock().unwrap().clone(), addresses)),
+					CacheStatus::Init => Err(anyhow!("Address cache is not intialised.").into()),
+					CacheStatus::Down =>
+						Err(anyhow!("Address cache is down - check btc connection.").into()),
+				})
 				.map_err(Error::Call)
 		}
 	})?;
