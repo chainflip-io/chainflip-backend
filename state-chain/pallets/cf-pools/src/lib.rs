@@ -309,15 +309,7 @@ pub mod pallet {
 			lp: T::AccountId,
 			error: DispatchError,
 		},
-		MintingRangeOrderFailed {
-			lp: T::AccountId,
-			error: DispatchError,
-		},
 		BurningLimitOrderFailed {
-			lp: T::AccountId,
-			error: DispatchError,
-		},
-		BurningRangeOrderFailed {
 			lp: T::AccountId,
 			error: DispatchError,
 		},
