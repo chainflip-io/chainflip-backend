@@ -103,6 +103,10 @@ impl Default for EthereumTrackedData {
 	}
 }
 
+pub trait StateChainGatewayProvider<C: Chain> {
+	fn state_chain_gateway_address() -> eth::Address;
+}
+
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum AggKeyVerificationError {
 	/// The provided signature (aka. `s`) is not a valid private key.

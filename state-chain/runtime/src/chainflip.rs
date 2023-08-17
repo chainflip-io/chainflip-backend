@@ -30,7 +30,10 @@ use cf_chains::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData, RuntimeVersion,
 	},
-	eth::{self, api::EthereumApi, deposit_address::ETHEREUM_ETH_ADDRESS, Ethereum},
+	eth::{
+		self, api::EthereumApi, deposit_address::ETHEREUM_ETH_ADDRESS, Ethereum,
+		StateChainGatewayProvider,
+	},
 	evm::{api::EvmReplayProtection, EthereumChainId, EthereumContract, EvmEnvironmentProvider},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
 	ChainCrypto, ChainEnvironment, ChainState, ForeignChain, ReplayProtectionProvider,
@@ -334,6 +337,14 @@ impl EvmEnvironmentProvider<Ethereum> for EthEnvironment {
 
 	fn next_nonce() -> u64 {
 		Environment::next_ethereum_signature_nonce()
+	}
+}
+
+pub struct StateChainGateway;
+
+impl StateChainGatewayProvider<Ethereum> for StateChainGateway {
+	fn state_chain_gateway_address() -> H160 {
+		Environment::state_chain_gateway_address()
 	}
 }
 

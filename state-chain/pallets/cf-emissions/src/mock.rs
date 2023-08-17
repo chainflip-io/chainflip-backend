@@ -202,7 +202,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type EthEnvironment = MockEthEnvironment;
+	type StateChainGatewayProvider = MockEthEnvironment;
 	type Broadcaster = MockBroadcast;
 	type FlipToBurn = MockFlipToBurn;
 	type SafeMode = MockRuntimeSafeMode;

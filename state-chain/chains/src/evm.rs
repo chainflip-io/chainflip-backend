@@ -24,20 +24,8 @@ pub trait EvmEnvironmentProvider<C: Chain> {
 		EvmReplayProtection {
 			nonce: Self::next_nonce(),
 			chain_id: Self::chain_id(),
-			key_manager_address: Self::key_manager_address(),
+			key_manager_address: Self::contract_address(EthereumContract::KeyManager),
 			contract_address: Self::contract_address(contract),
 		}
-	}
-
-	fn key_manager_address() -> EvmAddress {
-		Self::contract_address(EthereumContract::KeyManager)
-	}
-
-	fn vault_address() -> EvmAddress {
-		Self::contract_address(EthereumContract::Vault)
-	}
-
-	fn state_chain_gateway_address() -> EvmAddress {
-		Self::contract_address(EthereumContract::StateChainGateway)
 	}
 }

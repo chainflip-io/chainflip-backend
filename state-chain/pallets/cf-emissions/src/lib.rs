@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, evm::EvmEnvironmentProvider, UpdateFlipSupply};
+use cf_chains::{address::ForeignChainAddress, UpdateFlipSupply};
 use cf_traits::{
 	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
 	RewardsDistribution,
@@ -36,7 +36,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::ChainAbi;
+	use cf_chains::{eth::StateChainGatewayProvider, ChainAbi};
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -91,8 +91,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
-		/// Something that can provide the state chain gatweay address.
-		type EthEnvironment: EvmEnvironmentProvider<Self::HostChain>;
+		type StateChainGatewayProvider: StateChainGatewayProvider<Self::HostChain>;
 
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;
@@ -176,7 +175,9 @@ pub mod pallet {
 					T::EgressHandler::schedule_egress(
 						Asset::Flip,
 						flip_to_burn,
-						ForeignChainAddress::Eth(T::EthEnvironment::state_chain_gateway_address()),
+						ForeignChainAddress::Eth(
+							T::StateChainGatewayProvider::state_chain_gateway_address(),
+						),
 						None,
 					);
 					T::Issuance::burn(flip_to_burn.into());

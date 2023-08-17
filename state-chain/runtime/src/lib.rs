@@ -77,7 +77,7 @@ pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ArbEnvironment, ArbVaultTransitionHandler,
 	BroadcastReadyProvider, BtcEnvironment, BtcVaultTransitionHandler, ChainAddressConverter,
-	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
+	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler, StateChainGateway,
 	TokenholderGovernanceBroadcaster,
 };
 
@@ -594,7 +594,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
-	type EthEnvironment = EthEnvironment;
+	type StateChainGatewayProvider = StateChainGateway;
 	type FlipToBurn = LiquidityPools;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SafeMode = chainflip::RuntimeSafeMode;
