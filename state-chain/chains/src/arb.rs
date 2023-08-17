@@ -14,48 +14,14 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
-use ethereum_types::H160;
+use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
-use frame_support::sp_runtime::RuntimeDebug;
 use sp_std::str;
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 42161;
-
-#[derive(
-	Copy,
-	Clone,
-	RuntimeDebug,
-	Default,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	PartialOrd,
-	Ord,
-)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ArbitrumAddress(pub [u8; 20]);
-
-impl From<ArbitrumAddress> for H160 {
-	fn from(value: ArbitrumAddress) -> Self {
-		value.0.into()
-	}
-}
-impl From<H160> for ArbitrumAddress {
-	fn from(value: H160) -> Self {
-		ArbitrumAddress(*value.as_fixed_bytes())
-	}
-}
-impl From<[u8; 20]> for ArbitrumAddress {
-	fn from(value: [u8; 20]) -> Self {
-		ArbitrumAddress(value)
-	}
-}
 
 impl Chain for Arbitrum {
 	const NAME: &'static str = "Arbitrum";

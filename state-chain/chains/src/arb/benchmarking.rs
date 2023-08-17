@@ -3,7 +3,7 @@
 use cf_primitives::chains::assets::arb;
 
 use crate::{
-	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	benchmarking_value::BenchmarkValue,
 	eth::{
 		api::{
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey, EthereumReplayProtection,
@@ -13,23 +13,11 @@ use crate::{
 	},
 };
 
-use super::{api::ArbitrumApi, ArbitrumAddress, ArbitrumTrackedData};
+use super::{api::ArbitrumApi, ArbitrumTrackedData};
 
 impl BenchmarkValue for ArbitrumTrackedData {
 	fn benchmark_value() -> Self {
 		Self { base_fee: 10_000_000_000 }
-	}
-}
-
-impl BenchmarkValue for ArbitrumAddress {
-	fn benchmark_value() -> Self {
-		ArbitrumAddress([1_u8; 20])
-	}
-}
-
-impl BenchmarkValueExtended for ArbitrumAddress {
-	fn benchmark_value_by_id(id: u8) -> Self {
-		ArbitrumAddress([id; 20])
 	}
 }
 
