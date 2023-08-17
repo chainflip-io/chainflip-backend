@@ -540,6 +540,25 @@ pub enum UtilityCall {
 		#[allow(missing_docs)]
 		calls: Vec<PolkadotRuntimeCall>,
 	},
+	/// Send a batch of dispatch calls.
+	/// Unlike `batch`, it allows errors and won't interrupt.
+	///
+	/// May be called from any origin.
+	///
+	/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+	///   exceed the constant: `batched_calls_limit` (available in constant metadata).
+	///
+	/// If origin is root then call are dispatch without checking origin filter. (This includes
+	/// bypassing `frame_system::Config::BaseCallFilter`).
+	///
+	/// # <weight>
+	/// - Complexity: O(C) where C is the number of calls to be batched.
+	/// # </weight>
+	#[codec(index = 4u8)]
+	force_batch {
+		#[allow(missing_docs)]
+		calls: Vec<PolkadotRuntimeCall>,
+	},
 }
 
 #[allow(non_camel_case_types)]

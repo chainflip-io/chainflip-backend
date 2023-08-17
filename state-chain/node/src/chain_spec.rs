@@ -30,7 +30,13 @@ use state_chain_runtime::{
 	ValidatorConfig, WASM_BINARY,
 };
 
-use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
+use std::{
+	collections::BTreeMap,
+	env,
+	marker::PhantomData,
+	str::FromStr,
+	time::{SystemTime, UNIX_EPOCH},
+};
 use utilities::clean_hex_address;
 
 use sp_runtime::{
@@ -271,7 +277,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Telemetry
 		None,
 		// Protocol ID
-		None,
+		Some("flip-dev"),
 		// Fork ID
 		None,
 		// Properties
@@ -312,6 +318,17 @@ macro_rules! network_spec {
 					dot_vault_account_id,
 					dot_runtime_version,
 				} = env_override.unwrap_or(ENV);
+				let protocol_id = format!(
+					"{}-{}",
+					PROTOCOL_ID,
+					hex::encode(
+						SystemTime::now()
+							.duration_since(UNIX_EPOCH)
+							.unwrap()
+							.as_millis()
+							.to_be_bytes(),
+					)
+				);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
 					NETWORK_NAME,
@@ -382,8 +399,7 @@ macro_rules! network_spec {
 					vec![],
 					// Telemetry
 					None,
-					// Protocol ID
-					None,
+					Some(&protocol_id[..]),
 					// Fork ID
 					None,
 					// Properties
