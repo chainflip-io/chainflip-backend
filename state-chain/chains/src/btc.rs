@@ -225,8 +225,20 @@ impl ChainCrypto for Bitcoin {
 			})
 	}
 
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		vec![(PreviousOrCurrent::Current, agg_key.current)]
+	fn agg_key_to_payload(agg_key: Self::AggKey, for_handover: bool) -> Self::Payload {
+		let payload = if for_handover {
+			(
+				PreviousOrCurrent::Previous,
+				agg_key.previous.expect("previous key must exist after handover"),
+			)
+		} else {
+			(PreviousOrCurrent::Current, agg_key.current)
+		};
+		vec![payload]
+	}
+
+	fn handover_key_matches(current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
+		new_key.previous.is_some_and(|previous| current_key.current == previous)
 	}
 }
 

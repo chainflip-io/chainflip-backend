@@ -82,7 +82,7 @@ where
 		req_id
 	}
 
-	fn request_keygen_verification_signature(
+	fn request_verification_signature(
 		payload: <C as ChainCrypto>::Payload,
 		_participants: BTreeSet<Self::ValidatorId>,
 		_key: <C as ChainCrypto>::AggKey,
