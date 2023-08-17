@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
 	common::{OneToZero, Order, Price, Side, SideMap, ZeroToOne},
-	PoolState,
+	NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -31,7 +31,7 @@ impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limi
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::{SqrtPriceQ64F96, Tick},
+		common::Tick,
 		limit_orders,
 		range_orders::{self, Liquidity},
 	};
@@ -211,7 +211,7 @@ pub mod pallet {
 		NewPoolCreated {
 			unstable_asset: any::Asset,
 			fee_hundredth_pips: u32,
-			initial_sqrt_price: SqrtPriceQ64F96,
+			initial_price: Price,
 		},
 		RangeOrderMinted {
 			lp: T::AccountId,
@@ -334,7 +334,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
 			fee_hundredth_pips: u32,
-			initial_sqrt_price: SqrtPriceQ64F96,
+			initial_price: Price,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Pools::<T>::try_mutate(unstable_asset, |maybe_pool| {
@@ -342,24 +342,16 @@ pub mod pallet {
 
 				*maybe_pool = Some(Pool {
 					enabled: true,
-					pool_state: PoolState {
-						limit_orders: limit_orders::PoolState::new(fee_hundredth_pips).map_err(
-							|e| match e {
-								limit_orders::NewError::InvalidFeeAmount =>
-									Error::<T>::InvalidFeeAmount,
-							},
-						)?,
-						range_orders: range_orders::PoolState::new(
-							fee_hundredth_pips,
-							initial_sqrt_price,
-						)
-						.map_err(|e| match e {
-							range_orders::NewError::InvalidFeeAmount =>
+					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
+						match e {
+							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
 								Error::<T>::InvalidFeeAmount,
-							range_orders::NewError::InvalidInitialPrice =>
+							NewError::RangeOrders(range_orders::NewError::InvalidFeeAmount) =>
+								Error::<T>::InvalidFeeAmount,
+							NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice) =>
 								Error::<T>::InvalidInitialPrice,
-						})?,
-					},
+						}
+					})?,
 				});
 
 				Ok::<_, Error<T>>(())
@@ -368,7 +360,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::NewPoolCreated {
 				unstable_asset,
 				fee_hundredth_pips,
-				initial_sqrt_price,
+				initial_price,
 			});
 
 			Ok(())

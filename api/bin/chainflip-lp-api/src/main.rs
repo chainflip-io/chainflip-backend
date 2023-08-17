@@ -13,9 +13,8 @@ use chainflip_api::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
 	},
-	queries::RangeOrderPosition,
 	settings::StateChain,
-	AccountId32, OperatorApi, StateChainApi,
+	OperatorApi, StateChainApi,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -158,12 +157,6 @@ pub trait Rpc {
 	#[method(name = "assetBalances")]
 	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
 
-	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(
-		&self,
-		account_id: Option<AccountId32>,
-	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error>;
-
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
 }
@@ -226,14 +219,6 @@ impl RpcServer for RpcServerImpl {
 	/// Returns a list of all assets and their free balance in json format
 	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error> {
 		Ok(self.api.query_api().get_balances(None).await?)
-	}
-
-	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(
-		&self,
-		account_id: Option<AccountId32>,
-	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error> {
-		Ok(self.api.query_api().get_range_orders(None, account_id).await?)
 	}
 
 	/// Creates or adds liquidity to a range order.

@@ -1,6 +1,6 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{sqrt_price_at_tick, Order, SqrtPriceQ64F96, Tick},
+	common::{price_at_tick, Order, Price, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -29,19 +29,19 @@ use state_chain_runtime::EthereumChainTracking;
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
 
-fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) {
+fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
 	assert_ok!(LiquidityPools::new_pool(
 		pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 		unstable_asset,
 		fee_hundredth_pips,
-		initial_sqrt_price,
+		initial_price,
 	));
 	assert_events_eq!(
 		Runtime,
 		RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::NewPoolCreated {
 			unstable_asset,
 			fee_hundredth_pips,
-			initial_sqrt_price,
+			initial_price,
 		},)
 	);
 	System::reset_events();
@@ -179,7 +179,7 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
-		new_pool(asset, 0u32, sqrt_price_at_tick(0));
+		new_pool(asset, 0u32, price_at_tick(0).unwrap());
 		credit_account(&DORIS, asset, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 		mint_range_order(&DORIS, asset, -1_000..1_000, 1_000_000);
@@ -189,8 +189,8 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::default().build().execute_with(|| {
-		new_pool(Asset::Eth, 0u32, sqrt_price_at_tick(0));
-		new_pool(Asset::Flip, 0u32, sqrt_price_at_tick(0));
+		new_pool(Asset::Eth, 0u32, price_at_tick(0).unwrap());
+		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
 
 		new_account(&DORIS, AccountRole::LiquidityProvider);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);

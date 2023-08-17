@@ -2,7 +2,7 @@ use crate::{
 	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
 	RangeOrderSize, STABLE_ASSET,
 };
-use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
+use cf_amm::common::{price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::assert_events_match;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -13,7 +13,7 @@ use sp_runtime::Permill;
 fn can_create_new_trading_pool() {
 	new_test_ext().execute_with(|| {
 		let unstable_asset = Asset::Eth;
-		let default_sqrt_price = sqrt_price_at_tick(0);
+		let default_price = price_at_tick(0).unwrap();
 
 		// While the pool does not exist, no info can be obtained.
 		assert!(Pools::<Test>::get(unstable_asset).is_none());
@@ -24,7 +24,7 @@ fn can_create_new_trading_pool() {
 				RuntimeOrigin::root(),
 				unstable_asset,
 				1_000_000u32,
-				default_sqrt_price,
+				default_price,
 			),
 			Error::<Test>::InvalidFeeAmount,
 		);
@@ -34,24 +34,19 @@ fn can_create_new_trading_pool() {
 			RuntimeOrigin::root(),
 			unstable_asset,
 			500_000u32,
-			default_sqrt_price,
+			default_price,
 		));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
 			crate::Event::<Test>::NewPoolCreated {
 				unstable_asset,
 				fee_hundredth_pips: 500_000u32,
-				initial_sqrt_price: default_sqrt_price,
+				initial_price: default_price,
 			},
 		));
 
 		// Cannot create duplicate pool
 		assert_noop!(
-			LiquidityPools::new_pool(
-				RuntimeOrigin::root(),
-				unstable_asset,
-				0u32,
-				default_sqrt_price
-			),
+			LiquidityPools::new_pool(RuntimeOrigin::root(), unstable_asset, 0u32, default_price),
 			Error::<Test>::PoolAlreadyExists
 		);
 	});
@@ -62,14 +57,14 @@ fn can_enable_disable_trading_pool() {
 	new_test_ext().execute_with(|| {
 		let range = -100..100;
 		let unstable_asset = Asset::Eth;
-		let default_sqrt_price = sqrt_price_at_tick(0);
+		let default_price = price_at_tick(0).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
 			500_000u32,
-			default_sqrt_price,
+			default_price,
 		));
 
 		// Disable the pool
@@ -115,14 +110,14 @@ fn can_enable_disable_trading_pool() {
 fn test_buy_back_flip_no_funds_available() {
 	new_test_ext().execute_with(|| {
 		let unstable_asset = Asset::Eth;
-		let default_sqrt_price = sqrt_price_at_tick(0);
+		let default_price = price_at_tick(0).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
 			500_000u32,
-			default_sqrt_price,
+			default_price,
 		));
 
 		FlipBuyInterval::<Test>::set(5);
@@ -143,7 +138,7 @@ fn test_buy_back_flip_2() {
 			RuntimeOrigin::root(),
 			FLIP,
 			Default::default(),
-			sqrt_price_at_tick(0),
+			price_at_tick(0).unwrap(),
 		));
 		assert_ok!(LiquidityPools::collect_and_mint_range_order(
 			RuntimeOrigin::signed(ALICE),
@@ -184,7 +179,7 @@ fn test_buy_back_flip() {
 			RuntimeOrigin::root(),
 			FLIP,
 			Default::default(),
-			sqrt_price_at_tick(0),
+			price_at_tick(0).unwrap(),
 		));
 		assert_ok!(LiquidityPools::collect_and_mint_range_order(
 			RuntimeOrigin::signed(ALICE),
@@ -251,14 +246,14 @@ fn can_update_liquidity_fee() {
 	new_test_ext().execute_with(|| {
 		let range = -100..100;
 		let unstable_asset = Asset::Eth;
-		let default_sqrt_price = sqrt_price_at_tick(0);
+		let default_price = price_at_tick(0).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
 			500_000u32,
-			default_sqrt_price,
+			default_price,
 		));
 		assert_ok!(LiquidityPools::collect_and_mint_range_order(
 			RuntimeOrigin::signed(ALICE),
@@ -311,14 +306,14 @@ fn can_get_liquidity_and_positions() {
 		let range_1 = -100..100;
 		let range_2 = -50..200;
 		let unstable_asset = Asset::Flip;
-		let default_sqrt_price = sqrt_price_at_tick(0);
+		let default_price = price_at_tick(0).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
 			500_000u32,
-			default_sqrt_price,
+			default_price,
 		));
 
 		assert_ok!(LiquidityPools::collect_and_mint_range_order(

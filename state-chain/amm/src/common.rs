@@ -202,11 +202,38 @@ pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
 
+	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price
+	// will always include a bit pass the 64th bit that is set, so when we shift down below that set
+	// bit will not be removed.
 	mul_div_floor(
 		sqrt_price,
 		sqrt_price,
 		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
 	)
+}
+
+pub fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
+	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
+		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
+		.try_into()
+		.unwrap_or(SqrtPriceQ64F96::MAX)
+}
+
+pub fn price_at_tick(tick: Tick) -> Option<Price> {
+	if is_tick_valid(tick) {
+		Some(sqrt_price_to_price(sqrt_price_at_tick(tick)))
+	} else {
+		None
+	}
+}
+
+pub fn tick_at_price(price: Price) -> Option<Tick> {
+	let sqrt_price = price_to_sqrt_price(price);
+	if is_sqrt_price_valid(sqrt_price) {
+		Some(tick_at_sqrt_price(sqrt_price))
+	} else {
+		None
+	}
 }
 
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of

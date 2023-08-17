@@ -5,8 +5,8 @@ mod tests;
 
 use codec::{Decode, Encode};
 use common::{
-	sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap, SqrtPriceQ64F96, Tick,
-	ZeroToOne,
+	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap,
+	SqrtPriceQ64F96, Tick, ZeroToOne,
 };
 use scale_info::TypeInfo;
 
@@ -16,11 +16,31 @@ pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState<LiquidityProvider> {
-	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
-	pub range_orders: range_orders::PoolState<LiquidityProvider>,
+	limit_orders: limit_orders::PoolState<LiquidityProvider>,
+	range_orders: range_orders::PoolState<LiquidityProvider>,
+}
+
+pub enum NewError {
+	LimitOrders(limit_orders::NewError),
+	RangeOrders(range_orders::NewError),
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
+	pub fn new(
+		fee_hundredth_pips: u32,
+		initial_range_order_price: Price,
+	) -> Result<Self, NewError> {
+		Ok(Self {
+			limit_orders: limit_orders::PoolState::new(fee_hundredth_pips)
+				.map_err(NewError::LimitOrders)?,
+			range_orders: range_orders::PoolState::new(
+				fee_hundredth_pips,
+				price_to_sqrt_price(initial_range_order_price),
+			)
+			.map_err(NewError::RangeOrders)?,
+		})
+	}
+
 	pub fn current_price<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(

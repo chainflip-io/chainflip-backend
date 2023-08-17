@@ -122,40 +122,6 @@ impl QueryApi {
 		.into_iter()
 		.collect()
 	}
-
-	pub async fn get_range_orders(
-		&self,
-		block_hash: Option<state_chain_runtime::Hash>,
-		account_id: Option<state_chain_runtime::AccountId>,
-	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, anyhow::Error> {
-		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
-		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
-
-		Ok(self
-			.state_chain_client
-			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>, Vec<_>>(block_hash)
-			.await?
-			.into_iter()
-			.map(|(asset, pool)| {
-				(
-					asset,
-					pool.pool_state
-						.range_orders
-						.positions()
-						.into_iter()
-						.filter_map(|((owner, lower_tick, upper_tick), liquidity)| {
-							if owner == account_id {
-								Some(RangeOrderPosition { lower_tick, upper_tick, liquidity })
-							} else {
-								None
-							}
-						})
-						.collect(),
-				)
-			})
-			.collect())
-	}
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

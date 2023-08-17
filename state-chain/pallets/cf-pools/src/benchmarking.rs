@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::common::sqrt_price_at_tick;
+use cf_amm::common::price_at_tick;
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -33,7 +33,7 @@ benchmarks! {
 
 	update_pool_enabled {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, sqrt_price_at_tick(0));
+		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, price_at_tick(0).unwrap());
 		let call =  Call::<T>::update_pool_enabled{
 			unstable_asset: Asset::Eth,
 			enabled: false,
@@ -48,7 +48,7 @@ benchmarks! {
 		let call =  Call::<T>::new_pool {
 			unstable_asset: Asset::Eth,
 			fee_hundredth_pips: 0u32,
-			initial_sqrt_price: sqrt_price_at_tick(0),
+			initial_price: price_at_tick(0).unwrap(),
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
@@ -58,7 +58,7 @@ benchmarks! {
 
 	collect_and_mint_range_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -82,7 +82,7 @@ benchmarks! {
 
 	collect_and_burn_range_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -104,7 +104,7 @@ benchmarks! {
 
 	collect_and_mint_limit_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -120,7 +120,7 @@ benchmarks! {
 
 	collect_and_burn_limit_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
