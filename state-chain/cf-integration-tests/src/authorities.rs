@@ -239,7 +239,10 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 
 			// Run until key handover starts
 			testnet.move_forward_blocks(3);
-			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+			assert!(matches!(
+				EthereumVault::status(),
+				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
+			));
 
 			assert_ok!(Environment::update_safe_mode(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),

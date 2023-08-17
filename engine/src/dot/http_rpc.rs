@@ -8,6 +8,7 @@ use jsonrpsee::{
 };
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use serde_json::value::RawValue;
+use sp_core::H256;
 use subxt::{
 	error::{BlockError, RpcError},
 	events::{Events, EventsClient},
@@ -83,8 +84,8 @@ impl DotHttpRpcClient {
 		Ok(Self { online_client })
 	}
 
-	pub async fn metadata(&self) -> Result<subxt::Metadata> {
-		Ok(self.online_client.rpc().metadata().await?)
+	pub async fn metadata(&self, block_hash: H256) -> Result<subxt::Metadata> {
+		Ok(self.online_client.rpc().metadata_legacy(Some(block_hash)).await?)
 	}
 }
 
@@ -108,8 +109,13 @@ impl DotRpcApi for DotHttpRpcClient {
 		Ok(self.block(block_hash).await?.map(|block| block.block.extrinsics))
 	}
 
+	// TODO: When witnessing is catching up we query blocks in batches. It's posible that when
+	// a batch is made over a runtime boundary that the metadata will need to be queried more than
+	// necessary, as the order within the batch is not necessarily guaranteed. Beacause we limit
+	// Polkadot to 32 concurrent requests and runtime upgrades are infrequent this should not be an
+	// issue in reality, but probably worth solving at some point.
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>> {
-		let chain_runtime_version = self.current_runtime_version().await?;
+		let chain_runtime_version = self.runtime_version(Some(block_hash)).await?;
 
 		let client_runtime_version = self.online_client.runtime_version();
 
@@ -120,7 +126,7 @@ impl DotRpcApi for DotHttpRpcClient {
 			chain_runtime_version.transaction_version !=
 				client_runtime_version.transaction_version
 		{
-			let new_metadata = self.metadata().await?;
+			let new_metadata = self.metadata(block_hash).await?;
 
 			self.online_client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
 				spec_version: chain_runtime_version.spec_version,
@@ -141,11 +147,16 @@ impl DotRpcApi for DotHttpRpcClient {
 		}
 	}
 
-	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
-		Ok(self.online_client.rpc().runtime_version(None).await.map(|v| RuntimeVersion {
-			spec_version: v.spec_version,
-			transaction_version: v.transaction_version,
-		})?)
+	async fn runtime_version(&self, block_hash: Option<H256>) -> Result<RuntimeVersion> {
+		Ok(self
+			.online_client
+			.rpc()
+			.runtime_version(block_hash)
+			.await
+			.map(|v| RuntimeVersion {
+				spec_version: v.spec_version,
+				transaction_version: v.transaction_version,
+			})?)
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {

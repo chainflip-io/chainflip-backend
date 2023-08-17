@@ -420,7 +420,7 @@ where
 	/// ceremony id.
 	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
 
-	fn request_keygen_verification_signature(
+	fn request_verification_signature(
 		payload: C::Payload,
 		participants: BTreeSet<Self::ValidatorId>,
 		key: C::AggKey,

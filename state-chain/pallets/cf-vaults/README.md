@@ -16,6 +16,23 @@ Vault rotation can be thought of a two-stage process: 1. Keygen 2. Rotation.
 For a vault rotation to take place we need a set of validator candidates that will participate in the key
 generation ceremony. All candidates *must* participate and succeed in keygen ceremonies for *all* supported chains.
 
+### Keygen Verification
+
+After a new key is generated, we perform "keygen verification" which is just a dummy signing ceremony with *all*
+validator candidates (in contrast to regular signing ceremonies which require only a threshold of participants)
+that ensures that the key has been generated correctly and is ready to be used by all candidates in future signing
+ceremonies. 
+
+### Key Handover
+
+For certain blockchains (notably, Bitcoin) in addition to generating a new key during rotation, we want to preserve
+the existing key and hand it over the new validator candidates. This is done by performing a "key handover" ceremony
+where a new set of key shares is generated for the same key.
+
+### Key Handover Verification
+
+Same as "keygen verification" but for key handover.
+
 ### Rotation
 
 Once *all* new keys have been generated, the vault for each chain needs to be rotated. For some chains, this will
