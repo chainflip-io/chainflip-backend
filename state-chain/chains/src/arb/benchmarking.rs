@@ -1,14 +1,12 @@
 #![cfg(feature = "runtime-benchmarks")]
 
+use crate::evm::api::EvmReplayProtection;
 use cf_primitives::chains::assets::arb;
 
 use crate::{
 	benchmarking_value::BenchmarkValue,
 	eth::{
-		api::{
-			set_agg_key_with_agg_key::SetAggKeyWithAggKey, EthereumReplayProtection,
-			EthereumTransactionBuilder,
-		},
+		api::{set_agg_key_with_agg_key::SetAggKeyWithAggKey, EthereumTransactionBuilder},
 		AggKey,
 	},
 };
@@ -30,7 +28,7 @@ impl BenchmarkValue for arb::Asset {
 impl<E> BenchmarkValue for ArbitrumApi<E> {
 	fn benchmark_value() -> Self {
 		EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection::default(),
+			EvmReplayProtection::default(),
 			SetAggKeyWithAggKey::new(AggKey::from_pubkey_compressed([2u8; 33])),
 		)
 		.into()

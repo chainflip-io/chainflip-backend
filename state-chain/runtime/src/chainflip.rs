@@ -30,12 +30,8 @@ use cf_chains::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData, RuntimeVersion,
 	},
-	eth::{
-		self,
-		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
-		deposit_address::ETHEREUM_ETH_ADDRESS,
-		Ethereum,
-	},
+	eth::{self, api::EthereumApi, deposit_address::ETHEREUM_ETH_ADDRESS, Ethereum},
+	evm::{api::EvmReplayProtection, EthereumChainId, EthereumContract, EvmEnvironmentProvider},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
 	ChainCrypto, ChainEnvironment, ChainState, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
@@ -311,12 +307,12 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	fn replay_protection() -> EthereumReplayProtection {
+	fn replay_protection() -> EvmReplayProtection {
 		unimplemented!()
 	}
 }
 
-impl EthEnvironmentProvider<Ethereum> for EthEnvironment {
+impl EvmEnvironmentProvider<Ethereum> for EthEnvironment {
 	fn token_address(asset: assets::eth::Asset) -> Option<H160> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS),
@@ -332,7 +328,7 @@ impl EthEnvironmentProvider<Ethereum> for EthEnvironment {
 		}
 	}
 
-	fn chain_id() -> eth::api::EthereumChainId {
+	fn chain_id() -> EthereumChainId {
 		Environment::ethereum_chain_id()
 	}
 
@@ -343,7 +339,7 @@ impl EthEnvironmentProvider<Ethereum> for EthEnvironment {
 
 pub struct ArbEnvironment;
 
-impl EthEnvironmentProvider<Arbitrum> for ArbEnvironment {
+impl EvmEnvironmentProvider<Arbitrum> for ArbEnvironment {
 	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
 		match asset {
 			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
@@ -360,7 +356,7 @@ impl EthEnvironmentProvider<Arbitrum> for ArbEnvironment {
 		}
 	}
 
-	fn chain_id() -> eth::api::EthereumChainId {
+	fn chain_id() -> EthereumChainId {
 		Environment::arbitrum_chain_id()
 	}
 

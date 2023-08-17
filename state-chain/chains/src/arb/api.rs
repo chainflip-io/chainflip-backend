@@ -1,8 +1,10 @@
-use super::eth::api::evm_all_batch_builder;
 use crate::{
 	eth::api::{
-		common::EncodableTransferAssetParams, execute_x_swap_and_call, EthEnvironmentProvider,
-		EthereumContract, EthereumReplayProtection, EthereumTransactionBuilder,
+		common::EncodableTransferAssetParams, execute_x_swap_and_call, EthereumTransactionBuilder,
+	},
+	evm::{
+		api::{evm_all_batch_builder, EvmReplayProtection},
+		EthereumContract, EvmEnvironmentProvider,
 	},
 	*,
 };
@@ -12,7 +14,7 @@ use sp_std::{cmp::min, marker::PhantomData};
 
 impl ChainAbi for Arbitrum {
 	type Transaction = eth::Transaction;
-	type ReplayProtection = EthereumReplayProtection;
+	type ReplayProtection = EvmReplayProtection;
 }
 
 impl FeeRefundCalculator<Arbitrum> for eth::Transaction {
@@ -46,7 +48,7 @@ pub enum ArbitrumApi<Environment: 'static> {
 
 impl<E> SetAggKeyWithAggKey<Arbitrum> for ArbitrumApi<E>
 where
-	E: EthEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Arbitrum as ChainCrypto>::AggKey>,
@@ -61,7 +63,7 @@ where
 
 impl<E> AllBatch<Arbitrum> for ArbitrumApi<E>
 where
-	E: EthEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
@@ -78,7 +80,7 @@ where
 
 impl<E> ExecutexSwapAndCall<Arbitrum> for ArbitrumApi<E>
 where
-	E: EthEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -129,7 +131,7 @@ impl<E> From<EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAnd
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn replay_protection(&self) -> EthereumReplayProtection {
+	pub fn replay_protection(&self) -> EvmReplayProtection {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(tx) => tx.replay_protection(),
 			ArbitrumApi::AllBatch(tx) => tx.replay_protection(),

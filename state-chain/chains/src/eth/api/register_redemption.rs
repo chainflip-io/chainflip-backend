@@ -62,7 +62,7 @@ impl EthereumCall for RegisterRedemption {
 #[cfg(test)]
 mod test_register_redemption {
 	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		api::{abi::load_abi, ApiCall, EvmReplayProtection, EthereumTransactionBuilder},
 		SchnorrVerificationComponents,
 	};
 
@@ -89,7 +89,7 @@ mod test_register_redemption {
 			state_chain_gateway.function("registerRedemption").unwrap();
 
 		let register_redemption_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

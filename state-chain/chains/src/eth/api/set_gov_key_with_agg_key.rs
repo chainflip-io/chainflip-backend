@@ -32,10 +32,13 @@ impl EthereumCall for SetGovKeyWithAggKey {
 #[cfg(test)]
 mod test_set_gov_key_with_agg_key {
 	use super::*;
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumTransactionBuilder},
-		tests::asymmetrise,
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::{
+			api::{abi::load_abi, ApiCall, EthereumTransactionBuilder},
+			tests::asymmetrise,
+			SchnorrVerificationComponents,
+		},
+		evm::api::EvmReplayProtection,
 	};
 
 	#[test]
@@ -50,7 +53,7 @@ mod test_set_gov_key_with_agg_key {
 		let key_manager = load_abi("IKeyManager");
 
 		let tx_builder = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

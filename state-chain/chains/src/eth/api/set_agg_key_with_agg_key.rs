@@ -35,7 +35,7 @@ impl EthereumCall for SetAggKeyWithAggKey {
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
 	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		api::{abi::load_abi, ApiCall, EvmReplayProtection, EthereumTransactionBuilder},
 		SchnorrVerificationComponents,
 	};
 
@@ -49,7 +49,7 @@ mod test_set_agg_key_with_agg_key {
 			hex_literal::hex!("d45a181d77a4e10810b033734a611885d85848663b98f372f5d279309b3da0b5")
 				.into();
 		let call = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: 0,
 				chain_id: 31337,
 				key_manager_address,
@@ -79,7 +79,7 @@ mod test_set_agg_key_with_agg_key {
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
 		let set_agg_key_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
