@@ -111,13 +111,12 @@ pub mod pallet {
 	pub type EthereumSupportedAssets<T: Config> =
 		StorageMap<_, Blake2_128Concat, EthAsset, EthereumAddress>;
 
-	// TODO: Rename
 	#[pallet::storage]
 	#[pallet::getter(fn state_chain_gateway_address)]
-	/// The address of the ETH state chain gatweay contract
-	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	/// The address of the state chain gatweay contract on Ethereum.
+	pub type StateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
-	// eth_
+	// eth_key_manager_address
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract
@@ -474,7 +473,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
+			StateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
