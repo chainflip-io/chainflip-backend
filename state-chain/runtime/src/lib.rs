@@ -4,6 +4,8 @@
 pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
+#[cfg(feature = "std")]
+pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::Offence,
