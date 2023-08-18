@@ -38,6 +38,7 @@ pub mod btc;
 pub mod dot;
 pub mod eth;
 pub mod none;
+pub mod evm;
 
 pub mod address;
 pub mod deposit_channel;

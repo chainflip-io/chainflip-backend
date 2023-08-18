@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use cf_chains::eth::{AggKey, SchnorrVerificationComponents, TransactionFee};
+use cf_chains::{
+	eth::{AggKey, TransactionFee},
+	evm::SchnorrVerificationComponents,
+};
 use ethers::{
 	prelude::abigen,
 	types::{Bloom, TransactionReceipt},

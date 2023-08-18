@@ -1,7 +1,7 @@
+// TODO: See if we can dedup this once the vault address stuff is deduped
 use cf_chains::{
-	address::AddressDerivationApi,
-	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address},
-	Arbitrum, Chain,
+	address::AddressDerivationApi, eth::deposit_address::get_create_2_address,
+	evm::EvmEnvironmentProvider, Arbitrum, Chain,
 };
 use cf_primitives::{chains::assets::arb, ChannelId};
 use sp_runtime::DispatchError;

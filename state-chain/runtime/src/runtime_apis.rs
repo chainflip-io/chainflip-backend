@@ -4,9 +4,7 @@ use cf_amm::{
 	range_orders::{AmountsToLiquidityError, Liquidity},
 };
 use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
-	eth::{api::EthereumChainId, Address as EthereumAddress},
+	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, evm::EthereumChainId,
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};

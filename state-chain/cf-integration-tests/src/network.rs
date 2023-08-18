@@ -4,7 +4,7 @@ use crate::threshold_signing::{
 	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents,
 	EthThresholdSigner, KeyUtils, ThresholdSigner,
 };
-use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
+use cf_chains::{dot::PolkadotSignature, evm::SchnorrVerificationComponents, ChainCrypto};
 
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};

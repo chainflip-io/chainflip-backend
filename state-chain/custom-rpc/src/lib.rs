@@ -3,9 +3,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
-	eth::{api::EthereumChainId, Address as EthereumAddress},
+	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, evm::EthereumChainId,
 };
 use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};

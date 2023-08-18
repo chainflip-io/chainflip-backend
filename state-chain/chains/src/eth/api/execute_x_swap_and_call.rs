@@ -1,5 +1,5 @@
 use super::*;
-use crate::address::ForeignChainAddress;
+use crate::{address::ForeignChainAddress, evm::api::common::EncodableTransferAssetParams};
 use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use ethabi::Token;
@@ -86,8 +86,8 @@ mod test_execute_x_swap_and_execute {
 	use super::*;
 	use crate::{
 		dot::PolkadotAccountId,
-		eth::{
-			api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		evm::{
+			api::{abi::load_abi, EthereumTransactionBuilder, EvmReplayProtection},
 			SchnorrVerificationComponents,
 		},
 	};
@@ -125,7 +125,7 @@ mod test_execute_x_swap_and_execute {
 		let function_reference = eth_vault.function("executexSwapAndCall").unwrap();
 
 		let function_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

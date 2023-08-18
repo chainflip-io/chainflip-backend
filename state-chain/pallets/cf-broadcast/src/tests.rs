@@ -7,7 +7,7 @@ use crate::{
 	TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
-	eth::SchnorrVerificationComponents,
+	evm::SchnorrVerificationComponents,
 	mocks::{
 		MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, MockTransactionBuilder,
 		ETH_TX_FEE,

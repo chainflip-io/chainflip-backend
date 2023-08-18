@@ -113,8 +113,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn state_chain_gateway_address)]
-	/// The address of the ETH state chain gatweay contract
-	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	/// The address of the state chain gatweay contract on Ethereum.
+	pub type StateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
@@ -134,7 +134,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
 	/// The ETH chain id
-	pub type EthereumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
+	pub type EthereumChainId<T> = StorageValue<_, cf_chains::evm::EthereumChainId, ValueQuery>;
 
 	#[pallet::storage]
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
@@ -200,7 +200,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn arbitrum_chain_id)]
 	/// The ARB chain id
-	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
+	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::evm::EthereumChainId, ValueQuery>;
 
 	#[pallet::storage]
 	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
@@ -259,7 +259,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
 		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
@@ -473,7 +472,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
+			StateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
