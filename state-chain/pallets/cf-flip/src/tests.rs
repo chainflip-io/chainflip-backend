@@ -424,7 +424,7 @@ fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
 		} else {
 			TestResult::passed()
 		}
-	})
+	}).context()
 }
 
 #[test]
@@ -657,5 +657,5 @@ fn can_reap_dust_account() {
 		System::assert_last_event(RuntimeEvent::System(frame_system::Event::KilledAccount {
 			account: ALICE,
 		}));
-	})
+	});
 }

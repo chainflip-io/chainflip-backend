@@ -143,6 +143,12 @@ where
 		self
 	}
 
+	/// Returns the context yielded.
+	#[track_caller]
+	pub fn context(self) -> Ctx {
+		self.context
+	}
+
 	/// Execute the given closure as if it was an extrinsic in the next block.
 	///
 	/// The closure's return value is next context.

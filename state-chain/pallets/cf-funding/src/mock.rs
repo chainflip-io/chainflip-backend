@@ -31,6 +31,25 @@ frame_support::construct_runtime!(
 	}
 );
 
+cf_test_utilities::impl_test_helpers!(
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000_000 },
+		funding: FundingConfig {
+			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
+			redemption_tax: REDEMPTION_TAX,
+			minimum_funding: MIN_FUNDING,
+			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
+		},
+	},
+	|| {
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
+			.unwrap();
+		System::set_block_number(1);
+	}
+ );
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
@@ -188,26 +207,3 @@ pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 pub const MIN_FUNDING: u128 = 10;
 pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000_000 },
-		funding: FundingConfig {
-			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
-			redemption_tax: REDEMPTION_TAX,
-			minimum_funding: MIN_FUNDING,
-			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
-		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
-			.unwrap();
-		System::set_block_number(1);
-	});
-
-	ext
-}

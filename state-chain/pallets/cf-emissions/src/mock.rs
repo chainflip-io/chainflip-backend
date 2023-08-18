@@ -40,6 +40,8 @@ frame_support::construct_runtime!(
 	}
 );
 
+cf_test_utilities::impl_test_helpers!(Test);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
@@ -211,7 +213,7 @@ impl pallet_cf_emissions::Config for Test {
 }
 
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
+pub fn buid_new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> TestRunner<()> {
 	let total_issuance = issuance.unwrap_or(TOTAL_ISSUANCE);
 	let config = RuntimeGenesisConfig {
 		system: Default::default(),
@@ -230,5 +232,5 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 		MockEpochInfo::add_authorities(v);
 	}
 
-	config.build_storage().unwrap().into()
+	new_test_ext_with_genesis_config(config)
 }
