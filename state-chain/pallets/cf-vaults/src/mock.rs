@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use super::*;
 use crate as pallet_cf_vaults;
 use cf_chains::{
-	btc, eth,
+	btc,
 	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereum},
 	ApiCall, SetAggKeyWithAggKeyError,
