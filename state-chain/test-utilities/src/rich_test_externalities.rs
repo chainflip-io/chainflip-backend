@@ -143,9 +143,8 @@ where
 		self
 	}
 
-	/// Returns the context yielded.
-	#[track_caller]
-	pub fn context(self) -> Ctx {
+	/// Consume the test externalities and return the context.
+	pub fn into_context(self) -> Ctx {
 		self.context
 	}
 
