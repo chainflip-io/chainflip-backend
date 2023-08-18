@@ -15,7 +15,7 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::{RegisterRedemption};
+use cf_chains::RegisterRedemption;
 use cf_primitives::AccountRole;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
