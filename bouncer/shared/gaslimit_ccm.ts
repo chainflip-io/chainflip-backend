@@ -26,7 +26,6 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasFractio
   return newCcmMetadata(
     sourceAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
-    // Very small gas budget since gasPrice in testnet is extremely low (~7wei)
     gasFraction,
   );
 }
@@ -82,8 +81,7 @@ async function testGasLimitSwap(
       SwapType.CcmGas,
     );
 
-    // SwapExecuted will be emitted at the same time as swapScheduled so we can't wait for
-    // swapId to be known.
+    // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
     const swapIdToEgressAmount: { [key: string]: string } = {};
     const swapExecutedHandle = observeEvent(
       'swapping:SwapExecuted',
@@ -131,7 +129,7 @@ async function testGasLimitSwap(
   // Max Gas Limit budget
   const gasLimitBudget = egressGasAmount / maxFeePerGas;
 
-  // Console log tag egresssGasAmount, fees and gasLimitBudget
+  // TODO: Add a check for the gasLimitBudget once mainnet logic is implemented. For now just logging it.
   console.log(
     `${tag} egressGasAmount: ${egressGasAmount}, baseFee: ${baseFee}, priorityFee: ${priorityFee}, gasLimitBudget: ${gasLimitBudget}`,
   );
@@ -139,6 +137,7 @@ async function testGasLimitSwap(
   await ccmReceivedFailure;
 }
 
+// NOTE: In localnet the gasPrice is is extremely low (~7wei) so the gasBudget needed is very small.
 export async function testGasLimitCcmSwaps() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
@@ -206,7 +205,7 @@ export async function testGasLimitCcmSwaps() {
       if (broadcastAborted > gasLimitSwapsAborted.length) {
         throw new Error('Broadcast Aborted Unexpected');
       }
-      // Continue observing for unexpepected BroadcastAborted events
+      // Continue observing for unexpected BroadcastAborted events
       return false;
     },
     () => stopObserveAborted,
