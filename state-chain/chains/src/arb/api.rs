@@ -1,8 +1,11 @@
-use super::eth::api::evm_all_batch_builder;
 use crate::{
-	eth::api::{
-		common::EncodableTransferAssetParams, execute_x_swap_and_call, EthEnvironmentProvider,
-		EthereumContract, EthereumReplayProtection, EthereumTransactionBuilder,
+	eth::api::execute_x_swap_and_call,
+	evm::{
+		api::{
+			common::EncodableTransferAssetParams, evm_all_batch_builder,
+			EthereumTransactionBuilder, EvmReplayProtection,
+		},
+		EvmEnvironmentProvider,
 	},
 	*,
 };
@@ -10,9 +13,11 @@ use eth::api::{all_batch, set_agg_key_with_agg_key};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::{cmp::min, marker::PhantomData};
 
+use super::ArbitrumContract;
+
 impl ChainAbi for Arbitrum {
 	type Transaction = eth::Transaction;
-	type ReplayProtection = EthereumReplayProtection;
+	type ReplayProtection = EvmReplayProtection;
 }
 
 impl FeeRefundCalculator<Arbitrum> for eth::Transaction {
@@ -46,14 +51,14 @@ pub enum ArbitrumApi<Environment: 'static> {
 
 impl<E> SetAggKeyWithAggKey<Arbitrum> for ArbitrumApi<E>
 where
-	E: EthEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum, Contract = ArbitrumContract>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Arbitrum as ChainCrypto>::AggKey>,
 		new_key: <Arbitrum as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::KeyManager),
+			E::replay_protection(ArbitrumContract::KeyManager),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
 		)))
 	}
@@ -61,7 +66,7 @@ where
 
 impl<E> AllBatch<Arbitrum> for ArbitrumApi<E>
 where
-	E: EthEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum, Contract = ArbitrumContract>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
@@ -71,14 +76,14 @@ where
 			fetch_params,
 			transfer_params,
 			E::token_address,
-			E::replay_protection,
+			E::replay_protection(ArbitrumContract::Vault),
 		)?))
 	}
 }
 
 impl<E> ExecutexSwapAndCall<Arbitrum> for ArbitrumApi<E>
 where
-	E: EthEnvironmentProvider<Arbitrum>,
+	E: EvmEnvironmentProvider<Arbitrum, Contract = ArbitrumContract>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -94,7 +99,7 @@ where
 		};
 
 		Ok(Self::ExecutexSwapAndCall(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::Vault),
+			E::replay_protection(ArbitrumContract::Vault),
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				egress_id,
 				transfer_param,
@@ -129,7 +134,7 @@ impl<E> From<EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAnd
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn replay_protection(&self) -> EthereumReplayProtection {
+	pub fn replay_protection(&self) -> EvmReplayProtection {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(tx) => tx.replay_protection(),
 			ArbitrumApi::AllBatch(tx) => tx.replay_protection(),

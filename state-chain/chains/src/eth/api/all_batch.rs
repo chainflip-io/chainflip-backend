@@ -1,3 +1,5 @@
+use crate::evm::api::common::{EncodableFetchAssetParams, EncodableFetchDeployAssetParams};
+
 use super::*;
 use codec::{Decode, Encode};
 use ethabi::Token;
@@ -54,15 +56,25 @@ mod test_all_batch {
 	use super::*;
 	use crate::{
 		eth::{
-			self,
-			api::{abi::load_abi, EthereumReplayProtection, EthereumTransactionBuilder},
-			EthereumFetchId, SchnorrVerificationComponents,
+			self, api::EthereumTransactionBuilder, EthereumFetchId, SchnorrVerificationComponents,
+		},
+		evm::{
+			api::{
+				abi::load_abi,
+				common::{
+					EncodableFetchAssetParams, EncodableFetchDeployAssetParams,
+					EncodableTransferAssetParams,
+				},
+				EvmReplayProtection,
+			},
+			EthereumChainId,
 		},
 		AllBatch, ApiCall, FetchAssetParams,
 	};
 	use cf_primitives::chains::assets;
+	use ethabi::Address;
 
-	use super::{EthEnvironmentProvider, EthereumApi};
+	use super::EthereumApi;
 
 	#[test]
 	fn test_payload() {
@@ -116,7 +128,7 @@ mod test_all_batch {
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 
 		let all_batch_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
@@ -167,21 +179,27 @@ mod test_all_batch {
 	const NONCE: u64 = 54321;
 	const CHANNEL_ID: u64 = 12345;
 
-	impl EthEnvironmentProvider<Ethereum> for MockEnvironment {
+	impl EvmEnvironmentProvider<Ethereum> for MockEnvironment {
+		type Contract = EthereumContract;
+
 		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 			Some(eth::Address::from_low_u64_be(asset as u64))
 		}
 
-		fn contract_address(contract: super::EthereumContract) -> eth::Address {
+		fn contract_address(contract: Self::Contract) -> eth::Address {
 			eth::Address::from_low_u64_be(contract as u64)
 		}
 
-		fn chain_id() -> super::EthereumChainId {
+		fn chain_id() -> EthereumChainId {
 			CHAIN_ID
 		}
 
 		fn next_nonce() -> u64 {
 			NONCE
+		}
+
+		fn key_manager_address() -> Address {
+			eth::Address::from_low_u64_be(789)
 		}
 	}
 

@@ -1,9 +1,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::{
-	api::{EthereumReplayProtection, EthereumTransactionBuilder},
-	TransactionFee,
-};
+use super::TransactionFee;
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::{
@@ -11,6 +8,7 @@ use crate::{
 		to_ethereum_address, Address, AggKey, EthereumTrackedData, SchnorrVerificationComponents,
 		Transaction, H256,
 	},
+	evm::api::{EthereumTransactionBuilder, EvmReplayProtection},
 	ApiCall,
 };
 use cf_primitives::EthAmount;
@@ -69,7 +67,7 @@ impl BenchmarkValue for AggKey {
 impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
 		EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection::default(),
+			EvmReplayProtection::default(),
 			UpdateFlipSupply::new(1000000u128, 1u64),
 		)
 		.into()

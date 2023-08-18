@@ -38,9 +38,12 @@ impl EthereumCall for UpdateFlipSupply {
 
 #[cfg(test)]
 mod test_update_flip_supply {
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::{
+			api::{ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+			SchnorrVerificationComponents,
+		},
+		evm::api::abi::load_abi,
 	};
 
 	use super::*;
@@ -63,7 +66,7 @@ mod test_update_flip_supply {
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
 		let update_flip_supply_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

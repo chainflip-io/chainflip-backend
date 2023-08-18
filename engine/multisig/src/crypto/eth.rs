@@ -23,7 +23,7 @@ pub struct EthSchnorrSignature {
 	pub r: secp256k1::PublicKey,
 }
 
-impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
+impl From<EthSchnorrSignature> for cf_chains::evm::SchnorrVerificationComponents {
 	fn from(cfe_sig: EthSchnorrSignature) -> Self {
 		Self { s: cfe_sig.s, k_times_g_address: pubkey_to_eth_addr(cfe_sig.r) }
 	}

@@ -1,9 +1,6 @@
 #![cfg(debug_assertions)]
 
-use crate::{
-	eth::{api::EthereumReplayProtection, TransactionFee},
-	*,
-};
+use crate::{eth::TransactionFee, evm::api::EvmReplayProtection, *};
 use cf_utilities::SliceToArray;
 use sp_core::H160;
 use sp_std::marker::PhantomData;
@@ -231,7 +228,7 @@ pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 
 impl ChainAbi for MockEthereum {
 	type Transaction = MockTransaction;
-	type ReplayProtection = EthereumReplayProtection;
+	type ReplayProtection = EvmReplayProtection;
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]

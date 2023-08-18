@@ -33,15 +33,12 @@ impl EthereumCall for SetCommKeyWithAggKey {
 mod test_set_comm_key_with_agg_key {
 	use super::*;
 	use crate::{
-		eth::{
-			api::{abi::load_abi, EthereumTransactionBuilder},
-			tests::asymmetrise,
-			SchnorrVerificationComponents,
-		},
+		eth::{api::EthereumTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
+		evm::api::abi::load_abi,
 		ApiCall,
 	};
 
-	use crate::eth::api::EthereumReplayProtection;
+	use crate::eth::api::EvmReplayProtection;
 
 	#[test]
 	fn test_known_payload() {
@@ -55,7 +52,7 @@ mod test_set_comm_key_with_agg_key {
 		let key_manager = load_abi("IKeyManager");
 
 		let tx_builder = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

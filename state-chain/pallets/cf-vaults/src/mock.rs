@@ -6,6 +6,7 @@ use super::*;
 use crate as pallet_cf_vaults;
 use cf_chains::{
 	btc, eth,
+	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereum},
 	ApiCall, SetAggKeyWithAggKeyError,
 };
@@ -44,8 +45,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 

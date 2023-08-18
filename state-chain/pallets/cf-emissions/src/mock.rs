@@ -1,12 +1,15 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_emissions, PalletSafeMode};
-use cf_chains::{mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply};
+use cf_chains::{
+	eth::StateChainGatewayProvider, mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto,
+	UpdateFlipSupply,
+};
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
-	Broadcaster, FlipBurnInfo, Issuance, RewardsDistribution, WaivedFees,
+	mocks::egress_handler::MockEgressHandler, Broadcaster, FlipBurnInfo, Issuance,
+	RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -188,6 +191,14 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	}
 }
 
+pub struct MockStateChainGatewayProvider;
+
+impl StateChainGatewayProvider for MockStateChainGatewayProvider {
+	fn state_chain_gateway_address() -> cf_chains::eth::Address {
+		[0xcc; 20].into()
+	}
+}
+
 impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
 
 impl pallet_cf_emissions::Config for Test {
@@ -199,7 +210,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type EthEnvironment = MockEthEnvironment;
+	type StateChainGatewayProvider = MockStateChainGatewayProvider;
 	type Broadcaster = MockBroadcast;
 	type FlipToBurn = MockFlipToBurn;
 	type SafeMode = MockRuntimeSafeMode;

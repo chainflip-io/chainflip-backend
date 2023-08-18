@@ -59,11 +59,11 @@ where
 	);
 
 	let state_chain_gateway_address = state_chain_client
-        .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-            state_chain_client.latest_finalized_hash(),
-        )
-        .await
-        .context("Failed to get StateChainGateway address from SC")?;
+		.storage_value::<pallet_cf_environment::StateChainGatewayAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+		)
+		.await
+		.context("Failed to get StateChainGateway address from SC")?;
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
