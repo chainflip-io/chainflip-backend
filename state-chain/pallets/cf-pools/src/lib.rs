@@ -59,7 +59,7 @@ pub mod pallet {
 		Deserialize,
 		Serialize,
 	)]
-	pub enum RangeOrderSize {
+	pub enum OldRangeOrderSize {
 		AssetAmounts { maximum: SideMap<AssetAmount>, minimum: SideMap<AssetAmount> },
 		Liquidity(Liquidity),
 	}
@@ -391,7 +391,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
 			tick_range: core::ops::Range<Tick>,
-			order_size: RangeOrderSize,
+			order_size: OldRangeOrderSize,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_range_order_enabled,
@@ -411,9 +411,9 @@ pub mod pallet {
 						&lp,
 						tick_range.clone(),
 						match order_size {
-							RangeOrderSize::Liquidity(liquidity) =>
+							OldRangeOrderSize::Liquidity(liquidity) =>
 								range_orders::Size::Liquidity { liquidity },
-							RangeOrderSize::AssetAmounts { maximum, minimum } =>
+							OldRangeOrderSize::AssetAmounts { maximum, minimum } =>
 								range_orders::Size::Amount {
 									maximum: maximum.map(|_, amount| amount.into()),
 									minimum: minimum.map(|_, amount| amount.into()),

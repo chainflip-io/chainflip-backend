@@ -68,21 +68,22 @@ pub mod rpc_types {
 	/// pairs. This will attempt a mint of up to `maximum` amounts of the assets, but will not mint
 	/// less than `minimum` amounts.
 	#[derive(Serialize, Deserialize)]
-	pub enum RangeOrderSize {
+	pub enum OldRangeOrderSize {
 		AssetAmounts { maximum: AssetAmounts, minimum: AssetAmounts },
 		PoolLiquidity(NumberOrHex),
 	}
 
-	impl TryFrom<RangeOrderSize> for lp::RangeOrderSize {
+	impl TryFrom<OldRangeOrderSize> for lp::OldRangeOrderSize {
 		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
 
-		fn try_from(value: RangeOrderSize) -> Result<Self, Self::Error> {
+		fn try_from(value: OldRangeOrderSize) -> Result<Self, Self::Error> {
 			Ok(match value {
-				RangeOrderSize::AssetAmounts { maximum, minimum } => Self::AssetAmounts {
+				OldRangeOrderSize::AssetAmounts { maximum, minimum } => Self::AssetAmounts {
 					maximum: maximum.try_into()?,
 					minimum: minimum.try_into()?,
 				},
-				RangeOrderSize::PoolLiquidity(liquidity) => Self::Liquidity(liquidity.try_into()?),
+				OldRangeOrderSize::PoolLiquidity(liquidity) =>
+					Self::Liquidity(liquidity.try_into()?),
 			})
 		}
 	}
@@ -124,7 +125,7 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		order_size: rpc_types::RangeOrderSize,
+		order_size: rpc_types::OldRangeOrderSize,
 	) -> Result<MintRangeOrderReturn, Error>;
 
 	#[method(name = "burnRangeOrder")]
@@ -228,7 +229,7 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		order_size: rpc_types::RangeOrderSize,
+		order_size: rpc_types::OldRangeOrderSize,
 	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
 			return Err(anyhow!("Invalid tick range").into())

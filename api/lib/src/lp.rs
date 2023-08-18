@@ -11,7 +11,7 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 pub use core::ops::Range;
-pub use pallet_cf_pools::{utilities as pool_utilities, RangeOrderSize};
+pub use pallet_cf_pools::{utilities as pool_utilities, OldRangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
@@ -109,7 +109,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		asset: Asset,
 		tick_range: Range<Tick>,
-		order_size: RangeOrderSize,
+		order_size: OldRangeOrderSize,
 	) -> Result<MintRangeOrderReturn> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self

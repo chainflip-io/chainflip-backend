@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
-	RangeOrderSize, STABLE_ASSET,
+	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, OldRangeOrderSize,
+	Pools, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
@@ -82,7 +82,7 @@ fn can_enable_disable_trading_pool() {
 				RuntimeOrigin::signed(ALICE),
 				unstable_asset,
 				range.clone(),
-				RangeOrderSize::Liquidity(1_000_000),
+				OldRangeOrderSize::Liquidity(1_000_000),
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -101,7 +101,7 @@ fn can_enable_disable_trading_pool() {
 			RuntimeOrigin::signed(ALICE),
 			unstable_asset,
 			range,
-			RangeOrderSize::Liquidity(1_000_000),
+			OldRangeOrderSize::Liquidity(1_000_000),
 		));
 	});
 }
@@ -144,7 +144,7 @@ fn test_buy_back_flip_2() {
 			RuntimeOrigin::signed(ALICE),
 			FLIP,
 			POSITION,
-			RangeOrderSize::AssetAmounts {
+			OldRangeOrderSize::AssetAmounts {
 				maximum: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([900_000, 900_000]),
 			}
@@ -185,7 +185,7 @@ fn test_buy_back_flip() {
 			RuntimeOrigin::signed(ALICE),
 			FLIP,
 			POSITION,
-			RangeOrderSize::Liquidity(1_000_000),
+			OldRangeOrderSize::Liquidity(1_000_000),
 		));
 
 		// Swapping should cause the network fee to be collected.

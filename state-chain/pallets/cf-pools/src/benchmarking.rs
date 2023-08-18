@@ -73,7 +73,7 @@ benchmarks! {
 			RawOrigin::Signed(caller.clone()),
 			Asset::Eth,
 			-100..100,
-			RangeOrderSize::AssetAmounts {
+			OldRangeOrderSize::AssetAmounts {
 				maximum: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([500_000, 500_000]),
 			}
@@ -97,7 +97,7 @@ benchmarks! {
 			RawOrigin::Signed(caller.clone()).into(),
 			Asset::Eth,
 			-100..100,
-			RangeOrderSize::Liquidity(1_000),
+			OldRangeOrderSize::Liquidity(1_000),
 		));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000)
 	verify {}
