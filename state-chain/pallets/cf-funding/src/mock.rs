@@ -13,7 +13,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, BuildStorage,
+	AccountId32,
 };
 use std::time::Duration;
 
@@ -48,7 +48,7 @@ cf_test_utilities::impl_test_helpers!(
 			.unwrap();
 		System::set_block_number(1);
 	}
- );
+);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -206,4 +206,3 @@ pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
 pub const MIN_FUNDING: u128 = 10;
 pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
-

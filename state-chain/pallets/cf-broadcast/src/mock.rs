@@ -18,10 +18,7 @@ use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -73,8 +70,7 @@ cf_test_utilities::impl_test_helpers!(Test, RuntimeGenesisConfig::default(), || 
 	MockEpochInfo::next_epoch((0..3).collect());
 	MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 	for id in &MockEpochInfo::current_authorities() {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
-			.unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();
 	}
 });
 

@@ -144,11 +144,6 @@ macro_rules! impl_test_helpers {
 		pub fn new_test_ext() -> TestRunner<()> {
 			TestRunner::<()>::new($genesis).execute_with($init)
 		}
-
-		/// Create new test externalities with the genesis config passed in.
-		pub fn new_test_ext_with_genesis_config(genesis: RuntimeGenesisConfig) -> TestRunner<()> {
-			TestRunner::<()>::new(genesis).execute_with($init)
-		}
 	};
 	( $runtime:ty, $genesis:expr ) => {
 		$crate::impl_test_helpers!($runtime, RuntimeGenesisConfig::default(), || {});
