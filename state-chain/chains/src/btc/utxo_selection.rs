@@ -64,30 +64,17 @@ fn test_utxo_selection() {
 	use std::collections::BTreeSet;
 
 	#[allow(clippy::upper_case_acronyms)]
-	#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-	pub struct UTXO {
-		pub amount: u64,
-	}
+	type UTXO = u64;
+
 	impl GetUtxoAmount for UTXO {
 		fn amount(&self) -> u64 {
-			self.amount
+			*self
 		}
 	}
 
 	const FEE_PER_UTXO: u64 = 2;
 
-	let available_utxos = vec![
-		UTXO { amount: 110 },
-		UTXO { amount: 25 },
-		UTXO { amount: 500 },
-		UTXO { amount: 7 },
-		UTXO { amount: 15 },
-		UTXO { amount: 20 },
-		UTXO { amount: 19 },
-		UTXO { amount: 41 },
-		UTXO { amount: 1000 },
-		UTXO { amount: 768 },
-	];
+	let available_utxos = vec![110, 25, 500, 7, 15, 20, 19, 41, 1000, 768];
 
 	#[track_caller]
 	fn test_case(
@@ -117,29 +104,11 @@ fn test_utxo_selection() {
 	// empty utxo list as input should return Option::None.
 	test_case(&Default::default(), 0, FEE_PER_UTXO, None);
 
-	test_case(
-		&available_utxos,
-		FEE_PER_UTXO,
-		1,
-		Some((vec![UTXO { amount: 7 }, UTXO { amount: 15 }], 18)),
-	);
+	test_case(&available_utxos, FEE_PER_UTXO, 1, Some((vec![7, 15], 18)));
 
-	test_case(
-		&available_utxos,
-		FEE_PER_UTXO,
-		18,
-		Some((vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }], 35)),
-	);
+	test_case(&available_utxos, FEE_PER_UTXO, 18, Some((vec![7, 15, 19], 35)));
 
-	test_case(
-		&available_utxos,
-		FEE_PER_UTXO,
-		19,
-		Some((
-			vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }, UTXO { amount: 20 }],
-			53,
-		)),
-	);
+	test_case(&available_utxos, FEE_PER_UTXO, 19, Some((vec![7, 15, 19, 20], 53)));
 
 	let all_selected_utxos = {
 		let mut utxos = available_utxos.clone();
@@ -160,19 +129,5 @@ fn test_utxo_selection() {
 	// choosing the fee to spend the input utxo as greater than the amounts in the 2 smallest
 	// utxos will cause the algorithm to skip the selection of those 2 utxos and adding it to the
 	// list of available utxos for future use.
-	test_case(
-		&available_utxos,
-		16,
-		19,
-		Some((
-			vec![
-				UTXO { amount: 19 },
-				UTXO { amount: 20 },
-				UTXO { amount: 25 },
-				UTXO { amount: 41 },
-				UTXO { amount: 110 },
-			],
-			135,
-		)),
-	);
+	test_case(&available_utxos, 16, 19, Some((vec![19, 20, 25, 41, 110], 135)));
 }
