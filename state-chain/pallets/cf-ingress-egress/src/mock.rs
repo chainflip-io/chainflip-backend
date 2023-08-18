@@ -131,7 +131,6 @@ pub trait RequestAddressAndDeposit {
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
-		AllPalletsWithSystem,
 		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	>;
 }
@@ -147,7 +146,6 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
-		AllPalletsWithSystem,
 		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
@@ -191,14 +189,11 @@ pub trait RequestAddress {
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
-		AllPalletsWithSystem,
 		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	>;
 }
 
-impl<Ctx: Clone> RequestAddress
-	for cf_test_utilities::TestExternalities<Test, AllPalletsWithSystem, Ctx>
-{
+impl<Ctx: Clone> RequestAddress for cf_test_utilities::TestExternalities<Test, Ctx> {
 	fn request_deposit_addresses(
 		self,
 		requests: &[(
@@ -208,7 +203,6 @@ impl<Ctx: Clone> RequestAddress
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
-		AllPalletsWithSystem,
 		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	> {
 		self.then_execute_at_next_block(|_| {
