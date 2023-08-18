@@ -21,12 +21,12 @@ const tagSuffix = ' CcmGasLimit';
 
 let stopObservingCcmReceived = false;
 
-function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasFraction?: number) {
+function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   return newCcmMetadata(
     sourceAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
-    gasFraction,
+    gasBudgetFraction,
   );
 }
 

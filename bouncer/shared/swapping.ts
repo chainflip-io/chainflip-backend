@@ -70,12 +70,12 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
 export function newCcmMetadata(
   sourceAsset: Asset,
   ccmMessage?: string,
-  gasFraction?: number,
+  gasBudgetFraction?: number,
   cfParamsArray?: SolidityType[],
 ) {
   const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  const gasDiv = gasFraction ?? 100;
+  const gasDiv = gasBudgetFraction ?? 100;
 
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
