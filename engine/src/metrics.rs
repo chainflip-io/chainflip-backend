@@ -29,14 +29,10 @@ pub async fn start<'a, 'env>(
 	let port: u16 = 5566;
 	const PATH: &str = "metrics";
 
-	let future = warp::serve(
-		warp::any()
-			.and(warp::path(PATH))
-			.and(warp::path::end())
-			.map(metrics_handler),
-	)
-	// .bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
-	.bind((hostname.parse::<IpAddr>()?, port));
+	let future =
+		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(metrics_handler))
+			// .bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
+			.bind((hostname.parse::<IpAddr>()?, port));
 
 	scope.spawn_weak(async move {
 		future.await;
