@@ -126,7 +126,6 @@ where
 	}
 }
 
-// We actually don't need to pass chain in here. The only reason we have t
 impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum, Contract = EthereumContract>,
