@@ -208,12 +208,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 mod tests {
 	use std::{path::PathBuf, str::FromStr};
 
+	use cf_chains::Arbitrum;
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
-	use sp_core::H160;
 	use utilities::task_scope::task_scope;
-
-	use super::super::eth_source::EthSource;
 
 	use crate::{
 		eth::{
@@ -222,7 +220,10 @@ mod tests {
 		},
 		settings::{self},
 		state_chain_observer::client::StateChainClient,
-		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
+		witness::{
+			common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
+			evm::source::EvmSource,
+		},
 	};
 
 	#[ignore = "requires connection to live network"]
@@ -230,16 +231,16 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let eth_settings = settings::Eth {
-					ws_node_endpoint: "ws://localhost:8546".to_string(),
-					http_node_endpoint: "http://localhost:8545".to_string(),
+				let arb_settings = settings::Eth {
+					ws_node_endpoint: "ws://localhost:8548".to_string(),
+					http_node_endpoint: "http://localhost:8547".to_string(),
 					private_key_file: PathBuf::from_str(
 						"/Users/kylezs/Documents/test-keys/eth-cf-metamask",
 					)
 					.unwrap(),
 				};
 
-				let client = EthRpcClient::new(&eth_settings).await.unwrap();
+				let client = EthRpcClient::new(&arb_settings).await.unwrap();
 
 				let chain_id = client.chain_id().await.unwrap();
 				println!("Here's the chain_id: {chain_id}");
@@ -248,9 +249,10 @@ mod tests {
 					scope,
 					client,
 					ReconnectSubscriptionClient::new(
-						eth_settings.ws_node_endpoint,
-						web3::types::U256::from(10997),
+						arb_settings.ws_node_endpoint,
+						web3::types::U256::from(412346),
 					),
+					"eth",
 				);
 
 				let (state_chain_stream, state_chain_client) =
@@ -272,13 +274,9 @@ mod tests {
 						.vaults()
 						.await;
 
-				EthSource::new(retry_client.clone())
+				EvmSource::<_, Arbitrum>::new(retry_client.clone())
 					.chunk_by_vault(vault_source)
-					.key_manager_witnessing(
-						state_chain_client,
-						retry_client,
-						H160::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
-					)
+					.key_manager_witnessing(state_chain_client, retry_client, Default::default())
 					.spawn(scope);
 
 				Ok(())

@@ -1,5 +1,5 @@
-mod dot_chain_tracking;
-mod dot_source;
+mod chain_tracking;
+mod source;
 
 use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotUncheckedExtrinsic},
@@ -34,7 +34,7 @@ use crate::{
 	witness::common::chain_source::extension::ChainSourceExt,
 };
 use anyhow::Result;
-use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
+use source::{DotFinalisedSource, DotUnfinalisedSource};
 
 use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
@@ -242,7 +242,7 @@ where
 				}
 			}
 		)
-		.continuous("Polkadot".to_string(), db)
+		.continuous("All", db)
 		.logging("witnessing")
 		.spawn(scope);
 

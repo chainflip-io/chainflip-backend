@@ -35,18 +35,19 @@ impl EthersRetryRpcClient {
 		scope: &Scope<'_, anyhow::Error>,
 		eth_rpc_client: EthRpcClient,
 		sub_client: ReconnectSubscriptionClient,
+		chain_prefix: &str,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
-				"eth_rpc",
+				format!("{chain_prefix}_rpc"),
 				eth_rpc_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
-				"eth_subscribe",
+				format!("{chain_prefix}_subscribe"),
 				sub_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
@@ -280,6 +281,7 @@ mod tests {
 						settings.eth.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
+					"eth",
 				);
 
 				let chain_id = retry_client.chain_id().await;

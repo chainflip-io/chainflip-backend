@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-	eth::vault::VaultEvents,
+	evm::vault::VaultEvents,
 };
 
 use std::collections::BTreeMap;
@@ -329,6 +329,7 @@ mod tests {
 						settings.eth.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
+					"eth",
 				);
 
 				let addresses = vec![

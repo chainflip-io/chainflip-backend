@@ -1,5 +1,5 @@
-mod btc_chain_tracking;
-mod btc_source;
+mod chain_tracking;
+mod source;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -25,7 +25,7 @@ use crate::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
 };
-use btc_source::BtcSource;
+use source::BtcSource;
 
 use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 
@@ -132,7 +132,7 @@ where
 				}
 			}
 		})
-		.continuous("Bitcoin".to_string(), db)
+		.continuous("All", db)
 		.logging("witnessing")
 		.spawn(scope);
 

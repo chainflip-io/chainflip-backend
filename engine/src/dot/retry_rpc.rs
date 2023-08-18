@@ -41,14 +41,14 @@ impl DotRetryRpcClient {
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
-				"dot_rpc",
+				"dot_rpc".to_string(),
 				dot_rpc_client,
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
-				"dot_subscribe",
+				"dot_subscribe".to_string(),
 				dot_sub_client,
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,

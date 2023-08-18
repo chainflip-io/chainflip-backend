@@ -8,14 +8,12 @@ use tracing::{info, trace};
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+	witness::evm::contract_common::events_at_block,
 };
 
-use super::{
-	super::common::{
-		chain_source::ChainClient,
-		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
-	},
-	contract_common::events_at_block,
+use super::super::common::{
+	chain_source::ChainClient,
+	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 };
 
 abigen!(

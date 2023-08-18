@@ -19,7 +19,7 @@ http_node_endpoint = "http://localhost:8545"
 [arb]
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "./localnet/init/keys/eth_private_key_file"
-ws_node_endpoint = "ws://localhost:8547"
+ws_node_endpoint = "ws://localhost:8548"
 http_node_endpoint = "http://localhost:8547"
 
 [health_check]

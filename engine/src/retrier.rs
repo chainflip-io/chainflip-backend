@@ -163,7 +163,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		// The name of the retrier that appears in the logs.
-		name: &'static str,
+		name: String,
 		primary_client: Client,
 		initial_request_timeout: Duration,
 		maximum_concurrent_submissions: u32,
@@ -302,7 +302,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test".to_string(), (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -348,7 +349,8 @@ mod tests {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test".to_string(), (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -377,7 +379,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test".to_string(), (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -417,7 +420,8 @@ mod tests {
 
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 2);
+				let retrier_client =
+					RetrierClient::new(scope, "test".to_string(), (), INITIAL_TIMEOUT, 2);
 
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
@@ -487,7 +491,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test".to_string(), (), INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request(specific_fut_err::<(), _>(INITIAL_TIMEOUT), "request".to_string())

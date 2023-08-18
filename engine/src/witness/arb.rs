@@ -1,10 +1,8 @@
 mod chain_tracking;
-mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::Ethereum;
-use cf_primitives::chains::assets::eth;
+use cf_chains::Arbitrum;
 use sp_core::H160;
 use utilities::task_scope::Scope;
 
@@ -19,7 +17,7 @@ use crate::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
+	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use super::{
@@ -31,8 +29,6 @@ use super::{
 };
 
 use anyhow::{Context, Result};
-
-const SAFETY_MARGIN: usize = 7;
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
@@ -48,109 +44,89 @@ where
 {
 	let expected_chain_id = web3::types::U256::from(
 		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+			.storage_value::<pallet_cf_environment::ArbitrumChainId<state_chain_runtime::Runtime>>(
 				state_chain_client.latest_finalized_hash(),
 			)
 			.await
 			.expect(STATE_CHAIN_CONNECTION),
 	);
 
-	let state_chain_gateway_address = state_chain_client
-		.storage_value::<pallet_cf_environment::StateChainGatewayAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
-		)
-		.await
-		.context("Failed to get StateChainGateway address from SC")?;
-
 	let key_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
+		.storage_value::<pallet_cf_environment::ArbitrumKeyManagerAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
 		.context("Failed to get KeyManager address from SC")?;
 
 	let vault_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
+		.storage_value::<pallet_cf_environment::ArbitrumVaultAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
 		.context("Failed to get Vault contract address from SC")?;
 
 	let address_checker_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
+		.storage_value::<pallet_cf_environment::ArbitrumAddressCheckerAddress<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_hash(),
 		)
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
-	let supported_erc20_tokens: HashMap<cf_primitives::chains::assets::eth::Asset, H160> =
+	let supported_arb_erc20_assets: HashMap<cf_primitives::chains::assets::arb::Asset, H160> =
 		state_chain_client
-			.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
+			.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>, _>(
 				state_chain_client.latest_finalized_hash(),
 			)
 			.await
-			.context("Failed to fetch Ethereum supported assets")?;
+			.context("Failed to fetch Arbitrum supported assets")?;
 
-	let usdc_contract_address =
-		*supported_erc20_tokens.get(&eth::Asset::Usdc).context("USDC not supported")?;
+	let usdc_contract_address = *supported_arb_erc20_assets
+		.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
+		.context("ArbitrumSupportedAssets does not include USDC")?;
 
-	let flip_contract_address =
-		*supported_erc20_tokens.get(&eth::Asset::Flip).context("FLIP not supported")?;
+	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> =
+		supported_arb_erc20_assets
+			.into_iter()
+			.map(|(asset, address)| (address, asset.into()))
+			.collect();
 
-	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
-		.into_iter()
-		.map(|(asset, address)| (address, asset.into()))
-		.collect();
-
-	let eth_client = EthersRetryRpcClient::new(
+	let arb_client = EthersRetryRpcClient::new(
 		scope,
 		EthRpcClient::new(settings).await?,
 		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
-		"eth",
+		"arb",
 	);
 
-	let eth_source = EvmSource::<_, Ethereum>::new(eth_client.clone()).shared(scope);
+	let arb_source = EvmSource::<_, Arbitrum>::new(arb_client.clone()).shared(scope);
 
-	eth_source
+	arb_source
 		.clone()
 		.chunk_by_time(epoch_source.clone())
-		.chain_tracking(state_chain_client.clone(), eth_client.clone())
+		.chain_tracking(state_chain_client.clone(), arb_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
 
-	let eth_safe_vault_source = eth_source
+	let arb_safe_vault_source = arb_source
 		.strictly_monotonic()
-		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
 		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await);
 
-	eth_safe_vault_source
+	arb_safe_vault_source
 		.clone()
-		.key_manager_witnessing(state_chain_client.clone(), eth_client.clone(), key_manager_address)
+		.key_manager_witnessing(state_chain_client.clone(), arb_client.clone(), key_manager_address)
 		.continuous("KeyManager", db.clone())
 		.logging("KeyManager")
 		.spawn(scope);
 
-	eth_safe_vault_source
-		.clone()
-		.state_chain_gateway_witnessing(
-			state_chain_client.clone(),
-			eth_client.clone(),
-			state_chain_gateway_address,
-		)
-		.continuous("StateChainGateway", db.clone())
-		.logging("StateChainGateway")
-		.spawn(scope);
-
-	eth_safe_vault_source
+	arb_safe_vault_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.erc20_deposits::<_, _, UsdcEvents>(
 			state_chain_client.clone(),
-			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdc,
+			arb_client.clone(),
+			cf_primitives::chains::assets::arb::Asset::ArbUsdc,
 			usdc_contract_address,
 		)
 		.await?
@@ -158,29 +134,14 @@ where
 		.logging("USDCDeposits")
 		.spawn(scope);
 
-	eth_safe_vault_source
-		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.erc20_deposits::<_, _, FlipEvents>(
-			state_chain_client.clone(),
-			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Flip,
-			flip_contract_address,
-		)
-		.await?
-		.continuous("FlipDeposits", db.clone())
-		.logging("FlipDeposits")
-		.spawn(scope);
-
-	eth_safe_vault_source
+	arb_safe_vault_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.ethereum_deposits(
 			state_chain_client.clone(),
-			eth_client.clone(),
-			eth::Asset::Eth,
+			arb_client.clone(),
+			cf_primitives::chains::assets::arb::Asset::ArbEth,
 			address_checker_address,
 			vault_address,
 		)
@@ -189,14 +150,14 @@ where
 		.logging("EthereumDeposits")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	arb_safe_vault_source
 		.vault_witnessing(
 			state_chain_client.clone(),
-			eth_client.clone(),
+			arb_client.clone(),
 			vault_address,
-			cf_primitives::Asset::Eth,
-			cf_primitives::ForeignChain::Ethereum,
-			supported_erc20_tokens,
+			cf_primitives::Asset::ArbEth,
+			cf_primitives::ForeignChain::Arbitrum,
+			supported_arb_erc20_assets,
 		)
 		.continuous("Vault", db)
 		.logging("Vault")
