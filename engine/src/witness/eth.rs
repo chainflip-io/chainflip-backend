@@ -1,9 +1,9 @@
 mod chain_tracking;
-pub mod source;
 mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
 
+use cf_chains::Ethereum;
 use cf_primitives::chains::assets::eth;
 use sp_core::H160;
 use utilities::task_scope::Scope;
@@ -22,11 +22,13 @@ use crate::{
 	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
+use super::{
+	common::{
+		chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
+		STATE_CHAIN_CONNECTION,
+	},
+	evm::source::EvmSource,
 };
-use source::EthSource;
 
 use anyhow::{Context, Result};
 
@@ -107,7 +109,7 @@ where
 		"eth",
 	);
 
-	let eth_source = EthSource::new(eth_client.clone()).shared(scope);
+	let eth_source = EvmSource::<_, Ethereum>::new(eth_client.clone()).shared(scope);
 
 	eth_source
 		.clone()

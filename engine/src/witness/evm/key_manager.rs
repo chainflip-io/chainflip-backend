@@ -208,6 +208,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 mod tests {
 	use std::{path::PathBuf, str::FromStr};
 
+	use cf_chains::Arbitrum;
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
 	use utilities::task_scope::task_scope;
@@ -219,10 +220,11 @@ mod tests {
 		},
 		settings::{self},
 		state_chain_observer::client::StateChainClient,
-		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
+		witness::{
+			common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
+			evm::source::EvmSource,
+		},
 	};
-
-	use super::super::super::arb::source::ArbSource;
 
 	#[ignore = "requires connection to live network"]
 	#[tokio::test]
@@ -272,7 +274,7 @@ mod tests {
 						.vaults()
 						.await;
 
-				ArbSource::new(retry_client.clone())
+				EvmSource::<_, Arbitrum>::new(retry_client.clone())
 					.chunk_by_vault(vault_source)
 					.key_manager_witnessing(state_chain_client, retry_client, Default::default())
 					.spawn(scope);

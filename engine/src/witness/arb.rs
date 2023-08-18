@@ -1,8 +1,8 @@
 mod chain_tracking;
-pub mod source;
 
 use std::{collections::HashMap, sync::Arc};
 
+use cf_chains::Arbitrum;
 use sp_core::H160;
 use utilities::task_scope::Scope;
 
@@ -20,11 +20,12 @@ use crate::{
 	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
-use self::source::ArbSource;
-
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
+use super::{
+	common::{
+		chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
+		STATE_CHAIN_CONNECTION,
+	},
+	evm::source::EvmSource,
 };
 
 use anyhow::{Context, Result};
@@ -96,7 +97,7 @@ where
 		"arb",
 	);
 
-	let arb_source = ArbSource::new(arb_client.clone()).shared(scope);
+	let arb_source = EvmSource::<_, Arbitrum>::new(arb_client.clone()).shared(scope);
 
 	arb_source
 		.clone()
