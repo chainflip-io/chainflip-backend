@@ -14,17 +14,19 @@ mod tests;
 
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
-use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
+use cf_traits::{impl_pallet_safe_mode, AccountRoleRegistry, Chainflip, EpochInfo};
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
 	pallet_prelude::Member,
 	storage::with_storage_layer,
-	traits::EnsureOrigin,
+	traits::{EnsureOrigin, Get},
 	Hashable,
 };
-use sp_std::prelude::*;
+use sp_std::{collections::vec_deque::VecDeque, prelude::*};
+
+impl_pallet_safe_mode!(PalletSafeMode; witness_calls_enabled);
 
 pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
@@ -59,6 +61,9 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -99,28 +104,72 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochsToCull<T: Config> = StorageValue<_, Vec<EpochIndex>, ValueQuery>;
 
+	/// This stores Calls that have already been witnessed but not yet dispatched due to safe mode
+	/// being on.
+	#[pallet::storage]
+	pub type WitnessedCallsScheduledForDispatch<T: Config> =
+		StorageValue<_, Vec<(EpochIndex, <T as Config>::RuntimeCall, CallHash)>, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let mut used_weight = Weight::zero();
+			if T::SafeMode::get().witness_calls_enabled {
+				let _ = WitnessedCallsScheduledForDispatch::<T>::try_mutate(
+					|witnessed_calls_storage| {
+						used_weight.saturating_accrue(T::DbWeight::get().reads(1));
+						if !witnessed_calls_storage.is_empty() {
+							let mut witnessed_calls =
+								VecDeque::from(sp_std::mem::take(witnessed_calls_storage));
+							while let Some((_, call, _)) = witnessed_calls.front() {
+								let next_weight =
+									used_weight.saturating_add(call.get_dispatch_info().weight);
+								if remaining_weight.all_gte(next_weight) {
+									used_weight = next_weight;
+									let (witnessed_at_epoch, call, call_hash) =
+										witnessed_calls.pop_front().unwrap();
+									Self::dispatch_call(
+										witnessed_at_epoch,
+										T::EpochInfo::epoch_index(),
+										call,
+										call_hash,
+									);
+								} else {
+									break
+								}
+							}
+							let _empty = sp_std::mem::replace(
+								witnessed_calls_storage,
+								witnessed_calls.make_contiguous().to_vec(),
+							);
+							used_weight.saturating_accrue(T::DbWeight::get().writes(1));
+							Ok(())
+						} else {
+							Err("no action needed when the scheduled witness calls list is empty")
+						}
+					},
+				);
+			}
+
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
 			let epoch = if let Some(epoch) = epochs_to_cull.pop() {
 				epoch
 			} else {
-				return T::WeightInfo::on_idle_with_nothing_to_remove()
+				return used_weight.saturating_add(T::WeightInfo::on_idle_with_nothing_to_remove())
 			};
 
 			let max_deletions_count_remaining = remaining_weight
+				.saturating_sub(used_weight)
 				.ref_time()
 				.checked_div(T::WeightInfo::remove_storage_items(1).ref_time())
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
-				return T::WeightInfo::on_idle_with_nothing_to_remove()
+				return used_weight.saturating_add(T::WeightInfo::on_idle_with_nothing_to_remove())
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;
-			let mut used_weight: Weight = Weight::zero();
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
@@ -129,8 +178,8 @@ pub mod pallet {
 				Votes::<T>::clear_prefix(epoch, deletions_count_remaining as u32, None);
 			deletions_count_remaining =
 				deletions_count_remaining.saturating_sub(remove_result.backend as u64);
-			used_weight = used_weight
-				.saturating_add(T::WeightInfo::remove_storage_items(remove_result.backend));
+			used_weight
+				.saturating_accrue(T::WeightInfo::remove_storage_items(remove_result.backend));
 			if remove_result.maybe_cursor.is_none() {
 				cleared_votes = true;
 			}
@@ -141,8 +190,8 @@ pub mod pallet {
 					ExtraCallData::<T>::clear_prefix(epoch, deletions_count_remaining as u32, None);
 				deletions_count_remaining =
 					deletions_count_remaining.saturating_sub(remove_result.backend as u64);
-				used_weight = used_weight
-					.saturating_add(T::WeightInfo::remove_storage_items(remove_result.backend));
+				used_weight
+					.saturating_accrue(T::WeightInfo::remove_storage_items(remove_result.backend));
 				if remove_result.maybe_cursor.is_none() {
 					cleared_extra_call_data = true;
 				}
@@ -155,8 +204,8 @@ pub mod pallet {
 					deletions_count_remaining as u32,
 					None,
 				);
-				used_weight = used_weight
-					.saturating_add(T::WeightInfo::remove_storage_items(remove_result.backend));
+				used_weight
+					.saturating_accrue(T::WeightInfo::remove_storage_items(remove_result.backend));
 				if remove_result.maybe_cursor.is_none() {
 					cleared_call_hash = true;
 				}
@@ -302,7 +351,18 @@ pub mod pallet {
 				(last_expired_epoch..=current_epoch)
 					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
+				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
+					call.combine_and_inject(&mut extra_data)
+				}
+				if T::SafeMode::get().witness_calls_enabled {
+					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
+				} else {
+					WitnessedCallsScheduledForDispatch::<T>::append((
+						epoch_index,
+						*call,
+						call_hash,
+					));
+				}
 			}
 			Ok(().into())
 		}
@@ -319,19 +379,16 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn force_witness(
 			origin: OriginFor<T>,
-			mut call: Box<<T as Config>::RuntimeCall>,
+			call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 
-			let (extra_data, call_hash) = Self::split_calldata(&mut call);
+			let (_, call_hash) = Self::split_calldata(&mut call.clone());
 			ensure!(Votes::<T>::contains_key(epoch_index, call_hash), Error::<T>::InvalidEpoch);
 
-			if let Some(extra_data) = extra_data {
-				ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
-			}
 			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
 			Ok(())
 		}
@@ -358,12 +415,9 @@ impl<T: Config> Pallet<T> {
 	fn dispatch_call(
 		witnessed_at_epoch: EpochIndex,
 		current_epoch: EpochIndex,
-		mut call: <T as Config>::RuntimeCall,
+		call: <T as Config>::RuntimeCall,
 		call_hash: CallHash,
 	) {
-		if let Some(mut extra_data) = ExtraCallData::<T>::get(witnessed_at_epoch, call_hash) {
-			call.combine_and_inject(&mut extra_data)
-		}
 		let _result = with_storage_layer(move || {
 			call.dispatch_bypass_filter(
 				(if witnessed_at_epoch == current_epoch {
