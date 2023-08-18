@@ -33,7 +33,7 @@ pub async fn start<'a, 'env>(
 		warp::any()
 			.and(warp::path(PATH))
 			.and(warp::path::end())
-			.map(move || metrics_handler()),
+			.map(metrics_handler),
 	)
 	// .bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
 	.bind((hostname.parse::<IpAddr>()?, port));
@@ -54,15 +54,13 @@ fn metrics_handler() -> String {
 	if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
 		eprintln!("could not encode custom metrics: {}", e);
 	};
-	let res = match String::from_utf8(buffer) {
+	match String::from_utf8(buffer) {
 		Ok(v) => v,
 		Err(e) => {
 			eprintln!("custom metrics could not be from_utf8'd: {}", e);
 			String::default()
 		},
-	};
-
-	res
+	}
 }
 
 pub fn register_metrics() {
