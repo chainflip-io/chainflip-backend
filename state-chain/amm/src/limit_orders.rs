@@ -245,7 +245,7 @@ pub struct Collected {
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct PositionInfo {
-	amount: Amount,
+	pub amount: Amount,
 }
 impl PositionInfo {
 	pub fn new(amount: Amount) -> Self {
