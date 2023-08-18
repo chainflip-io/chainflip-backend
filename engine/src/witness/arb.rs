@@ -1,4 +1,4 @@
-mod arb_chain_tracking;
+mod chain_tracking;
 pub mod source;
 
 use std::{collections::HashMap, sync::Arc};

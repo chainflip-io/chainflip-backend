@@ -1,4 +1,4 @@
-mod eth_chain_tracking;
+mod chain_tracking;
 pub mod source;
 mod state_chain_gateway;
 

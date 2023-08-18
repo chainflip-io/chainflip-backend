@@ -1,4 +1,4 @@
-mod btc_chain_tracking;
+mod chain_tracking;
 mod source;
 
 use std::{collections::HashMap, sync::Arc};

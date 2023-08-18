@@ -1,4 +1,4 @@
-mod dot_chain_tracking;
+mod chain_tracking;
 mod source;
 
 use cf_chains::{
