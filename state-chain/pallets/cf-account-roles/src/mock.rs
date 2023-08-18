@@ -5,9 +5,7 @@ use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;

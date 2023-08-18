@@ -418,13 +418,15 @@ fn random_account(g: &mut Gen) -> u64 {
 
 #[quickcheck]
 fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
-	new_test_ext().execute_with(|| -> TestResult {
-		if events.iter().any(|event| !event.execute()) || !check_balance_integrity() {
-			TestResult::failed()
-		} else {
-			TestResult::passed()
-		}
-	}).context()
+	new_test_ext()
+		.execute_with(|| -> TestResult {
+			if events.iter().any(|event| !event.execute()) || !check_balance_integrity() {
+				TestResult::failed()
+			} else {
+				TestResult::passed()
+			}
+		})
+		.context()
 }
 
 #[test]
