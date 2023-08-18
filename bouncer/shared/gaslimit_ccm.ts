@@ -190,7 +190,7 @@ export async function testGasLimitCcmSwaps() {
     testSwap('DOT', 'FLIP', undefined, gasTestCcmMetadata('DOT', maximumGasReceived), tagSuffix),
     testSwap('ETH', 'USDC', undefined, gasTestCcmMetadata('ETH', maximumGasReceived), tagSuffix),
     testSwap('FLIP', 'ETH', undefined, gasTestCcmMetadata('FLIP', maximumGasReceived), tagSuffix),
-    // testSwap('BTC', 'ETH', undefined, gasTestCcmMetadata('FLIP', maximumGasReceived), tagSuffix),
+    testSwap('BTC', 'ETH', undefined, gasTestCcmMetadata('BTC', maximumGasReceived), tagSuffix),
   ];
 
   let broadcastAborted = 0;
@@ -200,7 +200,6 @@ export async function testGasLimitCcmSwaps() {
     await getChainflipApi(),
     (_) => {
       ++broadcastAborted;
-      console.log('BroadcastAborted ', broadcastAborted);
       if (broadcastAborted === gasLimitSwapsAborted.length) {
         stopObservingCcmReceived = true;
       }
@@ -218,6 +217,7 @@ export async function testGasLimitCcmSwaps() {
     ...gasLimitSwapsBroadcasted,
     ...gasLimitSwapsBroadcastedAlmostZeroGas,
   ]);
+
   stopObserveAborted = true;
   await observeBroadcastAborted;
 
