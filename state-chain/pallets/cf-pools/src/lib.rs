@@ -60,7 +60,7 @@ pub mod pallet {
 		Serialize,
 	)]
 	pub enum RangeOrderSize {
-		AssetAmounts { desired: SideMap<AssetAmount>, minimum: SideMap<AssetAmount> },
+		AssetAmounts { maximum: SideMap<AssetAmount>, minimum: SideMap<AssetAmount> },
 		Liquidity(Liquidity),
 	}
 
@@ -413,9 +413,9 @@ pub mod pallet {
 						match order_size {
 							RangeOrderSize::Liquidity(liquidity) =>
 								range_orders::Size::Liquidity { liquidity },
-							RangeOrderSize::AssetAmounts { desired, minimum } =>
+							RangeOrderSize::AssetAmounts { maximum, minimum } =>
 								range_orders::Size::Amount {
-									maximum: desired.map(|_, amount| amount.into()),
+									maximum: maximum.map(|_, amount| amount.into()),
 									minimum: minimum.map(|_, amount| amount.into()),
 								},
 						},

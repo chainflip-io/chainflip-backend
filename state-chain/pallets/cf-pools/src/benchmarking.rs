@@ -74,7 +74,7 @@ benchmarks! {
 			Asset::Eth,
 			-100..100,
 			RangeOrderSize::AssetAmounts {
-				desired: SideMap::from_array([1_000_000, 1_000_000]),
+				maximum: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([500_000, 500_000]),
 			}
 	)

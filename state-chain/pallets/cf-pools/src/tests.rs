@@ -145,7 +145,7 @@ fn test_buy_back_flip_2() {
 			FLIP,
 			POSITION,
 			RangeOrderSize::AssetAmounts {
-				desired: SideMap::from_array([1_000_000, 1_000_000]),
+				maximum: SideMap::from_array([1_000_000, 1_000_000]),
 				minimum: SideMap::from_array([900_000, 900_000]),
 			}
 		));

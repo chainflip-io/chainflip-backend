@@ -64,12 +64,12 @@ pub mod rpc_types {
 
 	/// Range Orders can be specified in terms of either asset amounts or pool liquidity.
 	///
-	/// If `AssetAmounts` is specified, the order requires desired and minimum amounts of the assets
-	/// pairs. This will attempt a mint of up to `desired` amounts of the assets, but will not mint
+	/// If `AssetAmounts` is specified, the order requires maximum and minimum amounts of the assets
+	/// pairs. This will attempt a mint of up to `maximum` amounts of the assets, but will not mint
 	/// less than `minimum` amounts.
 	#[derive(Serialize, Deserialize)]
 	pub enum RangeOrderSize {
-		AssetAmounts { desired: AssetAmounts, minimum: AssetAmounts },
+		AssetAmounts { maximum: AssetAmounts, minimum: AssetAmounts },
 		PoolLiquidity(NumberOrHex),
 	}
 
@@ -78,8 +78,8 @@ pub mod rpc_types {
 
 		fn try_from(value: RangeOrderSize) -> Result<Self, Self::Error> {
 			Ok(match value {
-				RangeOrderSize::AssetAmounts { desired, minimum } => Self::AssetAmounts {
-					desired: desired.try_into()?,
+				RangeOrderSize::AssetAmounts { maximum, minimum } => Self::AssetAmounts {
+					maximum: maximum.try_into()?,
 					minimum: minimum.try_into()?,
 				},
 				RangeOrderSize::PoolLiquidity(liquidity) => Self::Liquidity(liquidity.try_into()?),
