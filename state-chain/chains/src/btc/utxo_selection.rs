@@ -78,12 +78,12 @@ fn test_utxo_selection() {
 
 	#[track_caller]
 	fn test_case(
-		initial_available_utxos: &Vec<UTXO>,
+		initial_available_utxos: &[UTXO],
 		fee_per_utxo: u64,
 		amount_to_be_spent: u64,
 		expected_selection: Option<(Vec<UTXO>, u64)>,
 	) {
-		let mut utxos = initial_available_utxos.clone();
+		let mut utxos = initial_available_utxos.to_owned();
 		let selected = select_utxos_from_pool(&mut utxos, fee_per_utxo, amount_to_be_spent);
 
 		assert_eq!(selected, expected_selection);
@@ -102,7 +102,7 @@ fn test_utxo_selection() {
 	}
 
 	// empty utxo list as input should return Option::None.
-	test_case(&Default::default(), 0, FEE_PER_UTXO, None);
+	test_case(&[], 0, FEE_PER_UTXO, None);
 
 	test_case(&available_utxos, FEE_PER_UTXO, 1, Some((vec![7, 15], 18)));
 
