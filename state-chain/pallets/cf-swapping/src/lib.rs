@@ -771,7 +771,7 @@ pub mod pallet {
 			let bundle_input: AssetAmount =
 				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
 
-			// debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
+			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
 			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)
