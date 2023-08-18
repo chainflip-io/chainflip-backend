@@ -216,7 +216,7 @@ fn lookup_transactions(
 			.iter()
 			.map(|address| cache.transactions.get(address).map(Clone::clone))
 			.collect::<Vec<Option<QueryResult>>>()),
-		CacheStatus::Init => Err(anyhow!("Address cache is not intialised.").into()),
+		CacheStatus::Init => Err(anyhow!("Address cache is not initialised.").into()),
 		CacheStatus::Down => Err(anyhow!("Address cache is down - check btc connection.").into()),
 	}
 }
