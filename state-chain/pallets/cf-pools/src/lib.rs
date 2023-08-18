@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
 	common::{Order, Price, Side, SideMap},
-	NewError, PoolState,
+	limit_orders, range_orders, NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -423,21 +423,7 @@ pub mod pallet {
 							Self::try_debit_both_assets(&lp, unstable_asset, required_amounts)
 						},
 					)
-					.map_err(|e| match e {
-						range_orders::PositionError::InvalidTickRange =>
-							Error::<T>::InvalidTickRange.into(),
-						range_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist.into(),
-						range_orders::PositionError::Other(
-							range_orders::MintError::CallbackFailed(e),
-						) => e,
-						range_orders::PositionError::Other(
-							range_orders::MintError::MaximumGrossLiquidity,
-						) => Error::<T>::MaximumGrossLiquidity.into(),
-						range_orders::PositionError::Other(
-							cf_amm::range_orders::MintError::AssetRatioUnachieveable,
-						) => Error::<T>::AssetRatioUnachieveable.into(),
-					})?;
+					.map_err(Self::range_order_mint_error_to_pallet_error)?;
 
 				let collected_fees = Self::try_credit_both_assets(&lp, unstable_asset, fees)?;
 
@@ -490,16 +476,7 @@ pub mod pallet {
 							tick_range.clone(),
 							range_orders::Size::Liquidity { liquidity },
 						)
-						.map_err(|e| match e {
-							range_orders::PositionError::InvalidTickRange =>
-								Error::<T>::InvalidTickRange,
-							range_orders::PositionError::NonExistent =>
-								Error::<T>::PositionDoesNotExist,
-							range_orders::PositionError::Other(e) => match e {
-								range_orders::BurnError::AssetRatioUnachieveable =>
-									Error::<T>::AssetRatioUnachieveable,
-							},
-						})?;
+						.map_err(Self::range_order_burn_error_to_pallet_error)?;
 
 				let assets_credited =
 					Self::try_credit_both_assets(&lp, unstable_asset, assets_withdrawn)?;
@@ -556,17 +533,7 @@ pub mod pallet {
 
 				let (limit_orders::Collected { fees, swapped_liquidity }, _) = pool_state
 					.collect_and_mint_limit_order(&lp, side, Order::Sell, tick, amount.into())
-					.map_err(|e| match e {
-						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-						limit_orders::PositionError::NonExistent =>
-							Error::<T>::PositionDoesNotExist,
-						limit_orders::PositionError::Other(
-							limit_orders::MintError::MaximumLiquidity,
-						) => Error::<T>::MaximumGrossLiquidity,
-						limit_orders::PositionError::Other(
-							limit_orders::MintError::MaximumPoolInstances,
-						) => Error::<T>::MaximumPoolInstances,
-					})?;
+					.map_err(Self::limit_order_mint_error_to_pallet_error)?;
 
 				let collected_fees =
 					Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
@@ -623,12 +590,7 @@ pub mod pallet {
 				let (assets_credited, limit_orders::Collected { fees, swapped_liquidity }, _) =
 					pool_state
 						.collect_and_burn_limit_order(&lp, side, Order::Sell, tick, amount.into())
-						.map_err(|e| match e {
-							limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
-							limit_orders::PositionError::NonExistent =>
-								Error::<T>::PositionDoesNotExist,
-							limit_orders::PositionError::Other(e) => match e {},
-						})?;
+						.map_err(Self::limit_order_burn_error_to_pallet_error)?;
 
 				let collected_fees =
 					Self::try_credit_single_asset(&lp, unstable_asset, !side, fees)?;
@@ -707,6 +669,56 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	fn range_order_mint_error_to_pallet_error(
+		error: range_orders::PositionError<range_orders::MintError<DispatchError>>,
+	) -> DispatchError {
+		match error {
+			range_orders::PositionError::NonExistent => Error::<T>::PositionDoesNotExist.into(),
+			range_orders::PositionError::InvalidTickRange => Error::<T>::InvalidTickRange.into(),
+			range_orders::PositionError::Other(range_orders::MintError::MaximumGrossLiquidity) =>
+				Error::<T>::MaximumGrossLiquidity.into(),
+			range_orders::PositionError::Other(
+				range_orders::MintError::AssetRatioUnachieveable,
+			) => Error::<T>::AssetRatioUnachieveable.into(),
+			range_orders::PositionError::Other(range_orders::MintError::CallbackFailed(e)) => e,
+		}
+	}
+
+	fn range_order_burn_error_to_pallet_error(
+		error: range_orders::PositionError<range_orders::BurnError>,
+	) -> Error<T> {
+		match error {
+			range_orders::PositionError::NonExistent => Error::PositionDoesNotExist,
+			range_orders::PositionError::InvalidTickRange => Error::InvalidTickRange,
+			range_orders::PositionError::Other(
+				range_orders::BurnError::AssetRatioUnachieveable,
+			) => Error::AssetRatioUnachieveable,
+		}
+	}
+
+	fn limit_order_mint_error_to_pallet_error(
+		error: limit_orders::PositionError<limit_orders::MintError>,
+	) -> Error<T> {
+		match error {
+			limit_orders::PositionError::NonExistent => Error::PositionDoesNotExist,
+			limit_orders::PositionError::InvalidTick => Error::InvalidTick,
+			limit_orders::PositionError::Other(limit_orders::MintError::MaximumLiquidity) =>
+				Error::MaximumGrossLiquidity,
+			limit_orders::PositionError::Other(limit_orders::MintError::MaximumPoolInstances) =>
+				Error::AssetRatioUnachieveable,
+		}
+	}
+
+	fn limit_order_burn_error_to_pallet_error(
+		error: limit_orders::PositionError<limit_orders::BurnError>,
+	) -> Error<T> {
+		match error {
+			limit_orders::PositionError::NonExistent => Error::PositionDoesNotExist,
+			limit_orders::PositionError::InvalidTick => Error::InvalidTick,
+			limit_orders::PositionError::Other(error) => match error {},
+		}
+	}
+
 	#[transactional]
 	pub fn swap_with_network_fee(
 		from: any::Asset,
