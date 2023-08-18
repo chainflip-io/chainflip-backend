@@ -123,7 +123,7 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ for<'a> From<&'a DepositChannel<Self>>;
 
-	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
 	type DepositDetails: Member + Parameter + BenchmarkValue;

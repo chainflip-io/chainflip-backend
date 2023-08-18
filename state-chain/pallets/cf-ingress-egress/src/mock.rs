@@ -93,6 +93,16 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
 		Ok([channel_id as u8; 20].into())
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
+		sp_runtime::DispatchError,
+	> {
+		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
+	}
 }
 
 impl crate::Config for Test {

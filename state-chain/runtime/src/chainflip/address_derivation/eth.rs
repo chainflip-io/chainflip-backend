@@ -20,6 +20,19 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 			channel_id,
 		))
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
+		DispatchError,
+	> {
+		Ok((
+			<Self as AddressDerivationApi<Ethereum>>::generate_address(source_asset, channel_id)?,
+			Default::default(),
+		))
+	}
 }
 
 #[test]
