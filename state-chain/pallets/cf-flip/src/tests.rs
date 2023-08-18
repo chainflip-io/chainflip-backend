@@ -426,7 +426,7 @@ fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
 				TestResult::passed()
 			}
 		})
-		.context()
+		.into_context()
 }
 
 #[test]
