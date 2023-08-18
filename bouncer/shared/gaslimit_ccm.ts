@@ -27,8 +27,7 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasFractio
     sourceAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
     // Very small gas budget since gasPrice in testnet is extremely low (~7wei)
-    gasFraction, // => 10**9 causes runtime panic in debug mode!!
-    // 1,
+    gasFraction,
   );
 }
 
@@ -48,7 +47,7 @@ async function testGasLimitSwap(
     destAsset,
     addressType,
     messageMetadata,
-    tagSuffix + ' NoBroadcast',
+    tagSuffix + ' BroadcastAborted',
   );
 
   const ccmReceivedFailure = observeCcmReceived(
@@ -83,8 +82,8 @@ async function testGasLimitSwap(
       SwapType.CcmGas,
     );
 
-    // SwapExecuted will be emitted at the same time as swapScheduled so we can't wait for swapId
-    // to be defined.
+    // SwapExecuted will be emitted at the same time as swapScheduled so we can't wait for
+    // swapId to be known.
     const swapIdToEgressAmount: { [key: string]: string } = {};
     const swapExecutedHandle = observeEvent(
       'swapping:SwapExecuted',
@@ -101,7 +100,8 @@ async function testGasLimitSwap(
       data: { swapId },
     } = await swapScheduledHandle;
 
-    await sleep(6000); // TO ensure the scheduleExecute has been witnesed
+    // Time buffer ensure the scheduleExecute has been witnessed
+    await sleep(6000);
     swapScheduledObserved = true;
     await swapExecutedHandle;
     egressGasAmount = Number(swapIdToEgressAmount[swapId].replace(/,/g, ''));
@@ -112,8 +112,7 @@ async function testGasLimitSwap(
       channelId,
       SwapType.CcmPrincipal,
     );
-    await send(sourceAsset, depositAddress);
-    await swapScheduledHandle;
+    Promise.all([send(sourceAsset, depositAddress), swapScheduledHandle]);
     egressGasAmount = messageMetadata.gasBudget;
   }
 
@@ -125,7 +124,8 @@ async function testGasLimitSwap(
   const baseFee = Number(ethChainTracking.data.newChainState.trackedData.baseFee);
   const priorityFee = Number(ethChainTracking.data.newChainState.trackedData.priorityFee);
 
-  // Standard gas estimation => We might not need to do this as the gasLimit will end up being a bit too high
+  // Standard gas estimation => In the statechain we might do a less conservative estimation, otherwise
+  // a good amount of gas might end up being unused (gasLimit too low).
   const maxFeePerGas = 2 * baseFee + priorityFee;
 
   // Max Gas Limit budget
@@ -144,6 +144,7 @@ export async function testGasLimitCcmSwaps() {
 
   // As of now, not broadcasted regardless of the gas becuase the gas consumed on the egress is > 400k. However, in localnet
   // this should probably be broadcasted in the future (1% of the amount is enough gas budget since gasPrice is extremely low).
+  // TODO: For final solution, add swaps that consume slightly more gas than the gasBudget.
   const gasLimitSwapsAborted = [
     testGasLimitSwap('DOT', 'FLIP', maximumGasReceived + 20000),
     testGasLimitSwap('ETH', 'USDC', maximumGasReceived + 20000),
@@ -151,74 +152,49 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('BTC', 'ETH', maximumGasReceived + 20000),
   ];
 
-  // This amount of gas will be swapped into basically zero destination gas. But as of now this will be broadcasted
-  // anyway because the gasBudget is not checked (hardcoded to < 400k) and this is within budget. This shouldn't
-  // be broadcasted for mainnet.
+  // This amount of gas will be swapped into very little destination gas. Not into zero as that will cause a debug_assert to
+  // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
+  // As of now this will be broadcasted anyway because the gasBudget is not checked (hardcoded to < 400k) and this is within budget.
+  // However, this shouldn't be broadcasted for mainnet.
   const gasLimitSwapsBroadcastedAlmostZeroGas = [
-    // testSwap(
-    //   'DOT',
-    //   'FLIP',
-    //   undefined,
-    //   gasTestCcmMetadata('DOT', maximumGasReceived, 10 ** 3),
-    //   tagSuffix + ' SwappedToZeroGas',
-    // ),
-    // testSwap(
-    //   'ETH',
-    //   'USDC',
-    //   undefined,
-    //   gasTestCcmMetadata('ETH', maximumGasReceived, 10 ** 9),
-    //   tagSuffix + ' SwappedToZeroGas',
-    // ),
-    // testSwap(
-    //   'FLIP',
-    //   'ETH',
-    //   undefined,
-    //   gasTestCcmMetadata('FLIP', maximumGasReceived, 10 ** 10),
-    //   tagSuffix + ' SwappedToZeroGas',
-    // ),
-  ];
-
-  // As of now this is broadcasted regardless of the gas budget, but even when the final solution is implemented
-  // this should be broadcasted since the gas budget should be enough (same as gasLimitSwapsAborted).
-  const gasLimitSwapsBroadcasted = [
-    // DEBUG: Swapping these three (at the same time as gasLimitSwapsAborted) don't work => some of these are aborted
-    // However, if swapping these three by itself they work fine, so it might be some weird interaction. Even not doing gasTests
-    // is causing Broadcast aborted. Something is off. Error on the engine seems to be:
-    // Failed to estimate gas\n\nCaused by:\n    (code: -32000, message: execution reverted, data: None)"}
+    // ~ 410 wei for gasBudget (after CcmGas swap)
     testSwap(
       'DOT',
       'FLIP',
       undefined,
-      gasTestCcmMetadata('DOT', maximumGasReceived),
-      // newCcmMetadata('DOT'),
-      tagSuffix,
+      gasTestCcmMetadata('DOT', maximumGasReceived, 10 ** 6),
+      tagSuffix + ' SwappedToMinimalGas',
     ),
+    // ~ 500 wei for gasBudget (no CcmGas swap executed)
     testSwap(
       'ETH',
       'USDC',
       undefined,
-      gasTestCcmMetadata('ETH', maximumGasReceived),
-      // newCcmMetadata('ETH'),
-      tagSuffix,
+      gasTestCcmMetadata('ETH', maximumGasReceived, 10 ** 17),
+      tagSuffix + ' SwappedToMinimalGas',
     ),
+    // ~ 450 wei for gasBudget (after CcmGas swap)
     testSwap(
       'FLIP',
       'ETH',
       undefined,
-      gasTestCcmMetadata('FLIP', maximumGasReceived),
-      // newCcmMetadata('FLIP'),
-      tagSuffix,
+      gasTestCcmMetadata('FLIP', maximumGasReceived, 2 * 10 ** 6),
+      tagSuffix + ' SwappedToMinimalGas',
     ),
-    // DEBUG: Swapping these three (at the same time as gasLimitSwapsAborted) work
-    // testSwap('DOT', 'FLIP'),
-    // testSwap('ETH', 'USDC'),
-    // testSwap('FLIP', 'ETH'),
   ];
-  // await Promise.all(gasLimitSwapsBroadcasted);
+
+  // As of now this is broadcasted regardless of the gas budget and even when the final solution is implemented
+  // this should be broadcasted, since the gas budget should be enough, since by default gasBudget is 1% of the
+  // principal and the gasPrice is very low in localnet (~7wei).
+  const gasLimitSwapsBroadcasted = [
+    testSwap('DOT', 'FLIP', undefined, gasTestCcmMetadata('DOT', maximumGasReceived), tagSuffix),
+    testSwap('ETH', 'USDC', undefined, gasTestCcmMetadata('ETH', maximumGasReceived), tagSuffix),
+    testSwap('FLIP', 'ETH', undefined, gasTestCcmMetadata('FLIP', maximumGasReceived), tagSuffix),
+    // testSwap('BTC', 'ETH', undefined, gasTestCcmMetadata('FLIP', maximumGasReceived), tagSuffix),
+  ];
 
   let broadcastAborted = 0;
   let stopObserveAborted = false;
-  // TODO: When it works, consider removing the continuous broadcast aborted check to simplify test
   const observeBroadcastAborted = observeEvent(
     'ethereumBroadcaster:BroadcastAborted',
     await getChainflipApi(),
@@ -227,22 +203,20 @@ export async function testGasLimitCcmSwaps() {
       console.log('BroadcastAborted ', broadcastAborted);
       if (broadcastAborted === gasLimitSwapsAborted.length) {
         stopObservingCcmReceived = true;
-        return false;
       }
-      if (broadcastAborted < gasLimitSwapsAborted.length) {
-        return false;
+      if (broadcastAborted > gasLimitSwapsAborted.length) {
+        throw new Error('Broadcast Aborted Unexpected');
       }
-      // throw new Error('Broadcast Aborted Unexpected');
+      // Continue observing for unexpepected BroadcastAborted events
       return false;
     },
-    // return ++broadcastAborted === gasLimitSwapsAborted.length;
     () => stopObserveAborted,
   );
 
   await Promise.all([
     ...gasLimitSwapsAborted,
     ...gasLimitSwapsBroadcasted,
-    // ...gasLimitSwapsBroadcastedAlmostZeroGas,
+    ...gasLimitSwapsBroadcastedAlmostZeroGas,
   ]);
   stopObserveAborted = true;
   await observeBroadcastAborted;
