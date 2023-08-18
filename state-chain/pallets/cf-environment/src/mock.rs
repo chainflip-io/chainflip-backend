@@ -29,8 +29,8 @@ frame_support::construct_runtime!(
 	}
 );
 
-cf_test_utilities::impl_test_helpers!(
-	Test, 
+cf_test_utilities::impl_test_helpers! {
+	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
@@ -46,8 +46,9 @@ cf_test_utilities::impl_test_helpers!(
 			network_environment: Default::default(),
 			..Default::default()
 		},
-	}, ||System::set_block_number(1)
-);
+	},
+	|| System::set_block_number(1)
+}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -188,4 +189,3 @@ pub const KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
 pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
 pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
-

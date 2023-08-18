@@ -65,14 +65,18 @@ impl frame_system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-cf_test_utilities::impl_test_helpers!(Test, RuntimeGenesisConfig::default(), || {
-	System::set_block_number(1);
-	MockEpochInfo::next_epoch((0..3).collect());
-	MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-	for id in &MockEpochInfo::current_authorities() {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
+		System::set_block_number(1);
+		MockEpochInfo::next_epoch((0..3).collect());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		for id in &MockEpochInfo::current_authorities() {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();
+		}
 	}
-});
+}
 
 pub const BROADCAST_EXPIRY_BLOCKS: BlockNumberFor<Test> = 4;
 

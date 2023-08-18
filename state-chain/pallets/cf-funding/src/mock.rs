@@ -31,7 +31,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-cf_test_utilities::impl_test_helpers!(
+cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
@@ -48,7 +48,7 @@ cf_test_utilities::impl_test_helpers!(
 			.unwrap();
 		System::set_block_number(1);
 	}
-);
+}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;

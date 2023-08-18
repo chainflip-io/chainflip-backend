@@ -11,7 +11,8 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, Permill,
+	traits::{BlakeTwo256, IdentityLookup},
+	Permill,
 };
 
 pub type AccountId = u64;
@@ -28,14 +29,14 @@ frame_support::construct_runtime!(
 	}
 );
 
-
-cf_test_utilities::impl_test_helpers!(
-	Test, 
+cf_test_utilities::impl_test_helpers! {
+	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000 },
 		transaction_payment: Default::default(),
-	}, || {
+	},
+	|| {
 		System::set_block_number(1);
 
 		// Seed with two funded accounts.
@@ -49,7 +50,8 @@ cf_test_utilities::impl_test_helpers!(
 
 		assert_eq!(Flip::offchain_funds(), 850);
 		check_balance_integrity();
-	});
+	}
+}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
