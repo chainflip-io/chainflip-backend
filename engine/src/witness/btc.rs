@@ -132,7 +132,7 @@ where
 				}
 			}
 		})
-		.continuous("Bitcoin".to_string(), db)
+		.continuous("All", db)
 		.logging("witnessing")
 		.spawn(scope);
 
