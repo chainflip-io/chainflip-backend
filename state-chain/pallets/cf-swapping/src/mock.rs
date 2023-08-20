@@ -1,7 +1,6 @@
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
-use cf_test_utilities::impl_test_helpers;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -138,7 +137,7 @@ impl pallet_cf_swapping::Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
-impl_test_helpers! {
+cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
