@@ -19,7 +19,7 @@ fn genesis_config() {
 
 #[test]
 fn test_btc_utxo_selection() {
-	fn add_utxo_amount(amount: BtcAmount) {
+	fn add_utxo_amount(amount: crate::BtcAmount) {
 		Environment::add_bitcoin_utxo_to_list(
 			amount,
 			Default::default(),
