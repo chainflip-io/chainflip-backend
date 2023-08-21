@@ -18,8 +18,8 @@ import { BtcAddressType } from './new_btc_address';
 // CCM call itself is ~115k with some variability depending on the parameters. Overrall, the transaction should
 // be broadcasted up to ~220k according to contract tests with some margin (~20k). 210k is a safe bet for a call
 // being broadcasted, 230k shouldn't be.
-const maximumGasReceived = 210000;
-const gasBudgetMargin = 20000;
+const MAXIMUM_GAS_RECEIVED = 210000;
+const GAS_BUDGET_MARGIN = 20000;
 const tagSuffix = ' CcmGasLimit';
 
 let stopObservingCcmReceived = false;
@@ -148,10 +148,10 @@ export async function testGasLimitCcmSwaps() {
   // gasPrice is extremely low).
   // TODO: For final solution, make swaps that consume more gas than the gasBudget.
   const gasLimitSwapsAborted = [
-    testGasLimitSwap('DOT', 'FLIP', maximumGasReceived + gasBudgetMargin),
-    testGasLimitSwap('ETH', 'USDC', maximumGasReceived + gasBudgetMargin),
-    testGasLimitSwap('FLIP', 'ETH', maximumGasReceived + gasBudgetMargin),
-    testGasLimitSwap('BTC', 'ETH', maximumGasReceived + gasBudgetMargin),
+    testGasLimitSwap('DOT', 'FLIP', MAXIMUM_GAS_RECEIVED + GAS_BUDGET_MARGIN),
+    testGasLimitSwap('ETH', 'USDC', MAXIMUM_GAS_RECEIVED + GAS_BUDGET_MARGIN),
+    testGasLimitSwap('FLIP', 'ETH', MAXIMUM_GAS_RECEIVED + GAS_BUDGET_MARGIN),
+    testGasLimitSwap('BTC', 'ETH', MAXIMUM_GAS_RECEIVED + GAS_BUDGET_MARGIN),
   ];
 
   // This amount of gas will be swapped into very little destination gas. Not into zero as that will cause a debug_assert to
@@ -164,7 +164,7 @@ export async function testGasLimitCcmSwaps() {
       'DOT',
       'FLIP',
       undefined,
-      gasTestCcmMetadata('DOT', maximumGasReceived, 10 ** 6),
+      gasTestCcmMetadata('DOT', MAXIMUM_GAS_RECEIVED, 10 ** 6),
       tagSuffix + ' InsufficientGasBudget',
     ),
     // ~ 500 wei for gasBudget (no CcmGas swap executed)
@@ -172,7 +172,7 @@ export async function testGasLimitCcmSwaps() {
       'ETH',
       'USDC',
       undefined,
-      gasTestCcmMetadata('ETH', maximumGasReceived, 10 ** 17),
+      gasTestCcmMetadata('ETH', MAXIMUM_GAS_RECEIVED, 10 ** 17),
       tagSuffix + ' InsufficientGasBudget',
     ),
     // ~ 450 wei for gasBudget (after CcmGas swap)
@@ -180,7 +180,7 @@ export async function testGasLimitCcmSwaps() {
       'FLIP',
       'ETH',
       undefined,
-      gasTestCcmMetadata('FLIP', maximumGasReceived, 2 * 10 ** 6),
+      gasTestCcmMetadata('FLIP', MAXIMUM_GAS_RECEIVED, 2 * 10 ** 6),
       tagSuffix + ' InsufficientGasBudget',
     ),
   ];
@@ -193,28 +193,28 @@ export async function testGasLimitCcmSwaps() {
       'DOT',
       'FLIP',
       undefined,
-      gasTestCcmMetadata('DOT', maximumGasReceived),
+      gasTestCcmMetadata('DOT', MAXIMUM_GAS_RECEIVED),
       tagSuffix + ' SufficientGasBudget',
     ),
     testSwap(
       'ETH',
       'USDC',
       undefined,
-      gasTestCcmMetadata('ETH', maximumGasReceived),
+      gasTestCcmMetadata('ETH', MAXIMUM_GAS_RECEIVED),
       tagSuffix + ' SufficientGasBudget',
     ),
     testSwap(
       'FLIP',
       'ETH',
       undefined,
-      gasTestCcmMetadata('FLIP', maximumGasReceived),
+      gasTestCcmMetadata('FLIP', MAXIMUM_GAS_RECEIVED),
       tagSuffix + ' SufficientGasBudget',
     ),
     testSwap(
       'BTC',
       'ETH',
       undefined,
-      gasTestCcmMetadata('BTC', maximumGasReceived),
+      gasTestCcmMetadata('BTC', MAXIMUM_GAS_RECEIVED),
       tagSuffix + ' SufficientGasBudget',
     ),
   ];
