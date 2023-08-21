@@ -384,67 +384,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-		/// Adds or updates an asset address in the map of supported ETH assets.
-		///
-		/// ## Events
-		///
-		/// - [EthereumSupportedAssetsUpdated](Event::EthereumSupportedAssetsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
-		pub fn update_supported_eth_assets(
-			origin: OriginFor<T>,
-			asset: EthAsset,
-			address: EthereumAddress,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
-			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
-				EthereumSupportedAssets::<T>::mutate(asset, |mapped_address| {
-					mapped_address.replace(address);
-				});
-				Event::UpdatedEthAsset(asset, address)
-			} else {
-				EthereumSupportedAssets::<T>::insert(asset, address);
-				Event::AddedNewEthAsset(asset, address)
-			});
-			Ok(())
-		}
-
-		/// Adds or updates an asset address in the map of supported ARB assets.
-		///
-		/// ## Events
-		///
-		/// - [UpdatedArbAsset](Event::UpdatedArbAsset)
-		/// - [AddedNewArbAsset](Event::AddedNewArbAsset)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
-		pub fn update_supported_arb_assets(
-			origin: OriginFor<T>,
-			asset: ArbAsset,
-			address: EthereumAddress,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(asset != ArbAsset::ArbEth, Error::<T>::ArbAddressNotUpdateable);
-			Self::deposit_event(if ArbitrumSupportedAssets::<T>::contains_key(asset) {
-				ArbitrumSupportedAssets::<T>::mutate(asset, |mapped_address| {
-					mapped_address.replace(address);
-				});
-				Event::UpdatedArbAsset(asset, address)
-			} else {
-				ArbitrumSupportedAssets::<T>::insert(asset, address);
-				Event::AddedNewArbAsset(asset, address)
-			});
-			Ok(().into())
-		}
 	}
 
 	#[pallet::genesis_config]
