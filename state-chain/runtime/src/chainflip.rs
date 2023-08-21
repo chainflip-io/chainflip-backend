@@ -343,7 +343,6 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 pub struct BtcEnvironment;
 
 impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
-	// TODO: Implement replay protection for Bitcoin.
 	fn replay_protection() {}
 }
 
