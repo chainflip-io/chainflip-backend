@@ -118,6 +118,7 @@ impl ExtBuilder {
 			},
 			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 			funding: FundingConfig {
+				state_chain_gateway_address: Default::default(),
 				genesis_accounts: self.genesis_accounts.clone(),
 				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,

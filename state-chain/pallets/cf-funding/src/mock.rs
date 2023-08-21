@@ -1,6 +1,6 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
-use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
+use cf_chains::{eth, ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
@@ -11,6 +11,7 @@ use core::cell::RefCell;
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
+use sp_core::H160;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32,
@@ -31,12 +32,15 @@ frame_support::construct_runtime!(
 	}
 );
 
+pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {
+			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
 			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
 			redemption_tax: REDEMPTION_TAX,
 			minimum_funding: MIN_FUNDING,

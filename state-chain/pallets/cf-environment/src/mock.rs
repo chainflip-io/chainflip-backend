@@ -34,7 +34,6 @@ cf_test_utilities::impl_test_helpers! {
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
-			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
 			key_manager_address: KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
 			eth_vault_address: VAULT_ADDRESS,
@@ -184,7 +183,6 @@ impl pallet_cf_environment::Config for Test {
 	type WeightInfo = ();
 }
 
-pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
 pub const KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
 pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
 pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);

@@ -852,7 +852,7 @@ impl_runtime_apis! {
 			Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip).expect("FLIP token address should exist")
 		}
 		fn cf_eth_state_chain_gateway_address() -> EthereumAddress {
-			Environment::state_chain_gateway_address()
+			Funding::state_chain_gateway_address()
 		}
 		fn cf_eth_key_manager_address() -> EthereumAddress {
 			Environment::key_manager_address()

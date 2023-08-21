@@ -105,11 +105,6 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, EthAsset, EthereumAddress>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn state_chain_gateway_address)]
-	/// The address of the ETH state chain gatweay contract
-	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract
 	pub type EthereumKeyManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
@@ -380,7 +375,6 @@ pub mod pallet {
 	pub struct GenesisConfig<T> {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
-		pub state_chain_gateway_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,
 		pub eth_address_checker_address: EthereumAddress,
@@ -395,7 +389,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);

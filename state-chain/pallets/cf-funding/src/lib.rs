@@ -114,6 +114,11 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	#[pallet::storage]
+	#[pallet::getter(fn state_chain_gateway_address)]
+	/// The address of the state chain gatweay contract.
+	pub type StateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+
 	/// Store the list of funded accounts and whether or not they are a active bidder.
 	#[pallet::storage]
 	pub type ActiveBidder<T: Config> =
@@ -684,6 +689,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		pub state_chain_gateway_address: EthereumAddress,
 		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Amount)>,
 		pub redemption_tax: T::Amount,
 		pub minimum_funding: T::Amount,
@@ -693,6 +699,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
+				state_chain_gateway_address: Default::default(),
 				genesis_accounts: vec![],
 				redemption_tax: Default::default(),
 				minimum_funding: Default::default(),
@@ -708,6 +715,7 @@ pub mod pallet {
 				self.redemption_tax < self.minimum_funding,
 				"Redemption tax must be less than minimum funding"
 			);
+			StateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			MinimumFunding::<T>::set(self.minimum_funding);
 			RedemptionTax::<T>::set(self.redemption_tax);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());

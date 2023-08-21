@@ -1,6 +1,7 @@
 use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash},
-	eth, ChainState,
+	eth::{self, Address as EthereumAddress},
+	ChainState,
 };
 use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment};
 
@@ -240,7 +241,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
 					eth_usdc_address: eth_usdc_address.into(),
-					state_chain_gateway_address: state_chain_gateway_address.into(),
 					key_manager_address: key_manager_address.into(),
 					eth_vault_address: eth_vault_address.into(),
 					eth_address_checker_address: eth_address_checker_address.into(),
@@ -252,6 +252,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
+				state_chain_gateway_address.into(),
 				common::TOTAL_ISSUANCE,
 				genesis_funding_amount,
 				min_funding,
@@ -363,7 +364,6 @@ macro_rules! network_spec {
 							EnvironmentConfig {
 								flip_token_address: flip_token_address.into(),
 								eth_usdc_address: eth_usdc_address.into(),
-								state_chain_gateway_address: state_chain_gateway_address.into(),
 								key_manager_address: key_manager_address.into(),
 								eth_vault_address: eth_vault_address.into(),
 								eth_address_checker_address: eth_address_checker_address.into(),
@@ -375,6 +375,7 @@ macro_rules! network_spec {
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
+							state_chain_gateway_address.into(),
 							TOTAL_ISSUANCE,
 							genesis_funding_amount,
 							min_funding,
@@ -430,6 +431,7 @@ fn testnet_genesis(
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
+	state_chain_gateway_address: EthereumAddress,
 	total_issuance: FlipBalance,
 	genesis_funding_amount: u128,
 	minimum_funding: u128,
@@ -561,6 +563,7 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance },
 		funding: FundingConfig {
+			state_chain_gateway_address,
 			genesis_accounts: Vec::from_iter(all_accounts.clone()),
 			minimum_funding,
 			redemption_tax,

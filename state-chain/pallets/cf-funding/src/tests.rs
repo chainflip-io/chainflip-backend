@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	RedemptionTax, RestrictedAddresses, RestrictedBalances,
+	RedemptionTax, RestrictedAddresses, RestrictedBalances, StateChainGatewayAddress,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
@@ -20,6 +20,13 @@ type FlipError = pallet_cf_flip::Error<Test>;
 const ETH_DUMMY_ADDR: EthereumAddress = H160([42u8; 20]);
 const ETH_ZERO_ADDRESS: EthereumAddress = H160([0u8; 20]);
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
+
+#[test]
+fn genesis_config() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, StateChainGatewayAddress::<Test>::get());
+	});
+}
 
 #[test]
 fn genesis_nodes_are_bidding_by_default() {

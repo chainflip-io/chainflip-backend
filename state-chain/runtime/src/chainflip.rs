@@ -11,7 +11,7 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
+	EthereumIngressEgress, Flip, FlipBalance, Funding, PolkadotBroadcaster, PolkadotChainTracking,
 	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
@@ -292,7 +292,7 @@ impl EthEnvironmentProvider for EthEnvironment {
 
 	fn contract_address(contract: EthereumContract) -> eth::Address {
 		match contract {
-			EthereumContract::StateChainGateway => Environment::state_chain_gateway_address(),
+			EthereumContract::StateChainGateway => Funding::state_chain_gateway_address(),
 			EthereumContract::KeyManager => Environment::key_manager_address(),
 			EthereumContract::Vault => Environment::eth_vault_address(),
 		}

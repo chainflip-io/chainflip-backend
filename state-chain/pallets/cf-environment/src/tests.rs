@@ -14,7 +14,6 @@ use crate::{mock::*, Error};
 #[test]
 fn genesis_config() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, Environment::state_chain_gateway_address());
 		assert_eq!(KEY_MANAGER_ADDRESS, Environment::key_manager_address());
 		assert_eq!(ETH_CHAIN_ID, Environment::ethereum_chain_id());
 	});
