@@ -13,9 +13,16 @@ use utilities::task_scope;
 use warp::Filter;
 
 lazy_static::lazy_static! {
-	static ref REGISTRY: Registry = Registry::new();
 	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = IntCounterVec::new(Opts::new("rpc_requests", "Count the rpc calls made by the retrier, it doesn't keep into account the number of retrials"), &["client","rpcMethod"]).expect("Metric succesfully created");
 	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = IntCounterVec::new(Opts::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times"), &["client", "rpcMethod"]).expect("Metric succesfully created");
+	static ref REGISTRY: Registry = { 
+		let reg = Registry::new();
+		reg.register(Box::new(RPC_RETRIER_REQUESTS.clone()))
+			.expect("Metric succesfully register");
+		reg.register(Box::new(RPC_RETRIER_TOTAL_REQUESTS.clone()))
+			.expect("Metric succesfully register");
+		reg
+	};
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
@@ -54,13 +61,4 @@ fn metrics_handler() -> String {
 			String::default()
 		},
 	}
-}
-
-pub fn register_metrics() {
-	REGISTRY
-		.register(Box::new(RPC_RETRIER_REQUESTS.clone()))
-		.expect("Metric succesfully register");
-	REGISTRY
-		.register(Box::new(RPC_RETRIER_TOTAL_REQUESTS.clone()))
-		.expect("Metric succesfully register");
 }

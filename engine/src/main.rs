@@ -116,7 +116,6 @@ async fn start(
 	}
 
 	if let Some(prometheus_settings) = &settings.prometheus {
-		metrics::register_metrics();
 		metrics::start(scope, prometheus_settings).await?;
 	}
 
