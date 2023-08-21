@@ -277,8 +277,13 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	fn replay_protection() -> EthereumReplayProtection {
-		unimplemented!()
+	fn replay_protection(contract_address: eth::Address) -> EthereumReplayProtection {
+		EthereumReplayProtection {
+			nonce: Self::next_nonce(),
+			chain_id: Self::chain_id(),
+			key_manager_address: Self::key_manager_address(),
+			contract_address,
+		}
 	}
 }
 
@@ -313,7 +318,7 @@ pub struct DotEnvironment;
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
-	fn replay_protection() -> PolkadotReplayProtection {
+	fn replay_protection(_params: ()) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(),
@@ -343,7 +348,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 pub struct BtcEnvironment;
 
 impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
-	fn replay_protection() {}
+	fn replay_protection(_params: ()) {}
 }
 
 impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEnvironment {

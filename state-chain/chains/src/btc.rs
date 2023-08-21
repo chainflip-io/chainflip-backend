@@ -288,6 +288,8 @@ fn verify_single_threshold_signature(
 impl ChainAbi for Bitcoin {
 	type Transaction = BitcoinTransactionData;
 
+	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
+	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 }
 

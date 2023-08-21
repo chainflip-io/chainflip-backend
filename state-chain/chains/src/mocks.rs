@@ -225,6 +225,7 @@ pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 
 impl ChainAbi for MockEthereum {
 	type Transaction = MockTransaction;
+	type ReplayProtectionParams = ();
 	type ReplayProtection = EthereumReplayProtection;
 }
 

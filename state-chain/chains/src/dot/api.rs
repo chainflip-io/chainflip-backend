@@ -64,7 +64,7 @@ where
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Result<Self, AllBatchError> {
 		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(()),
 			fetch_params,
 			transfer_params,
 			E::try_vault_account().ok_or(AllBatchError::Other)?,
@@ -83,7 +83,7 @@ where
 		let vault = E::try_vault_account().ok_or(())?;
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(()),
 			maybe_old_key,
 			new_key,
 			vault,
@@ -102,7 +102,7 @@ where
 		let vault = E::try_vault_account().ok_or(SetAggKeyWithAggKeyError::Failed)?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(()),
 			maybe_old_key,
 			new_key,
 			vault,
