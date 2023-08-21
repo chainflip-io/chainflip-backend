@@ -13,7 +13,6 @@ use utilities::read_clean_and_decode_hex_str_file;
 #[cfg(test)]
 use mockall::automock;
 
-
 struct NonceInfo {
 	next_nonce: U256,
 	requested_at: std::time::Instant,

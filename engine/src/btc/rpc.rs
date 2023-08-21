@@ -12,7 +12,6 @@ use crate::settings;
 
 use anyhow::{Context, Result};
 
-
 #[cfg(test)]
 use mockall::automock;
 
@@ -101,7 +100,6 @@ impl BtcRpcClient {
 			.json::<serde_json::Value>()
 			.await
 			.map_err(Error::Transport)?;
-
 
 		let error = &response["error"];
 		if !error.is_null() {

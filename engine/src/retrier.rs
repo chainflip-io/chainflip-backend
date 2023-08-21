@@ -13,6 +13,7 @@ use std::{
 	time::Duration,
 };
 
+use crate::metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS};
 use anyhow::Result;
 use core::cmp::min;
 use futures::Future;
@@ -20,7 +21,6 @@ use futures_util::stream::FuturesUnordered;
 use rand::Rng;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{task_scope::Scope, UnendingStream};
-use crate::metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS};
 
 #[derive(Debug, Clone)]
 enum RetryLimit {
@@ -202,9 +202,10 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				let (request_id, request_log, retry_limit, result) = submission_holder.next_or_pending() => {
+					RPC_RETRIER_TOTAL_REQUESTS.with_label_values(&[name, request_log.split('(').next().unwrap()]).inc();
 					match result {
 						Ok(value) => {
-							RPC_RETRIER_REQUESTS.with_label_values(&[name, request_log.splitn(2, "(").next().unwrap()]).inc();
+							RPC_RETRIER_REQUESTS.with_label_values(&[name, request_log.split('(').next().unwrap()]).inc();
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
 								let _result = response_sender.send(value);
 							}
