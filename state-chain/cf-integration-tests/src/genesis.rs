@@ -19,6 +19,8 @@ pub fn default() -> ExtBuilder {
 			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
 			(AccountId::from(BOB), AccountRole::Validator, GENESIS_BALANCE),
 			(AccountId::from(CHARLIE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(BROKER), AccountRole::Broker, GENESIS_BALANCE),
+			(AccountId::from(LIQUIDITY_PROVIDER), AccountRole::LiquidityProvider, GENESIS_BALANCE),
 		])
 		.root(AccountId::from(ERIN))
 		.blocks_per_epoch(BLOCKS_PER_EPOCH)

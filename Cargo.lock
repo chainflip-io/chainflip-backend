@@ -213,9 +213,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.71"
+version = "1.0.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
+checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "approx"
@@ -418,9 +418,9 @@ checksum = "ecc7ab41815b3c653ccd2978ec3255c81349336702dfdf62ee6f7069b12a3aae"
 
 [[package]]
 name = "async-trait"
-version = "0.1.68"
+version = "0.1.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
+checksum = "bc00ceb34980c03614e35a3a4e218276a0a824e911d07651cd0d858a51e8c0f0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1112,7 +1112,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-session",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sp-runtime",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08)",
 ]
@@ -1253,6 +1253,21 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.17",
  "utilities",
+]
+
+[[package]]
+name = "chainflip-btc-deposit-tracker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "jsonrpsee",
+ "reqwest",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.17",
 ]
 
 [[package]]
@@ -6342,6 +6357,7 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6362,6 +6378,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6403,6 +6420,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6425,6 +6443,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6445,6 +6464,7 @@ name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -10539,6 +10559,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-session-benchmarking",
+ "cf-test-utilities",
  "cf-traits",
  "ethabi",
  "frame-benchmarking",

@@ -123,7 +123,7 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ for<'a> From<&'a DepositChannel<Self>>;
 
-	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
 	type DepositDetails: Member + Parameter + BenchmarkValue;
@@ -157,7 +157,14 @@ pub trait ChainCrypto: Chain {
 	) -> bool;
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
+	fn agg_key_to_payload(agg_key: Self::AggKey, for_handover: bool) -> Self::Payload;
+
+	/// For a chain that supports key handover, check that the key produced during
+	/// the handover ceremony (stored in new_key) matches the current key. (Defaults
+	/// to always trivially returning `true` for chains without handover.)
+	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
+		true
+	}
 }
 
 /// Common abi-related types and operations for some external chain.

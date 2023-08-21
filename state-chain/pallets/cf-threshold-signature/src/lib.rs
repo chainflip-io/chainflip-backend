@@ -818,7 +818,7 @@ where
 		Self::inner_request_signature(payload, RequestType::Standard)
 	}
 
-	fn request_keygen_verification_signature(
+	fn request_verification_signature(
 		payload: <T::TargetChain as ChainCrypto>::Payload,
 		participants: BTreeSet<Self::ValidatorId>,
 		key: <T::TargetChain as ChainCrypto>::AggKey,

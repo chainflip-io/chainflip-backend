@@ -60,7 +60,7 @@ fn threshold_signer_nomination_respects_epoch() {
 
 		// double the number of authorities should mean we have a higher threshold
 		assert!(new_nominees.len() > old_nominees.len());
-	})
+	});
 }
 
 fn test_not_nominated_for_offence<F: Fn(crate::AccountId)>(penalise: F) {

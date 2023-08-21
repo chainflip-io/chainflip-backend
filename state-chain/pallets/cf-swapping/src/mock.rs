@@ -1,7 +1,6 @@
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
-use cf_test_utilities::TestExternalities;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -138,20 +137,13 @@ impl pallet_cf_swapping::Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> TestExternalities<Test, AllPalletsWithSystem> {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		swapping: SwappingConfig { swap_ttl: 5, minimum_swap_amounts: vec![] },
-	};
-
-	let mut ext = TestExternalities::<Test, AllPalletsWithSystem>::new(config);
-
-	ext = ext.execute_with(|| {
+	},
+	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
-		System::set_block_number(1);
-		System::set_block_number(1);
-	});
-
-	ext
+	},
 }

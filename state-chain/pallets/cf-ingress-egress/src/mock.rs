@@ -13,6 +13,7 @@ pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount,
 };
+use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
@@ -93,6 +94,16 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
 		Ok([channel_id as u8; 20].into())
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
+		sp_runtime::DispatchError,
+	> {
+		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
+	}
 }
 
 impl crate::Config for Test {
@@ -114,7 +125,7 @@ impl crate::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Configure a mock runtime to test the pallet.
-cf_test_utilities::impl_test_helpers!(Test);
+impl_test_helpers!(Test);
 
 type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
 type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
@@ -129,11 +140,7 @@ pub trait RequestAddressAndDeposit {
 			TestChainAmount,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	>;
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>>;
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
@@ -145,11 +152,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 			TestChainAmount,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	> {
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
 			.iter()
 			.copied()
@@ -189,16 +192,10 @@ pub trait RequestAddress {
 			TestChainAsset,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	>;
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>>;
 }
 
-impl<Ctx: Clone> RequestAddress
-	for cf_test_utilities::TestExternalities<Test, AllPalletsWithSystem, Ctx>
-{
+impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 	fn request_deposit_addresses(
 		self,
 		requests: &[(
@@ -206,11 +203,7 @@ impl<Ctx: Clone> RequestAddress
 			TestChainAsset,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	> {
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>> {
 		self.then_execute_at_next_block(|_| {
 			requests
 				.iter()

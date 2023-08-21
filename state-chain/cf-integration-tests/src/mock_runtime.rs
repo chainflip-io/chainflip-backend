@@ -1,12 +1,11 @@
 use chainflip_node::test_account_from_seed;
-use frame_support::sp_io::TestExternalities;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::{BuildStorage, Percent};
+use sp_runtime::Percent;
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
-	EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	ReputationConfig, Runtime, SessionConfig, System, ValidatorConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
+	AccountRolesConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig,
+	GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -90,14 +89,11 @@ impl ExtBuilder {
 	}
 
 	/// Default ext configuration with BlockNumber 1
-	pub fn build(&self) -> TestExternalities {
-		let mut storage =
-			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
-
+	pub fn build(&self) -> TestRunner<()> {
 		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH);
 		let ethereum_vault_key = key_components.agg_key();
 
-		state_chain_runtime::RuntimeGenesisConfig {
+		TestRunner::<()>::new(state_chain_runtime::RuntimeGenesisConfig {
 			// These are set indirectly via the session pallet.
 			aura: Default::default(),
 			// These are set indirectly via the session pallet.
@@ -219,15 +215,6 @@ impl ExtBuilder {
 			liquidity_provider: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
-		}
-		.assimilate_storage(&mut storage)
-		.unwrap();
-
-		let mut ext = TestExternalities::from(storage);
-
-		// Ensure we emit the events (no events emitted at block 0)
-		ext.execute_with(|| System::set_block_number(1));
-
-		ext
+		})
 	}
 }

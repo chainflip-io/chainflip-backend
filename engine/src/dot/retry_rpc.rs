@@ -9,6 +9,7 @@ use cf_chains::{
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
 use futures_core::Stream;
+use sp_core::H256;
 use std::pin::Pin;
 use subxt::{config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic};
 use utilities::task_scope::Scope;
@@ -64,7 +65,7 @@ pub trait DotRetryRpcApi {
 
 	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
 
-	async fn current_runtime_version(&self) -> RuntimeVersion;
+	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash;
 }
@@ -111,14 +112,14 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn current_runtime_version(&self) -> RuntimeVersion {
+	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion {
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.current_runtime_version().await })
+					Box::pin(async move { client.runtime_version(block_hash).await })
 				}),
-				"current_runtime_version".to_string(),
+				"runtime_version".to_string(),
 			)
 			.await
 	}
@@ -258,7 +259,7 @@ mod tests {
 				let events = dot_retry_rpc_client.events(hash).await;
 				println!("Events: {:?}", events);
 
-				let runtime_version = dot_retry_rpc_client.current_runtime_version().await;
+				let runtime_version = dot_retry_rpc_client.runtime_version(None).await;
 				println!("Runtime version: {:?}", runtime_version);
 
 				let hash = dot_retry_rpc_client

@@ -1,7 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne},
-	limit_orders, PoolState,
+	limit_orders,
+	range_orders::{AmountsToLiquidityError, Liquidity},
+	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -36,9 +38,9 @@ impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limi
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::{Side, SqrtPriceQ64F96, Tick},
+		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
 		limit_orders,
-		range_orders::{self, AmountsToLiquidityError, Liquidity},
+		range_orders::{self, Liquidity},
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -746,6 +748,15 @@ pub mod pallet {
 			Ok(())
 		}
 	}
+
+	impl<T: Config> From<cf_amm::range_orders::AmountsToLiquidityError> for Error<T> {
+		fn from(error: cf_amm::range_orders::AmountsToLiquidityError) -> Self {
+			match error {
+				cf_amm::range_orders::AmountsToLiquidityError::InvalidTickRange =>
+					Error::<T>::InvalidTickRange,
+			}
+		}
+	}
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
@@ -1060,6 +1071,31 @@ impl<T: Config> Pallet<T> {
 			_ => None,
 		}
 	}
+
+	pub fn estimate_liquidity_from_range_order(
+		asset: Asset,
+		lower: Tick,
+		upper: Tick,
+		unstable_amount: AssetAmount,
+		stable_amount: AssetAmount,
+	) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>> {
+		Pools::<T>::get(asset)
+			.ok_or(PoolQueryError::PoolDoesNotExist)?
+			.pool_state
+			.range_orders
+			.desired_amounts_to_liquidity(
+				lower,
+				upper,
+				SideMap::from_array([unstable_amount.into(), stable_amount.into()]),
+			)
+			.map_err(PoolQueryError::Inner)
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
+pub enum PoolQueryError<Inner: PartialEq> {
+	PoolDoesNotExist,
+	Inner(Inner),
 }
 
 pub mod utilities {

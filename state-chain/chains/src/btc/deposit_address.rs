@@ -1,3 +1,5 @@
+use crate::ChannelLifecycleHooks;
+
 use super::*;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -65,6 +67,10 @@ impl DepositAddress {
 			0xC1
 		}
 	}
+}
+
+impl ChannelLifecycleHooks for DepositAddress {
+	// Default implentations are fine.
 }
 
 #[test]
