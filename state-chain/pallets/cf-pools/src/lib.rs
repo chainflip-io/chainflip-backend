@@ -38,7 +38,7 @@ impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limi
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
+		common::{Side, SqrtPriceQ64F96, Tick},
 		limit_orders,
 		range_orders::{self, Liquidity},
 	};
@@ -77,8 +77,8 @@ pub mod pallet {
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub enum OrderLifetime {
-		Active,
-		Inactive,
+		Pending,
+		Canceled,
 	}
 
 	// TODO: add needed fields to this struct for mint/burn.
@@ -670,31 +670,37 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			if let Some(order_validity) = order_validity {
 				let current_block = <frame_system::Pallet<T>>::block_number();
+				// Ensure that the order is not added after the creation window has ended.
 				ensure!(
-					!(current_block < order_validity.valid_at.end),
+					current_block >= order_validity.valid_at.end,
 					Error::<T>::OrderValidityExpired
 				);
-				Self::collect_and_mint_limit_order_inner(
-					lp.clone(),
-					unstable_asset,
-					order,
-					price_as_tick,
-					amount,
-				)?;
-				Self::add_to_order_queue(
-					order_validity.valid_at.end,
-					OrderDetails {
-						lifetime: OrderLifetime::Inactive,
-						validity: order_validity,
-						details: LimitOrderDetails {
-							lp,
-							unstable_asset,
-							order,
-							price_as_tick,
-							amount,
+				// Order is already inside the creation window
+				if current_block >= order_validity.valid_at.start {
+					Self::collect_and_mint_limit_order_inner(
+						lp.clone(),
+						unstable_asset,
+						order,
+						price_as_tick,
+						amount,
+					)?;
+				} else {
+					// Schedule the mint
+					Self::add_to_order_queue(
+						order_validity.valid_until,
+						OrderDetails {
+							lifetime: OrderLifetime::Pending,
+							validity: order_validity,
+							details: LimitOrderDetails {
+								lp,
+								unstable_asset,
+								order,
+								price_as_tick,
+								amount,
+							},
 						},
-					},
-				);
+					);
+				}
 				Ok(())
 			} else {
 				Self::collect_and_mint_limit_order_inner(
@@ -830,7 +836,7 @@ impl<T: Config> Pallet<T> {
 		if let Some(orders) = OrderQueue::<T>::take(current_block) {
 			for order in orders.into_iter() {
 				match order.lifetime {
-					OrderLifetime::Active => {
+					OrderLifetime::Pending => {
 						let details_copy = order.clone().details;
 						match Self::collect_and_mint_limit_order_inner(
 							order.details.lp,
@@ -843,7 +849,7 @@ impl<T: Config> Pallet<T> {
 								Self::add_to_order_queue(
 									order.validity.valid_until,
 									OrderDetails {
-										lifetime: OrderLifetime::Inactive,
+										lifetime: OrderLifetime::Canceled,
 										validity: order.validity,
 										details: details_copy,
 									},
@@ -857,7 +863,7 @@ impl<T: Config> Pallet<T> {
 							},
 						}
 					},
-					OrderLifetime::Inactive => {
+					OrderLifetime::Canceled => {
 						let details_copy = order.clone().details;
 						if let Err(err) = Self::collect_and_burn_limit_order_inner(
 							order.details.lp,
