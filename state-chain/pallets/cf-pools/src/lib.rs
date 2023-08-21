@@ -672,48 +672,28 @@ pub mod pallet {
 					!(current_block < order_validity.valid_at.end),
 					Error::<T>::OrderValidityExpired
 				);
-				// If order is already valid we can mint it straight away.
-				if current_block > order_validity.valid_at.start {
-					Self::collect_and_mint_limit_order_inner(
-						lp.clone(),
-						unstable_asset,
-						order,
-						price_as_tick,
-						amount,
-					)?;
-					Self::add_to_order_queue(
-						order_validity.valid_at.end,
-						OrderDetails {
-							lifetime: OrderLifetime::Inactive,
-							validity: order_validity,
-							details: LimitOrderDetails {
-								lp,
-								unstable_asset,
-								order,
-								price_as_tick,
-								amount,
-							},
+				Self::collect_and_mint_limit_order_inner(
+					lp.clone(),
+					unstable_asset,
+					order,
+					price_as_tick,
+					amount,
+				)?;
+				Self::add_to_order_queue(
+					order_validity.valid_at.end,
+					OrderDetails {
+						lifetime: OrderLifetime::Inactive,
+						validity: order_validity,
+						details: LimitOrderDetails {
+							lp,
+							unstable_asset,
+							order,
+							price_as_tick,
+							amount,
 						},
-					);
-					Ok(())
-				// If not pass it to the limit order queue.
-				} else {
-					Self::add_to_order_queue(
-						order_validity.valid_at.start,
-						OrderDetails {
-							lifetime: OrderLifetime::Active,
-							validity: order_validity,
-							details: LimitOrderDetails {
-								lp,
-								unstable_asset,
-								order,
-								price_as_tick,
-								amount,
-							},
-						},
-					);
-					Ok(())
-				}
+					},
+				);
+				Ok(())
 			} else {
 				Self::collect_and_mint_limit_order_inner(
 					lp,
