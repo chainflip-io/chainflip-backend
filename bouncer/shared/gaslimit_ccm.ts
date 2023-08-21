@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { Asset } from '@chainflip-io/cli';
+import { Asset, Assets } from '@chainflip-io/cli';
 import { newCcmMetadata, prepareSwap, testSwap } from './swapping';
 import {
   getChainflipApi,
@@ -13,10 +13,13 @@ import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
 
-// Currently, gasLimit for CCM calls is hardcoded to 400k. Default gas overhead ~115k. Extra margin of
-// 215k (CFTester loop step). Should be broadcasted up to ~220k according to contract tests, but the
-// parameter values affect that. 210k is a safe bet for a call being broadcasted, 230k won't be.
+// This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
+// the gas amount specified in the CCM message with an error margin. On top of that, the gas overhead of the
+// CCM call itself is ~115k with some variability depending on the parameters. Overrall, the transaction should
+// be broadcasted up to ~220k according to contract tests with some margin (~20k). 210k is a safe bet for a call
+// being broadcasted, 230k shouldn't be.
 const maximumGasReceived = 210000;
+const gasBudgetMargin = 20000;
 const tagSuffix = ' CcmGasLimit';
 
 let stopObservingCcmReceived = false;
@@ -46,7 +49,7 @@ async function testGasLimitSwap(
     destAsset,
     addressType,
     messageMetadata,
-    tagSuffix + ' BroadcastAborted',
+    tagSuffix,
   );
 
   const ccmReceivedFailure = observeCcmReceived(
@@ -68,21 +71,20 @@ async function testGasLimitSwap(
     messageMetadata,
   );
 
-  // If sourceAsset === ETH then it won't be swapped so we observe the principal instead
-  // If destAsset === ETH then it's still making two swaps, one for the principal and one for the gas
+  // If sourceAsset is ETH then deposited gasAmount won't be swapped, so we need to observe the principal swap
+  // instead. In any other scenario, including when destAsset is ETH both principal and gas are being swapped.
   let egressGasAmount;
-  if (sourceAsset !== 'ETH') {
-    let swapScheduledObserved = false;
-
+  if (sourceAsset !== Assets.ETH) {
     const swapScheduledHandle = observeSwapScheduled(
       sourceAsset,
-      'ETH', // Native destChain asset
+      Assets.ETH, // Native destChain asset
       channelId,
       SwapType.CcmGas,
     );
 
     // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
     const swapIdToEgressAmount: { [key: string]: string } = {};
+    let swapScheduledObserved = false;
     const swapExecutedHandle = observeEvent(
       'swapping:SwapExecuted',
       chainflipApi,
@@ -98,11 +100,12 @@ async function testGasLimitSwap(
       data: { swapId },
     } = await swapScheduledHandle;
 
-    // Time buffer ensure the scheduleExecute has been witnessed
-    await sleep(6000);
+    while (!(swapId in swapIdToEgressAmount)) {
+      await sleep(3000);
+    }
     swapScheduledObserved = true;
     await swapExecutedHandle;
-    egressGasAmount = Number(swapIdToEgressAmount[swapId].replace(/,/g, ''));
+    egressGasAmount = Number(swapIdToEgressAmount[swapId as string].replace(/,/g, ''));
   } else {
     const swapScheduledHandle = observeSwapScheduled(
       sourceAsset,
@@ -114,13 +117,12 @@ async function testGasLimitSwap(
     egressGasAmount = messageMetadata.gasBudget;
   }
 
-  const ethChainTracking = await observeEvent(
-    'ethereumChainTracking:ChainStateUpdated',
-    chainflipApi,
-  );
+  const ethTrackedData = (
+    await observeEvent('ethereumChainTracking:ChainStateUpdated', chainflipApi)
+  ).data.newChainState.trackedData;
 
-  const baseFee = Number(ethChainTracking.data.newChainState.trackedData.baseFee);
-  const priorityFee = Number(ethChainTracking.data.newChainState.trackedData.priorityFee);
+  const baseFee = Number(ethTrackedData.baseFee);
+  const priorityFee = Number(ethTrackedData.priorityFee);
 
   // Standard gas estimation => In the statechain we might do a less conservative estimation, otherwise
   // a good amount of gas might end up being unused (gasLimit too low).
@@ -141,28 +143,29 @@ async function testGasLimitSwap(
 export async function testGasLimitCcmSwaps() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
-  // As of now, not broadcasted regardless of the gas becuase the gas consumed on the egress is > 400k. However, in localnet
-  // this should probably be broadcasted in the future (1% of the amount is enough gas budget since gasPrice is extremely low).
-  // TODO: For final solution, add swaps that consume slightly more gas than the gasBudget.
+  // As of now, these won't ne broadcasted regardless of the gasBudget provided because the gas consumed on the egress is > 400k.
+  // However, with the final solution, in localnet this might be broadcasted (1% of the amount might be enough gas budget since
+  // gasPrice is extremely low).
+  // TODO: For final solution, make swaps that consume more gas than the gasBudget.
   const gasLimitSwapsAborted = [
-    testGasLimitSwap('DOT', 'FLIP', maximumGasReceived + 20000),
-    testGasLimitSwap('ETH', 'USDC', maximumGasReceived + 20000),
-    testGasLimitSwap('FLIP', 'ETH', maximumGasReceived + 20000),
-    testGasLimitSwap('BTC', 'ETH', maximumGasReceived + 20000),
+    testGasLimitSwap('DOT', 'FLIP', maximumGasReceived + gasBudgetMargin),
+    testGasLimitSwap('ETH', 'USDC', maximumGasReceived + gasBudgetMargin),
+    testGasLimitSwap('FLIP', 'ETH', maximumGasReceived + gasBudgetMargin),
+    testGasLimitSwap('BTC', 'ETH', maximumGasReceived + gasBudgetMargin),
   ];
 
   // This amount of gas will be swapped into very little destination gas. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
   // As of now this will be broadcasted anyway because the gasBudget is not checked (hardcoded to < 400k) and this is within budget.
   // However, this shouldn't be broadcasted for mainnet.
-  const gasLimitSwapsBroadcastedAlmostZeroGas = [
+  const gasLimitSwapsInsufBudget = [
     // ~ 410 wei for gasBudget (after CcmGas swap)
     testSwap(
       'DOT',
       'FLIP',
       undefined,
       gasTestCcmMetadata('DOT', maximumGasReceived, 10 ** 6),
-      tagSuffix + ' SwappedToMinimalGas',
+      tagSuffix + ' InsufficientGasBudget',
     ),
     // ~ 500 wei for gasBudget (no CcmGas swap executed)
     testSwap(
@@ -170,7 +173,7 @@ export async function testGasLimitCcmSwaps() {
       'USDC',
       undefined,
       gasTestCcmMetadata('ETH', maximumGasReceived, 10 ** 17),
-      tagSuffix + ' SwappedToMinimalGas',
+      tagSuffix + ' InsufficientGasBudget',
     ),
     // ~ 450 wei for gasBudget (after CcmGas swap)
     testSwap(
@@ -178,7 +181,7 @@ export async function testGasLimitCcmSwaps() {
       'ETH',
       undefined,
       gasTestCcmMetadata('FLIP', maximumGasReceived, 2 * 10 ** 6),
-      tagSuffix + ' SwappedToMinimalGas',
+      tagSuffix + ' InsufficientGasBudget',
     ),
   ];
 
@@ -186,10 +189,34 @@ export async function testGasLimitCcmSwaps() {
   // this should be broadcasted, since the gas budget should be enough, since by default gasBudget is 1% of the
   // principal and the gasPrice is very low in localnet (~7wei).
   const gasLimitSwapsBroadcasted = [
-    testSwap('DOT', 'FLIP', undefined, gasTestCcmMetadata('DOT', maximumGasReceived), tagSuffix),
-    testSwap('ETH', 'USDC', undefined, gasTestCcmMetadata('ETH', maximumGasReceived), tagSuffix),
-    testSwap('FLIP', 'ETH', undefined, gasTestCcmMetadata('FLIP', maximumGasReceived), tagSuffix),
-    testSwap('BTC', 'ETH', undefined, gasTestCcmMetadata('BTC', maximumGasReceived), tagSuffix),
+    testSwap(
+      'DOT',
+      'FLIP',
+      undefined,
+      gasTestCcmMetadata('DOT', maximumGasReceived),
+      tagSuffix + ' SufficientGasBudget',
+    ),
+    testSwap(
+      'ETH',
+      'USDC',
+      undefined,
+      gasTestCcmMetadata('ETH', maximumGasReceived),
+      tagSuffix + ' SufficientGasBudget',
+    ),
+    testSwap(
+      'FLIP',
+      'ETH',
+      undefined,
+      gasTestCcmMetadata('FLIP', maximumGasReceived),
+      tagSuffix + ' SufficientGasBudget',
+    ),
+    testSwap(
+      'BTC',
+      'ETH',
+      undefined,
+      gasTestCcmMetadata('BTC', maximumGasReceived),
+      tagSuffix + ' SufficientGasBudget',
+    ),
   ];
 
   let broadcastAborted = 0;
@@ -214,7 +241,7 @@ export async function testGasLimitCcmSwaps() {
   await Promise.all([
     ...gasLimitSwapsAborted,
     ...gasLimitSwapsBroadcasted,
-    ...gasLimitSwapsBroadcastedAlmostZeroGas,
+    ...gasLimitSwapsInsufBudget,
   ]);
 
   stopObserveAborted = true;
