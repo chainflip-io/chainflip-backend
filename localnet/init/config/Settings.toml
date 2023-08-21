@@ -20,6 +20,10 @@ http_node_endpoint = "http://localhost:8545"
 hostname = "0.0.0.0"
 port = 5555
 
+[prometheus]
+hostname = "0.0.0.0"
+port = 5566
+
 [signing]
 db_file = "/tmp/chainflip/bashful.db"
 
