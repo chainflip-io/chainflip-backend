@@ -105,7 +105,7 @@ async function testGasLimitSwap(
     }
     swapScheduledObserved = true;
     await swapExecutedHandle;
-    egressGasAmount = Number(swapIdToEgressAmount[swapId as string].replace(/,/g, ''));
+    egressGasAmount = Number(swapIdToEgressAmount[swapId].replace(/,/g, ''));
   } else {
     const swapScheduledHandle = observeSwapScheduled(
       sourceAsset,
