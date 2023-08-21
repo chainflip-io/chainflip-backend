@@ -219,7 +219,7 @@ mod tests {
 				channel_id: 1,
 				address,
 				asset: btc::Asset::Btc,
-				state: Default::default(),
+				state: DepositAddress::new([0; 32], 1),
 			},
 		}
 	}

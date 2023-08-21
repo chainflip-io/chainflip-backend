@@ -1,6 +1,6 @@
 #![cfg(test)]
 use cf_chains::{
-	btc::{api::UtxoSelectionType, deposit_address::DepositAddress, ScriptPubkey, Utxo},
+	btc::{api::UtxoSelectionType, deposit_address::DepositAddress, BtcAmount, Utxo},
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset, SemVer};
@@ -57,7 +57,13 @@ fn update_supported_eth_assets() {
 
 #[test]
 fn test_btc_utxo_selection() {
-	const SCRIPT_PUBKEY: ScriptPubkey = ScriptPubkey::Taproot([0u8; 32]);
+	fn add_utxo_amount(amount: BtcAmount) {
+		Environment::add_bitcoin_utxo_to_list(
+			amount,
+			Default::default(),
+			DepositAddress::new(Default::default(), Default::default()),
+		);
+	}
 
 	let utxo = |amount| Utxo {
 		amount,
@@ -73,11 +79,11 @@ fn test_btc_utxo_selection() {
 		);
 
 		// add some UTXOs to the available utxos list.
-		Environment::add_bitcoin_utxo_to_list(10000, Default::default(), SCRIPT_PUBKEY);
-		Environment::add_bitcoin_utxo_to_list(5000, Default::default(), SCRIPT_PUBKEY);
-		Environment::add_bitcoin_utxo_to_list(100000, Default::default(), SCRIPT_PUBKEY);
-		Environment::add_bitcoin_utxo_to_list(5000000, Default::default(), SCRIPT_PUBKEY);
-		Environment::add_bitcoin_utxo_to_list(25000, Default::default(), SCRIPT_PUBKEY);
+		add_utxo_amount(10000);
+		add_utxo_amount(5000);
+		add_utxo_amount(100000);
+		add_utxo_amount(5000000);
+		add_utxo_amount(25000);
 
 		// select some utxos for a tx
 		assert_eq!(
@@ -90,7 +96,7 @@ fn test_btc_utxo_selection() {
 		);
 
 		// add the change utxo back to the available utxo list
-		Environment::add_bitcoin_utxo_to_list(120080, Default::default(), SCRIPT_PUBKEY);
+		add_utxo_amount(120080);
 
 		// select all remaining utxos
 		assert_eq!(
@@ -100,8 +106,8 @@ fn test_btc_utxo_selection() {
 		);
 
 		// add some more utxos to the list
-		Environment::add_bitcoin_utxo_to_list(5000, Default::default(), SCRIPT_PUBKEY);
-		Environment::add_bitcoin_utxo_to_list(15000, Default::default(), SCRIPT_PUBKEY);
+		add_utxo_amount(5000);
+		add_utxo_amount(15000);
 
 		// request a larger amount than what is available
 		assert!(Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
