@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use cf_amm::common::OrderValidity;
 pub use cf_amm::{
 	common::{SideMap, Tick},
 	range_orders::Liquidity,
@@ -12,6 +11,7 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 pub use core::ops::Range;
+use pallet_cf_pools::OrderValidity;
 pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;

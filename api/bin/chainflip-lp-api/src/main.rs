@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use cf_amm::common::OrderValidity;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	try_parse_number_or_hex,
@@ -25,6 +24,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use pallet_cf_pools::OrderValidity;
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};

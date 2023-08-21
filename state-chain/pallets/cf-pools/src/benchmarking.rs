@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::common::{sqrt_price_at_tick, OrderValidity};
+use cf_amm::common::sqrt_price_at_tick;
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -115,7 +115,11 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000, Some(OrderValidity::<BlockNumberFor::<T>>::new(BlockNumberFor::<T>::one(), BlockNumberFor::<T>::one(), BlockNumberFor::<T>::one())))
+		let order_validity = OrderValidity {
+			valid_at: Range {start: BlockNumberFor::<T>::one(), end: BlockNumberFor::<T>::one()},
+			valid_until: BlockNumberFor::<T>::one()
+		};
+	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000, Some(order_validity))
 	verify {}
 
 	collect_and_burn_limit_order {
@@ -131,7 +135,11 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, Some(OrderValidity::<BlockNumberFor::<T>>::new(BlockNumberFor::<T>::one(), BlockNumberFor::<T>::one(), BlockNumberFor::<T>::one()))));
+		let order_validity = OrderValidity {
+			valid_at: Range {start: BlockNumberFor::<T>::one(), end: BlockNumberFor::<T>::one()},
+			valid_until: BlockNumberFor::<T>::one()
+		};
+		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, Some(order_validity)));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
 	verify {}
 

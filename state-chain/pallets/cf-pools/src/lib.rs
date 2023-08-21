@@ -1,10 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{OneToZero, OrderValidity, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne},
+	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne},
 	limit_orders, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
+use core::ops::Range;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
@@ -44,6 +45,15 @@ pub mod pallet {
 	use sp_std::{vec, vec::Vec};
 
 	use super::*;
+
+	/// This is the actual type we use to determine if an order is valid.
+	/// We can extend this later on with Price/Quantity constraints.
+	#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	pub struct OrderValidity<BlockNumber: PartialOrd + Copy> {
+		pub valid_at: Range<BlockNumber>,
+		pub valid_until: BlockNumber,
+	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
@@ -129,6 +139,24 @@ pub mod pallet {
 	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
 	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub(super) type PendingOrderRequest<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<OrderDetails<T::AccountId, BlockNumberFor<T>>>,
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	pub(super) type ChancelOrderRequest<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<OrderDetails<T::AccountId, BlockNumberFor<T>>>,
+		OptionQuery,
+	>;
 
 	/// Lifetime of an order.
 	#[pallet::storage]
@@ -641,11 +669,11 @@ pub mod pallet {
 			if let Some(order_validity) = order_validity {
 				let current_block = <frame_system::Pallet<T>>::block_number();
 				ensure!(
-					!order_validity.is_expired(current_block),
+					!(current_block < order_validity.valid_at.end),
 					Error::<T>::OrderValidityExpired
 				);
 				// If order is already valid we can mint it straight away.
-				if order_validity.is_valid(current_block) {
+				if current_block > order_validity.valid_at.start {
 					Self::collect_and_mint_limit_order_inner(
 						lp.clone(),
 						unstable_asset,
@@ -654,7 +682,7 @@ pub mod pallet {
 						amount,
 					)?;
 					Self::add_to_order_queue(
-						order_validity.is_valid_until(),
+						order_validity.valid_at.end,
 						OrderDetails {
 							lifetime: OrderLifetime::Inactive,
 							validity: order_validity,
@@ -671,7 +699,7 @@ pub mod pallet {
 				// If not pass it to the limit order queue.
 				} else {
 					Self::add_to_order_queue(
-						order_validity.gets_valid_at(),
+						order_validity.valid_at.start,
 						OrderDetails {
 							lifetime: OrderLifetime::Active,
 							validity: order_validity,
@@ -822,7 +850,7 @@ impl<T: Config> Pallet<T> {
 						) {
 							Ok(_) => {
 								Self::add_to_order_queue(
-									order.validity.is_valid_until(),
+									order.validity.valid_until,
 									OrderDetails {
 										lifetime: OrderLifetime::Inactive,
 										validity: order.validity,

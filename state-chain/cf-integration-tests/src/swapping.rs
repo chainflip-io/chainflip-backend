@@ -1,6 +1,8 @@
 //! Contains tests related to liquidity, pools and swapping
+use std::ops::Range;
+
 use cf_amm::{
-	common::{sqrt_price_at_tick, OrderValidity, SqrtPriceQ64F96, Tick},
+	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -16,7 +18,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::{Order, RangeOrderSize};
+use pallet_cf_pools::{Order, OrderValidity, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
@@ -135,7 +137,7 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	let order_validity = OrderValidity::<u32>::new(1, 1, 1);
+	let order_validity = OrderValidity { valid_until: 1, valid_at: Range { start: 1, end: 2 } };
 	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
