@@ -4,7 +4,7 @@ use futures::future;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	env,
 	net::SocketAddr,
 	sync::{Arc, Mutex},
@@ -13,19 +13,23 @@ use std::{
 use tokio::{task, time};
 use tracing::log;
 
+type TxHash = String;
+type BlockHash = String;
+type Address = String;
+
 #[derive(Deserialize)]
 struct BestBlockResult {
-	result: String,
+	result: BlockHash,
 }
 
 #[derive(Deserialize)]
 struct MemPoolResult {
-	result: Vec<String>,
+	result: Vec<TxHash>,
 }
 
 #[derive(Deserialize, Clone)]
 struct ScriptPubKey {
-	address: Option<String>,
+	address: Option<Address>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -37,18 +41,18 @@ struct Vout {
 
 #[derive(Deserialize, Clone)]
 struct RawTx {
-	txid: String,
+	txid: TxHash,
 	vout: Vec<Vout>,
 }
 
 #[derive(Deserialize)]
 struct RawTxResult {
-	result: RawTx,
+	result: Option<RawTx>,
 }
 
 #[derive(Deserialize, Clone)]
 struct Block {
-	previousblockhash: String,
+	previousblockhash: BlockHash,
 	tx: Vec<RawTx>,
 }
 
@@ -60,9 +64,9 @@ struct BlockResult {
 #[derive(Clone, Serialize)]
 struct QueryResult {
 	confirmations: u32,
-	destination: String,
+	destination: Address,
 	value: f64,
-	tx_hash: String,
+	tx_hash: TxHash,
 }
 
 #[derive(Default, Clone)]
@@ -76,66 +80,104 @@ enum CacheStatus {
 #[derive(Default, Clone)]
 struct Cache {
 	status: CacheStatus,
-	best_block_hash: String,
-	transactions: HashMap<String, QueryResult>,
+	best_block_hash: BlockHash,
+	transactions: HashMap<Address, QueryResult>,
+	known_tx_hashes: HashSet<TxHash>,
 }
 
-const SAFETY_MARGIN: u32 = 7;
+const SAFETY_MARGIN: u32 = 10;
 const REFRESH_INTERVAL: u64 = 10;
 
 #[async_trait]
 trait BtcNode {
-	async fn getrawmempool(&self) -> anyhow::Result<Vec<String>>;
-	async fn getrawtransaction(&self, tx_hash: String) -> anyhow::Result<RawTx>;
-	async fn getbestblockhash(&self) -> anyhow::Result<String>;
-	async fn getblock(&self, block_hash: String) -> anyhow::Result<Block>;
+	async fn getrawmempool(&self) -> anyhow::Result<Vec<TxHash>>;
+	async fn getrawtransactions(
+		&self,
+		tx_hashes: Vec<TxHash>,
+	) -> anyhow::Result<Vec<Option<RawTx>>>;
+	async fn getbestblockhash(&self) -> anyhow::Result<BlockHash>;
+	async fn getblock(&self, block_hash: BlockHash) -> anyhow::Result<Block>;
 }
 
 struct BtcRpc;
 
 impl BtcRpc {
-	async fn call<T: DeserializeOwned>(&self, method: &str, params: &str) -> anyhow::Result<T> {
+	async fn call<T: DeserializeOwned>(
+		&self,
+		method: &str,
+		params: Vec<&str>,
+	) -> anyhow::Result<Vec<T>> {
+		log::info!("Calling {} with batch size of {}", method, params.len());
 		let url = env::var("BTC_ENDPOINT").unwrap_or("http://127.0.0.1:8332".to_string());
+		let body = params
+			.iter()
+			.map(|param| {
+				format!(r#"{{"jsonrpc":"1.0","id":0,"method":"{}","params":[{}]}}"#, method, param)
+			})
+			.collect::<Vec<String>>()
+			.join(",");
 		reqwest::Client::new()
 			.post(url)
 			.header("Content-Type", "text/plain")
-			.body(format!(
-				r#"{{"jsonrpc":"1.0","id":0,"method":"{}","params":[{}]}}"#,
-				method, params
-			))
-			.basic_auth("flip", Some("flip"))
+			.body(format!("[{}]", body))
+			.basic_auth("flip", Some("0ZfkAn8O39ZD8yRU5aSi6Y4Iowjbaaw+PKkV8ur50io="))
 			.send()
 			.await?
-			.json::<T>()
+			.json::<Vec<T>>()
 			.await
 			.map_err(|err| anyhow!(err))
+			.and_then(|result| {
+				if result.len() == params.len() {
+					Ok(result)
+				} else {
+					Err(anyhow!("Batched request returned an incorrect number of results"))
+				}
+			})
 	}
 }
 
 #[async_trait]
 impl BtcNode for BtcRpc {
-	async fn getrawmempool(&self) -> anyhow::Result<Vec<String>> {
-		self.call::<MemPoolResult>("getrawmempool", "").await.map(|x| x.result)
-	}
-	async fn getrawtransaction(&self, tx_hash: String) -> anyhow::Result<RawTx> {
-		self.call::<RawTxResult>("getrawtransaction", &format!("\"{}\", true", tx_hash))
+	async fn getrawmempool(&self) -> anyhow::Result<Vec<TxHash>> {
+		self.call::<MemPoolResult>("getrawmempool", vec![""])
 			.await
-			.map(|x| x.result)
+			.map(|x| x[0].result.clone())
 	}
-	async fn getbestblockhash(&self) -> anyhow::Result<String> {
-		self.call::<BestBlockResult>("getbestblockhash", "").await.map(|x| x.result)
+	async fn getrawtransactions(
+		&self,
+		tx_hashes: Vec<TxHash>,
+	) -> anyhow::Result<Vec<Option<RawTx>>> {
+		let params = tx_hashes
+			.iter()
+			.map(|tx_hash| format!("\"{}\",  true", tx_hash))
+			.collect::<Vec<String>>();
+		Ok(self
+			.call::<RawTxResult>(
+				"getrawtransaction",
+				params.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+			)
+			.await?
+			.into_iter()
+			.map(|x| x.result)
+			.collect::<Vec<Option<RawTx>>>())
+	}
+	async fn getbestblockhash(&self) -> anyhow::Result<BlockHash> {
+		self.call::<BestBlockResult>("getbestblockhash", vec![""])
+			.await
+			.map(|x| x[0].result.clone())
 	}
 	async fn getblock(&self, block_hash: String) -> anyhow::Result<Block> {
-		self.call::<BlockResult>("getblock", &format!("\"{}\", 2", block_hash))
+		self.call::<BlockResult>("getblock", vec![&format!("\"{}\", 2", block_hash)])
 			.await
-			.map(|x| x.result)
+			.map(|x| x[0].result.clone())
 	}
 }
 
-async fn get_updated_cache<T: BtcNode>(btc: T, current_cache: Cache) -> anyhow::Result<Cache> {
-	let mempool = btc.getrawmempool().await?;
-	let mut cache: HashMap<String, QueryResult> = Default::default();
-	let previous_mempool = current_cache
+async fn get_updated_cache<T: BtcNode>(btc: T, previous_cache: Cache) -> anyhow::Result<Cache> {
+	let all_mempool_transactions: Vec<TxHash> = btc.getrawmempool().await?;
+	let mut new_transactions: HashMap<Address, QueryResult> = Default::default();
+	let mut new_known_tx_hashes: HashSet<TxHash> = Default::default();
+	let previous_mempool: HashMap<TxHash, QueryResult> = previous_cache
 		.clone()
 		.transactions
 		.iter()
@@ -146,39 +188,49 @@ async fn get_updated_cache<T: BtcNode>(btc: T, current_cache: Cache) -> anyhow::
 				None
 			}
 		})
-		.collect::<HashMap<String, QueryResult>>();
-	for tx_hash in mempool {
-		if let Some(known_transaction) = previous_mempool.get(&tx_hash) {
-			cache.insert(known_transaction.destination.clone(), known_transaction.clone());
-		} else {
-			let vouts = btc
-				.getrawtransaction(tx_hash.clone())
-				.await
-				.map(|tx| tx.vout)
-				// Don't error here. It could be that the transaction was already removed from the
-				// mempool by the time we tried to query it.
-				.unwrap_or_default();
-			for vout in vouts {
-				if let Some(destination) = vout.script_pub_key.address {
-					cache.insert(
-						destination.clone(),
-						QueryResult {
-							destination,
-							confirmations: 0,
-							value: vout.value,
-							tx_hash: tx_hash.clone(),
-						},
-					);
-				}
+		.collect();
+	let unknown_mempool_transactions: Vec<TxHash> = all_mempool_transactions
+		.into_iter()
+		.filter(|tx_hash| {
+			if let Some(known_transaction) = previous_mempool.get(tx_hash) {
+				new_known_tx_hashes.insert(tx_hash.clone());
+				new_transactions
+					.insert(known_transaction.destination.clone(), known_transaction.clone());
+			} else if previous_cache.known_tx_hashes.contains(tx_hash) {
+				new_known_tx_hashes.insert(tx_hash.clone());
+			} else {
+				return true
+			}
+			false
+		})
+		.collect();
+	let transactions: Vec<RawTx> = btc
+		.getrawtransactions(unknown_mempool_transactions)
+		.await?
+		.iter()
+		.filter_map(|x| x.clone())
+		.collect();
+	for tx in transactions {
+		for vout in tx.vout {
+			new_known_tx_hashes.insert(tx.txid.clone());
+			if let Some(destination) = vout.script_pub_key.address {
+				new_transactions.insert(
+					destination.clone(),
+					QueryResult {
+						destination,
+						confirmations: 0,
+						value: vout.value,
+						tx_hash: tx.txid.clone(),
+					},
+				);
 			}
 		}
 	}
-
 	let block_hash = btc.getbestblockhash().await?;
-	if current_cache.best_block_hash == block_hash {
-		for entry in current_cache.transactions {
+	if previous_cache.best_block_hash == block_hash {
+		for entry in previous_cache.transactions {
 			if entry.1.confirmations > 0 {
-				cache.insert(entry.0, entry.1);
+				new_transactions.insert(entry.0, entry.1);
 			}
 		}
 	} else {
@@ -189,7 +241,7 @@ async fn get_updated_cache<T: BtcNode>(btc: T, current_cache: Cache) -> anyhow::
 			for tx in block.tx {
 				for vout in tx.vout {
 					if let Some(destination) = vout.script_pub_key.address {
-						cache.insert(
+						new_transactions.insert(
 							destination.clone(),
 							QueryResult {
 								destination,
@@ -204,7 +256,12 @@ async fn get_updated_cache<T: BtcNode>(btc: T, current_cache: Cache) -> anyhow::
 			block_hash_to_query = block.previousblockhash;
 		}
 	}
-	Ok(Cache { status: CacheStatus::Ready, best_block_hash: block_hash, transactions: cache })
+	Ok(Cache {
+		status: CacheStatus::Ready,
+		best_block_hash: block_hash,
+		transactions: new_transactions,
+		known_tx_hashes: new_known_tx_hashes,
+	})
 }
 
 fn lookup_transactions(
@@ -282,13 +339,21 @@ impl BtcNode for MockBtcRpc {
 	async fn getrawmempool(&self) -> anyhow::Result<Vec<String>> {
 		Ok(self.mempool.iter().map(|x| x.txid.clone()).collect())
 	}
-	async fn getrawtransaction(&self, tx_hash: String) -> anyhow::Result<RawTx> {
-		for tx in self.mempool.clone() {
-			if tx.txid == tx_hash {
-				return Ok(tx)
+	async fn getrawtransactions(
+		&self,
+		tx_hashes: Vec<String>,
+	) -> anyhow::Result<Vec<Option<RawTx>>> {
+		let mut result: Vec<Option<RawTx>> = Default::default();
+		for hash in tx_hashes {
+			for tx in self.mempool.clone() {
+				if tx.txid == hash {
+					result.push(Some(tx))
+				} else {
+					result.push(None)
+				}
 			}
 		}
-		Err(anyhow!("Transaction missing"))
+		Ok(result)
 	}
 	async fn getbestblockhash(&self) -> anyhow::Result<String> {
 		Ok(self.latest_block_hash.clone())
@@ -417,4 +482,40 @@ async fn blocks() {
 	let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
 	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 	assert_eq!(result[0].as_ref().unwrap().confirmations, 2);
+}
+
+#[tokio::test]
+async fn report_oldest_tx_only() {
+	let mempool = vec![RawTx {
+		txid: "tx2".into(),
+		vout: vec![Vout {
+			value: 0.8,
+			script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+		}],
+	}];
+	let latest_block_hash = "15".to_string();
+	let mut blocks: HashMap<String, Block> = Default::default();
+	for i in 1..16 {
+		blocks.insert(i.to_string(), Block { previousblockhash: (i - 1).to_string(), tx: vec![] });
+	}
+	blocks.insert(
+		"13".to_string(),
+		Block {
+			previousblockhash: "12".to_string(),
+			tx: vec![RawTx {
+				txid: "tx1".into(),
+				vout: vec![Vout {
+					value: 12.5,
+					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+				}],
+			}],
+		},
+	);
+	let btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+	let cache: Cache = Default::default();
+	let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+	let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+	assert_eq!(result[0].as_ref().unwrap().confirmations, 3);
+	assert_eq!(result[0].as_ref().unwrap().value, 12.5);
 }
