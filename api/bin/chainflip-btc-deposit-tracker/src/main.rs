@@ -120,7 +120,6 @@ impl BtcRpc {
 			.post(url)
 			.header("Content-Type", "text/plain")
 			.body(format!("[{}]", body))
-			.basic_auth("flip", Some("0ZfkAn8O39ZD8yRU5aSi6Y4Iowjbaaw+PKkV8ur50io="))
 			.send()
 			.await?
 			.json::<Vec<T>>()
