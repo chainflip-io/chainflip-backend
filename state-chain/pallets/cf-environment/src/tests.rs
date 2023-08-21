@@ -1,15 +1,12 @@
 #![cfg(test)]
-use cf_chains::{
-	btc::{api::UtxoSelectionType, deposit_address::DepositAddress, ScriptPubkey, Utxo},
-	eth::Address as EthereumAddress,
-};
-use cf_primitives::{chains::assets::eth::Asset, SemVer};
+use cf_chains::btc::{api::UtxoSelectionType, deposit_address::DepositAddress, ScriptPubkey, Utxo};
+use cf_primitives::SemVer;
 use cf_traits::SafeMode;
-use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
+use frame_support::{assert_ok, traits::OriginTrait};
 
-use crate::{EthereumSupportedAssets, RuntimeSafeMode, SafeModeUpdate};
+use crate::{RuntimeSafeMode, SafeModeUpdate};
 
-use crate::{mock::*, Error};
+use crate::mock::*;
 
 #[test]
 fn genesis_config() {
@@ -17,41 +14,6 @@ fn genesis_config() {
 		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, Environment::state_chain_gateway_address());
 		assert_eq!(KEY_MANAGER_ADDRESS, Environment::key_manager_address());
 		assert_eq!(ETH_CHAIN_ID, Environment::ethereum_chain_id());
-	});
-}
-
-#[test]
-fn update_supported_eth_assets() {
-	new_test_ext().execute_with(|| {
-		const ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(2);
-		// Expect the FLIP token address to be set after genesis
-		assert!(EthereumSupportedAssets::<Test>::contains_key(Asset::Flip));
-		// Update the address for Usdc
-		assert_ok!(Environment::update_supported_eth_assets(
-			RuntimeOrigin::root(),
-			Asset::Usdc,
-			ADDRESS
-		));
-		assert_eq!(EthereumSupportedAssets::<Test>::get(Asset::Usdc), Some(ADDRESS));
-		assert_eq!(
-			frame_system::Pallet::<Test>::events()
-				.pop()
-				.expect("Event should be emitted!")
-				.event,
-			crate::mock::RuntimeEvent::Environment(crate::Event::UpdatedEthAsset(
-				Asset::Usdc,
-				ADDRESS
-			),)
-		);
-		// Last but not least - verify we can not add an address for ETH
-		assert_noop!(
-			Environment::update_supported_eth_assets(
-				RuntimeOrigin::root(),
-				Asset::Eth,
-				EthereumAddress::repeat_byte(3)
-			),
-			<Error<Test>>::EthAddressNotUpdateable
-		);
 	});
 }
 

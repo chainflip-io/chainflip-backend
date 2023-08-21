@@ -218,36 +218,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Adds or updates an asset address in the map of supported ETH assets.
-		///
-		/// ## Events
-		///
-		/// - [EthereumSupportedAssetsUpdated](Event::EthereumSupportedAssetsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
-		pub fn update_supported_eth_assets(
-			origin: OriginFor<T>,
-			asset: EthAsset,
-			address: EthereumAddress,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
-			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
-				EthereumSupportedAssets::<T>::mutate(asset, |mapped_address| {
-					mapped_address.replace(address);
-				});
-				Event::UpdatedEthAsset(asset, address)
-			} else {
-				EthereumSupportedAssets::<T>::insert(asset, address);
-				Event::AddedNewEthAsset(asset, address)
-			});
-			Ok(())
-		}
-
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
 		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
