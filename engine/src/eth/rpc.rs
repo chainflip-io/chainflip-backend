@@ -13,8 +13,6 @@ use utilities::read_clean_and_decode_hex_str_file;
 #[cfg(test)]
 use mockall::automock;
 
-use crate::metrics::RPC_COUNTER;
-const RPC_CLIENT: &str = "ethereum";
 
 struct NonceInfo {
 	next_nonce: U256,
@@ -63,7 +61,6 @@ impl EthRpcClient {
 					.signer
 					.get_transaction_count(self.address(), Some(BlockNumber::Pending.into()))
 					.await?;
-				RPC_COUNTER.with_label_values(&[RPC_CLIENT, "get_transaction_count"]).inc();
 				nonce_info_lock
 					.insert(NonceInfo { next_nonce: tx_count, requested_at: Instant::now() })
 			},
@@ -112,7 +109,6 @@ impl EthRpcApi for EthRpcClient {
 	}
 
 	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "estimate_gas"]).inc();
 		Ok(self.signer.estimate_gas(req, None).await?)
 	}
 
@@ -120,7 +116,6 @@ impl EthRpcApi for EthRpcClient {
 		tx.nonce = Some(self.get_next_nonce().await?);
 
 		let res = self.signer.send_transaction(tx, None).await;
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "send_transaction"]).inc();
 		if res.is_err() {
 			// Reset the nonce just in case (it will be re-requested during next broadcast)
 			tracing::warn!("Resetting eth broadcaster nonce due to error");
@@ -131,17 +126,14 @@ impl EthRpcApi for EthRpcClient {
 	}
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "get_logs"]).inc();
 		Ok(self.signer.get_logs(&filter).await?)
 	}
 
 	async fn chain_id(&self) -> Result<U256> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "chain_id"]).inc();
 		Ok(self.signer.get_chainid().await?)
 	}
 
 	async fn transaction_receipt(&self, tx_hash: TxHash) -> Result<TransactionReceipt> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "transaction_receipt"]).inc();
 		Ok(self.signer.get_transaction_receipt(tx_hash).await?.unwrap())
 	}
 
@@ -149,14 +141,12 @@ impl EthRpcApi for EthRpcClient {
 	/// - Request fails
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "block"]).inc();
 		self.signer.get_block(block_number).await?.ok_or_else(|| {
 			anyhow!("Getting ETH block for block number {} returned None", block_number)
 		})
 	}
 
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "block_with_txs"]).inc();
 		self.signer.get_block_with_txs(block_number).await?.ok_or_else(|| {
 			anyhow!("Getting ETH block with txs for block number {} returned None", block_number)
 		})
@@ -168,7 +158,6 @@ impl EthRpcApi for EthRpcClient {
 		last_block: BlockNumber,
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "fee_history"]).inc();
 		Ok(self.signer.fee_history(block_count, last_block, reward_percentiles).await?)
 	}
 }

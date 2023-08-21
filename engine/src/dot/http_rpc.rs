@@ -22,8 +22,6 @@ use subxt::{
 use anyhow::Result;
 
 use super::rpc::DotRpcApi;
-use crate::metrics::RPC_COUNTER;
-const RPC_CLIENT: &str = "polkadot";
 
 pub struct PolkadotHttpClient(HttpClient);
 
@@ -87,7 +85,6 @@ impl DotHttpRpcClient {
 	}
 
 	pub async fn metadata(&self, block_hash: H256) -> Result<subxt::Metadata> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "metadata"]).inc();
 		Ok(self.online_client.rpc().metadata_legacy(Some(block_hash)).await?)
 	}
 }
@@ -95,7 +92,6 @@ impl DotHttpRpcClient {
 #[async_trait::async_trait]
 impl DotRpcApi for DotHttpRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "block_hash"]).inc();
 		Ok(self.online_client.rpc().block_hash(Some(block_number.into())).await?)
 	}
 
@@ -103,7 +99,6 @@ impl DotRpcApi for DotHttpRpcClient {
 		&self,
 		block_hash: PolkadotHash,
 	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "block"]).inc();
 		Ok(self.online_client.rpc().block(Some(block_hash)).await?)
 	}
 
@@ -153,7 +148,6 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn runtime_version(&self, block_hash: Option<H256>) -> Result<RuntimeVersion> {
-		RPC_COUNTER.with_label_values(&[RPC_CLIENT, "runtime_version"]).inc();
 		Ok(self
 			.online_client
 			.rpc()
@@ -167,9 +161,6 @@ impl DotRpcApi for DotHttpRpcClient {
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
 		let encoded_bytes: Bytes = encoded_bytes.into();
-		RPC_COUNTER
-			.with_label_values(&[RPC_CLIENT, "submit_raw_encoded_extrinsic"])
-			.inc();
 		Ok(self
 			.online_client
 			.rpc()
