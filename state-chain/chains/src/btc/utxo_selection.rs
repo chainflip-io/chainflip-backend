@@ -4,28 +4,29 @@ use super::GetUtxoAmount;
 
 /// The algorithm for the utxo selection works as follows: In a greedy approach it starts selecting
 /// utxos from the lowest value utxos in a sorted array. It keeps selecting the utxos until the
-/// cummulative amount in utxos is just greater than or equal to the total amount to be egressed
-/// plus fees of spending the utxos such that not including the last utxo would have the cummulative
+/// cumulative amount in utxos is just greater than or equal to the total amount to be egressed
+/// plus fees of spending the utxos such that not including the last utxo would have the cumulative
 /// amount fall below the required. It then includes one more utxo if it is available.
 /// This approach is provably non-fragmenting. Specifically, it can be proven that the minimum
 /// amount utxo in the list of available utxos after the transaction is greater than the minimum
 /// amount utxo in the list before the transaction EXCEPT for the case where the algorithm has to
-/// choose all available utxos for the transaction but then the fragmentation doesnt matter anyways
+/// choose all available utxos for the transaction but then the fragmentation doesn't matter anyways
 /// since we in any case have to use all utxos (because the output amount is high enough).
 ///
 /// In the case where the fee to spend the utxo is higher than the amount locked in the utxo, the
 /// algorithm will skip the selection of that utxo and will keep it in the list of available utxos
-/// for future use when the fee possibly comes down so that it is feasable to select these utxos.
+/// for future use when the fee possibly comes down so that it is feasible to select these utxos.
+///
+/// Note that on failure (when `None` is returned) this may still modify `available_utxos`, which
+/// is not a concern because the caller will ignore that value in that case.
 pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
-	available_utxos_out: &mut Vec<UTXO>,
+	available_utxos: &mut Vec<UTXO>,
 	fee_per_utxo: u64,
 	amount_to_be_spent: u64,
 ) -> Option<(Vec<UTXO>, u64)> {
-	if available_utxos_out.is_empty() {
+	if available_utxos.is_empty() {
 		return None
 	}
-
-	let mut available_utxos = available_utxos_out.clone();
 
 	available_utxos.sort_by_key(|utxo| sp_std::cmp::Reverse(utxo.amount()));
 
@@ -54,7 +55,6 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
 
 	available_utxos.append(&mut skipped_utxos);
 
-	*available_utxos_out = available_utxos;
 	Some((selected_utxos, cumulative_amount))
 }
 
@@ -101,8 +101,14 @@ fn test_utxo_selection() {
 		);
 	}
 
-	// empty utxo list as input should return Option::None.
-	test_case(&[], 0, FEE_PER_UTXO, None);
+	// Empty utxo list as input should return Option::None.
+	test_case(&Vec::<UTXO>::new(), FEE_PER_UTXO, 0, None);
+
+	// Entering the amount greater than the max spendable amount will
+	// cause the function to return no utxos. Note that we don't check
+	// remaining utxos in this case since it will be an "incorrect" value
+	// (which is OK since it will be ignored).
+	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 100000), None);
 
 	test_case(&available_utxos, FEE_PER_UTXO, 1, Some((vec![7, 15], 18)));
 
@@ -121,10 +127,6 @@ fn test_utxo_selection() {
 
 	// Max amount that can be spent with the given utxos.
 	test_case(&available_utxos, FEE_PER_UTXO, 2485, Some((all_selected_utxos, 2485)));
-
-	// Entering the amount greater than the max spendable amount will
-	// cause the function to return no utxos
-	test_case(&available_utxos, FEE_PER_UTXO, 100000, None);
 
 	// choosing the fee to spend the input utxo as greater than the amounts in the 2 smallest
 	// utxos will cause the algorithm to skip the selection of those 2 utxos and adding it to the
