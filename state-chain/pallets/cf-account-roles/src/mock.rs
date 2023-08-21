@@ -5,10 +5,7 @@ use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -20,6 +17,8 @@ frame_support::construct_runtime!(
 		MockAccountRoles: pallet_cf_account_roles,
 	}
 );
+
+cf_test_utilities::impl_test_helpers!(Test);
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -51,8 +50,4 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
-}
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }

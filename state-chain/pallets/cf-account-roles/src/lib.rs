@@ -73,10 +73,16 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
+			let mut should_enable_swapping = false;
 			for (account, role) in &self.initial_account_roles {
 				AccountRoles::<T>::insert(account, role);
+				if *role == AccountRole::LiquidityProvider || *role == AccountRole::Broker {
+					should_enable_swapping = true;
+				}
 			}
-			SwappingEnabled::<T>::put(true);
+			if should_enable_swapping {
+				SwappingEnabled::<T>::put(true);
+			}
 		}
 	}
 

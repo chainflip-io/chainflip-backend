@@ -1113,7 +1113,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-session",
- "rand 0.7.3",
+ "rand 0.8.5",
  "sp-runtime",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08)",
 ]
@@ -6384,6 +6384,7 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6404,6 +6405,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6445,6 +6447,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6467,6 +6470,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -6487,6 +6491,7 @@ name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -10603,6 +10608,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-session-benchmarking",
+ "cf-test-utilities",
  "cf-traits",
  "ethabi",
  "frame-benchmarking",

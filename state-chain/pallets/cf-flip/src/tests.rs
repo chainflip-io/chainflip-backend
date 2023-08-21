@@ -418,13 +418,15 @@ fn random_account(g: &mut Gen) -> u64 {
 
 #[quickcheck]
 fn balance_has_integrity(events: Vec<FlipOperation>) -> TestResult {
-	new_test_ext().execute_with(|| -> TestResult {
-		if events.iter().any(|event| !event.execute()) || !check_balance_integrity() {
-			TestResult::failed()
-		} else {
-			TestResult::passed()
-		}
-	})
+	new_test_ext()
+		.execute_with(|| -> TestResult {
+			if events.iter().any(|event| !event.execute()) || !check_balance_integrity() {
+				TestResult::failed()
+			} else {
+				TestResult::passed()
+			}
+		})
+		.into_context()
 }
 
 #[test]
@@ -657,5 +659,5 @@ fn can_reap_dust_account() {
 		System::assert_last_event(RuntimeEvent::System(frame_system::Event::KilledAccount {
 			account: ALICE,
 		}));
-	})
+	});
 }

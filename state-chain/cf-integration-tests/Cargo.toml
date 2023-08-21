@@ -11,6 +11,9 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
+[dependencies]
+state-chain-runtime = { path = '../runtime' }
+
 [dev-dependencies]
 libsecp256k1 = { version = "0.7", features = ['static-context'] }
 rand = "0.8.4"
@@ -46,7 +49,6 @@ pallet-cf-witnesser = { path = '../pallets/cf-witnesser' }
 pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", features = [
     'historical',
 ] }
-state-chain-runtime = { path = '../runtime' }
 
 # Substrate dependencies
 codec = { package = "parity-scale-codec", version = "3.6.1", features = [
