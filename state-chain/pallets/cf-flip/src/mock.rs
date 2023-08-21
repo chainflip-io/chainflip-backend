@@ -12,7 +12,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Permill,
+	Permill,
 };
 
 pub type AccountId = u64;
@@ -28,6 +28,30 @@ frame_support::construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 	}
 );
+
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000 },
+		transaction_payment: Default::default(),
+	},
+	|| {
+		System::set_block_number(1);
+
+		// Seed with two funded accounts.
+		frame_system::Provider::<Test>::created(&ALICE).unwrap();
+		frame_system::Provider::<Test>::created(&BOB).unwrap();
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
+		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
+		<Flip as Funding>::credit_funds(&ALICE, 100);
+		<Flip as Funding>::credit_funds(&BOB, 50);
+
+		assert_eq!(Flip::offchain_funds(), 850);
+		check_balance_integrity();
+	}
+}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -110,35 +134,6 @@ pub fn check_balance_integrity() -> bool {
 	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
 
 	(accounts_total + reserves_total + pending_redemptions_total) == Flip::onchain_funds()
-}
-
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000 },
-		transaction_payment: Default::default(),
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-
-		// Seed with two funded accounts.
-		frame_system::Provider::<Test>::created(&ALICE).unwrap();
-		frame_system::Provider::<Test>::created(&BOB).unwrap();
-		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
-		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
-		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
-		<Flip as Funding>::credit_funds(&ALICE, 100);
-		<Flip as Funding>::credit_funds(&BOB, 50);
-
-		assert_eq!(Flip::offchain_funds(), 850);
-		check_balance_integrity();
-	});
-
-	ext
 }
 
 pub type SlashingRateType = Permill;

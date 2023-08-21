@@ -13,6 +13,7 @@ pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount,
 };
+use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
@@ -114,7 +115,7 @@ impl crate::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Configure a mock runtime to test the pallet.
-cf_test_utilities::impl_test_helpers!(Test);
+impl_test_helpers!(Test);
 
 type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
 type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
@@ -129,10 +130,7 @@ pub trait RequestAddressAndDeposit {
 			TestChainAmount,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	>;
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>>;
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
@@ -144,10 +142,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 			TestChainAmount,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	> {
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
 			.iter()
 			.copied()
@@ -187,13 +182,10 @@ pub trait RequestAddress {
 			TestChainAsset,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	>;
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>>;
 }
 
-impl<Ctx: Clone> RequestAddress for cf_test_utilities::TestExternalities<Test, Ctx> {
+impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 	fn request_deposit_addresses(
 		self,
 		requests: &[(
@@ -201,10 +193,7 @@ impl<Ctx: Clone> RequestAddress for cf_test_utilities::TestExternalities<Test, C
 			TestChainAsset,
 			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	> {
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>> {
 		self.then_execute_at_next_block(|_| {
 			requests
 				.iter()

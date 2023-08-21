@@ -17,10 +17,7 @@ use frame_support::{
 use frame_system as system;
 use scale_info::TypeInfo;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 pub type AccountId = u64;
 
@@ -210,12 +207,11 @@ impl pallet_cf_emissions::Config for Test {
 	type WeightInfo = ();
 }
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
-	let total_issuance = issuance.unwrap_or(TOTAL_ISSUANCE);
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance },
+		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 		emissions: {
 			EmissionsConfig {
 				current_authority_emission_inflation: 2720,
@@ -224,11 +220,9 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 				..Default::default()
 			}
 		},
-	};
-
-	for v in validators {
-		MockEpochInfo::add_authorities(v);
+	},
+	|| {
+		MockEpochInfo::add_authorities(1);
+		MockEpochInfo::add_authorities(2);
 	}
-
-	config.build_storage().unwrap().into()
 }

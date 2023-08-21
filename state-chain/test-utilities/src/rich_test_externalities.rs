@@ -143,6 +143,11 @@ where
 		self
 	}
 
+	/// Consume the test externalities and return the context.
+	pub fn into_context(self) -> Ctx {
+		self.context
+	}
+
 	/// Execute the given closure as if it was an extrinsic in the next block.
 	///
 	/// The closure's return value is next context.
