@@ -184,7 +184,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
-	type DepositChannelState = ();
+	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
 }
 
