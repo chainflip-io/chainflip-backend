@@ -7,13 +7,6 @@ use frame_benchmarking::benchmarks;
 use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
-	update_supported_eth_assets {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let asset = EthAsset::Flip;
-		let address = Default::default();
-		let call = Call::<T>::update_supported_eth_assets { asset, address };
-	}: { call.dispatch_bypass_filter(origin)? }
-
 	update_safe_mode {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let call = Call::<T>::update_safe_mode { update: SafeModeUpdate::CodeRed };
