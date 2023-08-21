@@ -72,7 +72,7 @@ async function testGasLimitSwap(
   );
 
   // If sourceAsset is ETH then deposited gasAmount won't be swapped, so we need to observe the principal swap
-  // instead. In any other scenario, including when destAsset is ETH both principal and gas are being swapped.
+  // instead. In any other scenario, including when destAsset is ETH, both principal and gas are being swapped.
   let egressGasAmount;
   if (sourceAsset !== Assets.ETH) {
     const swapScheduledHandle = observeSwapScheduled(
