@@ -233,31 +233,3 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 		self.builder.signature().unwrap()
 	}
 }
-
-#[cfg(test)]
-mod mocks {
-	use super::*;
-	use crate::dot::{PolkadotPair, PolkadotReplayProtection, NONCE_1, RAW_SEED_1, RAW_SEED_2};
-
-	pub struct MockEnv;
-
-	impl PolkadotEnvironment for MockEnv {
-		fn try_vault_account() -> Option<PolkadotAccountId> {
-			Some(PolkadotPair::from_seed(&RAW_SEED_1).public_key())
-		}
-
-		fn try_proxy_account() -> Option<PolkadotAccountId> {
-			Some(PolkadotPair::from_seed(&RAW_SEED_2).public_key())
-		}
-
-		fn runtime_version() -> crate::dot::RuntimeVersion {
-			dot::TEST_RUNTIME_VERSION
-		}
-	}
-
-	impl ReplayProtectionProvider<Polkadot> for MockEnv {
-		fn replay_protection() -> PolkadotReplayProtection {
-			PolkadotReplayProtection { nonce: NONCE_1, genesis_hash: Default::default() }
-		}
-	}
-}
