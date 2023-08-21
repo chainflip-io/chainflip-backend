@@ -35,11 +35,18 @@ cf_test_utilities::impl_test_helpers! {
 		system: Default::default(),
 		environment: EnvironmentConfig {
 			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
-			key_manager_address: KEY_MANAGER_ADDRESS,
+
+			eth_key_manager_address: ETH_KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
-			eth_vault_address: VAULT_ADDRESS,
-			eth_address_checker_address: ADDRESS_CHECKER,
+			eth_vault_address: ETH_VAULT_ADDRESS,
+			eth_address_checker_address: ETH_ADDRESS_CHECKER_ADDRESS,
 			flip_token_address: [0u8; 20].into(),
+
+			arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
+			arb_vault_address: ARB_VAULT_ADDRESS,
+			arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,
+			arb_usdc_address: ARBUSDC_TOKEN_ADDRESS,
+
 			eth_usdc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,

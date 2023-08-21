@@ -453,13 +453,13 @@ pub mod pallet {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
 		pub state_chain_gateway_address: EthereumAddress,
-		pub key_manager_address: EthereumAddress,
+		pub eth_key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,
 		pub eth_address_checker_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-		pub arbusdc_token_address: EthereumAddress,
+		pub arb_usdc_address: EthereumAddress,
 		pub arb_key_manager_address: EthereumAddress,
 		pub arb_vault_address: EthereumAddress,
 		pub arb_address_checker_address: EthereumAddress,
@@ -468,12 +468,11 @@ pub mod pallet {
 		pub _config: PhantomData<T>,
 	}
 
-	/// Sets the genesis config
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			StateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
-			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
+			EthereumKeyManagerAddress::<T>::set(self.eth_key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
 
@@ -490,7 +489,7 @@ pub mod pallet {
 			ArbitrumKeyManagerAddress::<T>::set(self.arb_key_manager_address);
 			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
 			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
-			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arbusdc_token_address);
+			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
