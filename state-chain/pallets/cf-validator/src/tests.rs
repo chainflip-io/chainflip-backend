@@ -765,27 +765,21 @@ mod key_handover {
 	}
 
 	#[test]
-	fn abort_if_many_authorities_including_candidates_fail() {
+	fn restart_from_keygen_if_many_authorities_including_candidates_fail() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
-			// Above the threshold, old validators, and any new validators, we abort.
+			// What matters is that at least one of the candidate fails,
+			// so any other offenders don't change the outcome: reverting
+			// to keygen.
 			failed_handover_with_offenders(0..5);
-			assert!(
-				matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::Idle),
-				"Expected Idle, got {:?}",
+			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
-			);
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-					new_phase: RotationPhase::Idle
-				}),
-				RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-			);
+				RotationPhase::KeygensInProgress(..)
+			));
 		});
 	}
 
 	#[test]
-	fn restart_keygen_if_a_single_candidate_fails() {
+	fn restart_from_keygen_if_a_single_candidate_fails() {
 		// TODO: should abort and start from auction instead
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// If even one new validator fails, but all old validators were well-behaved,

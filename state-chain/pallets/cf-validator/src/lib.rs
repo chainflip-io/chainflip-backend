@@ -365,8 +365,6 @@ pub mod pallet {
 							Self::start_key_handover(rotation_state, block_number);
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
-							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
 							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
@@ -405,14 +403,10 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) < Self::current_consensus_success_threshold() {
-								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-								);
-								Self::abort_rotation();
-							} else if num_failed_candidates > 0 {
+							if num_failed_candidates > 0 {
 								log::warn!(
 									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
 									num_failed_candidates,
