@@ -135,8 +135,6 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	// let order_validity = OrderValidity { valid_until: 1, valid_at: Range { start: 0, end: 100 }
-	// };
 	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
@@ -149,7 +147,6 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let new_stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-
 	if order == Order::Sell {
 		assert_eq!(new_unstable_balance, unstable_balance - amount);
 		assert_eq!(new_stable_balance, stable_balance);

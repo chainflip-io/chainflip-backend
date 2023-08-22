@@ -139,7 +139,7 @@ benchmarks! {
 			valid_at: Range {start: BlockNumberFor::<T>::one(), end: BlockNumberFor::<T>::one()},
 			valid_until: BlockNumberFor::<T>::one()
 		};
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, Some(order_validity)));
+		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, None));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
 	verify {}
 
