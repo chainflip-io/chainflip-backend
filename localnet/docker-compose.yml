@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:perseverance-0.9-rc4-1-node-arb-test
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:perseverance-0.9-rc6-1-node
     container_name: init
     platform: linux/amd64
     volumes:
