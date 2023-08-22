@@ -10,7 +10,7 @@ source ./localnet/helper.sh
 
 set -eo pipefail
 
-if [ $CI == true ]; then
+if [[ $CI == true ]]; then
   additional_docker_compose_up_args="--quiet-pull"
   additional_docker_compose_down_args="--volumes --remove-orphans --rmi all"
 else

@@ -1,0 +1,188 @@
+WARN [08-22|08:25:10.137] --node.archive has been deprecated. Please use --node.caching.archive instead. 
+INFO [08-22|08:25:10.137] Running Arbitrum nitro node              revision=v2.0.14-2baa834 vcs.time=2023-05-03T14:10:15-06:00
+INFO [08-22|08:25:10.137] connected to l1 chain                    l1url=ws://geth:8546 l1chainid=10997
+INFO [08-22|08:25:10.137] retaining ability to lookup full transaction history as archive mode is enabled 
+INFO [08-22|08:25:10.137] Dev node funded private key              priv=e887f7d17d07cc7b8004053fb8826f6657084e88904bb61590e498ca04704cf2
+INFO [08-22|08:25:10.137] Funded public address                    addr=0x683642c22feDE752415D4793832Ab75EFdF6223c
+INFO [08-22|08:25:10.138] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/l2chaindata cache=16.00MiB handles=16  readonly=true
+INFO [08-22|08:25:10.138] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/l2chaindata cache=2.00GiB  handles=512
+INFO [08-22|08:25:10.324] Opened ancient database                  database=/home/user/.arbitrum/local/nitro/l2chaindata/ancient/chain readonly=false
+INFO [08-22|08:25:10.324] Initializing                             ancients=0 genesisBlockNr=0
+INFO [08-22|08:25:10.325] addresss table import complete 
+INFO [08-22|08:25:10.325] retryables import complete 
+INFO [08-22|08:25:10.326] Persisted trie from memory database      nodes=48 size=5.57KiB time="137.325µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [08-22|08:25:10.326] Persisted trie from memory database      nodes=4  size=771.00B time="56.077µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [08-22|08:25:10.326] wrote genesis block                      number=0 hash=6899c9..c369ae
+INFO [08-22|08:25:10.329] Loaded most recent local header          number=0 hash=6899c9..c369ae td=1 age=54y5mo1d
+INFO [08-22|08:25:10.329] Loaded most recent local full block      number=0 hash=6899c9..c369ae td=1 age=54y5mo1d
+INFO [08-22|08:25:10.329] Loaded most recent local fast block      number=0 hash=6899c9..c369ae td=1 age=54y5mo1d
+WARN [08-22|08:25:10.329] Failed to load snapshot, regenerating    err="missing or corrupted snapshot"
+INFO [08-22|08:25:10.330] Rebuilding state snapshot 
+INFO [08-22|08:25:10.332] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/arbitrumdata cache=16.00MiB handles=16
+INFO [08-22|08:25:10.333] Resuming state snapshot generation       root=1916c8..72ec86 accounts=0  slots=0  storage=0.00B   dangling=0 elapsed=2.425ms
+INFO [08-22|08:25:10.336] Generated state snapshot                 accounts=16 slots=22 storage=2.57KiB dangling=0 elapsed=5.438ms
+INFO [08-22|08:25:10.359] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/classic-msg cache=16.00MiB handles=16  readonly=true
+INFO [08-22|08:25:10.381] Starting peer-to-peer node               instance=nitro/vv2.0.14-2baa834/linux-amd64/go1.19.9
+WARN [08-22|08:25:10.381] P2P server will be useless, neither dialing nor listening 
+INFO [08-22|08:25:10.397] Loaded JWT secret file                   path=/home/user/.arbitrum/local/nitro/jwtsecret crc32=0x472377c7
+INFO [08-22|08:25:10.398] HTTP server started                      endpoint=[::]:8547      auth=false prefix= cors=*         vhosts=*
+INFO [08-22|08:25:10.398] GraphQL enabled                          url=http://[::]:8547/graphql
+INFO [08-22|08:25:10.398] GraphQL UI enabled                       url=http://[::]:8547/graphql/ui
+INFO [08-22|08:25:10.398] WebSocket enabled                        url=ws://[::]:8548
+INFO [08-22|08:25:10.398] WebSocket enabled                        url=ws://127.0.0.1:8549
+INFO [08-22|08:25:10.398] HTTP server started                      endpoint=127.0.0.1:8549 auth=true  prefix= cors=localhost vhosts=
+WARN [08-22|08:25:10.398] Error reading unclean shutdown markers   error="leveldb: not found"
+INFO [08-22|08:25:10.400] New local node record                    seq=1,692,692,710,397 id=9be01aaa761e3ff0 ip=127.0.0.1 udp=0 tcp=0
+INFO [08-22|08:25:10.400] Started P2P networking                   self=enode://ecd112aedf38f4ba009e7ad4a731df59181b9eb2e1b2fad20adae4a148afbb5567d89c09ae0f1eaf9cf58f818c6170bec8340d468d882543088186ee2c5b2104@127.0.0.1:0
+INFO [08-22|08:25:10.407] InboxTracker                             SequencerBatchCount=0
+WARN [08-22|08:25:10.445] empty sequencer message 
+WARN [08-22|08:25:10.445] reading virtual delayed message segment  delayedMessagesRead=0 afterDelayedMessages=1
+INFO [08-22|08:25:10.445] InboxTracker                             sequencerBatchCount=1 messageCount=1 l1Block=66 l1Timestamp=2023-08-22T08:24:31+0000
+INFO [08-22|08:25:10.510] arbitrum websocket broadcast server is listening address=[::]:9642
+ERROR[08-22|08:25:10.514] no sequencer appears to want the lockout on redis priorities=ws://sequencer:8548
+INFO [08-22|08:25:13.516] caught chosen-coordinator lock           myUrl=ws://sequencer:8548
+INFO [08-22|08:29:19.009] ExecutionEngine: Added DelayedMessages   pos=1 delayed=1 block-header="&{ParentHash:0x6899c9b1ce4e1958c3b40492d6e813993e5797916cd620968dfe30d143c369ae UncleHash:0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347 Coinbase:0x502fae7d46d88F08Fc2F8ed27fCB2Ab183Eb3e1F Root:0xae6694d75759bd4a66cddbeaae398fa5cf107d9d5305d2dfef51f3f7b65b57af TxHash:0x623cb6190bd10b41ca5ceec2a2d0ba18c6e6bf9f996c94e236fa140bf477da23 ReceiptHash:0xd7a92f3697d06225df2a55e920d2f7a04a4b78f19a42e774c4a3993e342c61bb Bloom:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] Difficulty:+1 Number:+1 GasLimit:1125899906842624 GasUsed:0 Time:1692692719 Extra:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] MixDigest:0x00000000000000000000000000000046000000000000000b0000000000000000 Nonce:[0 0 0 0 0 0 0 2] BaseFee:+100000000}"
+INFO [08-22|08:29:19.010] DelayedSequencer: Sequenced              msgnum=1 startpos=1
+WARN [08-22|08:32:22.892] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=100,000,000,000,000,000,000,000 sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,529,411,764
+WARN [08-22|08:32:22.901] Caller gas above allowance, capping      requested=58,823,529,411,764 cap=61,740,000
+INFO [08-22|08:32:22.941] Submitted contract creation              hash=0x7b093856283dae76baad259b54685dc502a89d212725c441aa140fd72a6cf8cb from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=0 contract=0xda52b25ddB0e3B9CC393b0690Ac62245Ac772527 value=0
+WARN [08-22|08:32:22.968] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,998,804,092,600,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,528,708,289
+WARN [08-22|08:32:22.968] Caller gas above allowance, capping      requested=58,823,528,708,289 cap=69,513,000
+INFO [08-22|08:32:23.010] Submitted contract creation              hash=0x32168ee5ea58800e03f661c0dbb28b522fdaa9d94872e57908c6168ad49bb01f from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=1 contract=0x11B57FE348584f042E436c6Bf7c3c3deF171de49 value=0
+WARN [08-22|08:32:23.036] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,996,789,095,300,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,527,522,997
+WARN [08-22|08:32:23.036] Caller gas above allowance, capping      requested=58,823,527,522,997 cap=69,779,500
+INFO [08-22|08:32:23.078] Submitted contract creation              hash=0x31608b790f74c84bfc8c0c8a06de78d0baac0e31727278f2a021d23e7600f3da from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=2 contract=0x1294b86822ff4976BfE136cB06CF43eC7FCF2574 value=0
+WARN [08-22|08:32:23.108] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,994,781,547,200,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,526,342,086
+WARN [08-22|08:32:23.109] Caller gas above allowance, capping      requested=58,823,526,342,086 cap=76,300,000
+INFO [08-22|08:32:23.150] Submitted contract creation              hash=0x352312c030d1252d9b9fc6a4961112124b932fbccc82f15e570318f6dda9a38c from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=3 contract=0xA6E41fFD769491a42A6e5Ce453259b93983a22EF value=0
+WARN [08-22|08:32:23.172] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,992,070,881,400,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,524,747,577
+WARN [08-22|08:32:23.173] Caller gas above allowance, capping      requested=58,823,524,747,577 cap=69,763,500
+INFO [08-22|08:32:23.247] Submitted contract creation              hash=0x7ffe9c3bd150c53444d4fe6ad12d04fae102159eaff589e52402a8b46997c189 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=4 contract=0xe1080224B632A93951A7CFA33EeEa9Fd81558b5e value=0
+WARN [08-22|08:32:23.274] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,990,061,733,300,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,523,565,725
+WARN [08-22|08:32:23.275] Caller gas above allowance, capping      requested=58,823,523,565,725 cap=76,292,000
+INFO [08-22|08:32:23.348] Submitted contract creation              hash=0x9bfb9a858582e86ebb3047074c4ad7bfe1726b1bf179668fc91f66e68a0dd956 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=5 contract=0x7E32b54800705876d3b5cFbc7d9c226a211F7C1a value=0
+WARN [08-22|08:32:23.370] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,987,340,694,400,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,521,965,114
+WARN [08-22|08:32:23.371] Caller gas above allowance, capping      requested=58,823,521,965,114 cap=69,779,500
+INFO [08-22|08:32:23.449] Submitted contract creation              hash=0xeee71bf51d021250993e9015e73220d7c6bf826bbee7712552970587a3fa657b from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=6 contract=0x525c2aBA45F66987217323E8a05EA400C65D06DC value=0
+WARN [08-22|08:32:23.477] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,985,334,747,500,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,520,785,145
+WARN [08-22|08:32:23.477] Caller gas above allowance, capping      requested=58,823,520,785,145 cap=76,874,000
+INFO [08-22|08:32:23.550] Submitted contract creation              hash=0x88765b08d2beb1b733eb73f932b0b0450a136b3c9dcdfea30da11469ca4c1819 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=7 contract=0x85D9a8a4bd77b9b5559c1B7FCb8eC9635922Ed49 value=0
+WARN [08-22|08:32:23.577] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,982,566,625,000,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,519,156,838
+WARN [08-22|08:32:23.577] Caller gas above allowance, capping      requested=58,823,519,156,838 cap=69,763,500
+INFO [08-22|08:32:23.650] Submitted contract creation              hash=0x448549b01529115955bc6ca65f5ef97d2775e0f5c78d5c122ee246df5db73e5b from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=8 contract=0x4A2bA922052bA54e29c5417bC979Daaf7D5Fe4f4 value=0
+WARN [08-22|08:32:23.682] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,980,559,876,900,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,517,976,398
+WARN [08-22|08:32:23.683] Caller gas above allowance, capping      requested=58,823,517,976,398 cap=88,218,000
+WARN [08-22|08:32:23.684] Caller gas above allowance, capping      requested=66,168,749         cap=50,000,000
+WARN [08-22|08:32:23.685] Caller gas above allowance, capping      requested=55,144,124         cap=50,000,000
+INFO [08-22|08:32:23.751] Submitted contract creation              hash=0xec6e2a6322fe868fbd5d83e6b5801026fe41bb74d9f5b292f58ab0b43e194ea5 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=9 contract=0x4Af567288e68caD4aA93A272fe6139Ca53859C70 value=0
+WARN [08-22|08:32:23.776] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,976,576,267,800,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,515,633,098
+WARN [08-22|08:32:23.776] Caller gas above allowance, capping      requested=58,823,515,633,098 cap=58,855,500
+INFO [08-22|08:32:23.851] Submitted contract creation              hash=0x220a8da5d69f2bd446c8f3a7173be38d9f9c906c42af4cb4c80dae8a2b32fb6a from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=10 contract=0x3DF948c956e14175f43670407d5796b95Bb219D8 value=0
+WARN [08-22|08:32:23.876] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,975,681,614,300,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,515,106,831
+WARN [08-22|08:32:23.876] Caller gas above allowance, capping      requested=58,823,515,106,831 cap=65,311,500
+INFO [08-22|08:32:23.952] Submitted contract creation              hash=0xac54b3c8f1da82e83117211eaff77460f763de5dd25150e57d1783fd5e9ebe89 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=11 contract=0x75E0E92A79880Bd81A69F72983D03c75e2B33dC8 value=0
+WARN [08-22|08:32:23.976] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,974,105,260,300,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,514,179,564
+WARN [08-22|08:32:23.977] Caller gas above allowance, capping      requested=58,823,514,179,564 cap=85,956,000
+INFO [08-22|08:32:24.054] Submitted contract creation              hash=0xca46de8e363ff1e6e73382c76e71a7386f44348d83eaf79856f04d2049bb472e from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=12 contract=0xF5FfD11A55AFD39377411Ab9856474D2a7Cb697e value=0
+WARN [08-22|08:32:24.075] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,970,371,823,100,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,511,983,425
+WARN [08-22|08:32:24.075] Caller gas above allowance, capping      requested=58,823,511,983,425 cap=69,771,500
+INFO [08-22|08:32:24.153] Submitted contract creation              hash=0x43f68b553b4d7e53d843853a07a392780f1bb0a86683eb3f7ece6c2d6326cb61 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=13 contract=0x408Da76E87511429485C32E4Ad647DD14823Fdc4 value=0
+WARN [08-22|08:32:24.176] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,968,365,075,000,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,510,802,985
+WARN [08-22|08:32:24.177] Caller gas above allowance, capping      requested=58,823,510,802,985 cap=66,733,500
+INFO [08-22|08:32:24.254] Submitted contract creation              hash=0xb745a71df6898735928c0be4675ee0aecc89a22ae1013f2343cb382e18ab46ac from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=14 contract=0xDB2D15a3EB70C347E0D2C2c7861cAFb946baAb48 value=0
+WARN [08-22|08:32:24.275] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,966,666,384,600,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,509,803,755
+WARN [08-22|08:32:24.275] Caller gas above allowance, capping      requested=58,823,509,803,755 cap=51,704,500
+INFO [08-22|08:32:24.354] Submitted transaction                    hash=0x8ab6cd450e1e600ce684a1617f0dfc6bbef63bf4ff1081e6771b1d80ff587c48 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=15 recipient=0x1294b86822ff4976BfE136cB06CF43eC7FCF2574 value=0
+WARN [08-22|08:32:24.368] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,966,509,957,800,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,509,711,739
+WARN [08-22|08:32:24.368] Caller gas above allowance, capping      requested=58,823,509,711,739 cap=51,438,000
+INFO [08-22|08:32:24.455] Submitted transaction                    hash=0xfcb5a143518798e84926eaa53cc016ab614f6174427cecf89364dee80b0bc196 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=16 recipient=0x75E0E92A79880Bd81A69F72983D03c75e2B33dC8 value=0
+WARN [08-22|08:32:24.470] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,966,383,951,200,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,509,637,618
+WARN [08-22|08:32:24.470] Caller gas above allowance, capping      requested=58,823,509,637,618 cap=51,963,000
+INFO [08-22|08:32:24.555] Submitted transaction                    hash=0xb94f3a63e494cb11ba7fec65aae101b422ad1d87845ea7902eb344013ca02fee from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=17 recipient=0xe1080224B632A93951A7CFA33EeEa9Fd81558b5e value=0
+WARN [08-22|08:32:24.573] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,966,199,890,300,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,509,529,347
+WARN [08-22|08:32:24.573] Caller gas above allowance, capping      requested=58,823,509,529,347 cap=51,704,500
+INFO [08-22|08:32:24.656] Submitted transaction                    hash=0x8b2c87226c8dc9018142e21dd7df6531e7c81d23908577a3d938f2ad8985f188 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=18 recipient=0x525c2aBA45F66987217323E8a05EA400C65D06DC value=0
+WARN [08-22|08:32:24.675] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,966,043,692,000,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,509,437,465
+WARN [08-22|08:32:24.676] Caller gas above allowance, capping      requested=58,823,509,437,465 cap=52,924,500
+INFO [08-22|08:32:24.756] Submitted transaction                    hash=0x4a93c99626522c707a65c2c2140667f934ea37624f459d6ec0a667f86dc5ce3e from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=19 recipient=0x408Da76E87511429485C32E4Ad647DD14823Fdc4 value=0
+WARN [08-22|08:32:24.775] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,965,759,375,100,000,000  sent=0 maxFeePerGas=1,700,000,000 fundable=58,823,509,270,220
+WARN [08-22|08:32:24.775] Caller gas above allowance, capping      requested=58,823,509,270,220 cap=52,222,000
+INFO [08-22|08:32:24.857] Submitted transaction                    hash=0xac40e2ca3af06f2063f61d90a68e6510d74f5304717405396d9f011a158b6770 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=20 recipient=0x4A2bA922052bA54e29c5417bC979Daaf7D5Fe4f4 value=0
+WARN [08-22|08:33:09.110] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=53,732,500
+INFO [08-22|08:37:19.007] ExecutionEngine: Added DelayedMessages   pos=23 delayed=2 block-header="&{ParentHash:0xe1b6f37f201c2e475a260bc900085f538ede63e308aac43f8bc667a924be20f0 UncleHash:0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347 Coinbase:0x636D2aBA45F66987217323e8a05eA400C65D17ED Root:0xe99a1405d88ef8f7477ffb7c7b785ce6d674d0982994d95fcc67dd996ef4c020 TxHash:0x161e5a7521328c5e8c8399056dab8b229ff33e3fb4b1e67700f67fa45af5c4e8 ReceiptHash:0x4f89273ef0de580f1340211581e2cfa48b44b1d50bfbac3bec03e0af73b3dccb Bloom:[0 4 0 0 0 0 0 0 0 0 0 0 0 0 128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 32 0 0 0 0 0 0 0 0 0 2 0 0 0 0 0 16 0 0 0 0 0 0 0 0 0 0 0 8 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 10 0 0 0 32 0 0 64 0 0 8 0 0 0 0 0 0 0 4 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 16 0 0 68 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 8 0 0 32 0 0 0 0 0 0 0 16 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 0 0 32 0 0 0 0 40 0 16 0 0 0 0 0 0 0 0 0 0 160 0 0 0 0 0 0 32 0 0 0 0 0 0 0 0 0 0 0 0 0] Difficulty:+1 Number:+23 GasLimit:1125899906842624 GasUsed:114667 Time:1692693199 Extra:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] MixDigest:0x0000000000000000000000000000006e000000000000000b0000000000000000 Nonce:[0 0 0 0 0 0 0 3] BaseFee:+100000000}"
+INFO [08-22|08:37:19.008] DelayedSequencer: Sequenced              msgnum=1 startpos=2
+WARN [08-22|08:37:25.262] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=99,999,965,559,003,010,334,912  sent=10,000,000,000,000,000,000,000 maxFeePerGas=1,700,000,000 fundable=52,941,156,211,178
+WARN [08-22|08:37:25.262] Caller gas above allowance, capping      requested=52,941,156,211,178    cap=51,228,000
+INFO [08-22|08:37:25.313] Submitted transaction                    hash=0xf10e4674ee999d554928ac23a43837d5a0c444c5aba990b3c16d4e69a259e07f from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=21 recipient=0x076d3803349fd5FB48863c5Fc33483cB2243C0Df value=10,000,000,000,000,000,000,000
+WARN [08-22|08:37:27.235] Gas estimation capped by limited funds   original=1,125,899,906,842,624 balance=89,999,965,455,303,010,334,912  sent=10,000,000,000,000,000,000,000 maxFeePerGas=1,700,000,000 fundable=47,058,803,209,001
+WARN [08-22|08:37:27.236] Caller gas above allowance, capping      requested=47,058,803,209,001    cap=51,228,000
+INFO [08-22|08:37:27.273] Submitted transaction                    hash=0x818aaf923206ea0353f03e99d4beab325c8781a0494c304cf6174d3b55505d83 from=0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E nonce=22 recipient=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 value=10,000,000,000,000,000,000,000
+INFO [08-22|08:37:43.043] InboxTracker                             sequencerBatchCount=2 messageCount=26 l1Block=132 l1Timestamp=2023-08-22T08:37:27+0000
+INFO [08-22|08:41:43.011] ExecutionEngine: Added DelayedMessages   pos=26 delayed=3 block-header="&{ParentHash:0xd20cc9c62e90efd569ee778432c800eb7243c1f45ca2c3b168c1cf3129f2ca8a UncleHash:0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347 Coinbase:0xe2148eE53c0755215Df69b2616E552154EdC584f Root:0x379c78c95b6766b7fc973eef6fbc8bf97c0a31affdddb6e554f4dd29da8d4ccd TxHash:0xba18376503443924c2ac261f90b256ef28b47d7c066d1bc53530b59b7c683eb7 ReceiptHash:0xf08cf5553e1dae52e3df19b356b8320e17c39fb055f635739c31052db5c3e45e Bloom:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] Difficulty:+1 Number:+26 GasLimit:1125899906842624 GasUsed:0 Time:1692693463 Extra:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] MixDigest:0x00000000000000000000000000000084000000000000000b0000000000000000 Nonce:[0 0 0 0 0 0 0 4] BaseFee:+100000000}"
+INFO [08-22|08:41:43.012] DelayedSequencer: Sequenced              msgnum=1 startpos=3
+WARN [08-22|08:42:43.155] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=74,410,928
+INFO [08-22|08:42:43.208] Submitted contract creation              hash=0xc7b3386d1bbb4fe3d0a5fbe74a20db5e8e8068eda96069b33f4d64956dd3765d from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=0  contract=0x5FbDB2315678afecb367f032d93F642f64180aa3 value=0
+WARN [08-22|08:42:43.448] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=114,444,756
+WARN [08-22|08:42:43.448] Caller gas above allowance, capping      requested=57,232,877            cap=50,000,000
+WARN [08-22|08:42:43.449] Caller gas above allowance, capping      requested=85,838,816            cap=50,000,000
+WARN [08-22|08:42:43.450] Caller gas above allowance, capping      requested=71,535,846            cap=50,000,000
+WARN [08-22|08:42:43.451] Caller gas above allowance, capping      requested=78,687,331            cap=50,000,000
+WARN [08-22|08:42:43.451] Caller gas above allowance, capping      requested=75,111,588            cap=50,000,000
+WARN [08-22|08:42:43.452] Caller gas above allowance, capping      requested=73,323,717            cap=50,000,000
+WARN [08-22|08:42:43.453] Caller gas above allowance, capping      requested=74,217,652            cap=50,000,000
+WARN [08-22|08:42:43.454] Caller gas above allowance, capping      requested=74,664,620            cap=50,000,000
+WARN [08-22|08:42:43.454] Caller gas above allowance, capping      requested=74,888,104            cap=50,000,000
+WARN [08-22|08:42:43.455] Caller gas above allowance, capping      requested=74,999,846            cap=50,000,000
+WARN [08-22|08:42:43.456] Caller gas above allowance, capping      requested=75,055,717            cap=50,000,000
+WARN [08-22|08:42:43.457] Caller gas above allowance, capping      requested=75,027,781            cap=50,000,000
+WARN [08-22|08:42:43.457] Caller gas above allowance, capping      requested=75,041,749            cap=50,000,000
+WARN [08-22|08:42:43.458] Caller gas above allowance, capping      requested=75,034,765            cap=50,000,000
+WARN [08-22|08:42:43.459] Caller gas above allowance, capping      requested=75,038,257            cap=50,000,000
+WARN [08-22|08:42:43.460] Caller gas above allowance, capping      requested=75,036,511            cap=50,000,000
+WARN [08-22|08:42:43.461] Caller gas above allowance, capping      requested=75,037,384            cap=50,000,000
+WARN [08-22|08:42:43.461] Caller gas above allowance, capping      requested=75,036,947            cap=50,000,000
+WARN [08-22|08:42:43.462] Caller gas above allowance, capping      requested=75,037,165            cap=50,000,000
+WARN [08-22|08:42:43.463] Caller gas above allowance, capping      requested=75,037,274            cap=50,000,000
+WARN [08-22|08:42:43.464] Caller gas above allowance, capping      requested=75,037,329            cap=50,000,000
+WARN [08-22|08:42:43.464] Caller gas above allowance, capping      requested=75,037,356            cap=50,000,000
+WARN [08-22|08:42:43.465] Caller gas above allowance, capping      requested=75,037,342            cap=50,000,000
+WARN [08-22|08:42:43.466] Caller gas above allowance, capping      requested=75,037,335            cap=50,000,000
+WARN [08-22|08:42:43.467] Caller gas above allowance, capping      requested=75,037,338            cap=50,000,000
+WARN [08-22|08:42:43.467] Caller gas above allowance, capping      requested=75,037,340            cap=50,000,000
+WARN [08-22|08:42:43.468] Caller gas above allowance, capping      requested=75,037,341            cap=50,000,000
+WARN [08-22|08:42:43.486] Caller gas above allowance, capping      requested=82,541,075            cap=50,000,000
+INFO [08-22|08:42:43.508] Submitted contract creation              hash=0x4450af8f3eefd67caba244d9f84508b88f3a6b99f1ad8a65ac5991b2e1402d7c from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=1  contract=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 value=0
+WARN [08-22|08:42:44.062] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=57,989,293
+INFO [08-22|08:42:44.100] Submitted contract creation              hash=0xf17145daf2ae29262388e61d930db7b0c2c8986019290fd8a5ce0db591c4522c from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=2  contract=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 value=0
+WARN [08-22|08:42:44.167] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=69,617,065
+INFO [08-22|08:42:44.211] Submitted contract creation              hash=0x27a2bc89e7c18caa65171e9f5f63e7731015b2276bed6f0506cced7181d9495c from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=3  contract=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.312] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.351] Submitted transaction                    hash=0xe08bc57d07d7e97607177c71d5312a36a625b12f5349189821df5336f3c08d67 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=4  recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.380] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.419] Submitted transaction                    hash=0x854ab7e3679bf96f4c6b0a65a26ec040ab2d96983ef5f21d98c019a154d52a44 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=5  recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.449] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.489] Submitted transaction                    hash=0x1d4ec1b36043c82472deadac5666c65470ad1bd4714cee3dbe2960e83ea9f811 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=6  recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.518] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.557] Submitted transaction                    hash=0x54b37f9fb70e51d09304014247c4a9594925bfe067f662fb725c120cf42877e8 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=7  recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.586] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.655] Submitted transaction                    hash=0x5384c2690ff8bac41f39c07b23a0b5cc359b33574149f3a12d6f824f6d138885 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=8  recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.686] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.755] Submitted transaction                    hash=0xc19932bcac5c0ae7cdb76249ccb514d9d269f69c61b9ed6329db7b23a80604a7 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=9  recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.785] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.855] Submitted transaction                    hash=0x060570c3bc2ad02037577042ae1f28579796d1963170741d0f2eee727ae0f97e from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=10 recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.885] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:44.956] Submitted transaction                    hash=0x2d6c3cf69a6b089f5c4fedec5c5d382bc0589b2ad931608cb466aa47711f12a8 from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=11 recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:44.985] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=51,636,355
+INFO [08-22|08:42:45.057] Submitted transaction                    hash=0xa31d0cad8044e284dcec6ef7aca73b89e02df7ad2cc9ea3fe23f98e49c62ac9f from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=12 recipient=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 value=0
+WARN [08-22|08:42:45.082] Caller gas above allowance, capping      requested=1,125,899,906,842,624 cap=81,554,923
+INFO [08-22|08:42:45.158] Submitted contract creation              hash=0x770c8ed122a5e515faa65e7d12b55b1d963976d613eeefc725e465690881e99a from=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 nonce=13 contract=0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82 value=0
+INFO [08-22|08:42:46.095] shutting down because of sigint 
+INFO [08-22|08:42:46.095] avoiding lockout                         myUrl=ws://sequencer:8548
+INFO [08-22|08:42:46.095] waiting for another sequencer to become chosen... timeout=30s myUrl=ws://sequencer:8548
+WARN [08-22|08:42:46.133] error in subscription to headers         err="websocket: close 1006 (abnormal closure): unexpected EOF"
+WARN [08-22|08:42:47.017] coordinator failed finding sequencer wanting lockout err="dial tcp: lookup redis: Temporary failure in name resolution"
+WARN [08-22|08:42:47.602] coordinator failed finding sequencer wanting lockout err="dial tcp: lookup redis: Temporary failure in name resolution"
+WARN [08-22|08:42:48.724] coordinator failed finding sequencer wanting lockout err="dial tcp: lookup redis: Temporary failure in name resolution"
+WARN [08-22|08:42:50.276] coordinator failed finding sequencer wanting lockout err="dial tcp: lookup redis: Temporary failure in name resolution"
+WARN [08-22|08:42:52.384] coordinator failed finding sequencer wanting lockout err="dial tcp: lookup redis: Temporary failure in name resolution"
+WARN [08-22|08:42:54.975] coordinator failed finding sequencer wanting lockout err="dial tcp: lookup redis: Temporary failure in name resolution"

@@ -1,0 +1,72 @@
+WARN [08-22|08:37:23.124] --node.archive has been deprecated. Please use --node.caching.archive instead. 
+INFO [08-22|08:37:23.125] Running Arbitrum nitro node              revision=v2.0.14-2baa834 vcs.time=2023-05-03T14:10:15-06:00
+INFO [08-22|08:37:24.307] connected to l1 chain                    l1url=ws://geth:8546 l1chainid=10997
+INFO [08-22|08:37:24.307] retaining ability to lookup full transaction history as archive mode is enabled 
+INFO [08-22|08:37:24.308] Dev node funded private key              priv=e887f7d17d07cc7b8004053fb8826f6657084e88904bb61590e498ca04704cf2
+INFO [08-22|08:37:24.308] Funded public address                    addr=0x683642c22feDE752415D4793832Ab75EFdF6223c
+INFO [08-22|08:37:24.309] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/l2chaindata cache=16.00MiB handles=16 readonly=true
+INFO [08-22|08:37:24.309] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/l2chaindata cache=2.00GiB  handles=512
+INFO [08-22|08:37:24.435] Opened ancient database                  database=/home/user/.arbitrum/local/nitro/l2chaindata/ancient/chain readonly=false
+INFO [08-22|08:37:24.435] Initializing                             ancients=0 genesisBlockNr=0
+INFO [08-22|08:37:24.436] addresss table import complete 
+INFO [08-22|08:37:24.436] retryables import complete 
+INFO [08-22|08:37:24.438] Persisted trie from memory database      nodes=48 size=5.57KiB time="130.895µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [08-22|08:37:24.438] Persisted trie from memory database      nodes=4  size=771.00B time="27.215µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [08-22|08:37:24.438] wrote genesis block                      number=0 hash=6899c9..c369ae
+INFO [08-22|08:37:24.440] Loaded most recent local header          number=0 hash=6899c9..c369ae td=1 age=54y5mo1d
+INFO [08-22|08:37:24.440] Loaded most recent local full block      number=0 hash=6899c9..c369ae td=1 age=54y5mo1d
+INFO [08-22|08:37:24.440] Loaded most recent local fast block      number=0 hash=6899c9..c369ae td=1 age=54y5mo1d
+WARN [08-22|08:37:24.440] Failed to load snapshot, regenerating    err="missing or corrupted snapshot"
+INFO [08-22|08:37:24.440] Rebuilding state snapshot 
+INFO [08-22|08:37:24.441] Resuming state snapshot generation       root=1916c8..72ec86 accounts=0 slots=0 storage=0.00B dangling=0 elapsed="892.527µs"
+INFO [08-22|08:37:24.442] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/arbitrumdata cache=16.00MiB handles=16
+INFO [08-22|08:37:24.444] Generated state snapshot                 accounts=16 slots=22 storage=2.57KiB dangling=0 elapsed=3.340ms
+INFO [08-22|08:37:24.463] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/classic-msg cache=16.00MiB handles=16  readonly=true
+INFO [08-22|08:37:24.476] running as validator                     txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe actingAsWallet=nil whitelisted=false strategy=MakeNodes
+INFO [08-22|08:37:24.476] Starting peer-to-peer node               instance=nitro/vv2.0.14-2baa834/linux-amd64/go1.19.9
+WARN [08-22|08:37:24.476] P2P server will be useless, neither dialing nor listening 
+INFO [08-22|08:37:24.494] New local node record                    seq=1,692,693,444,494 id=e8eb2cdc1115b4c3 ip=127.0.0.1 udp=0 tcp=0
+INFO [08-22|08:37:24.495] Started P2P networking                   self=enode://07089a3e1e54ed2c6ff41e92ecba55e03b39e06e16b3b5ed64256237df091701bacf617d9dc6d19928bc45d25260fa24e087dfcd22dbf5a639b7a2d97be48665@127.0.0.1:0
+INFO [08-22|08:37:24.496] Loaded JWT secret file                   path=/home/user/.arbitrum/local/nitro/jwtsecret crc32=0x64573723
+INFO [08-22|08:37:24.497] HTTP server started                      endpoint=[::]:8547      auth=false prefix= cors=*         vhosts=*
+INFO [08-22|08:37:24.497] WebSocket enabled                        url=ws://[::]:8548
+INFO [08-22|08:37:24.497] WebSocket enabled                        url=ws://127.0.0.1:8549
+INFO [08-22|08:37:24.498] HTTP server started                      endpoint=127.0.0.1:8549 auth=true  prefix= cors=localhost vhosts=
+WARN [08-22|08:37:24.498] Error reading unclean shutdown markers   error="leveldb: not found"
+INFO [08-22|08:37:24.498] InboxTracker                             SequencerBatchCount=0
+WARN [08-22|08:37:24.505] empty sequencer message 
+WARN [08-22|08:37:24.506] reading virtual delayed message segment  delayedMessagesRead=0 afterDelayedMessages=1
+INFO [08-22|08:37:24.506] InboxTracker                             sequencerBatchCount=1 messageCount=1 l1Block=66 l1Timestamp=2023-08-22T08:24:31+0000
+WARN [08-22|08:37:24.603] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:37:34.614] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+INFO [08-22|08:37:43.030] InboxTracker                             sequencerBatchCount=2 messageCount=26 l1Block=132 l1Timestamp=2023-08-22T08:37:27+0000
+INFO [08-22|08:37:43.036] created block                            l2Block=1 l2BlockHash=ab3ca7..e70eec
+INFO [08-22|08:37:44.037] created block                            l2Block=25 l2BlockHash=d20cc9..f2ca8a
+WARN [08-22|08:37:44.624] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:37:54.633] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:38:04.646] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:38:14.656] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:38:24.666] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:38:34.676] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:38:44.686] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:38:54.697] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:39:04.706] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:39:14.717] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:39:24.728] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+WARN [08-22|08:39:34.738] validator address isn't whitelisted      address=nil txSender=0x6A568afe0f82d34759347bb36F14A6bB171d2CBe
+INFO [08-22|08:39:34.749] creating node                            hash=5074f8..9d8072 lastNode=0 parentNode=0
+INFO [08-22|08:39:34.752] staking to execute transactions 
+INFO [08-22|08:39:43.008] created validator smart contract wallet  address=0xf10EF80c6eF4930A62C5F9661c91339Df4dBB173
+INFO [08-22|08:39:55.011] successfully executed staker transaction hash=072cf1..b81eb5
+WARN [08-22|08:42:46.133] error in subscription to headers         err="websocket: close 1006 (abnormal closure): unexpected EOF"
+INFO [08-22|08:42:46.134] shutting down because of sigint 
+WARN [08-22|08:42:46.134] HTTP server graceful shutdown timed out 
+INFO [08-22|08:42:46.134] HTTP server stopped                      endpoint=[::]:8547
+WARN [08-22|08:42:46.134] HTTP server graceful shutdown timed out 
+INFO [08-22|08:42:46.134] HTTP server stopped                      endpoint=[::]:8548
+WARN [08-22|08:42:46.135] HTTP server graceful shutdown timed out 
+INFO [08-22|08:42:46.135] HTTP server stopped                      endpoint=127.0.0.1:8549
+INFO [08-22|08:42:46.135] delayed sequencer: context done          err="context canceled"
+INFO [08-22|08:42:46.136] Writing clean trie cache to disk         path=/home/user/.arbitrum/local/nitro/triecache threads=2
+INFO [08-22|08:42:46.173] Persisted the clean trie cache           path=/home/user/.arbitrum/local/nitro/triecache elapsed=37.248ms
+INFO [08-22|08:42:46.173] Blockchain stopped 
