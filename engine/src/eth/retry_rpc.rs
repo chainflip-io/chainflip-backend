@@ -5,6 +5,7 @@ use ethers::{
 	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
 };
 
+use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -21,20 +22,39 @@ use super::{
 use crate::eth::rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
 
-#[derive(Clone)]
-pub struct EthersRetryRpcClient {
-	rpc_retry_client: RetrierClient<EthRpcClient>,
-	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
+pub struct EthersRetryRpcClient<
+	EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
+	ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
+> {
+	rpc_retry_client: RetrierClient<EthRpcClientFut, EthRpcClient>,
+	sub_retry_client: RetrierClient<ReconnectSubscriptionClientFut, ReconnectSubscriptionClient>,
+}
+
+impl<
+		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
+		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
+	> Clone for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
+{
+	fn clone(&self) -> Self {
+		Self {
+			rpc_retry_client: self.rpc_retry_client.clone(),
+			sub_retry_client: self.sub_retry_client.clone(),
+		}
+	}
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-impl EthersRetryRpcClient {
+impl<
+		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
+		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
+	> EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
+{
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		eth_rpc_client: EthRpcClient,
-		sub_client: ReconnectSubscriptionClient,
+		eth_rpc_client: EthRpcClientFut,
+		sub_client: ReconnectSubscriptionClientFut,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
@@ -56,7 +76,7 @@ impl EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-pub trait EthersRetryRpcApi: Send + Sync {
+pub trait EthersRetryRpcApi {
 	async fn estimate_gas(&self, req: TypedTransaction) -> U256;
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash;
@@ -80,7 +100,11 @@ pub trait EthersRetryRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl EthersRetryRpcApi for EthersRetryRpcClient {
+impl<
+		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
+		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
+	> EthersRetryRpcApi for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
+{
 	async fn estimate_gas(&self, req: TypedTransaction) -> U256 {
 		let log = RequestLog::new("estimate_gas".to_string(), Some(format!("{req:?}")));
 		self.rpc_retry_client
@@ -209,7 +233,12 @@ pub trait EthersRetrySubscribeApi {
 }
 
 #[async_trait::async_trait]
-impl EthersRetrySubscribeApi for EthersRetryRpcClient {
+impl<
+		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
+		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
+	> EthersRetrySubscribeApi
+	for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
+{
 	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
@@ -224,7 +253,11 @@ impl EthersRetrySubscribeApi for EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-impl ChainClient for EthersRetryRpcClient {
+impl<
+		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
+		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
+	> ChainClient for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
+{
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;
@@ -281,11 +314,13 @@ mod tests {
 
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					EthRpcClient::new(&settings.eth, 1337u64).await.unwrap(),
-					ReconnectSubscriptionClient::new(
-						settings.eth.ws_node_endpoint,
-						web3::types::U256::from(1337),
-					),
+					async move { EthRpcClient::new(&settings.eth, 1337u64).await.unwrap() },
+					async move {
+						ReconnectSubscriptionClient::new(
+							settings.eth.ws_node_endpoint,
+							web3::types::U256::from(1337),
+						)
+					},
 				);
 
 				let chain_id = retry_client.chain_id().await;

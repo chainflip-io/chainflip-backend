@@ -228,11 +228,10 @@ async fn start(
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		EthBroadcaster::new(EthRpcClient::new(&settings.eth, 1337u64).await?),
-		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
-		BtcBroadcaster::new(
-			BtcRpcClient::new(&settings.btc)?,
-		),
+		// These should take retriers not raw clients
+		EthBroadcaster::new(EthRpcClient::new(settings.eth, 1337u64).await?),
+		DotBroadcaster::new(DotHttpRpcClient::new(settings.dot.http_node_endpoint).await?),
+		BtcBroadcaster::new(BtcRpcClient::new(settings.btc)?),
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,

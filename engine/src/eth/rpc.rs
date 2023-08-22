@@ -28,7 +28,7 @@ pub struct EthRpcClient {
 }
 
 impl EthRpcClient {
-	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: u64) -> Result<Self> {
+	pub async fn new(eth_settings: settings::Eth, expected_chain_id: u64) -> Result<Self> {
 		let provider =
 			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
 		let wallet = read_clean_and_decode_hex_str_file(
@@ -50,14 +50,15 @@ impl EthRpcClient {
 				Ok(chain_id) if chain_id == expected_chain_id.into() => break,
 				Ok(chain_id) => {
 					tracing::warn!(
-						"Connected to Ethereum node but with chain_id {}, expected {}. Please check your CFE configuration file...",
+						"Connected to Ethereum node but with chain_id {}, expected {}. Please check your CFE
+						configuration file...", 				
 						chain_id,
 						expected_chain_id
 					);
 				},
 				Err(e) => tracing::error!(
-					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE configuration file. Retrying...",
-					eth_settings.http_node_endpoint
+					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE
+		configuration file. Retrying...", 			eth_settings.http_node_endpoint
 				),
 			}
 		}
@@ -100,7 +101,7 @@ impl EthRpcClient {
 
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
-pub trait EthRpcApi: Send + Sync {
+pub trait EthRpcApi: Send {
 	fn address(&self) -> H160;
 
 	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;

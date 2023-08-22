@@ -1,4 +1,5 @@
 use bitcoin::{Block, BlockHash, Txid};
+use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -10,16 +11,25 @@ use core::time::Duration;
 
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
 
-#[derive(Clone)]
-pub struct BtcRetryRpcClient {
-	retry_client: RetrierClient<BtcRpcClient>,
+pub struct BtcRetryRpcClient<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> {
+	retry_client: RetrierClient<BtcRpcClientFut, BtcRpcClient>,
+}
+
+impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> Clone
+	for BtcRetryRpcClient<BtcRpcClientFut>
+{
+	fn clone(&self) -> Self {
+		Self { retry_client: self.retry_client.clone() }
+	}
 }
 
 const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-impl BtcRetryRpcClient {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClient) -> Self {
+impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>
+	BtcRetryRpcClient<BtcRpcClientFut>
+{
+	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClientFut) -> Self {
 		Self {
 			retry_client: RetrierClient::new(
 				scope,
@@ -33,7 +43,7 @@ impl BtcRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-pub trait BtcRetryRpcApi {
+pub trait BtcRetryRpcApi: Clone {
 	async fn block(&self, block_hash: BlockHash) -> Block;
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
@@ -48,7 +58,9 @@ pub trait BtcRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl BtcRetryRpcApi for BtcRetryRpcClient {
+impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> BtcRetryRpcApi
+	for BtcRetryRpcClient<BtcRpcClientFut>
+{
 	async fn block(&self, block_hash: BlockHash) -> Block {
 		self.retry_client
 			.request(
@@ -136,7 +148,9 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-impl ChainClient for BtcRetryRpcClient {
+impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> ChainClient
+	for BtcRetryRpcClient<BtcRpcClientFut>
+{
 	type Index = <Bitcoin as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = BlockHash;
 	type Data = ();

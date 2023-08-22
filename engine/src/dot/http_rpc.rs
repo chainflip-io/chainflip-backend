@@ -79,8 +79,8 @@ pub struct DotHttpRpcClient {
 }
 
 impl DotHttpRpcClient {
-	pub async fn new(url: &str) -> Result<Self> {
-		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(url)?);
+	pub async fn new(url: String) -> Result<Self> {
+		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
 
 		// We don't want to return an error here. Returning an error means that we'll exit the CFE.
 		// So on client creation we wait until we can be successfully connected to the ETH node. So
@@ -88,13 +88,17 @@ impl DotHttpRpcClient {
 		let mut poll_interval = make_periodic_tick(DOT_AVERAGE_BLOCK_TIME, true);
 		let online_client = loop {
 			poll_interval.tick().await;
+
+			// genesis-hash -> request -> request is where the error is lowest
+
 			match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
 				.await
 			{
 				Ok(online_client) => break online_client,
 				Err(e) => {
 					tracing::error!(
-						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE configuration file. Retrying in {:?}...",
+						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE
+						configuration file. Retrying in {:?}...", 			
 						poll_interval.period()
 					);
 				},

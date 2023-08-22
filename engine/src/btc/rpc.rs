@@ -68,7 +68,7 @@ pub struct BtcRpcClient {
 }
 
 impl BtcRpcClient {
-	pub fn new(btc_settings: &settings::Btc) -> Result<Self> {
+	pub fn new(btc_settings: settings::Btc) -> Result<Self> {
 		Ok(Self {
 			client: Client::builder().build()?,
 			url: btc_settings.http_node_endpoint.clone(),

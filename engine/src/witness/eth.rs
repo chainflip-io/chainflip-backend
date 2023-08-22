@@ -105,10 +105,20 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
+	let settings = settings.clone();
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
-		EthRpcClient::new(settings, expected_chain_id.as_u64()).await?,
-		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
+		{
+			let settings = settings.clone();
+			async move {
+				EthRpcClient::new(settings.clone(), expected_chain_id.as_u64())
+					.await
+					.expect("TODO: Handle this")
+			}
+		},
+		async move {
+			ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id)
+		},
 	);
 
 	let eth_source = EthSource::new(eth_client.clone()).shared(scope);

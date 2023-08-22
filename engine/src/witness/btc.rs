@@ -45,7 +45,10 @@ where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
 {
-	let btc_client = BtcRetryRpcClient::new(scope, BtcRpcClient::new(settings)?);
+	let settings = settings.clone();
+	let btc_client = BtcRetryRpcClient::new(scope, async move {
+		BtcRpcClient::new(settings).expect("TODO: Handle this.")
+	});
 
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 

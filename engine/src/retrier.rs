@@ -9,7 +9,9 @@
 use std::{
 	any::Any,
 	collections::{BTreeMap, VecDeque},
+	marker::PhantomData,
 	pin::Pin,
+	sync::atomic::AtomicPtr,
 	time::Duration,
 };
 
@@ -84,10 +86,20 @@ type RequestSent<Client> =
 	(oneshot::Sender<BoxAny>, RequestLog, FutureAnyGenerator<Client>, RetryLimit);
 
 /// Tracks all the retries
-#[derive(Clone)]
-pub struct RetrierClient<Client> {
+pub struct RetrierClient<ClientFut, Client> {
 	// The channel to send requests to the client.
 	request_sender: mpsc::Sender<RequestSent<Client>>,
+
+	// This AtomicPtr<Box> is required because we need the Client to be Send and Sync
+	// but the ClientFut can only be Send (not Sync). We don't need the future to be Sync,
+	// so we can just wrap it in an AtomicPtr to make the type Sync.
+	_phantom: std::marker::PhantomData<AtomicPtr<Box<ClientFut>>>,
+}
+
+impl<ClientFut, Client: Clone> Clone for RetrierClient<ClientFut, Client> {
+	fn clone(&self) -> Self {
+		Self { request_sender: self.request_sender.clone(), _phantom: PhantomData }
+	}
 }
 
 #[derive(Default)]
@@ -196,12 +208,16 @@ fn submission_future<Client: Clone>(
 /// Requests submitted to this client will be retried until success.
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
-impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
+impl<ClientFut, Client> RetrierClient<ClientFut, Client>
+where
+	ClientFut: Future<Output = Client> + Send + 'static,
+	Client: Clone + Send + Sync + 'static,
+{
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		// The name of the retrier that appears in the logs.
 		name: &'static str,
-		primary_client: Client,
+		primary_client: ClientFut,
 		initial_request_timeout: Duration,
 		maximum_concurrent_submissions: u32,
 	) -> Self {
@@ -215,6 +231,8 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 		let mut submission_holder = SubmissionHolder::new(maximum_concurrent_submissions);
 
 		scope.spawn(async move {
+			let primary_client = primary_client.await;
+
 			utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
@@ -273,7 +291,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 			Ok(())
 		});
 
-		Self { request_sender }
+		Self { request_sender, _phantom: PhantomData::default() }
 	}
 
 	// Separate function so we can more easily test.

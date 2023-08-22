@@ -8,7 +8,7 @@ use cf_chains::{
 };
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
-use futures_core::Stream;
+use futures_core::{Future, Stream};
 use sp_core::H256;
 use std::pin::Pin;
 use subxt::{config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic};
@@ -23,20 +23,40 @@ use super::{
 
 use crate::dot::rpc::DotRpcApi;
 
-#[derive(Clone)]
-pub struct DotRetryRpcClient {
-	rpc_retry_client: RetrierClient<DotHttpRpcClient>,
-	sub_retry_client: RetrierClient<DotSubClient>,
+// We do need the Sync bound.
+pub struct DotRetryRpcClient<
+	DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
+	DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
+> {
+	rpc_retry_client: RetrierClient<DotHttpRpcClientFut, DotHttpRpcClient>,
+	sub_retry_client: RetrierClient<DotSubClientFut, DotSubClient>,
+}
+
+impl<
+		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
+		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
+	> Clone for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
+{
+	fn clone(&self) -> Self {
+		Self {
+			rpc_retry_client: self.rpc_retry_client.clone(),
+			sub_retry_client: self.sub_retry_client.clone(),
+		}
+	}
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
-impl DotRetryRpcClient {
+impl<
+		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
+		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
+	> DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
+{
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		dot_rpc_client: DotHttpRpcClient,
-		dot_sub_client: DotSubClient,
+		dot_rpc_client: DotHttpRpcClientFut,
+		dot_sub_client: DotSubClientFut,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
@@ -71,7 +91,11 @@ pub trait DotRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl DotRetryRpcApi for DotRetryRpcClient {
+impl<
+		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
+		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
+	> DotRetryRpcApi for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
+{
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash> {
 		self.rpc_retry_client
 			.request(
@@ -158,7 +182,11 @@ pub trait DotRetrySubscribeApi {
 use crate::dot::rpc::DotSubscribeApi;
 
 #[async_trait::async_trait]
-impl DotRetrySubscribeApi for DotRetryRpcClient {
+impl<
+		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
+		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
+	> DotRetrySubscribeApi for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
+{
 	async fn subscribe_best_heads(
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
@@ -188,8 +216,13 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 	}
 }
 
+// We definitely don't want clone here
 #[async_trait::async_trait]
-impl ChainClient for DotRetryRpcClient {
+impl<
+		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
+		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
+	> ChainClient for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
+{
 	type Index = <Polkadot as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;
