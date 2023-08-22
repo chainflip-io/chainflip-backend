@@ -4,17 +4,22 @@ use chainflip_engine::{
 	btc::{rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
-	health, metrics, p2p,
+	eth::{
+		broadcaster::EthBroadcaster,
+		retry_rpc::EthersRetryRpcClient,
+		rpc::{EthRpcClient, ReconnectSubscriptionClient},
+	},
+	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
 		client::{
+			chain_api::ChainApi,
 			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 			storage_api::StorageApi,
 		},
 	},
-	witness,
+	witness::{self, common::STATE_CHAIN_CONNECTION},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -216,15 +221,47 @@ async fn start(
 
 	scope.spawn(btc_multisig_client_backend_future);
 
+	// Create all the clients
+
+	let expected_chain_id = web3::types::U256::from(
+		state_chain_client
+			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+				state_chain_client.latest_finalized_hash(),
+			)
+			.await
+			.expect(STATE_CHAIN_CONNECTION),
+	);
+
+	let eth_settings = settings.eth.clone();
+	let eth_client = EthersRetryRpcClient::new(
+		scope,
+		{
+			let eth_settings = eth_settings.clone();
+			async move {
+				EthRpcClient::new(eth_settings, expected_chain_id.as_u64())
+					.await
+					.expect("TODO: Handle this")
+			}
+		},
+		async move {
+			ReconnectSubscriptionClient::new(
+				eth_settings.ws_node_endpoint.clone(),
+				expected_chain_id,
+			)
+		},
+	);
+
 	witness::start::start(
 		scope,
 		&settings,
+		eth_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		db.clone(),
 	)
 	.await?;
 
+	println!("Witnessing has started");
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -238,6 +275,10 @@ async fn start(
 		peer_update_sender,
 	));
 
+	println!("State chain observer has started");
+
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+
+	println!("Set has_completed_initialising to true");
 	Ok(())
 }

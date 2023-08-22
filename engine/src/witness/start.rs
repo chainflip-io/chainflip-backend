@@ -1,9 +1,14 @@
 use std::sync::Arc;
 
+use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
+	eth::{
+		retry_rpc::EthersRetryRpcClient,
+		rpc::{EthRpcClient, ReconnectSubscriptionClient},
+	},
 	settings::Settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
@@ -20,6 +25,10 @@ use anyhow::Result;
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &Settings,
+	eth_client: EthersRetryRpcClient<
+		impl Future<Output = EthRpcClient> + Send,
+		impl Future<Output = ReconnectSubscriptionClient> + Send,
+	>,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	db: Arc<PersistentKeyDB>,
@@ -36,7 +45,7 @@ where
 
 	super::eth::start(
 		scope,
-		&settings.eth,
+		eth_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),

@@ -10,6 +10,7 @@ pub mod vault;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_primitives::chains::assets::eth;
+use futures_core::Future;
 use sp_core::H160;
 use utilities::task_scope::Scope;
 
@@ -19,7 +20,6 @@ use crate::{
 		retry_rpc::EthersRetryRpcClient,
 		rpc::{EthRpcClient, ReconnectSubscriptionClient},
 	},
-	settings,
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
@@ -39,7 +39,10 @@ const SAFETY_MARGIN: usize = 7;
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &settings::Eth,
+	eth_client: EthersRetryRpcClient<
+		impl Future<Output = EthRpcClient> + Send,
+		impl Future<Output = ReconnectSubscriptionClient> + Send,
+	>,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -49,15 +52,6 @@ where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	let expected_chain_id = web3::types::U256::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION),
-	);
-
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
             state_chain_client.latest_finalized_hash(),
@@ -104,22 +98,6 @@ where
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
-
-	let settings = settings.clone();
-	let eth_client = EthersRetryRpcClient::new(
-		scope,
-		{
-			let settings = settings.clone();
-			async move {
-				EthRpcClient::new(settings.clone(), expected_chain_id.as_u64())
-					.await
-					.expect("TODO: Handle this")
-			}
-		},
-		async move {
-			ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id)
-		},
-	);
 
 	let eth_source = EthSource::new(eth_client.clone()).shared(scope);
 

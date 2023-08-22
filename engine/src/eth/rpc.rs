@@ -58,7 +58,8 @@ impl EthRpcClient {
 				},
 				Err(e) => tracing::error!(
 					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE
-		configuration file. Retrying...", 			eth_settings.http_node_endpoint
+					configuration file. Retrying...",
+					eth_settings.http_node_endpoint
 				),
 			}
 		}
