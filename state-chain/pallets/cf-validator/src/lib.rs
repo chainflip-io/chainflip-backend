@@ -366,17 +366,7 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							rotation_state.ban(offenders);
-
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
-								Self::current_consensus_success_threshold() {
-								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-								);
-								Self::abort_rotation();
-							} else {
-								Self::start_vault_rotation(rotation_state);
-							}
+							Self::start_vault_rotation(rotation_state);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
