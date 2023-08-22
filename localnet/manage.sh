@@ -138,6 +138,9 @@ build-localnet-in-ci() {
     fi
   done
 
+  echo "🔮 Initializing Network"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
+
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
 
