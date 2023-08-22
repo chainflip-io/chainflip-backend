@@ -1,6 +1,6 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{price_at_tick, Order, Price, Tick},
+	common::{price_at_tick, Price, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -16,7 +16,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::OldRangeOrderSize;
+use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
@@ -79,33 +79,34 @@ fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	System::reset_events();
 }
 
-fn mint_range_order(
+fn set_range_order(
 	account_id: &AccountId,
-	unstable_asset: Asset,
-	range: core::ops::Range<Tick>,
+	base_asset: Asset,
+	pair_asset: Asset,
+	id: OrderId,
+	range: Option<core::ops::Range<Tick>>,
 	liquidity: Liquidity,
 ) {
-	let unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	assert_ok!(LiquidityPools::collect_and_mint_range_order(
+	let balances = [base_asset, pair_asset].map(|asset| {
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
+	});
+	assert_ok!(LiquidityPools::set_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		unstable_asset,
+		base_asset,
+		pair_asset,
+		id,
 		range,
-		OldRangeOrderSize::Liquidity(liquidity),
+		RangeOrderSize::Liquidity(liquidity),
 	));
-	let new_unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let new_stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
+	let new_balances = [base_asset, pair_asset].map(|asset| {
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
+	});
 
-	assert!(
-		new_unstable_balance < unstable_balance && new_stable_balance <= stable_balance ||
-			new_unstable_balance <= unstable_balance && new_stable_balance < stable_balance
-	);
+	assert!(new_balances.into_iter().zip(balances).all(|(new, old)| { new <= old }));
 
-	let check_balance = |asset, new_balance, old_balance| {
+	for ((new_balance, old_balance), asset) in
+		new_balances.into_iter().zip(balances).zip([base_asset, pair_asset])
+	{
 		if new_balance < old_balance {
 			assert_events_eq!(
 				Runtime,
@@ -116,60 +117,49 @@ fn mint_range_order(
 				},)
 			);
 		}
-	};
-
-	check_balance(unstable_asset, new_unstable_balance, unstable_balance);
-	check_balance(STABLE_ASSET, new_stable_balance, stable_balance);
+	}
 
 	System::reset_events();
 }
 
-fn mint_limit_order(
+fn set_limit_order(
 	account_id: &AccountId,
-	unstable_asset: Asset,
-	order: Order,
-	tick: Tick,
+	sell_asset: Asset,
+	buy_asset: Asset,
+	id: OrderId,
+	tick: Option<Tick>,
 	amount: AssetAmount,
 ) {
-	let unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
+	let sell_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+	let buy_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		unstable_asset,
-		order,
+		sell_asset,
+		buy_asset,
+		id,
 		tick,
 		amount,
 	));
-	let new_unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let new_stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
+	let new_sell_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+	let new_buy_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
 
-	if order == Order::Sell {
-		assert_eq!(new_unstable_balance, unstable_balance - amount);
-		assert_eq!(new_stable_balance, stable_balance);
-	} else {
-		assert_eq!(new_unstable_balance, unstable_balance);
-		assert_eq!(new_stable_balance, stable_balance - amount);
+	assert_eq!(new_sell_balance, sell_balance - amount);
+	assert_eq!(new_buy_balance, buy_balance);
+
+	if new_sell_balance < sell_balance {
+		assert_events_eq!(
+			Runtime,
+			RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
+				account_id: account_id.clone(),
+				asset: sell_asset,
+				amount_debited: sell_balance - new_sell_balance,
+			},)
+		);
 	}
-
-	let check_balance = |asset, new_balance, old_balance| {
-		if new_balance < old_balance {
-			assert_events_eq!(
-				Runtime,
-				RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
-					account_id: account_id.clone(),
-					asset,
-					amount_debited: old_balance - new_balance,
-				},)
-			);
-		}
-	};
-
-	check_balance(unstable_asset, new_unstable_balance, unstable_balance);
-	check_balance(STABLE_ASSET, new_stable_balance, stable_balance);
 
 	System::reset_events();
 }
@@ -182,7 +172,7 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 		new_pool(asset, 0u32, price_at_tick(0).unwrap());
 		credit_account(&DORIS, asset, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
-		mint_range_order(&DORIS, asset, -1_000..1_000, 1_000_000);
+		set_range_order(&DORIS, asset, Asset::Usdc, 0, Some(-1_000..1_000), 1_000_000);
 	}
 }
 
@@ -197,11 +187,11 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Eth, Order::Sell, 0, 500_000);
-		mint_range_order(&DORIS, Asset::Eth, -10..10, 1_000_000);
+		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
+		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Flip, Order::Sell, 0, 500_000);
-		mint_range_order(&DORIS, Asset::Flip, -10..10, 1_000_000);
+		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
+		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		new_account(&ZION, AccountRole::Broker);
 

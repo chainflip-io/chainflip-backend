@@ -3,7 +3,7 @@
 use super::*;
 use cf_amm::common::price_at_tick;
 use cf_primitives::Asset;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok,
@@ -56,7 +56,7 @@ benchmarks! {
 		assert!(Pools::<T>::get(Asset::Eth).is_some());
 	}
 
-	collect_and_mint_range_order {
+	update_range_order {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
@@ -70,17 +70,26 @@ benchmarks! {
 			1_000_000,
 		));
 	}: _(
-			RawOrigin::Signed(caller.clone()),
-			Asset::Eth,
-			-100..100,
-			OldRangeOrderSize::AssetAmounts {
-				maximum: SideMap::from_array([1_000_000, 1_000_000]),
-				minimum: SideMap::from_array([500_000, 500_000]),
-			}
+		RawOrigin::Signed(caller.clone()),
+		Asset::Eth,
+		Asset::Usdc,
+		0,
+		Some(-100..100),
+		RangeOrderSize::AssetAmounts {
+			maximum: AssetAmounts {
+				base: 1_000_000,
+				pair: 1_000_000,
+			},
+			minimum: AssetAmounts {
+				base: 500_000,
+				pair: 500_000,
+			},
+		},
+		IncreaseOrDecrease::Increase
 	)
 	verify {}
 
-	collect_and_burn_range_order {
+	set_range_order {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
@@ -93,16 +102,26 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_range_order(
-			RawOrigin::Signed(caller.clone()).into(),
-			Asset::Eth,
-			-100..100,
-			OldRangeOrderSize::Liquidity(1_000),
-		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000)
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		Asset::Eth,
+		Asset::Usdc,
+		0,
+		Some(-100..100),
+		RangeOrderSize::AssetAmounts {
+			maximum: AssetAmounts {
+				base: 1_000_000,
+				pair: 1_000_000,
+			},
+			minimum: AssetAmounts {
+				base: 500_000,
+				pair: 500_000,
+			},
+		}
+	)
 	verify {}
 
-	collect_and_mint_limit_order {
+	update_limit_order {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
@@ -115,10 +134,18 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000)
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		Asset::Eth,
+		Asset::Usdc,
+		0,
+		Some(100),
+		1_000_000,
+		IncreaseOrDecrease::Increase
+	)
 	verify {}
 
-	collect_and_burn_limit_order {
+	set_limit_order {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
@@ -131,8 +158,14 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		Asset::Eth,
+		Asset::Usdc,
+		0,
+		Some(100),
+		1_000
+	)
 	verify {}
 
 	impl_benchmark_test_suite!(

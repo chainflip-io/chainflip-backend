@@ -1,8 +1,8 @@
 use crate::{
-	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, OldRangeOrderSize,
-	Pools, STABLE_ASSET,
+	mock::*, utilities, AssetAmounts, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn,
+	Pools, RangeOrderSize, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, SideMap, Tick};
+use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::assert_events_match;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -78,11 +78,13 @@ fn can_enable_disable_trading_pool() {
 		));
 
 		assert_noop!(
-			LiquidityPools::collect_and_mint_range_order(
+			LiquidityPools::set_range_order(
 				RuntimeOrigin::signed(ALICE),
+				Asset::Usdc,
 				unstable_asset,
-				range.clone(),
-				OldRangeOrderSize::Liquidity(1_000_000),
+				0,
+				Some(range.clone()),
+				RangeOrderSize::Liquidity(1_000_000),
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -97,11 +99,13 @@ fn can_enable_disable_trading_pool() {
 			crate::Event::<Test>::PoolStateUpdated { unstable_asset, enabled: true },
 		));
 
-		assert_ok!(LiquidityPools::collect_and_mint_range_order(
+		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
+			Asset::Usdc,
 			unstable_asset,
-			range,
-			OldRangeOrderSize::Liquidity(1_000_000),
+			0,
+			Some(range),
+			RangeOrderSize::Liquidity(1_000_000),
 		));
 	});
 }
@@ -140,29 +144,32 @@ fn test_buy_back_flip_2() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
-		assert_ok!(LiquidityPools::collect_and_mint_range_order(
+		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
+			Asset::Usdc,
 			FLIP,
-			POSITION,
-			OldRangeOrderSize::AssetAmounts {
-				maximum: SideMap::from_array([1_000_000, 1_000_000]),
-				minimum: SideMap::from_array([900_000, 900_000]),
+			0,
+			Some(POSITION),
+			RangeOrderSize::AssetAmounts {
+				maximum: AssetAmounts { base: 1_000_000, pair: 1_000_000 },
+				minimum: AssetAmounts { base: 900_000, pair: 900_000 },
 			}
 		));
-		let liquidity = assert_events_match!(
+		assert_events_match!(
 			Test,
 			RuntimeEvent::LiquidityPools(
-				crate::Event::RangeOrderMinted {
-					liquidity,
+				crate::Event::RangeOrderUpdated {
 					..
 				},
-			) => liquidity
+			) => ()
 		);
-		assert_ok!(LiquidityPools::collect_and_burn_range_order(
+		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
+			Asset::Usdc,
 			FLIP,
-			POSITION,
-			liquidity
+			0,
+			Some(POSITION),
+			RangeOrderSize::Liquidity(0)
 		));
 	});
 }
@@ -181,11 +188,13 @@ fn test_buy_back_flip() {
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
-		assert_ok!(LiquidityPools::collect_and_mint_range_order(
+		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
+			Asset::Usdc,
 			FLIP,
-			POSITION,
-			OldRangeOrderSize::Liquidity(1_000_000),
+			0,
+			Some(POSITION),
+			RangeOrderSize::Liquidity(1_000_000),
 		));
 
 		// Swapping should cause the network fee to be collected.

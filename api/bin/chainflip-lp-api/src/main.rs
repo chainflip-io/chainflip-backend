@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use cf_primitives::AssetAmount;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	try_parse_number_or_hex,
@@ -6,8 +6,8 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		BurnLimitOrderReturn, BurnRangeOrderReturn, LpApi, MintLimitOrderReturn,
-		MintRangeOrderReturn, Order, Tick,
+		LpApi, SetLimitOrderReturn, SetRangeOrderReturn, Tick, UpdateLimitOrderReturn,
+		UpdateRangeOrderReturn,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -23,6 +23,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
@@ -62,32 +63,6 @@ pub mod rpc_types {
 		pub liquidity: u128,
 	}
 
-	/// Range Orders can be specified in terms of either asset amounts or pool liquidity.
-	///
-	/// If `AssetAmounts` is specified, the order requires maximum and minimum amounts of the assets
-	/// pairs. This will attempt a mint of up to `maximum` amounts of the assets, but will not mint
-	/// less than `minimum` amounts.
-	#[derive(Serialize, Deserialize)]
-	pub enum OldRangeOrderSize {
-		AssetAmounts { maximum: AssetAmounts, minimum: AssetAmounts },
-		PoolLiquidity(NumberOrHex),
-	}
-
-	impl TryFrom<OldRangeOrderSize> for lp::OldRangeOrderSize {
-		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
-
-		fn try_from(value: OldRangeOrderSize) -> Result<Self, Self::Error> {
-			Ok(match value {
-				OldRangeOrderSize::AssetAmounts { maximum, minimum } => Self::AssetAmounts {
-					maximum: maximum.try_into()?,
-					minimum: minimum.try_into()?,
-				},
-				OldRangeOrderSize::PoolLiquidity(liquidity) =>
-					Self::Liquidity(liquidity.try_into()?),
-			})
-		}
-	}
-
 	#[derive(Serialize, Deserialize)]
 	pub struct OpenSwapChannels {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
@@ -119,41 +94,47 @@ pub trait Rpc {
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), Error>;
 
-	#[method(name = "mintRangeOrder")]
-	async fn mint_range_order(
+	#[method(name = "updateRangeOrder")]
+	async fn update_range_order(
 		&self,
-		asset: Asset,
-		lower_tick: Tick,
-		upper_tick: Tick,
-		order_size: rpc_types::OldRangeOrderSize,
-	) -> Result<MintRangeOrderReturn, Error>;
+		base_asset: Asset,
+		pair_asset: Asset,
+		id: OrderId,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSize,
+		increase_or_decrease: IncreaseOrDecrease,
+	) -> Result<UpdateRangeOrderReturn, Error>;
 
-	#[method(name = "burnRangeOrder")]
-	async fn burn_range_order(
+	#[method(name = "setRangeOrder")]
+	async fn set_range_order(
 		&self,
-		asset: Asset,
-		lower_tick: Tick,
-		upper_tick: Tick,
-		amount: NumberOrHex,
-	) -> Result<BurnRangeOrderReturn, Error>;
+		base_asset: Asset,
+		pair_asset: Asset,
+		id: OrderId,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSize,
+	) -> Result<SetRangeOrderReturn, Error>;
 
-	#[method(name = "mintLimitOrder")]
-	async fn mint_limit_order(
+	#[method(name = "updateLimitOrder")]
+	async fn update_limit_order(
 		&self,
-		asset: Asset,
-		order: Order,
-		price: Tick,
-		amount: NumberOrHex,
-	) -> Result<MintLimitOrderReturn, Error>;
+		sell_asset: Asset,
+		buy_asset: Asset,
+		id: OrderId,
+		tick: Option<Tick>,
+		sell_amount: AssetAmount,
+		increase_or_decrease: IncreaseOrDecrease,
+	) -> Result<UpdateLimitOrderReturn, Error>;
 
-	#[method(name = "burnLimitOrder")]
-	async fn burn_limit_order(
+	#[method(name = "setLimitOrder")]
+	async fn set_limit_order(
 		&self,
-		asset: Asset,
-		order: Order,
-		price: Tick,
-		amount: NumberOrHex,
-	) -> Result<BurnLimitOrderReturn, Error>;
+		sell_asset: Asset,
+		buy_asset: Asset,
+		id: OrderId,
+		tick: Option<Tick>,
+		sell_amount: AssetAmount,
+	) -> Result<SetLimitOrderReturn, Error>;
 
 	#[method(name = "assetBalances")]
 	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
@@ -222,79 +203,65 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.query_api().get_balances(None).await?)
 	}
 
-	/// Creates or adds liquidity to a range order.
-	/// Returns the assets debited and fees harvested.
-	async fn mint_range_order(
+	async fn update_range_order(
 		&self,
-		asset: Asset,
-		start: Tick,
-		end: Tick,
-		order_size: rpc_types::OldRangeOrderSize,
-	) -> Result<MintRangeOrderReturn, Error> {
-		if start >= end {
-			return Err(anyhow!("Invalid tick range").into())
-		}
-
+		base_asset: Asset,
+		pair_asset: Asset,
+		id: OrderId,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSize,
+		increase_or_decrease: IncreaseOrDecrease,
+	) -> Result<UpdateRangeOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.mint_range_order(
-				asset,
-				Range { start, end },
-				order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
-			)
+			.update_range_order(base_asset, pair_asset, id, tick_range, size, increase_or_decrease)
 			.await?)
 	}
 
-	/// Removes liquidity from a range order.
-	/// Returns the assets returned and fees harvested.
-	async fn burn_range_order(
+	async fn set_range_order(
 		&self,
-		asset: Asset,
-		start: Tick,
-		end: Tick,
-		amount: NumberOrHex,
-	) -> Result<BurnRangeOrderReturn, Error> {
-		if start >= end {
-			return Err(anyhow!("Invalid tick range").into())
-		}
-
+		base_asset: Asset,
+		pair_asset: Asset,
+		id: OrderId,
+		tick_range: Option<Range<Tick>>,
+		size: RangeOrderSize,
+	) -> Result<SetRangeOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.burn_range_order(asset, Range { start, end }, try_parse_number_or_hex(amount)?)
+			.set_range_order(base_asset, pair_asset, id, tick_range, size)
 			.await?)
 	}
 
-	/// Creates or adds liquidity to a limit order.
-	/// Returns the assets debited, fees harvested and swapped liquidity.
-	async fn mint_limit_order(
+	async fn update_limit_order(
 		&self,
-		asset: Asset,
-		order: Order,
-		price: Tick,
-		amount: NumberOrHex,
-	) -> Result<MintLimitOrderReturn, Error> {
+		sell_asset: Asset,
+		buy_asset: Asset,
+		id: OrderId,
+		tick: Option<Tick>,
+		sell_amount: AssetAmount,
+		increase_or_decrease: IncreaseOrDecrease,
+	) -> Result<UpdateLimitOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.mint_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.update_limit_order(sell_asset, buy_asset, id, tick, sell_amount, increase_or_decrease)
 			.await?)
 	}
 
-	/// Removes liquidity from a limit order.
-	/// Returns the assets credited, fees harvested and swapped liquidity.
-	async fn burn_limit_order(
+	async fn set_limit_order(
 		&self,
-		asset: Asset,
-		order: Order,
-		price: Tick,
-		amount: NumberOrHex,
-	) -> Result<BurnLimitOrderReturn, Error> {
+		sell_asset: Asset,
+		buy_asset: Asset,
+		id: OrderId,
+		tick: Option<Tick>,
+		sell_amount: AssetAmount,
+	) -> Result<SetLimitOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.burn_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.set_limit_order(sell_asset, buy_asset, id, tick, sell_amount)
 			.await?)
 	}
 
