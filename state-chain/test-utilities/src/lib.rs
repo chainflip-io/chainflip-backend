@@ -146,7 +146,7 @@ macro_rules! impl_test_helpers {
 		}
 	};
 	( $runtime:ty, $genesis:expr ) => {
-		$crate::impl_test_helpers!($runtime, RuntimeGenesisConfig::default(), || {});
+		$crate::impl_test_helpers!($runtime, $genesis, || {});
 	};
 	( $runtime:ty ) => {
 		$crate::impl_test_helpers!($runtime, RuntimeGenesisConfig::default());

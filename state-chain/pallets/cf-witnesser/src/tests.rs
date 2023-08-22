@@ -203,8 +203,7 @@ fn can_continue_to_witness_for_old_epochs() {
 fn can_purge_stale_storage() {
 	const BLOCK_WEIGHT: u64 = 1_000_000_000_000u64;
 	let delete_weight = <Test as Config>::WeightInfo::remove_storage_items(1);
-	let mut ext = new_test_ext();
-	ext.execute_with(|| {
+	let mut ext = new_test_ext().execute_with(|| {
 		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::Dummy(
 			pallet_dummy::Call::<Test>::increment_value {},
 		))));
@@ -225,9 +224,9 @@ fn can_purge_stale_storage() {
 	// Commit Overlay changeset into the backend DB, to fully test clear_prefix logic.
 	// See: /state-chain/TROUBLESHOOTING.md
 	// Section: ## Substrate storage: Separation of front overlay and backend. Feat clear_prefix()
-	let _ = ext.commit_all();
+	assert_ok!(ext.commit_all());
 
-	ext.execute_with(|| {
+	let mut ext: cf_test_utilities::TestExternalities<Test> = ext.execute_with(|| {
 		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::Dummy(
 			pallet_dummy::Call::<Test>::increment_value {},
 		))));
@@ -267,7 +266,7 @@ fn can_purge_stale_storage() {
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2]);
 	});
 
-	let _ = ext.commit_all();
+	assert_ok!(ext.commit_all());
 
 	ext.execute_with(|| {
 		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::Dummy(

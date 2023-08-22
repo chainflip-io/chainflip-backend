@@ -10,12 +10,12 @@ use cf_traits::{
 	},
 	AccountRoleRegistry,
 };
-use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{assert_ok, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Permill,
+	Permill,
 };
 
 use sp_std::str::FromStr;
@@ -90,22 +90,15 @@ impl crate::Config for Test {
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];
 pub const NON_LP_ACCOUNT: [u8; 32] = [2u8; 32];
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities =
-		RuntimeGenesisConfig::default().build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&LP_ACCOUNT.into(),
-		)
-		.unwrap();
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+		));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
 			&NON_LP_ACCOUNT.into(),
-		)
-		.unwrap();
-	});
-
-	ext
+		));
+	}
 }
