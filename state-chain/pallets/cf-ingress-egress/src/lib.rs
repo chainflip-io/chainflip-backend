@@ -149,6 +149,28 @@ pub mod pallet {
 		},
 	}
 
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	pub struct DepositTracker {
+		pub unfetched: AssetAmount,
+		pub fetched: AssetAmount,
+	}
+
+	impl DepositTracker {
+		pub fn total(&self) -> AssetAmount {
+			self.unfetched + self.fetched
+		}
+
+		pub fn register_deposit(&mut self, amount: AssetAmount) {
+			self.unfetched.saturating_accrue(amount);
+		}
+
+		pub fn mark_as_fetched(&mut self, amount: AssetAmount) {
+			let amount = amount.min(self.unfetched);
+			self.unfetched -= amount;
+			self.fetched.saturating_accrue(amount);
+		}
+	}
+
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -264,6 +286,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FailedVaultTransfers<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DepositBalance<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, DepositTracker, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -727,6 +753,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			amount,
 			deposit_channel_details.deposit_channel,
 		);
+		DepositBalance::<T, I>::mutate(|deposits| deposits.register_deposit(amount));
 
 		Self::deposit_event(Event::DepositReceived {
 			deposit_address,
