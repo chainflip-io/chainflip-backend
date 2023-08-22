@@ -8,7 +8,7 @@ source ./localnet/helper.sh
 
 set -eo pipefail
 
-if [ $CI == true ]; then
+if [[ $CI == true ]]; then
   additional_docker_compose_up_args="--quiet-pull"
   additional_docker_compose_down_args="--volumes --remove-orphans --rmi all"
 else
@@ -213,38 +213,38 @@ yeet() {
 logs() {
   echo "🤖 Which service would you like to tail?"
   select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
-    if [ $SERVICE == "all" ]; then
+    if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
     fi
-    if [ $SERVICE == "polkadot" ]; then
+    if [[ $SERVICE == "polkadot" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
     fi
-    if [ $SERVICE == "geth" ]; then
+    if [[ $SERVICE == "geth" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow geth
     fi
-    if [ $SERVICE == "bitcoin" ]; then
+    if [[ $SERVICE == "bitcoin" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow bitcoin
     fi
-    if [ $SERVICE == "poster" ]; then
+    if [[ $SERVICE == "poster" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
     fi
-    if [ $SERVICE == "sequencer" ]; then
+    if [[ $SERVICE == "sequencer" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
     fi
-    if [ $SERVICE == "staker" ]; then
+    if [[ $SERVICE == "staker" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
-    if [ $SERVICE == "node" ]; then
+    if [[ $SERVICE == "node" ]]; then
       tail -f /tmp/chainflip/chainflip-node.log
     fi
-    if [ $SERVICE == "engine" ]; then
+    if [[ $SERVICE == "engine" ]]; then
       tail -f /tmp/chainflip/chainflip-engine.log
     fi
-    if [ $SERVICE == "broker" ]; then
+    if [[ $SERVICE == "broker" ]]; then
       tail -f /tmp/chainflip/chainflip-broker-api.log
     fi
-    if [ $SERVICE == "lp" ]; then
+    if [[ $SERVICE == "lp" ]]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
     fi
     break
@@ -273,18 +273,18 @@ fi
 
 get-workflow
 
-if [ $WORKFLOW == "build-localnet" ]; then
+if [[ $WORKFLOW == "build-localnet" ]]; then
   build-localnet
-elif [ $WORKFLOW == "recreate" ]; then
+elif [[ $WORKFLOW == "recreate" ]]; then
   destroy
   sleep 5
   build-localnet
-elif [ $WORKFLOW == "destroy" ]; then
+elif [[ $WORKFLOW == "destroy" ]]; then
   destroy
-elif [ $WORKFLOW == "logs" ]; then
+elif [[ $WORKFLOW == "logs" ]]; then
   logs
-elif [ $WORKFLOW == "yeet" ]; then
+elif [[ $WORKFLOW == "yeet" ]]; then
   yeet
-elif [ $WORKFLOW == "bouncer" ]; then
+elif [[ $WORKFLOW == "bouncer" ]]; then
   bouncer
 fi
