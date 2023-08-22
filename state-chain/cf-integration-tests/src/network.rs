@@ -106,7 +106,12 @@ impl Cli {
 		amount: RedemptionAmount<FlipBalance>,
 		eth_address: EthereumAddress,
 	) {
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(account.clone()), amount, eth_address));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(account.clone()),
+			amount,
+			eth_address,
+			Default::default()
+		));
 	}
 
 	pub fn set_vanity_name(account: &NodeId, name: &str) {

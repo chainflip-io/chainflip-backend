@@ -18,6 +18,8 @@ pub struct RegisterRedemption {
 	pub address: Address,
 	/// The expiry duration in seconds.
 	pub expiry: Uint,
+	/// The authorised executor of the redemption.
+	pub executor: RedemptionExecutor,
 }
 
 impl RegisterRedemption {
@@ -27,12 +29,14 @@ impl RegisterRedemption {
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
+		executor: RedemptionExecutor,
 	) -> Self {
 		Self {
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
+			executor,
 		}
 	}
 }
@@ -46,6 +50,7 @@ impl EthereumCall for RegisterRedemption {
 			("amount", Uint::param_type()),
 			("funder", Address::param_type()),
 			("expiryTime", ParamType::Uint(48)),
+			("executor", RedemptionExecutor::param_type()),
 		]
 	}
 
@@ -55,6 +60,7 @@ impl EthereumCall for RegisterRedemption {
 			self.amount.tokenize(),
 			self.address.tokenize(),
 			self.expiry.tokenize(),
+			self.executor.tokenize(),
 		]
 	}
 }
@@ -95,7 +101,13 @@ mod test_register_redemption {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_SCGW_ADDR.into(),
 			},
-			super::RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS),
+			super::RegisterRedemption::new(
+				&TEST_ACCT,
+				AMOUNT,
+				&TEST_ADDR,
+				EXPIRY_SECS,
+				RedemptionExecutor::OnlyAddress(TEST_ADDR.into()),
+			),
 		);
 
 		let expected_msg_hash = register_redemption_runtime.threshold_signature_payload();
