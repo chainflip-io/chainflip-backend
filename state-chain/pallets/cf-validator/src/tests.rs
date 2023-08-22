@@ -112,6 +112,10 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeygensInProgress(..)
+		));
 		assert_noop!(
 			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
 			Error::<Test>::RotationInProgress
@@ -555,25 +559,6 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-	});
-}
-
-#[test]
-fn rotating_during_rotation_is_noop() {
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		MockBidderProvider::set_default_test_bids();
-		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
-		// We attempt an auction when we force a rotation
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
-
-		// We don't attempt the auction again, because we're already in a rotation
-		assert_noop!(
-			ValidatorPallet::force_rotation(RawOrigin::Root.into()),
-			Error::<Test>::RotationInProgress
-		);
 	});
 }
 
