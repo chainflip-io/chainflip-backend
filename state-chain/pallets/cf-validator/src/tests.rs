@@ -690,6 +690,33 @@ fn test_expect_validator_register_fails() {
 	});
 }
 
+mod keygen {
+	use super::*;
+
+	fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+		CurrentAuthorities::<Test>::set((0..10).collect());
+		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
+			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+				winners: (4..14).collect(),
+				losers: Default::default(),
+				bond: Default::default(),
+			}),
+		));
+
+		MockVaultRotatorA::failed(offenders);
+		Pallet::<Test>::on_initialize(1);
+	}
+
+	#[test]
+	fn restarts_from_keygen_on_keygen_failure() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// Even one "bad" node should result in a new auction
+			failed_keygen_with_offenders(4..5);
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+	}
+}
+
 #[cfg(test)]
 mod key_handover {
 
