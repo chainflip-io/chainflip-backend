@@ -13,7 +13,7 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
-use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
+use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -461,7 +461,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> CompatibleVersions for Pallet<T> {
+impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	fn current_compatibility_version() -> SemVer {
 		<T as Config>::CurrentCompatibilityVersion::get()
 	}

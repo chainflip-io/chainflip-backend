@@ -4,6 +4,7 @@ use crate::{
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_err, assert_noop, assert_ok, traits::OnInitialize};
+use sp_runtime::Percent;
 use std::time::Duration;
 
 use crate as pallet_cf_governance;
@@ -210,6 +211,7 @@ fn upgrade_runtime_successfully() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::chainflip_runtime_upgrade(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			None,
 			DUMMY_WASM_BLOB
 		));
 		assert_eq!(
@@ -226,6 +228,7 @@ fn wrong_upgrade_conditions() {
 		assert_noop!(
 			Governance::chainflip_runtime_upgrade(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				None,
 				DUMMY_WASM_BLOB
 			),
 			<Error<Test>>::UpgradeConditionsNotMet
@@ -242,9 +245,65 @@ fn error_during_runtime_upgrade() {
 		// the result is an error
 		let result = Governance::chainflip_runtime_upgrade(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			None,
 			DUMMY_WASM_BLOB,
 		);
 		assert!(result.is_err());
 		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
+	});
+}
+
+#[test]
+fn runtime_upgrade_requires_up_to_date_authorities_cfes() {
+	RuntimeUpgradeMock::upgrade_success(true);
+	UpgradeConditionMock::set(true);
+	new_test_ext().execute_with(|| {
+		PercentCfeAtTargetVersion::set(Percent::from_percent(50));
+		assert_ok!(Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			Some(Percent::from_percent(50)),
+			DUMMY_WASM_BLOB,
+		));
+
+		assert_noop!(
+			Governance::chainflip_runtime_upgrade(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				Some(Percent::from_percent(51)),
+				DUMMY_WASM_BLOB,
+			),
+			crate::Error::<Test>::NotEnoughAuthoritiesCfesAtTargetVersion
+		);
+
+		NextCfeVersion::set(None);
+		assert_noop!(
+			Governance::chainflip_runtime_upgrade(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				Some(Percent::from_percent(50)),
+				DUMMY_WASM_BLOB,
+			),
+			crate::Error::<Test>::TargetCfeVersionNotSet
+		);
+	});
+}
+
+#[test]
+fn runtime_upgrade_can_have_no_cfes_version_requirement() {
+	RuntimeUpgradeMock::upgrade_success(true);
+	UpgradeConditionMock::set(true);
+	new_test_ext().execute_with(|| {
+		PercentCfeAtTargetVersion::set(Percent::from_percent(0));
+
+		assert_ok!(Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			None,
+			DUMMY_WASM_BLOB,
+		));
+
+		NextCfeVersion::set(None);
+		assert_ok!(Governance::chainflip_runtime_upgrade(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			None,
+			DUMMY_WASM_BLOB,
+		));
 	});
 }
