@@ -127,7 +127,6 @@ spec:
             - --rpc-cors=all
             - --rpc-methods=unsafe
             - --unsafe-rpc-external
-            - --unsafe-ws-external
             {{- range .Values.bootnodes }}
             - --bootnodes={{ . }}
             {{- end }}
