@@ -5,7 +5,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - "/tmp/chainflip/data/redis/data:/data"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/redis/data:/data"
 
   geth:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc4-1-node
@@ -17,9 +17,9 @@ services:
       - "127.0.0.1:8546:8546"
       - "127.0.0.1:30303:30303"
     volumes:
-      - "/tmp/chainflip/data/l1data:/datadir"
-      - "/tmp/chainflip/data/l1keystore:/keystore"
-      - "/tmp/chainflip/data/config:/config"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/l1data:/datadir"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/l1keystore:/keystore"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/config:/config"
 
   sequencer:
     pid: host # allow debugging
@@ -30,8 +30,8 @@ services:
       - "127.0.0.1:8548:8548"
       - "127.0.0.1:9642:9642"
     volumes:
-      - "/tmp/chainflip/data/seqdata:/home/user/.arbitrum/local/nitro"
-      - "/tmp/chainflip/data/config:/config"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/seqdata:/home/user/.arbitrum/local/nitro"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/config:/config"
     command: --conf.file /config/sequencer_config.json --node.feed.output.enable --node.feed.output.port 9642  --http.api net,web3,eth,txpool,debug --node.seq-coordinator.my-url  ws://sequencer:8548 --graphql.enable --graphql.vhosts * --graphql.corsdomain *
     depends_on:
       - geth
@@ -45,9 +45,9 @@ services:
       - "127.0.0.1:8047:8547"
       - "127.0.0.1:8048:8548"
     volumes:
-      - "/tmp/chainflip/data/unsafestaker-data:/home/user/.arbitrum/local/nitro"
-      - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
-      - "/tmp/chainflip/data/config:/config"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/unsafestaker-data:/home/user/.arbitrum/local/nitro"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/l1keystore:/home/user/l1keystore"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/config:/config"
     command: --conf.file /config/unsafe_staker_config.json
     depends_on:
       - sequencer
@@ -61,9 +61,9 @@ services:
       - "127.0.0.1:8147:8547"
       - "127.0.0.1:8148:8548"
     volumes:
-      - "/tmp/chainflip/data/poster-data:/home/user/.arbitrum/local/nitro"
-      - "/tmp/chainflip/data/l1keystore:/home/user/l1keystore"
-      - "/tmp/chainflip/data/config:/config"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/poster-data:/home/user/.arbitrum/local/nitro"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/l1keystore:/home/user/l1keystore"
+      - "/home/albert/work/chainflip/temp_localnet/chainflip/data/config:/config"
     command: --conf.file /config/poster_config.json
     depends_on:
       - geth
