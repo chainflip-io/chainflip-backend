@@ -965,6 +965,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
+		T::VaultRotator::abort_vault_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1069,7 +1070,6 @@ impl<T: Config> Pallet<T> {
 				target: "cf-validator",
 				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
-			T::VaultRotator::abort_vault_rotation();
 			Self::abort_rotation();
 			return
 		}
