@@ -46,6 +46,18 @@ macro_rules! assert_default_rotation_outcome {
 	};
 }
 
+#[track_caller]
+fn assert_rotation_aborted() {
+	assert_rotation_phase_matches!(RotationPhase::Idle);
+	assert_event_sequence!(
+		Test,
+		RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+			new_phase: RotationPhase::Idle
+		}),
+		RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+	);
+}
+
 fn simple_rotation_state(
 	auction_winners: Vec<u64>,
 	bond: Option<u128>,
@@ -718,14 +730,7 @@ mod key_handover {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// Too many current authorities banned, we abort.
 			failed_handover_with_offenders(0..4);
-			assert_rotation_phase_matches!(RotationPhase::Idle);
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-					new_phase: RotationPhase::Idle
-				}),
-				RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-			);
+			assert_rotation_aborted();
 		});
 	}
 
@@ -765,14 +770,7 @@ fn safe_mode_can_aborts_authority_rotation_before_key_handover() {
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		ValidatorPallet::on_initialize(1);
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-				new_phase: RotationPhase::Idle
-			}),
-			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-		);
-		assert_rotation_phase_matches!(RotationPhase::Idle);
+		assert_rotation_aborted();
 	});
 }
 
