@@ -49,8 +49,8 @@ get-workflow() {
   done
 }
 build-localnet() {
-  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /home/albert/work/chainflip/temp_localnet/chainflip/
-  cp -R $LOCALNET_INIT_DIR/data/ /home/albert/work/chainflip/temp_localnet/chainflip/data
+  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
+  cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
   echo
 
   if [ -z "${BINARIES_LOCATION}" ]; then
@@ -110,8 +110,8 @@ build-localnet() {
 }
 
 build-localnet-in-ci() {
-  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /home/albert/work/chainflip/temp_localnet/chainflip/
-  cp -R $LOCALNET_INIT_DIR/data/ /home/albert/work/chainflip/temp_localnet/chainflip/data
+  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
+  cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
 
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
@@ -164,7 +164,7 @@ destroy() {
   echo "💣 Destroying network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
-  rm -rf /home/albert/work/chainflip/temp_localnet/chainflip
+  rm -rf /tmp/chainflip
 }
 
 yeet() {
@@ -215,7 +215,7 @@ logs() {
   select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
     if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
-      tail -f /home/albert/work/chainflip/temp_localnet/chainflip/chainflip-*.log
+      tail -f /tmp/chainflip/chainflip-*.log
     fi
     if [[ $SERVICE == "polkadot" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
@@ -236,16 +236,16 @@ logs() {
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
     if [[ $SERVICE == "node" ]]; then
-      tail -f /home/albert/work/chainflip/temp_localnet/chainflip/chainflip-node.log
+      tail -f /tmp/chainflip/chainflip-node.log
     fi
     if [[ $SERVICE == "engine" ]]; then
-      tail -f /home/albert/work/chainflip/temp_localnet/chainflip/chainflip-engine.log
+      tail -f /tmp/chainflip/chainflip-engine.log
     fi
     if [[ $SERVICE == "broker" ]]; then
-      tail -f /home/albert/work/chainflip/temp_localnet/chainflip/chainflip-broker-api.log
+      tail -f /tmp/chainflip/chainflip-broker-api.log
     fi
     if [[ $SERVICE == "lp" ]]; then
-      tail -f /home/albert/work/chainflip/temp_localnet/chainflip/chainflip-lp-api.log
+      tail -f /tmp/chainflip/chainflip-lp-api.log
     fi
     break
   done
