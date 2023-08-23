@@ -774,7 +774,6 @@ mod key_handover {
 
 	#[test]
 	fn restart_from_keygen_if_a_single_candidate_fails() {
-		// TODO: should abort and start from auction instead
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// If even one new validator fails, but all old validators were well-behaved,
 			// we revert to keygen.
