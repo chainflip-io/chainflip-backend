@@ -48,14 +48,14 @@ benchmarks! {
 		let deposit_amount = 1_000;
 
 		// reduce minimum swap amount
-		let gov_origin = T::EnsureGovernance::successful_origin();
+		let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let call = Call::<T>::set_minimum_swap_amount{
 			asset: Asset::Usdc,
 			amount: 1u128,
 		};
 		call.dispatch_bypass_filter(gov_origin)?;
 
-		let witness_origin = T::EnsureWitnessed::successful_origin();
+		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let call = Call::<T>::schedule_swap_from_contract{
 			from: Asset::Usdc,
 			to: Asset::Eth,
@@ -78,14 +78,14 @@ benchmarks! {
 
 	ccm_deposit {
 		// reduce minimum swap amount
-		let gov_origin = T::EnsureGovernance::successful_origin();
+		let gov_origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		let call = Call::<T>::set_minimum_swap_amount{
 			asset: Asset::Usdc,
 			amount: 1u128,
 		};
 		call.dispatch_bypass_filter(gov_origin)?;
 
-		let origin = T::EnsureWitnessed::successful_origin();
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::benchmark_value()),
@@ -148,12 +148,12 @@ benchmarks! {
 	}
 
 	set_swap_ttl {
-		let ttl = T::BlockNumber::from(1_000u32);
+		let ttl = BlockNumberFor::<T>::from(1_000u32);
 		let call = Call::<T>::set_swap_ttl {
 			ttl
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
 	}
@@ -166,7 +166,7 @@ benchmarks! {
 			amount,
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
 		assert_eq!(crate::MinimumSwapAmount::<T>::get(asset), amount);
 	}

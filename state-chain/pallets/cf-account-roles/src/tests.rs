@@ -140,5 +140,5 @@ fn cannot_register_swapping_roles_if_swapping_disabled() {
 
 		// We can still register as a validator.
 		assert_ok!(Pallet::<Test>::register_as_validator(&ALICE));
-	})
+	});
 }

@@ -14,15 +14,11 @@ use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, Permill,
 };
 
 use sp_std::str::FromStr;
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
 
 pub struct MockAddressDerivation;
 
@@ -33,15 +29,22 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
 		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
+		sp_runtime::DispatchError,
+	> {
+		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
+	}
 }
+type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub enum Test {
 		System: frame_system,
 		LiquidityProvider: pallet_cf_lp,
 	}
@@ -59,13 +62,12 @@ impl system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
@@ -101,7 +103,7 @@ pub const NON_LP_ACCOUNT: [u8; 32] = [2u8; 32];
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
-		GenesisConfig::default().build_storage().unwrap().into();
+		RuntimeGenesisConfig::default().build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);

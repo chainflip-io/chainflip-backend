@@ -15,8 +15,8 @@ use sp_std::vec;
 const SUPPLY_UPDATE_INTERVAL: u32 = 100;
 const INFLATION_RATE: u32 = 200;
 
-fn on_initialize_setup<T: Config>(should_mint: bool) -> <T as frame_system::Config>::BlockNumber {
-	use sp_runtime::{Digest, DigestItem};
+fn on_initialize_setup<T: Config>(should_mint: bool) -> BlockNumberFor<T> {
+	use frame_support::sp_runtime::{Digest, DigestItem};
 	type System<T> = frame_system::Pallet<T>;
 	let author_slot = 1u32;
 	let pre_digest =
@@ -35,7 +35,7 @@ benchmarks! {
 	update_backup_node_emission_inflation {
 		let call = Call::<T>::update_backup_node_emission_inflation{inflation: INFLATION_RATE};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	}
 	verify {
 		assert_eq!(BackupNodeEmissionInflation::<T>::get(), INFLATION_RATE);
@@ -43,7 +43,7 @@ benchmarks! {
 	update_current_authority_emission_inflation {
 		let call = Call::<T>::update_current_authority_emission_inflation{inflation: INFLATION_RATE};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	}
 	verify {
 		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), INFLATION_RATE);
@@ -62,7 +62,7 @@ benchmarks! {
 	update_supply_update_interval {
 		let call = Call::<T>::update_supply_update_interval { value: SUPPLY_UPDATE_INTERVAL.into() };
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	}
 	verify {
 		 let supply_update_interval = Pallet::<T>::supply_update_interval();
@@ -71,7 +71,7 @@ benchmarks! {
 
 	impl_benchmark_test_suite!(
 		Pallet,
-		crate::mock::new_test_ext(Default::default(), Default::default()),
+		crate::mock::new_test_ext(),
 		crate::mock::Test,
 	);
 }

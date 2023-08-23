@@ -8,7 +8,7 @@ source ./localnet/helper.sh
 
 set -eo pipefail
 
-if [ $CI == true ]; then
+if [[ $CI == true ]]; then
   additional_docker_compose_up_args="--quiet-pull"
   additional_docker_compose_down_args="--volumes --remove-orphans --rmi all"
 else
@@ -87,7 +87,7 @@ build-localnet() {
 
   echo "🚧 Waiting for chainflip-node to start"
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
+  check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9944' > /dev/null
 
   echo "🕺 Starting Broker API ..."
   ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARIES_LOCATION
@@ -139,7 +139,7 @@ build-localnet-in-ci() {
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   echo "🚧 Waiting for chainflip-node to start"
-  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
+  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9944' > /dev/null
 
   echo "🕺 Starting Broker API ..."
   ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARIES_LOCATION
@@ -213,38 +213,38 @@ yeet() {
 logs() {
   echo "🤖 Which service would you like to tail?"
   select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
-    if [ $SERVICE == "all" ]; then
+    if [[ $SERVICE == "all" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
     fi
-    if [ $SERVICE == "polkadot" ]; then
+    if [[ $SERVICE == "polkadot" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
     fi
-    if [ $SERVICE == "geth" ]; then
+    if [[ $SERVICE == "geth" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow geth
     fi
-    if [ $SERVICE == "bitcoin" ]; then
+    if [[ $SERVICE == "bitcoin" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow bitcoin
     fi
-    if [ $SERVICE == "poster" ]; then
+    if [[ $SERVICE == "poster" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
     fi
-    if [ $SERVICE == "sequencer" ]; then
+    if [[ $SERVICE == "sequencer" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
     fi
-    if [ $SERVICE == "staker" ]; then
+    if [[ $SERVICE == "staker" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
-    if [ $SERVICE == "node" ]; then
+    if [[ $SERVICE == "node" ]]; then
       tail -f /tmp/chainflip/chainflip-node.log
     fi
-    if [ $SERVICE == "engine" ]; then
+    if [[ $SERVICE == "engine" ]]; then
       tail -f /tmp/chainflip/chainflip-engine.log
     fi
-    if [ $SERVICE == "broker" ]; then
+    if [[ $SERVICE == "broker" ]]; then
       tail -f /tmp/chainflip/chainflip-broker-api.log
     fi
-    if [ $SERVICE == "lp" ]; then
+    if [[ $SERVICE == "lp" ]]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
     fi
     break
@@ -273,18 +273,18 @@ fi
 
 get-workflow
 
-if [ $WORKFLOW == "build-localnet" ]; then
+if [[ $WORKFLOW == "build-localnet" ]]; then
   build-localnet
-elif [ $WORKFLOW == "recreate" ]; then
+elif [[ $WORKFLOW == "recreate" ]]; then
   destroy
   sleep 5
   build-localnet
-elif [ $WORKFLOW == "destroy" ]; then
+elif [[ $WORKFLOW == "destroy" ]]; then
   destroy
-elif [ $WORKFLOW == "logs" ]; then
+elif [[ $WORKFLOW == "logs" ]]; then
   logs
-elif [ $WORKFLOW == "yeet" ]; then
+elif [[ $WORKFLOW == "yeet" ]]; then
   yeet
-elif [ $WORKFLOW == "bouncer" ]; then
+elif [[ $WORKFLOW == "bouncer" ]]; then
   bouncer
 fi

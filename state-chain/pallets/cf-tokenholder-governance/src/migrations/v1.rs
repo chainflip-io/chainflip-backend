@@ -63,14 +63,14 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let awaiting = GovKeyUpdateAwaitingEnactment::<T>::get().is_some();
 		let proposal_count = Proposals::<T>::iter_keys().count() as u32;
 		Ok((awaiting, proposal_count).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		let (awaiting, proposal_count) = <(bool, u32)>::decode(&mut &state[..]).unwrap();
 		ensure!(
 			GovKeyUpdateAwaitingEnactment::<T>::get().is_some() == awaiting,

@@ -7,8 +7,7 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, ScriptPubkey, Utxo, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
@@ -21,7 +20,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 mod benchmarking;
 
@@ -53,9 +52,10 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::btc::{ScriptPubkey, Utxo};
+	use cf_chains::btc::Utxo;
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
+	use frame_support::DefaultNoBound;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -152,12 +152,6 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
-	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
-	/// from.
-	pub type BitcoinActiveDepositAddressDetails<T> =
-		StorageMap<_, Twox64Concat, ScriptPubkey, (u32, [u8; 32]), ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
 	/// Stores the current safe mode state for the runtime.
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
@@ -190,7 +184,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
 			NextCompatibilityVersion::<T>::kill();
@@ -198,54 +192,25 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
 				if next_version != T::CurrentCompatibilityVersion::get() {
-					return Err("NextCompatibilityVersion does not match the current runtime")
+					return Err("NextCompatibilityVersion does not match the current runtime".into())
 				}
 			} else {
-				return Err("NextCompatibilityVersion is not set")
+				return Err("NextCompatibilityVersion is not set".into())
 			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Adds or updates an asset address in the map of supported ETH assets.
-		///
-		/// ## Events
-		///
-		/// - [EthereumSupportedAssetsUpdated](Event::EthereumSupportedAssetsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
-		pub fn update_supported_eth_assets(
-			origin: OriginFor<T>,
-			asset: EthAsset,
-			address: EthereumAddress,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
-			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
-				EthereumSupportedAssets::<T>::mutate(asset, |mapped_address| {
-					mapped_address.replace(address);
-				});
-				Event::UpdatedEthAsset(asset, address)
-			} else {
-				EthereumSupportedAssets::<T>::insert(asset, address);
-				Event::AddedNewEthAsset(asset, address)
-			});
-			Ok(())
-		}
-
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
 		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
@@ -263,7 +228,10 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
-		#[pallet::weight(0)]
+		#[pallet::call_index(1)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
@@ -297,7 +265,10 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(unused_variables)]
-		#[pallet::weight(0)]
+		#[pallet::call_index(2)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
 		pub fn witness_current_bitcoin_block_number_for_key(
 			origin: OriginFor<T>,
 			block_number: cf_chains::btc::BlockNumber,
@@ -321,6 +292,7 @@ pub mod pallet {
 		/// Can only be dispatched from the governance origin.
 		///
 		/// See [SafeModeUpdate] for the different options.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_safe_mode())]
 		pub fn update_safe_mode(origin: OriginFor<T>, update: SafeModeUpdate<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -350,6 +322,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
 		pub fn set_next_compatibility_version(
 			origin: OriginFor<T>,
@@ -366,8 +339,8 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(Default))]
-	pub struct GenesisConfig {
+	#[derive(DefaultNoBound)]
+	pub struct GenesisConfig<T> {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
 		pub state_chain_gateway_address: EthereumAddress,
@@ -378,11 +351,12 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub network_environment: NetworkEnvironment,
+		pub _config: PhantomData<T>,
 	}
 
 	/// Sets the genesis config
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
@@ -426,19 +400,9 @@ impl<T: Config> Pallet<T> {
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		script_pubkey: ScriptPubkey,
+		deposit_address: DepositAddress,
 	) {
-		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::get(script_pubkey);
-
-		BitcoinAvailableUtxos::<T>::append(Utxo {
-			amount,
-			id: utxo_id,
-			deposit_address: DepositAddress::new(pubkey, salt),
-		});
-	}
-
-	pub fn cleanup_bitcoin_deposit_address_details(script_pubkey: ScriptPubkey) {
-		BitcoinActiveDepositAddressDetails::<T>::remove(script_pubkey);
+		BitcoinAvailableUtxos::<T>::append(Utxo { amount, id: utxo_id, deposit_address });
 	}
 
 	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {
@@ -494,14 +458,6 @@ impl<T: Config> Pallet<T> {
 					)
 				}),
 		}
-	}
-
-	pub fn add_details_for_btc_deposit_script(
-		script_pubkey: ScriptPubkey,
-		salt: u32,
-		pubkey: [u8; 32],
-	) {
-		BitcoinActiveDepositAddressDetails::<T>::insert(script_pubkey, (salt, pubkey));
 	}
 }
 

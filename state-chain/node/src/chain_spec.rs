@@ -15,22 +15,28 @@ use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
 	sr25519, Pair, Public,
 };
-use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
 	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GenesisConfig, GovernanceConfig,
-	GrandpaConfig, PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
-	ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig, ValidatorConfig,
-	WASM_BINARY,
+	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
+	PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
+	ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
+	ValidatorConfig, WASM_BINARY,
 };
 
-use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
+use std::{
+	collections::BTreeMap,
+	env,
+	marker::PhantomData,
+	str::FromStr,
+	time::{SystemTime, UNIX_EPOCH},
+};
 use utilities::clean_hex_address;
 
 use sp_runtime::{
@@ -66,7 +72,7 @@ where
 }
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -242,6 +248,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
 					network_environment: NetworkEnvironment::Development,
+					_config: PhantomData,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -270,7 +277,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		// Telemetry
 		None,
 		// Protocol ID
-		None,
+		Some("flip-dev"),
 		// Fork ID
 		None,
 		// Properties
@@ -311,6 +318,17 @@ macro_rules! network_spec {
 					dot_vault_account_id,
 					dot_runtime_version,
 				} = env_override.unwrap_or(ENV);
+				let protocol_id = format!(
+					"{}-{}",
+					PROTOCOL_ID,
+					hex::encode(
+						SystemTime::now()
+							.duration_since(UNIX_EPOCH)
+							.unwrap()
+							.as_millis()
+							.to_be_bytes(),
+					)
+				);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
 					NETWORK_NAME,
@@ -353,6 +371,7 @@ macro_rules! network_spec {
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								network_environment: NETWORK_ENVIRONMENT,
+								_config: PhantomData,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -380,8 +399,7 @@ macro_rules! network_spec {
 					vec![],
 					// Telemetry
 					None,
-					// Protocol ID
-					None,
+					Some(&protocol_id[..]),
 					// Fork ID
 					None,
 					// Properties
@@ -430,7 +448,7 @@ fn testnet_genesis(
 	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
-) -> GenesisConfig {
+) -> RuntimeGenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
 		assert_eq!(
@@ -493,7 +511,7 @@ fn testnet_genesis(
 		"Found a vanity name for non-genesis account."
 	);
 
-	GenesisConfig {
+	RuntimeGenesisConfig {
 		account_roles: AccountRolesConfig {
 			initial_account_roles: all_accounts
 				.iter()
@@ -503,6 +521,7 @@ fn testnet_genesis(
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
+			_config: PhantomData,
 		},
 		validator: ValidatorConfig {
 			genesis_authorities: authority_ids.clone(),
@@ -550,7 +569,7 @@ fn testnet_genesis(
 		// These are set indirectly via the session pallet.
 		aura: AuraConfig { authorities: vec![] },
 		// These are set indirectly via the session pallet.
-		grandpa: GrandpaConfig { authorities: vec![] },
+		grandpa: GrandpaConfig { authorities: vec![], _config: PhantomData },
 		governance: GovernanceConfig { members: BTreeSet::from([root_key]), expiry_span },
 		reputation: ReputationConfig {
 			accrual_ratio,
@@ -602,6 +621,7 @@ fn testnet_genesis(
 			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
 			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
 			supply_update_interval,
+			_config: PhantomData,
 		},
 		// !!! These Chain tracking values should be set to reasonable vaules at time of launch !!!
 		ethereum_chain_tracking: EthereumChainTrackingConfig {

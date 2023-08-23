@@ -9,32 +9,46 @@ use cf_traits::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, BuildStorage,
+	AccountId32,
 };
 use std::time::Duration;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
 // Use a realistic account id for compatibility with `RegisterRedemption`.
 type AccountId = AccountId32;
 type Balance = u128;
+type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub enum Test {
 		System: frame_system,
 		Flip: pallet_cf_flip,
 		Funding: pallet_cf_funding,
 	}
 );
+
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		flip: FlipConfig { total_issuance: 1_000_000 },
+		funding: FundingConfig {
+			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
+			redemption_tax: REDEMPTION_TAX,
+			minimum_funding: MIN_FUNDING,
+			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
+		},
+	},
+	|| {
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
+			.unwrap();
+		System::set_block_number(1);
+	}
+}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -48,13 +62,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = sp_core::H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
@@ -71,7 +84,7 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(Test);
 
 parameter_types! {
-	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+	pub const CeremonyRetryDelay: BlockNumberFor<Test> = 1;
 }
 
 parameter_types! {
@@ -193,27 +206,3 @@ pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
 pub const MIN_FUNDING: u128 = 10;
 pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
-
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000_000 },
-		funding: FundingConfig {
-			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
-			redemption_tax: REDEMPTION_TAX,
-			minimum_funding: MIN_FUNDING,
-			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
-		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
-			.unwrap();
-		System::set_block_number(1);
-	});
-
-	ext
-}

@@ -40,7 +40,7 @@ impl<T: DotRetryRpcApi + Send + Sync + Clone>
 				tips.sort();
 				tips.get(tips.len().saturating_sub(1) / 2).cloned().unwrap_or_default()
 			},
-			runtime_version: self.current_runtime_version().await,
+			runtime_version: self.runtime_version(None).await,
 		})
 	}
 }

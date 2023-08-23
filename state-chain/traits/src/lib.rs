@@ -15,7 +15,7 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
-	ChainCrypto, Ethereum, Polkadot, SwapOrigin,
+	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -26,14 +26,14 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
 	pallet_prelude::Member,
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+		DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
+	},
 	traits::{EnsureOrigin, Get, Imbalance, IsType},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
-};
 use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
 
 /// Common base config for Chainflip pallets.
@@ -420,7 +420,7 @@ where
 	/// ceremony id.
 	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
 
-	fn request_keygen_verification_signature(
+	fn request_verification_signature(
 		payload: C::Payload,
 		participants: BTreeSet<Self::ValidatorId>,
 		key: C::AggKey,
@@ -641,11 +641,13 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
+	type BlockNumber;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
+		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -656,6 +658,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
+		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
@@ -767,15 +770,8 @@ pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
 		_deposit_details: C::DepositDetails,
 		_amount: C::ChainAmount,
-		_address: C::ChainAccount,
-		_asset: C::ChainAsset,
+		_channel: DepositChannel<C>,
 	) {
-	}
-	fn on_channel_opened(
-		_address: C::ChainAccount,
-		_channel_id: ChannelId,
-	) -> Result<(), DispatchError> {
-		Ok(())
 	}
 }
 

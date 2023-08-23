@@ -3,17 +3,18 @@ use crate::{
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
+	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
-use cf_chains::Ethereum;
-use cf_primitives::chains::assets::eth;
 use ethers::types::Bloom;
-use pallet_cf_ingress_egress::DepositChannelDetails;
 use sp_core::H256;
-use state_chain_runtime::EthereumInstance;
+use state_chain_runtime::PalletInstanceAlias;
 use std::sync::Arc;
 
-use crate::witness::eth::vault::VaultEvents;
+use crate::witness::{
+	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+	eth::vault::VaultEvents,
+};
 
 use std::collections::BTreeMap;
 
@@ -26,9 +27,8 @@ use crate::eth::rpc::address_checker::*;
 use super::{contract_common::events_at_block, vault::FetchedNativeFilter};
 use crate::witness::common::chain_source::Header;
 
-use super::super::common::{
-	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
-	STATE_CHAIN_CONNECTION,
+use super::super::common::chunked_chain_source::chunked_by_vault::{
+	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
 use crate::eth::retry_rpc::EthersRetryRpcApi;
 
@@ -44,38 +44,25 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: EthRetryRpcClient,
+		native_asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
+		address_checker_address: H160,
+		vault_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
-		Inner: ChunkedByVault<
-			Index = u64,
-			Hash = H256,
-			Data = (Bloom, Vec<DepositChannelDetails<Ethereum>>),
-			Chain = Ethereum,
-		>,
+		Inner::Chain:
+			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
+		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
 		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
 		EthRetryRpcClient: EthersRetryRpcApi + AddressCheckerRetryRpcApi + Send + Sync + Clone,
+		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+		state_chain_runtime::RuntimeCall:
+			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		let address_checker_address = state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION);
-
-		let vault_address = state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION);
-
 		self.then(move |epoch, header| {
 			let eth_rpc = eth_rpc.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				let (bloom, deposit_channels) = header.data;
-
-				const NATIVE_ASSET: eth::Asset = eth::Asset::Eth;
 
 				// Genesis block cannot contain any transactions
 				if let Some(parent_hash) = header.parent_hash {
@@ -83,7 +70,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						let addresses = deposit_channels
 							.into_iter()
 							.filter(|deposit_channel| {
-								deposit_channel.deposit_channel.asset == NATIVE_ASSET
+								deposit_channel.deposit_channel.asset == native_asset
 							})
 							.map(|deposit_channel| deposit_channel.deposit_channel.address)
 							.collect::<Vec<_>>();
@@ -120,30 +107,29 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							state_chain_client
 								.submit_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
-										call:
-											Box::new(
-												pallet_cf_ingress_egress::Call::<
-													_,
-													EthereumInstance,
-												>::process_deposits {
-													deposit_witnesses: ingresses
-														.into_iter()
-														.map(|(to_addr, value)| {
-															pallet_cf_ingress_egress::DepositWitness {
+										call: Box::new(
+											pallet_cf_ingress_egress::Call::<
+												_,
+												<Inner::Chain as PalletInstanceAlias>::Instance,
+											>::process_deposits {
+												deposit_witnesses: ingresses
+													.into_iter()
+													.map(|(to_addr, value)| {
+														pallet_cf_ingress_egress::DepositWitness {
 																deposit_address: to_addr,
-																asset: NATIVE_ASSET,
+																asset: native_asset,
 																amount:
 																	value
 																	.try_into()
 																	.expect("Ingress witness transfer value should fit u128"),
 																deposit_details: (),
 															}
-														})
-														.collect(),
-													block_height: header.index,
-												}
-												.into(),
-											),
+													})
+													.collect(),
+												block_height: header.index,
+											}
+											.into(),
+										),
 										epoch_index: epoch.index,
 									},
 								)

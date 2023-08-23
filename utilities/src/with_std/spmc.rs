@@ -66,7 +66,7 @@ mod test {
 	async fn channel_allows_reconnection() {
 		let (mut sender, receiver) = channel(2);
 		drop(receiver);
-		assert!(matches!(sender.send(1).await, Err(_)));
+		assert!(sender.send(1).await.is_err());
 		let mut receiver = sender.receiver();
 		sender.send(1).await.unwrap();
 		sender.send(1).await.unwrap();

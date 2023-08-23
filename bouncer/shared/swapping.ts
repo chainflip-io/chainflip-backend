@@ -64,24 +64,23 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
         throw new Error(`Unsupported Solidity type: ${typesArray[i]}`);
     }
   }
-  const encodedMessage = web3.eth.abi.encodeParameters(typesArray, variables);
-  return encodedMessage;
+  return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
-function newCcmMetadata(
+export function newCcmMetadata(
   sourceAsset: Asset,
-  gas?: number,
-  messageTypesArray?: SolidityType[],
+  ccmMessage?: string,
+  gasBudgetFraction?: number,
   cfParamsArray?: SolidityType[],
 ) {
-  const message = newAbiEncodedMessage(messageTypesArray);
+  const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = newAbiEncodedMessage(cfParamsArray);
-  const gasBudget =
-    gas ??
-    Math.floor(
-      Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
-        100,
-    );
+  const gasDiv = gasBudgetFraction ?? 100;
+
+  const gasBudget = Math.floor(
+    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals[sourceAsset])) /
+      gasDiv,
+  );
 
   return {
     message,
@@ -208,4 +207,6 @@ export async function testAllSwaps() {
   );
 
   await Promise.all(allSwaps);
+
+  console.log('=== Swapping test complete ===');
 }

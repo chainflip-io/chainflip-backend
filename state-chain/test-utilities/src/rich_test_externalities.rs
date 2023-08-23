@@ -5,28 +5,39 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnInitialize},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::BuildStorage;
+
+/// Convenience trait to link a runtime with its corresponding AllPalletsWithSystem struct.
+pub trait HasAllPallets: frame_system::Config {
+	type AllPalletsWithSystem: OnInitialize<BlockNumberFor<Self>>
+		+ OnIdle<BlockNumberFor<Self>>
+		+ OnFinalize<BlockNumberFor<Self>>;
+
+	fn on_initialize(block_number: BlockNumberFor<Self>) {
+		<Self::AllPalletsWithSystem as OnInitialize<BlockNumberFor<Self>>>::on_initialize(
+			block_number,
+		);
+	}
+	fn on_idle(block_number: BlockNumberFor<Self>, weight: Weight) {
+		<Self::AllPalletsWithSystem as OnIdle<BlockNumberFor<Self>>>::on_idle(block_number, weight);
+	}
+	fn on_finalize(block_number: BlockNumberFor<Self>) {
+		<Self::AllPalletsWithSystem as OnFinalize<BlockNumberFor<Self>>>::on_finalize(block_number);
+	}
+}
 
 /// Basic [sp_io::TestExternalities] wrapper that provides a richer API for testing pallets.
 struct RichExternalities<Runtime>(sp_io::TestExternalities, std::marker::PhantomData<Runtime>);
 
-impl<
-		Runtime: frame_system::Config,
-		Pallets: OnInitialize<Runtime::BlockNumber>
-			+ OnIdle<Runtime::BlockNumber>
-			+ OnFinalize<Runtime::BlockNumber>,
-	> RichExternalities<(Runtime, Pallets)>
-{
+impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 	fn new(ext: sp_io::TestExternalities) -> Self {
 		Self(ext, Default::default())
 	}
 
 	/// Executes a closure, preserving the result as test context.
 	#[track_caller]
-	fn execute_with<Ctx>(
-		mut self,
-		f: impl FnOnce() -> Ctx,
-	) -> TestExternalities<Runtime, Pallets, Ctx> {
+	fn execute_with<Ctx>(mut self, f: impl FnOnce() -> Ctx) -> TestExternalities<Runtime, Ctx> {
 		let context = self.0.execute_with(f);
 		TestExternalities { ext: self, context }
 	}
@@ -37,7 +48,7 @@ impl<
 	fn execute_at_next_block<Ctx>(
 		mut self,
 		f: impl FnOnce() -> Ctx,
-	) -> TestExternalities<Runtime, Pallets, Ctx> {
+	) -> TestExternalities<Runtime, Ctx> {
 		let block_number =
 			self.0.execute_with(|| frame_system::Pallet::<Runtime>::block_number()) + 1u32.into();
 		self.execute_at_block::<Ctx>(block_number, f)
@@ -48,17 +59,17 @@ impl<
 	#[track_caller]
 	fn execute_at_block<Ctx>(
 		mut self,
-		block_number: impl Into<Runtime::BlockNumber>,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
 		f: impl FnOnce() -> Ctx,
-	) -> TestExternalities<Runtime, Pallets, Ctx> {
+	) -> TestExternalities<Runtime, Ctx> {
 		let context = self.0.execute_with(|| {
 			let block_number = block_number.into();
 			frame_system::Pallet::<Runtime>::reset_events();
 			frame_system::Pallet::<Runtime>::set_block_number(block_number);
-			Pallets::on_initialize(block_number);
+			Runtime::on_initialize(block_number);
 			let context = f();
-			Pallets::on_idle(block_number, Weight::MAX);
-			Pallets::on_finalize(block_number);
+			Runtime::on_idle(block_number, Weight::MAX);
+			Runtime::on_finalize(block_number);
 			context
 		});
 		TestExternalities { ext: self, context }
@@ -66,42 +77,31 @@ impl<
 }
 
 /// A wrapper around [sp_io::TestExternalities] that provides a richer API for testing pallets.
-pub struct TestExternalities<Runtime, Pallets, Ctx = ()> {
-	ext: RichExternalities<(Runtime, Pallets)>,
+pub struct TestExternalities<Runtime: HasAllPallets, Ctx = ()> {
+	ext: RichExternalities<Runtime>,
 	context: Ctx,
 }
 
-impl<Runtime, Pallets> TestExternalities<Runtime, Pallets>
+impl<Runtime> TestExternalities<Runtime>
 where
-	Runtime: frame_system::Config,
-	Pallets: OnInitialize<Runtime::BlockNumber>
-		+ OnIdle<Runtime::BlockNumber>
-		+ OnFinalize<Runtime::BlockNumber>,
+	Runtime: HasAllPallets,
 {
 	/// Useful for backwards-compatibility. This is equivalent to the context-less execute_with from
 	/// [sp_io::TestExternalities].
 	#[track_caller]
-	pub fn execute_with<Ctx>(
-		self,
-		f: impl FnOnce() -> Ctx,
-	) -> TestExternalities<Runtime, Pallets, Ctx> {
+	pub fn execute_with<Ctx>(self, f: impl FnOnce() -> Ctx) -> TestExternalities<Runtime, Ctx> {
 		self.ext.execute_with(f)
 	}
 }
 
-impl<Runtime, Pallets, Ctx> TestExternalities<Runtime, Pallets, Ctx>
+impl<Runtime, Ctx> TestExternalities<Runtime, Ctx>
 where
-	Runtime: frame_system::Config,
-	Pallets: OnInitialize<Runtime::BlockNumber>
-		+ OnIdle<Runtime::BlockNumber>
-		+ OnFinalize<Runtime::BlockNumber>,
+	Runtime: HasAllPallets,
 	Ctx: Clone,
 {
 	/// Initialises new [TestExternalities] with the given genesis config at block number 1.
 	#[track_caller]
-	pub fn new<GenesisConfig: BuildStorage>(
-		config: GenesisConfig,
-	) -> TestExternalities<Runtime, Pallets> {
+	pub fn new<GenesisConfig: BuildStorage>(config: GenesisConfig) -> TestExternalities<Runtime> {
 		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 		ext.execute_with(|| {
 			frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
@@ -114,19 +114,13 @@ where
 	/// Storage is not accessible in this closure. This means that assert_noop! won't work. If
 	/// storage access is required, use `inspect_storage`.
 	#[track_caller]
-	pub fn map_context<R>(
-		self,
-		f: impl FnOnce(Ctx) -> R,
-	) -> TestExternalities<Runtime, Pallets, R> {
+	pub fn map_context<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, R> {
 		TestExternalities { ext: self.ext, context: f(self.context) }
 	}
 
 	/// Execute a closure. The return value of the closure is preserved as test context.
 	#[track_caller]
-	pub fn then_execute_with<R>(
-		self,
-		f: impl FnOnce(Ctx) -> R,
-	) -> TestExternalities<Runtime, Pallets, R> {
+	pub fn then_execute_with<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, R> {
 		let context = self.context;
 		self.ext.execute_with(move || f(context))
 	}
@@ -135,7 +129,7 @@ where
 	///
 	/// Use this for assertions, for example testing invariants.
 	#[track_caller]
-	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
+	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Ctx> {
 		self.then_execute_with(|context| {
 			f(&context);
 			context
@@ -144,9 +138,14 @@ where
 
 	/// Inspect the test context without accessing storage.
 	#[track_caller]
-	pub fn inspect_context(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
+	pub fn inspect_context(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Ctx> {
 		f(&self.context);
 		self
+	}
+
+	/// Consume the test externalities and return the context.
+	pub fn into_context(self) -> Ctx {
+		self.context
 	}
 
 	/// Execute the given closure as if it was an extrinsic in the next block.
@@ -158,7 +157,7 @@ where
 	pub fn then_execute_at_next_block<R>(
 		self,
 		f: impl FnOnce(Ctx) -> R,
-	) -> TestExternalities<Runtime, Pallets, R> {
+	) -> TestExternalities<Runtime, R> {
 		let context = self.context;
 		self.ext.execute_at_next_block(move || f(context))
 	}
@@ -169,9 +168,9 @@ where
 	#[track_caller]
 	pub fn then_execute_at_block<R>(
 		self,
-		block_number: impl Into<Runtime::BlockNumber>,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
 		f: impl FnOnce(Ctx) -> R,
-	) -> TestExternalities<Runtime, Pallets, R> {
+	) -> TestExternalities<Runtime, R> {
 		let context = self.context;
 		self.ext.execute_at_block(block_number, move || f(context))
 	}
@@ -183,7 +182,7 @@ where
 	pub fn then_process_events<R>(
 		self,
 		mut f: impl FnMut(Ctx, Runtime::RuntimeEvent) -> Option<R>,
-	) -> TestExternalities<Runtime, Pallets, (Ctx, Vec<R>)> {
+	) -> TestExternalities<Runtime, (Ctx, Vec<R>)> {
 		let context = self.context.clone();
 		self.ext.execute_with(move || {
 			let r = frame_system::Pallet::<Runtime>::events()
@@ -203,7 +202,7 @@ where
 	>(
 		self,
 		f: impl FnOnce(&Ctx) -> I,
-	) -> TestExternalities<Runtime, Pallets, Ctx> {
+	) -> TestExternalities<Runtime, Ctx> {
 		let r = self.ext.execute_at_next_block(|| {
 			for (origin, call, expected_result) in f(&self.context) {
 				match expected_result {
@@ -244,21 +243,16 @@ mod test_examples {
 	use frame_support::traits::OriginTrait;
 	use sp_core::{ConstU16, ConstU64, H256};
 	use sp_runtime::{
-		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
 		DispatchError,
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 	type AccountId = u64;
 
 	// Configure a mock runtime to test the pallet.
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
 			System: frame_system,
 		}
@@ -271,13 +265,12 @@ mod test_examples {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
-		type Index = u64;
-		type BlockNumber = u64;
+		type Nonce = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
@@ -291,9 +284,13 @@ mod test_examples {
 		type MaxConsumers = frame_support::traits::ConstU32<5>;
 	}
 
+	impl HasAllPallets for Test {
+		type AllPalletsWithSystem = AllPalletsWithSystem;
+	}
+
 	// Note AllPalletsWithSystem is an alias generated by the construct_runtime macro.
-	fn new_test_ext() -> TestExternalities<Test, AllPalletsWithSystem> {
-		TestExternalities::<Test, AllPalletsWithSystem>::new(GenesisConfig::default())
+	fn new_test_ext() -> TestExternalities<Test> {
+		TestExternalities::<Test>::new(RuntimeGenesisConfig::default())
 	}
 
 	const ALICE: u64 = 1;

@@ -19,7 +19,7 @@ use chainflip_engine::{
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
-use jsonrpsee_subxt::core::client::ClientT;
+use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
@@ -60,9 +60,7 @@ async fn main() -> anyhow::Result<()> {
 		async move {
 			let mut start_logger_server_fn = Some(utilities::init_json_logger().await);
 
-			// Note that we use jsonrpsee ^0.16 to prevent unwanted
-			// warning when this ws client is disconnected
-			let ws_rpc_client = jsonrpsee_subxt::ws_client::WsClientBuilder::default()
+			let ws_rpc_client = jsonrpsee::ws_client::WsClientBuilder::default()
 				.build(&settings.state_chain.ws_endpoint)
 				.await?;
 

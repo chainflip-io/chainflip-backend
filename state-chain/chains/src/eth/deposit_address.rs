@@ -2,7 +2,7 @@ use super::Address as EthereumAddress;
 use cf_primitives::ChannelId;
 use cf_utilities::SliceToArray;
 use ethereum_types::H160;
-use sp_runtime::traits::{Hash, Keccak256};
+use frame_support::sp_runtime::traits::{Hash, Keccak256};
 use sp_std::{mem::size_of, vec::Vec};
 
 // From master branch of chainflip-eth-contracts

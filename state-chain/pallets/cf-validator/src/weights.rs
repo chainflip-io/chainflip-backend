@@ -54,21 +54,21 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator BlocksPerEpoch (r:1 w:1)
 	fn set_blocks_for_epoch() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::from_parts(23_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
 	fn update_pallet_config() -> Weight {
 		// Minimum execution time: 16_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::from_parts(16_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator AuthoritySetMinSize (r:0 w:1)
 	fn set_authority_set_min_size() -> Weight {
 		// Minimum execution time: 26_000 nanoseconds.
-		Weight::from_ref_time(26_000_000)
+		Weight::from_parts(26_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -76,7 +76,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn cfe_version() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
-		Weight::from_ref_time(27_000_000)
+		Weight::from_parts(27_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -85,14 +85,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator MappedPeers (r:1 w:1)
 	fn register_peer_id() -> Weight {
 		// Minimum execution time: 78_000 nanoseconds.
-		Weight::from_ref_time(78_000_000)
+		Weight::from_parts(78_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: Validator VanityNames (r:1 w:1)
 	fn set_vanity_name() -> Weight {
 		// Minimum execution time: 24_000 nanoseconds.
-		Weight::from_ref_time(24_000_000)
+		Weight::from_parts(24_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -105,7 +105,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[3, 150]`.
 	fn expire_epoch(_a: u32, ) -> Weight {
 		// Minimum execution time: 51_000 nanoseconds.
-		Weight::from_ref_time(1_430_000_000)
+		Weight::from_parts(1_430_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(303))
 			.saturating_add(T::DbWeight::get().writes(302))
 	}
@@ -118,7 +118,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `m` is `[1, 10]`.
 	fn missed_authorship_slots(_m: u32, ) -> Weight {
 		// Minimum execution time: 47_000 nanoseconds.
-		Weight::from_ref_time(142_000_000)
+		Weight::from_parts(142_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -131,7 +131,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	fn rotation_phase_idle() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::from_parts(23_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(7))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
@@ -157,14 +157,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[3, 400]`.
 	fn start_authority_rotation(_a: u32, ) -> Weight {
 		// Minimum execution time: 333_000 nanoseconds.
-		Weight::from_ref_time(11_434_000_000)
+		Weight::from_parts(11_434_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2422))
 			.saturating_add(T::DbWeight::get().writes(8))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	fn start_authority_rotation_while_disabled_by_safe_mode() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
-		Weight::from_ref_time(13_000_000)
+		Weight::from_parts(13_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
@@ -183,7 +183,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[3, 150]`.
 	fn rotation_phase_keygen(_a: u32, ) -> Weight {
 		// Minimum execution time: 95_000 nanoseconds.
-		Weight::from_ref_time(162_000_000)
+		Weight::from_parts(162_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(13))
 			.saturating_add(T::DbWeight::get().writes(4))
 	}
@@ -198,7 +198,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[3, 150]`.
 	fn rotation_phase_activating_keys(_a: u32, ) -> Weight {
 		// Minimum execution time: 57_000 nanoseconds.
-		Weight::from_ref_time(76_000_000)
+		Weight::from_parts(76_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(8))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -206,7 +206,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator AuctionParameters (r:0 w:1)
 	fn set_auction_parameters() -> Weight {
 		// Minimum execution time: 28_000 nanoseconds.
-		Weight::from_ref_time(28_000_000)
+		Weight::from_parts(28_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -215,7 +215,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_as_validator() -> Weight {
 		// Minimum execution time: 34_000 nanoseconds.
-		Weight::from_ref_time(34_000_000)
+		Weight::from_parts(34_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -227,21 +227,21 @@ impl WeightInfo for () {
 	// Storage: Validator BlocksPerEpoch (r:1 w:1)
 	fn set_blocks_for_epoch() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::from_parts(23_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
 	fn update_pallet_config() -> Weight {
 		// Minimum execution time: 16_000 nanoseconds.
-		Weight::from_ref_time(16_000_000)
+		Weight::from_parts(16_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator AuthoritySetMinSize (r:0 w:1)
 	fn set_authority_set_min_size() -> Weight {
 		// Minimum execution time: 26_000 nanoseconds.
-		Weight::from_ref_time(26_000_000)
+		Weight::from_parts(26_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -249,7 +249,7 @@ impl WeightInfo for () {
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn cfe_version() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
-		Weight::from_ref_time(27_000_000)
+		Weight::from_parts(27_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -258,14 +258,14 @@ impl WeightInfo for () {
 	// Storage: Validator MappedPeers (r:1 w:1)
 	fn register_peer_id() -> Weight {
 		// Minimum execution time: 78_000 nanoseconds.
-		Weight::from_ref_time(78_000_000)
+		Weight::from_parts(78_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: Validator VanityNames (r:1 w:1)
 	fn set_vanity_name() -> Weight {
 		// Minimum execution time: 24_000 nanoseconds.
-		Weight::from_ref_time(24_000_000)
+		Weight::from_parts(24_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -278,7 +278,7 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[3, 150]`.
 	fn expire_epoch(_a: u32, ) -> Weight {
 		// Minimum execution time: 51_000 nanoseconds.
-		Weight::from_ref_time(1_430_000_000)
+		Weight::from_parts(1_430_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(303))
 			.saturating_add(RocksDbWeight::get().writes(302))
 	}
@@ -291,7 +291,7 @@ impl WeightInfo for () {
 	/// The range of component `m` is `[1, 10]`.
 	fn missed_authorship_slots(_m: u32, ) -> Weight {
 		// Minimum execution time: 47_000 nanoseconds.
-		Weight::from_ref_time(142_000_000)
+		Weight::from_parts(142_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -304,7 +304,7 @@ impl WeightInfo for () {
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	fn rotation_phase_idle() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(23_000_000)
+		Weight::from_parts(23_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(7))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
@@ -330,14 +330,14 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[3, 400]`.
 	fn start_authority_rotation(_a: u32, ) -> Weight {
 		// Minimum execution time: 333_000 nanoseconds.
-		Weight::from_ref_time(11_434_000_000)
+		Weight::from_parts(11_434_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2422))
 			.saturating_add(RocksDbWeight::get().writes(8))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	fn start_authority_rotation_while_disabled_by_safe_mode() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
-		Weight::from_ref_time(13_000_000)
+		Weight::from_parts(13_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
@@ -356,7 +356,7 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[3, 150]`.
 	fn rotation_phase_keygen(_a: u32, ) -> Weight {
 		// Minimum execution time: 95_000 nanoseconds.
-		Weight::from_ref_time(162_000_000)
+		Weight::from_parts(162_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(13))
 			.saturating_add(RocksDbWeight::get().writes(4))
 	}
@@ -371,7 +371,7 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[3, 150]`.
 	fn rotation_phase_activating_keys(_a: u32, ) -> Weight {
 		// Minimum execution time: 57_000 nanoseconds.
-		Weight::from_ref_time(76_000_000)
+		Weight::from_parts(76_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(8))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -379,7 +379,7 @@ impl WeightInfo for () {
 	// Storage: Validator AuctionParameters (r:0 w:1)
 	fn set_auction_parameters() -> Weight {
 		// Minimum execution time: 28_000 nanoseconds.
-		Weight::from_ref_time(28_000_000)
+		Weight::from_parts(28_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -388,7 +388,7 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_as_validator() -> Weight {
 		// Minimum execution time: 34_000 nanoseconds.
-		Weight::from_ref_time(34_000_000)
+		Weight::from_parts(34_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}

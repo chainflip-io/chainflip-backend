@@ -1,7 +1,7 @@
 use crate::Vec;
 use cf_chains::{address::AddressDerivationApi, dot::PolkadotAccountId, Chain, Polkadot};
-use cf_primitives::{chains::assets::dot, ChannelId};
-use sp_runtime::{
+use cf_primitives::ChannelId;
+use frame_support::sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 	DispatchError,
 };
@@ -13,7 +13,7 @@ use super::AddressDerivation;
 
 impl AddressDerivationApi<Polkadot> for AddressDerivation {
 	fn generate_address(
-		_source_asset: dot::Asset,
+		_source_asset: <Polkadot as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
 		const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
@@ -43,13 +43,27 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 
 		Ok(PolkadotAccountId::from_aliased(*payload_hash.as_fixed_bytes()))
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Polkadot as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Polkadot as Chain>::ChainAccount, <Polkadot as Chain>::DepositChannelState),
+		DispatchError,
+	> {
+		Ok((
+			<Self as AddressDerivationApi<Polkadot>>::generate_address(source_asset, channel_id)?,
+			Default::default(),
+		))
+	}
 }
 
 #[test]
 fn test_dot_derive() {
 	use crate::Runtime;
+	use cf_primitives::chains::assets::dot;
+	use frame_support::sp_runtime::app_crypto::Ss58Codec;
 	use pallet_cf_environment::PolkadotVaultAccountId;
-	use sp_runtime::app_crypto::Ss58Codec;
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 		let (account_id, address_format) = sp_runtime::AccountId32::from_ss58check_with_version(

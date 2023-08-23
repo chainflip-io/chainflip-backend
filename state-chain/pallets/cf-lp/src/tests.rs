@@ -142,6 +142,7 @@ fn deposit_channel_expires() {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap(),
 			source_asset: asset,
 			lp_account: LP_ACCOUNT.into(),
+			expiry,
 		};
 
 		assert_eq!(

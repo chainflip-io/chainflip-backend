@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
-use jsonrpsee_subxt::{
+use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
 	http_client::{HttpClient, HttpClientBuilder},
 };
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use serde_json::value::RawValue;
+use sp_core::H256;
 use subxt::{
 	error::{BlockError, RpcError},
 	events::{Events, EventsClient},
@@ -83,8 +84,8 @@ impl DotHttpRpcClient {
 		Ok(Self { online_client })
 	}
 
-	pub async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
-		Ok(self.online_client.rpc().metadata(Some(block_hash)).await?)
+	pub async fn metadata(&self, block_hash: H256) -> Result<subxt::Metadata> {
+		Ok(self.online_client.rpc().metadata_legacy(Some(block_hash)).await?)
 	}
 }
 
@@ -108,8 +109,13 @@ impl DotRpcApi for DotHttpRpcClient {
 		Ok(self.block(block_hash).await?.map(|block| block.block.extrinsics))
 	}
 
+	// TODO: When witnessing is catching up we query blocks in batches. It's posible that when
+	// a batch is made over a runtime boundary that the metadata will need to be queried more than
+	// necessary, as the order within the batch is not necessarily guaranteed. Beacause we limit
+	// Polkadot to 32 concurrent requests and runtime upgrades are infrequent this should not be an
+	// issue in reality, but probably worth solving at some point.
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>> {
-		let chain_runtime_version = self.current_runtime_version().await?;
+		let chain_runtime_version = self.runtime_version(Some(block_hash)).await?;
 
 		let client_runtime_version = self.online_client.runtime_version();
 
@@ -132,20 +138,25 @@ impl DotRpcApi for DotHttpRpcClient {
 
 		// If we've succeeded in getting the current runtime version then we assume
 		// the connection is stable (or has just been refreshed), no need to retry again.
-		match EventsClient::new(self.online_client.clone()).at(Some(block_hash)).await {
+		match EventsClient::new(self.online_client.clone()).at(block_hash).await {
 			Ok(events) => Ok(Some(events)),
 			Err(e) => match e {
-				subxt::Error::Block(BlockError::BlockHashNotFound(_)) => Ok(None),
+				subxt::Error::Block(BlockError::NotFound(_)) => Ok(None),
 				_ => Err(e.into()),
 			},
 		}
 	}
 
-	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
-		Ok(self.online_client.rpc().runtime_version(None).await.map(|v| RuntimeVersion {
-			spec_version: v.spec_version,
-			transaction_version: v.transaction_version,
-		})?)
+	async fn runtime_version(&self, block_hash: Option<H256>) -> Result<RuntimeVersion> {
+		Ok(self
+			.online_client
+			.rpc()
+			.runtime_version(block_hash)
+			.await
+			.map(|v| RuntimeVersion {
+				spec_version: v.spec_version,
+				transaction_version: v.transaction_version,
+			})?)
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {

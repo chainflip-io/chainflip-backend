@@ -122,7 +122,7 @@ where
 	StateChainClient: StorageApi,
 {
 	let peer_infos: Vec<_> = state_chain_client
-		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
+		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>, Vec<_>>(
 			block_hash,
 		)
 		.await?

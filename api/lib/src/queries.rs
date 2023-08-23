@@ -16,6 +16,7 @@ pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
 	source_asset: any::Asset,
 	destination_asset: any::Asset,
+	expiry_block: state_chain_runtime::BlockNumber,
 }
 
 pub struct QueryApi {
@@ -53,23 +54,23 @@ impl QueryApi {
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 
 		let (channel_details, channel_actions, network_environment) = tokio::try_join!(
-			self.state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+				self.state_chain_client
+					.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+						state_chain_runtime::Runtime,
+						C::Instance,
+					>, Vec<_>>(block_hash)
+					.map(|result| {
+						result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
+					}),
+				self.state_chain_client.storage_map::<pallet_cf_ingress_egress::ChannelActions<
 					state_chain_runtime::Runtime,
 					C::Instance,
-				>>(block_hash)
-				.map(|result| {
-					result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
-				}),
-			self.state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::ChannelActions<state_chain_runtime::Runtime, C::Instance>>(
-					block_hash,
-				),
-			self.state_chain_client
-				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-					block_hash
-				),
-		)?;
+				>, Vec<_>>(block_hash,),
+				self.state_chain_client
+					.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+						state_chain_runtime::Runtime,
+					>>(block_hash),
+			)?;
 
 		Ok(channel_actions
 			.iter()
@@ -83,14 +84,15 @@ impl QueryApi {
 					_ => None,
 				}
 				.and_then(|destination_asset| {
-					channel_details
-						.get(address)
-						.map(|details| (destination_asset, details.deposit_channel.clone()))
+					channel_details.get(address).map(|details| {
+						(destination_asset, details.deposit_channel.clone(), details.expires_at)
+					})
 				})
-				.map(|(&destination_asset, deposit_channel)| SwapChannelInfo {
+				.map(|(&destination_asset, deposit_channel, expiry)| SwapChannelInfo {
 					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
 					source_asset: deposit_channel.asset.into(),
 					destination_asset,
+					expiry_block: expiry,
 				})
 			})
 			.collect::<Vec<_>>())
@@ -142,10 +144,8 @@ impl QueryApi {
 				.unwrap_or_default()
 		} else {
 			self.state_chain_client
-				.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+				.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>, _>(block_hash)
 				.await?
-				.into_iter()
-				.collect::<BTreeMap<_, _>>()
 		})
 	}
 
@@ -160,7 +160,7 @@ impl QueryApi {
 
 		Ok(self
 			.state_chain_client
-			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>, Vec<_>>(block_hash)
 			.await?
 			.into_iter()
 			.map(|(asset, pool)| {

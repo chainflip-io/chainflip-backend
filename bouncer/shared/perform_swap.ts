@@ -9,6 +9,7 @@ import {
   observeEvent,
   observeCcmReceived,
   assetToChain,
+  observeSwapScheduled,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 
@@ -57,7 +58,14 @@ export async function requestNewSwap(
         destAddressEvent.toLowerCase() ===
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-      return destAddressMatches && destAssetMatches && sourceAssetMatches;
+      // CF Parameters is always set to '' by the SDK for now
+      const ccmMetadataMatches = messageMetadata
+        ? event.data.channelMetadata.message === messageMetadata.message &&
+          Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
+            messageMetadata.gasBudget
+        : true;
+
+      return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   );
   await newSwap(sourceAsset, destAsset, destAddress, messageMetadata);
@@ -91,21 +99,11 @@ export async function doPerformSwap(
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
 ) {
-  const chainflipApi = await getChainflipApi();
-
   const oldBalance = await getBalance(destAsset, destAddress);
 
   console.log(`${tag} Old balance: ${oldBalance}`);
 
-  const swapScheduledHandle = observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
-    if ('DepositChannel' in event.data.origin) {
-      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const assetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
-      return channelMatches && assetMatches;
-    }
-    // Otherwise it was a swap scheduled by interacting with the ETH smart contract
-    return false;
-  });
+  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, channelId);
 
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)

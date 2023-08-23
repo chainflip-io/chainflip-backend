@@ -115,9 +115,19 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 }
 
 #[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct MockTrackedData {
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
@@ -154,8 +164,9 @@ pub struct MockThresholdSignature<K, P> {
 	pub signed_payload: P,
 }
 
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
+	serde::Serialize,
+	serde::Deserialize,
 	Copy,
 	Clone,
 	Debug,
@@ -170,6 +181,9 @@ pub struct MockThresholdSignature<K, P> {
 	PartialOrd,
 )]
 pub struct MockAggKey(pub [u8; 4]);
+
+/// A key that should be not accepted as handover result
+pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 
 impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
@@ -188,8 +202,14 @@ impl ChainCrypto for MockEthereum {
 		signature.signing_key == *agg_key && signature.signed_payload == *payload
 	}
 
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		agg_key.0
+	}
+
+	fn handover_key_matches(_current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
+		// In tests we don't look to the current key, but instead
+		// compare to some "bad" value for simplicity
+		new_key != &BAD_AGG_KEY_POST_HANDOVER
 	}
 }
 

@@ -36,7 +36,7 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 benchmarks_instance_pallet! {
 	on_initialize_failure {
 		let b in 1 .. 100;
-		let current_block: T::BlockNumber = 0u32.into();
+		let current_block: BlockNumberFor<T> = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
@@ -65,7 +65,7 @@ benchmarks_instance_pallet! {
 		));
 	}
 	on_initialize_success {
-		let current_block: T::BlockNumber = 0u32.into();
+		let current_block: BlockNumberFor<T> = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.into());
@@ -138,7 +138,7 @@ benchmarks_instance_pallet! {
 			threshold_request_id: request_id,
 			new_public_key: agg_key,
 		};
-		let origin = T::EnsureThresholdSigned::successful_origin();
+		let origin = T::EnsureThresholdSigned::try_successful_origin().unwrap();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(matches!(
@@ -156,13 +156,13 @@ benchmarks_instance_pallet! {
 			block_number: 5u32.into(),
 			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
-		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index()));
 	}
 	vault_key_rotated_externally {
-		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: AggKeyFor::<T, I>::benchmark_value(),
 			block_number: 5u32.into(),
@@ -173,14 +173,14 @@ benchmarks_instance_pallet! {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index().saturating_add(1)));
 	}
 	set_keygen_response_timeout {
-		let old_timeout: T::BlockNumber = 5u32.into();
+		let old_timeout: BlockNumberFor<T> = 5u32.into();
 		KeygenResponseTimeout::<T, I>::put(old_timeout);
-		let new_timeout: T::BlockNumber = old_timeout + 1u32.into();
+		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
 		// ensure it's a different value for most expensive path.
 		let call = Call::<T, I>::set_keygen_response_timeout { new_timeout };
-	} : { call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin())? }
+	} : { call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())? }
 	verify {
 		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
 	}
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::MockRuntime,);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

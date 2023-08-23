@@ -13,6 +13,7 @@ pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount,
 };
+use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
@@ -25,22 +26,15 @@ use cf_traits::{
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Zero},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub enum Test {
 		System: frame_system,
 		IngressEgress: pallet_cf_ingress_egress,
 	}
@@ -53,13 +47,12 @@ impl system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
@@ -101,6 +94,16 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
 		Ok([channel_id as u8; 20].into())
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
+		sp_runtime::DispatchError,
+	> {
+		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
+	}
 }
 
 impl crate::Config for Test {
@@ -122,7 +125,7 @@ impl crate::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Configure a mock runtime to test the pallet.
-cf_test_utilities::impl_test_helpers!(Test);
+impl_test_helpers!(Test);
 
 type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
 type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
@@ -131,12 +134,13 @@ type TestChainAsset = <<Test as crate::Config>::TargetChain as Chain>::ChainAsse
 pub trait RequestAddressAndDeposit {
 	fn request_address_and_deposit(
 		self,
-		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset, TestChainAmount)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	>;
+		requests: &[(
+			<Test as frame_system::Config>::AccountId,
+			TestChainAsset,
+			TestChainAmount,
+			BlockNumberFor<Test>,
+		)],
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>>;
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
@@ -146,16 +150,13 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 			<Test as frame_system::Config>::AccountId,
 			TestChainAsset,
 			TestChainAmount,
+			BlockNumberFor<Test>,
 		)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	> {
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
 			.iter()
 			.copied()
-			.map(|(acct, asset, amount)| ((acct, asset), amount))
+			.map(|(acct, asset, amount, expiry)| ((acct, asset, expiry), amount))
 			.unzip();
 
 		self.request_deposit_addresses(&requests[..])
@@ -163,7 +164,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 				channel
 					.iter()
 					.zip(amounts)
-					.filter_map(|(&(_channel_id, deposit_address, asset), amount)| {
+					.filter_map(|(&(_channel_id, deposit_address, asset, ..), amount)| {
 						(!amount.is_zero()).then_some((
 							OriginTrait::none(),
 							RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
@@ -186,31 +187,29 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 pub trait RequestAddress {
 	fn request_deposit_addresses(
 		self,
-		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	>;
+		requests: &[(
+			<Test as frame_system::Config>::AccountId,
+			TestChainAsset,
+			BlockNumberFor<Test>,
+		)],
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>>;
 }
 
-impl<Ctx: Clone> RequestAddress
-	for cf_test_utilities::TestExternalities<Test, AllPalletsWithSystem, Ctx>
-{
+impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 	fn request_deposit_addresses(
 		self,
-		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset)],
-	) -> cf_test_utilities::TestExternalities<
-		Test,
-		AllPalletsWithSystem,
-		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
-	> {
+		requests: &[(
+			<Test as frame_system::Config>::AccountId,
+			TestChainAsset,
+			BlockNumberFor<Test>,
+		)],
+	) -> TestExternalities<Test, Vec<(ChannelId, TestChainAccount, TestChainAsset)>> {
 		self.then_execute_at_next_block(|_| {
 			requests
 				.iter()
 				.copied()
-				.map(|(broker, asset)| {
-					IngressEgress::request_liquidity_deposit_address(broker, asset)
+				.map(|(broker, asset, expiry)| {
+					IngressEgress::request_liquidity_deposit_address(broker, asset, expiry)
 						.map(|(id, addr)| (id, TestChainAccount::try_from(addr).unwrap(), asset))
 						.unwrap()
 				})

@@ -9,6 +9,7 @@ use std::{
 	future::Future,
 	net::Ipv6Addr,
 	sync::Arc,
+	time::Duration,
 };
 
 use auth::Authenticator;
@@ -25,6 +26,12 @@ use monitor::MonitorEvent;
 use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
+
+/// How long to keep the TCP connection open for while waiting
+/// for the client to authenticate themselves. We want to keep
+/// this somewhat short to mitigate some attacks where clients
+/// can use system resources without authenticating.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub struct X25519KeyPair {
@@ -376,13 +383,12 @@ impl P2PContext {
 	fn handle_monitor_event(&mut self, event: MonitorEvent) {
 		match event {
 			MonitorEvent::ConnectionFailure(account_id) => {
-				let Some(_existing_socket) = self
-					.active_connections
-					.remove(&account_id) else {
-						// NOTE: this should not happen, but this guards against any surprising ZMQ behaviour
-						error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
-						return;
-					};
+				let Some(_existing_socket) = self.active_connections.remove(&account_id) else {
+					// NOTE: this should not happen, but this guards against any surprising ZMQ
+					// behaviour
+					error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
+					return
+				};
 
 				self.reconnect_context.schedule_reconnect(account_id);
 			},
@@ -479,6 +485,7 @@ impl P2PContext {
 		socket.set_router_handover(true).unwrap();
 		socket.set_curve_server(true).unwrap();
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();
+		socket.set_handshake_ivl(HANDSHAKE_TIMEOUT.as_millis() as i32).unwrap();
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");

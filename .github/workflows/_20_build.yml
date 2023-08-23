@@ -20,7 +20,7 @@ jobs:
       matrix:
         ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-${{ matrix.ubuntu_version }}"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-${{ matrix.ubuntu_version }}-27"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -47,6 +47,7 @@ jobs:
             ./target/release/generate-genesis-keys
             ./target/release/chainflip-broker-api
             ./target/release/chainflip-lp-api
+            ./target/release/chainflip-btc-deposit-tracker
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
 
       - name: Upload binary artifacts
@@ -55,4 +56,3 @@ jobs:
           name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
-

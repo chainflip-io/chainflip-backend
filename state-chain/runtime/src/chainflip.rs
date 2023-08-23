@@ -22,7 +22,7 @@ use cf_chains::{
 	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
+		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -35,7 +35,7 @@ use cf_chains::{
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
-	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
@@ -48,6 +48,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
 	traits::Get,
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -55,7 +56,6 @@ pub use offences::*;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
-use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
 impl Chainflip for Runtime {
@@ -81,6 +81,7 @@ impl_runtime_safe_mode! {
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
 	vault: pallet_cf_vaults::PalletSafeMode,
+	witnesser: pallet_cf_witnesser::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -146,10 +147,19 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	fn build_transaction(
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
+		// TODO: This should take into account the ccm gas budget. (See PRO-161)
+		const CCM_GAS_LIMIT: u64 = 400_000;
+		const DEFAULT_GAS_LIMIT: u64 = 15_000_000;
+		let gas_limit = match signed_call {
+			EthereumApi::ExecutexSwapAndCall(_) => Some(CCM_GAS_LIMIT.into()),
+			// None means there is no gas limit.
+			_ => Some(DEFAULT_GAS_LIMIT.into()),
+		};
 		eth::Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
+			gas_limit,
 			..Default::default()
 		}
 	}
@@ -426,10 +436,12 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
+			type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Runtime>;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
+				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -437,6 +449,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
+								expiry,
 							),
 					)+
 				}
@@ -449,6 +462,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
+				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -459,15 +473,13 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
+							expiry,
 						),
 					)+
 				}
 			}
 
 			fn expire_channel(address: ForeignChainAddress) {
-				if address.chain() == ForeignChain::Bitcoin {
-					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
-				}
 				match address.chain() {
 					$(
 						ForeignChain::$chain => {
@@ -536,29 +548,9 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
 		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
-		address: <Bitcoin as Chain>::ChainAccount,
-		_asset: <Bitcoin as Chain>::ChainAsset,
+		channel: DepositChannel<Bitcoin>,
 	) {
-		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, address)
-	}
-
-	fn on_channel_opened(
-		script_pubkey: ScriptPubkey,
-		salt: ChannelId,
-	) -> Result<(), DispatchError> {
-		Environment::add_details_for_btc_deposit_script(
-			script_pubkey,
-			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
-			                                                                                  * this assumption.
-			                                                                                  * Consider this in
-			                                                                                  * conjunction with
-			                                                                                  * #2354 */
-			BitcoinVault::vaults(Validator::epoch_index())
-				.ok_or(DispatchError::Other("No vault for epoch"))?
-				.public_key
-				.current,
-		);
-		Ok(())
+		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
 	}
 }
 

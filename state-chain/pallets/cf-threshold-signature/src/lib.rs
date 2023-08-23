@@ -28,14 +28,14 @@ use cf_traits::{
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
+	sp_runtime::{
+		traits::{BlockNumberProvider, Saturating, Zero},
+		RuntimeDebug,
+	},
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
-use sp_runtime::{
-	traits::{BlockNumberProvider, Saturating, Zero},
-	RuntimeDebug,
-};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
@@ -237,7 +237,7 @@ pub mod pallet {
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.
 		#[pallet::constant]
-		type CeremonyRetryDelay: Get<Self::BlockNumber>;
+		type CeremonyRetryDelay: Get<BlockNumberFor<Self>>;
 
 		/// Pallet weights
 		type Weights: WeightInfo;
@@ -246,7 +246,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// A counter to generate fresh request ids.
@@ -302,7 +301,6 @@ pub mod pallet {
 		pub _instance: PhantomData<I>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {
@@ -314,7 +312,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			ThresholdSignatureResponseTimeout::<T, I>::put(
 				self.threshold_signature_response_timeout,
@@ -459,12 +457,12 @@ pub mod pallet {
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			migrations::PalletMigration::<T, I>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
 			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
@@ -519,6 +517,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](sp_runtime::traits::InvalidCeremonyId)
 		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::Weights::signature_success())]
 		pub fn signature_success(
 			origin: OriginFor<T>,
@@ -571,6 +570,7 @@ pub mod pallet {
 		///
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
 		/// - [InvalidRespondent](Error::InvalidRespondent)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
@@ -622,6 +622,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::Weights::set_threshold_signature_timeout())]
 		pub fn set_threshold_signature_timeout(
 			origin: OriginFor<T>,
@@ -800,8 +801,8 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> <T as Config<I>>::RuntimeOrigin {
-		Origin::<T, I>(Default::default()).into()
+	fn try_successful_origin() -> Result<<T as Config<I>>::RuntimeOrigin, ()> {
+		Ok(Origin::<T, I>(Default::default()).into())
 	}
 }
 
@@ -817,7 +818,7 @@ where
 		Self::inner_request_signature(payload, RequestType::Standard)
 	}
 
-	fn request_keygen_verification_signature(
+	fn request_verification_signature(
 		payload: <T::TargetChain as ChainCrypto>::Payload,
 		participants: BTreeSet<Self::ValidatorId>,
 		key: <T::TargetChain as ChainCrypto>::AggKey,

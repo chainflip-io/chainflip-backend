@@ -44,7 +44,7 @@ where
 				value: Some(unsigned_tx.value),
 				max_fee_per_gas: unsigned_tx.max_fee_per_gas,
 				max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
-				gas: Some(U256::from(15_000_000u64)),
+				gas: unsigned_tx.gas_limit,
 				access_list: AccessList::default(),
 				from: Some(self.address),
 				nonce: None,
