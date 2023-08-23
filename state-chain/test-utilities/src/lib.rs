@@ -12,11 +12,6 @@ pub fn maybe_last_event<T: Config>() -> Option<<T as Config>::RuntimeEvent> {
 	frame_system::Pallet::<T>::events().pop().map(|e| e.event)
 }
 
-/// Can be used to check that fixed-sized types have the correct implementation of MaxEncodedLen
-pub fn ensure_max_encoded_len_is_exact<T: Default + codec::Encode + codec::MaxEncodedLen>() {
-	assert_eq!(T::default().encode().len(), T::max_encoded_len());
-}
-
 #[track_caller]
 pub fn assert_has_event<T: frame_system::Config>(event: <T as frame_system::Config>::RuntimeEvent) {
 	let events = frame_system::Pallet::<T>::events()

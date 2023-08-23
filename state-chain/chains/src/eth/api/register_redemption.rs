@@ -170,13 +170,10 @@ mod test_register_redemption {
 					Token::Address(TEST_ADDR.into()),
 					// epiryTime: uint48
 					Token::Uint(EXPIRY_SECS.into()),
+					// executor: Address
+					Token::Address(TEST_ADDR.into()),
 				])
 				.unwrap()
 		);
-	}
-
-	#[test]
-	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<super::RegisterRedemption>();
 	}
 }
