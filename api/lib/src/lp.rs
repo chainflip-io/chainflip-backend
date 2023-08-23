@@ -120,8 +120,8 @@ pub trait LpApi: SignedExtrinsicApi {
 		pair_asset: Asset,
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSize,
 		increase_or_decrease: IncreaseOrDecrease,
+		size: RangeOrderSize,
 	) -> Result<UpdateRangeOrderReturn> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
@@ -130,8 +130,8 @@ pub trait LpApi: SignedExtrinsicApi {
 				pair_asset,
 				id,
 				tick_range,
-				size,
 				increase_or_decrease,
+				size,
 			})
 			.await
 			.until_finalized()
@@ -139,7 +139,7 @@ pub trait LpApi: SignedExtrinsicApi {
 
 		// Get some details from the emitted event
 		Ok({
-			let (liquidity_delta, liquidity_total, assets_delta) = events
+			let (liquidity_delta, liquidity_total, assets_delta, collected_fees) = events
 				.iter()
 				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
@@ -148,25 +148,14 @@ pub trait LpApi: SignedExtrinsicApi {
 							liquidity_delta,
 							liquidity_total,
 							assets_delta,
+							collected_fees,
 							..
 						},
 					) if increase_or_decrease == *event_mint_or_burn =>
-						Some((*liquidity_delta, *liquidity_total, *assets_delta)),
+						Some((*liquidity_delta, *liquidity_total, *assets_delta, *collected_fees)),
 					_ => None,
 				})
 				.expect("RangeOrderUpdated must have been generated");
-
-			let collected_fees = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::RangeOrderCollectedEarnings {
-							collected_fees, ..
-						},
-					) => Some(*collected_fees),
-					_ => None,
-				})
-				.expect("RangeOrderCollectedEarnings must have been generated");
 
 			UpdateRangeOrderReturn {
 				liquidity_delta,
@@ -200,7 +189,13 @@ pub trait LpApi: SignedExtrinsicApi {
 
 		// Get some details from the emitted event
 		Ok({
-			let (increase_or_decrease, liquidity_delta, liquidity_total, assets_delta) = events
+			let (
+				increase_or_decrease,
+				liquidity_delta,
+				liquidity_total,
+				assets_delta,
+				collected_fees,
+			) = events
 				.iter()
 				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
@@ -209,6 +204,7 @@ pub trait LpApi: SignedExtrinsicApi {
 							liquidity_delta,
 							liquidity_total,
 							assets_delta,
+							collected_fees,
 							..
 						},
 					) => Some((
@@ -216,22 +212,11 @@ pub trait LpApi: SignedExtrinsicApi {
 						*liquidity_delta,
 						*liquidity_total,
 						*assets_delta,
+						*collected_fees,
 					)),
 					_ => None,
 				})
 				.expect("RangeOrderUpdated must have been generated");
-
-			let collected_fees = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::RangeOrderCollectedEarnings {
-							collected_fees, ..
-						},
-					) => Some(*collected_fees),
-					_ => None,
-				})
-				.expect("RangeOrderCollectedEarnings must have been generated");
 
 			SetRangeOrderReturn {
 				increase_or_decrease,
@@ -249,8 +234,8 @@ pub trait LpApi: SignedExtrinsicApi {
 		buy_asset: Asset,
 		id: OrderId,
 		tick: Option<Tick>,
-		sell_amount: AssetAmount,
 		increase_or_decrease: IncreaseOrDecrease,
+		amount: AssetAmount,
 	) -> Result<UpdateLimitOrderReturn> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
@@ -259,8 +244,8 @@ pub trait LpApi: SignedExtrinsicApi {
 				buy_asset,
 				id,
 				tick,
-				sell_amount,
 				increase_or_decrease,
+				amount,
 			})
 			.await
 			.until_finalized()
@@ -268,7 +253,7 @@ pub trait LpApi: SignedExtrinsicApi {
 
 		// Get some details from the emitted event
 		Ok({
-			let (amount_delta, amount_total) = events
+			let (amount_delta, amount_total, collected_fees, swapped_liquidity) = events
 				.iter()
 				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
@@ -276,26 +261,15 @@ pub trait LpApi: SignedExtrinsicApi {
 							increase_or_decrease: event_mint_or_burn,
 							amount_delta,
 							amount_total,
-							..
-						},
-					) if increase_or_decrease == *event_mint_or_burn => Some((*amount_delta, *amount_total)),
-					_ => None,
-				})
-				.expect("LimitOrderUpdated must have been generated");
-
-			let (collected_fees, swapped_liquidity) = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LimitOrderCollectedEarnings {
 							collected_fees,
 							swapped_liquidity,
 							..
 						},
-					) => Some((*collected_fees, *swapped_liquidity)),
+					) if increase_or_decrease == *event_mint_or_burn =>
+						Some((*amount_delta, *amount_total, *collected_fees, *swapped_liquidity)),
 					_ => None,
 				})
-				.expect("LimitOrderCollectedEarnings must have been generated");
+				.expect("LimitOrderUpdated must have been generated");
 
 			UpdateLimitOrderReturn { amount_delta, amount_total, collected_fees, swapped_liquidity }
 		})
@@ -324,7 +298,13 @@ pub trait LpApi: SignedExtrinsicApi {
 
 		// Get some details from the emitted event
 		Ok({
-			let (increase_or_decrease, amount_delta, amount_total) = events
+			let (
+				increase_or_decrease,
+				amount_delta,
+				amount_total,
+				collected_fees,
+				swapped_liquidity,
+			) = events
 				.iter()
 				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
@@ -332,26 +312,20 @@ pub trait LpApi: SignedExtrinsicApi {
 							increase_or_decrease,
 							amount_delta,
 							amount_total,
-							..
-						},
-					) => Some((*increase_or_decrease, *amount_delta, *amount_total)),
-					_ => None,
-				})
-				.expect("LimitOrderUpdated must have been generated");
-
-			let (collected_fees, swapped_liquidity) = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LimitOrderCollectedEarnings {
 							collected_fees,
 							swapped_liquidity,
 							..
 						},
-					) => Some((*collected_fees, *swapped_liquidity)),
+					) => Some((
+						*increase_or_decrease,
+						*amount_delta,
+						*amount_total,
+						*collected_fees,
+						*swapped_liquidity,
+					)),
 					_ => None,
 				})
-				.expect("LimitOrderCollectedEarnings must have been generated");
+				.expect("LimitOrderUpdated must have been generated");
 
 			SetLimitOrderReturn {
 				increase_or_decrease,

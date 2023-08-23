@@ -1,5 +1,5 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapLeg};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId};
 use frame_support::{dispatch::DispatchError, sp_runtime::DispatchResult};
 
 pub trait SwapDepositHandler {
@@ -44,8 +44,8 @@ pub trait SwappingApi {
 
 	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
 	fn swap_single_leg(
-		leg: SwapLeg,
-		unstable_asset: Asset,
+		from: Asset,
+		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError>;
 }
@@ -56,8 +56,8 @@ impl<T: frame_system::Config> SwappingApi for T {
 	}
 
 	fn swap_single_leg(
-		_leg: SwapLeg,
-		_unstable_asset: Asset,
+		_from: Asset,
+		_to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
 		Ok(input_amount)

@@ -202,19 +202,6 @@ impl SwapDirection for OneToZero {
 pub type Price = U256;
 pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
-pub(super) fn inverse_price(price: Price) -> Price {
-	if price == Price::from(1) {
-		// The inverse price of 1 is Price::MAX + 1
-		Price::MAX
-	} else {
-		mul_div_floor(
-			Price::one() << PRICE_FRACTIONAL_BITS,
-			Price::one() << PRICE_FRACTIONAL_BITS,
-			price,
-		)
-	}
-}
-
 pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
 

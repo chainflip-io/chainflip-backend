@@ -101,8 +101,8 @@ pub trait Rpc {
 		pair_asset: Asset,
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSize,
 		increase_or_decrease: IncreaseOrDecrease,
+		size: RangeOrderSize,
 	) -> Result<UpdateRangeOrderReturn, Error>;
 
 	#[method(name = "setRangeOrder")]
@@ -122,8 +122,8 @@ pub trait Rpc {
 		buy_asset: Asset,
 		id: OrderId,
 		tick: Option<Tick>,
-		sell_amount: AssetAmount,
 		increase_or_decrease: IncreaseOrDecrease,
+		amount: AssetAmount,
 	) -> Result<UpdateLimitOrderReturn, Error>;
 
 	#[method(name = "setLimitOrder")]
@@ -133,7 +133,7 @@ pub trait Rpc {
 		buy_asset: Asset,
 		id: OrderId,
 		tick: Option<Tick>,
-		sell_amount: AssetAmount,
+		amount: AssetAmount,
 	) -> Result<SetLimitOrderReturn, Error>;
 
 	#[method(name = "assetBalances")]
@@ -209,13 +209,13 @@ impl RpcServer for RpcServerImpl {
 		pair_asset: Asset,
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSize,
 		increase_or_decrease: IncreaseOrDecrease,
+		size: RangeOrderSize,
 	) -> Result<UpdateRangeOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.update_range_order(base_asset, pair_asset, id, tick_range, size, increase_or_decrease)
+			.update_range_order(base_asset, pair_asset, id, tick_range, increase_or_decrease, size)
 			.await?)
 	}
 
@@ -240,13 +240,13 @@ impl RpcServer for RpcServerImpl {
 		buy_asset: Asset,
 		id: OrderId,
 		tick: Option<Tick>,
-		sell_amount: AssetAmount,
 		increase_or_decrease: IncreaseOrDecrease,
+		amount: AssetAmount,
 	) -> Result<UpdateLimitOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.update_limit_order(sell_asset, buy_asset, id, tick, sell_amount, increase_or_decrease)
+			.update_limit_order(sell_asset, buy_asset, id, tick, increase_or_decrease, amount)
 			.await?)
 	}
 

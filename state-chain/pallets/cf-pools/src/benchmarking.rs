@@ -33,32 +33,34 @@ benchmarks! {
 
 	update_pool_enabled {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, price_at_tick(0).unwrap());
+		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap());
 		let call =  Call::<T>::update_pool_enabled{
-			unstable_asset: Asset::Eth,
+			base_asset: Asset::Eth,
+			pair_asset: Asset::Usdc,
 			enabled: false,
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert!(!Pools::<T>::get(Asset::Eth).unwrap().enabled);
+		assert!(!Pools::<T>::get(CanonialAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).unwrap().enabled);
 	}
 
 	new_pool {
 		let call =  Call::<T>::new_pool {
-			unstable_asset: Asset::Eth,
+			base_asset: Asset::Eth,
+			pair_asset: Asset::Usdc,
 			fee_hundredth_pips: 0u32,
 			initial_price: price_at_tick(0).unwrap(),
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert!(Pools::<T>::get(Asset::Eth).is_some());
+		assert!(Pools::<T>::get(CanonialAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).is_some());
 	}
 
 	update_range_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -75,6 +77,7 @@ benchmarks! {
 		Asset::Usdc,
 		0,
 		Some(-100..100),
+		IncreaseOrDecrease::Increase,
 		RangeOrderSize::AssetAmounts {
 			maximum: AssetAmounts {
 				base: 1_000_000,
@@ -84,14 +87,13 @@ benchmarks! {
 				base: 500_000,
 				pair: 500_000,
 			},
-		},
-		IncreaseOrDecrease::Increase
+		}
 	)
 	verify {}
 
 	set_range_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -123,7 +125,7 @@ benchmarks! {
 
 	update_limit_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -140,14 +142,14 @@ benchmarks! {
 		Asset::Usdc,
 		0,
 		Some(100),
-		1_000_000,
-		IncreaseOrDecrease::Increase
+		IncreaseOrDecrease::Increase,
+		1_000_000
 	)
 	verify {}
 
 	set_limit_order {
 		let caller = new_lp_account::<T>();
-		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, 0, price_at_tick(0).unwrap()));
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,

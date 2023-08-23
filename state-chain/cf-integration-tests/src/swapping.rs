@@ -33,13 +33,15 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 	assert_ok!(LiquidityPools::new_pool(
 		pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 		unstable_asset,
+		STABLE_ASSET,
 		fee_hundredth_pips,
 		initial_price,
 	));
 	assert_events_eq!(
 		Runtime,
 		RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::NewPoolCreated {
-			unstable_asset,
+			base_asset: unstable_asset,
+			pair_asset: STABLE_ASSET,
 			fee_hundredth_pips,
 			initial_price,
 		},)
@@ -96,7 +98,7 @@ fn set_range_order(
 		pair_asset,
 		id,
 		range,
-		RangeOrderSize::Liquidity(liquidity),
+		RangeOrderSize::Liquidity { liquidity },
 	));
 	let new_balances = [base_asset, pair_asset].map(|asset| {
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
@@ -128,7 +130,7 @@ fn set_limit_order(
 	buy_asset: Asset,
 	id: OrderId,
 	tick: Option<Tick>,
-	amount: AssetAmount,
+	sell_amount: AssetAmount,
 ) {
 	let sell_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
@@ -140,14 +142,14 @@ fn set_limit_order(
 		buy_asset,
 		id,
 		tick,
-		amount,
+		sell_amount,
 	));
 	let new_sell_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
 	let new_buy_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
 
-	assert_eq!(new_sell_balance, sell_balance - amount);
+	assert_eq!(new_sell_balance, sell_balance - sell_amount);
 	assert_eq!(new_buy_balance, buy_balance);
 
 	if new_sell_balance < sell_balance {

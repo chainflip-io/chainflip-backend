@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, utilities, AssetAmounts, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn,
-	Pools, RangeOrderSize, STABLE_ASSET,
+	mock::*, utilities, AssetAmounts, CanonialAssetPair, CollectedNetworkFee, Error,
+	FlipBuyInterval, FlipToBurn, Pools, RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
@@ -16,13 +16,15 @@ fn can_create_new_trading_pool() {
 		let default_price = price_at_tick(0).unwrap();
 
 		// While the pool does not exist, no info can be obtained.
-		assert!(Pools::<Test>::get(unstable_asset).is_none());
+		assert!(Pools::<Test>::get(CanonialAssetPair::new(unstable_asset, STABLE_ASSET).unwrap())
+			.is_none());
 
 		// Fee must be appropriate
 		assert_noop!(
 			LiquidityPools::new_pool(
 				RuntimeOrigin::root(),
 				unstable_asset,
+				STABLE_ASSET,
 				1_000_000u32,
 				default_price,
 			),
@@ -33,12 +35,14 @@ fn can_create_new_trading_pool() {
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
+			STABLE_ASSET,
 			500_000u32,
 			default_price,
 		));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
 			crate::Event::<Test>::NewPoolCreated {
-				unstable_asset,
+				base_asset: unstable_asset,
+				pair_asset: STABLE_ASSET,
 				fee_hundredth_pips: 500_000u32,
 				initial_price: default_price,
 			},
@@ -46,7 +50,13 @@ fn can_create_new_trading_pool() {
 
 		// Cannot create duplicate pool
 		assert_noop!(
-			LiquidityPools::new_pool(RuntimeOrigin::root(), unstable_asset, 0u32, default_price),
+			LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				unstable_asset,
+				STABLE_ASSET,
+				0u32,
+				default_price
+			),
 			Error::<Test>::PoolAlreadyExists
 		);
 	});
@@ -63,6 +73,7 @@ fn can_enable_disable_trading_pool() {
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
+			STABLE_ASSET,
 			500_000u32,
 			default_price,
 		));
@@ -71,10 +82,15 @@ fn can_enable_disable_trading_pool() {
 		assert_ok!(LiquidityPools::update_pool_enabled(
 			RuntimeOrigin::root(),
 			unstable_asset,
+			STABLE_ASSET,
 			false
 		));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
-			crate::Event::<Test>::PoolStateUpdated { unstable_asset, enabled: false },
+			crate::Event::<Test>::PoolStateUpdated {
+				base_asset: unstable_asset,
+				pair_asset: STABLE_ASSET,
+				enabled: false,
+			},
 		));
 
 		assert_noop!(
@@ -84,7 +100,7 @@ fn can_enable_disable_trading_pool() {
 				unstable_asset,
 				0,
 				Some(range.clone()),
-				RangeOrderSize::Liquidity(1_000_000),
+				RangeOrderSize::Liquidity { liquidity: 1_000_000 },
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -93,10 +109,15 @@ fn can_enable_disable_trading_pool() {
 		assert_ok!(LiquidityPools::update_pool_enabled(
 			RuntimeOrigin::root(),
 			unstable_asset,
+			STABLE_ASSET,
 			true
 		));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
-			crate::Event::<Test>::PoolStateUpdated { unstable_asset, enabled: true },
+			crate::Event::<Test>::PoolStateUpdated {
+				base_asset: unstable_asset,
+				pair_asset: STABLE_ASSET,
+				enabled: true,
+			},
 		));
 
 		assert_ok!(LiquidityPools::set_range_order(
@@ -105,7 +126,7 @@ fn can_enable_disable_trading_pool() {
 			unstable_asset,
 			0,
 			Some(range),
-			RangeOrderSize::Liquidity(1_000_000),
+			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
 		));
 	});
 }
@@ -120,6 +141,7 @@ fn test_buy_back_flip_no_funds_available() {
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			unstable_asset,
+			STABLE_ASSET,
 			500_000u32,
 			default_price,
 		));
@@ -141,12 +163,13 @@ fn test_buy_back_flip_2() {
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			FLIP,
+			STABLE_ASSET,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Usdc,
+			STABLE_ASSET,
 			FLIP,
 			0,
 			Some(POSITION),
@@ -165,11 +188,11 @@ fn test_buy_back_flip_2() {
 		);
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Usdc,
+			STABLE_ASSET,
 			FLIP,
 			0,
 			Some(POSITION),
-			RangeOrderSize::Liquidity(0)
+			RangeOrderSize::Liquidity { liquidity: 0 }
 		));
 	});
 }
@@ -185,16 +208,17 @@ fn test_buy_back_flip() {
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			FLIP,
+			STABLE_ASSET,
 			Default::default(),
 			price_at_tick(0).unwrap(),
 		));
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
-			Asset::Usdc,
+			STABLE_ASSET,
 			FLIP,
 			0,
 			Some(POSITION),
-			RangeOrderSize::Liquidity(1_000_000),
+			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
 		));
 
 		// Swapping should cause the network fee to be collected.

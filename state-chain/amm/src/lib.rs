@@ -5,8 +5,8 @@ mod tests;
 
 use codec::{Decode, Encode};
 use common::{
-	inverse_price, price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side,
-	SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
+	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap,
+	SqrtPriceQ64F96, Tick, ZeroToOne,
 };
 use scale_info::TypeInfo;
 
@@ -45,8 +45,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// the specified Side argument
 	pub fn current_price(&mut self, side: Side, order: Order) -> Option<Price> {
 		match (side, order) {
-			(Side::Zero, Order::Buy) => self.inner_current_price::<OneToZero>().map(inverse_price),
-			(Side::Zero, Order::Sell) => self.inner_current_price::<ZeroToOne>().map(inverse_price),
+			(Side::Zero, Order::Buy) => self.inner_current_price::<OneToZero>(),
+			(Side::Zero, Order::Sell) => self.inner_current_price::<ZeroToOne>(),
 			(Side::One, Order::Sell) => self.inner_current_price::<OneToZero>(),
 			(Side::One, Order::Buy) => self.inner_current_price::<ZeroToOne>(),
 		}
