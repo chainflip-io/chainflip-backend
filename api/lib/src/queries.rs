@@ -4,7 +4,6 @@ use cf_primitives::{chains::assets::any, AssetAmount};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
-pub use pallet_cf_pools::Pool;
 use serde::Deserialize;
 use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, sync::Arc};

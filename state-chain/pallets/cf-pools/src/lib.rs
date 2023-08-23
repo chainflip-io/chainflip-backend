@@ -200,13 +200,17 @@ pub mod pallet {
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_std::collections::btree_map::BTreeMap;
 
 	use super::*;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct Pool<LiquidityProvider> {
+	#[scale_info(skip_type_params(T))]
+	pub struct Pool<T: Config> {
 		pub enabled: bool,
-		pub pool_state: PoolState<LiquidityProvider>,
+		pub range_orders: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
+		pub limit_orders: BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>,
+		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
 
 	pub type OrderId = u64;
@@ -215,6 +219,7 @@ pub mod pallet {
 		Copy,
 		Clone,
 		Debug,
+		Default,
 		Encode,
 		Decode,
 		TypeInfo,
@@ -292,7 +297,7 @@ pub mod pallet {
 	/// The STABLE_ASSET is always PoolSide::Asset1
 	#[pallet::storage]
 	pub type Pools<T: Config> =
-		StorageMap<_, Twox64Concat, CanonialAssetPair<T>, Pool<T::AccountId>, OptionQuery>;
+		StorageMap<_, Twox64Concat, CanonialAssetPair<T>, Pool<T>, OptionQuery>;
 
 	/// FLIP ready to be burned.
 	#[pallet::storage]
@@ -365,6 +370,9 @@ pub mod pallet {
 		PoolAlreadyExists,
 		/// The specified exchange pool does not exist.
 		PoolDoesNotExist,
+		/// For previously unused order ids, you must specific a tick/tick range for the order,
+		/// thereby specifying the order price associated with that order id
+		UnspecifiedOrderPrice,
 		/// The exchange pool is currently disabled.
 		PoolDisabled,
 		/// the Fee BIPs must be within the allowed range.
@@ -538,6 +546,8 @@ pub mod pallet {
 
 				*maybe_pool = Some(Pool {
 					enabled: true,
+					range_orders: Default::default(),
+					limit_orders: Default::default(),
 					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
 						match e {
 							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
@@ -570,33 +580,72 @@ pub mod pallet {
 			base_asset: Asset,
 			pair_asset: Asset,
 			id: OrderId,
-			tick_range: Option<core::ops::Range<Tick>>,
+			option_tick_range: Option<core::ops::Range<Tick>>,
 			increase_or_decrease: IncreaseOrDecrease,
 			size: RangeOrderSize,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_pool_state(base_asset, pair_asset, |asset_pair, pool_state| {
-				let size = match size {
-					RangeOrderSize::Liquidity { liquidity } =>
-						range_orders::Size::Liquidity { liquidity },
-					RangeOrderSize::AssetAmounts { maximum, minimum } =>
-						range_orders::Size::Amount {
-							maximum: asset_pair.asset_amounts_to_side_map(maximum),
-							minimum: asset_pair.asset_amounts_to_side_map(minimum),
-						},
-				};
+			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
+				let tick_range = match (
+					pool.range_orders
+						.get(&lp)
+						.and_then(|range_orders| range_orders.get(&id))
+						.cloned(),
+					option_tick_range,
+				) {
+					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
+					(None, Some(tick_range)) | (Some(tick_range), None) => Ok(tick_range),
+					(Some(previous_tick_range), Some(new_tick_range)) => {
+						if previous_tick_range != new_tick_range {
+							let withdrawn_asset_amounts = Self::inner_update_range_order(
+								pool,
+								&lp,
+								asset_pair,
+								id,
+								previous_tick_range,
+								IncreaseOrDecrease::Decrease,
+								range_orders::Size::Liquidity { liquidity: Liquidity::MAX },
+								/* allow_noop */ false,
+							)?;
+							Self::inner_update_range_order(
+								pool,
+								&lp,
+								asset_pair,
+								id,
+								new_tick_range.clone(),
+								IncreaseOrDecrease::Increase,
+								range_orders::Size::Amount {
+									minimum: Default::default(),
+									maximum: asset_pair
+										.asset_amounts_to_side_map(withdrawn_asset_amounts),
+								},
+								/* allow_noop */ true,
+							)?;
+						}
 
+						Ok(new_tick_range)
+					},
+				}?;
 				Self::inner_update_range_order(
-					pool_state,
+					pool,
 					&lp,
 					asset_pair,
 					id,
-					tick_range.unwrap(),
+					tick_range,
 					increase_or_decrease,
-					size,
-					false,
-				)
-				.map(|_| ())
+					match size {
+						RangeOrderSize::Liquidity { liquidity } =>
+							range_orders::Size::Liquidity { liquidity },
+						RangeOrderSize::AssetAmounts { maximum, minimum } =>
+							range_orders::Size::Amount {
+								maximum: asset_pair.asset_amounts_to_side_map(maximum),
+								minimum: asset_pair.asset_amounts_to_side_map(minimum),
+							},
+					},
+					/* allow_noop */ false,
+				)?;
+
+				Ok(())
 			})
 		}
 
@@ -607,40 +656,52 @@ pub mod pallet {
 			base_asset: Asset,
 			pair_asset: Asset,
 			id: OrderId,
-			tick_range: Option<core::ops::Range<Tick>>,
+			option_tick_range: Option<core::ops::Range<Tick>>,
 			size: RangeOrderSize,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_pool_state(base_asset, pair_asset, |asset_pair, pool_state| {
-				let size = match size {
-					RangeOrderSize::Liquidity { liquidity } =>
-						range_orders::Size::Liquidity { liquidity },
-					RangeOrderSize::AssetAmounts { maximum, minimum } =>
-						range_orders::Size::Amount {
-							maximum: asset_pair.asset_amounts_to_side_map(maximum),
-							minimum: asset_pair.asset_amounts_to_side_map(minimum),
-						},
-				};
+			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
+				let tick_range = match (
+					pool.range_orders
+						.get(&lp)
+						.and_then(|range_orders| range_orders.get(&id))
+						.cloned(),
+					option_tick_range,
+				) {
+					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
+					(None, Some(tick_range)) => Ok(tick_range),
+					(Some(previous_tick_range), option_new_tick_range) => {
+						Self::inner_update_range_order(
+							pool,
+							&lp,
+							asset_pair,
+							id,
+							previous_tick_range.clone(),
+							IncreaseOrDecrease::Decrease,
+							range_orders::Size::Liquidity { liquidity: Liquidity::MAX },
+							/* allow noop */ false,
+						)?;
 
-				let noop = Self::inner_update_range_order(
-					pool_state,
-					&lp,
-					asset_pair,
-					id,
-					tick_range.clone().unwrap(),
-					IncreaseOrDecrease::Decrease,
-					range_orders::Size::Liquidity { liquidity: Liquidity::MAX },
-					/* allow noop */ true,
-				)?;
+						Ok(option_new_tick_range.unwrap_or(previous_tick_range))
+					},
+				}?;
 				Self::inner_update_range_order(
-					pool_state,
+					pool,
 					&lp,
 					asset_pair,
 					id,
-					tick_range.unwrap(),
+					tick_range,
 					IncreaseOrDecrease::Increase,
-					size,
-					/* allow noop */ !noop,
+					match size {
+						RangeOrderSize::Liquidity { liquidity } =>
+							range_orders::Size::Liquidity { liquidity },
+						RangeOrderSize::AssetAmounts { maximum, minimum } =>
+							range_orders::Size::Amount {
+								maximum: asset_pair.asset_amounts_to_side_map(maximum),
+								minimum: asset_pair.asset_amounts_to_side_map(minimum),
+							},
+					},
+					/* allow noop */ true,
 				)?;
 
 				Ok(())
@@ -654,23 +715,60 @@ pub mod pallet {
 			sell_asset: any::Asset,
 			buy_asset: any::Asset,
 			id: OrderId,
-			tick: Option<Tick>,
+			option_tick: Option<Tick>,
 			increase_or_decrease: IncreaseOrDecrease,
 			amount: AssetAmount,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_pool_state(sell_asset, buy_asset, |asset_pair, pool_state| {
+			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
+				let tick = match (
+					pool.limit_orders
+						.get(&lp)
+						.and_then(|limit_orders| limit_orders.get(&id))
+						.cloned(),
+					option_tick,
+				) {
+					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
+					(None, Some(tick)) | (Some(tick), None) => Ok(tick),
+					(Some(previous_tick), Some(new_tick)) => {
+						if previous_tick != new_tick {
+							let withdrawn_asset_amount = Self::inner_update_limit_order(
+								pool,
+								&lp,
+								asset_pair,
+								id,
+								previous_tick,
+								IncreaseOrDecrease::Decrease,
+								cf_amm::common::Amount::MAX,
+								/* allow_noop */ false,
+							)?;
+							Self::inner_update_limit_order(
+								pool,
+								&lp,
+								asset_pair,
+								id,
+								new_tick,
+								IncreaseOrDecrease::Increase,
+								withdrawn_asset_amount.into(),
+								/* allow_noop */ true,
+							)?;
+						}
+
+						Ok(new_tick)
+					},
+				}?;
 				Self::inner_update_limit_order(
-					pool_state,
+					pool,
 					&lp,
 					asset_pair,
 					id,
-					tick.unwrap(),
+					tick,
 					increase_or_decrease,
 					amount.into(),
-					false,
-				)
-				.map(|_| ())
+					/* allow_noop */ false,
+				)?;
+
+				Ok(())
 			})
 		}
 
@@ -681,31 +779,46 @@ pub mod pallet {
 			sell_asset: any::Asset,
 			buy_asset: any::Asset,
 			id: OrderId,
-			tick: Option<Tick>,
+			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			Self::try_mutate_pool_state(sell_asset, buy_asset, |asset_pair, pool_state| {
-				let noop = Self::inner_update_limit_order(
-					pool_state,
-					&lp,
-					asset_pair,
-					id,
-					tick.unwrap(),
-					IncreaseOrDecrease::Decrease,
-					cf_amm::common::Amount::MAX,
-					/* allow noop */ true,
-				)?;
+			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
+				let tick = match (
+					pool.limit_orders
+						.get(&lp)
+						.and_then(|limit_orders| limit_orders.get(&id))
+						.cloned(),
+					option_tick,
+				) {
+					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
+					(None, Some(tick)) => Ok(tick),
+					(Some(previous_tick), option_new_tick) => {
+						Self::inner_update_limit_order(
+							pool,
+							&lp,
+							asset_pair,
+							id,
+							previous_tick,
+							IncreaseOrDecrease::Decrease,
+							cf_amm::common::Amount::MAX,
+							/* allow noop */ false,
+						)?;
+
+						Ok(option_new_tick.unwrap_or(previous_tick))
+					},
+				}?;
 				Self::inner_update_limit_order(
-					pool_state,
+					pool,
 					&lp,
 					asset_pair,
 					id,
-					tick.unwrap(),
+					tick,
 					IncreaseOrDecrease::Increase,
 					sell_amount.into(),
-					/* allow noop */ !noop,
+					/* allow noop */ false,
 				)?;
+
 				Ok(())
 			})
 		}
@@ -731,9 +844,9 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		to: any::Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		Self::try_mutate_pool_state(from, to, |asset_pair, pool_state| {
+		Self::try_mutate_enabled_pool(from, to, |asset_pair, pool| {
 			let (output_amount, remaining_amount) =
-				pool_state.swap(asset_pair.base_side, Order::Sell, input_amount.into());
+				pool.pool_state.swap(asset_pair.base_side, Order::Sell, input_amount.into());
 			remaining_amount
 				.is_zero()
 				.then_some(())
@@ -754,7 +867,7 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	#[allow(clippy::too_many_arguments)]
 	fn inner_update_limit_order(
-		pool_state: &mut PoolState<T::AccountId>,
+		pool: &mut Pool<T>,
 		lp: &T::AccountId,
 		asset_pair: &AssetPair<T>,
 		id: OrderId,
@@ -762,7 +875,7 @@ impl<T: Config> Pallet<T> {
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: cf_amm::common::Amount,
 		allow_noop: bool,
-	) -> Result<bool, DispatchError> {
+	) -> Result<AssetAmount, DispatchError> {
 		let (amount_delta, position_info, collected) = match increase_or_decrease {
 			IncreaseOrDecrease::Increase => {
 				let debited_asset_amount = asset_pair.canonial_asset_pair.try_debit_asset(
@@ -771,8 +884,8 @@ impl<T: Config> Pallet<T> {
 					amount,
 				)?;
 
-				let (collected, position_info) = match pool_state.collect_and_mint_limit_order(
-					lp,
+				let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
+					&(lp.clone(), id),
 					asset_pair.base_side,
 					Order::Sell,
 					tick,
@@ -782,7 +895,7 @@ impl<T: Config> Pallet<T> {
 					Err(error) => Err(match error {
 						limit_orders::PositionError::NonExistent =>
 							if allow_noop {
-								return Ok(true)
+								return Ok(Default::default())
 							} else {
 								Error::<T>::PositionDoesNotExist
 							},
@@ -799,26 +912,26 @@ impl<T: Config> Pallet<T> {
 				(debited_asset_amount, position_info, collected)
 			},
 			IncreaseOrDecrease::Decrease => {
-				let (withdrawn_amount, collected, position_info) = match pool_state
-					.collect_and_burn_limit_order(
-						lp,
+				let (withdrawn_amount, collected, position_info) =
+					match pool.pool_state.collect_and_burn_limit_order(
+						&(lp.clone(), id),
 						asset_pair.base_side,
 						Order::Sell,
 						tick,
 						amount,
 					) {
-					Ok(ok) => Ok(ok),
-					Err(error) => Err(match error {
-						limit_orders::PositionError::NonExistent =>
-							if allow_noop {
-								return Ok(true)
-							} else {
-								Error::<T>::PositionDoesNotExist
-							},
-						limit_orders::PositionError::InvalidTick => Error::InvalidTick,
-						limit_orders::PositionError::Other(error) => match error {},
-					}),
-				}?;
+						Ok(ok) => Ok(ok),
+						Err(error) => Err(match error {
+							limit_orders::PositionError::NonExistent =>
+								if allow_noop {
+									return Ok(Default::default())
+								} else {
+									Error::<T>::PositionDoesNotExist
+								},
+							limit_orders::PositionError::InvalidTick => Error::InvalidTick,
+							limit_orders::PositionError::Other(error) => match error {},
+						}),
+					}?;
 
 				let withdrawn_asset_amount = asset_pair.canonial_asset_pair.try_credit_asset(
 					lp,
@@ -829,6 +942,18 @@ impl<T: Config> Pallet<T> {
 				(withdrawn_asset_amount, position_info, collected)
 			},
 		};
+
+		if position_info.amount.is_zero() {
+			if let Some(limit_orders) = pool.limit_orders.get_mut(lp) {
+				limit_orders.remove(&id);
+				if limit_orders.is_empty() {
+					pool.limit_orders.remove(lp);
+				}
+			}
+		} else {
+			let limit_orders = pool.limit_orders.entry(lp.clone()).or_default();
+			limit_orders.insert(id, tick);
+		}
 
 		let collected_fees = asset_pair.canonial_asset_pair.try_credit_asset(
 			lp,
@@ -854,12 +979,12 @@ impl<T: Config> Pallet<T> {
 			swapped_liquidity,
 		});
 
-		Ok(false)
+		Ok(amount_delta)
 	}
 
 	#[allow(clippy::too_many_arguments)]
 	fn inner_update_range_order(
-		pool_state: &mut PoolState<T::AccountId>,
+		pool: &mut Pool<T>,
 		lp: &T::AccountId,
 		asset_pair: &AssetPair<T>,
 		id: OrderId,
@@ -867,68 +992,81 @@ impl<T: Config> Pallet<T> {
 		increase_or_decrease: IncreaseOrDecrease,
 		size: range_orders::Size,
 		allow_noop: bool,
-	) -> Result<bool, DispatchError> {
-		let (liquidity_delta, liquidity_total, assets_delta, collected) = match increase_or_decrease
-		{
+	) -> Result<AssetAmounts, DispatchError> {
+		let (liquidity_delta, position_info, assets_delta, collected) = match increase_or_decrease {
 			IncreaseOrDecrease::Increase => {
-				let (assets_debited, minted_liquidity, collected, position_info) = match pool_state
-					.collect_and_mint_range_order(
-						lp,
+				let (assets_debited, minted_liquidity, collected, position_info) =
+					match pool.pool_state.collect_and_mint_range_order(
+						&(lp.clone(), id),
 						tick_range.clone(),
 						size,
 						|required_amounts| asset_pair.try_debit_assets(lp, required_amounts),
 					) {
-					Ok(ok) => Ok(ok),
-					Err(error) => Err(match error {
-						range_orders::PositionError::InvalidTickRange =>
-							Error::<T>::InvalidTickRange.into(),
-						range_orders::PositionError::NonExistent =>
-							if allow_noop {
-								return Ok(true)
-							} else {
-								Error::<T>::PositionDoesNotExist.into()
-							},
-						range_orders::PositionError::Other(
-							range_orders::MintError::CallbackFailed(e),
-						) => e,
-						range_orders::PositionError::Other(
-							range_orders::MintError::MaximumGrossLiquidity,
-						) => Error::<T>::MaximumGrossLiquidity.into(),
-						range_orders::PositionError::Other(
-							cf_amm::range_orders::MintError::AssetRatioUnachieveable,
-						) => Error::<T>::AssetRatioUnachieveable.into(),
-					}),
-				}?;
-
-				(minted_liquidity, position_info.liquidity, assets_debited, collected)
-			},
-			IncreaseOrDecrease::Decrease => {
-				let (assets_withdrawn, burnt_liquidity, collected, position_info) =
-					match pool_state.collect_and_burn_range_order(lp, tick_range.clone(), size) {
 						Ok(ok) => Ok(ok),
 						Err(error) => Err(match error {
 							range_orders::PositionError::InvalidTickRange =>
-								Error::<T>::InvalidTickRange,
+								Error::<T>::InvalidTickRange.into(),
 							range_orders::PositionError::NonExistent =>
 								if allow_noop {
-									return Ok(true)
+									return Ok(Default::default())
 								} else {
-									Error::<T>::PositionDoesNotExist
+									Error::<T>::PositionDoesNotExist.into()
 								},
-							range_orders::PositionError::Other(e) => match e {
-								range_orders::BurnError::AssetRatioUnachieveable =>
-									Error::<T>::AssetRatioUnachieveable,
-							},
+							range_orders::PositionError::Other(
+								range_orders::MintError::CallbackFailed(e),
+							) => e,
+							range_orders::PositionError::Other(
+								range_orders::MintError::MaximumGrossLiquidity,
+							) => Error::<T>::MaximumGrossLiquidity.into(),
+							range_orders::PositionError::Other(
+								cf_amm::range_orders::MintError::AssetRatioUnachieveable,
+							) => Error::<T>::AssetRatioUnachieveable.into(),
 						}),
 					}?;
 
+				(minted_liquidity, position_info, assets_debited, collected)
+			},
+			IncreaseOrDecrease::Decrease => {
+				let (assets_withdrawn, burnt_liquidity, collected, position_info) = match pool
+					.pool_state
+					.collect_and_burn_range_order(&(lp.clone(), id), tick_range.clone(), size)
+				{
+					Ok(ok) => Ok(ok),
+					Err(error) => Err(match error {
+						range_orders::PositionError::InvalidTickRange =>
+							Error::<T>::InvalidTickRange,
+						range_orders::PositionError::NonExistent =>
+							if allow_noop {
+								return Ok(Default::default())
+							} else {
+								Error::<T>::PositionDoesNotExist
+							},
+						range_orders::PositionError::Other(e) => match e {
+							range_orders::BurnError::AssetRatioUnachieveable =>
+								Error::<T>::AssetRatioUnachieveable,
+						},
+					}),
+				}?;
+
 				let assets_withdrawn = asset_pair.try_credit_assets(lp, assets_withdrawn)?;
 
-				(burnt_liquidity, position_info.liquidity, assets_withdrawn, collected)
+				(burnt_liquidity, position_info, assets_withdrawn, collected)
 			},
 		};
 
 		let collected_fees = asset_pair.try_credit_assets(lp, collected.fees)?;
+
+		if position_info.liquidity == 0 {
+			if let Some(range_orders) = pool.range_orders.get_mut(lp) {
+				range_orders.remove(&id);
+				if range_orders.is_empty() {
+					pool.range_orders.remove(lp);
+				}
+			}
+		} else {
+			let range_orders = pool.range_orders.entry(lp.clone()).or_default();
+			range_orders.insert(id, tick_range.clone());
+		}
 
 		Self::deposit_event(Event::<T>::RangeOrderUpdated {
 			lp: lp.clone(),
@@ -938,12 +1076,12 @@ impl<T: Config> Pallet<T> {
 			tick_range,
 			increase_or_decrease,
 			liquidity_delta,
-			liquidity_total,
+			liquidity_total: position_info.liquidity,
 			assets_delta,
 			collected_fees,
 		});
 
-		Ok(false)
+		Ok(assets_delta)
 	}
 
 	#[transactional]
@@ -969,7 +1107,7 @@ impl<T: Config> Pallet<T> {
 	fn try_mutate_pool<
 		R,
 		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair<T>, &mut Pool<T::AccountId>) -> Result<R, E>,
+		F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
 	>(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
@@ -982,10 +1120,10 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn try_mutate_pool_state<
+	fn try_mutate_enabled_pool<
 		R,
 		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair<T>, &mut PoolState<T::AccountId>) -> Result<R, E>,
+		F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
 	>(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
@@ -993,7 +1131,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<R, E> {
 		Self::try_mutate_pool(base_asset, pair_asset, |asset_pair, pool| {
 			ensure!(pool.enabled, Error::<T>::PoolDisabled);
-			f(asset_pair, &mut pool.pool_state)
+			f(asset_pair, pool)
 		})
 	}
 

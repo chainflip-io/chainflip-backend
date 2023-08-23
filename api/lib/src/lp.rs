@@ -119,7 +119,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		base_asset: Asset,
 		pair_asset: Asset,
 		id: OrderId,
-		tick_range: Option<Range<Tick>>,
+		option_tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
 		size: RangeOrderSize,
 	) -> Result<UpdateRangeOrderReturn> {
@@ -129,7 +129,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				base_asset,
 				pair_asset,
 				id,
-				tick_range,
+				option_tick_range,
 				increase_or_decrease,
 				size,
 			})
@@ -171,7 +171,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		base_asset: Asset,
 		pair_asset: Asset,
 		id: OrderId,
-		tick_range: Option<Range<Tick>>,
+		option_tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
 	) -> Result<SetRangeOrderReturn> {
 		// Submit the mint order
@@ -180,7 +180,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				base_asset,
 				pair_asset,
 				id,
-				tick_range,
+				option_tick_range,
 				size,
 			})
 			.await
@@ -233,7 +233,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		sell_asset: Asset,
 		buy_asset: Asset,
 		id: OrderId,
-		tick: Option<Tick>,
+		option_tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: AssetAmount,
 	) -> Result<UpdateLimitOrderReturn> {
@@ -243,7 +243,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				sell_asset,
 				buy_asset,
 				id,
-				tick,
+				option_tick,
 				increase_or_decrease,
 				amount,
 			})
@@ -280,7 +280,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		sell_asset: Asset,
 		buy_asset: Asset,
 		id: OrderId,
-		tick: Option<Tick>,
+		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
 	) -> Result<SetLimitOrderReturn> {
 		// Submit the burn order
@@ -289,7 +289,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				sell_asset,
 				buy_asset,
 				id,
-				tick,
+				option_tick,
 				sell_amount,
 			})
 			.await
