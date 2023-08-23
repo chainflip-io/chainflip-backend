@@ -170,12 +170,14 @@ pub trait ChainCrypto: Chain {
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
+	/// Passed in to construct the replay protection.
+	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
 }
 
 /// Provides chain-specific replay protection data.
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection() -> Abi::ReplayProtection;
+	fn replay_protection(params: Abi::ReplayProtectionParams) -> Abi::ReplayProtection;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
