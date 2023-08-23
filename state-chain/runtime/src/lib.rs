@@ -4,6 +4,8 @@
 pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
+#[cfg(feature = "std")]
+pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::Offence,
@@ -12,7 +14,10 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_amm::common::SqrtPriceQ64F96;
+use cf_amm::{
+	common::{SqrtPriceQ64F96, Tick},
+	range_orders::{AmountsToLiquidityError, Liquidity},
+};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
@@ -21,6 +26,7 @@ use cf_chains::{
 };
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_pools::PoolQueryError;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::AccountId32;
@@ -32,20 +38,21 @@ pub use frame_support::{
 	instances::{Instance1, Instance2},
 	parameter_types,
 	traits::{
-		ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness,
-		StorageInfo,
+		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
+		Randomness, StorageInfo,
 	},
 	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_PER_SECOND},
+		constants::{
+			BlockExecutionWeight, ExtrinsicBaseWeight, ParityDbWeight as DbWeight,
+			WEIGHT_REF_TIME_PER_SECOND,
+		},
 		ConstantMultiplier, IdentityFee, Weight,
 	},
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
 use pallet_cf_funding::MinimumFunding;
-use pallet_grandpa::{
-	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
-};
+use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
@@ -96,8 +103,8 @@ pub type Signature = MultiSignature;
 /// to the public key of our transaction signing scheme.
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-/// Index of a transaction in the chain.
-pub type Index = u32;
+/// Nonce of a transaction in the chain.
+pub type Nonce = u32;
 
 /// Balance of an account.
 pub type Balance = u128;
@@ -375,7 +382,7 @@ parameter_types! {
 	/// We allow for 2 seconds of compute with a 6 second average block time.
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
-			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
 			NORMAL_DISPATCH_RATIO,
 		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
@@ -387,6 +394,8 @@ parameter_types! {
 impl frame_system::Config for Runtime {
 	/// The basic call filter to use in dispatchable.
 	type BaseCallFilter = frame_support::traits::Everything;
+	/// The block type for the runtime.
+	type Block = Block;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
@@ -395,18 +404,14 @@ impl frame_system::Config for Runtime {
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
 	type RuntimeCall = RuntimeCall;
+	/// The type for storing how many extrinsics an account has signed.
+	type Nonce = Nonce;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
-	/// The index type for storing how many extrinsics an account has signed.
-	type Index = Index;
-	/// The index type for blocks.
-	type BlockNumber = BlockNumber;
 	/// The type for hashing blocks and tries.
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The header type.
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
 	/// The ubiquitous origin type.
@@ -414,7 +419,7 @@ impl frame_system::Config for Runtime {
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 	/// The weight of database operations that the runtime can invoke.
-	type DbWeight = weights::rocksdb_weights::constants::RocksDbWeight;
+	type DbWeight = DbWeight;
 	/// Version of the runtime.
 	type Version = Version;
 	/// Converts a module to the index of the module in `construct_runtime!`.
@@ -444,8 +449,6 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 
-impl pallet_randomness_collective_flip::Config for Runtime {}
-
 impl frame_system::offchain::SigningTypes for Runtime {
 	type Public = <Signature as Verify>::Signer;
 	type Signature = Signature;
@@ -455,6 +458,7 @@ impl pallet_aura::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	type AllowMultipleBlocksPerSlot = ConstBool<false>;
 }
 
 parameter_types! {
@@ -463,27 +467,27 @@ parameter_types! {
 
 type KeyOwnerIdentification<T, Id> =
 	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
-type KeyOwnerProof<T, Id> = <T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::Proof;
 type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
 	T,
-	pallet_grandpa::GrandpaEquivocationOffence<
-		<T as pallet_grandpa::Config>::KeyOwnerIdentification,
-	>,
+	pallet_grandpa::EquivocationOffence<KeyOwnerIdentification<Historical, GrandpaId>>,
 	<T as pallet_session::historical::Config>::FullIdentification,
 >;
 
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type KeyOwnerProofSystem = Historical;
-	type KeyOwnerProof = KeyOwnerProof<Historical, GrandpaId>;
-	type KeyOwnerIdentification = KeyOwnerIdentification<Historical, GrandpaId>;
-	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
-		Self::KeyOwnerIdentification,
-		GrandpaOffenceReporter<Self>,
-		BlocksPerEpoch,
-	>;
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
+	// Note: We don't use nomination.
+	type MaxNominators = ConstU32<0>;
+
+	type MaxSetIdSessionEntries = ConstU64<8>;
+	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
+		Self,
+		GrandpaOffenceReporter<Self>,
+		Historical,
+		ConstU64<14400>,
+	>;
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -496,8 +500,6 @@ impl pallet_timestamp::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type UncleGenerations = ConstU32<5>;
-	type FilterUncle = ();
 	type EventHandler = ();
 }
 
@@ -515,6 +517,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
@@ -723,13 +726,8 @@ impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 
 construct_runtime!(
 	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
 		Timestamp: pallet_timestamp,
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
@@ -1027,6 +1025,16 @@ impl_runtime_apis! {
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
 		}
+
+		fn cf_estimate_liquidity_from_range_order(
+			asset: Asset,
+			lower: Tick,
+			upper: Tick,
+			unstable_amount: AssetAmount,
+			stable_amount: AssetAmount,
+		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>> {
+			LiquidityPools::estimate_liquidity_from_range_order(asset, lower, upper, unstable_amount, stable_amount)
+		}
 	}
 
 	// END custom runtime APIs
@@ -1047,6 +1055,14 @@ impl_runtime_apis! {
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
+		}
+
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+			Runtime::metadata_at_version(version)
+		}
+
+		fn metadata_versions() -> sp_std::vec::Vec<u32> {
+			Runtime::metadata_versions()
 		}
 	}
 
@@ -1109,21 +1125,22 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> GrandpaAuthorityList {
+
+	impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
+		fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn current_set_id() -> fg_primitives::SetId {
+		fn current_set_id() -> sp_consensus_grandpa::SetId {
 			Grandpa::current_set_id()
 		}
 
 		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof: fg_primitives::EquivocationProof<
+			equivocation_proof: sp_consensus_grandpa::EquivocationProof<
 				<Block as BlockT>::Hash,
 				NumberFor<Block>,
 			>,
-			key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+			key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,
 		) -> Option<()> {
 			let key_owner_proof = key_owner_proof.decode()?;
 
@@ -1134,19 +1151,19 @@ impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
-			_set_id: fg_primitives::SetId,
+			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
-		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
+		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
 			use codec::Encode;
 
-			Historical::prove((fg_primitives::KEY_TYPE, authority_id))
+			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
-				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
+				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)
 		}
 	}
 
-	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Nonce> for Runtime {
+		fn account_nonce(account: AccountId) -> Nonce {
 			System::account_nonce(account)
 		}
 	}
@@ -1163,6 +1180,12 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
+		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
 		}
 	}
 
@@ -1181,26 +1204,33 @@ impl_runtime_apis! {
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(call, len)
 		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
+		}
 	}
 
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
-		fn on_runtime_upgrade() -> (Weight, Weight) {
+		fn on_runtime_upgrade(checks: frame_try_runtime::UpgradeCheckSelect) -> (Weight, Weight) {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
 			// right here and right now.
-			let weight = Executive::try_runtime_upgrade().unwrap();
+			let weight = Executive::try_runtime_upgrade(checks).unwrap();
 			(weight, BlockWeights::get().max_block)
 		}
 
 		fn execute_block(
 			block: Block,
 			state_root_check: bool,
+			signature_check: bool,
 			select: frame_try_runtime::TryStateSelect
 		) -> Weight {
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
-			Executive::try_execute_block(block, state_root_check, select).expect("execute-block failed")
+			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
 		}
 	}
 
@@ -1278,35 +1308,6 @@ mod test {
 			",
 			CALL_ENUM_MAX_SIZE,
 			core::mem::size_of::<RuntimeCall>(),
-		);
-	}
-
-	use frame_support::traits::WhitelistedStorageKeys;
-	use sp_core::hexdisplay::HexDisplay;
-	use std::collections::HashSet;
-
-	#[test]
-	fn check_whitelist() {
-		let whitelist: HashSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
-			.iter()
-			.map(|e| HexDisplay::from(&e.key).to_string())
-			.collect();
-
-		// Block Number
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac")
-		);
-		// Execution Phase
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a")
-		);
-		// Event Count
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850")
-		);
-		// System Events
-		assert!(
-			whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7")
 		);
 	}
 }

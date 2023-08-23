@@ -34,7 +34,7 @@ thread_local! {
 }
 
 // When calling on_idle, we should broadcast everything with this excess weight.
-const LARGE_EXCESS_WEIGHT: Weight = Weight::from_ref_time(20_000_000_000);
+const LARGE_EXCESS_WEIGHT: Weight = Weight::from_parts(20_000_000_000, 0);
 
 const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 
@@ -190,7 +190,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 				broadcast_id: broadcast_attempt_id.broadcast_id
 			})
 		);
-	})
+	});
 }
 
 #[test]
@@ -220,7 +220,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 		let retry_queue = BroadcastRetryQueue::<Test, Instance1>::get();
 		assert_eq!(retry_queue.len(), 1);
 		assert_eq!(retry_queue.first().unwrap().broadcast_attempt_id, broadcast_attempt_id_2);
-	})
+	});
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn test_transaction_signing_failed() {
 
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
 			.is_some());
-	})
+	});
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn test_invalid_id_is_noop() {
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
 		);
-	})
+	});
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn test_sigdata_with_no_match_is_noop() {
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
-	})
+	});
 }
 
 // the nodes who failed to broadcast should be report if we succeed, since success
@@ -381,7 +381,7 @@ fn test_signature_request_expiry() {
 		MockCfe::respond(Scenario::Timeout);
 
 		check_end_state();
-	})
+	});
 }
 
 #[test]
@@ -424,7 +424,7 @@ fn test_transmission_request_expiry() {
 		MockCfe::respond(Scenario::Timeout);
 
 		check_end_state();
-	})
+	});
 }
 
 fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {

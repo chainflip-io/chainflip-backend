@@ -253,7 +253,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let EpochKey { key, .. } =
 				<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap();
-			let request_id = EthereumThresholdSigner::request_keygen_verification_signature(
+			let request_id = EthereumThresholdSigner::request_verification_signature(
 				*PAYLOAD,
 				NOMINEES.into_iter().collect(),
 				key,
@@ -343,7 +343,7 @@ fn fail_path_with_timeout() {
 			assert_eq!(
 				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
 					.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap())
 			);
 		});
 }
@@ -405,7 +405,7 @@ fn fail_path_due_to_report_signature_failed() {
 			assert_eq!(
 				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
 					.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
+				BTreeSet::from_iter(MockNominator::get_nominees().unwrap())
 			);
 
 			System::set_block_number(timeout_block_for_next_retry);
@@ -500,7 +500,7 @@ mod unsigned_validation {
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = MockAggKey(*b"AKEY");
 
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			EthereumThresholdSigner::request_keygen_verification_signature(
+			EthereumThresholdSigner::request_verification_signature(
 				PAYLOAD,
 				participants,
 				CUSTOM_AGG_KEY,

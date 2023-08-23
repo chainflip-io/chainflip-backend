@@ -3,10 +3,11 @@
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	weights::WeightInfo,
-	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, VoteMask, Votes,
+	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, PalletSafeMode,
+	VoteMask, Votes, WitnessedCallsScheduledForDispatch,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochInfo, EpochTransitionHandler, SafeMode, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -240,7 +241,7 @@ fn can_purge_stale_storage() {
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3, 4]);
 
 		// Nothing to clean up in epoch 4
-		Witnesser::on_idle(1, Weight::from_ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(1, Weight::from_parts(BLOCK_WEIGHT, 0));
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3]);
 		for e in [2u32, 9, 10, 11] {
 			assert_eq!(Votes::<Test>::get(e, call1), Some(vec![0, 0, e as u8]));
@@ -251,7 +252,7 @@ fn can_purge_stale_storage() {
 			assert_eq!(CallHashExecuted::<Test>::get(e, call2), Some(()));
 		}
 
-		Witnesser::on_idle(2, Weight::from_ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(2, Weight::from_parts(BLOCK_WEIGHT, 0));
 
 		// Partially clean data from epoch 2
 		Witnesser::on_idle(3, delete_weight * 4);
@@ -277,7 +278,7 @@ fn can_purge_stale_storage() {
 		))));
 
 		// Clean the remaining storage
-		Witnesser::on_idle(4, Weight::from_ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(4, Weight::from_parts(BLOCK_WEIGHT, 0));
 
 		// Epoch 2's stale data should be fully cleaned.
 		assert_eq!(CallHashExecuted::<Test>::get(2u32, call1), None);
@@ -298,8 +299,8 @@ fn can_purge_stale_storage() {
 		Witnesser::on_expired_epoch(9);
 		Witnesser::on_expired_epoch(10);
 		assert_eq!(EpochsToCull::<Test>::get(), vec![9, 10]);
-		Witnesser::on_idle(4, Weight::from_ref_time(BLOCK_WEIGHT));
-		Witnesser::on_idle(5, Weight::from_ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(4, Weight::from_parts(BLOCK_WEIGHT, 0));
+		Witnesser::on_idle(5, Weight::from_parts(BLOCK_WEIGHT, 0));
 		assert!(EpochsToCull::<Test>::get().is_empty());
 
 		for e in [9u32, 10] {
@@ -318,5 +319,57 @@ fn can_purge_stale_storage() {
 		assert_eq!(ExtraCallData::<Test>::get(11u32, call2), Some(vec![vec![0], vec![11]]));
 		assert_eq!(CallHashExecuted::<Test>::get(11u32, call1), Some(()));
 		assert_eq!(CallHashExecuted::<Test>::get(11u32, call2), Some(()));
+	});
+}
+
+#[test]
+fn test_safe_mode() {
+	new_test_ext().execute_with(|| {
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CODE_RED,
+		});
+
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
+
+		// Only one vote, nothing should happen yet.
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(ALISSA),
+			call.clone(),
+			current_epoch
+		));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+
+		// Vote again, we should reach the threshold but not dispatch the call.
+		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(BOBSON), call, current_epoch));
+
+		// the call should not be dispatched
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+
+		//the call should be stored for dispatching later when safe mode is deactivated.
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		Witnesser::on_idle(1, Weight::zero().set_ref_time(1_000_000_000_000u64));
+
+		// the call is still not dispatched and we do nothing in the on_initialize since we are
+		// still in safe mode
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CODE_GREEN,
+		});
+
+		// the call should now be able to dispatch since we now deactivated the safe mode but wont
+		// because there is not enough idle weight available.
+		Witnesser::on_idle(2, Weight::zero().set_ref_time(0u64));
+
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		// The call should now dispatch since we have enough weight now.
+		Witnesser::on_idle(3, Weight::zero().set_ref_time(1_000_000_000_000u64));
+
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});
 }

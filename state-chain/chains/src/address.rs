@@ -3,11 +3,12 @@ extern crate alloc;
 use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, eth::Address as EthereumAddress, Chain};
 use cf_primitives::{ChannelId, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use sp_core::H160;
-use sp_runtime::DispatchError;
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
@@ -17,10 +18,27 @@ pub trait AddressDerivationApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<C::ChainAccount, DispatchError>;
+
+	fn generate_address_and_state(
+		source_asset: C::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<(C::ChainAccount, C::DepositChannelState), DispatchError>;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+	Serialize,
+	Deserialize,
+)]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot(PolkadotAccountId),
@@ -37,8 +55,9 @@ impl ForeignChainAddress {
 	}
 }
 
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[derive(
+	Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord,
+)]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),

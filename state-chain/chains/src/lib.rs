@@ -5,20 +5,19 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, ToHumanreadableAddress};
-use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
+		DispatchError,
+	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
 	StorageHasher,
 };
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
-	DispatchError,
-};
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -124,7 +123,7 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ for<'a> From<&'a DepositChannel<Self>>;
 
-	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
 	type DepositDetails: Member + Parameter + BenchmarkValue;
@@ -158,7 +157,14 @@ pub trait ChainCrypto: Chain {
 	) -> bool;
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
+	fn agg_key_to_payload(agg_key: Self::AggKey, for_handover: bool) -> Self::Payload;
+
+	/// For a chain that supports key handover, check that the key produced during
+	/// the handover ceremony (stored in new_key) matches the current key. (Defaults
+	/// to always trivially returning `true` for chains without handover.)
+	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
+		true
+	}
 }
 
 /// Common abi-related types and operations for some external chain.
@@ -336,8 +342,7 @@ pub enum SwapOrigin {
 }
 
 /// Deposit channel Metadata for Cross-Chain-Message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
 	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
@@ -349,8 +354,7 @@ pub struct CcmChannelMetadata {
 	pub cf_parameters: Vec<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmDepositMetadata {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
@@ -358,9 +362,17 @@ pub struct CcmDepositMetadata {
 }
 
 #[derive(
-	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	CloneNoBound,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	DebugNoBound,
+	Serialize,
+	Deserialize,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ChainState<C: Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub tracked_data: C::TrackedData,

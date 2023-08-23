@@ -7,14 +7,15 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price, Amount,
-	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
-	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	OneToZero, PostOperationPositionExistence, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
+	MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -246,10 +247,7 @@ impl<T> PositionError<T> {
 }
 
 #[derive(Debug)]
-pub enum BurnError {
-	/// Position referenced does not contain the requested liquidity
-	PositionLacksLiquidity,
-}
+pub enum BurnError {}
 
 #[derive(Debug)]
 pub enum CollectError {}
@@ -336,7 +334,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		fee_hundredth_pips: u32,
 	) -> Result<
-		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), CollectedAmounts>>,
+		SideMap<
+			BTreeMap<
+				(SqrtPriceQ64F96, LiquidityProvider),
+				(CollectedAmounts, PostOperationPositionExistence),
+			>,
+		>,
 		SetFeesError,
 	> {
 		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
@@ -531,7 +534,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<CollectedAmounts, PositionError<MintError>> {
+	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<MintError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> MintError { match e {} }))
@@ -601,7 +604,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				fixed_pools.insert(sqrt_price, fixed_pool);
 				positions.insert((sqrt_price, lp.clone()), position);
 
-				Ok(collected_amounts)
+				Ok((collected_amounts, PostOperationPositionExistence::Exists))
 			}
 		}
 	}
@@ -622,11 +625,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, CollectedAmounts), PositionError<BurnError>> {
+	) -> Result<(Amount, CollectedAmounts, PostOperationPositionExistence), PositionError<BurnError>>
+	{
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> BurnError { match e {} }))
-				.map(|collected_amounts| (Amount::zero(), collected_amounts))
+				.map(|(collected_amounts, post_operation_position_existence)| {
+					(Amount::zero(), collected_amounts, post_operation_position_existence)
+				})
 		} else {
 			let sqrt_price = Self::validate_tick(tick)?;
 			let price = sqrt_price_to_price(sqrt_price);
@@ -646,29 +652,36 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				price,
 				self.fee_hundredth_pips,
 			);
-			let mut position =
-				option_position.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
-			let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing.
+			Ok(if let Some(mut position) = option_position {
+				let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing before collect.
 
-			position.amount = position
-				.amount
-				.checked_sub(amount)
-				.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
-			fixed_pool.available -= amount;
+				let amount = core::cmp::min(position.amount, amount);
+				position.amount -= amount;
+				fixed_pool.available -= amount;
 
-			if position.amount.is_zero() {
+				let post_operation_position_existence = if position.amount.is_zero() {
+					positions.remove(&(sqrt_price, lp.clone()));
+					PostOperationPositionExistence::DoesNotExist
+				} else {
+					assert!(!fixed_pool.available.is_zero());
+					positions.insert((sqrt_price, lp.clone()), position);
+					PostOperationPositionExistence::Exists
+				};
+				if fixed_pool.available.is_zero() {
+					fixed_pools.remove(&sqrt_price);
+				} else {
+					fixed_pools.insert(sqrt_price, fixed_pool);
+				}
+
+				(amount, collected_amounts, post_operation_position_existence)
+			} else {
 				positions.remove(&(sqrt_price, lp.clone()));
-			} else {
-				assert!(!fixed_pool.available.is_zero());
-				positions.insert((sqrt_price, lp.clone()), position);
-			}
-			if fixed_pool.available.is_zero() {
-				fixed_pools.remove(&sqrt_price);
-			} else {
-				fixed_pools.insert(sqrt_price, fixed_pool);
-			}
-
-			Ok((amount, collected_amounts))
+				(
+					Default::default(),
+					collected_amounts,
+					PostOperationPositionExistence::DoesNotExist,
+				)
+			})
 		}
 	}
 
@@ -680,7 +693,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<CollectedAmounts, PositionError<CollectError>> {
+	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<CollectError>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		self.inner_collect::<SD>(lp, sqrt_price)
 	}
@@ -689,7 +702,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
-	) -> Result<CollectedAmounts, PositionError<CollectError>> {
+	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<CollectError>> {
 		let price = sqrt_price_to_price(sqrt_price);
 
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
@@ -704,13 +717,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			price,
 			self.fee_hundredth_pips,
 		);
-		if let Some(position) = option_position {
-			positions.insert((sqrt_price, lp.clone()), position);
-		} else {
-			positions.remove(&(sqrt_price, lp.clone()));
-		};
 
-		Ok(collected_amounts)
+		Ok((
+			collected_amounts,
+			if let Some(position) = option_position {
+				positions.insert((sqrt_price, lp.clone()), position);
+				PostOperationPositionExistence::Exists
+			} else {
+				positions.remove(&(sqrt_price, lp.clone()));
+				PostOperationPositionExistence::DoesNotExist
+			},
+		))
 	}
 
 	/// Returns all the assets associated with a position

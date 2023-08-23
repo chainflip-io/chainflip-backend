@@ -17,7 +17,7 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
 pub use pallet::*;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -32,7 +32,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	// TODO: Remove once swapping is enabled and stabilised.
@@ -65,7 +64,6 @@ pub mod pallet {
 		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { initial_account_roles: Default::default() }
@@ -73,12 +71,18 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
+			let mut should_enable_swapping = false;
 			for (account, role) in &self.initial_account_roles {
 				AccountRoles::<T>::insert(account, role);
+				if *role == AccountRole::LiquidityProvider || *role == AccountRole::Broker {
+					should_enable_swapping = true;
+				}
 			}
-			SwappingEnabled::<T>::put(true);
+			if should_enable_swapping {
+				SwappingEnabled::<T>::put(true);
+			}
 		}
 	}
 
@@ -89,6 +93,7 @@ pub mod pallet {
 		// If they have been enabled, it's possible accounts have already registered as Brokers or
 		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
 		// Governance can bypass this by calling `gov_register_account_role`.
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::enable_swapping())]
 		pub fn enable_swapping(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -99,6 +104,7 @@ pub mod pallet {
 		// TODO: Remove this function after swapping is deployed and stabilised.
 		/// Bypass the Swapping Enabled check. This allows governance to enable swapping
 		/// features for some controlled accounts.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::gov_register_account_role())]
 		pub fn gov_register_account_role(
 			origin: OriginFor<T>,
@@ -209,6 +215,12 @@ macro_rules! define_ensure_origin {
 					Ok(o) => Err(o.into()),
 					Err(o) => Err(o),
 				}
+			}
+
+			#[cfg(feature = "runtime-benchmarks")]
+			fn try_successful_origin() -> Result<<T as frame_system::Config>::RuntimeOrigin, ()> {
+				// Can't return a default account id with the correct role.
+				Err(())
 			}
 		}
 

@@ -8,7 +8,7 @@ benchmarks! {
 	set_slashing_rate {
 		let slashing_rate: Permill = Permill::one();
 		let call = Call::<T>::set_slashing_rate { slashing_rate };
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate)

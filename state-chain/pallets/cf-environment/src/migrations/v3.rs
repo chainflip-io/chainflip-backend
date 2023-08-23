@@ -38,13 +38,13 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 		let before = BitcoinAvailableUtxos::<T>::get();
 		Ok(before.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
 		assert_eq!(
 			BitcoinAvailableUtxos::<T>::get(),
 			vec![Utxo {

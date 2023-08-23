@@ -1,11 +1,10 @@
 #![feature(ip)]
 #![feature(result_flattening)]
-#![feature(btree_drain_filter)]
-#![feature(drain_filter)]
+#![feature(btree_extract_if)]
+#![feature(extract_if)]
 #![feature(map_try_insert)]
 #![feature(step_trait)]
 #![feature(result_option_inspect)]
-#![feature(is_some_and)]
 
 pub mod common;
 pub mod constants;

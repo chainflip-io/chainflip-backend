@@ -197,14 +197,28 @@ export async function observeEvent(
   return result as Event;
 }
 
-export async function observeSwapScheduled(sourceAsset: Asset, channelId: number) {
+// TODO: To import from the SDK once it's exported
+export enum SwapType {
+  Swap = 'Swap',
+  CcmPrincipal = 'CcmPrincipal',
+  CcmGas = 'CcmGas',
+}
+
+export async function observeSwapScheduled(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  channelId: number,
+  swapType?: SwapType,
+) {
   const chainflipApi = await getChainflipApi();
 
   return observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('DepositChannel' in event.data.origin) {
       const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const assetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
-      return channelMatches && assetMatches;
+      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+      const destAssetMatches = destAsset === (event.data.destinationAsset.toUpperCase() as Asset);
+      const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
+      return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
     }
     // Otherwise it was a swap scheduled by interacting with the ETH smart contract
     return false;
@@ -333,6 +347,8 @@ export async function observeEVMEvent(
         toBlock: currentBlockNumber,
       });
       for (let j = 0; j < events.length; j++) {
+        if (Object.keys(events[j].returnValues).length / 2 !== parameterNames.length)
+          throw new Error('Unexpected event length');
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
           if (
@@ -374,6 +390,7 @@ export async function observeCcmReceived(
       '*',
       messageMetadata.message,
       getEthContractAddress(destAsset.toString()),
+      '*',
       '*',
       '*',
     ],

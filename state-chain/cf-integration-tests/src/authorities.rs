@@ -8,10 +8,12 @@ use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
-use cf_traits::{AsyncResult, EpochInfo, VaultRotator, VaultStatus};
+use cf_traits::{AsyncResult, EpochInfo, SafeMode, VaultRotator, VaultStatus};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
-use state_chain_runtime::{Environment, EthereumVault, Flip, Runtime, Validator};
+use state_chain_runtime::{
+	chainflip::RuntimeSafeMode, Environment, EthereumVault, Flip, Runtime, Validator,
+};
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 fn fund_authorities_and_join_auction(
@@ -221,7 +223,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 }
 
 #[test]
-fn authority_rotation_cannot_be_aborted_after_key_handover() {
+fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mode() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::default()
@@ -237,16 +239,45 @@ fn authority_rotation_cannot_be_aborted_after_key_handover() {
 
 			// Run until key handover starts
 			testnet.move_forward_blocks(3);
-			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+			assert!(matches!(
+				EthereumVault::status(),
+				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
+			));
 
 			assert_ok!(Environment::update_safe_mode(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				SafeModeUpdate::CodeRed
 			));
 
-			// Authority rotation is completed while in Code Red.
 			testnet.move_forward_blocks(3);
 
-			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
+			// Authority rotation is stalled while in Code Red because of disabling dispatching
+			// witness extrinsics and so witnessing vault rotation will be stalled.
+			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+
+			// We activate witnessing calls by setting safe mode to code green just for the
+			// witnesser pallet.
+			let runtime_safe_mode_with_witnessing = RuntimeSafeMode {
+				emissions: pallet_cf_emissions::PalletSafeMode::CODE_RED,
+				funding: pallet_cf_funding::PalletSafeMode::CODE_RED,
+				swapping: pallet_cf_swapping::PalletSafeMode::CODE_RED,
+				liquidity_provider: pallet_cf_lp::PalletSafeMode::CODE_RED,
+				validator: pallet_cf_validator::PalletSafeMode::CODE_RED,
+				pools: pallet_cf_pools::PalletSafeMode::CODE_RED,
+				witnesser: pallet_cf_witnesser::PalletSafeMode::CODE_GREEN, /* code green for
+				                                                             * witnessing */
+				reputation: pallet_cf_reputation::PalletSafeMode::CODE_RED,
+				vault: pallet_cf_vaults::PalletSafeMode::CODE_RED,
+			};
+
+			assert_ok!(Environment::update_safe_mode(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				SafeModeUpdate::CodeAmber(runtime_safe_mode_with_witnessing)
+			));
+
+			// rotation should now complete since the witness calls are now dispatched.
+			testnet.move_forward_blocks(3);
+
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new	epoch");
 		});
 }

@@ -24,12 +24,14 @@ use frame_support::{
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{
+		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
+		DispatchError, Percent, Permill, RuntimeDebug,
 	},
-	DispatchError, Percent, Permill, RuntimeDebug,
 };
+use frame_system::pallet_prelude::*;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
@@ -38,8 +40,6 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{Chainflip, OnAccountFunded, WaivedFees};
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
@@ -67,7 +67,7 @@ pub mod pallet {
 
 		/// Blocks per day.
 		#[pallet::constant]
-		type BlocksPerDay: Get<Self::BlockNumber>;
+		type BlocksPerDay: Get<BlockNumberFor<Self>>;
 
 		/// Providing updates on funding activity
 		type OnAccountFunded: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
@@ -191,6 +191,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [EnsureGovernance]
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
 		pub fn set_slashing_rate(origin: OriginFor<T>, slashing_rate: Permill) -> DispatchResult {
 			// Ensure the extrinsic was executed by the governance
@@ -207,16 +208,15 @@ pub mod pallet {
 		pub total_issuance: T::Balance,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			use sp_runtime::traits::Zero;
+			use frame_support::sp_runtime::traits::Zero;
 			Self { total_issuance: Zero::zero() }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
 			OffchainFunds::<T>::set(self.total_issuance);
@@ -453,7 +453,7 @@ impl<T: Config> FeePayment for Pallet<T> {
 	fn try_burn_fee(
 		account_id: &Self::AccountId,
 		amount: Self::Amount,
-	) -> sp_runtime::DispatchResult {
+	) -> frame_support::dispatch::DispatchResult {
 		if let Some(surplus) = Pallet::<T>::try_debit_from_liquid_funds(account_id, amount) {
 			let _ = surplus.offset(Pallet::<T>::burn(amount));
 			Ok(())
@@ -528,10 +528,7 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		account_id: &Self::AccountId,
 		amount: Self::Balance,
 	) -> Result<(), DispatchError> {
-		ensure!(
-			amount <= Self::liquid_funds(account_id),
-			DispatchError::from(Error::<T>::InsufficientLiquidity)
-		);
+		ensure!(amount <= Self::liquid_funds(account_id), Error::<T>::InsufficientLiquidity);
 		Self::settle(account_id, Self::deposit_pending_redemption(account_id, amount).into());
 		T::OnAccountFunded::on_account_funded(account_id, Self::balance(account_id));
 
@@ -577,11 +574,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
 
-impl<T, B> FlipSlasher<T>
-where
-	T: Config<BlockNumber = B>,
-	B: UniqueSaturatedInto<T::Balance> + Into<T::Balance>,
-{
+impl<T: Config> FlipSlasher<T> {
 	fn attempt_slash(
 		account_id: &T::AccountId,
 		account: FlipAccount<T::Balance>,
@@ -597,13 +590,12 @@ where
 	}
 }
 
-impl<T, B> Slashing for FlipSlasher<T>
+impl<T: Config> Slashing for FlipSlasher<T>
 where
-	T: Config<BlockNumber = B>,
-	B: UniqueSaturatedInto<T::Balance> + Into<T::Balance>,
+	BlockNumberFor<T>: Into<T::Balance>,
 {
 	type AccountId = T::AccountId;
-	type BlockNumber = B;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);

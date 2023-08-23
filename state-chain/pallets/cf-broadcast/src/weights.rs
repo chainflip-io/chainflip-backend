@@ -45,9 +45,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `x` is `[1, 1000]`.
 	fn on_initialize(x: u32, ) -> Weight {
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_ref_time(6_605_838)
+		Weight::from_parts(6_605_838, 0)
 			// Standard Error: 4_267
-			.saturating_add(Weight::from_ref_time(1_301_424).saturating_mul(x.into()))
+			.saturating_add(Weight::from_parts(1_301_424, 0).saturating_mul(x.into()))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(x.into())))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -58,7 +58,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_signing_failure() -> Weight {
 		// Minimum execution time: 36_000 nanoseconds.
-		Weight::from_ref_time(38_000_000)
+		Weight::from_parts(38_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -76,7 +76,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn on_signature_ready() -> Weight {
 		// Minimum execution time: 66_000 nanoseconds.
-		Weight::from_ref_time(67_000_000)
+		Weight::from_parts(67_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(10))
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
@@ -93,7 +93,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn start_next_broadcast_attempt() -> Weight {
 		// Minimum execution time: 215_000 nanoseconds.
-		Weight::from_ref_time(224_000_000)
+		Weight::from_parts(224_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(11))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -105,7 +105,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
 	fn transaction_succeeded() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
-		Weight::from_ref_time(39_000_000)
+		Weight::from_parts(39_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(4))
 	}
@@ -118,9 +118,9 @@ impl WeightInfo for () {
 	/// The range of component `x` is `[1, 1000]`.
 	fn on_initialize(x: u32, ) -> Weight {
 		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_ref_time(6_605_838)
+		Weight::from_parts(6_605_838, 0)
 			// Standard Error: 4_267
-			.saturating_add(Weight::from_ref_time(1_301_424).saturating_mul(x.into()))
+			.saturating_add(Weight::from_parts(1_301_424, 0).saturating_mul(x.into()))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(x.into())))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -131,7 +131,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_signing_failure() -> Weight {
 		// Minimum execution time: 36_000 nanoseconds.
-		Weight::from_ref_time(38_000_000)
+		Weight::from_parts(38_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -149,7 +149,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn on_signature_ready() -> Weight {
 		// Minimum execution time: 66_000 nanoseconds.
-		Weight::from_ref_time(67_000_000)
+		Weight::from_parts(67_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(10))
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
@@ -166,7 +166,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn start_next_broadcast_attempt() -> Weight {
 		// Minimum execution time: 215_000 nanoseconds.
-		Weight::from_ref_time(224_000_000)
+		Weight::from_parts(224_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(11))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -178,7 +178,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
 	fn transaction_succeeded() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
-		Weight::from_ref_time(39_000_000)
+		Weight::from_parts(39_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(4))
 	}

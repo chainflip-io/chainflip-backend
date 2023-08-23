@@ -283,7 +283,9 @@ fn dont_report_in_safe_mode() {
 mod reporting_adapter_test {
 	use super::*;
 	use frame_support::assert_err;
-	use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
+	use pallet_grandpa::{
+		EquivocationOffence as GrandpaEquivocationOffence, TimeSlot as GrandpaTimeSlot,
+	};
 	use sp_staking::offence::ReportOffence;
 
 	type IdentificationTuple = (u64, ());

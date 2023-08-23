@@ -15,25 +15,30 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Chainflip
 cf-chains = { path = '../../chains', default-features = false }
-cf-primitives = { path ='../../primitives', default-features = false }
+cf-primitives = { path = '../../primitives', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
 # Parity deps
-codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
-scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
+codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+  'derive',
+] }
+scale-info = { version = '2.5.0', default-features = false, features = [
+  'derive',
+] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", default-features = false }
 
 [dev-dependencies]
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+cf-test-utilities = { path = '../../test-utilities' }
 
 [features]
 default = ['std']
@@ -48,8 +53,6 @@ std = [
   'frame-system/std',
   'log/std',
   'scale-info/std',
-  'sp-core/std',
-  'sp-runtime/std',
   'sp-std/std',
 ]
 runtime-benchmarks = [
@@ -59,7 +62,6 @@ runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
 ]
 try-runtime = [
   'cf-runtime-upgrade-utilities/try-runtime',

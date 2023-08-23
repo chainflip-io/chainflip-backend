@@ -7,7 +7,7 @@ use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
 	enable_swapping {
-		let origin = <T as Config>::EnsureGovernance::successful_origin();
+		let origin = <T as Config>::EnsureGovernance::try_successful_origin().unwrap();
 		let call = Call::<T>::enable_swapping{};
 	}: {
 		call.dispatch_bypass_filter(origin)?;
@@ -16,7 +16,7 @@ benchmarks! {
 		assert!(SwappingEnabled::<T>::get());
 	}
 	gov_register_account_role {
-		let origin = <T as Config>::EnsureGovernance::successful_origin();
+		let origin = <T as Config>::EnsureGovernance::try_successful_origin().unwrap();
 		let caller: T::AccountId = whitelisted_caller();
 		Pallet::<T>::on_new_account(&caller);
 

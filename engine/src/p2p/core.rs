@@ -383,13 +383,12 @@ impl P2PContext {
 	fn handle_monitor_event(&mut self, event: MonitorEvent) {
 		match event {
 			MonitorEvent::ConnectionFailure(account_id) => {
-				let Some(_existing_socket) = self
-					.active_connections
-					.remove(&account_id) else {
-						// NOTE: this should not happen, but this guards against any surprising ZMQ behaviour
-						error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
-						return;
-					};
+				let Some(_existing_socket) = self.active_connections.remove(&account_id) else {
+					// NOTE: this should not happen, but this guards against any surprising ZMQ
+					// behaviour
+					error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
+					return
+				};
 
 				self.reconnect_context.schedule_reconnect(account_id);
 			},

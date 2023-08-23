@@ -54,7 +54,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:0 w:1)
 	fn request_liquidity_deposit_address() -> Weight {
 		// Minimum execution time: 55_000 nanoseconds.
-		Weight::from_ref_time(56_000_000)
+		Weight::from_parts(56_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(7))
 			.saturating_add(T::DbWeight::get().writes(6))
 	}
@@ -65,7 +65,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw_asset() -> Weight {
 		// Minimum execution time: 44_000 nanoseconds.
-		Weight::from_ref_time(45_000_000)
+		Weight::from_parts(45_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -73,7 +73,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_lp_account() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::from_ref_time(21_000_000)
+		Weight::from_parts(21_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -84,9 +84,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(34_520_228)
+		Weight::from_parts(34_520_228, 0)
 			// Standard Error: 40_282
-			.saturating_add(Weight::from_ref_time(14_834_261).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(14_834_261, 0).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().reads((2_u64).saturating_mul(a.into())))
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -95,11 +95,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider LpTTL (r:0 w:1)
 	fn set_lp_ttl() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
-		Weight::from_ref_time(14_000_000)
+		Weight::from_parts(14_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	fn register_emergency_withdrawal_address() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::from_parts(1_000_000, 0)
 	}
 }
 
@@ -118,7 +118,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:0 w:1)
 	fn request_liquidity_deposit_address() -> Weight {
 		// Minimum execution time: 55_000 nanoseconds.
-		Weight::from_ref_time(56_000_000)
+		Weight::from_parts(56_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(7))
 			.saturating_add(RocksDbWeight::get().writes(6))
 	}
@@ -129,7 +129,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw_asset() -> Weight {
 		// Minimum execution time: 44_000 nanoseconds.
-		Weight::from_ref_time(45_000_000)
+		Weight::from_parts(45_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -137,7 +137,7 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_lp_account() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
-		Weight::from_ref_time(21_000_000)
+		Weight::from_parts(21_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
@@ -148,9 +148,9 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(34_520_228)
+		Weight::from_parts(34_520_228, 0)
 			// Standard Error: 40_282
-			.saturating_add(Weight::from_ref_time(14_834_261).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(14_834_261, 0).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().reads((2_u64).saturating_mul(a.into())))
 			.saturating_add(RocksDbWeight::get().writes(1))
@@ -159,10 +159,10 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider LpTTL (r:0 w:1)
 	fn set_lp_ttl() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
-		Weight::from_ref_time(14_000_000)
+		Weight::from_parts(14_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	fn register_emergency_withdrawal_address() -> Weight {
-		Weight::from_ref_time(1_000_000)
+		Weight::from_parts(1_000_000, 0)
 	}
 }

@@ -181,7 +181,7 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
-			BlockNumber = <Self as frame_system::Config>::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// API for handling asset egress.
@@ -203,7 +203,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Scheduled Swaps
@@ -229,7 +228,7 @@ pub mod pallet {
 
 	/// Stores the swap TTL in blocks.
 	#[pallet::storage]
-	pub type SwapTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type SwapTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
@@ -240,7 +239,7 @@ pub mod pallet {
 	pub type SwapChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<(ChannelId, ForeignChainAddress)>,
 		ValueQuery,
 	>;
@@ -266,11 +265,12 @@ pub mod pallet {
 		SwapDepositAddressReady {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
-			expiry_block: T::BlockNumber,
+			expiry_block: BlockNumberFor<T>,
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
 			broker_commission_rate: BasisPoints,
+			channel_metadata: Option<CcmChannelMetadata>,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -321,7 +321,7 @@ pub mod pallet {
 			channel_id: ChannelId,
 		},
 		SwapTtlSet {
-			ttl: T::BlockNumber,
+			ttl: BlockNumberFor<T>,
 		},
 		CcmDepositReceived {
 			ccm_id: u64,
@@ -373,12 +373,12 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub swap_ttl: T::BlockNumber,
+		pub swap_ttl: BlockNumberFor<T>,
 		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			SwapTTL::<T>::put(self.swap_ttl);
 			for (asset, min) in &self.minimum_swap_amounts {
@@ -387,11 +387,10 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			// 1200 = 2 hours (6 sec per block)
-			Self { swap_ttl: T::BlockNumber::from(1_200u32), minimum_swap_amounts: vec![] }
+			Self { swap_ttl: BlockNumberFor::<T>::from(1_200u32), minimum_swap_amounts: vec![] }
 		}
 	}
 
@@ -508,6 +507,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
 			origin: OriginFor<T>,
@@ -540,7 +540,7 @@ pub mod pallet {
 				destination_address_internal,
 				broker_commission_bps,
 				broker,
-				channel_metadata,
+				channel_metadata.clone(),
 				expiry_block,
 			)?;
 
@@ -554,6 +554,7 @@ pub mod pallet {
 				destination_asset,
 				channel_id,
 				broker_commission_rate: broker_commission_bps,
+				channel_metadata,
 			});
 
 			Ok(())
@@ -564,6 +565,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [WithdrawalRequested](Event::WithdrawalRequested)
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::withdraw())]
 		pub fn withdraw(
 			origin: OriginFor<T>,
@@ -601,6 +603,7 @@ pub mod pallet {
 		///
 		/// - [SwapScheduled](Event::SwapScheduled)
 		/// - [SwapAmountTooLow](Event::SwapAmountTooLow)
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::schedule_swap_from_contract())]
 		pub fn schedule_swap_from_contract(
 			origin: OriginFor<T>,
@@ -638,6 +641,7 @@ pub mod pallet {
 		}
 
 		/// Process the deposit of a CCM swap.
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::ccm_deposit())]
 		pub fn ccm_deposit(
 			origin: OriginFor<T>,
@@ -668,6 +672,7 @@ pub mod pallet {
 		/// Register the account as a Broker.
 		///
 		/// Account roles are immutable once registered.
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::register_as_broker())]
 		pub fn register_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
@@ -689,8 +694,9 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::SwapTtlSet)
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
-		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			SwapTTL::<T>::set(ttl);
 
@@ -705,6 +711,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::MinimumSwapAmountSet)
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_minimum_swap_amount())]
 		pub fn set_minimum_swap_amount(
 			origin: OriginFor<T>,

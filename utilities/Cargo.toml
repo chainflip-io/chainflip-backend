@@ -9,46 +9,53 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 
 [dependencies]
-async-broadcast = {version="0.4.1", optional = true}
-hex = {version = "0.4.3", default-features = false}
-anyhow = {version = '1.0', optional = true}
-predicates = {version = "2.1.1", optional = true}
-mockall = {version = "0.11.0", optional = true}
-futures = {version = "0.3.14", optional = true}
-tokio = {version = "1.13.1", features = ["full"], optional = true}
+async-broadcast = { version = "0.5", optional = true }
+hex = { version = "0.4.3", default-features = false }
+anyhow = { version = '1.0', optional = true }
+predicates = { version = "3.0", optional = true }
+mockall = { version = "0.11.0", optional = true }
+futures = { version = "0.3.14", optional = true }
+tokio = { version = "1.13.1", features = ["full"], optional = true }
 lazy_format = "2.0"
-serde = { version = "1.0", optional = true}
-async-channel = { version = "1.7.1", optional = true}
-tempfile = { version = "3.3.0", optional = true}
-itertools = {version = "0.10", default_features = false}
-tracing = { version = "0.1", optional = true}
-tracing-subscriber = {version = "0.3", features = ["json", "env-filter"], optional = true}
-pin-project = {version = "1.0.12", optional = true}
-warp = {version = "0.3.5", optional = true}
-sp-rpc = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true}
-num-traits = {version = "0.2", optional = true}
+serde = { version = "1.0", optional = true, default_features = false, features = [
+  "alloc",
+  "derive",
+] }
+async-channel = { version = "1.7.1", optional = true }
+tempfile = { version = "3.7.0", optional = true }
+itertools = { version = "0.11", default_features = false }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = [
+  "json",
+  "env-filter",
+], optional = true }
+pin-project = { version = "1.0.12", optional = true }
+warp = { version = "0.3.5", optional = true }
+sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", optional = true }
+num-traits = { version = "0.2", optional = true }
 
 [dev-dependencies]
-tempfile = "3.3.0"
+tempfile = "3.7.0"
 
 [features]
 default = ['std']
-test-utils = ['tempfile', 'tracing', 'tracing-subscriber']
+test-utils = ['dep:tempfile', 'dep:tracing', 'dep:tracing-subscriber']
 std = [
-  'anyhow',
-  'async-broadcast',
-  'predicates',
-  'mockall',
-  'futures',
-  'tokio',
+  'dep:anyhow',
+  'dep:async-broadcast',
+  'dep:predicates',
+  'dep:mockall',
+  'dep:futures',
+  'dep:tokio',
   'hex/std',
-  'serde',
-  'async-channel',
+  'dep:async-channel',
   'itertools/use_std',
-  'pin-project',
-  'tracing',
-  'tracing-subscriber',
-  'warp',
-  'sp-rpc',
-  'num-traits',
+  'dep:pin-project',
+  'dep:serde',
+  'serde?/std',
+  'dep:tracing',
+  'dep:tracing-subscriber',
+  'dep:warp',
+  'dep:sp-rpc',
+  'dep:num-traits',
 ]

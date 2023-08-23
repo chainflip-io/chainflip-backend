@@ -49,9 +49,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[10, 1000]`.
 	fn on_initialize_resolve_votes(a: u32, ) -> Weight {
 		// Minimum execution time: 48_000 nanoseconds.
-		Weight::from_ref_time(51_000_000)
+		Weight::from_parts(51_000_000, 0)
 			// Standard Error: 11_060
-			.saturating_add(Weight::from_ref_time(2_551_738).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(2_551_738, 0).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(5))
 			.saturating_add(T::DbWeight::get().reads((1_u64).saturating_mul(a.into())))
 			.saturating_add(T::DbWeight::get().writes(3))
@@ -77,7 +77,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_execute_proposal() -> Weight {
 		// Minimum execution time: 60_000 nanoseconds.
-		Weight::from_ref_time(64_000_000)
+		Weight::from_parts(64_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(18))
 			.saturating_add(T::DbWeight::get().writes(9))
 	}
@@ -87,7 +87,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: TokenholderGovernance Proposals (r:0 w:1)
 	fn submit_proposal() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(24_000_000)
+		Weight::from_parts(24_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(4))
 	}
@@ -95,9 +95,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `a` is `[1, 1000]`.
 	fn back_proposal(a: u32, ) -> Weight {
 		// Minimum execution time: 9_000 nanoseconds.
-		Weight::from_ref_time(9_702_509)
+		Weight::from_parts(9_702_509, 0)
 			// Standard Error: 803
-			.saturating_add(Weight::from_ref_time(63_022).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(63_022, 0).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
@@ -115,9 +115,9 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[10, 1000]`.
 	fn on_initialize_resolve_votes(a: u32, ) -> Weight {
 		// Minimum execution time: 48_000 nanoseconds.
-		Weight::from_ref_time(51_000_000)
+		Weight::from_parts(51_000_000, 0)
 			// Standard Error: 11_060
-			.saturating_add(Weight::from_ref_time(2_551_738).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(2_551_738, 0).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(5))
 			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(a.into())))
 			.saturating_add(RocksDbWeight::get().writes(3))
@@ -143,7 +143,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_execute_proposal() -> Weight {
 		// Minimum execution time: 60_000 nanoseconds.
-		Weight::from_ref_time(64_000_000)
+		Weight::from_parts(64_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(18))
 			.saturating_add(RocksDbWeight::get().writes(9))
 	}
@@ -153,7 +153,7 @@ impl WeightInfo for () {
 	// Storage: TokenholderGovernance Proposals (r:0 w:1)
 	fn submit_proposal() -> Weight {
 		// Minimum execution time: 23_000 nanoseconds.
-		Weight::from_ref_time(24_000_000)
+		Weight::from_parts(24_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(4))
 	}
@@ -161,9 +161,9 @@ impl WeightInfo for () {
 	/// The range of component `a` is `[1, 1000]`.
 	fn back_proposal(a: u32, ) -> Weight {
 		// Minimum execution time: 9_000 nanoseconds.
-		Weight::from_ref_time(9_702_509)
+		Weight::from_parts(9_702_509, 0)
 			// Standard Error: 803
-			.saturating_add(Weight::from_ref_time(63_022).saturating_mul(a.into()))
+			.saturating_add(Weight::from_parts(63_022, 0).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}

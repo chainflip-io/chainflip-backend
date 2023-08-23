@@ -899,6 +899,9 @@ pub async fn new_signing_ceremony<Chain: ChainSigning>() -> (
 	)
 }
 
+// Note: Clippy seems to throw a false positive without this.
+// (as of `clippy 0.1.73 (a17c7968 2023-07-30)`).
+#[allow(clippy::needless_pass_by_ref_mut)]
 pub async fn standard_signing<Chain: ChainSigning>(
 	signing_ceremony: &mut SigningCeremonyRunner<Chain>,
 ) -> <SigningCeremony<Chain::CryptoScheme> as CeremonyTrait>::Output {

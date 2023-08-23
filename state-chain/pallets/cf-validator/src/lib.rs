@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
-#![feature(array_zip)]
 #![feature(is_sorted)]
 
 mod mock;
@@ -28,14 +27,15 @@ use cf_traits::{
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
+	sp_runtime::{
+		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
+		Percent, Permill,
+	},
 	traits::{EstimateNextSessionRotation, OnKilledAccount},
 };
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_core::ed25519;
-use sp_runtime::{
-	traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
-	Percent,
-};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	prelude::*,
@@ -95,12 +95,10 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 pub mod pallet {
 	use super::*;
 	use cf_traits::{AccountRoleRegistry, VaultStatus};
-	use frame_system::pallet_prelude::*;
+	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
-	use sp_runtime::app_crypto::RuntimePublic;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -158,12 +156,12 @@ pub mod pallet {
 	/// The starting block number for the current epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch_started_at)]
-	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// The duration of an epoch in blocks.
 	#[pallet::storage]
 	#[pallet::getter(fn blocks_per_epoch)]
-	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub type BlocksPerEpoch<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Current epoch index.
 	#[pallet::storage]
@@ -227,7 +225,7 @@ pub mod pallet {
 	/// A map storing the expiry block numbers for old epochs.
 	#[pallet::storage]
 	pub type EpochExpiries<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, EpochIndex, OptionQuery>;
 
 	/// A map between an epoch and the set of authorities (participating in this epoch).
 	#[pallet::storage]
@@ -465,7 +463,7 @@ pub mod pallet {
 					T::ValidatorWeightInfo::rotation_phase_activating_keys(num_primary_candidates)
 				},
 				// The new session will kick off the new epoch
-				_ => Weight::from_ref_time(0),
+				_ => Weight::from_parts(0, 0),
 			});
 			weight
 		}
@@ -480,6 +478,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::ValidatorWeightInfo::update_pallet_config())]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
@@ -540,6 +539,7 @@ pub mod pallet {
 		///
 		/// The weight is related to the number of bidders. Getting that number is quite expensive
 		/// so we use 2 * authority_count as an approximation.
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
 			<Pallet<T> as EpochInfo>::current_authority_count().saturating_mul(2)
 		))]
@@ -570,6 +570,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - [Session Pallet](pallet_session::Config)
+		#[pallet::call_index(2)]
 		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
 		pub fn set_keys(
 			origin: OriginFor<T>,
@@ -598,6 +599,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_peer_id())]
 		pub fn register_peer_id(
 			origin: OriginFor<T>,
@@ -668,6 +670,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
 		pub fn cfe_version(
 			origin: OriginFor<T>,
@@ -710,6 +713,7 @@ pub mod pallet {
 		/// ## Dependencies
 		///
 		/// - None
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::ValidatorWeightInfo::set_vanity_name())]
 		pub fn set_vanity_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
@@ -722,6 +726,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
 		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;
@@ -741,7 +746,7 @@ pub mod pallet {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
 		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
-		pub blocks_per_epoch: T::BlockNumber,
+		pub blocks_per_epoch: BlockNumberFor<T>,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percent,
 		pub backup_reward_node_percentage: Percent,
@@ -751,7 +756,6 @@ pub mod pallet {
 		pub max_expansion: AuthorityCount,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
@@ -771,7 +775,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			use cf_primitives::GENESIS_EPOCH;
 			LastExpiredEpoch::<T>::set(Default::default());
@@ -867,8 +871,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 /// substrate issue https://github.com/paritytech/substrate/issues/8650 for context.
 ///
 /// Also see [SessionManager::new_session] impl below.
-impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
-	fn should_end_session(_now: T::BlockNumber) -> bool {
+impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T> {
+	fn should_end_session(_now: BlockNumberFor<T>) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(_)
@@ -1072,7 +1076,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_key_handover(rotation_state: RuntimeRotationState<T>, block_number: T::BlockNumber) {
+	fn start_key_handover(
+		rotation_state: RuntimeRotationState<T>,
+		block_number: BlockNumberFor<T>,
+	) {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
@@ -1254,16 +1261,14 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	}
 }
 
-impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
-	fn average_session_length() -> T::BlockNumber {
+impl<T: Config> EstimateNextSessionRotation<BlockNumberFor<T>> for Pallet<T> {
+	fn average_session_length() -> BlockNumberFor<T> {
 		Self::blocks_per_epoch()
 	}
 
-	fn estimate_current_session_progress(
-		now: T::BlockNumber,
-	) -> (Option<sp_runtime::Permill>, Weight) {
+	fn estimate_current_session_progress(now: BlockNumberFor<T>) -> (Option<Permill>, Weight) {
 		(
-			Some(sp_runtime::Permill::from_rational(
+			Some(Permill::from_rational(
 				now.saturating_sub(CurrentEpochStartedAt::<T>::get()),
 				BlocksPerEpoch::<T>::get(),
 			)),
@@ -1271,7 +1276,9 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 		)
 	}
 
-	fn estimate_next_session_rotation(_now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+	fn estimate_next_session_rotation(
+		_now: BlockNumberFor<T>,
+	) -> (Option<BlockNumberFor<T>>, Weight) {
 		(
 			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
 			T::DbWeight::get().reads(2),

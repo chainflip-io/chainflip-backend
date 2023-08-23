@@ -11,7 +11,7 @@ type Emissions = Pallet<Test>;
 
 #[test]
 fn test_should_mint_at() {
-	new_test_ext(vec![], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		// It has been `SUPPLY_UPDATE_INTERVAL` blocks since the last broadcast.
 		assert!(Emissions::should_update_supply_at(SUPPLY_UPDATE_INTERVAL.into()));
 		// It hasn't yet been `SUPPLY_UPDATE_INTERVAL` blocks since the last broadcast.
@@ -30,7 +30,7 @@ mod test_block_rewards {
 	use super::*;
 
 	fn test_with(emissions_per_block: u128) {
-		new_test_ext(vec![1, 2], Some(1000)).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Emissions::update_authority_block_emission(emissions_per_block);
 
 			let before = Flip::<Test>::total_issuance();
@@ -42,24 +42,17 @@ mod test_block_rewards {
 	}
 
 	#[test]
-	fn test_zero_block() {
-		test_with(1);
-	}
-
-	#[test]
-	fn test_zero_emissions_rate() {
+	fn test_emissions_rates() {
 		test_with(0);
-	}
-
-	#[test]
-	fn test_non_zero_rate() {
-		test_with(10);
+		test_with(1);
+		test_with(TOTAL_ISSUANCE / 100_000_000);
+		test_with(TOTAL_ISSUANCE / 100_000);
 	}
 }
 
 #[test]
 fn test_duplicate_emission_should_be_noop() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		Emissions::update_authority_block_emission(EMISSION_RATE);
 
 		let before = Flip::<Test>::total_issuance();
@@ -79,7 +72,7 @@ fn test_duplicate_emission_should_be_noop() {
 
 #[test]
 fn should_calculate_block_emissions() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		// Block emissions are calculated at genesis.
 		assert!(Emissions::current_authority_emission_per_block() > 0);
 		assert!(Emissions::backup_node_emission_per_block() > 0);
@@ -88,7 +81,7 @@ fn should_calculate_block_emissions() {
 
 #[test]
 fn should_mint_but_not_broadcast() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		let prev_supply_update_block = LastSupplyUpdateBlock::<Test>::get();
 		MockRewardsDistribution::distribute();
 		assert_eq!(prev_supply_update_block, LastSupplyUpdateBlock::<Test>::get());
@@ -97,7 +90,7 @@ fn should_mint_but_not_broadcast() {
 
 #[test]
 fn should_mint_and_initiate_broadcast() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
 		assert!(MockBroadcast::get_called().is_none());
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
@@ -112,7 +105,7 @@ fn should_mint_and_initiate_broadcast() {
 
 #[test]
 fn no_update_of_update_total_supply_during_safe_mode_code_red() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		// Activate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		// Try send a broadcast to update the total supply
@@ -142,7 +135,7 @@ fn test_example_block_reward_calcaulation() {
 
 #[test]
 fn burn_flip() {
-	new_test_ext(vec![1, 2], None).execute_with(|| {
+	new_test_ext().execute_with(|| {
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,

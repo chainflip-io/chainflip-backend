@@ -6,7 +6,7 @@ use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sp_core::H256;
 use sp_runtime::{traits::Hash, MultiAddress};
-use state_chain_runtime::Index as Nonce;
+use state_chain_runtime::Nonce;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
@@ -264,7 +264,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
 		block_hash: H256,
-	) -> Result<()> {
+	) -> Result<(), anyhow::Error> {
 		let block = self.base_rpc_client.block(block_hash).await?.expect(SUBSTRATE_BEHAVIOUR).block;
 		// TODO: Move this out into BlockProducer
 		let events = self
@@ -429,7 +429,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		requests: &mut BTreeMap<RequestID, Request>,
 	) -> Result<()> {
 		// Remove any expired requests that don't allow resubmits
-		for (_request_id, request) in requests.drain_filter(|_request_id, request| {
+		for (_request_id, request) in requests.extract_if(|_request_id, request| {
 			!request.lifetime.contains(&(block_number + 1)) ||
 				!request.allow_resubmits && request.pending_submissions == 0
 		}) {
@@ -444,7 +444,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 		// Resubmit any expired requests that are left.
 		// Has to be a separate loop from the above due to not being able to await inside
-		// drain_filter
+		// extract_if
 		for (_request_id, request) in requests.iter_mut() {
 			if request.pending_submissions == 0 {
 				debug!("Resubmitting extrinsic as all existing submissions have expired.");
