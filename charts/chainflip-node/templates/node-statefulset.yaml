@@ -123,7 +123,7 @@ spec:
             - --base-path={{ .Values.basePath }}/chaindata
             - --chain={{ .Values.chain | default .Values.chainspec }}
             - --prometheus-external
-            - --state-cache-size=0
+            - --trie-cache-size=0
             - --rpc-cors=all
             - --rpc-methods=unsafe
             - --unsafe-rpc-external
