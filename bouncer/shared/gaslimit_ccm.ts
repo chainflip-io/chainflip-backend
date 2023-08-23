@@ -215,7 +215,7 @@ export async function testGasLimitCcmSwaps() {
   // As of now this is broadcasted regardless of the gas budget and even when the final solution is implemented
   // this should be broadcasted, since the gas budget should be enough, since by default gasBudget is 1% of the
   // principal and the gasPrice is very low in localnet (~7wei).
-  const gasLimitSwapsBroadcasted = [
+  const ccmgasLimitSwapsDefault = [
     testSwap(
       'DOT',
       'FLIP',
@@ -249,7 +249,7 @@ export async function testGasLimitCcmSwaps() {
   await Promise.all([
     ...gasLimitSwapsSufBudget,
     ...gasLimitSwapsInsufBudget,
-    ...gasLimitSwapsBroadcasted,
+    ...ccmgasLimitSwapsDefault,
   ]);
 
   spam = false;
