@@ -710,9 +710,25 @@ mod keygen {
 	#[test]
 	fn restarts_from_keygen_on_keygen_failure() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
-			// Even one "bad" node should result in a new auction
+			// just one node failed
 			failed_keygen_with_offenders(4..5);
 			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// many nodes failed, but enough to perform keygen
+			failed_keygen_with_offenders(4..13);
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+	}
+
+	#[test]
+	fn abort_on_keygen_failure_if_too_many_banned() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// There is less than `MIN_AUTHORITY_SIZE` unbanned
+			// nodes left, so should abort
+			failed_keygen_with_offenders(4..14);
+			assert_rotation_aborted();
 		});
 	}
 }
