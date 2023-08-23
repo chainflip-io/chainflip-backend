@@ -167,9 +167,11 @@ async function testGasLimitSwap(
   // Get the gasToConsume either decoding the message or returning it in gasTestCcmMetadata
   if (gasConsumption + GAS_OVERHEAD /* + probably some gasLimit margin */ >= gasLimitBudget) {
     // Expect Broadcast Aborted
-    await observeEvent('ethereumBroadcaster:BroadcastAborted', await getChainflipApi(), (event) => {
-      return event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
-    });
+    await observeEvent(
+      'ethereumBroadcaster:BroadcastAborted',
+      await getChainflipApi(),
+      (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
+    );
     stopObservingCcmReceived = true;
     if ((await ccmReceived) !== undefined) {
       throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
