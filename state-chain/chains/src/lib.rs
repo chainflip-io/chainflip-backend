@@ -7,7 +7,6 @@ pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, ToHumanreadableAddress};
 use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use eth::api::RedemptionExecutor;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::{
@@ -297,7 +296,7 @@ pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 		amount: u128,
 		address: &[u8; 20],
 		expiry: u64,
-		executor: RedemptionExecutor,
+		executor: Option<eth::Address>,
 	) -> Self;
 
 	fn amount(&self) -> u128;

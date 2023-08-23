@@ -442,7 +442,7 @@ pub mod pallet {
 					net_amount.unique_saturated_into(),
 					address.as_fixed_bytes(),
 					contract_expiry,
-					executor.into(),
+					executor,
 				);
 
 				PendingRedemptions::<T>::insert(&account_id, ());

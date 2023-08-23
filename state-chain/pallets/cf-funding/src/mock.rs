@@ -1,6 +1,6 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
-use cf_chains::{eth::api::RedemptionExecutor, ApiCall, Chain, ChainCrypto, Ethereum};
+use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
@@ -128,7 +128,7 @@ impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
 		amount: u128,
 		_address: &[u8; 20],
 		_expiry: u64,
-		_executor: RedemptionExecutor,
+		_executor: Option<cf_chains::eth::Address>,
 	) -> Self {
 		Self { amount }
 	}

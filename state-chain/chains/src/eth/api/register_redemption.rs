@@ -22,6 +22,35 @@ pub struct RegisterRedemption {
 	pub executor: RedemptionExecutor,
 }
 
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum RedemptionExecutor {
+	#[default]
+	AnyAddress,
+	OnlyAddress(Address),
+}
+
+impl From<Option<Address>> for RedemptionExecutor {
+	fn from(address: Option<Address>) -> Self {
+		match address {
+			Some(address) => RedemptionExecutor::OnlyAddress(address),
+			None => RedemptionExecutor::AnyAddress,
+		}
+	}
+}
+
+impl Tokenizable for RedemptionExecutor {
+	fn tokenize(self) -> Token {
+		match self {
+			RedemptionExecutor::AnyAddress => Address::zero().tokenize(),
+			RedemptionExecutor::OnlyAddress(address) => address.tokenize(),
+		}
+	}
+
+	fn param_type() -> ParamType {
+		ParamType::Address
+	}
+}
+
 impl RegisterRedemption {
 	#[allow(clippy::too_many_arguments)]
 	pub fn new<Amount: Into<Uint> + Clone>(
@@ -29,14 +58,14 @@ impl RegisterRedemption {
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
-		executor: RedemptionExecutor,
+		executor: impl Into<RedemptionExecutor>,
 	) -> Self {
 		Self {
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
-			executor,
+			executor: executor.into(),
 		}
 	}
 }

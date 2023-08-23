@@ -338,7 +338,7 @@ where
 		amount: u128,
 		address: &[u8; 20],
 		expiry: u64,
-		executor: RedemptionExecutor,
+		executor: Option<Address>,
 	) -> Self {
 		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
@@ -561,32 +561,3 @@ pub enum EthereumContract {
 }
 
 pub type EthereumChainId = u64;
-
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum RedemptionExecutor {
-	#[default]
-	AnyAddress,
-	OnlyAddress(Address),
-}
-
-impl From<Option<Address>> for RedemptionExecutor {
-	fn from(address: Option<Address>) -> Self {
-		match address {
-			Some(address) => RedemptionExecutor::OnlyAddress(address),
-			None => RedemptionExecutor::AnyAddress,
-		}
-	}
-}
-
-impl Tokenizable for RedemptionExecutor {
-	fn tokenize(self) -> Token {
-		match self {
-			RedemptionExecutor::AnyAddress => Address::zero().tokenize(),
-			RedemptionExecutor::OnlyAddress(address) => address.tokenize(),
-		}
-	}
-
-	fn param_type() -> ParamType {
-		ParamType::Address
-	}
-}
