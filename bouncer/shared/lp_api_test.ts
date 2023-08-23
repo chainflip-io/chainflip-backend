@@ -91,6 +91,7 @@ async function testLiquidityDeposit() {
   const observeLiquidityDepositEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
+    (event) => event.data.depositAddress.Eth,
   );
   const liquidityDepositResult = await lpApiRpc(`lp_liquidityDeposit`, ['Eth']);
   const liquidityDepositEvent = await observeLiquidityDepositEvent;
