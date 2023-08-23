@@ -80,9 +80,15 @@ fn funded_amount_is_added_and_subtracted() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			REDEMPTION_A.into(),
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default(),
 		));
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(BOB), REDEMPTION_B, ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(BOB),
+			REDEMPTION_B,
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
 
 		// Make sure it was subtracted.
 		assert_eq!(
@@ -132,7 +138,12 @@ fn redeeming_unredeemable_is_err() {
 
 		// Redeem FLIP before it is funded.
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				AMOUNT.into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			Error::<Test>::InsufficientBalance
 		);
 
@@ -154,14 +165,20 @@ fn redeeming_unredeemable_is_err() {
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
 				excessive_redemption.into(),
-				ETH_DUMMY_ADDR
+				ETH_DUMMY_ADDR,
+				Default::default()
 			),
 			Error::<Test>::BelowMinimumFunding
 		);
 
 		// Redeem FLIP from another account.
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(BOB), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(BOB),
+				AMOUNT.into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			Error::<Test>::InsufficientBalance
 		);
 
@@ -196,11 +213,21 @@ fn cannot_double_redeem() {
 		));
 
 		// Redeem a portion.
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), amount_a1.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			amount_a1.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
 
 		// Redeeming the rest should not be possible yet.
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), amount_a1.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				amount_a1.into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			<Error<Test>>::PendingRedemption
 		);
 
@@ -211,7 +238,8 @@ fn cannot_double_redeem() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default()
 		));
 
 		assert_ok!(Funding::redeemed(
@@ -252,7 +280,8 @@ fn redemption_cannot_occur_without_funding_first() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default()
 		));
 
 		// Redeem should kick off a broadcast request.
@@ -315,9 +344,19 @@ fn cannot_redeem_bond() {
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
 		// Bob can withdraw all, but not Alice.
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(BOB), AMOUNT.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(BOB),
+			AMOUNT.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				AMOUNT.into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			FlipError::InsufficientLiquidity
 		);
 
@@ -325,19 +364,30 @@ fn cannot_redeem_bond() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT - BOND).into(),
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default()
 		));
 
 		// Even if she redeems, the remaining 100 are blocked
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT - BOND, TX_HASH));
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), 1.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				1.into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			FlipError::InsufficientLiquidity
 		);
 
 		// Once she is no longer bonded, Alice can redeem her funds.
 		Bonder::<Test>::update_bond(&ALICE, 0u128);
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), BOND.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			BOND.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
 	});
 }
 
@@ -431,7 +481,12 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 
 		// Redeeming is not allowed because Alice is bidding in the auction phase.
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), RedemptionAmount::Max, ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			<Error<Test>>::AuctionPhase
 		);
 
@@ -445,7 +500,8 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default()
 		),);
 	});
 }
@@ -472,7 +528,8 @@ fn test_redeem_all() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default()
 		));
 		assert_eq!(Flip::total_balance_of(&ALICE), BOND);
 
@@ -503,9 +560,19 @@ fn redemption_expiry_removes_redemption() {
 			TX_HASH
 		));
 
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			AMOUNT.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				AMOUNT.into(),
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			Error::<Test>::PendingRedemption
 		);
 
@@ -517,7 +584,12 @@ fn redemption_expiry_removes_redemption() {
 		);
 
 		// Success, can request redemption again since the last one expired.
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			AMOUNT.into(),
+			ETH_DUMMY_ADDR,
+			Default::default()
+		));
 	});
 }
 
@@ -534,7 +606,12 @@ fn runtime_safe_mode_blocks_redemption_requests() {
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), RedemptionAmount::Max, ETH_DUMMY_ADDR),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
 			Error::<Test>::RedeemDisabled
 		);
 
@@ -542,7 +619,8 @@ fn runtime_safe_mode_blocks_redemption_requests() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
-			ETH_DUMMY_ADDR
+			ETH_DUMMY_ADDR,
+			Default::default()
 		));
 	});
 }
@@ -615,6 +693,7 @@ fn restricted_funds_getting_reduced() {
 			RuntimeOrigin::signed(ALICE),
 			REDEEM_AMOUNT.into(),
 			RESTRICTED_ADDRESS,
+			Default::default()
 		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, REDEEM_AMOUNT, TX_HASH));
 		assert_eq!(
@@ -673,16 +752,36 @@ fn vesting_contracts_test_case() {
 		));
 		// Because 100 is available this should fail
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), 200.into(), UNRESTRICTED_ADDRESS),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				200.into(),
+				UNRESTRICTED_ADDRESS,
+				Default::default()
+			),
 			Error::<Test>::InsufficientUnrestrictedFunds
 		);
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 50.into(), UNRESTRICTED_ADDRESS));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			50.into(),
+			UNRESTRICTED_ADDRESS,
+			Default::default()
+		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 50, TX_HASH));
 		// Try to redeem 100 from contract 1
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 100.into(), VESTING_CONTRACT_1));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			100.into(),
+			VESTING_CONTRACT_1,
+			Default::default()
+		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 100, TX_HASH));
 		// Try to redeem 400 from contract 2
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 400.into(), VESTING_CONTRACT_2));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			400.into(),
+			VESTING_CONTRACT_2,
+			Default::default()
+		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 400, TX_HASH));
 	});
 }
@@ -717,7 +816,8 @@ fn can_withdraw_unrestricted_to_restricted() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT - RedemptionTax::<Test>::get()).into(),
-			RESTRICTED_ADDRESS_1
+			RESTRICTED_ADDRESS_1,
+			Default::default()
 		));
 	});
 }
@@ -747,7 +847,8 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
-			RESTRICTED_ADDRESS_1
+			RESTRICTED_ADDRESS_1,
+			Default::default()
 		));
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), None);
 	});
@@ -770,7 +871,12 @@ fn can_only_redeem_funds_to_bound_address() {
 			TX_HASH
 		));
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), UNRESTRICTED_ADDRESS),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				AMOUNT.into(),
+				UNRESTRICTED_ADDRESS,
+				Default::default()
+			),
 			Error::<Test>::AccountBindingRestrictionViolated
 		);
 		assert_ok!(Funding::funded(
@@ -780,7 +886,12 @@ fn can_only_redeem_funds_to_bound_address() {
 			UNRESTRICTED_ADDRESS,
 			TX_HASH
 		));
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), BOUND_ADDRESS));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			AMOUNT.into(),
+			BOUND_ADDRESS,
+			Default::default()
+		));
 	});
 }
 
@@ -811,16 +922,27 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT).into(),
-			RESTRICTED_ADDRESS
+			RESTRICTED_ADDRESS,
+			Default::default()
 		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
 		// Redeem to an unrestricted address should fail because the account has a redeem address.
 		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), (AMOUNT).into(), UNRESTRICTED_ADDRESS),
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				(AMOUNT).into(),
+				UNRESTRICTED_ADDRESS,
+				Default::default()
+			),
 			Error::<Test>::AccountBindingRestrictionViolated
 		);
 		// Redeem the rest of the existing funds to the redeem address.
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), (AMOUNT).into(), REDEEM_ADDRESS));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			(AMOUNT).into(),
+			REDEEM_ADDRESS,
+			Default::default()
+		));
 	});
 }
 
@@ -878,7 +1000,8 @@ mod test_restricted_balances {
 					assert_ok!(Funding::redeem(
 						RuntimeOrigin::signed(ALICE),
 						redeem_amount,
-						bound_redeem_address
+						bound_redeem_address,
+						Default::default()
 					));
 					let expected_redeemed_amount =
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
@@ -895,7 +1018,8 @@ mod test_restricted_balances {
 						Funding::redeem(
 							RuntimeOrigin::signed(ALICE),
 							redeem_amount,
-							bound_redeem_address
+							bound_redeem_address,
+							Default::default()
 						),
 						e.into(),
 					);
@@ -1126,6 +1250,7 @@ fn cannot_redeem_lower_than_redemption_tax() {
 				RuntimeOrigin::signed(ALICE),
 				RedemptionAmount::Exact(TOTAL_FUNDS - REDEMPTION_TAX + 1),
 				Default::default(),
+				Default::default()
 			),
 			crate::Error::<Test>::InsufficientBalance
 		);
@@ -1134,6 +1259,7 @@ fn cannot_redeem_lower_than_redemption_tax() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,
+			Default::default(),
 			Default::default()
 		));
 	});
@@ -1205,7 +1331,8 @@ fn max_redemption_is_net_exact_is_gross() {
 			assert_ok!(Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
 				redemption_amount,
-				redemption_address
+				redemption_address,
+				Default::default(),
 			));
 
 			assert!(
@@ -1273,7 +1400,8 @@ fn bond_should_count_toward_restricted_balance() {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			pallet::RedemptionAmount::Exact(AMOUNT / 2),
-			RESTRICTED_ADDRESS
+			RESTRICTED_ADDRESS,
+			Default::default()
 		));
 	});
 }
@@ -1293,6 +1421,7 @@ fn skip_redemption_of_zero_flip() {
 			assert_ok!(Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
 				redemption_amount,
+				Default::default(),
 				Default::default()
 			));
 			assert_event_sequence! {

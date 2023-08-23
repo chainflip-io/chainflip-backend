@@ -333,10 +333,18 @@ impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
+	fn new_unsigned(
+		node_id: &[u8; 32],
+		amount: u128,
+		address: &[u8; 20],
+		expiry: u64,
+		executor: Option<Address>,
+	) -> Self {
 		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
-			register_redemption::RegisterRedemption::new(node_id, amount, address, expiry),
+			register_redemption::RegisterRedemption::new(
+				node_id, amount, address, expiry, executor,
+			),
 		))
 	}
 

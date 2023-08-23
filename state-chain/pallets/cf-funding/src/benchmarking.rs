@@ -50,7 +50,7 @@ benchmarks! {
 		};
 		call.dispatch_bypass_filter(origin)?;
 
-	} :_(RawOrigin::Signed(caller.clone()), balance_to_redeem, withdrawal_address)
+	} :_(RawOrigin::Signed(caller.clone()), balance_to_redeem, withdrawal_address, Default::default())
 	verify {
 		assert!(PendingRedemptions::<T>::contains_key(&caller));
 	}
@@ -73,6 +73,7 @@ benchmarks! {
 		let call = Call::<T>::redeem {
 			amount: RedemptionAmount::Max,
 			address: withdrawal_address,
+			executor: Default::default(),
 		};
 	}: { call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into())? }
 	verify {
@@ -96,7 +97,7 @@ benchmarks! {
 
 		// Push a redemption
 		let redeemed_amount = funds / T::Amount::from(2u32);
-		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Exact(redeemed_amount), withdrawal_address)?;
+		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Exact(redeemed_amount), withdrawal_address, Default::default())?;
 
 		let call = Call::<T>::redeemed {
 			account_id: caller.clone(),
@@ -124,7 +125,7 @@ benchmarks! {
 		}.dispatch_bypass_filter(origin.clone())?;
 
 		// Push a redemption
-		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Max, withdrawal_address)?;
+		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Max, withdrawal_address, Default::default())?;
 
 		let call = Call::<T>::redemption_expired {
 			account_id: caller.clone(),

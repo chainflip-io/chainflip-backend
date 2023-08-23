@@ -291,7 +291,13 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 
 /// Constructs the `RegisterRedemption` api call.
 pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self;
+	fn new_unsigned(
+		node_id: &[u8; 32],
+		amount: u128,
+		address: &[u8; 20],
+		expiry: u64,
+		executor: Option<eth::Address>,
+	) -> Self;
 
 	fn amount(&self) -> u128;
 }

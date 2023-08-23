@@ -183,6 +183,12 @@
         "internalType": "uint48",
         "name": "expiryTime",
         "type": "uint48"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "executor",
+        "type": "address"
       }
     ],
     "name": "RedemptionRegistered",
@@ -392,6 +398,11 @@
             "internalType": "uint48",
             "name": "expiryTime",
             "type": "uint48"
+          },
+          {
+            "internalType": "address",
+            "name": "executor",
+            "type": "address"
           }
         ],
         "internalType": "struct IStateChainGateway.Redemption",
@@ -472,6 +483,11 @@
         "internalType": "uint48",
         "name": "expiryTime",
         "type": "uint48"
+      },
+      {
+        "internalType": "address",
+        "name": "executor",
+        "type": "address"
       }
     ],
     "name": "registerRedemption",
