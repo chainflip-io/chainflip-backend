@@ -672,7 +672,7 @@ pub mod pallet {
 				let current_block = <frame_system::Pallet<T>>::block_number();
 				// Ensure that the order is not added after the creation window has ended.
 				ensure!(
-					current_block >= order_validity.valid_at.end,
+					current_block <= order_validity.valid_at.end,
 					Error::<T>::OrderValidityExpired
 				);
 				// Order is already inside the creation window
@@ -687,7 +687,7 @@ pub mod pallet {
 				} else {
 					// Schedule the mint
 					Self::add_to_order_queue(
-						order_validity.valid_until,
+						order_validity.valid_at.start,
 						OrderDetails {
 							lifetime: OrderLifetime::Pending,
 							validity: order_validity,

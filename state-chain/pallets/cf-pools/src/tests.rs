@@ -1,8 +1,8 @@
-use core::panic;
+use core::{ops::Range, panic};
 
 use crate::{
-	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, PoolQueryError,
-	Pools, RangeOrderSize, STABLE_ASSET,
+	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, OrderQueue,
+	OrderValidity, PoolQueryError, Pools, RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::{
 	common::{sqrt_price_at_tick, SideMap, Tick},
@@ -294,6 +294,57 @@ fn can_get_liquidity_from_range_order() {
 				1_000u128,
 			),
 			PoolQueryError::Inner(AmountsToLiquidityError::InvalidTickRange),
+		);
+	});
+}
+
+#[test]
+fn can_mint_limit_order_with_validity() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			Default::default(),
+			sqrt_price_at_tick(0),
+		));
+		assert_ok!(LiquidityPools::collect_and_mint_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Flip,
+			crate::Order::Buy,
+			0,
+			55,
+			Some(OrderValidity { valid_at: Range { end: 5, start: 2 }, valid_until: 4 }),
+		));
+		// Not yet minted.
+		assert!(OrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_some());
+		// We mint the order.
+		LiquidityPools::on_initialize(BlockNumberFor::<Test>::from(2u64));
+		// Removed as minted from the order queue.
+		assert!(OrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_none());
+		// Order is getting moved to the block where we expect it to ge burned.
+		assert!(OrderQueue::<Test>::get(BlockNumberFor::<Test>::from(4u64)).is_some());
+	});
+}
+
+#[test]
+fn gets_rejected_if_order_window_has_already_passed() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			Default::default(),
+			sqrt_price_at_tick(0),
+		));
+		assert_noop!(
+			LiquidityPools::collect_and_mint_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				crate::Order::Buy,
+				0,
+				55,
+				Some(OrderValidity { valid_at: Range { end: 0, start: 0 }, valid_until: 4 }),
+			),
+			Error::<Test>::OrderValidityExpired
 		);
 	});
 }
