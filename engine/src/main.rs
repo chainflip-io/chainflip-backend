@@ -36,11 +36,6 @@ lazy_static::lazy_static! {
 	};
 }
 
-fn is_compatible_with_runtime(runtime_compatibility_version: &SemVer) -> bool {
-	CFE_VERSION.major == runtime_compatibility_version.major &&
-		CFE_VERSION.minor == runtime_compatibility_version.minor
-}
-
 enum CfeStatus {
 	Active(ScopedJoinHandle<()>),
 	Idle,
@@ -76,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
 					.unwrap();
 
 				let compatible =
-					is_compatible_with_runtime(&runtime_compatibility_version);
+					CFE_VERSION.is_compatible_with(runtime_compatibility_version);
 
 				match cfe_status {
 					CfeStatus::Active(_) =>

@@ -4,12 +4,13 @@
 
 mod migrations;
 
+use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
 	ensure,
 	pallet_prelude::DispatchResultWithPostInfo,
-	sp_runtime::{DispatchError, TransactionOutcome},
+	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
@@ -99,6 +100,10 @@ pub mod pallet {
 		type UpgradeCondition: ExecutionCondition;
 		/// Provides to implementation for a runtime upgrade
 		type RuntimeUpgrade: RuntimeUpgrade;
+		/// For getting required CFE version for a runtime upgrade.
+		type CompatibleCfeVersions: CompatibleCfeVersions;
+		/// For getting current authorities' CFE versions.
+		type AuthoritiesCfeVersions: AuthoritiesCfeVersions;
 	}
 
 	#[pallet::pallet]
@@ -215,6 +220,10 @@ pub mod pallet {
 		UpgradeConditionsNotMet,
 		/// The call hash was not whitelisted
 		CallHashNotWhitelisted,
+		/// Insufficient number of CFEs are at the target version to receive the runtime upgrade.
+		NotEnoughAuthoritiesCfesAtTargetVersion,
+		/// The target CFE version required for the runtime upgrade is not set.
+		TargetCfeVersionNotSet,
 	}
 
 	#[pallet::call]
@@ -285,10 +294,22 @@ pub mod pallet {
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn chainflip_runtime_upgrade(
 			origin: OriginFor<T>,
+			required_up_to_date_cfes: Option<Percent>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
+
+			if let Some(percent) = required_up_to_date_cfes {
+				let next_version = T::CompatibleCfeVersions::next_compatibility_version()
+					.ok_or(Error::<T>::TargetCfeVersionNotSet)?;
+				ensure!(
+					T::AuthoritiesCfeVersions::precent_authorities_at_version(next_version) >=
+						percent,
+					Error::<T>::NotEnoughAuthoritiesCfesAtTargetVersion,
+				);
+			}
+
 			Self::deposit_event(Event::UpgradeConditionsSatisfied);
 			T::RuntimeUpgrade::do_upgrade(code)
 		}

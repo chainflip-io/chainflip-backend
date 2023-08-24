@@ -62,7 +62,7 @@ mod test_all_batch {
 	};
 	use cf_primitives::chains::assets;
 
-	use super::{EthEnvironmentProvider, EthereumApi};
+	use super::EthereumApi;
 
 	#[test]
 	fn test_payload() {
@@ -166,6 +166,17 @@ mod test_all_batch {
 	const CHAIN_ID: u64 = 1337;
 	const NONCE: u64 = 54321;
 	const CHANNEL_ID: u64 = 12345;
+
+	impl ReplayProtectionProvider<Ethereum> for MockEnvironment {
+		fn replay_protection(contract_address: eth::Address) -> EthereumReplayProtection {
+			EthereumReplayProtection {
+				nonce: Self::next_nonce(),
+				chain_id: Self::chain_id(),
+				key_manager_address: Self::key_manager_address(),
+				contract_address,
+			}
+		}
+	}
 
 	impl EthEnvironmentProvider for MockEnvironment {
 		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {

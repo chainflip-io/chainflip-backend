@@ -308,6 +308,7 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 
 impl ChainAbi for Polkadot {
 	type Transaction = PolkadotTransactionData;
+	type ReplayProtectionParams = ();
 	type ReplayProtection = PolkadotReplayProtection;
 }
 
