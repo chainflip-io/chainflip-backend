@@ -917,6 +917,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		let initial_version = SemVer { major: 5, minor: 0, patch: 0 };
 		let next_version = SemVer { major: 6, minor: 0, patch: 0 };
+
 		// We initially submit version
 		let authorities = [0u64, 1u64, 2u64, 3u64, 4u64, 5u64, 6u64, 7u64, 8u64, 9u64];
 		authorities.iter().for_each(|id| {
@@ -956,6 +957,13 @@ fn can_calculate_percentage_cfe_at_target_version() {
 		);
 		assert_eq!(
 			ValidatorPallet::precent_authorities_at_version(next_version),
+			Percent::from_percent(100)
+		);
+
+		// Version checking ignores `patch`.
+		let compatible_version = SemVer { major: 6, minor: 0, patch: 6 };
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(compatible_version),
 			Percent::from_percent(100)
 		);
 	});

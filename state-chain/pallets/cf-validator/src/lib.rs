@@ -1359,7 +1359,9 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 
 		let num_authorities_at_target_version = current_authorities
 			.into_iter()
-			.filter(|validator_id| NodeCFEVersion::<T>::get(validator_id) == version)
+			.filter(|validator_id| {
+				NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+			})
 			.count() as u32;
 
 		Percent::from_rational(num_authorities_at_target_version, authorities_count)
