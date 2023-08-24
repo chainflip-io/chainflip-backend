@@ -73,36 +73,36 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		.execute_with(|| {
 			assert_eq!(MockBidderProvider::get_bidders().len(), 0);
 		})
-		.then_forward_n_block_and_execute_with_checks(EPOCH_DURATION + 100, || {
-			// Move forward a few blocks, the auction will be failing
+		// Move forward past the epoch boundary, the auction will be failing
+		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION + 100, || {
 			assert_epoch_index(GENESIS_EPOCH);
 			assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
-			// Now that we have bidders, we should succeed the auction, and complete the rotation
 			MockBidderProvider::set_default_test_bids();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		// Now that we have bidders, we should succeed the auction, and complete the rotation
+		.then_advance_n_blocks_and_execute_with_checks(1, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeygensInProgress(..)
 			));
 			MockVaultRotatorA::keygen_success();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeyHandoversInProgress(..)
 			));
 			MockVaultRotatorA::key_handover_success();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::ActivatingKeys(..)
 			));
 			MockVaultRotatorA::keys_activated();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
 		});
 }
@@ -148,7 +148,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			// Run to the epoch boundary.
 			MockBidderProvider::set_default_test_bids();
 		})
-		.then_forward_n_block_and_execute_with_checks(EPOCH_DURATION, || {
+		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION, || {
 			assert_eq!(
 				ValidatorPallet::current_authorities(),
 				genesis_set,
@@ -161,14 +161,14 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			));
 			MockVaultRotatorA::keygen_success();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeyHandoversInProgress(..)
 			));
 			MockVaultRotatorA::key_handover_success();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::ActivatingKeys(..)
@@ -176,7 +176,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 
 			MockVaultRotatorA::keys_activated();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
 		});
 }
@@ -414,9 +414,9 @@ fn rerun_auction_if_not_enough_participants() {
 					}
 				}
 			));
-			// Run to the epoch boundary
 		})
-		.then_forward_n_block_and_execute_with_checks(EPOCH_DURATION, || {
+		// Run to the epoch boundary
+		.then_advance_n_blocks_and_execute_with_checks(EPOCH_DURATION, || {
 			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
 				Event::RotationAborted,
 			));
@@ -437,10 +437,10 @@ fn rerun_auction_if_not_enough_participants() {
 					}
 				}
 			));
-			// Run to the next block - we expect and immediate retry
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
-			// Expect a resolved auction and kickedoff key-gen
+		// Run to the next block - we expect and immediate retry
+		.then_advance_n_blocks_and_execute_with_checks(1, || {
+			// Expect a resolved auction and kicked-off keygen
 			assert!(matches!(
 				CurrentRotationPhase::<Test>::get(),
 				RotationPhase::<Test>::KeygensInProgress(..)
@@ -522,7 +522,7 @@ fn test_missing_author_punishment() {
 				authored_authority_index as u64 + offset,
 			);
 		})
-		.then_execute_at_next_block(|_| {
+		.then_advance_n_blocks_and_execute_with_checks(1, || {
 			MockOffenceReporter::assert_reported(
 				PalletOffence::MissedAuthorshipSlot,
 				ValidatorPallet::current_authorities()
@@ -919,14 +919,14 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 
 			MockVaultRotatorA::keys_activated();
 		})
-		.then_forward_n_block_and_execute_with_checks(1, || {
+		.then_advance_n_blocks_and_execute_with_checks(2, || {
 			assert_default_rotation_outcome!();
 		});
 }
 
 #[test]
 fn can_calculate_percentage_cfe_at_target_version() {
-	new_test_ext().execute_with_unchecked_invariants(|| {
+	new_test_ext().execute_with(|| {
 		let initial_version = SemVer { major: 5, minor: 0, patch: 0 };
 		let next_version = SemVer { major: 6, minor: 0, patch: 0 };
 

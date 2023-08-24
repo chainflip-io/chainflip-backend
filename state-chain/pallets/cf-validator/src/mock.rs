@@ -258,53 +258,48 @@ macro_rules! assert_invariants {
 
 /// Traits for helper functions used in tests
 pub trait TestHelper {
-	fn then_execute_with_checks(self, execute: impl FnOnce()) -> Self;
-	fn then_forward_n_block_and_execute_with_checks(
+	fn then_execute_with_checks<R>(self, execute: impl FnOnce() -> R) -> TestRunner<R>;
+	fn then_advance_n_blocks_and_execute_with_checks<R>(
 		self,
 		block: BlockNumberFor<Test>,
-		execute: impl FnOnce(),
-	) -> Self;
+		execute: impl FnOnce() -> R,
+	) -> TestRunner<R>;
 }
 
-impl TestHelper for TestRunner<()> {
+impl<Ctx: Clone> TestHelper for TestRunner<Ctx> {
 	/// Run checks before and after the execution to ensure the integrity of states.
-	fn then_execute_with_checks(self, execute: impl FnOnce()) -> Self {
+	fn then_execute_with_checks<R>(self, execute: impl FnOnce() -> R) -> TestRunner<R> {
 		self.then_execute_with(|_| {
 			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			log::debug!("Pre-test invariant check.");
 			assert_invariants!();
 			log::debug!("Pre-test invariant check passed.");
-			execute();
+			let r = execute();
 			log::debug!("Post-test invariant check.");
 			assert_invariants!();
+			r
 		})
 	}
 
 	/// Run forward certain number of blocks, then execute with checks before and after.
 	/// All hooks are run for each block forwarded.
-	fn then_forward_n_block_and_execute_with_checks(
+	fn then_advance_n_blocks_and_execute_with_checks<R>(
 		self,
-		block: BlockNumberFor<Test>,
-		execute: impl FnOnce(),
-	) -> Self {
-		let mut current_block = 0u64;
-		let mut test_runner = self.then_execute_with(|_| {
-			current_block = System::current_block_number();
-		});
-		let target_block = current_block + block;
-
-		while current_block < target_block {
-			test_runner = test_runner.then_execute_at_block(current_block, |_| {});
-			current_block += 1;
-		}
-
-		test_runner.then_execute_at_block(target_block, |_| {
-			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
-			log::debug!("Pre-test invariant check.");
-			assert_invariants!();
-			execute();
-			log::debug!("Post-test invariant check.");
-			assert_invariants!();
-		})
+		blocks: BlockNumberFor<Test>,
+		execute: impl FnOnce() -> R,
+	) -> TestRunner<R> {
+		self.then_execute_with(|_| System::current_block_number() + blocks)
+			.then_process_blocks_until(|execution_block| {
+				System::current_block_number() == execution_block - 1
+			})
+			.then_execute_at_next_block(|_| {
+				QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
+				log::debug!("Pre-test invariant check.");
+				assert_invariants!();
+				let r = execute();
+				log::debug!("Post-test invariant check.");
+				assert_invariants!();
+				r
+			})
 	}
 }
