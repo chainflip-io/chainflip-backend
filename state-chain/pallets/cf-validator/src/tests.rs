@@ -794,45 +794,51 @@ mod key_handover {
 
 	#[test]
 	fn banned_nodes_persist() {
-		new_test_ext().execute_with(|| {
-			let non_candidates = AUTHORITIES
-				.collect::<BTreeSet<_>>()
-				.difference(&CANDIDATES.collect())
-				.copied()
-				.collect::<Vec<_>>();
+		let non_candidates = AUTHORITIES
+			.collect::<BTreeSet<_>>()
+			.difference(&CANDIDATES.collect())
+			.copied()
+			.collect::<Vec<_>>();
 
-			let fails_keygen = non_candidates[0];
-			let fails_handover = non_candidates[1];
+		let fails_keygen = non_candidates[0];
+		let fails_handover = non_candidates[1];
 
-			// Failed keygen should restart (should have enough non-banned nodes)
-			failed_keygen_with_offenders([fails_keygen]);
-			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
-
-			// Successful keygen should transition to handover
-			MockVaultRotatorA::keygen_success();
-			Pallet::<Test>::on_initialize(3);
-			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
-
-			// Handover fails with a different non-candidate and will be retried
-			MockVaultRotatorA::failed([fails_handover]);
-			Pallet::<Test>::on_initialize(4);
-
-			// Ensure that banned nodes banned during either keygen or handover aren't selected
-			if let RotationPhase::KeyHandoversInProgress(state) =
-				CurrentRotationPhase::<Test>::get()
-			{
-				assert_eq!(
-					state
-						.authority_candidates()
-						.intersection(&BTreeSet::from([fails_keygen, fails_handover]))
-						.count(),
-					0,
-					"banned nodes should have been selected"
-				)
-			} else {
-				panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
-			}
-		});
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				// Failed keygen should restart (should have enough non-banned nodes)
+				failed_keygen_with_offenders([fails_keygen]);
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+			})
+			.then_execute_at_next_block(|_| {
+				// Successful keygen should transition to handover
+				MockVaultRotatorA::keygen_success();
+			})
+			.then_execute_at_next_block(|_| {
+				assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+			})
+			.then_execute_at_next_block(|_| {
+				// Handover fails with a different non-candidate and will be retried
+				MockVaultRotatorA::failed([fails_handover]);
+			})
+			.then_execute_at_next_block(|_| {
+				// Ensure that banned nodes banned during either keygen or handover aren't selected
+				if let RotationPhase::KeyHandoversInProgress(state) =
+					CurrentRotationPhase::<Test>::get()
+				{
+					assert_eq!(
+						state
+							.authority_candidates()
+							.intersection(&BTreeSet::from([fails_keygen, fails_handover]))
+							.count(),
+						0,
+						"banned nodes should have been selected"
+					)
+				} else {
+					panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
+				}
+			});
 	}
 
 	#[test]
