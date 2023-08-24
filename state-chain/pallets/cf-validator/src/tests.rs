@@ -709,23 +709,23 @@ lazy_static::lazy_static! {
 	};
 }
 
+fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+	CurrentAuthorities::<Test>::set(AUTHORITIES.collect());
+	CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
+		RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+			winners: CANDIDATES.collect(),
+			losers: Default::default(),
+			bond: Default::default(),
+		}),
+	));
+
+	MockVaultRotatorA::failed(offenders);
+	Pallet::<Test>::on_initialize(1);
+}
+#[cfg(test)]
 mod keygen {
 
 	use super::*;
-
-	fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
-		CurrentAuthorities::<Test>::set((0..10).collect());
-		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
-			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-				winners: CANDIDATES.collect(),
-				losers: Default::default(),
-				bond: Default::default(),
-			}),
-		));
-
-		MockVaultRotatorA::failed(offenders);
-		Pallet::<Test>::on_initialize(1);
-	}
 
 	#[test]
 	fn restarts_from_keygen_on_keygen_failure() {
@@ -777,6 +777,49 @@ mod key_handover {
 	}
 
 	#[test]
+	fn banned_nodes_persist() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			let non_candidates = AUTHORITIES
+				.collect::<BTreeSet<_>>()
+				.difference(&CANDIDATES.collect())
+				.copied()
+				.collect::<Vec<_>>();
+
+			let fails_initially = non_candidates[0];
+			let fails_later = non_candidates[1];
+
+			// Failed keygen should restart (should have enough non-banned nodes)
+			failed_keygen_with_offenders([fails_initially]);
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+
+			// Successful keygen should transition to handover
+			MockVaultRotatorA::keygen_success();
+			Pallet::<Test>::on_initialize(3);
+			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+
+			// Handover is failed again with a different non-candidate and will be retried
+			MockVaultRotatorA::failed([fails_later]);
+			Pallet::<Test>::on_initialize(4);
+
+			// Ensure that banned nodes banned during either keygen or handover aren't selected
+			if let RotationPhase::KeyHandoversInProgress(state) =
+				CurrentRotationPhase::<Test>::get()
+			{
+				assert_eq!(
+					state
+						.authority_candidates()
+						.intersection(&BTreeSet::from([fails_initially, fails_later]))
+						.count(),
+					0,
+					"banned nodes should have been selected"
+				)
+			} else {
+				panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
+			}
+		});
+	}
+
+	#[test]
 	fn restarts_if_non_candidates_fail() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// Still enough current authorities available, we should try again.
@@ -788,7 +831,7 @@ mod key_handover {
 
 	#[test]
 	fn abort_if_too_many_current_authorities_fail() {
-		// TODO: should unban and keep trying instead
+		// TODO: should unban and keep trying instead (see PRO-786)
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// Too many current authorities banned, we abort.
 			failed_handover_with_offenders(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS + 1));
