@@ -28,7 +28,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-impl_pallet_safe_mode!(PalletSafeMode; minting_range_order_enabled, minting_limit_order_enabled, burning_range_order_enabled, burning_limit_order_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
 
 enum Stability {
 	Stable,
@@ -37,11 +37,11 @@ enum Stability {
 
 #[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
 #[scale_info(skip_type_params(T))]
-pub struct CanonialAssetPair<T: Config> {
+pub struct CanonicalAssetPair<T: Config> {
 	assets: cf_amm::common::SideMap<Asset>,
 	_phantom: core::marker::PhantomData<T>,
 }
-impl<T: Config> CanonialAssetPair<T> {
+impl<T: Config> CanonicalAssetPair<T> {
 	pub fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
 		match (base_asset, pair_asset) {
 			(STABLE_ASSET, STABLE_ASSET) => Err(Error::<T>::PoolDoesNotExist),
@@ -110,14 +110,14 @@ impl<T: Config> CanonialAssetPair<T> {
 }
 
 struct AssetPair<T: Config> {
-	canonial_asset_pair: CanonialAssetPair<T>,
+	canonical_asset_pair: CanonicalAssetPair<T>,
 	base_side: Side,
 }
 impl<T: Config> AssetPair<T> {
 	fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
 		Ok(Self {
-			canonial_asset_pair: CanonialAssetPair::new(base_asset, pair_asset)?,
-			base_side: CanonialAssetPair::<T>::stability_to_side(match (base_asset, pair_asset) {
+			canonical_asset_pair: CanonicalAssetPair::new(base_asset, pair_asset)?,
+			base_side: CanonicalAssetPair::<T>::stability_to_side(match (base_asset, pair_asset) {
 				(STABLE_ASSET, STABLE_ASSET) => Err(Error::<T>::PoolDoesNotExist),
 				(STABLE_ASSET, _unstable_asset) => Ok(Stability::Stable),
 				(_unstable_asset, STABLE_ASSET) => Ok(Stability::Unstable),
@@ -155,12 +155,12 @@ impl<T: Config> AssetPair<T> {
 
 		T::LpBalance::try_debit_account(
 			lp,
-			self.canonial_asset_pair.side_to_asset(self.base_side),
+			self.canonical_asset_pair.side_to_asset(self.base_side),
 			asset_amounts.base,
 		)?;
 		T::LpBalance::try_debit_account(
 			lp,
-			self.canonial_asset_pair.side_to_asset(!self.base_side),
+			self.canonical_asset_pair.side_to_asset(!self.base_side),
 			asset_amounts.pair,
 		)?;
 
@@ -178,12 +178,12 @@ impl<T: Config> AssetPair<T> {
 
 		T::LpBalance::try_credit_account(
 			lp,
-			self.canonial_asset_pair.side_to_asset(self.base_side),
+			self.canonical_asset_pair.side_to_asset(self.base_side),
 			asset_amounts.base,
 		)?;
 		T::LpBalance::try_credit_account(
 			lp,
-			self.canonial_asset_pair.side_to_asset(!self.base_side),
+			self.canonical_asset_pair.side_to_asset(!self.base_side),
 			asset_amounts.pair,
 		)?;
 
@@ -294,10 +294,9 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Pools are indexed by single asset since USDC is implicit.
-	/// The STABLE_ASSET is always PoolSide::Asset1
 	#[pallet::storage]
 	pub type Pools<T: Config> =
-		StorageMap<_, Twox64Concat, CanonialAssetPair<T>, Pool<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, CanonicalAssetPair<T>, Pool<T>, OptionQuery>;
 
 	/// FLIP ready to be burned.
 	#[pallet::storage]
@@ -397,14 +396,10 @@ pub mod pallet {
 		/// There are no amounts between the specified maximum and minimum that match the required
 		/// ratio of assets
 		AssetRatioUnachieveable,
-		/// Minting Range Order is disabled
-		MintingRangeOrderDisabled,
-		/// Burning Range Order is disabled
-		BurningRangeOrderDisabled,
-		/// Minting Limit Order is disabled
-		MintingLimitOrderDisabled,
-		/// Burning Limit Order is disabled
-		BurningLimitOrderDisabled,
+		/// Updating Limit Orders is disabled
+		UpdatingLimitOrdersDisabled,
+		/// Updating Range Orders is disabled
+		UpdatingRangeOrdersDisabled,
 	}
 
 	#[pallet::event]
@@ -540,8 +535,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let canonial_asset_pair = CanonialAssetPair::<T>::new(base_asset, pair_asset)?;
-			Pools::<T>::try_mutate(canonial_asset_pair, |maybe_pool| {
+			let canonical_asset_pair = CanonicalAssetPair::<T>::new(base_asset, pair_asset)?;
+			Pools::<T>::try_mutate(canonical_asset_pair, |maybe_pool| {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
 				*maybe_pool = Some(Pool {
@@ -584,6 +579,10 @@ pub mod pallet {
 			increase_or_decrease: IncreaseOrDecrease,
 			size: RangeOrderSize,
 		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().range_order_update_enabled,
+				Error::<T>::UpdatingRangeOrdersDisabled
+			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
@@ -659,6 +658,10 @@ pub mod pallet {
 			option_tick_range: Option<core::ops::Range<Tick>>,
 			size: RangeOrderSize,
 		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().range_order_update_enabled,
+				Error::<T>::UpdatingRangeOrdersDisabled
+			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
@@ -719,6 +722,10 @@ pub mod pallet {
 			increase_or_decrease: IncreaseOrDecrease,
 			amount: AssetAmount,
 		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
@@ -782,6 +789,10 @@ pub mod pallet {
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
 		) -> DispatchResult {
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
@@ -878,7 +889,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<AssetAmount, DispatchError> {
 		let (amount_delta, position_info, collected) = match increase_or_decrease {
 			IncreaseOrDecrease::Increase => {
-				let debited_asset_amount = asset_pair.canonial_asset_pair.try_debit_asset(
+				let debited_asset_amount = asset_pair.canonical_asset_pair.try_debit_asset(
 					lp,
 					asset_pair.base_side,
 					amount,
@@ -933,7 +944,7 @@ impl<T: Config> Pallet<T> {
 						}),
 					}?;
 
-				let withdrawn_asset_amount = asset_pair.canonial_asset_pair.try_credit_asset(
+				let withdrawn_asset_amount = asset_pair.canonical_asset_pair.try_credit_asset(
 					lp,
 					asset_pair.base_side,
 					withdrawn_amount,
@@ -955,12 +966,12 @@ impl<T: Config> Pallet<T> {
 			limit_orders.insert(id, tick);
 		}
 
-		let collected_fees = asset_pair.canonial_asset_pair.try_credit_asset(
+		let collected_fees = asset_pair.canonical_asset_pair.try_credit_asset(
 			lp,
 			!asset_pair.base_side,
 			collected.fees,
 		)?;
-		let swapped_liquidity = asset_pair.canonial_asset_pair.try_credit_asset(
+		let swapped_liquidity = asset_pair.canonical_asset_pair.try_credit_asset(
 			lp,
 			!asset_pair.base_side,
 			collected.swapped_liquidity,
@@ -968,8 +979,8 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::LimitOrderUpdated {
 			lp: lp.clone(),
-			sell_asset: asset_pair.canonial_asset_pair.side_to_asset(asset_pair.base_side),
-			buy_asset: asset_pair.canonial_asset_pair.side_to_asset(!asset_pair.base_side),
+			sell_asset: asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
+			buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
 			id,
 			tick,
 			increase_or_decrease,
@@ -1070,8 +1081,8 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::RangeOrderUpdated {
 			lp: lp.clone(),
-			base_asset: asset_pair.canonial_asset_pair.side_to_asset(asset_pair.base_side),
-			pair_asset: asset_pair.canonial_asset_pair.side_to_asset(!asset_pair.base_side),
+			base_asset: asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
+			pair_asset: asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
 			id,
 			tick_range,
 			increase_or_decrease,
@@ -1114,7 +1125,7 @@ impl<T: Config> Pallet<T> {
 		f: F,
 	) -> Result<R, E> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
-		Pools::<T>::try_mutate(&asset_pair.canonial_asset_pair, |maybe_pool| {
+		Pools::<T>::try_mutate(&asset_pair.canonical_asset_pair, |maybe_pool| {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 			f(&asset_pair, pool)
 		})
@@ -1137,7 +1148,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn current_price(from: Asset, to: Asset) -> Option<Price> {
 		let asset_pair = &AssetPair::new(from, to).ok()?;
-		Pools::<T>::get(&asset_pair.canonial_asset_pair)
+		Pools::<T>::get(&asset_pair.canonical_asset_pair)
 			.and_then(|mut pool| pool.pool_state.current_price(asset_pair.base_side, Order::Sell))
 	}
 }

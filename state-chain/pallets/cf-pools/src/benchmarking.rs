@@ -42,7 +42,7 @@ benchmarks! {
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert!(!Pools::<T>::get(CanonialAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).unwrap().enabled);
+		assert!(!Pools::<T>::get(CanonicalAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).unwrap().enabled);
 	}
 
 	new_pool {
@@ -55,7 +55,7 @@ benchmarks! {
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	} verify {
-		assert!(Pools::<T>::get(CanonialAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).is_some());
+		assert!(Pools::<T>::get(CanonicalAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).is_some());
 	}
 
 	update_range_order {

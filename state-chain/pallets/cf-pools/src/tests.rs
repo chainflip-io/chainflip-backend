@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, utilities, AssetAmounts, CanonialAssetPair, CollectedNetworkFee, Error,
+	mock::*, utilities, AssetAmounts, CanonicalAssetPair, CollectedNetworkFee, Error,
 	FlipBuyInterval, FlipToBurn, Pools, RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
@@ -16,7 +16,7 @@ fn can_create_new_trading_pool() {
 		let default_price = price_at_tick(0).unwrap();
 
 		// While the pool does not exist, no info can be obtained.
-		assert!(Pools::<Test>::get(CanonialAssetPair::new(unstable_asset, STABLE_ASSET).unwrap())
+		assert!(Pools::<Test>::get(CanonicalAssetPair::new(unstable_asset, STABLE_ASSET).unwrap())
 			.is_none());
 
 		// Fee must be appropriate
