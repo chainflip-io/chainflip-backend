@@ -24,7 +24,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
-	btc::{rpc::BtcRpcApi, BtcBroadcaster},
+	btc::retry_rpc::BtcRetryRpcApi,
 	dot::{rpc::DotRpcApi, DotBroadcaster},
 	eth::retry_rpc::EthersRetryRpcApi,
 	p2p::{PeerInfo, PeerUpdate},
@@ -228,9 +228,9 @@ pub async fn start<
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
-	eth_broadcaster: EthRpc,
+	eth_rpc: EthRpc,
 	dot_broadcaster: DotBroadcaster<DotRpc>,
-	btc_broadcaster: BtcBroadcaster<BtcRpc>,
+	btc_rpc: BtcRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
@@ -240,7 +240,7 @@ where
 	BlockStream: StateChainStreamApi,
 	EthRpc: EthersRetryRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
-	BtcRpc: BtcRpcApi + Send + Sync + 'static,
+	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
 	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
@@ -503,7 +503,7 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) if nominee == account_id => {
-                                        match eth_broadcaster.broadcast_transaction(transaction_payload).await {
+                                        match eth_rpc.broadcast_transaction(transaction_payload).await {
                                             Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                             Err(error) => {
                                                 // Note: this error can indicate that we failed to estimate gas, or that there is
@@ -555,7 +555,7 @@ where
                                         },
                                     ) => {
                                         if nominee == account_id {
-                                            match btc_broadcaster.send(transaction_payload.encoded_transaction).await {
+                                            match btc_rpc.send_raw_transaction(transaction_payload.encoded_transaction).await {
                                                 Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                 Err(error) => {
                                                     error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");

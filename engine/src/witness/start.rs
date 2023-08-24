@@ -4,6 +4,7 @@ use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
+	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
 	db::PersistentKeyDB,
 	eth::{
 		retry_rpc::EthersRetryRpcClient,
@@ -29,6 +30,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 		impl Future<Output = EthRpcClient> + Send,
 		impl Future<Output = ReconnectSubscriptionClient> + Send,
 	>,
+	btc_client: BtcRetryRpcClient<impl Future<Output = BtcRpcClient> + Send>,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	db: Arc<PersistentKeyDB>,
@@ -55,7 +57,7 @@ where
 
 	super::btc::start(
 		scope,
-		&settings.btc,
+		btc_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),

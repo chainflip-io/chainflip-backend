@@ -48,7 +48,7 @@ pub trait BtcRetryRpcApi: Clone {
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
-	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid;
+	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid>;
 
 	async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount>;
 
@@ -85,19 +85,20 @@ impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> BtcRetryRp
 			.await
 	}
 
-	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid {
+	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
 		let log = RequestLog::new(
 			"send_raw_transaction".to_string(),
 			Some(format!("{transaction_bytes:?}")),
 		);
 		self.retry_client
-			.request(
+			.request_with_limit(
 				Box::pin(move |client| {
 					let transaction_bytes = transaction_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
 				}),
 				log,
+				5,
 			)
 			.await
 	}

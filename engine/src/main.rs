@@ -1,7 +1,7 @@
 use anyhow::Context;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
-	btc::{rpc::BtcRpcClient, BtcBroadcaster},
+	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{
@@ -250,10 +250,16 @@ async fn start(
 		},
 	);
 
+	let btc_settings = settings.btc.clone();
+	let btc_client = BtcRetryRpcClient::new(scope, async move {
+		BtcRpcClient::new(btc_settings).expect("TODO: Handle this.")
+	});
+
 	witness::start::start(
 		scope,
 		&settings,
 		eth_client.clone(),
+		btc_client.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		db.clone(),
@@ -267,7 +273,7 @@ async fn start(
 		// These should take retriers not raw clients
 		eth_client,
 		DotBroadcaster::new(DotHttpRpcClient::new(settings.dot.http_node_endpoint).await?),
-		BtcBroadcaster::new(BtcRpcClient::new(settings.btc)?),
+		btc_client,
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,
