@@ -813,7 +813,12 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
-pub trait CompatibleVersions {
+pub trait CompatibleCfeVersions {
 	fn current_compatibility_version() -> SemVer;
 	fn next_compatibility_version() -> Option<SemVer>;
+}
+
+pub trait AuthoritiesCfeVersions {
+	/// Returns the percentage of current authorities with their CFEs at the given version.
+	fn precent_authorities_at_version(version: SemVer) -> Percent;
 }

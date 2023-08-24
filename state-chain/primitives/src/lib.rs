@@ -164,6 +164,13 @@ pub struct SemVer {
 	pub minor: u8,
 	pub patch: u8,
 }
+impl SemVer {
+	/// Check if "self" is compatible with the target version.
+	/// This is true if the major and minor versions are the same.
+	pub fn is_compatible_with(&self, target: SemVer) -> bool {
+		self.major == target.major && self.minor == target.minor
+	}
+}
 
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(

@@ -18,10 +18,10 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, Bid, BidderProvider,
-	Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
-	HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter,
-	SetSafeMode, VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
+	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
+	ReputationResetter, SetSafeMode, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -654,8 +654,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a node to send their current cfe version.  We validate that the version is a
-		/// not the same version stored and if not we store and emit `CFEVersionUpdated`.
+		/// Allow a validator to report their current cfe version. Update storage and emmit event if
+		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
 		///
@@ -1348,5 +1348,22 @@ impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
 				backups.insert(validator_id.clone(), amount);
 			}
 		});
+	}
+}
+
+impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
+	/// Returns the percentage of current authorities with their CFEs at the given version.
+	fn precent_authorities_at_version(version: SemVer) -> Percent {
+		let current_authorities = CurrentAuthorities::<T>::get();
+		let authorities_count = current_authorities.len() as u32;
+
+		let num_authorities_at_target_version = current_authorities
+			.into_iter()
+			.filter(|validator_id| {
+				NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+			})
+			.count() as u32;
+
+		Percent::from_rational(num_authorities_at_target_version, authorities_count)
 	}
 }

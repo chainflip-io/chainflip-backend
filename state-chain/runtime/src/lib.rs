@@ -554,6 +554,8 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 	type UpgradeCondition = pallet_cf_validator::NotDuringRotation<Runtime>;
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
+	type CompatibleCfeVersions = Environment;
+	type AuthoritiesCfeVersions = Validator;
 }
 
 impl pallet_cf_emissions::Config for Runtime {
@@ -878,7 +880,7 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_current_compatibility_version() -> SemVer {
-			use cf_traits::CompatibleVersions;
+			use cf_traits::CompatibleCfeVersions;
 			Environment::current_compatibility_version()
 		}
 		fn cf_epoch_duration() -> u32 {
