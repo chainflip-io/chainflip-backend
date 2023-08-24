@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use core::ops::Range;
+
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
@@ -9,6 +11,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
 
@@ -26,13 +29,37 @@ fn assert_epoch_index(n: EpochIndex) {
 	);
 }
 
+macro_rules! assert_rotation_phase_matches {
+	($expected_phase: pat) => {
+		assert!(
+			matches!(CurrentRotationPhase::<Test>::get(), $expected_phase),
+			"Expected {}, got {:?}",
+			stringify!($expected_phase),
+			CurrentRotationPhase::<Test>::get(),
+		);
+	};
+}
+
 macro_rules! assert_default_rotation_outcome {
 	() => {
-		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
+		assert_rotation_phase_matches!(RotationPhase::Idle);
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), EXPECTED_BOND, "bond should be updated");
 		assert_eq!(ValidatorPallet::current_authorities(), BTreeSet::from(AUCTION_WINNERS));
 	};
+}
+
+#[track_caller]
+fn assert_rotation_aborted() {
+	assert_rotation_phase_matches!(RotationPhase::Idle);
+	assert_eq!(<Test as Config>::VaultRotator::status(), AsyncResult::Void);
+	assert_event_sequence!(
+		Test,
+		RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+			new_phase: RotationPhase::Idle
+		}),
+		RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+	);
 }
 
 fn simple_rotation_state(
@@ -76,30 +103,20 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		move_forward_blocks(100);
 
 		assert_epoch_index(GENESIS_EPOCH);
-		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
-
+		assert_rotation_phase_matches!(RotationPhase::Idle);
 		// Now that we have bidders, we should succeed the auction, and complete the rotation
 		MockBidderProvider::set_default_test_bids();
 
 		move_forward_blocks(1);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		MockVaultRotatorA::keygen_success();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeyHandoversInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 		MockVaultRotatorA::key_handover_success();
 
 		move_forward_blocks(2);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::ActivatingKeys(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::ActivatingKeys(..));
 		MockVaultRotatorA::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
@@ -112,6 +129,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		assert_noop!(
 			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
 			Error::<Test>::RotationInProgress
@@ -124,10 +142,7 @@ fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_default_test_bids();
 		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		assert_noop!(
 			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
 			Error::<Test>::RotationInProgress
@@ -153,24 +168,16 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			"we should still be validating with the genesis authorities"
 		);
 
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+
 		MockVaultRotatorA::keygen_success();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeyHandoversInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 		MockVaultRotatorA::key_handover_success();
 
 		move_forward_blocks(2);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::ActivatingKeys(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::ActivatingKeys(..));
 
 		MockVaultRotatorA::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
@@ -418,11 +425,7 @@ fn rerun_auction_if_not_enough_participants() {
 			Event::RotationAborted,
 		));
 		// Assert that we still in the idle phase
-		assert!(
-			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle),
-			"Expected idle phase, got {:?}",
-			CurrentRotationPhase::<Test>::get()
-		);
+		assert_rotation_phase_matches!(RotationPhase::Idle);
 		assert_ok!(ValidatorPallet::update_pallet_config(
 			RuntimeOrigin::root(),
 			PalletConfigUpdate::AuctionParameters {
@@ -436,10 +439,7 @@ fn rerun_auction_if_not_enough_participants() {
 		// Run to the next block - we expect and immediate retry
 		run_to_block(EPOCH_DURATION + 1);
 		// Expect a resolved auction and kickedoff key-gen
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 	});
 }
 
@@ -537,12 +537,12 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
-		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+		assert_rotation_phase_matches!(RotationPhase::Idle);
 		assert_noop!(
 			ValidatorPallet::force_rotation(RawOrigin::Root.into()),
 			Error::<Test>::RotationsDisabled
 		);
-		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+		assert_rotation_phase_matches!(RotationPhase::Idle);
 
 		// Change safe mode to CODE GREEN
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
@@ -551,29 +551,7 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 		// Try to start a rotation.
 		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
-	});
-}
-
-#[test]
-fn rotating_during_rotation_is_noop() {
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		MockBidderProvider::set_default_test_bids();
-		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
-		// We attempt an auction when we force a rotation
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
-
-		// We don't attempt the auction again, because we're already in a rotation
-		assert_noop!(
-			ValidatorPallet::force_rotation(RawOrigin::Root.into()),
-			Error::<Test>::RotationInProgress
-		);
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 	});
 }
 
@@ -705,7 +683,7 @@ fn test_expect_validator_register_fails() {
 				},
 			},
 		));
-		// It should be possible to register now since the acutal size is below the target.
+		// It should be possible to register now since the actual size is below the target.
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)));
 		MockFundingInfo::<Test>::credit_funds(&ID, Percent::from_percent(20) * GENESIS_BOND);
 		// Trying to register again passes the funding check but fails for other reasons.
@@ -716,13 +694,74 @@ fn test_expect_validator_register_fails() {
 	});
 }
 
-#[test]
-fn key_handover_should_repeat_until_below_authority_threshold() {
+const CANDIDATES: Range<u64> = 4..14;
+const AUTHORITIES: Range<u64> = 0..10;
+
+lazy_static::lazy_static! {
+	/// How many candidates can fail without preventing us from re-trying keygen
+	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = CANDIDATES.count().checked_sub(MIN_AUTHORITY_SIZE as usize).unwrap();
+
+	/// How many current authorities can fail to leave enough healthy ones to handover the key
+	static ref MAX_ALLOWED_SHARING_OFFENDERS: usize = {
+		let total = AUTHORITIES.count();
+		let needed = success_threshold_from_share_count(total as u32);
+		total.checked_sub(needed as usize).unwrap()
+	};
+}
+
+fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+	CurrentAuthorities::<Test>::set(AUTHORITIES.collect());
+	CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
+		RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+			winners: CANDIDATES.collect(),
+			losers: Default::default(),
+			bond: Default::default(),
+		}),
+	));
+
+	MockVaultRotatorA::failed(offenders);
+	Pallet::<Test>::on_initialize(1);
+}
+#[cfg(test)]
+mod keygen {
+
+	use super::*;
+
+	#[test]
+	fn restarts_from_keygen_on_keygen_failure() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// just one node failed
+			failed_keygen_with_offenders(CANDIDATES.take(1));
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// many nodes failed, but enough left to try to restart keygen
+			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS));
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+	}
+
+	#[test]
+	fn abort_on_keygen_failure_if_too_many_banned() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// Not enough unbanned nodes left after this failure, so we should abort
+			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS + 1));
+			assert_rotation_aborted();
+		});
+	}
+}
+
+#[cfg(test)]
+mod key_handover {
+
+	use super::*;
+
 	fn failed_handover_with_offenders(offenders: impl IntoIterator<Item = u64>) {
-		CurrentAuthorities::<Test>::set((0..10).collect());
+		CurrentAuthorities::<Test>::set(AUTHORITIES.collect());
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-				winners: (4..14).collect(),
+				winners: CANDIDATES.collect(),
 				losers: Default::default(),
 				bond: Default::default(),
 			}),
@@ -730,68 +769,98 @@ fn key_handover_should_repeat_until_below_authority_threshold() {
 		MockVaultRotatorA::keygen_success();
 		System::reset_events();
 		Pallet::<Test>::on_initialize(1);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::KeyHandoversInProgress(..)
-		));
+
+		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 		MockVaultRotatorA::failed(offenders);
 		System::reset_events();
 		Pallet::<Test>::on_initialize(2);
 	}
 
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		// Still enough current authorities available, we should try again.
-		failed_handover_with_offenders(0..3);
-		assert!(
-			matches!(
-				CurrentRotationPhase::<Test>::get(),
-				RotationPhase::KeyHandoversInProgress(..)
-			),
-			"Expected KeyHandoversInProgress, got {:?}",
-			CurrentRotationPhase::<Test>::get(),
-		);
-	});
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		// Too many current authorities banned, we abort.
-		failed_handover_with_offenders(0..4);
-		assert!(
-			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::Idle),
-			"Expected Idle, got {:?}",
-			CurrentRotationPhase::<Test>::get(),
-		);
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-				new_phase: RotationPhase::Idle
-			}),
-			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-		);
-	});
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		// Above the threshold, old validators, and any new validators, we abort.
-		failed_handover_with_offenders(0..5);
-		assert!(
-			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::Idle),
-			"Expected Idle, got {:?}",
-			CurrentRotationPhase::<Test>::get(),
-		);
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-				new_phase: RotationPhase::Idle
-			}),
-			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-		);
-	});
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		// If even one new validator fails, but all old validators were well-behaved,
-		// we revert to keygen.
-		failed_handover_with_offenders(4..5);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::KeygensInProgress(..)
-		));
-	});
+	#[test]
+	fn banned_nodes_persist() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			let non_candidates = AUTHORITIES
+				.collect::<BTreeSet<_>>()
+				.difference(&CANDIDATES.collect())
+				.copied()
+				.collect::<Vec<_>>();
+
+			let fails_keygen = non_candidates[0];
+			let fails_handover = non_candidates[1];
+
+			// Failed keygen should restart (should have enough non-banned nodes)
+			failed_keygen_with_offenders([fails_keygen]);
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+
+			// Successful keygen should transition to handover
+			MockVaultRotatorA::keygen_success();
+			Pallet::<Test>::on_initialize(3);
+			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+
+			// Handover fails with a different non-candidate and will be retried
+			MockVaultRotatorA::failed([fails_handover]);
+			Pallet::<Test>::on_initialize(4);
+
+			// Ensure that banned nodes banned during either keygen or handover aren't selected
+			if let RotationPhase::KeyHandoversInProgress(state) =
+				CurrentRotationPhase::<Test>::get()
+			{
+				assert_eq!(
+					state
+						.authority_candidates()
+						.intersection(&BTreeSet::from([fails_keygen, fails_handover]))
+						.count(),
+					0,
+					"banned nodes should have been selected"
+				)
+			} else {
+				panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
+			}
+		});
+	}
+
+	#[test]
+	fn restarts_if_non_candidates_fail() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// Still enough current authorities available, we should try again.
+			failed_handover_with_offenders(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS));
+
+			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
+		});
+	}
+
+	#[test]
+	fn abort_if_too_many_current_authorities_fail() {
+		// TODO: should unban and keep trying instead (see PRO-786)
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// Too many current authorities banned, we abort.
+			failed_handover_with_offenders(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS + 1));
+			assert_rotation_aborted();
+		});
+	}
+
+	#[test]
+	fn restart_from_keygen_if_many_authorities_including_candidates_fail() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// What matters is that at least one of the candidate fails,
+			// so any other offenders don't change the outcome: reverting
+			// to keygen.
+			let offenders =
+				CANDIDATES.take(1).chain(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS + 1));
+			failed_handover_with_offenders(offenders);
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+	}
+
+	#[test]
+	fn restart_from_keygen_if_a_single_candidate_fails() {
+		new_test_ext().execute_with_unchecked_invariants(|| {
+			// If even one new validator fails, but all old validators were well-behaved,
+			// we revert to keygen.
+			failed_handover_with_offenders(CANDIDATES.take(1));
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+		});
+	}
 }
 
 #[test]
@@ -799,23 +868,15 @@ fn safe_mode_can_aborts_authority_rotation_before_key_handover() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+
+		assert_rotation_phase_matches!(RotationPhase::<Test>::KeygensInProgress(..));
+
 		MockVaultRotatorA::keygen_success();
 
 		System::reset_events();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		ValidatorPallet::on_initialize(1);
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
-				new_phase: RotationPhase::Idle
-			}),
-			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
-		);
-		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+		assert_rotation_aborted();
 	});
 }
 
@@ -837,10 +898,8 @@ fn safe_mode_does_not_aborts_authority_rotation_after_key_handover() {
 				new_phase: RotationPhase::ActivatingKeys(..)
 			}),
 		);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::ActivatingKeys(..)
-		));
+
+		assert_rotation_phase_matches!(RotationPhase::ActivatingKeys(..));
 	});
 }
 
@@ -864,10 +923,7 @@ fn safe_mode_does_not_aborts_authority_rotation_during_key_activation() {
 				new_phase: RotationPhase::NewKeysActivated(..)
 			}),
 		);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::NewKeysActivated(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::NewKeysActivated(..));
 	});
 }
 
@@ -880,30 +936,21 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 		MockVaultRotatorA::keygen_success();
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		ValidatorPallet::on_initialize(1);
-		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
+		assert_rotation_phase_matches!(RotationPhase::Idle);
 
 		// Restart the authority Rotation.
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 		ValidatorPallet::start_authority_rotation();
 		ValidatorPallet::on_initialize(1);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 
 		MockVaultRotatorA::keygen_success();
 		ValidatorPallet::on_initialize(1);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeyHandoversInProgress(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 
 		MockVaultRotatorA::key_handover_success();
 		ValidatorPallet::on_initialize(1);
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::ActivatingKeys(..)
-		));
+		assert_rotation_phase_matches!(RotationPhase::ActivatingKeys(..));
 
 		MockVaultRotatorA::keys_activated();
 		ValidatorPallet::on_initialize(1);
