@@ -27,10 +27,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"63c94acc94e3275e480d9290f60ebb70338f63fdedeacc1a6d2551c7fc67ac0a"
+		"13d0723c0891a46a0e0931e23fb7c9961c0f87bc73ad965b35cf0f1d84a986b8"
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
+	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
