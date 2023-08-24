@@ -109,7 +109,7 @@ export async function performSwapViaContract(
           Wallet.fromMnemonic(
             process.env.ETH_USDC_WHALE_MNEMONIC ??
               'test test test test test test test test test test test junk',
-          ).address,
+          ).address.toLowerCase(),
         )
       : Promise.resolve();
 
