@@ -295,9 +295,11 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 		let rx = self
 			.send_request(specific_closure, request_log.clone(), RetryLimit::Limit(retry_limit))
 			.await;
-		let result: BoxAny = rx
-			.await
-			.map_err(|_| anyhow::anyhow!("Maximum attempts for request {request_log} reached."))?;
+		let result: BoxAny = rx.await.map_err(|_| {
+			anyhow::anyhow!(
+				"Maximum attempt of `{retry_limit}` reached for request `{request_log}`."
+			)
+		})?;
 		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
 	}
 }
