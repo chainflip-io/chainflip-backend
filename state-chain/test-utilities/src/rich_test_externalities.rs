@@ -74,11 +74,6 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 		});
 		TestExternalities { ext: self, context }
 	}
-
-	/// Commits storage changes to the DB
-	pub fn commit_all(&mut self) -> Result<(), String> {
-		self.0.commit_all()
-	}
 }
 
 /// A wrapper around [sp_io::TestExternalities] that provides a richer API for testing pallets.
@@ -241,9 +236,11 @@ where
 		}
 	}
 
-	/// Commit storage changes to the DB.
-	pub fn commit_all(&mut self) -> Result<(), String> {
-		self.ext.commit_all()
+	/// Commits storage changes to the DB
+	#[track_caller]
+	pub fn commit_all(mut self) -> Self {
+		assert_ok!(self.ext.0.commit_all());
+		self
 	}
 }
 
