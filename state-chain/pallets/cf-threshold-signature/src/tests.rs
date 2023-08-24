@@ -276,7 +276,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 
 			assert!(MockCallback::has_executed(request_id));
 			assert_eq!(MockCallback::times_called(), 1);
-		})
+		});
 }
 
 #[test]

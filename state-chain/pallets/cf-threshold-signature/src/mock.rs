@@ -161,7 +161,7 @@ pub trait TestHelper {
 		message: &<MockEthereum as ChainCrypto>::Payload,
 		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereum>,
 	) -> Self;
-	fn execute_with_consistency_checks(self, f: impl FnOnce());
+	fn execute_with_consistency_checks<R>(self, f: impl FnOnce() -> R) -> TestRunner<R>;
 	fn do_consistency_check();
 }
 impl TestHelper for TestRunner<()> {
@@ -231,12 +231,13 @@ impl TestHelper for TestRunner<()> {
 		})
 	}
 
-	fn execute_with_consistency_checks(self, f: impl FnOnce()) {
+	fn execute_with_consistency_checks<R>(self, f: impl FnOnce() -> R) -> TestRunner<R> {
 		self.execute_with(|| {
 			Self::do_consistency_check();
-			f();
+			let r = f();
 			Self::do_consistency_check();
-		});
+			r
+		})
 	}
 
 	/// Checks conditions that should always hold.
