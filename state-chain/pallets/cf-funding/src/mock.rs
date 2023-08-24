@@ -104,7 +104,13 @@ pub struct MockRegisterRedemption {
 }
 
 impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
-	fn new_unsigned(_node_id: &[u8; 32], amount: u128, _address: &[u8; 20], _expiry: u64) -> Self {
+	fn new_unsigned(
+		_node_id: &[u8; 32],
+		amount: u128,
+		_address: &[u8; 20],
+		_expiry: u64,
+		_executor: Option<cf_chains::eth::Address>,
+	) -> Self {
 		Self { amount }
 	}
 

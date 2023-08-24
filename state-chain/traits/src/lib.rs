@@ -15,7 +15,7 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
-	ChainCrypto, Ethereum, Polkadot, SwapOrigin,
+	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -770,15 +770,8 @@ pub trait DepositHandler<C: Chain> {
 	fn on_deposit_made(
 		_deposit_details: C::DepositDetails,
 		_amount: C::ChainAmount,
-		_address: C::ChainAccount,
-		_asset: C::ChainAsset,
+		_channel: DepositChannel<C>,
 	) {
-	}
-	fn on_channel_opened(
-		_address: C::ChainAccount,
-		_channel_id: ChannelId,
-	) -> Result<(), DispatchError> {
-		Ok(())
 	}
 }
 
@@ -820,7 +813,12 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
-pub trait CompatibleVersions {
+pub trait CompatibleCfeVersions {
 	fn current_compatibility_version() -> SemVer;
 	fn next_compatibility_version() -> Option<SemVer>;
+}
+
+pub trait AuthoritiesCfeVersions {
+	/// Returns the percentage of current authorities with their CFEs at the given version.
+	fn precent_authorities_at_version(version: SemVer) -> Percent;
 }

@@ -29,6 +29,16 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
 		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())
 	}
+
+	fn generate_address_and_state(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<
+		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
+		sp_runtime::DispatchError,
+	> {
+		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
+	}
 }
 type Block = frame_system::mocking::MockBlock<Test>;
 

@@ -103,9 +103,4 @@ mod test_update_flip_supply {
 				.unwrap()
 		);
 	}
-
-	#[test]
-	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<super::UpdateFlipSupply>();
-	}
 }

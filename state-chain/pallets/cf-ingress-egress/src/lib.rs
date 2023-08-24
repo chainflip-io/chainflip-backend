@@ -721,11 +721,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			),
 		};
 
+		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(
 			deposit_details.clone(),
 			amount,
-			deposit_address.clone(),
-			asset,
+			deposit_channel_details.deposit_channel,
 		);
 
 		Self::deposit_event(Event::DepositReceived {
@@ -769,7 +769,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_address = deposit_channel.address.clone();
 
 		ChannelActions::<T, I>::insert(&deposit_address, channel_action);
-		T::DepositHandler::on_channel_opened(deposit_address.clone(), channel_id)?;
 
 		let opened_at = T::ChainTracking::get_block_height();
 

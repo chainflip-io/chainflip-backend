@@ -18,6 +18,11 @@ pub trait AddressDerivationApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<C::ChainAccount, DispatchError>;
+
+	fn generate_address_and_state(
+		source_asset: C::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<(C::ChainAccount, C::DepositChannelState), DispatchError>;
 }
 
 #[derive(

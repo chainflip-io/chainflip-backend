@@ -22,7 +22,7 @@ use cf_chains::{
 	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
+		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -35,7 +35,7 @@ use cf_chains::{
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
-	ChainEnvironment, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
@@ -277,8 +277,13 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	fn replay_protection() -> EthereumReplayProtection {
-		unimplemented!()
+	fn replay_protection(contract_address: eth::Address) -> EthereumReplayProtection {
+		EthereumReplayProtection {
+			nonce: Self::next_nonce(),
+			chain_id: Self::chain_id(),
+			key_manager_address: Self::key_manager_address(),
+			contract_address,
+		}
 	}
 }
 
@@ -313,7 +318,7 @@ pub struct DotEnvironment;
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
-	fn replay_protection() -> PolkadotReplayProtection {
+	fn replay_protection(_params: ()) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(),
@@ -343,8 +348,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 pub struct BtcEnvironment;
 
 impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
-	// TODO: Implement replay protection for Bitcoin.
-	fn replay_protection() {}
+	fn replay_protection(_params: ()) {}
 }
 
 impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEnvironment {
@@ -480,9 +484,6 @@ macro_rules! impl_deposit_api_for_anychain {
 			}
 
 			fn expire_channel(address: ForeignChainAddress) {
-				if address.chain() == ForeignChain::Bitcoin {
-					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
-				}
 				match address.chain() {
 					$(
 						ForeignChain::$chain => {
@@ -551,29 +552,9 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
 		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
-		address: <Bitcoin as Chain>::ChainAccount,
-		_asset: <Bitcoin as Chain>::ChainAsset,
+		channel: DepositChannel<Bitcoin>,
 	) {
-		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, address)
-	}
-
-	fn on_channel_opened(
-		script_pubkey: ScriptPubkey,
-		salt: ChannelId,
-	) -> Result<(), DispatchError> {
-		Environment::add_details_for_btc_deposit_script(
-			script_pubkey,
-			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
-			                                                                                  * this assumption.
-			                                                                                  * Consider this in
-			                                                                                  * conjunction with
-			                                                                                  * #2354 */
-			BitcoinVault::vaults(Validator::epoch_index())
-				.ok_or(DispatchError::Other("No vault for epoch"))?
-				.public_key
-				.current,
-		);
-		Ok(())
+		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
 	}
 }
 

@@ -7,14 +7,13 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, ScriptPubkey, Utxo, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
-use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
+use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -53,7 +52,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::btc::{ScriptPubkey, Utxo};
+	use cf_chains::btc::Utxo;
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
@@ -153,12 +152,6 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
-	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
-	/// from.
-	pub type BitcoinActiveDepositAddressDetails<T> =
-		StorageMap<_, Twox64Concat, ScriptPubkey, (u32, [u8; 32]), ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
 	/// Stores the current safe mode state for the runtime.
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
@@ -218,36 +211,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Adds or updates an asset address in the map of supported ETH assets.
-		///
-		/// ## Events
-		///
-		/// - [EthereumSupportedAssetsUpdated](Event::EthereumSupportedAssetsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
-		pub fn update_supported_eth_assets(
-			origin: OriginFor<T>,
-			asset: EthAsset,
-			address: EthereumAddress,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
-			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
-				EthereumSupportedAssets::<T>::mutate(asset, |mapped_address| {
-					mapped_address.replace(address);
-				});
-				Event::UpdatedEthAsset(asset, address)
-			} else {
-				EthereumSupportedAssets::<T>::insert(asset, address);
-				Event::AddedNewEthAsset(asset, address)
-			});
-			Ok(())
-		}
-
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
 		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
@@ -437,19 +400,9 @@ impl<T: Config> Pallet<T> {
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		script_pubkey: ScriptPubkey,
+		deposit_address: DepositAddress,
 	) {
-		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::get(script_pubkey);
-
-		BitcoinAvailableUtxos::<T>::append(Utxo {
-			amount,
-			id: utxo_id,
-			deposit_address: DepositAddress::new(pubkey, salt),
-		});
-	}
-
-	pub fn cleanup_bitcoin_deposit_address_details(script_pubkey: ScriptPubkey) {
-		BitcoinActiveDepositAddressDetails::<T>::remove(script_pubkey);
+		BitcoinAvailableUtxos::<T>::append(Utxo { amount, id: utxo_id, deposit_address });
 	}
 
 	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {
@@ -506,17 +459,9 @@ impl<T: Config> Pallet<T> {
 				}),
 		}
 	}
-
-	pub fn add_details_for_btc_deposit_script(
-		script_pubkey: ScriptPubkey,
-		salt: u32,
-		pubkey: [u8; 32],
-	) {
-		BitcoinActiveDepositAddressDetails::<T>::insert(script_pubkey, (salt, pubkey));
-	}
 }
 
-impl<T: Config> CompatibleVersions for Pallet<T> {
+impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	fn current_compatibility_version() -> SemVer {
 		<T as Config>::CurrentCompatibilityVersion::get()
 	}

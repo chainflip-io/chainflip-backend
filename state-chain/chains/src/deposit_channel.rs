@@ -63,12 +63,8 @@ impl<C: Chain> DepositChannel<C> {
 		channel_id: ChannelId,
 		asset: C::ChainAsset,
 	) -> Result<Self, DispatchError> {
-		Ok(Self {
-			channel_id,
-			address: A::generate_address(asset, channel_id)?,
-			asset,
-			state: Default::default(),
-		})
+		let (address, state) = A::generate_address_and_state(asset, channel_id)?;
+		Ok(Self { channel_id, address, asset, state })
 	}
 
 	pub fn fetch_id(&self) -> C::DepositFetchId {

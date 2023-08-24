@@ -923,3 +923,60 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			assert_default_rotation_outcome!();
 		});
 }
+
+#[test]
+fn can_calculate_percentage_cfe_at_target_version() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		let initial_version = SemVer { major: 5, minor: 0, patch: 0 };
+		let next_version = SemVer { major: 6, minor: 0, patch: 0 };
+
+		// We initially submit version
+		let authorities = [0u64, 1u64, 2u64, 3u64, 4u64, 5u64, 6u64, 7u64, 8u64, 9u64];
+		authorities.iter().for_each(|id| {
+			let _ = ValidatorPallet::register_as_validator(RuntimeOrigin::signed(*id));
+			assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(*id), initial_version,));
+		});
+		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(initial_version),
+			Percent::from_percent(100)
+		);
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(next_version),
+			Percent::from_percent(0)
+		);
+
+		// Update some authorities' version
+		let authorities = [0u64, 1u64, 2u64, 3u64, 4u64, 5u64];
+		authorities.iter().for_each(|id| {
+			assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(*id), next_version,));
+		});
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(initial_version),
+			Percent::from_percent(40)
+		);
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(next_version),
+			Percent::from_percent(60)
+		);
+
+		// Change authorities
+		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(initial_version),
+			Percent::from_percent(0)
+		);
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(next_version),
+			Percent::from_percent(100)
+		);
+
+		// Version checking ignores `patch`.
+		let compatible_version = SemVer { major: 6, minor: 0, patch: 6 };
+		assert_eq!(
+			ValidatorPallet::precent_authorities_at_version(compatible_version),
+			Percent::from_percent(100)
+		);
+	});
+}
