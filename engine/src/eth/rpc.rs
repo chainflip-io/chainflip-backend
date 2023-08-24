@@ -115,7 +115,7 @@ impl EthRpcApi for EthRpcClient {
 		tx.nonce = Some(self.get_next_nonce().await?);
 
 		let res = self.signer.send_transaction(tx, None).await;
-		
+
 		if res.is_err() {
 			// Reset the nonce just in case (it will be re-requested during next broadcast)
 			tracing::warn!("Resetting eth broadcaster nonce due to error");
