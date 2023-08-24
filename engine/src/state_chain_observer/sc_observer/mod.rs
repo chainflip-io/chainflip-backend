@@ -25,7 +25,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
-	dot::{rpc::DotRpcApi, DotBroadcaster},
+	dot::retry_rpc::DotRetryRpcApi,
 	eth::retry_rpc::EthersRetryRpcApi,
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
@@ -229,7 +229,7 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_rpc: EthRpc,
-	dot_broadcaster: DotBroadcaster<DotRpc>,
+	dot_broadcaster: DotRpc,
 	btc_rpc: BtcRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
@@ -239,7 +239,7 @@ pub async fn start<
 where
 	BlockStream: StateChainStreamApi,
 	EthRpc: EthersRetryRpcApi + Send + Sync + 'static,
-	DotRpc: DotRpcApi + Send + Sync + 'static,
+	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
@@ -530,7 +530,7 @@ where
                                         },
                                     ) => {
                                         if nominee == account_id {
-                                            match dot_broadcaster.send(transaction_payload.encoded_extrinsic).await {
+                                            match dot_broadcaster.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
                                                 Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                 Err(error) => {
                                                     error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");

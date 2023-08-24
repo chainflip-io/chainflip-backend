@@ -3,7 +3,7 @@ use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
 	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
 	db::{KeyStore, PersistentKeyDB},
-	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
+	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
 	eth::{
 		retry_rpc::EthersRetryRpcClient,
 		rpc::{EthRpcClient, ReconnectSubscriptionClient},
@@ -255,11 +255,22 @@ async fn start(
 		BtcRpcClient::new(btc_settings).expect("TODO: Handle this.")
 	});
 
+	let dot_settings = settings.dot.clone();
+	let dot_client = DotRetryRpcClient::new(
+		scope,
+		async move {
+			DotHttpRpcClient::new(dot_settings.http_node_endpoint)
+				.await
+				.expect("TODO: Handle this")
+		},
+		async move { DotSubClient::new(&dot_settings.ws_node_endpoint) },
+	);
+
 	witness::start::start(
 		scope,
-		&settings,
 		eth_client.clone(),
 		btc_client.clone(),
+		dot_client.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		db.clone(),
@@ -272,7 +283,7 @@ async fn start(
 		state_chain_stream.clone(),
 		// These should take retriers not raw clients
 		eth_client,
-		DotBroadcaster::new(DotHttpRpcClient::new(settings.dot.http_node_endpoint).await?),
+		dot_client,
 		btc_client,
 		eth_multisig_client,
 		dot_multisig_client,

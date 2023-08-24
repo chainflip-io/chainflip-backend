@@ -6,11 +6,11 @@ use utilities::task_scope::Scope;
 use crate::{
 	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
 	db::PersistentKeyDB,
+	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
 	eth::{
 		retry_rpc::EthersRetryRpcClient,
 		rpc::{EthRpcClient, ReconnectSubscriptionClient},
 	},
-	settings::Settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -25,12 +25,15 @@ use anyhow::Result;
 /// Starts all the witnessing tasks.
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &Settings,
 	eth_client: EthersRetryRpcClient<
 		impl Future<Output = EthRpcClient> + Send,
 		impl Future<Output = ReconnectSubscriptionClient> + Send,
 	>,
 	btc_client: BtcRetryRpcClient<impl Future<Output = BtcRpcClient> + Send>,
+	dot_client: DotRetryRpcClient<
+		impl Future<Output = DotHttpRpcClient> + Send,
+		impl Future<Output = DotSubClient> + Send,
+	>,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	db: Arc<PersistentKeyDB>,
@@ -65,15 +68,8 @@ where
 	)
 	.await?;
 
-	super::dot::start(
-		scope,
-		&settings.dot,
-		state_chain_client,
-		state_chain_stream,
-		epoch_source,
-		db,
-	)
-	.await?;
+	super::dot::start(scope, dot_client, state_chain_client, state_chain_stream, epoch_source, db)
+		.await?;
 
 	Ok(())
 }

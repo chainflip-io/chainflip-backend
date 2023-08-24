@@ -1,7 +1,4 @@
-use crate::{
-	dot::PolkadotConfig,
-	witness::common::chain_source::{ChainClient, Header},
-};
+use crate::witness::common::chain_source::{ChainClient, Header};
 use cf_chains::{
 	dot::{PolkadotHash, RuntimeVersion},
 	Polkadot,
@@ -11,7 +8,9 @@ use core::time::Duration;
 use futures_core::{Future, Stream};
 use sp_core::H256;
 use std::pin::Pin;
-use subxt::{config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic};
+use subxt::{
+	config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic, PolkadotConfig,
+};
 use utilities::task_scope::Scope;
 
 use crate::retrier::{RequestLog, RetrierClient};
@@ -87,7 +86,10 @@ pub trait DotRetryRpcApi {
 
 	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
-	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash;
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash>;
 }
 
 #[async_trait::async_trait]
@@ -148,13 +150,16 @@ impl<
 			.await
 	}
 
-	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash {
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash> {
 		let log = RequestLog::new(
 			"submit_raw_encoded_extrinsic".to_string(),
 			Some(format!("{encoded_bytes:?}")),
 		);
 		self.rpc_retry_client
-			.request(
+			.request_with_limit(
 				Box::pin(move |client| {
 					let encoded_bytes = encoded_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -163,6 +168,7 @@ impl<
 					)
 				}),
 				log,
+				5,
 			)
 			.await
 	}

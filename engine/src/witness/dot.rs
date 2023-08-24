@@ -6,6 +6,7 @@ use cf_chains::{
 	Polkadot,
 };
 use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
+use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -26,7 +27,6 @@ use crate::{
 		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 		rpc::DotSubClient,
 	},
-	settings::{self},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -81,7 +81,10 @@ fn filter_map_events(
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &settings::Dot,
+	dot_client: DotRetryRpcClient<
+		impl Future<Output = DotHttpRpcClient> + Send,
+		impl Future<Output = DotSubClient> + Send,
+	>,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -91,18 +94,6 @@ where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	// This needs to be made sync
-	let settings = settings.clone();
-	let dot_client = DotRetryRpcClient::new(
-		scope,
-		async move {
-			DotHttpRpcClient::new(settings.http_node_endpoint)
-				.await
-				.expect("TODO: Handle this")
-		},
-		async move { DotSubClient::new(&settings.ws_node_endpoint) },
-	);
-
 	DotUnfinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
