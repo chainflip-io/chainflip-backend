@@ -142,27 +142,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
+	/// Queue of limit orders, indexed by block number waiting to get minted or burned.
 	#[pallet::storage]
-	pub(super) type PendingOrderRequest<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BlockNumberFor<T>,
-		Vec<OrderDetails<T::AccountId, BlockNumberFor<T>>>,
-		OptionQuery,
-	>;
-
-	#[pallet::storage]
-	pub(super) type ChancelOrderRequest<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BlockNumberFor<T>,
-		Vec<OrderDetails<T::AccountId, BlockNumberFor<T>>>,
-		OptionQuery,
-	>;
-
-	/// Lifetime of an order.
-	#[pallet::storage]
-	pub(super) type OrderQueue<T: Config> = StorageMap<
+	pub(super) type LimitOrderQueue<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		BlockNumberFor<T>,
@@ -661,14 +643,14 @@ pub mod pallet {
 			order: Order,
 			price_as_tick: Tick,
 			amount: AssetAmount,
-			order_validity: Option<OrderValidity<BlockNumberFor<T>>>,
+			validity: Option<OrderValidity<BlockNumberFor<T>>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().minting_limit_order_enabled,
 				Error::<T>::MintingLimitOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			if let Some(order_validity) = order_validity {
+			if let Some(order_validity) = validity {
 				let current_block = <frame_system::Pallet<T>>::block_number();
 				// Ensure that the order is not added after the creation window has ended.
 				ensure!(
@@ -823,7 +805,7 @@ impl<T: Config> Pallet<T> {
 		block_number: BlockNumberFor<T>,
 		order: OrderDetails<T::AccountId, BlockNumberFor<T>>,
 	) {
-		OrderQueue::<T>::mutate(block_number, |orders| {
+		LimitOrderQueue::<T>::mutate(block_number, |orders| {
 			if let Some(orders) = orders {
 				orders.push(order);
 			} else {
@@ -833,7 +815,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn mint_or_burn_orders(current_block: BlockNumberFor<T>) -> Weight {
-		if let Some(orders) = OrderQueue::<T>::take(current_block) {
+		if let Some(orders) = LimitOrderQueue::<T>::take(current_block) {
 			for order in orders.into_iter() {
 				match order.lifetime {
 					OrderLifetime::Pending => {

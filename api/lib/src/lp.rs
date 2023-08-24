@@ -193,7 +193,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				order,
 				price_as_tick: price,
 				amount,
-				order_validity: validity,
+				validity,
 			})
 			.await
 			.until_finalized()

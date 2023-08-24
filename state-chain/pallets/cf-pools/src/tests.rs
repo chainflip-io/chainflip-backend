@@ -1,7 +1,7 @@
 use core::{ops::Range, panic};
 
 use crate::{
-	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, OrderQueue,
+	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, LimitOrderQueue,
 	OrderValidity, PoolQueryError, Pools, RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::{
@@ -316,13 +316,13 @@ fn can_mint_limit_order_with_validity() {
 			Some(OrderValidity { valid_at: Range { end: 5, start: 2 }, valid_until: 4 }),
 		));
 		// Not yet minted.
-		assert!(OrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_some());
+		assert!(LimitOrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_some());
 		// We mint the order.
 		LiquidityPools::on_initialize(BlockNumberFor::<Test>::from(2u64));
 		// Removed as minted from the order queue.
-		assert!(OrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_none());
+		assert!(LimitOrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_none());
 		// Order is getting moved to the block where we expect it to ge burned.
-		assert!(OrderQueue::<Test>::get(BlockNumberFor::<Test>::from(4u64)).is_some());
+		assert!(LimitOrderQueue::<Test>::get(BlockNumberFor::<Test>::from(4u64)).is_some());
 	});
 }
 
