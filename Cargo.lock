@@ -6716,6 +6716,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "lazy_static",
  "log",
  "nanorand",
  "pallet-cf-funding",
