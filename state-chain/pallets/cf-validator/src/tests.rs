@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use core::ops::Range;
+
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
@@ -9,6 +11,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
 
@@ -49,6 +52,7 @@ macro_rules! assert_default_rotation_outcome {
 #[track_caller]
 fn assert_rotation_aborted() {
 	assert_rotation_phase_matches!(RotationPhase::Idle);
+	assert_eq!(<Test as Config>::VaultRotator::status(), AsyncResult::Void);
 	assert_event_sequence!(
 		Test,
 		RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
@@ -690,14 +694,30 @@ fn test_expect_validator_register_fails() {
 	});
 }
 
+const CANDIDATES: Range<u64> = 4..14;
+const AUTHORITIES: Range<u64> = 0..10;
+
+lazy_static::lazy_static! {
+	/// How many candidates can fail without preventing us from re-trying keygen
+	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = CANDIDATES.count().checked_sub(MIN_AUTHORITY_SIZE as usize).unwrap();
+
+	/// How many current authorities can fail to leave enough healthy ones to handover the key
+	static ref MAX_ALLOWED_SHARING_OFFENDERS: usize = {
+		let total = AUTHORITIES.count();
+		let needed = success_threshold_from_share_count(total as u32);
+		total.checked_sub(needed as usize).unwrap()
+	};
+}
+
 mod keygen {
+
 	use super::*;
 
 	fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
 		CurrentAuthorities::<Test>::set((0..10).collect());
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-				winners: (4..14).collect(),
+				winners: CANDIDATES.collect(),
 				losers: Default::default(),
 				bond: Default::default(),
 			}),
@@ -711,13 +731,13 @@ mod keygen {
 	fn restarts_from_keygen_on_keygen_failure() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// just one node failed
-			failed_keygen_with_offenders(4..5);
+			failed_keygen_with_offenders(CANDIDATES.take(1));
 			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		});
 
 		new_test_ext().execute_with_unchecked_invariants(|| {
-			// many nodes failed, but enough to perform keygen
-			failed_keygen_with_offenders(4..13);
+			// many nodes failed, but enough left to try to restart keygen
+			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS));
 			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		});
 	}
@@ -725,9 +745,8 @@ mod keygen {
 	#[test]
 	fn abort_on_keygen_failure_if_too_many_banned() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
-			// There is less than `MIN_AUTHORITY_SIZE` unbanned
-			// nodes left, so should abort
-			failed_keygen_with_offenders(4..14);
+			// Not enough unbanned nodes left after this failure, so we should abort
+			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS + 1));
 			assert_rotation_aborted();
 		});
 	}
@@ -739,10 +758,10 @@ mod key_handover {
 	use super::*;
 
 	fn failed_handover_with_offenders(offenders: impl IntoIterator<Item = u64>) {
-		CurrentAuthorities::<Test>::set((0..10).collect());
+		CurrentAuthorities::<Test>::set(AUTHORITIES.collect());
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-				winners: (4..14).collect(),
+				winners: CANDIDATES.collect(),
 				losers: Default::default(),
 				bond: Default::default(),
 			}),
@@ -761,7 +780,7 @@ mod key_handover {
 	fn restarts_if_non_candidates_fail() {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// Still enough current authorities available, we should try again.
-			failed_handover_with_offenders(0..3);
+			failed_handover_with_offenders(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS));
 
 			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 		});
@@ -772,7 +791,7 @@ mod key_handover {
 		// TODO: should unban and keep trying instead
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// Too many current authorities banned, we abort.
-			failed_handover_with_offenders(0..4);
+			failed_handover_with_offenders(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS + 1));
 			assert_rotation_aborted();
 		});
 	}
@@ -783,7 +802,9 @@ mod key_handover {
 			// What matters is that at least one of the candidate fails,
 			// so any other offenders don't change the outcome: reverting
 			// to keygen.
-			failed_handover_with_offenders(0..5);
+			let offenders =
+				CANDIDATES.take(1).chain(AUTHORITIES.take(*MAX_ALLOWED_SHARING_OFFENDERS + 1));
+			failed_handover_with_offenders(offenders);
 			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		});
 	}
@@ -793,7 +814,7 @@ mod key_handover {
 		new_test_ext().execute_with_unchecked_invariants(|| {
 			// If even one new validator fails, but all old validators were well-behaved,
 			// we revert to keygen.
-			failed_handover_with_offenders(4..5);
+			failed_handover_with_offenders(CANDIDATES.take(1));
 			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		});
 	}
