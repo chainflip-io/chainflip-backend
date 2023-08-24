@@ -90,9 +90,13 @@ build-localnet() {
 
   echo "💎 Waiting for ETH node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🦑 Starting Arbitrum ..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
@@ -111,7 +115,7 @@ build-localnet() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "Engine is running!"
           break
       fi
       sleep 1
@@ -141,13 +145,17 @@ build-localnet-in-ci() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
-  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
+  check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
 
   echo "💎 Waiting for ETH node to start"
-  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🦑 Starting Arbitrum ..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
@@ -165,7 +173,7 @@ build-localnet-in-ci() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "Engine is running!"
           break
       fi
       sleep 1
@@ -226,38 +234,38 @@ yeet() {
 logs() {
   echo "🤖 Which service would you like to tail?"
   select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
-    if [[ $SERVICE == "all" ]]; then
+    if [ $SERVICE == "all" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
     fi
-    if [[ $SERVICE == "polkadot" ]]; then
+    if [ $SERVICE == "polkadot" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
     fi
-    if [[ $SERVICE == "geth" ]]; then
+    if [ $SERVICE == "geth" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow geth
     fi
-    if [[ $SERVICE == "bitcoin" ]]; then
+    if [ $SERVICE == "bitcoin" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow bitcoin
     fi
-    if [[ $SERVICE == "poster" ]]; then
+    if [ $SERVICE == "poster" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
     fi
-    if [[ $SERVICE == "sequencer" ]]; then
+    if [ $SERVICE == "sequencer" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
     fi
-    if [[ $SERVICE == "staker" ]]; then
+    if [ $SERVICE == "staker" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
-    if [[ $SERVICE == "node" ]]; then
+    if [ $SERVICE == "node" ]; then
       tail -f /tmp/chainflip/chainflip-node.log
     fi
-    if [[ $SERVICE == "engine" ]]; then
+    if [ $SERVICE == "engine" ]; then
       tail -f /tmp/chainflip/chainflip-engine.log
     fi
-    if [[ $SERVICE == "broker" ]]; then
+    if [ $SERVICE == "broker" ]; then
       tail -f /tmp/chainflip/chainflip-broker-api.log
     fi
-    if [[ $SERVICE == "lp" ]]; then
+    if [ $SERVICE == "lp" ]; then
       tail -f /tmp/chainflip/chainflip-lp-api.log
     fi
     break
@@ -286,18 +294,18 @@ fi
 
 get-workflow
 
-if [[ $WORKFLOW == "build-localnet" ]]; then
+if [ $WORKFLOW == "build-localnet" ]; then
   build-localnet
-elif [[ $WORKFLOW == "recreate" ]]; then
+elif [ $WORKFLOW == "recreate" ]; then
   destroy
   sleep 5
   build-localnet
-elif [[ $WORKFLOW == "destroy" ]]; then
+elif [ $WORKFLOW == "destroy" ]; then
   destroy
-elif [[ $WORKFLOW == "logs" ]]; then
+elif [ $WORKFLOW == "logs" ]; then
   logs
-elif [[ $WORKFLOW == "yeet" ]]; then
+elif [ $WORKFLOW == "yeet" ]; then
   yeet
-elif [[ $WORKFLOW == "bouncer" ]]; then
+elif [ $WORKFLOW == "bouncer" ]; then
   bouncer
 fi
