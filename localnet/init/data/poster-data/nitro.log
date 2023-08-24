@@ -1,0 +1,64 @@
+WARN [08-23|09:03:22.408] --node.archive has been deprecated. Please use --node.caching.archive instead. 
+INFO [08-23|09:03:22.411] Running Arbitrum nitro node              revision=v2.0.14-2baa834 vcs.time=2023-05-03T14:10:15-06:00
+INFO [08-23|09:03:23.651] connected to l1 chain                    l1url=ws://geth:8546 l1chainid=10997
+INFO [08-23|09:03:23.651] retaining ability to lookup full transaction history as archive mode is enabled 
+INFO [08-23|09:03:23.652] Dev node funded private key              priv=e887f7d17d07cc7b8004053fb8826f6657084e88904bb61590e498ca04704cf2
+INFO [08-23|09:03:23.652] Funded public address                    addr=0x683642c22feDE752415D4793832Ab75EFdF6223c
+INFO [08-23|09:03:23.652] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/l2chaindata cache=16.00MiB handles=16 readonly=true
+INFO [08-23|09:03:23.655] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/l2chaindata cache=2.00GiB  handles=512
+INFO [08-23|09:03:23.770] Opened ancient database                  database=/home/user/.arbitrum/local/nitro/l2chaindata/ancient/chain readonly=false
+INFO [08-23|09:03:23.770] Initializing                             ancients=0 genesisBlockNr=0
+INFO [08-23|09:03:23.771] addresss table import complete 
+INFO [08-23|09:03:23.771] retryables import complete 
+INFO [08-23|09:03:23.772] Persisted trie from memory database      nodes=48 size=5.57KiB time="113.424µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [08-23|09:03:23.772] Persisted trie from memory database      nodes=4  size=771.00B time="25.793µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [08-23|09:03:23.773] wrote genesis block                      number=0 hash=6899c9..c369ae
+INFO [08-23|09:03:23.774] Loaded most recent local header          number=0 hash=6899c9..c369ae td=1 age=54y5mo2d
+INFO [08-23|09:03:23.774] Loaded most recent local full block      number=0 hash=6899c9..c369ae td=1 age=54y5mo2d
+INFO [08-23|09:03:23.774] Loaded most recent local fast block      number=0 hash=6899c9..c369ae td=1 age=54y5mo2d
+WARN [08-23|09:03:23.774] Failed to load snapshot, regenerating    err="missing or corrupted snapshot"
+INFO [08-23|09:03:23.774] Rebuilding state snapshot 
+INFO [08-23|09:03:23.775] Resuming state snapshot generation       root=1916c8..72ec86 accounts=0 slots=0 storage=0.00B dangling=0 elapsed="413.523µs"
+INFO [08-23|09:03:23.775] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/arbitrumdata cache=16.00MiB handles=16
+INFO [08-23|09:03:23.776] Generated state snapshot                 accounts=16 slots=22 storage=2.57KiB dangling=0 elapsed=1.932ms
+INFO [08-23|09:03:23.791] Allocated cache and file handles         database=/home/user/.arbitrum/local/nitro/classic-msg cache=16.00MiB handles=16  readonly=true
+INFO [08-23|09:03:23.797] Starting peer-to-peer node               instance=nitro/vv2.0.14-2baa834/linux-amd64/go1.19.9
+WARN [08-23|09:03:23.797] P2P server will be useless, neither dialing nor listening 
+INFO [08-23|09:03:23.815] New local node record                    seq=1,692,781,403,814 id=981b41ff4fe39088 ip=127.0.0.1 udp=0 tcp=0
+INFO [08-23|09:03:23.816] Started P2P networking                   self=enode://6ef432ba37d5235ce4b7107122db6a49bf1f95f0339e3415e2cf0e0b6838ee4f0023df93262f97f93c0bb77a24c6733deba5f0280a373e6cbda477308b7d67c5@127.0.0.1:0
+INFO [08-23|09:03:23.817] Loaded JWT secret file                   path=/home/user/.arbitrum/local/nitro/jwtsecret crc32=0x6b75648e
+INFO [08-23|09:03:23.818] HTTP server started                      endpoint=[::]:8547 auth=false prefix= cors=* vhosts=*
+INFO [08-23|09:03:23.818] WebSocket enabled                        url=ws://[::]:8548
+INFO [08-23|09:03:23.818] WebSocket enabled                        url=ws://127.0.0.1:8549
+INFO [08-23|09:03:23.818] HTTP server started                      endpoint=127.0.0.1:8549 auth=true  prefix= cors=localhost vhosts=
+WARN [08-23|09:03:23.818] Error reading unclean shutdown markers   error="leveldb: not found"
+INFO [08-23|09:03:23.819] InboxTracker                             SequencerBatchCount=0
+WARN [08-23|09:03:23.828] empty sequencer message 
+WARN [08-23|09:03:23.828] reading virtual delayed message segment  delayedMessagesRead=0 afterDelayedMessages=1
+INFO [08-23|09:03:23.828] InboxTracker                             sequencerBatchCount=1 messageCount=1 l1Block=65 l1Timestamp=2023-08-23T08:50:06+0000
+INFO [08-23|09:03:23.922] chosen sequencer changing                recommended=ws://sequencer:8548
+INFO [08-23|09:03:23.935] created block                            l2Block=1 l2BlockHash=61d6b6..b76fb0
+INFO [08-23|09:03:24.936] created block                            l2Block=23 l2BlockHash=6af23d..2b74bd
+INFO [08-23|09:03:26.935] created block                            l2Block=24 l2BlockHash=b55c1b..dc5268
+INFO [08-23|09:03:27.935] created block                            l2Block=25 l2BlockHash=ac9de6..f9bcfb
+INFO [08-23|09:03:33.926] data poster transactions confirmed       previousNonce=0 newNonce=22 l1Block=132
+INFO [08-23|09:03:34.202] DataPoster sent transaction              nonce=22 hash=6a7d8a..d5c6a0 feeCap=1,500,000,102
+INFO [08-23|09:03:34.203] BatchPoster: batch sent                  sequence nr.=1 from=1 to=26 prev delayed=1 current delayed=3 total segments=31
+INFO [08-23|09:03:42.039] InboxTracker                             sequencerBatchCount=2 messageCount=26 l1Block=133 l1Timestamp=2023-08-23T09:03:26+0000
+INFO [08-23|09:03:44.215] data poster transactions confirmed       previousNonce=22 newNonce=23 l1Block=133
+INFO [08-23|09:07:42.028] created block                            l2Block=26 l2BlockHash=a282b7..d1740e
+INFO [08-23|09:08:48.063] created block                            l2Block=27 l2BlockHash=54f970..8f5b19
+INFO [08-23|09:08:48.153] shutting down because of sigint 
+INFO [08-23|09:08:48.153] avoiding lockout                         myUrl=<?INVALID-URL?>
+WARN [08-23|09:08:48.153] HTTP server graceful shutdown timed out 
+INFO [08-23|09:08:48.153] HTTP server stopped                      endpoint=[::]:8547
+WARN [08-23|09:08:48.153] HTTP server graceful shutdown timed out 
+INFO [08-23|09:08:48.153] HTTP server stopped                      endpoint=[::]:8548
+WARN [08-23|09:08:48.153] HTTP server graceful shutdown timed out 
+INFO [08-23|09:08:48.153] HTTP server stopped                      endpoint=127.0.0.1:8549
+INFO [08-23|09:08:48.153] delayed sequencer: context done          err="context canceled"
+INFO [08-23|09:08:48.154] releasing wants lockout key              myUrl=<?INVALID-URL?> attempt=0
+INFO [08-23|09:08:48.154] releasing chosen one                     myUrl=<?INVALID-URL?> attempt=0
+INFO [08-23|09:08:48.158] Writing clean trie cache to disk         path=/home/user/.arbitrum/local/nitro/triecache threads=2
+INFO [08-23|09:08:48.172] Persisted the clean trie cache           path=/home/user/.arbitrum/local/nitro/triecache elapsed=14.464ms
+INFO [08-23|09:08:48.172] Blockchain stopped 
