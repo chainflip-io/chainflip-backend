@@ -176,8 +176,8 @@ async function testGasLimitSwap(
     if ((await ccmReceived) !== undefined) {
       throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
     }
-  } else {
-    await ccmReceived;
+  } else if ((await ccmReceived)?.returnValues.ccmTestGasUsed < gasConsumption) {
+    throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
   }
 }
 
