@@ -28,7 +28,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{DispatchError, TransactionOutcome},
+	sp_runtime::{DispatchError, Saturating, TransactionOutcome},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -41,6 +41,7 @@ pub enum FetchOrTransfer<C: Chain> {
 		asset: C::ChainAsset,
 		deposit_address: C::ChainAccount,
 		deposit_fetch_id: Option<C::DepositFetchId>,
+		amount: C::ChainAmount,
 	},
 	Transfer {
 		egress_id: EgressId,
@@ -96,6 +97,7 @@ pub mod pallet {
 	use frame_support::{
 		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
+		DefaultNoBound,
 	};
 	use sp_std::vec::Vec;
 
@@ -149,22 +151,40 @@ pub mod pallet {
 		},
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	pub struct DepositTracker {
-		pub unfetched: AssetAmount,
-		pub fetched: AssetAmount,
+	#[derive(
+		CloneNoBound,
+		DefaultNoBound,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct DepositTracker<T: Config<I>, I: 'static> {
+		pub unfetched: TargetChainAmount<T, I>,
+		pub fetched: TargetChainAmount<T, I>,
 	}
 
-	impl DepositTracker {
-		pub fn total(&self) -> AssetAmount {
+	// TODO: make this chain-specific. Something like:
+	// Replace Amount with an type representing a single deposit (ie. a single UTXO).
+	// Register transfer would store the change UTXO.
+	impl<T: Config<I>, I: 'static> DepositTracker<T, I> {
+		pub fn total(&self) -> TargetChainAmount<T, I> {
 			self.unfetched + self.fetched
 		}
 
-		pub fn register_deposit(&mut self, amount: AssetAmount) {
+		pub fn register_deposit(&mut self, amount: TargetChainAmount<T, I>) {
 			self.unfetched.saturating_accrue(amount);
 		}
 
-		pub fn mark_as_fetched(&mut self, amount: AssetAmount) {
+		pub fn register_transfer(&mut self, amount: TargetChainAmount<T, I>) {
+			self.fetched.saturating_reduce(amount);
+		}
+
+		pub fn mark_as_fetched(&mut self, amount: TargetChainAmount<T, I>) {
 			let amount = amount.min(self.unfetched);
 			self.unfetched -= amount;
 			self.fetched.saturating_accrue(amount);
@@ -288,8 +308,8 @@ pub mod pallet {
 		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
 
 	#[pallet::storage]
-	pub type DepositBalance<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, DepositTracker, ValueQuery>;
+	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, DepositTracker<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -578,12 +598,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					deposit_address,
 					deposit_fetch_id,
+					amount,
 				} => {
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
 					});
 					addresses.push(deposit_address.clone());
+					DepositBalances::<T, I>::mutate(asset, |tracker| {
+						tracker.mark_as_fetched(amount);
+					});
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
@@ -596,6 +620,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						asset,
 						amount,
 						to: destination_address,
+					});
+					DepositBalances::<T, I>::mutate(asset, |tracker| {
+						tracker.register_transfer(amount);
 					});
 				},
 			}
@@ -692,6 +719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			asset,
 			deposit_address: deposit_address.clone(),
 			deposit_fetch_id: None,
+			amount,
 		});
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
@@ -753,7 +781,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			amount,
 			deposit_channel_details.deposit_channel,
 		);
-		DepositBalance::<T, I>::mutate(|deposits| deposits.register_deposit(amount));
+		DepositBalances::<T, I>::mutate(asset, |deposits| deposits.register_deposit(amount));
 
 		Self::deposit_event(Event::DepositReceived {
 			deposit_address,
