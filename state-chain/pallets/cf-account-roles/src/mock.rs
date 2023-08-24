@@ -18,8 +18,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-cf_test_utilities::impl_test_helpers!(Test);
-
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -51,3 +49,5 @@ impl Config for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 }
+
+cf_test_utilities::impl_test_helpers!(Test);

@@ -34,6 +34,7 @@ sp-staking = { git = "https://github.com/chainflip-io/substrate.git", tag = "cha
 
 
 [dev-dependencies]
+cf-test-utilities = { path = '../../test-utilities' }
 serde = { version = '1.0.126', features = ['derive'] }
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }

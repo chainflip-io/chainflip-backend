@@ -124,6 +124,6 @@ mod test_runtime_upgrade {
 				BTreeSet::<_>::from_iter(*BACKERS),
 				"Backers accounts are incorrect."
 			);
-		})
+		});
 	}
 }
