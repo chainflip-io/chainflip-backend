@@ -13,7 +13,7 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - "/tmp/chainflip/data/redis/data:/data"
+      - "/tmp/chainflip/data/redis-data/data:/data"
 
   geth:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc6-1-node
