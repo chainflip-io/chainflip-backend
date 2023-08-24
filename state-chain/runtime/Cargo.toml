@@ -138,6 +138,7 @@ std = [
   'cf-utilities/std',
   'codec/std',
   'ethabi/std',
+  'cf-session-benchmarking?/std',
   'frame-benchmarking?/std',
   'frame-executive/std',
   'frame-support/std',

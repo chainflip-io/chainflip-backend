@@ -9,10 +9,7 @@ use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::HandleLifetime};
 use frame_system as system;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 use system::pallet_prelude::BlockNumberFor;
 
@@ -158,27 +155,21 @@ pub const CHARLES: AccountId = 789u64;
 pub const EVE: AccountId = 987u64;
 pub const BROKE_PAUL: AccountId = 1987u64;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let account_balances = [
-		(ALICE, 500),
-		(BOB, 200),
-		(CHARLES, 100),
-		(EVE, 200),
-		(BROKE_PAUL, ProposalFee::get() - 1),
-	];
-
-	let mut ext: sp_io::TestExternalities =
-		RuntimeGenesisConfig::default().build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
+		let account_balances = [
+			(ALICE, 500),
+			(BOB, 200),
+			(CHARLES, 100),
+			(EVE, 200),
+			(BROKE_PAUL, ProposalFee::get() - 1),
+		];
 		for (account, _) in account_balances {
 			frame_system::Provider::<Test>::created(&account).unwrap();
 			assert!(frame_system::Pallet::<Test>::account_exists(&account));
 		}
 		MockFundingInfo::<Test>::set_balances(account_balances);
-	});
-
-	ext
+	},
 }
