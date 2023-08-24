@@ -173,7 +173,7 @@ pub mod pallet {
 	// Register transfer would store the change UTXO.
 	impl<T: Config<I>, I: 'static> DepositTracker<T, I> {
 		pub fn total(&self) -> TargetChainAmount<T, I> {
-			self.unfetched + self.fetched
+			self.unfetched.saturating_add(self.fetched)
 		}
 
 		pub fn register_deposit(&mut self, amount: TargetChainAmount<T, I>) {
