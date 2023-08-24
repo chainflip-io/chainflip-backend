@@ -106,7 +106,6 @@ export async function performSwapViaContract(
           destAsset,
           destAddress,
           messageMetadata,
-          // '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
           Wallet.fromMnemonic(
             process.env.ETH_USDC_WHALE_MNEMONIC ??
               'test test test test test test test test test test test junk',
