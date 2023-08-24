@@ -5,7 +5,13 @@ import { submitGovernanceExtrinsic } from './cf_governance';
 export async function createLpPool(ccy: Asset, initialPrice: number) {
   const chainflip = await getChainflipApi();
 
-  if ((await chainflip.query.liquidityPools.pools({assets: {one: 'usdc', zero: ccy.toLowerCase()}})).toJSON()! === null) {
+  if (
+    (
+      await chainflip.query.liquidityPools.pools({
+        assets: { one: 'usdc', zero: ccy.toLowerCase() },
+      })
+    ).toJSON()! === null
+  ) {
     const price = BigInt(
       Math.round(
         Math.sqrt(initialPrice / 10 ** (assetDecimals[ccy] - assetDecimals.USDC)) * 2 ** 96,
