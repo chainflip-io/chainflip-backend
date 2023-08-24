@@ -27,7 +27,6 @@ use utilities::MakeCachedStream;
 use crate::{
 	btc::BtcBroadcaster,
 	dot::{rpc::MockDotRpcApi, DotBroadcaster},
-	eth::broadcaster::EthBroadcaster,
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 };
@@ -66,7 +65,7 @@ async fn start_sc_observer<
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(eth_rpc),
+		eth_rpc,
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),

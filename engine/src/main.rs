@@ -5,7 +5,6 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{
-		broadcaster::EthBroadcaster,
 		retry_rpc::EthersRetryRpcClient,
 		rpc::{EthRpcClient, ReconnectSubscriptionClient},
 	},
@@ -254,7 +253,7 @@ async fn start(
 	witness::start::start(
 		scope,
 		&settings,
-		eth_client,
+		eth_client.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		db.clone(),
@@ -266,7 +265,7 @@ async fn start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		// These should take retriers not raw clients
-		EthBroadcaster::new(EthRpcClient::new(settings.eth, 1337u64).await?),
+		eth_client,
 		DotBroadcaster::new(DotHttpRpcClient::new(settings.dot.http_node_endpoint).await?),
 		BtcBroadcaster::new(BtcRpcClient::new(settings.btc)?),
 		eth_multisig_client,

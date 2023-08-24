@@ -26,7 +26,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, rpc::EthRpcApi},
+	eth::retry_rpc::EthersRetryRpcApi,
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
@@ -228,7 +228,7 @@ pub async fn start<
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
-	eth_broadcaster: EthBroadcaster<EthRpc>,
+	eth_broadcaster: EthRpc,
 	dot_broadcaster: DotBroadcaster<DotRpc>,
 	btc_broadcaster: BtcBroadcaster<BtcRpc>,
 	eth_multisig_client: EthMultisigClient,
@@ -238,7 +238,7 @@ pub async fn start<
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
-	EthRpc: EthRpcApi + Send + Sync + 'static,
+	EthRpc: EthersRetryRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
@@ -503,7 +503,7 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) if nominee == account_id => {
-                                        match eth_broadcaster.send(transaction_payload).await {
+                                        match eth_broadcaster.broadcast_transaction(transaction_payload).await {
                                             Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                             Err(error) => {
                                                 // Note: this error can indicate that we failed to estimate gas, or that there is

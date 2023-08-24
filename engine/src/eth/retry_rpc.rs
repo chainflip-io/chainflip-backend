@@ -2,7 +2,10 @@ pub mod address_checker;
 
 use ethers::{
 	prelude::*,
-	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
+	types::{
+		transaction::{eip2718::TypedTransaction, eip2930::AccessList},
+		TransactionReceipt,
+	},
 };
 
 use futures_core::Future;
@@ -21,6 +24,8 @@ use super::{
 };
 use crate::eth::rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
+
+use anyhow::Context;
 
 pub struct EthersRetryRpcClient<
 	EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
@@ -77,9 +82,10 @@ impl<
 
 #[async_trait::async_trait]
 pub trait EthersRetryRpcApi {
-	async fn estimate_gas(&self, req: TypedTransaction) -> U256;
-
-	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash;
+	async fn broadcast_transaction(
+		&self,
+		tx: cf_chains::eth::Transaction,
+	) -> anyhow::Result<TxHash>;
 
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
@@ -105,30 +111,52 @@ impl<
 		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
 	> EthersRetryRpcApi for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
 {
-	async fn estimate_gas(&self, req: TypedTransaction) -> U256 {
-		let log = RequestLog::new("estimate_gas".to_string(), Some(format!("{req:?}")));
+	/// Estimates gas and then sends the transaction to the network.
+	async fn broadcast_transaction(
+		&self,
+		tx: cf_chains::eth::Transaction,
+	) -> anyhow::Result<TxHash> {
+		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
 		self.rpc_retry_client
-			.request(
-				Box::pin(move |client| {
-					let req = req.clone();
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.estimate_gas(&req).await })
-				}),
-				log,
-			)
-			.await
-	}
-
-	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash {
-		let log = RequestLog::new("send_transaction".to_string(), Some(format!("{tx:?}")));
-		self.rpc_retry_client
-			.request(
+			.request_with_limit(
 				Box::pin(move |client| {
 					let tx = tx.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.send_transaction(tx).await })
+					Box::pin(async move {
+						let mut transaction_request = Eip1559TransactionRequest {
+							to: Some(NameOrAddress::Address(tx.contract)),
+							data: Some(tx.data.into()),
+							chain_id: Some(tx.chain_id.into()),
+							value: Some(tx.value),
+							max_fee_per_gas: tx.max_fee_per_gas,
+							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+							gas: tx.gas_limit,
+							access_list: AccessList::default(),
+							from: Some(client.address()),
+							nonce: None,
+						};
+
+						let estimated_gas = client
+							.estimate_gas(&TypedTransaction::Eip1559(transaction_request.clone()))
+							.await
+							.context("Failed to estimate gas")?;
+
+						// increase the estimate by 50%
+						transaction_request.gas = Some(
+							estimated_gas
+								.saturating_mul(U256::from(3u64))
+								.checked_div(U256::from(2u64))
+								.unwrap(),
+						);
+
+						client
+							.send_transaction(transaction_request.into())
+							.await
+							.context("Failed to send ETH transaction")
+					})
 				}),
 				log,
+				5,
 			)
 			.await
 	}
