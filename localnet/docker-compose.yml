@@ -103,7 +103,7 @@ services:
           "curl",
           "-H 'Content-Type: application/json;'",
           "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9945"
+          "http://localhost:9944"
         ]
       interval: 10s
       timeout: 5s
