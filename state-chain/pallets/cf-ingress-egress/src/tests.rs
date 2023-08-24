@@ -297,8 +297,7 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None);
 		request_address_and_deposit(5u64, eth::Asset::Flip, 1_000u64);
 
-		// This should create a failure since the environment of eth does not have any address
-		// stored for USDC
+		MockAllBatch::<MockEthEnvironment>::set_success(false);
 		request_address_and_deposit(4u64, eth::Asset::Usdc, 1_000u64);
 
 		let scheduled_requests = ScheduledEgressFetchOrTransfer::<Test>::get();
@@ -316,8 +315,22 @@ fn addresses_are_getting_reused() {
 	new_test_ext()
 		// Request 2 deposit addresses and deposit to one of them.
 		.request_address_and_deposit(&[
-			(ALICE, eth::Asset::Eth, 100u32.into(), 1_000u64),
-			(ALICE, eth::Asset::Eth, 0u32.into(), 1_000u64),
+			(
+				DepositRequest::Liquidity {
+					lp_account: ALICE,
+					asset: eth::Asset::Eth,
+					expiry_block: 1000_u64,
+				},
+				100u32.into(),
+			),
+			(
+				DepositRequest::Liquidity {
+					lp_account: ALICE,
+					asset: eth::Asset::Eth,
+					expiry_block: 1000_u64,
+				},
+				0u32.into(),
+			),
 		])
 		.inspect_storage(|deposit_details| {
 			assert_eq!(ChannelIdCounter::<Test, _>::get(), deposit_details.len() as u64);
@@ -340,18 +353,22 @@ fn addresses_are_getting_reused() {
 		})
 		// Close the channels.
 		.then_execute_at_next_block(|channels| {
-			for (_id, address, _asset) in &channels {
+			for (_request, _id, address) in &channels {
 				IngressEgress::close_channel(*address);
 			}
-			channels[0]
+			channels[0].clone()
 		})
 		// Check that the used address is now deployed and in the pool of available addresses.
-		.inspect_storage(|(channel_id, address, _asset)| {
+		.inspect_storage(|(_request, channel_id, address)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
 			assert_eq!(DepositChannelPool::<Test, _>::get(channel_id).unwrap().address, *address);
 		})
-		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth, 1_000u64)])
+		.request_deposit_addresses(&[(DepositRequest::Liquidity {
+			lp_account: ALICE,
+			asset: eth::Asset::Eth,
+			expiry_block: 1000_u64,
+		})])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.inspect_storage(|_| {
 			expect_size_of_address_pool(0);
@@ -597,12 +614,16 @@ fn multi_use_deposit_same_block() {
 	const FLIP: eth::Asset = eth::Asset::Flip;
 	const DEPOSIT_AMOUNT: <Ethereum as Chain>::ChainAmount = 1_000;
 	new_test_ext()
-		.request_deposit_addresses(&[(ALICE, FLIP, 1_000u64)])
+		.request_deposit_addresses(&[DepositRequest::Liquidity {
+			lp_account: ALICE,
+			asset: FLIP,
+			expiry_block: 1_000u64,
+		}])
 		.map_context(|mut ctx| {
 			assert!(ctx.len() == 1);
 			ctx.pop().unwrap()
 		})
-		.inspect_storage(|(_, deposit_address, _)| {
+		.inspect_storage(|(_, _, deposit_address)| {
 			assert!(
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
@@ -610,19 +631,20 @@ fn multi_use_deposit_same_block() {
 					.state == cf_chains::eth::DeploymentStatus::Undeployed
 			);
 		})
-		.then_apply_extrinsics(|&(_, deposit_address, asset)| {
+		.then_apply_extrinsics(|(request, _, deposit_address)| {
+			let asset = request.source_asset();
 			[(
 				OriginTrait::root(),
 				PalletCall::<Test, _>::process_deposits {
 					deposit_witnesses: vec![
 						DepositWitness {
-							deposit_address,
+							deposit_address: *deposit_address,
 							asset,
 							amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
 							deposit_details: Default::default(),
 						},
 						DepositWitness {
-							deposit_address,
+							deposit_address: *deposit_address,
 							asset,
 							amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
 							deposit_details: Default::default(),
@@ -633,7 +655,7 @@ fn multi_use_deposit_same_block() {
 				Ok(()),
 			)]
 		})
-		.inspect_storage(|(channel_id, deposit_address, _)| {
+		.inspect_storage(|(_, channel_id, deposit_address)| {
 			assert_eq!(
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
@@ -681,7 +703,7 @@ fn multi_use_deposit_same_block() {
 			MockEgressBroadcaster::dispatch_all_callbacks();
 			ctx
 		})
-		.inspect_storage(|(_, deposit_address, _)| {
+		.inspect_storage(|(_, _, deposit_address)| {
 			assert_eq!(
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
@@ -840,21 +862,25 @@ fn channel_reuse_with_different_assets() {
 	const ASSET_2: eth::Asset = eth::Asset::Flip;
 	new_test_ext()
 		// First, request a deposit address and use it, then close it so it gets recycled.
-		.request_address_and_deposit(&[(ALICE, ASSET_1, 100_000, 1_000u64)])
+		.request_address_and_deposit(&[(
+			DepositRequest::Liquidity { lp_account: ALICE, asset: ASSET_1, expiry_block: 1_000u64 },
+			100_000,
+		)])
 		.map_context(|mut result| result.pop().unwrap())
 		.then_execute_at_next_block(|ctx| {
 			// Dispatch callbacks to finalise the ingress.
 			MockEgressBroadcaster::dispatch_all_callbacks();
 			ctx
 		})
-		.inspect_storage(|(_, address, asset)| {
-			assert_eq!(*asset, ASSET_1);
+		.inspect_storage(|(request, _, address)| {
+			let asset = request.source_asset();
+			assert_eq!(asset, ASSET_1);
 			assert!(
 				DepositChannelLookup::<Test, _>::get(address).unwrap().deposit_channel.asset ==
-					*asset
+					asset
 			);
 		})
-		.then_execute_at_next_block(|(channel_id, channel_address, _)| {
+		.then_execute_at_next_block(|(_, channel_id, channel_address)| {
 			// Close the channel.
 			IngressEgress::close_channel(channel_address);
 			channel_id
@@ -867,14 +893,19 @@ fn channel_reuse_with_different_assets() {
 			);
 		})
 		// Request a new address with a different asset.
-		.request_deposit_addresses(&[(ALICE, ASSET_2, 1_000u64)])
+		.request_deposit_addresses(&[DepositRequest::Liquidity {
+			lp_account: ALICE,
+			asset: ASSET_2,
+			expiry_block: 1_000u64,
+		}])
 		.map_context(|mut result| result.pop().unwrap())
 		// Ensure that the deposit channel's asset is updated.
-		.inspect_storage(|(_, address, asset)| {
-			assert_eq!(*asset, ASSET_2);
+		.inspect_storage(|(request, _, address)| {
+			let asset = request.source_asset();
+			assert_eq!(asset, ASSET_2);
 			assert!(
 				DepositChannelLookup::<Test, _>::get(address).unwrap().deposit_channel.asset ==
-					*asset
+					asset
 			);
 		});
 }
