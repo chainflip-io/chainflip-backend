@@ -785,11 +785,11 @@ mod key_handover {
 				.copied()
 				.collect::<Vec<_>>();
 
-			let fails_initially = non_candidates[0];
-			let fails_later = non_candidates[1];
+			let fails_keygen = non_candidates[0];
+			let fails_handover = non_candidates[1];
 
 			// Failed keygen should restart (should have enough non-banned nodes)
-			failed_keygen_with_offenders([fails_initially]);
+			failed_keygen_with_offenders([fails_keygen]);
 			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 
 			// Successful keygen should transition to handover
@@ -797,8 +797,8 @@ mod key_handover {
 			Pallet::<Test>::on_initialize(3);
 			assert_rotation_phase_matches!(RotationPhase::KeyHandoversInProgress(..));
 
-			// Handover is failed again with a different non-candidate and will be retried
-			MockVaultRotatorA::failed([fails_later]);
+			// Handover fails with a different non-candidate and will be retried
+			MockVaultRotatorA::failed([fails_handover]);
 			Pallet::<Test>::on_initialize(4);
 
 			// Ensure that banned nodes banned during either keygen or handover aren't selected
@@ -808,7 +808,7 @@ mod key_handover {
 				assert_eq!(
 					state
 						.authority_candidates()
-						.intersection(&BTreeSet::from([fails_initially, fails_later]))
+						.intersection(&BTreeSet::from([fails_keygen, fails_handover]))
 						.count(),
 					0,
 					"banned nodes should have been selected"
