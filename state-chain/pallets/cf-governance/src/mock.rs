@@ -1,13 +1,17 @@
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_governance};
-use cf_traits::{impl_mock_chainflip, mocks::time_source, ExecutionCondition, RuntimeUpgrade};
+use cf_primitives::SemVer;
+use cf_traits::{
+	impl_mock_chainflip, mocks::time_source, AuthoritiesCfeVersions, CompatibleCfeVersions,
+	ExecutionCondition, RuntimeUpgrade,
+};
 use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Percent,
 };
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -94,6 +98,28 @@ impl RuntimeUpgradeMock {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
+parameter_types! {
+	pub static NextCfeVersion: Option<SemVer> = Some(SemVer{major: 1, minor: 2, patch: 3});
+	pub static PercentCfeAtTargetVersion: Percent = Percent::from_percent(100);
+}
+
+pub struct MockAuthoritiesCfeVersions;
+impl AuthoritiesCfeVersions for MockAuthoritiesCfeVersions {
+	fn precent_authorities_at_version(_version: SemVer) -> Percent {
+		PercentCfeAtTargetVersion::get()
+	}
+}
+
+pub struct MockCompatibleCfeVersions;
+impl CompatibleCfeVersions for MockCompatibleCfeVersions {
+	fn current_compatibility_version() -> SemVer {
+		SemVer { major: 1, minor: 0, patch: 0 }
+	}
+	fn next_compatibility_version() -> Option<SemVer> {
+		NextCfeVersion::get()
+	}
+}
+
 impl pallet_cf_governance::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
@@ -102,6 +128,8 @@ impl pallet_cf_governance::Config for Test {
 	type WeightInfo = ();
 	type UpgradeCondition = UpgradeConditionMock;
 	type RuntimeUpgrade = RuntimeUpgradeMock;
+	type AuthoritiesCfeVersions = MockAuthoritiesCfeVersions;
+	type CompatibleCfeVersions = MockCompatibleCfeVersions;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

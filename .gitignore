@@ -21,6 +21,7 @@ localnet/init/polkadot/docker-compose.yml
 **/*.db
 !localnet/init/keyshare/*/*.db
 !localnet/init/keyshare/**/*.log
+!localnet/init/data/**/*.log
 
 # Local CFE config
 engine/config/Local.toml

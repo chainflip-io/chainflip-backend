@@ -268,15 +268,6 @@ pub trait EthEnvironmentProvider {
 	fn chain_id() -> EthereumChainId;
 	fn next_nonce() -> u64;
 
-	fn replay_protection(contract: EthereumContract) -> EthereumReplayProtection {
-		EthereumReplayProtection {
-			nonce: Self::next_nonce(),
-			chain_id: Self::chain_id(),
-			key_manager_address: Self::key_manager_address(),
-			contract_address: Self::contract_address(contract),
-		}
-	}
-
 	fn key_manager_address() -> eth::Address {
 		Self::contract_address(EthereumContract::KeyManager)
 	}
@@ -292,19 +283,20 @@ pub trait EthEnvironmentProvider {
 
 impl ChainAbi for Ethereum {
 	type Transaction = eth::Transaction;
+	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EthereumReplayProtection;
 }
 
 impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::KeyManager),
+			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
 		)))
 	}
@@ -312,14 +304,14 @@ where
 
 impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Ethereum as ChainCrypto>::GovKey>,
 		new_gov_key: <Ethereum as ChainCrypto>::GovKey,
 	) -> Result<Self, ()> {
 		Ok(Self::SetGovKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::KeyManager),
+			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_gov_key_with_agg_key::SetGovKeyWithAggKey::new(new_gov_key),
 		)))
 	}
@@ -327,11 +319,11 @@ where
 
 impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::KeyManager),
+			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_comm_key_with_agg_key::SetCommKeyWithAggKey::new(new_comm_key),
 		))
 	}
@@ -339,12 +331,20 @@ where
 
 impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
+	fn new_unsigned(
+		node_id: &[u8; 32],
+		amount: u128,
+		address: &[u8; 20],
+		expiry: u64,
+		executor: Option<Address>,
+	) -> Self {
 		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::StateChainGateway),
-			register_redemption::RegisterRedemption::new(node_id, amount, address, expiry),
+			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
+			register_redemption::RegisterRedemption::new(
+				node_id, amount, address, expiry, executor,
+			),
 		))
 	}
 
@@ -359,11 +359,11 @@ where
 
 impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self::UpdateFlipSupply(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::StateChainGateway),
+			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
 			update_flip_supply::UpdateFlipSupply::new(new_total_supply, block_number),
 		))
 	}
@@ -371,7 +371,7 @@ where
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -401,7 +401,7 @@ where
 			}
 		}
 		Ok(Self::AllBatch(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::Vault),
+			E::replay_protection(E::contract_address(EthereumContract::Vault)),
 			all_batch::AllBatch::new(
 				fetch_deploy_params,
 				fetch_only_params,
@@ -424,7 +424,7 @@ where
 
 impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -440,7 +440,7 @@ where
 		};
 
 		Ok(Self::ExecutexSwapAndCall(EthereumTransactionBuilder::new_unsigned(
-			E::replay_protection(EthereumContract::Vault),
+			E::replay_protection(E::contract_address(EthereumContract::Vault)),
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				egress_id,
 				transfer_param,

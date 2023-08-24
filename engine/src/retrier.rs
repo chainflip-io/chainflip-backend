@@ -21,6 +21,17 @@ use rand::Rng;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{task_scope::Scope, UnendingStream};
 
+#[derive(Debug, Clone)]
+enum RetryLimit {
+	// For requests that should never fail. Failure in these cases is directly or indirectly the
+	// fault of the operator. e.g. a faulty Ethereum node.
+	NoLimit,
+
+	// Should be set to some small-ish number for requests we expect can fail for a fault
+	// other than the operator e.g. broadcasts.
+	Limit(Attempt),
+}
+
 type TypedFutureGenerator<T, Client> = Pin<
 	Box<dyn Fn(Client) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>> + Send>,
 >;
@@ -34,19 +45,21 @@ type Attempt = u32;
 
 type RequestLog = String;
 
-type SubmissionFutureOutput = (RequestId, RequestLog, Result<BoxAny, (anyhow::Error, Attempt)>);
+type SubmissionFutureOutput =
+	(RequestId, RequestLog, RetryLimit, Result<BoxAny, (anyhow::Error, Attempt)>);
 type SubmissionFuture = Pin<Box<dyn Future<Output = SubmissionFutureOutput> + Send + 'static>>;
 type SubmissionFutures = FuturesUnordered<SubmissionFuture>;
 
 type RetryDelays = FuturesUnordered<
-	Pin<Box<dyn Future<Output = (RequestId, RequestLog, Attempt)> + Send + 'static>>,
+	Pin<Box<dyn Future<Output = (RequestId, RequestLog, Attempt, RetryLimit)> + Send + 'static>>,
 >;
 
 type BoxAny = Box<dyn Any + Send>;
 
 type RequestPackage<Client> = (oneshot::Sender<BoxAny>, FutureAnyGenerator<Client>);
 
-type RequestSent<Client> = (oneshot::Sender<BoxAny>, RequestLog, FutureAnyGenerator<Client>);
+type RequestSent<Client> =
+	(oneshot::Sender<BoxAny>, RequestLog, FutureAnyGenerator<Client>, RetryLimit);
 
 /// Tracks all the retries
 #[derive(Clone)]
@@ -130,6 +143,7 @@ fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Durati
 fn submission_future<Client: Clone>(
 	client: Client,
 	request_log: RequestLog,
+	retry_limit: RetryLimit,
 	submission_fn: &FutureAnyGenerator<Client>,
 	request_id: RequestId,
 	initial_request_timeout: Duration,
@@ -141,6 +155,7 @@ fn submission_future<Client: Clone>(
 		(
 			request_id,
 			request_log.clone(),
+			retry_limit,
 			match tokio::time::timeout(
 				max_sleep_duration(initial_request_timeout, attempt),
 				submission_fut,
@@ -179,13 +194,13 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 
 		scope.spawn(async move {
 			utilities::loop_select! {
-				if let Some((response_sender, request_log, closure)) = request_receiver.recv() => {
+				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
 					tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}`");
-					submission_holder.push(submission_future(primary_client.clone(), request_log, &closure, request_id, initial_request_timeout, 0));
+					submission_holder.push(submission_future(primary_client.clone(), request_log, retry_limit, &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				let (request_id, request_log, result) = submission_holder.next_or_pending() => {
+				let (request_id, request_log, retry_limit, result) = submission_holder.next_or_pending() => {
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
@@ -203,23 +218,31 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 							retry_delays.push(Box::pin(
 								async move {
 									tokio::time::sleep(sleep_duration).await;
-									(request_id, request_log, attempt)
+									(request_id, request_log, attempt, retry_limit)
 								}
 							));
 						},
 					}
 				},
-				let (request_id, request_log, attempt) = retry_delays.next_or_pending() => {
+				let (request_id, request_log, attempt, retry_limit) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
 
 					let (response_sender, closure) = request_holder.get(&request_id).expect("We only remove these on success, and if it's in `retry_delays` then it must still be in `request_holder`");
-					// If the receiver has been dropped, we don't need to retry.
-					if !response_sender.is_closed() {
-						tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}`, attempt `{next_attempt}`");
-						submission_holder.push(submission_future(primary_client.clone(), request_log, closure, request_id, initial_request_timeout, next_attempt));
-					} else {
-						tracing::trace!("Retrier {name}: Dropped request `{request_log}` with id `{request_id}` not retrying.");
+
+					if response_sender.is_closed() {
+						tracing::trace!("Retrier {name}: Dropped request `{request_log}` with id `{request_id}`. Not retrying.");
 						request_holder.remove(&request_id);
+					} else {
+						match retry_limit {
+							RetryLimit::Limit(max_attempts) if next_attempt >= max_attempts => {
+								tracing::trace!("Retrier {name}: Has reached maximum attempts of `{max_attempts}` for `{request_log}` with id `{request_id}`. Not retrying.");
+								request_holder.remove(&request_id);
+							}
+							_ => {
+								tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}`, attempt `{next_attempt}`");
+								submission_holder.push(submission_future(primary_client.clone(), request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt));
+							}
+						}
 					}
 				},
 			};
@@ -234,6 +257,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 		&self,
 		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
+		retry_limit: RetryLimit,
 	) -> oneshot::Receiver<BoxAny> {
 		let future_any_fn: FutureAnyGenerator<Client> = Box::pin(move |client| {
 			let future = specific_closure(client);
@@ -244,19 +268,39 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 			})
 		});
 		let (tx, rx) = oneshot::channel::<BoxAny>();
-		let _result = self.request_sender.send((tx, request_log, future_any_fn)).await;
+		let _result = self.request_sender.send((tx, request_log, future_any_fn, retry_limit)).await;
 		rx
 	}
 
 	/// Requests something to be retried by the retry client.
+	/// Sets retry limit of no limit, since we expect most requests not to fail.
 	pub async fn request<T: Send + 'static>(
 		&self,
 		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
 	) -> T {
-		let rx = self.send_request(specific_closure, request_log).await;
+		let rx = self.send_request(specific_closure, request_log, RetryLimit::NoLimit).await;
 		let result: BoxAny = rx.await.unwrap();
 		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
+	}
+
+	/// Requests something to be retried by the retry client, with an explicit retry limit.
+	/// Returns an error if the retry limit is reached.
+	pub async fn request_with_limit<T: Send + 'static>(
+		&self,
+		specific_closure: TypedFutureGenerator<T, Client>,
+		request_log: RequestLog,
+		retry_limit: Attempt,
+	) -> Result<T> {
+		let rx = self
+			.send_request(specific_closure, request_log.clone(), RetryLimit::Limit(retry_limit))
+			.await;
+		let result: BoxAny = rx.await.map_err(|_| {
+			anyhow::anyhow!(
+				"Maximum attempt of `{retry_limit}` reached for request `{request_log}`."
+			)
+		})?;
+		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
 	}
 }
 
@@ -309,6 +353,7 @@ mod tests {
 					.send_request(
 						specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 						"request 1".to_string(),
+						RetryLimit::NoLimit,
 					)
 					.await;
 
@@ -317,6 +362,7 @@ mod tests {
 					.send_request(
 						specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 						"request 2".to_string(),
+						RetryLimit::NoLimit,
 					)
 					.await;
 
@@ -325,6 +371,7 @@ mod tests {
 					.send_request(
 						specific_fut_closure(REQUEST_3, INITIAL_TIMEOUT),
 						"request 3".to_string(),
+						RetryLimit::NoLimit,
 					)
 					.await;
 
@@ -352,12 +399,20 @@ mod tests {
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_1, TIMEOUT), "request 1".to_string())
+					.send_request(
+						specific_fut_closure(REQUEST_1, TIMEOUT),
+						"request 1".to_string(),
+						RetryLimit::NoLimit,
+					)
 					.await;
 
 				const REQUEST_2: u64 = 64;
 				let rx2 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_2, TIMEOUT), "request 2".to_string())
+					.send_request(
+						specific_fut_closure(REQUEST_2, TIMEOUT),
+						"request 2".to_string(),
+						RetryLimit::NoLimit,
+					)
 					.await;
 
 				check_result(rx1, REQUEST_1).await;
@@ -410,7 +465,49 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn once_at_max_concurrent_submissions_cannot_submit_more() {
+	async fn using_the_request_with_limit_interface_works() {
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+
+				const REQUEST_1: u32 = 32;
+				assert_eq!(
+					REQUEST_1,
+					retrier_client
+						.request_with_limit(
+							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
+							"request 1".to_string(),
+							5
+						)
+						.await
+						.unwrap()
+				);
+
+				const REQUEST_2: u64 = 64;
+				assert_eq!(
+					REQUEST_2,
+					retrier_client
+						.request_with_limit(
+							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
+							"request 2".to_string(),
+							5
+						)
+						.await
+						.unwrap()
+				);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn once_at_max_concurrent_submissions_cannot_submit_more_no_limit_requests() {
 		task_scope(|scope| {
 			async move {
 				const TIMEOUT: Duration = Duration::from_millis(200);
@@ -422,12 +519,20 @@ mod tests {
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_1, TIMEOUT), "request 1".to_string())
+					.send_request(
+						specific_fut_closure(REQUEST_1, TIMEOUT),
+						"request 1".to_string(),
+						RetryLimit::NoLimit,
+					)
 					.await;
 
 				const REQUEST_2: u64 = 64;
 				let rx2 = retrier_client
-					.send_request(specific_fut_closure(REQUEST_2, TIMEOUT), "request 2".to_string())
+					.send_request(
+						specific_fut_closure(REQUEST_2, TIMEOUT),
+						"request 2".to_string(),
+						RetryLimit::NoLimit,
+					)
 					.await;
 
 				// The submission buffer should be full of the first two requests. We set the
@@ -478,6 +583,31 @@ mod tests {
 				Err(anyhow::anyhow!("Sorry, this just doesn't work."))
 			})
 		})
+	}
+
+	#[tokio::test]
+	async fn using_the_request_with_limit_fails_after_some_attempts() {
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+
+				retrier_client
+					.request_with_limit(
+						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
+						"request".to_string(),
+						5,
+					)
+					.await
+					.unwrap_err();
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
 	}
 
 	#[tokio::test]

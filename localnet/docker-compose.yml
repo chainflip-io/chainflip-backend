@@ -1,14 +1,22 @@
 version: "3.9"
 services:
+  init:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:perseverance-0.9-rc6-1-node
+    container_name: init
+    platform: linux/amd64
+    volumes:
+      - "/tmp/chainflip/data:/localnet-initial-state"
+    command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
+
   redis:
     image: redis:6.2.6
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - "/tmp/chainflip/data/redis/data:/data"
+      - "/tmp/chainflip/data/redis-data/data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc4-1-node
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc6-1-node
     container_name: geth
     platform: linux/amd64
     ports:
@@ -72,12 +80,12 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v1.0.0
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
     volumes:
-      - ./init/polkadot/chainspec.json:/polkadot/chainspec.json
+      - ./init/polkadot/chainspec.dev.v1.0.0.json:/polkadot/chainspec.json
     environment:
       - RUST_BACKTRACE=full
     command:
@@ -91,10 +99,11 @@ services:
       - --rpc-methods=unsafe
       - --state-pruning=archive
       - --validator
-      - --ws-external
+      - --rpc-max-connections=256
+      - --max-runtime-instances=256
+      - --wasmtime-instantiation-strategy=recreate-instance-copy-on-write
     ports:
-      - 9934:9933 # rpc port
-      - 9945:9944 # ws port
+      - 9945:9944
     healthcheck:
       test:
         [
@@ -102,7 +111,7 @@ services:
           "curl",
           "-H 'Content-Type: application/json;'",
           "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'",
-          "http://localhost:9945"
+          "http://localhost:9944"
         ]
       interval: 10s
       timeout: 5s

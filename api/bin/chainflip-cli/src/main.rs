@@ -90,8 +90,8 @@ async fn run_cli() -> Result<()> {
 						api.lp_api().register_emergency_withdrawal_address(ewa_address).await?;
 					println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
 				},
-				Redeem { amount, eth_address } => {
-					request_redemption(api.operator_api(), amount, &eth_address).await?;
+				Redeem { amount, eth_address, executor } => {
+					request_redemption(api.operator_api(), amount, &eth_address, executor).await?;
 				},
 				RegisterAccountRole { role } => {
 					println!(
@@ -132,6 +132,7 @@ async fn request_redemption(
 	api: Arc<impl OperatorApi + Sync>,
 	amount: Option<f64>,
 	eth_address: &str,
+	executor: Option<cf_chains::eth::Address>,
 ) -> Result<()> {
 	// Sanitise data
 	let eth_address = EthereumAddress::from_slice(
@@ -167,7 +168,7 @@ async fn request_redemption(
 		return Ok(())
 	}
 
-	let tx_hash = api.request_redemption(amount, eth_address).await?;
+	let tx_hash = api.request_redemption(amount, eth_address, executor).await?;
 
 	println!(
 		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."

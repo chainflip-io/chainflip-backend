@@ -40,4 +40,4 @@ std = [
   'sp-std/std',
   'strum/std',
 ]
-runtime-benchmarks = []
+runtime-benchmarks = ['frame-support/runtime-benchmarks']
