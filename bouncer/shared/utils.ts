@@ -95,11 +95,10 @@ export function defaultAssetAmounts(asset: Asset): string {
 
 export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
   const controller = new AbortController();
-  const error = new Error(`Timed out after ${millis} ms.`);
   const result = await Promise.race([
     promise,
     sleep(millis, { signal: AbortController }).then(() => {
-      throw error;
+      throw new Error(`Timed out after ${millis} ms.`);
     }),
   ]);
   controller.abort();

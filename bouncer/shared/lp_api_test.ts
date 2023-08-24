@@ -51,23 +51,24 @@ async function testGetPools() {
 }
 
 async function testAssetBalances() {
-  let balances = await lpApiRpc(`lp_assetBalances`, []);
   const fineAmountNeeded = parseInt(
     amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH),
   );
 
   // Wait for the balance to update
   let retryCount = 0;
-  while (balances.Eth < fineAmountNeeded) {
+  let ethBalance = 0;
+  do {
+    const balances = await lpApiRpc(`lp_assetBalances`, []);
+    ethBalance = balances.Eth;
     retryCount++;
-    if (retryCount > 10) {
+    if (retryCount > 120) {
       throw new Error(
         `Not enough Eth for test (${fineAmountNeeded}). balances: ${JSON.stringify(balances)}`,
       );
     }
     await sleep(1000);
-    balances = await lpApiRpc(`lp_assetBalances`, []);
-  }
+  } while (ethBalance < fineAmountNeeded);
 }
 
 async function testRegisterEmergencyWithdrawalAddress() {
@@ -118,7 +119,7 @@ async function testWithdrawAsset() {
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 }
 
-async function testRegisterAccount() {
+async function testRegisterWithExistingLpAccount() {
   try {
     await lpApiRpc(`lp_registerAccount`, []);
     throw new Error(`Unexpected lp_registerAccount result`);
@@ -246,7 +247,7 @@ export async function testLpApi() {
     testRegisterEmergencyWithdrawalAddress(),
     testLiquidityDeposit(),
     testWithdrawAsset(),
-    testRegisterAccount(),
+    testRegisterWithExistingLpAccount(),
     testRangeOrder(),
     testLimitOrder(),
   ]);
