@@ -934,3 +934,82 @@ fn can_store_failed_vault_transfers() {
 		assert_eq!(FailedVaultTransfers::<Test>::get(), vec![vault_transfer]);
 	});
 }
+
+#[test]
+fn basic_balance_tracking() {
+	const ETH_DEPOSIT_AMOUNT: u128 = 1_000;
+	const FLIP_DEPOSIT_AMOUNT: u128 = 2_000;
+	const USDC_DEPOSIT_AMOUNT: u128 = 3_000;
+	new_test_ext()
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, 0),
+			(eth::Asset::Flip, 0),
+			(eth::Asset::Usdc, 0),
+		])
+		.request_address_and_deposit(&[(
+			DepositRequest::Liquidity {
+				lp_account: ALICE,
+				asset: eth::Asset::Eth,
+				expiry_block: 10,
+			},
+			ETH_DEPOSIT_AMOUNT,
+		)])
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
+			(eth::Asset::Flip, 0),
+			(eth::Asset::Usdc, 0),
+		])
+		.request_address_and_deposit(&[(
+			DepositRequest::Liquidity {
+				lp_account: ALICE,
+				asset: eth::Asset::Flip,
+				expiry_block: 10,
+			},
+			FLIP_DEPOSIT_AMOUNT,
+		)])
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
+			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
+			(eth::Asset::Usdc, 0),
+		])
+		.request_address_and_deposit(&[(
+			DepositRequest::Liquidity {
+				lp_account: ALICE,
+				asset: eth::Asset::Usdc,
+				expiry_block: 10,
+			},
+			USDC_DEPOSIT_AMOUNT,
+		)])
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
+			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
+			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
+		])
+		.request_address_and_deposit(&[(
+			DepositRequest::Liquidity {
+				lp_account: ALICE,
+				asset: eth::Asset::Eth,
+				expiry_block: 10,
+			},
+			ETH_DEPOSIT_AMOUNT,
+		)])
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 2),
+			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
+			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
+		])
+		.request_address_and_deposit(&[(
+			DepositRequest::SimpleSwap {
+				source_asset: eth::Asset::Eth,
+				destination_asset: eth::Asset::Flip,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
+				expiry_block: 1_000u64,
+			},
+			ETH_DEPOSIT_AMOUNT,
+		)])
+		.check_deposit_balances(&[
+			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
+			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT),
+			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
+		]);
+}
