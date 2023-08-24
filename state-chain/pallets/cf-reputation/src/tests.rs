@@ -65,7 +65,7 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		// we've moved forward a block interval, so now we should have the extra rep
 		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 2,);
-	})
+	});
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn update_last_heartbeat_each_submission() {
 		advance_by_block();
 		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(ReputationPallet::last_heartbeat(ALICE).unwrap(), 2);
-	})
+	});
 }
 
 #[test]

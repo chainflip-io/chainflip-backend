@@ -25,10 +25,7 @@ pub use frame_support::{
 use frame_system::{self, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -152,43 +149,42 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Weights = ();
 }
 
-#[derive(Default)]
-pub struct ExtBuilder {
-	ext: sp_io::TestExternalities,
-}
-
 pub const AGG_KEY: [u8; 4] = *b"AKEY";
 
-impl ExtBuilder {
-	#[allow(clippy::new_without_default)]
-	pub fn new() -> Self {
-		let mut ext = new_test_ext();
-		ext.execute_with(|| MockKeyProvider::<MockEthereum>::add_key(MockAggKey(AGG_KEY)));
-		Self { ext }
-	}
-
-	pub fn with_nominees(mut self, nominees: impl IntoIterator<Item = u64>) -> Self {
-		self.ext.execute_with(|| {
+/// Define helper functions used for tests.
+pub trait TestHelper {
+	fn with_nominees(self, nominees: impl IntoIterator<Item = u64>) -> Self;
+	fn with_authorities(self, validators: impl IntoIterator<Item = u64>) -> Self;
+	fn with_request(self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self;
+	fn with_request_and_callback(
+		self,
+		message: &<MockEthereum as ChainCrypto>::Payload,
+		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereum>,
+	) -> Self;
+	fn execute_with_consistency_checks<R>(self, f: impl FnOnce() -> R) -> TestRunner<R>;
+	fn do_consistency_check();
+}
+impl TestHelper for TestRunner<()> {
+	fn with_nominees(self, nominees: impl IntoIterator<Item = u64>) -> Self {
+		self.execute_with(|| {
 			let nominees = BTreeSet::from_iter(nominees);
 			MockNominator::set_nominees(if nominees.is_empty() { None } else { Some(nominees) });
-		});
-		self
+		})
 	}
 
-	pub fn with_authorities(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
-		self.ext.execute_with(|| {
+	fn with_authorities(self, validators: impl IntoIterator<Item = u64>) -> Self {
+		self.execute_with(|| {
 			let validators = BTreeSet::from_iter(validators);
 			for id in &validators {
 				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
 					.unwrap();
 			}
 			MockEpochInfo::set_authorities(validators);
-		});
-		self
+		})
 	}
 
-	pub fn with_request(mut self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
-		self.ext.execute_with(|| {
+	fn with_request(self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
+		self.execute_with(|| {
 			let initial_ceremony_id = MockCeremonyIdProvider::get();
 			// Initiate request
 			let request_id =
@@ -212,16 +208,15 @@ impl ExtBuilder {
 			}
 
 			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
-		});
-		self
+		})
 	}
 
-	pub fn with_request_and_callback(
-		mut self,
+	fn with_request_and_callback(
+		self,
 		message: &<MockEthereum as ChainCrypto>::Payload,
 		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereum>,
 	) -> Self {
-		self.ext.execute_with(|| {
+		self.execute_with(|| {
 			// Initiate request
 			let request_id =
 				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
@@ -233,23 +228,11 @@ impl ExtBuilder {
 			);
 			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
 			assert!(EthereumThresholdSigner::request_callback(request_id).is_some());
-		});
-		self
+		})
 	}
 
-	pub fn build(self) -> TestExternalitiesWithCheck {
-		TestExternalitiesWithCheck { ext: self.ext }
-	}
-}
-
-/// Wraps the TestExternalities so that we can run consistency checks before and after each test.
-pub struct TestExternalitiesWithCheck {
-	ext: sp_io::TestExternalities,
-}
-
-impl TestExternalitiesWithCheck {
-	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
-		self.ext.execute_with(|| {
+	fn execute_with_consistency_checks<R>(self, f: impl FnOnce() -> R) -> TestRunner<R> {
+		self.execute_with(|| {
 			Self::do_consistency_check();
 			let r = f();
 			Self::do_consistency_check();
@@ -261,7 +244,7 @@ impl TestExternalitiesWithCheck {
 	///
 	/// Every ceremony in OpenRequests should always have a corresponding entry in LiveCeremonies.
 	/// Every ceremony should also have at least one retry scheduled.
-	pub fn do_consistency_check() {
+	fn do_consistency_check() {
 		let retries =
 			BTreeSet::<_>::from_iter(CeremonyRetryQueues::<Test, _>::iter_values().flatten());
 		PendingCeremonies::<Test, _>::iter().for_each(|(ceremony_id, _)| {
@@ -270,14 +253,8 @@ impl TestExternalitiesWithCheck {
 	}
 }
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities =
-		RuntimeGenesisConfig::default().build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-	});
-
-	ext
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| MockKeyProvider::<MockEthereum>::add_key(MockAggKey(AGG_KEY))
 }
