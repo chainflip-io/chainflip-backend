@@ -13,21 +13,19 @@ use utilities::task_scope;
 use warp::Filter;
 
 lazy_static::lazy_static! {
-	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = IntCounterVec::new(Opts::new("rpc_requests", "Count the rpc calls made by the retrier, it doesn't keep into account the number of retrials"), &["client","rpcMethod"]).expect("Metric succesfully created");
-	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = IntCounterVec::new(Opts::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times"), &["client", "rpcMethod"]).expect("Metric succesfully created");
+	pub static ref REGISTRY: Registry = Registry::new();
 
-	static ref REGISTRY: Registry = {
-		let reg = Registry::new();
-		register_metrics(reg)
-	};
+	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpcMethod"]);
+	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpcMethod"]);
+
+	pub static ref P2P_MSG_RECEIVED: IntCounterVec = create_and_register_counter_vec("p2p_msg_received", "number of p2p messages received", &["from", "to"]);
+	pub static ref P2P_MSG_SENT: IntCounterVec = create_and_register_counter_vec("p2p_msg_sent", "number of p2p messages sent", &["from", "to"]);
 }
 
-fn register_metrics(reg: Registry) -> Registry {
-	reg.register(Box::new(RPC_RETRIER_REQUESTS.clone()))
-		.expect("Metric succesfully register");
-	reg.register(Box::new(RPC_RETRIER_TOTAL_REQUESTS.clone()))
-		.expect("Metric succesfully register");
-	reg
+fn create_and_register_counter_vec(name: &str, help: &str, labels: &[&str]) -> IntCounterVec {
+	let m = IntCounterVec::new(Opts::new(name, help), labels).expect("Metric succesfully created");
+	REGISTRY.register(Box::new(m.clone())).expect("Metric succesfully register");
+	m
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
@@ -57,12 +55,12 @@ fn metrics_handler() -> String {
 
 	let mut buffer = Vec::new();
 	if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
-		eprintln!("could not encode custom metrics: {}", e);
+		tracing::error!("could not encode custom metrics: {}", e);
 	};
 	match String::from_utf8(buffer) {
 		Ok(v) => v,
 		Err(e) => {
-			eprintln!("custom metrics could not be from_utf8'd: {}", e);
+			tracing::error!("custom metrics could not be from_utf8'd: {}", e);
 			String::default()
 		},
 	}

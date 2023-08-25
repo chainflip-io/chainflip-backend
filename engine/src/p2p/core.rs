@@ -27,6 +27,7 @@ use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONN
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
 
+use crate::metrics::{P2P_MSG_RECEIVED, P2P_MSG_SENT};
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
 /// this somewhat short to mitigate some attacks where clients
@@ -319,6 +320,12 @@ impl P2PContext {
 	}
 
 	fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
+		P2P_MSG_SENT
+			.with_label_values(&[
+				self.our_account_id.to_string().as_str(),
+				account_id.to_string().as_str(),
+			])
+			.inc();
 		match self.active_connections.get(&account_id) {
 			Some(socket) => {
 				socket.send(payload);
@@ -339,6 +346,12 @@ impl P2PContext {
 	fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
 		if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
 			trace!("Received a message from {acc_id}");
+			P2P_MSG_RECEIVED
+				.with_label_values(&[
+					acc_id.to_string().as_str(),
+					self.our_account_id.to_string().as_str(),
+				])
+				.inc();
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
@@ -445,10 +458,10 @@ impl P2PContext {
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
 			debug!(
-				peer_info = peer.to_string(),
-				"Received info for new peer with account id {}, adding to allowed peers and id mapping",
-				&peer.account_id
-			);
+                peer_info = peer.to_string(),
+                "Received info for new peer with account id {}, adding to allowed peers and id mapping",
+                &peer.account_id
+            );
 		}
 
 		self.authenticator.add_peer(&peer);
