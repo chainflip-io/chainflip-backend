@@ -106,6 +106,10 @@ pub enum CliCommand {
 		amount: Option<f64>,
 		#[clap(help = "The Ethereum address you wish to redeem your FLIP to")]
 		eth_address: String,
+		#[clap(
+			help = "Optional executor. If specified, only this address will be able to execute the redemption."
+		)]
+		executor: Option<cf_chains::eth::Address>,
 	},
 	#[clap(
 		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"

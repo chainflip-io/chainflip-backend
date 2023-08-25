@@ -5,7 +5,7 @@ use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Permill,
+	Permill,
 };
 
 type AccountId = u64;
@@ -67,21 +67,12 @@ impl pallet_cf_pools::Config for Test {
 	type WeightInfo = ();
 }
 
-#[allow(unused)]
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config =
-		RuntimeGenesisConfig { system: Default::default(), liquidity_pools: Default::default() };
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
+		frame_support::assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
 			&ALICE,
-		)
-		.unwrap();
-	});
-
-	ext
+		));
+	}
 }

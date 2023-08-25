@@ -38,8 +38,7 @@ First connect a local node to the network with some rpc optimisations:
     --rpc-max-request-size 100000 \
     --rpc-max-response-size 100000 \
     --rpc-external \
-    --rpc-cors all \
-    --unsafe-ws-external
+    --rpc-cors all
 ```
 
 Once the node has synced, in another terminal window, run the checks:

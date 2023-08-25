@@ -359,6 +359,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 			address: EthereumAddress,
+			executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
@@ -441,6 +442,7 @@ pub mod pallet {
 					net_amount.unique_saturated_into(),
 					address.as_fixed_bytes(),
 					contract_expiry,
+					executor,
 				);
 
 				PendingRedemptions::<T>::insert(&account_id, ());

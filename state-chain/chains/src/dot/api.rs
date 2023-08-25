@@ -64,7 +64,7 @@ where
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Result<Self, AllBatchError> {
 		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(()),
 			fetch_params,
 			transfer_params,
 			E::try_vault_account().ok_or(AllBatchError::Other)?,
@@ -83,7 +83,7 @@ where
 		let vault = E::try_vault_account().ok_or(())?;
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(()),
 			maybe_old_key,
 			new_key,
 			vault,
@@ -102,7 +102,7 @@ where
 		let vault = E::try_vault_account().ok_or(SetAggKeyWithAggKeyError::Failed)?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
-			E::replay_protection(),
+			E::replay_protection(()),
 			maybe_old_key,
 			new_key,
 			vault,
@@ -231,33 +231,5 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 
 	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
 		self.builder.signature().unwrap()
-	}
-}
-
-#[cfg(test)]
-mod mocks {
-	use super::*;
-	use crate::dot::{PolkadotPair, PolkadotReplayProtection, NONCE_1, RAW_SEED_1, RAW_SEED_2};
-
-	pub struct MockEnv;
-
-	impl PolkadotEnvironment for MockEnv {
-		fn try_vault_account() -> Option<PolkadotAccountId> {
-			Some(PolkadotPair::from_seed(&RAW_SEED_1).public_key())
-		}
-
-		fn try_proxy_account() -> Option<PolkadotAccountId> {
-			Some(PolkadotPair::from_seed(&RAW_SEED_2).public_key())
-		}
-
-		fn runtime_version() -> crate::dot::RuntimeVersion {
-			dot::TEST_RUNTIME_VERSION
-		}
-	}
-
-	impl ReplayProtectionProvider<Polkadot> for MockEnv {
-		fn replay_protection() -> PolkadotReplayProtection {
-			PolkadotReplayProtection { nonce: NONCE_1, genesis_hash: Default::default() }
-		}
 	}
 }

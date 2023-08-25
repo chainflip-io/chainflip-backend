@@ -148,6 +148,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		&self,
 		amount: primitives::RedemptionAmount,
 		address: EthereumAddress,
+		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
 		// Are we in a current auction phase
 		if self.is_auction_phase().await? {
@@ -155,7 +156,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		}
 
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address })
+			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
 			.await
 			.until_finalized()
 			.await?;

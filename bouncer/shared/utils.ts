@@ -323,7 +323,7 @@ export async function observeEVMEvent(
   contractAbi: any,
   address: string,
   eventName: string,
-  eventParametersExpected: string[],
+  eventParametersExpected: (string | null)[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
@@ -379,6 +379,7 @@ export async function observeCcmReceived(
   destAsset: Asset,
   address: string,
   messageMetadata: CcmDepositMetadata,
+  sourceAddress?: string,
   stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent | undefined> {
   return observeEVMEvent(
@@ -387,7 +388,7 @@ export async function observeCcmReceived(
     'ReceivedxSwapAndCall',
     [
       chainContractIds[assetChains[sourceAsset]].toString(),
-      '*',
+      sourceAddress ?? null,
       messageMetadata.message,
       getEthContractAddress(destAsset.toString()),
       '*',

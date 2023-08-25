@@ -18,10 +18,10 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, Bid, BidderProvider,
-	Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
-	HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter,
-	SetSafeMode, VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
+	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
+	ReputationResetter, SetSafeMode, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -362,23 +362,11 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							Self::start_key_handover(rotation_state, block_number);
+							Self::try_start_key_handover(rotation_state, block_number);
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
-							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
-
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
-								Self::current_consensus_success_threshold() {
-								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-								);
-								Self::abort_rotation();
-							} else {
-								Self::start_vault_rotation(rotation_state);
-							}
+							Self::try_start_keygen(rotation_state);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -404,25 +392,23 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// NOTE: we distinguish between candidates (nodes currently selected to become next authorities)
+							// and non-candidates (current authorities *not* currently selected to become next authorities).
+							// The outcome of this failure depends on whether any of the candidates caused it:
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) < Self::current_consensus_success_threshold() {
+							if num_failed_candidates > 0 {
 								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+									"{num_failed_candidates} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
 								);
-								Self::abort_rotation();
-							} else if num_failed_candidates > 0 {
-								log::warn!(
-									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
-									num_failed_candidates,
-								);
-								Self::start_vault_rotation(rotation_state);
+								Self::try_start_keygen(rotation_state);
 							} else {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
-								Self::start_key_handover(rotation_state, block_number)
+								Self::try_start_key_handover(rotation_state, block_number)
 							};
 						},
 						AsyncResult::Pending => {
@@ -654,8 +640,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a node to send their current cfe version.  We validate that the version is a
-		/// not the same version stored and if not we store and emit `CFEVersionUpdated`.
+		/// Allow a validator to report their current cfe version. Update storage and emmit event if
+		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
 		///
@@ -981,6 +967,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
+		T::VaultRotator::abort_vault_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1040,9 +1027,7 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
-					auction_outcome,
-				));
+				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
 
 				weight
 			},
@@ -1058,7 +1043,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
+	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
 		if (candidates.len() as u32) < min_size {
@@ -1076,7 +1061,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_key_handover(
+	fn try_start_key_handover(
 		rotation_state: RuntimeRotationState<T>,
 		block_number: BlockNumberFor<T>,
 	) {
@@ -1085,7 +1070,6 @@ impl<T: Config> Pallet<T> {
 				target: "cf-validator",
 				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
-			T::VaultRotator::abort_vault_rotation();
 			Self::abort_rotation();
 			return
 		}
@@ -1348,5 +1332,22 @@ impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
 				backups.insert(validator_id.clone(), amount);
 			}
 		});
+	}
+}
+
+impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
+	/// Returns the percentage of current authorities with their CFEs at the given version.
+	fn precent_authorities_at_version(version: SemVer) -> Percent {
+		let current_authorities = CurrentAuthorities::<T>::get();
+		let authorities_count = current_authorities.len() as u32;
+
+		let num_authorities_at_target_version = current_authorities
+			.into_iter()
+			.filter(|validator_id| {
+				NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+			})
+			.count() as u32;
+
+		Percent::from_rational(num_authorities_at_target_version, authorities_count)
 	}
 }

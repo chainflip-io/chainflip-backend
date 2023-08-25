@@ -61,6 +61,7 @@ async function testGasLimitSwap(
     destAsset,
     destAddress,
     messageMetadata,
+    undefined,
     () => stopObservingCcmReceived,
   );
 

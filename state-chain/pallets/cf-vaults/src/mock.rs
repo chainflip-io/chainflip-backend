@@ -18,10 +18,7 @@ use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 pub type ValidatorId = u64;
 
@@ -238,20 +235,17 @@ pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
-fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key,
+			vault_key: Some(GENESIS_AGG_PUB_KEY),
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
+	},
+	|| {
 		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
 		for id in &authorities {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
@@ -263,15 +257,9 @@ fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
 			authorities.len() as AuthorityCount,
 		);
 		MockEpochInfo::set_authorities(authorities);
-	});
-
-	ext
+	},
 }
 
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	test_ext_inner(Some(GENESIS_AGG_PUB_KEY))
-}
-
-pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {
-	test_ext_inner(None)
+pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {
+	TestRunner::<()>::new(RuntimeGenesisConfig::default())
 }
