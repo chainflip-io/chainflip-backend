@@ -107,6 +107,7 @@ pub const OR_CANCEL: &str = "An error has occurred in another task";
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.
 /// Thereby making accessing data outside of this scope from inside this scope via a reference safe.
 /// This is why the closures/futures provided to Scope::spawn don't need static lifetimes.
+#[track_caller]
 pub async fn task_scope<
 	'a,
 	T,
