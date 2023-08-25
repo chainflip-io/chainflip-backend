@@ -65,3 +65,62 @@ fn metrics_handler() -> String {
 		},
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use crate::metrics;
+
+	use futures_util::FutureExt;
+
+	use crate::settings::Settings;
+
+	use super::*;
+
+	#[tokio::test]
+	async fn prometheus_test() {
+		let prometheus_settings = Settings::new_test().unwrap().prometheus.unwrap();
+		create_and_register_metric();
+
+		task_scope::task_scope(|scope| {
+			async {
+				start(scope, &prometheus_settings).await.unwrap();
+
+				let request_test = |path: &'static str,
+				                    expected_status: reqwest::StatusCode,
+				                    expected_text: &'static str| {
+					let prometheus_settings = prometheus_settings.clone();
+
+					async move {
+						let resp = reqwest::get(&format!(
+							"http://{}:{}/{}",
+							&prometheus_settings.hostname, &prometheus_settings.port, path
+						))
+						.await
+						.unwrap();
+
+						assert_eq!(expected_status, resp.status());
+						assert_eq!(resp.text().await.unwrap(), expected_text);
+					}
+				};
+
+				// starts with `has_completed_initialising` set to false
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"A\"} 1\ntest{label=\"B\"} 10\n").await;
+				request_test("invalid", reqwest::StatusCode::NOT_FOUND, "").await;
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	fn create_and_register_metric() {
+		let metric = metrics::create_and_register_counter_vec("test", "test help", &["label"]);
+		metric.with_label_values(&["A"]).inc();
+		metric.with_label_values(&["B"]).inc_by(10);
+
+		assert_eq!(metric.with_label_values(&["A"]).get(), 1);
+		assert_eq!(metric.with_label_values(&["B"]).get(), 10);
+	}
+}
