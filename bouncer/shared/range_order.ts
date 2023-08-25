@@ -27,10 +27,10 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   const orderCreatedEvent = observeEvent(
     'liquidityPools:RangeOrderUpdated',
     chainflip,
-    (event) =>
+    (event) => 
       event.data.lp === lp.address &&
       event.data.pairAsset.toUpperCase() === ccy &&
-      event.data.id === 0,
+      event.data.id === String(0)
   );
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
