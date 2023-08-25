@@ -101,7 +101,16 @@ export async function performSwapViaContract(
     console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
     const ccmEventEmitted = messageMetadata
-      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
+      ? observeCcmReceived(
+          sourceAsset,
+          destAsset,
+          destAddress,
+          messageMetadata,
+          Wallet.fromMnemonic(
+            process.env.ETH_USDC_WHALE_MNEMONIC ??
+              'test test test test test test test test test test test junk',
+          ).address.toLowerCase(),
+        )
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
