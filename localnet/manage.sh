@@ -55,19 +55,19 @@ build-localnet() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
   echo
 
-  if [ -z "${BINARIES_LOCATION}" ]; then
+  if [[ -z "${BINARIES_LOCATION}" ]]; then
       echo "💻 Please provide the location to the binaries you would like to use."
       read -p "(default: ./target/debug/) " BINARIES_LOCATION
       echo
       export BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug"}
   fi
 
-  if [ ! -d $BINARIES_LOCATION ]; then
+  if [[ ! -d $BINARIES_LOCATION ]]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
     exit 1
   fi
   for binary in $REQUIRED_BINARIES; do
-    if [ ! -f $BINARIES_LOCATION/$binary ]; then
+    if [[ ! -f $BINARIES_LOCATION/$binary ]]; then
       echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
       exit 1
     fi
@@ -90,9 +90,13 @@ build-localnet() {
 
   echo "💎 Waiting for ETH node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🦑 Starting Arbitrum ..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
@@ -111,7 +115,7 @@ build-localnet() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "Engine is running!"
           break
       fi
       sleep 1
@@ -123,12 +127,12 @@ build-localnet() {
 build-localnet-in-ci() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
   echo
-  if [ ! -d $BINARIES_LOCATION ]; then
+  if [[ ! -d $BINARIES_LOCATION ]]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
     exit 1
   fi
   for binary in $REQUIRED_BINARIES; do
-    if [ ! -f $BINARIES_LOCATION/$binary ]; then
+    if [[ ! -f $BINARIES_LOCATION/$binary ]]; then
       echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
       exit 1
     fi
@@ -141,13 +145,17 @@ build-localnet-in-ci() {
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
-  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
+  check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
 
   echo "💎 Waiting for ETH node to start"
-  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
+  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🦑 Starting Arbitrum ..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
@@ -165,7 +173,7 @@ build-localnet-in-ci() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "Engine is running!"
           break
       fi
       sleep 1
@@ -184,38 +192,38 @@ yeet() {
     destroy
     read -p "🚨💣 WARNING 💣🚨 Do you want to delete all Docker images and containers on your machine? [yesPleaseYeetAll/N] " YEET
     YEET=${YEET:-"N"}
-    if [ $YEET == "yesPleaseYeetAll" ]; then
+    if [[ $YEET == "yesPleaseYeetAll" ]]; then
       echo "🚨💣🚨💣 Yeeting all docker containers and images 🚨💣🚨💣"
       # Stop all running Docker containers
-      if [ "$(docker ps -q -a)" ]; then
+      if [[ "$(docker ps -q -a)" ]]; then
           docker stop $(docker ps -a -q)
       else
           echo "No Docker containers found, skipping..."
       fi
 
       # Remove all Docker containers
-      if [ "$(docker ps -q -a)" ]; then
+      if [[ "$(docker ps -q -a)" ]]; then
           docker rm $(docker ps -a -q)
       else
           echo "No Docker containers found, skipping..."
       fi
 
       # Remove all Docker images
-      if [ "$(docker images -q -a)" ]; then
+      if [[ "$(docker images -q -a)" ]]; then
           docker rmi $(docker images -a -q)
       else
           echo "No Docker images found, skipping..."
       fi
 
       # Remove all Docker networks
-      if [ "$(docker network ls -q)" ]; then
+      if [[ "$(docker network ls -q)" ]]; then
           docker network prune -f
       else
           echo "No Docker networks found, skipping..."
       fi
 
       # Remove all Docker volumes
-      if [ "$(docker volume ls -q)" ]; then
+      if [[ "$(docker volume ls -q)" ]]; then
           docker volume prune -f
       else
           echo "No Docker volumes found, skipping..."
@@ -278,7 +286,7 @@ if [[ $CI == true ]]; then
   exit 0
 fi
 
-if [ ! -f ./localnet/.setup_complete ]; then
+if [[ ! -f ./localnet/.setup_complete ]]; then
   setup
 else
   echo "✅ Set up already complete"
