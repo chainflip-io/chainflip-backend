@@ -102,7 +102,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 				Box::pin(move |client| {
 					let tx = tx.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.send_transaction(tx.clone()).await })
+					Box::pin(async move { client.send_transaction(tx).await })
 				}),
 				log,
 			)
