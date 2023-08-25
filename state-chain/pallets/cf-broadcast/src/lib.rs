@@ -8,7 +8,10 @@ mod tests;
 
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_traits::impl_pallet_safe_mode;
 pub use weights::WeightInfo;
+
+impl_pallet_safe_mode!(PalletSafeMode; retry_enabled, timeout_enabled);
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
@@ -179,6 +182,9 @@ pub mod pallet {
 		/// Something that provides the current key for signing.
 		type KeyProvider: KeyProvider<Self::TargetChain>;
 
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -310,15 +316,19 @@ pub mod pallet {
 			// eventually. For outlying, unknown unknowns, these can be something governance can
 			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
-			for attempt_id in expiries.iter() {
-				if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
-					Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
-						broadcast_attempt_id: *attempt_id,
-					});
-					Self::start_next_broadcast_attempt(attempt);
+			let save_mode_block_margin: BlockNumberFor<T> = BlockNumberFor::<T>::from(10u32);
+			if T::SafeMode::get().timeout_enabled {
+				for attempt_id in expiries.iter() {
+					if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
+						Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
+							broadcast_attempt_id: *attempt_id,
+						});
+						Self::start_next_broadcast_attempt(attempt);
+					}
 				}
+			} else {
+				Timeouts::<T, I>::insert(block_number + save_mode_block_margin, expiries.clone());
 			}
-
 			T::WeightInfo::on_initialize(expiries.len() as u32)
 		}
 
@@ -635,52 +645,54 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
+		if T::SafeMode::get().retry_enabled {
+			let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 
-		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			let EpochKey { key, .. } = T::KeyProvider::active_epoch_key()
-				.expect("Epoch key must exist if we made a broadcast.");
+			if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+				let EpochKey { key, .. } = T::KeyProvider::active_epoch_key()
+					.expect("Epoch key must exist if we made a broadcast.");
 
-			if T::TransactionBuilder::is_valid_for_rebroadcast(
-				&api_call,
-				&broadcast_attempt.threshold_signature_payload,
-				&key,
-				&signature,
-			) {
-				let next_broadcast_attempt_id =
-					broadcast_attempt.broadcast_attempt_id.next_attempt();
+				if T::TransactionBuilder::is_valid_for_rebroadcast(
+					&api_call,
+					&broadcast_attempt.threshold_signature_payload,
+					&key,
+					&signature,
+				) {
+					let next_broadcast_attempt_id =
+						broadcast_attempt.broadcast_attempt_id.next_attempt();
 
-				BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
-					*attempt_count += 1;
-					*attempt_count
-				});
-				debug_assert_eq!(
-					BroadcastAttemptCount::<T, I>::get(broadcast_id),
-					next_broadcast_attempt_id.attempt_count,
-				);
+					BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
+						*attempt_count += 1;
+						*attempt_count
+					});
+					debug_assert_eq!(
+						BroadcastAttemptCount::<T, I>::get(broadcast_id),
+						next_broadcast_attempt_id.attempt_count,
+					);
 
-				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-					broadcast_attempt_id: next_broadcast_attempt_id,
-					..broadcast_attempt
-				});
-			}
-			// If the signature verification fails, we want
-			// to retry from the threshold signing stage.
-			else {
-				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(
-					api_call,
-					RequestCallbacks::<T, I>::get(broadcast_id),
-				);
-				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
-					broadcast_id
-				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
-			}
-		} else {
-			log::error!("No threshold signature data is available.");
-		};
+					Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+						broadcast_attempt_id: next_broadcast_attempt_id,
+						..broadcast_attempt
+					});
+				}
+				// If the signature verification fails, we want
+				// to retry from the threshold signing stage.
+				else {
+					Self::clean_up_broadcast_storage(broadcast_id);
+					Self::threshold_sign_and_broadcast(
+						api_call,
+						RequestCallbacks::<T, I>::get(broadcast_id),
+					);
+					log::info!(
+						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+						broadcast_id
+					);
+					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+				}
+			} else {
+				log::error!("No threshold signature data is available.");
+			};
+		}
 	}
 
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
