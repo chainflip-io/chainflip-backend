@@ -194,9 +194,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					let reward_percentiles = reward_percentiles.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client
-							.fee_history(block_count, newest_block, &reward_percentiles.clone())
-							.await
+						client.fee_history(block_count, newest_block, &reward_percentiles).await
 					})
 				}),
 				log,
