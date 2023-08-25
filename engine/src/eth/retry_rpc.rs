@@ -9,7 +9,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	eth::rpc::EthRpcApi,
-	retrier::RetrierClient,
+	retrier::{RequestLog, RetrierClient},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
@@ -82,7 +82,7 @@ pub trait EthersRetryRpcApi: Send + Sync {
 #[async_trait::async_trait]
 impl EthersRetryRpcApi for EthersRetryRpcClient {
 	async fn estimate_gas(&self, req: TypedTransaction) -> U256 {
-		let log = format!("estimate_gas({req:?})");
+		let log = RequestLog::new("estimate_gas".to_string(), Some(format!("{req:?}")));
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
@@ -96,13 +96,13 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 	}
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash {
-		let log = format!("send_transaction({tx:?})");
+		let log = RequestLog::new("send_transaction".to_string(), Some(format!("{tx:?}")));
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
 					let tx = tx.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.send_transaction(tx).await })
+					Box::pin(async move { client.send_transaction(tx.clone()).await })
 				}),
 				log,
 			)
@@ -122,7 +122,10 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 							.await
 					})
 				}),
-				format!("get_logs({block_hash:?}, {contract_address:?})"),
+				RequestLog::new(
+					"get_logs".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
 			)
 			.await
 	}
@@ -134,7 +137,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.chain_id().await })
 				}),
-				"chain_id".to_string(),
+				RequestLog::new("chain_id".to_string(), None),
 			)
 			.await
 	}
@@ -146,7 +149,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.transaction_receipt(tx_hash).await })
 				}),
-				format!("transaction_receipt({tx_hash:?})"),
+				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
 			)
 			.await
 	}
@@ -158,7 +161,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block(block_number).await })
 				}),
-				format!("block({block_number})"),
+				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
 			)
 			.await
 	}
@@ -170,7 +173,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_with_txs(block_number).await })
 				}),
-				format!("block_with_txs({block_number})"),
+				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
 			)
 			.await
 	}
@@ -181,14 +184,19 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 		newest_block: BlockNumber,
 		reward_percentiles: Vec<f64>,
 	) -> FeeHistory {
-		let log = format!("fee_history({block_count}, {newest_block}, {reward_percentiles:?})");
+		let log = RequestLog::new(
+			"fee_history".to_string(),
+			Some(format!("{block_count}, {newest_block}, {reward_percentiles:?}")),
+		);
 		self.rpc_retry_client
 			.request(
 				Box::pin(move |client| {
 					let reward_percentiles = reward_percentiles.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						client.fee_history(block_count, newest_block, &reward_percentiles).await
+						client
+							.fee_history(block_count, newest_block, &reward_percentiles.clone())
+							.await
 					})
 				}),
 				log,
@@ -211,7 +219,7 @@ impl EthersRetrySubscribeApi for EthersRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_blocks().await })
 				}),
-				"subscribe_blocks".to_string(),
+				RequestLog::new("subscribe_blocks".to_string(), None),
 			)
 			.await
 	}
@@ -252,7 +260,7 @@ impl ChainClient for EthersRetryRpcClient {
 						})
 					})
 				}),
-				format!("header_at_index({index})"),
+				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 			)
 			.await
 	}
