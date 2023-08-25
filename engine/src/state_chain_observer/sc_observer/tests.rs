@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_chains::{
 	eth::{SchnorrVerificationComponents, Transaction},
-	ChainCrypto,
+	Chain, ChainCrypto,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
@@ -164,10 +164,10 @@ where
 	Runtime: pallet_cf_threshold_signature::Config<I>,
 	RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
-	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
+	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto as
 ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
-		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto
 
 	>,
 {
@@ -310,7 +310,10 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: ChainSigning<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
+	C: ChainSigning<
+			Chain = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
+		> + Send
+		+ Sync,
 	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
 	Runtime: pallet_cf_vaults::Config<I>,
 	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,

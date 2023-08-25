@@ -47,6 +47,8 @@ pub mod mocks;
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {
+	type ChainCrypto: ChainCrypto;
+
 	const NAME: &'static str;
 
 	type KeyHandoverIsRequired: Get<bool>;
@@ -127,10 +129,15 @@ pub trait Chain: Member + Parameter {
 
 	/// Extra data associated with a deposit.
 	type DepositDetails: Member + Parameter + BenchmarkValue;
+
+	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
+	/// Passed in to construct the replay protection.
+	type ReplayProtectionParams: Member + Parameter;
+	type ReplayProtection: Member + Parameter;
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto: Chain {
+pub trait ChainCrypto {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	type AggKey: MaybeSerializeDeserialize
 		+ Member
@@ -167,28 +174,23 @@ pub trait ChainCrypto: Chain {
 	}
 }
 
-/// Common abi-related types and operations for some external chain.
-pub trait ChainAbi: ChainCrypto {
-	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
-	/// Passed in to construct the replay protection.
-	type ReplayProtectionParams: Member + Parameter;
-	type ReplayProtection: Member + Parameter;
-}
-
 /// Provides chain-specific replay protection data.
-pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection(params: Abi::ReplayProtectionParams) -> Abi::ReplayProtection;
+pub trait ReplayProtectionProvider<C: Chain> {
+	fn replay_protection(params: C::ReplayProtectionParams) -> C::ReplayProtection;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
-pub trait ApiCall<Abi: ChainAbi>: Parameter {
+pub trait ApiCall<C: Chain>: Parameter {
 	/// Get the payload over which the threshold signature should be generated.
-	fn threshold_signature_payload(&self) -> <Abi as ChainCrypto>::Payload;
+	fn threshold_signature_payload(&self) -> <<C as Chain>::ChainCrypto as ChainCrypto>::Payload;
 
 	/// Add the threshold signature to the api call.
-	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
+	fn signed(
+		self,
+		threshold_signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self;
 
 	/// Construct the signed call, encoded according to the chain's native encoding.
 	///
@@ -199,32 +201,32 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	fn is_signed(&self) -> bool;
 
 	/// Generates an identifier for the output of the transaction.
-	fn transaction_out_id(&self) -> <Abi as ChainCrypto>::TransactionOutId;
+	fn transaction_out_id(&self) -> <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
-pub trait TransactionBuilder<Abi, Call>
+pub trait TransactionBuilder<C, Call>
 where
-	Abi: ChainAbi,
-	Call: ApiCall<Abi>,
+	C: Chain,
+	Call: ApiCall<C>,
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
 	/// Doesn't include any time-sensitive data e.g. gas price.
-	fn build_transaction(signed_call: &Call) -> Abi::Transaction;
+	fn build_transaction(signed_call: &Call) -> C::Transaction;
 
 	/// Refresh any transaction data that is not signed over by the validators.
 	///
 	/// Note that calldata cannot be updated, or it would invalidate the signature.
 	///
 	/// A typical use case would be for updating the gas price on Ethereum transactions.
-	fn refresh_unsigned_data(tx: &mut Abi::Transaction);
+	fn refresh_unsigned_data(tx: &mut C::Transaction);
 
 	/// Checks if the payload is still valid for the call.
 	fn is_valid_for_rebroadcast(
 		call: &Call,
-		payload: &<Abi as ChainCrypto>::Payload,
-		current_key: &<Abi as ChainCrypto>::AggKey,
-		signature: &<Abi as ChainCrypto>::ThresholdSignature,
+		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
 }
 
@@ -265,32 +267,32 @@ pub enum SetAggKeyWithAggKeyError {
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 #[allow(clippy::result_unit_err)]
-pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait SetAggKeyWithAggKey<C: Chain>: ApiCall<C> {
 	fn new_unsigned(
-		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
-		new_key: <Abi as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
+		new_key: <<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]
-pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait SetGovKeyWithAggKey<C: Chain>: ApiCall<C> {
 	fn new_unsigned(
-		maybe_old_key: Option<<Abi as ChainCrypto>::GovKey>,
-		new_key: <Abi as ChainCrypto>::GovKey,
+		maybe_old_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::GovKey>,
+		new_key: <<C as Chain>::ChainCrypto as ChainCrypto>::GovKey,
 	) -> Result<Self, ()>;
 }
 
-pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(new_comm_key: <Abi as ChainCrypto>::GovKey) -> Self;
+pub trait SetCommKeyWithAggKey<C: Chain>: ApiCall<C> {
+	fn new_unsigned(new_comm_key: <<C as Chain>::ChainCrypto as ChainCrypto>::GovKey) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
-pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait UpdateFlipSupply<C: Chain>: ApiCall<C> {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self;
 }
 
 /// Constructs the `RegisterRedemption` api call.
-pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait RegisterRedemption<C: Chain>: ApiCall<C> {
 	fn new_unsigned(
 		node_id: &[u8; 32],
 		amount: u128,
@@ -309,18 +311,18 @@ pub enum AllBatchError {
 }
 
 #[allow(clippy::result_unit_err)]
-pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait AllBatch<C: Chain>: ApiCall<C> {
 	fn new_unsigned(
-		fetch_params: Vec<FetchAssetParams<Abi>>,
-		transfer_params: Vec<TransferAssetParams<Abi>>,
+		fetch_params: Vec<FetchAssetParams<C>>,
+		transfer_params: Vec<TransferAssetParams<C>>,
 	) -> Result<Self, AllBatchError>;
 }
 
 #[allow(clippy::result_unit_err)]
-pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
+pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C> {
 	fn new_unsigned(
 		egress_id: EgressId,
-		transfer_param: TransferAssetParams<Abi>,
+		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
 		message: Vec<u8>,

@@ -5,7 +5,7 @@ pub mod benchmarking;
 
 pub mod deposit_address;
 
-use self::api::tokenizable::Tokenizable;
+use self::api::{tokenizable::Tokenizable, EthereumReplayProtection};
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
@@ -37,6 +37,7 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
+	type ChainCrypto = EvmCrypto;
 	type KeyHandoverIsRequired = ConstBool<false>;
 	type OptimisticActivation = ConstBool<false>;
 	type ChainBlockNumber = u64;
@@ -49,14 +50,18 @@ impl Chain for Ethereum {
 	type DepositFetchId = EthereumFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
+	type Transaction = eth::Transaction;
+	type ReplayProtectionParams = Self::ChainAccount;
+	type ReplayProtection = EthereumReplayProtection;
 }
+pub struct EvmCrypto;
 
-impl ChainCrypto for Ethereum {
+impl ChainCrypto for EvmCrypto {
 	type AggKey = eth::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
-	// We can't use the hash since we don't know it for Ethereum, as we must select an individaul
+	// We can't use the hash since we don't know it for the Evm, as we must select an individaul
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
@@ -68,7 +73,7 @@ impl ChainCrypto for Ethereum {
 	) -> bool {
 		agg_key
 			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
+			.map_err(|e| log::warn!("Evm signature verification failed: {:?}.", e))
 			.is_ok()
 	}
 

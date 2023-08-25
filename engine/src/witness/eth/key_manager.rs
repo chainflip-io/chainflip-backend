@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::eth::{AggKey, SchnorrVerificationComponents, TransactionFee};
+use cf_chains::eth::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
 use ethers::{
 	prelude::abigen,
 	types::{Bloom, TransactionReceipt},
@@ -56,11 +56,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		Inner::Chain: cf_chains::ChainCrypto<
-				TransactionInId = H256,
-				TransactionOutId = SchnorrVerificationComponents,
-				AggKey = AggKey,
-			> + cf_chains::Chain<ChainAccount = H160, TransactionFee = TransactionFee>,
+		Inner::Chain: cf_chains::Chain<
+			ChainCrypto = EvmCrypto,
+			ChainAccount = H160,
+			TransactionFee = TransactionFee,
+		>,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:

@@ -36,7 +36,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::ChainAbi;
+	use cf_chains::Chain;
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -51,7 +51,7 @@ pub mod pallet {
 		///
 		/// In practice this is always [Ethereum] but making this configurable simplifies
 		/// testing.
-		type HostChain: ChainAbi;
+		type HostChain: Chain;
 
 		/// The Flip token denomination.
 		type FlipBalance: Member

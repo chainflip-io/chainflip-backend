@@ -14,7 +14,7 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
 	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
@@ -471,9 +471,9 @@ where
 
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
-pub trait Broadcaster<Api: ChainAbi> {
+pub trait Broadcaster<C: Chain> {
 	/// Supported api calls for this chain.
-	type ApiCall: ApiCall<Api>;
+	type ApiCall: ApiCall<C>;
 
 	/// The callback that gets executed when the signature is accepted.
 	type Callback: UnfilteredDispatchable;
@@ -737,10 +737,10 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	}
 }
 
-pub trait VaultTransitionHandler<C: ChainCrypto> {
+pub trait VaultTransitionHandler<C: Chain> {
 	fn on_new_vault() {}
 }
-pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
+pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
@@ -756,7 +756,7 @@ pub trait BroadcastAnyChainGovKey {
 }
 
 pub trait CommKeyBroadcaster {
-	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey);
+	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
 
 /// Provides an interface to access the amount of Flip that is ready to be burned.
@@ -800,7 +800,7 @@ impl CcmHandler for () {
 	}
 }
 
-pub trait OnBroadcastReady<C: ChainAbi> {
+pub trait OnBroadcastReady<C: Chain> {
 	type ApiCall: ApiCall<C>;
 
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}

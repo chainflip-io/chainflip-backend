@@ -23,7 +23,7 @@ pub use self::{
 	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Context;
-use cf_chains::{Bitcoin, Chain, Ethereum, Polkadot};
+use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, eth::EvmCrypto, ChainCrypto};
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
@@ -38,22 +38,22 @@ use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
 type EdPublicKey = ed25519::Public;
 type XPublicKey = x25519_dalek::PublicKey;
 
-pub struct MultisigMessageSender<C: Chain>(
+pub struct MultisigMessageSender<C: ChainCrypto>(
 	pub UnboundedSender<OutgoingMultisigStageMessages>,
 	PhantomData<C>,
 );
 
-impl<C: Chain> MultisigMessageSender<C> {
+impl<C: ChainCrypto> MultisigMessageSender<C> {
 	pub fn new(sender: UnboundedSender<OutgoingMultisigStageMessages>) -> Self {
 		MultisigMessageSender(sender, PhantomData)
 	}
 }
-pub struct MultisigMessageReceiver<C: Chain>(
+pub struct MultisigMessageReceiver<C: ChainCrypto>(
 	pub UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	PhantomData<C>,
 );
 
-impl<C: Chain> MultisigMessageReceiver<C> {
+impl<C: ChainCrypto> MultisigMessageReceiver<C> {
 	pub fn new(receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
 		MultisigMessageReceiver(receiver, PhantomData)
 	}
@@ -89,12 +89,12 @@ pub async fn start<StateChainClient>(
 	settings: P2PSettings,
 	latest_block_hash: H256,
 ) -> anyhow::Result<(
-	MultisigMessageSender<Ethereum>,
-	MultisigMessageReceiver<Ethereum>,
-	MultisigMessageSender<Polkadot>,
-	MultisigMessageReceiver<Polkadot>,
-	MultisigMessageSender<Bitcoin>,
-	MultisigMessageReceiver<Bitcoin>,
+	MultisigMessageSender<EvmCrypto>,
+	MultisigMessageReceiver<EvmCrypto>,
+	MultisigMessageSender<PolkadotCrypto>,
+	MultisigMessageReceiver<PolkadotCrypto>,
+	MultisigMessageSender<BitcoinCrypto>,
+	MultisigMessageReceiver<BitcoinCrypto>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
 )>

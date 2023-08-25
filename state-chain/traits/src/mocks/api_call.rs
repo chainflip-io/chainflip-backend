@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, Ethereum,
+	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, Ethereum,
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain};
@@ -34,11 +34,16 @@ pub enum MockEthereumApiCall<MockEthEnvironment> {
 }
 
 impl ApiCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
-	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		_threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self {
 		unimplemented!()
 	}
 
@@ -50,14 +55,16 @@ impl ApiCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]
 pub struct MockAllBatch<MockEthEnvironment> {
-	pub nonce: <Ethereum as ChainAbi>::ReplayProtection,
+	pub nonce: <Ethereum as Chain>::ReplayProtection,
 	pub fetch_params: Vec<FetchAssetParams<Ethereum>>,
 	pub transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	_phantom: PhantomData<MockEthEnvironment>,
@@ -88,7 +95,7 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
 pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
-	nonce: <Ethereum as ChainAbi>::ReplayProtection,
+	nonce: <Ethereum as Chain>::ReplayProtection,
 	egress_id: EgressId,
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,

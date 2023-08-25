@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
@@ -44,13 +44,15 @@ const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
 	Result<AggKeyFor<T, I>, BTreeSet<<T as Chainflip>::ValidatorId>>;
-pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
+pub type AggKeyFor<T, I = ()> =
+	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
 pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
-pub type TransactionInIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionInId;
+pub type TransactionInIdFor<T, I = ()> =
+	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 pub type TransactionOutIdFor<T, I = ()> =
-	<<T as Config<I>>::Chain as ChainCrypto>::TransactionOutId;
+	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 pub type ThresholdSignatureFor<T, I = ()> =
-	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
+	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 pub type KeygenResponseStatus<T, I> =
 	ResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
@@ -121,9 +123,9 @@ impl<T: Config<I>, I: 'static> cf_traits::CeremonyIdProvider for Pallet<T, I> {
 
 /// A single vault.
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub struct Vault<T: ChainAbi> {
+pub struct Vault<T: Chain> {
 	/// The vault's public key.
-	pub public_key: T::AggKey,
+	pub public_key: <<T as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	/// The first active block for this vault
 	pub active_from_block: T::ChainBlockNumber,
 }
@@ -165,7 +167,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// The chain that is managed by this vault must implement the api types.
-		type Chain: ChainAbi;
+		type Chain: Chain;
 
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
@@ -176,7 +178,7 @@ pub mod pallet {
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		type ThresholdSigner: ThresholdSigner<
-			Self::Chain,
+			<Self::Chain as Chain>::ChainCrypto,
 			Callback = <Self as Config<I>>::RuntimeCall,
 			ValidatorId = Self::ValidatorId,
 		>;
@@ -267,7 +269,7 @@ pub mod pallet {
 								.expect("key must exist during handover")
 								.key;
 
-							if <T::Chain as ChainCrypto>::handover_key_matches(
+							if <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::handover_key_matches(
 								&current_key,
 								&reported_new_agg_key,
 							) {
@@ -418,18 +420,18 @@ pub mod pallet {
 		KeyHandoverRequest {
 			ceremony_id: CeremonyId,
 			from_epoch: EpochIndex,
-			key_to_share: <T::Chain as ChainCrypto>::AggKey,
+			key_to_share: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 			sharing_participants: BTreeSet<T::ValidatorId>,
 			receiving_participants: BTreeSet<T::ValidatorId>,
 			/// The freshly generated key for the next epoch.
-			new_key: <T::Chain as ChainCrypto>::AggKey,
+			new_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 			/// The epoch index for which the key is being handed over.
 			to_epoch: EpochIndex,
 		},
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
 		/// The vault's key has been rotated externally \[new_public_key\]
-		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
+		VaultRotatedExternally(<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
 		/// A key handover participant has reported that keygen was successful \[validator_id\]
@@ -447,10 +449,10 @@ pub mod pallet {
 		NoKeyHandover,
 		/// The new key was successfully used to sign.
 		KeygenVerificationSuccess {
-			agg_key: <T::Chain as ChainCrypto>::AggKey,
+			agg_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		KeyHandoverVerificationSuccess {
-			agg_key: <T::Chain as ChainCrypto>::AggKey,
+			agg_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		/// Verification of the new key has failed.
 		KeygenVerificationFailure {
@@ -473,7 +475,7 @@ pub mod pallet {
 		/// The new key has been generated, we must activate the new key on the external
 		/// chain via governance.
 		AwaitingGovernanceActivation {
-			new_public_key: <T::Chain as ChainCrypto>::AggKey,
+			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		/// Key handover has failed
 		KeyHandoverFailure {
@@ -885,7 +887,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		status_to_set: VaultRotationStatus<T, I>,
 	) -> ThresholdSignatureRequestId {
 		let request_id = T::ThresholdSigner::request_verification_signature(
-			T::Chain::agg_key_to_payload(new_agg_key, is_handover),
+			<T::Chain as Chain>::ChainCrypto::agg_key_to_payload(new_agg_key, is_handover),
 			participants,
 			new_agg_key,
 			next_epoch,
@@ -962,8 +964,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn active_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
+impl<T: Config<I>, I: 'static> KeyProvider<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
+	fn active_epoch_key(
+	) -> Option<EpochKey<<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey>> {
 		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
 			EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
@@ -975,7 +978,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(key: <T::Chain as ChainCrypto>::AggKey) {
+	fn set_key(key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey) {
 		Vaults::<T, I>::insert(
 			CurrentEpochIndex::<T>::get(),
 			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },

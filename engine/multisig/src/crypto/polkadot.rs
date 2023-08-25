@@ -4,7 +4,7 @@ use super::{
 	curve25519::ristretto::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme,
 	CryptoTag, ECPoint, SignatureToThresholdSignature,
 };
-use cf_chains::{ChainCrypto, Polkadot};
+use cf_chains::{Chain, ChainCrypto, Polkadot};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -17,8 +17,10 @@ const SIGNING_CTX: &[u8] = b"substrate";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
 
-impl SignatureToThresholdSignature<Polkadot> for Vec<PolkadotSignature> {
-	fn to_threshold_signature(&self) -> <Polkadot as ChainCrypto>::ThresholdSignature {
+impl SignatureToThresholdSignature<<Polkadot as Chain>::ChainCrypto> for Vec<PolkadotSignature> {
+	fn to_threshold_signature(
+		&self,
+	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature {
 		self.iter()
 			.map(|s| s.clone().into())
 			.next()
@@ -66,7 +68,7 @@ pub struct PolkadotCryptoScheme;
 
 impl ChainSigning for PolkadotSigning {
 	type CryptoScheme = PolkadotCryptoScheme;
-	type Chain = cf_chains::Polkadot;
+	type Chain = <Polkadot as Chain>::ChainCrypto;
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
 }

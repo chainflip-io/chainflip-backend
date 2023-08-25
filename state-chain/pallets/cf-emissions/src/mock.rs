@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_emissions, PalletSafeMode};
-use cf_chains::{mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply};
+use cf_chains::{
+	mocks::{MockEthereum, MockEthereumChainCrypto},
+	AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply,
+};
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
@@ -124,13 +127,13 @@ impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 }
 
 impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
-	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+	fn threshold_signature_payload(&self) -> <MockEthereumChainCrypto as ChainCrypto>::Payload {
 		[0xcf; 4]
 	}
 
 	fn signed(
 		self,
-		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		unimplemented!()
 	}
@@ -143,7 +146,7 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <MockEthereum as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
 }

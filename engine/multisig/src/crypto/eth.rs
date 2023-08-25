@@ -10,7 +10,7 @@ use super::{
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
 use anyhow::Context;
-use cf_chains::{eth::ParityBit, ChainCrypto, Ethereum};
+use cf_chains::{eth::ParityBit, Chain, ChainCrypto, Ethereum};
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
@@ -29,8 +29,10 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 	}
 }
 
-impl SignatureToThresholdSignature<Ethereum> for Vec<EthSchnorrSignature> {
-	fn to_threshold_signature(&self) -> <Ethereum as ChainCrypto>::ThresholdSignature {
+impl SignatureToThresholdSignature<<Ethereum as Chain>::ChainCrypto> for Vec<EthSchnorrSignature> {
+	fn to_threshold_signature(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature {
 		self.iter()
 			.map(|s| s.clone().into())
 			.next()
@@ -62,7 +64,7 @@ pub struct EvmCryptoScheme;
 
 impl ChainSigning for EthSigning {
 	type CryptoScheme = EvmCryptoScheme;
-	type Chain = cf_chains::Ethereum;
+	type Chain = <Ethereum as Chain>::ChainCrypto;
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
 }

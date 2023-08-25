@@ -120,11 +120,16 @@ impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
 }
 
 impl ApiCall<Ethereum> for MockRegisterRedemption {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
-	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		_threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self {
 		unimplemented!()
 	}
 
@@ -136,7 +141,9 @@ impl ApiCall<Ethereum> for MockRegisterRedemption {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		todo!()
 	}
 }

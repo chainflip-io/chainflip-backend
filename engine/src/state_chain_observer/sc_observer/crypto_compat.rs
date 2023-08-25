@@ -1,4 +1,9 @@
-use cf_chains::{dot::PolkadotPublicKey, ChainCrypto};
+use cf_chains::{
+	btc::BitcoinCrypto,
+	dot::{PolkadotCrypto, PolkadotPublicKey},
+	eth::EvmCrypto,
+	ChainCrypto,
+};
 use multisig::{
 	bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainSigning, CryptoScheme,
 };
@@ -12,26 +17,26 @@ pub trait CryptoCompat<S: ChainSigning<Chain = C>, C: ChainCrypto> {
 	) -> C::AggKey;
 }
 
-impl CryptoCompat<EthSigning, cf_chains::Ethereum> for EthereumInstance {
+impl CryptoCompat<EthSigning, EvmCrypto> for EthereumInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<EthSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Ethereum as ChainCrypto>::AggKey {
+	) -> <EvmCrypto as ChainCrypto>::AggKey {
 		pubkey
 	}
 }
 
-impl CryptoCompat<BtcSigning, cf_chains::Bitcoin> for BitcoinInstance {
+impl CryptoCompat<BtcSigning, BitcoinCrypto> for BitcoinInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<BtcSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Bitcoin as ChainCrypto>::AggKey {
+	) -> <BitcoinCrypto as ChainCrypto>::AggKey {
 		cf_chains::btc::AggKey { previous: None, current: pubkey.serialize() }
 	}
 }
 
-impl CryptoCompat<PolkadotSigning, cf_chains::Polkadot> for PolkadotInstance {
+impl CryptoCompat<PolkadotSigning, PolkadotCrypto> for PolkadotInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <<PolkadotSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
-	) -> <cf_chains::Polkadot as ChainCrypto>::AggKey {
+	) -> <PolkadotCrypto as ChainCrypto>::AggKey {
 		PolkadotPublicKey::from_aliased(pubkey.to_bytes())
 	}
 }

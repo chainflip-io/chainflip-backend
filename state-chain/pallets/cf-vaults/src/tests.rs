@@ -8,7 +8,8 @@ use crate::{
 	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::{
-	eth::Ethereum,
+	btc::BitcoinCrypto,
+	eth::EvmCrypto,
 	mocks::{MockAggKey, MockOptimisticActivation},
 };
 use cf_primitives::GENESIS_EPOCH;
@@ -24,8 +25,8 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 
-pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
-pub type BtcMockThresholdSigner = MockThresholdSigner<cf_chains::Bitcoin, crate::mock::RuntimeCall>;
+pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
+pub type BtcMockThresholdSigner = MockThresholdSigner<BitcoinCrypto, crate::mock::RuntimeCall>;
 
 macro_rules! assert_last_event {
 	($pat:pat) => {

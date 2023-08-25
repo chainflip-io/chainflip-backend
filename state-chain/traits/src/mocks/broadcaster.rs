@@ -1,4 +1,4 @@
-use cf_chains::{ApiCall, ChainAbi};
+use cf_chains::{ApiCall, Chain};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use core::marker::PhantomData;
 use frame_support::{
@@ -18,7 +18,7 @@ impl<T> MockPallet for MockBroadcaster<T> {
 }
 
 impl<
-		Api: ChainAbi,
+		Api: Chain,
 		A: ApiCall<Api> + Member + Parameter,
 		C: UnfilteredDispatchable + Member + Parameter,
 	> Broadcaster<Api> for MockBroadcaster<(A, C)>

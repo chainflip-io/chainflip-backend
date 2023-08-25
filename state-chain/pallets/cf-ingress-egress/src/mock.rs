@@ -6,7 +6,7 @@ pub use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Address as EthereumAddress,
 	},
-	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
+	CcmDepositMetadata, Chain, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
