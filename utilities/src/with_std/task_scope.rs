@@ -120,12 +120,12 @@ pub fn task_scope<
 	let location = core::panic::Location::caller();
 
 	async move {
-		tracing::log::info!(target: "task_scope", "opened: '{}'", location);
-		let _guard = scopeguard::guard((), move |_| {
+		tracing::info!(target: "task_scope", "opened: '{}'", location);
+		let guard = scopeguard::guard((), move |_| {
 			if std::thread::panicking() {
-				tracing::log::error!(target: "task_scope", "closed by panic: '{}'", location);
+				tracing::error!(target: "task_scope", "closed by panic: '{}'", location);
 			} else {
-				tracing::log::error!(target: "task_scope", "closed by cancellation: '{}'", location);
+				tracing::error!(target: "task_scope", "closed by cancellation: '{}'", location);
 			}
 		});
 
@@ -133,7 +133,7 @@ pub fn task_scope<
 
 		// try_join ensures if the top level task returns an error we immediately drop
 		// `task_result_stream`, which in turn cancels all the tasks
-		match tokio::try_join!(
+		let result = tokio::try_join!(
 			async move {
 				while let Some(task_result) = task_result_stream.next().await {
 					match task_result {
@@ -155,31 +155,35 @@ pub fn task_scope<
 			// This async move scope ensures scope is dropped when top_level_task and its returned
 			// future finish (Instead of when this function exits)
 			async move {
-				tracing::log::info!(target: "task_scope", "parent task started: '{}'", location);
+				tracing::info!(target: "task_scope", "parent task started: '{}'", location);
 				let guard = scopeguard::guard((), move |_| {
 					if std::thread::panicking() {
-						tracing::log::error!(target: "task_scope", "parent task ended by panic: '{}'", location);
+						tracing::error!(target: "task_scope", "parent task ended by panic: '{}'", location);
 					} else {
-						tracing::log::error!(target: "task_scope", "parent task ended by cancellation: '{}'", location);
+						tracing::error!(target: "task_scope", "parent task ended by cancellation: '{}'", location);
 					}
 				});
 				let result = top_level_task(&scope).await;
 				scopeguard::ScopeGuard::into_inner(guard);
 				match &result {
 					Ok(_) =>
-						tracing::log::info!(target: "task_scope", "parent task ended: '{}'", location),
+						tracing::info!(target: "task_scope", "parent task ended: '{}'", location),
 					Err(error) =>
-						tracing::log::error!(target: "task_scope", "parent task ended by error '{:?}': '{}'", error, location),
+						tracing::error!(target: "task_scope", "parent task ended by error '{error:?}': '{}'", location),
 				}
 				result
 			}
-		) {
+		);
+
+		scopeguard::ScopeGuard::into_inner(guard);
+
+		match result {
 			Ok((_, t)) => {
-				tracing::log::info!(target: "task_scope", "closed: '{}'", location);
+				tracing::info!(target: "task_scope", "closed: '{}'", location);
 				Ok(t)
 			},
 			Err(error) => {
-				tracing::log::error!(target: "task_scope", "closed by error: '{}'", location);
+				tracing::error!(target: "task_scope", "closed by error {error:?}: '{}'", location);
 				Err(error)
 			},
 		}
@@ -201,15 +205,15 @@ impl TaskProperties {
 		match &result {
 			Ok(result) => match result {
 				Ok(_) =>
-					tracing::log::info!(target: "task_scope", "child task ended: '{}'", self.location),
+					tracing::info!(target: "task_scope", "child task ended: '{}'", self.location),
 				Err(error) =>
-					tracing::log::error!(target: "task_scope", "child task ended by error '{:?}': '{}'", error, self.location),
+					tracing::error!(target: "task_scope", "child task ended by error '{error:?}': '{}'", self.location),
 			},
 			Err(error) =>
 				if error.is_panic() {
-					tracing::log::error!(target: "task_scope", "child task ended by panic: '{}'", self.location);
+					tracing::error!(target: "task_scope", "child task ended by panic: '{}'", self.location);
 				} else {
-					tracing::log::error!(target: "task_scope", "child task ended by cancellation: '{}'", self.location);
+					tracing::error!(target: "task_scope", "child task ended by cancellation: '{}'", self.location);
 				},
 		}
 	}
@@ -397,7 +401,7 @@ impl<Error: Debug + Send + 'static> Stream for ScopeResultStream<Error> {
 				Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx)
 			{
 				if let Some((properties, future)) = option {
-					tracing::log::info!(target: "task_scope", "child task started: '{}'", properties.location);
+					tracing::info!(target: "task_scope", "child task started: '{}'", properties.location);
 					if !properties.weak {
 						self.non_weak_tasks += 1;
 					}
@@ -473,7 +477,7 @@ impl<Error: Debug + Send + 'static> Drop for ScopeResultStream<Error> {
 				// futures as gone.
 
 				for task in tasks.into_iter() {
-					tracing::log::error!(target: "task_scope", "child task ended by cancellation: '{}'", task.properties.location);
+					tracing::error!(target: "task_scope", "child task ended by cancellation: '{}'", task.properties.location);
 				}
 			},
 			ScopedTasks::MultiThread(runtime, tasks) =>
