@@ -259,7 +259,7 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 					} else {
 						match retry_limit {
 							RetryLimit::Limit(max_attempts) if next_attempt >= max_attempts => {
-								tracing::trace!("Retrier {name}: Has reached maximum attempts of `{max_attempts}` for `{request_log:?}` with id `{request_id}`. Not retrying.");
+								tracing::trace!("Retrier {name}: Has reached maximum attempts of `{max_attempts}` for `{request_log}` with id `{request_id}`. Not retrying.");
 								request_holder.remove(&request_id);
 							}
 							_ => {

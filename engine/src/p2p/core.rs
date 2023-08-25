@@ -458,9 +458,9 @@ impl P2PContext {
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
 			debug!(
-                peer_info = peer.to_string(),
-                "Received info for new peer with account id {}, adding to allowed peers and id mapping",
-                &peer.account_id
+				peer_info = peer.to_string(),
+				"Received info for new peer with account id {}, adding to allowed peers and id mapping",
+				&peer.account_id
             );
 		}
 
