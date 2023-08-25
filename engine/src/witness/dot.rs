@@ -38,6 +38,9 @@ use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
 use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
+// To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
+// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment --url
+// wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.json.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
 
