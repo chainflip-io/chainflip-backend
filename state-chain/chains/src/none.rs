@@ -19,6 +19,7 @@ impl Chain for NoneChain {
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();
+	type DepositTracker = NoDepositTracking<Self>;
 	type Transaction = ();
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();

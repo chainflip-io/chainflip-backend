@@ -512,23 +512,6 @@ impl_egress_api_for_anychain!(
 	(Bitcoin, BitcoinIngressEgress)
 );
 
-pub struct EthDepositHandler;
-impl DepositHandler<Ethereum> for EthDepositHandler {}
-
-pub struct DotDepositHandler;
-impl DepositHandler<Polkadot> for DotDepositHandler {}
-
-pub struct BtcDepositHandler;
-impl DepositHandler<Bitcoin> for BtcDepositHandler {
-	fn on_deposit_made(
-		utxo_id: <Bitcoin as Chain>::DepositDetails,
-		amount: <Bitcoin as Chain>::ChainAmount,
-		channel: DepositChannel<Bitcoin>,
-	) {
-		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state)
-	}
-}
-
 pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {

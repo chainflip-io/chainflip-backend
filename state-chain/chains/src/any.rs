@@ -1,4 +1,7 @@
-use crate::{address::ForeignChainAddress, none::NoneChainCrypto, Chain, FeeRefundCalculator};
+use crate::{
+	address::ForeignChainAddress, none::NoneChainCrypto, Chain, FeeRefundCalculator,
+	NoDepositTracking,
+};
 
 use cf_primitives::{
 	chains::{assets, AnyChain},
@@ -20,6 +23,7 @@ impl Chain for AnyChain {
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();
+	type DepositTracker = NoDepositTracking<Self>;
 	type Transaction = ();
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();

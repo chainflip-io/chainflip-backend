@@ -43,6 +43,8 @@ pub mod none;
 pub mod address;
 pub mod deposit_channel;
 pub use deposit_channel::*;
+pub mod deposit_tracker;
+pub use deposit_tracker::*;
 
 pub mod mocks;
 
@@ -130,6 +132,8 @@ pub trait Chain: Member + Parameter {
 
 	/// Extra data associated with a deposit.
 	type DepositDetails: Member + Parameter + BenchmarkValue;
+
+	type DepositTracker: Member + Parameter + Default + DepositTracker<Self>;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 

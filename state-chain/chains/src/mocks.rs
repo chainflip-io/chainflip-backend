@@ -98,6 +98,7 @@ impl Chain for MockEthereum {
 	type EpochStartData = ();
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
+	type DepositTracker = SimpleDepositTracker<Self>;
 	type Transaction = MockTransaction;
 	type TransactionMetadata = MockEthereumTransactionMetadata;
 	type ReplayProtectionParams = ();

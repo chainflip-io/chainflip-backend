@@ -1,6 +1,8 @@
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
+pub mod deposit_tracker;
+pub use deposit_tracker::*;
 pub mod utxo_selection;
 
 extern crate alloc;
@@ -238,6 +240,7 @@ impl Chain for Bitcoin {
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
+	type DepositTracker = BitcoinDepositTracker;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
@@ -352,9 +355,19 @@ fn verify_single_threshold_signature(
 	recovered_r.x.eq_var(&rx)
 }
 
-// TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
-// which could be made generic, if even necessary at all.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Default)]
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	Default,
+	PartialOrd,
+	Ord,
+)]
 pub struct UtxoId {
 	// TxId of the transaction in which this utxo was created.
 	pub tx_id: Hash,
@@ -378,9 +391,24 @@ pub enum Error {
 }
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
-	pub id: UtxoId,
 	pub amount: u64,
+	pub id: UtxoId,
 	pub deposit_address: DepositAddress,
+}
+
+impl PartialOrd for Utxo {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for Utxo {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		match self.amount.cmp(&other.amount) {
+			core::cmp::Ordering::Equal => self.id.cmp(&other.id),
+			ordering => ordering,
+		}
+	}
 }
 
 pub trait GetUtxoAmount {
