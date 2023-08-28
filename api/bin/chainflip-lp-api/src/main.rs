@@ -5,10 +5,7 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	lp::{
-		LpApi, SetLimitOrderReturn, SetRangeOrderReturn, Tick, UpdateLimitOrderReturn,
-		UpdateRangeOrderReturn,
-	},
+	lp::{LimitOrderReturn, LpApi, RangeOrderReturn, Tick},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
@@ -103,7 +100,7 @@ pub trait Rpc {
 		tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
 		size: RangeOrderSize,
-	) -> Result<UpdateRangeOrderReturn, Error>;
+	) -> Result<Vec<RangeOrderReturn>, Error>;
 
 	#[method(name = "setRangeOrder")]
 	async fn set_range_order(
@@ -113,7 +110,7 @@ pub trait Rpc {
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<SetRangeOrderReturn, Error>;
+	) -> Result<Vec<RangeOrderReturn>, Error>;
 
 	#[method(name = "updateLimitOrder")]
 	async fn update_limit_order(
@@ -124,7 +121,7 @@ pub trait Rpc {
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: AssetAmount,
-	) -> Result<UpdateLimitOrderReturn, Error>;
+	) -> Result<Vec<LimitOrderReturn>, Error>;
 
 	#[method(name = "setLimitOrder")]
 	async fn set_limit_order(
@@ -134,7 +131,7 @@ pub trait Rpc {
 		id: OrderId,
 		tick: Option<Tick>,
 		amount: AssetAmount,
-	) -> Result<SetLimitOrderReturn, Error>;
+	) -> Result<Vec<LimitOrderReturn>, Error>;
 
 	#[method(name = "assetBalances")]
 	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
@@ -211,7 +208,7 @@ impl RpcServer for RpcServerImpl {
 		tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
 		size: RangeOrderSize,
-	) -> Result<UpdateRangeOrderReturn, Error> {
+	) -> Result<Vec<RangeOrderReturn>, Error> {
 		Ok(self
 			.api
 			.lp_api()
@@ -226,7 +223,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<SetRangeOrderReturn, Error> {
+	) -> Result<Vec<RangeOrderReturn>, Error> {
 		Ok(self
 			.api
 			.lp_api()
@@ -242,7 +239,7 @@ impl RpcServer for RpcServerImpl {
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: AssetAmount,
-	) -> Result<UpdateLimitOrderReturn, Error> {
+	) -> Result<Vec<LimitOrderReturn>, Error> {
 		Ok(self
 			.api
 			.lp_api()
@@ -257,7 +254,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderId,
 		tick: Option<Tick>,
 		sell_amount: AssetAmount,
-	) -> Result<SetLimitOrderReturn, Error> {
+	) -> Result<Vec<LimitOrderReturn>, Error> {
 		Ok(self
 			.api
 			.lp_api()

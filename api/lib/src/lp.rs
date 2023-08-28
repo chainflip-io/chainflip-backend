@@ -18,37 +18,81 @@ use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 
 #[derive(Serialize, Deserialize)]
-pub struct UpdateRangeOrderReturn {
-	liquidity_delta: Liquidity,
+pub struct RangeOrderReturn {
+	tick_range: Range<Tick>,
 	liquidity_total: Liquidity,
-	assets_delta: AssetAmounts,
 	collected_fees: AssetAmounts,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SetRangeOrderReturn {
 	increase_or_decrease: IncreaseOrDecrease,
 	liquidity_delta: Liquidity,
-	liquidity_total: Liquidity,
 	assets_delta: AssetAmounts,
-	collected_fees: AssetAmounts,
+}
+
+fn collect_range_order_returns(
+	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+) -> Vec<RangeOrderReturn> {
+	events
+		.into_iter()
+		.filter_map(|event| match event {
+			state_chain_runtime::RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::RangeOrderUpdated {
+					increase_or_decrease,
+					liquidity_delta,
+					liquidity_total,
+					assets_delta,
+					collected_fees,
+					tick_range,
+					..
+				},
+			) => Some(RangeOrderReturn {
+				liquidity_delta,
+				liquidity_total,
+				increase_or_decrease,
+				tick_range,
+				collected_fees,
+				assets_delta,
+			}),
+			_ => None,
+		})
+		.collect()
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct UpdateLimitOrderReturn {
-	amount_delta: AssetAmount,
+pub struct LimitOrderReturn {
+	tick: Tick,
 	amount_total: AssetAmount,
 	collected_fees: AssetAmount,
 	swapped_liquidity: AssetAmount,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SetLimitOrderReturn {
 	increase_or_decrease: IncreaseOrDecrease,
 	amount_delta: AssetAmount,
-	amount_total: AssetAmount,
-	collected_fees: AssetAmount,
-	swapped_liquidity: AssetAmount,
+}
+
+fn collect_limit_order_returns(
+	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+) -> Vec<LimitOrderReturn> {
+	events
+		.into_iter()
+		.filter_map(|event| match event {
+			state_chain_runtime::RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::LimitOrderUpdated {
+					increase_or_decrease,
+					amount_delta,
+					amount_total,
+					collected_fees,
+					swapped_liquidity,
+					tick,
+					..
+				},
+			) => Some(LimitOrderReturn {
+				tick,
+				amount_total,
+				collected_fees,
+				swapped_liquidity,
+				increase_or_decrease,
+				amount_delta,
+			}),
+			_ => None,
+		})
+		.collect()
 }
 
 impl LpApi for StateChainClient {}
@@ -122,7 +166,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		option_tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
 		size: RangeOrderSize,
-	) -> Result<UpdateRangeOrderReturn> {
+	) -> Result<Vec<RangeOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::update_range_order {
@@ -137,33 +181,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_finalized()
 			.await?;
 
-		// Get some details from the emitted event
-		Ok({
-			let (liquidity_delta, liquidity_total, assets_delta, collected_fees) = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::RangeOrderUpdated {
-							increase_or_decrease: event_mint_or_burn,
-							liquidity_delta,
-							liquidity_total,
-							assets_delta,
-							collected_fees,
-							..
-						},
-					) if increase_or_decrease == *event_mint_or_burn =>
-						Some((*liquidity_delta, *liquidity_total, *assets_delta, *collected_fees)),
-					_ => None,
-				})
-				.expect("RangeOrderUpdated must have been generated");
-
-			UpdateRangeOrderReturn {
-				liquidity_delta,
-				liquidity_total,
-				assets_delta,
-				collected_fees,
-			}
-		})
+		Ok(collect_range_order_returns(events))
 	}
 
 	async fn set_range_order(
@@ -173,7 +191,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<SetRangeOrderReturn> {
+	) -> Result<Vec<RangeOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::set_range_order {
@@ -187,45 +205,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_finalized()
 			.await?;
 
-		// Get some details from the emitted event
-		Ok({
-			let (
-				increase_or_decrease,
-				liquidity_delta,
-				liquidity_total,
-				assets_delta,
-				collected_fees,
-			) = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::RangeOrderUpdated {
-							increase_or_decrease,
-							liquidity_delta,
-							liquidity_total,
-							assets_delta,
-							collected_fees,
-							..
-						},
-					) => Some((
-						*increase_or_decrease,
-						*liquidity_delta,
-						*liquidity_total,
-						*assets_delta,
-						*collected_fees,
-					)),
-					_ => None,
-				})
-				.expect("RangeOrderUpdated must have been generated");
-
-			SetRangeOrderReturn {
-				increase_or_decrease,
-				liquidity_delta,
-				liquidity_total,
-				assets_delta,
-				collected_fees,
-			}
-		})
+		Ok(collect_range_order_returns(events))
 	}
 
 	async fn update_limit_order(
@@ -236,7 +216,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		option_tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: AssetAmount,
-	) -> Result<UpdateLimitOrderReturn> {
+	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::update_limit_order {
@@ -251,28 +231,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_finalized()
 			.await?;
 
-		// Get some details from the emitted event
-		Ok({
-			let (amount_delta, amount_total, collected_fees, swapped_liquidity) = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LimitOrderUpdated {
-							increase_or_decrease: event_mint_or_burn,
-							amount_delta,
-							amount_total,
-							collected_fees,
-							swapped_liquidity,
-							..
-						},
-					) if increase_or_decrease == *event_mint_or_burn =>
-						Some((*amount_delta, *amount_total, *collected_fees, *swapped_liquidity)),
-					_ => None,
-				})
-				.expect("LimitOrderUpdated must have been generated");
-
-			UpdateLimitOrderReturn { amount_delta, amount_total, collected_fees, swapped_liquidity }
-		})
+		Ok(collect_limit_order_returns(events))
 	}
 
 	async fn set_limit_order(
@@ -282,7 +241,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
-	) -> Result<SetLimitOrderReturn> {
+	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the burn order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::set_limit_order {
@@ -296,44 +255,6 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_finalized()
 			.await?;
 
-		// Get some details from the emitted event
-		Ok({
-			let (
-				increase_or_decrease,
-				amount_delta,
-				amount_total,
-				collected_fees,
-				swapped_liquidity,
-			) = events
-				.iter()
-				.find_map(|event| match event {
-					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LimitOrderUpdated {
-							increase_or_decrease,
-							amount_delta,
-							amount_total,
-							collected_fees,
-							swapped_liquidity,
-							..
-						},
-					) => Some((
-						*increase_or_decrease,
-						*amount_delta,
-						*amount_total,
-						*collected_fees,
-						*swapped_liquidity,
-					)),
-					_ => None,
-				})
-				.expect("LimitOrderUpdated must have been generated");
-
-			SetLimitOrderReturn {
-				increase_or_decrease,
-				amount_delta,
-				amount_total,
-				collected_fees,
-				swapped_liquidity,
-			}
-		})
+		Ok(collect_limit_order_returns(events))
 	}
 }
