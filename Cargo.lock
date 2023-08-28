@@ -1347,6 +1347,7 @@ dependencies = [
  "pallet-cf-witnesser",
  "parity-scale-codec",
  "pin-project",
+ "prometheus",
  "rand 0.8.5",
  "regex",
  "reqwest",

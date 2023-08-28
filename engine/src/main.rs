@@ -5,7 +5,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
-	health, p2p,
+	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -113,6 +113,10 @@ async fn start(
 
 	if let Some(health_check_settings) = &settings.health_check {
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
+	}
+
+	if let Some(prometheus_settings) = &settings.prometheus {
+		metrics::start(scope, prometheus_settings).await?;
 	}
 
 	let (state_chain_stream, state_chain_client) =
