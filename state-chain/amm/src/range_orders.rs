@@ -959,10 +959,28 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
 	}
 
-	#[cfg(feature = "std")]
-	#[allow(dead_code)]
-	pub(super) fn positions(&self) -> BTreeMap<(LiquidityProvider, Tick, Tick), Liquidity> {
-		self.positions.iter().map(|(k, v)| (k.clone(), v.liquidity)).collect()
+	pub(super) fn position(
+		&self,
+		lp: &LiquidityProvider,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
+		Self::validate_position_range(lower_tick, upper_tick)?;
+		let mut position = self
+			.positions
+			.get(&(lp.clone(), lower_tick, upper_tick))
+			.ok_or(PositionError::NonExistent)?
+			.clone();
+		Ok((
+			position.collect_fees(
+				self,
+				lower_tick,
+				self.liquidity_map.get(&lower_tick).unwrap(),
+				upper_tick,
+				self.liquidity_map.get(&upper_tick).unwrap(),
+			),
+			PositionInfo::from(&position),
+		))
 	}
 }
 

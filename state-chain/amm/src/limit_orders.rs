@@ -699,7 +699,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets associated with a position
 	///
 	/// This function never panics.
-	#[allow(dead_code)]
 	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,

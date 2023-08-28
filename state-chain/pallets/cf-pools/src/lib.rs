@@ -15,6 +15,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
+use sp_std::vec::Vec;
 
 pub use pallet::*;
 
@@ -215,7 +216,7 @@ pub mod pallet {
 	pub struct Pool<T: Config> {
 		pub enabled: bool,
 		pub range_orders: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
-		pub limit_orders: BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>,
+		pub limit_orders: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
 
@@ -441,8 +442,8 @@ pub mod pallet {
 		},
 		LimitOrderUpdated {
 			lp: T::AccountId,
-			sell_asset: any::Asset,
-			buy_asset: any::Asset,
+			sell_asset: Asset,
+			buy_asset: Asset,
 			id: OrderId,
 			tick: Tick,
 			increase_or_decrease: IncreaseOrDecrease,
@@ -455,8 +456,8 @@ pub mod pallet {
 			fee_amount: AssetAmount,
 		},
 		AssetSwapped {
-			from: any::Asset,
-			to: any::Asset,
+			from: Asset,
+			to: Asset,
 			input_amount: AssetAmount,
 			output_amount: AssetAmount,
 		},
@@ -737,7 +738,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders
+					pool.limit_orders[asset_pair.base_side]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -804,7 +805,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders
+					pool.limit_orders[asset_pair.base_side]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -962,16 +963,16 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
+		let limit_orders = &mut pool.limit_orders[asset_pair.base_side];
 		if position_info.amount.is_zero() {
-			if let Some(limit_orders) = pool.limit_orders.get_mut(lp) {
-				limit_orders.remove(&id);
-				if limit_orders.is_empty() {
-					pool.limit_orders.remove(lp);
+			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
+				lp_limit_orders.remove(&id);
+				if lp_limit_orders.is_empty() {
+					limit_orders.remove(lp);
 				}
 			}
 		} else {
-			let limit_orders = pool.limit_orders.entry(lp.clone()).or_default();
-			limit_orders.insert(id, tick);
+			limit_orders.entry(lp.clone()).or_default().insert(id, tick);
 		}
 
 		let collected_fees = asset_pair.canonical_asset_pair.try_credit_asset(
@@ -1201,6 +1202,55 @@ impl<T: Config> Pallet<T> {
 					}
 				})
 			})
+	}
+
+	pub fn pool_liquidity_providers(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+	) -> Result<Vec<T::AccountId>, Error<T>> {
+		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
+		let pool =
+			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
+		let pool = &pool;
+
+		let mut lps = Iterator::chain(
+			[Side::Zero, Side::One]
+				.into_iter()
+				.flat_map(|side| {
+					pool.limit_orders[side].iter().filter(move |(lp, positions)| {
+						positions.iter().any(move |(id, tick)| {
+							!pool
+								.pool_state
+								.limit_order(&((*lp).clone(), *id), side, Order::Sell, *tick)
+								.unwrap()
+								.1
+								.amount
+								.is_zero()
+						})
+					})
+				})
+				.map(|(lp, _positions)| lp.clone()),
+			pool.range_orders
+				.iter()
+				.filter(|(lp, positions)| {
+					positions.iter().any(|(id, tick_range)| {
+						!pool
+							.pool_state
+							.range_order(&((*lp).clone(), *id), tick_range.clone())
+							.unwrap()
+							.1
+							.liquidity
+							.is_zero()
+					})
+				})
+				.map(|(lp, _positions)| lp.clone()),
+		)
+		.collect::<Vec<_>>();
+
+		lps.sort();
+		lps.dedup();
+
+		Ok(lps)
 	}
 }
 

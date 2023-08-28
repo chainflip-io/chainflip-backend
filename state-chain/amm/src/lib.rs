@@ -3,6 +3,8 @@
 pub mod test_utilities;
 mod tests;
 
+use core::convert::Infallible;
+
 use codec::{Decode, Encode};
 use common::{
 	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap,
@@ -244,5 +246,34 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> Result<SideMap<Amount>, range_orders::RequiredAssetRatioError> {
 		self.range_orders
 			.required_asset_ratio::<false>(tick_range.start, tick_range.end)
+	}
+
+	pub fn range_order(
+		&self,
+		lp: &LiquidityProvider,
+		tick_range: core::ops::Range<Tick>,
+	) -> Result<
+		(range_orders::Collected, range_orders::PositionInfo),
+		range_orders::PositionError<Infallible>,
+	> {
+		self.range_orders.position(lp, tick_range.start, tick_range.end)
+	}
+
+	pub fn limit_order(
+		&self,
+		lp: &LiquidityProvider,
+		side: Side,
+		order: Order,
+		tick: Tick,
+	) -> Result<
+		(limit_orders::Collected, limit_orders::PositionInfo),
+		limit_orders::PositionError<Infallible>,
+	> {
+		match (side, order) {
+			(Side::Zero, Order::Sell) | (Side::One, Order::Buy) =>
+				self.limit_orders.position::<OneToZero>(lp, tick),
+			(Side::Zero, Order::Buy) | (Side::One, Order::Sell) =>
+				self.limit_orders.position::<ZeroToOne>(lp, tick),
+		}
 	}
 }
