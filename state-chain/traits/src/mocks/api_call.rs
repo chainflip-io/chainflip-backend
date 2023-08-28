@@ -12,6 +12,7 @@ use sp_runtime::DispatchError;
 
 pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
+pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEthEnvironment;
 
@@ -22,7 +23,7 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
 			assets::eth::Asset::Flip => Some(ETHEREUM_FLIP_ADDRESS.into()),
-			_ => None,
+			assets::eth::Asset::Usdc => Some(ETHEREUM_USDC_ADDRESS.into()),
 		}
 	}
 }
@@ -63,25 +64,30 @@ pub struct MockAllBatch<MockEthEnvironment> {
 	_phantom: PhantomData<MockEthEnvironment>,
 }
 
+impl MockAllBatch<MockEthEnvironment> {
+	pub fn set_success(success: bool) {
+		ALL_BATCH_SUCCESS.with(|cell| *cell.borrow_mut() = success);
+	}
+}
+
+thread_local! {
+	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
+}
+
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Result<Self, AllBatchError> {
-		if fetch_params
-			.iter()
-			.any(|FetchAssetParams { asset, .. }| MockEthEnvironment::lookup(*asset).is_none()) ||
-			transfer_params.iter().any(|TransferAssetParams { asset, .. }| {
-				MockEthEnvironment::lookup(*asset).is_none()
-			}) {
-			Err(AllBatchError::Other)
-		} else {
+		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
 			Ok(Self::AllBatch(MockAllBatch {
 				nonce: Default::default(),
 				fetch_params,
 				transfer_params,
 				_phantom: PhantomData,
 			}))
+		} else {
+			Err(AllBatchError::Other)
 		}
 	}
 }
