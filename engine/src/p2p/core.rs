@@ -27,6 +27,8 @@ use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONN
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
 
+use crate::metrics::P2P_MSG_RECEIVED;
+
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
 /// this somewhat short to mitigate some attacks where clients
@@ -500,7 +502,7 @@ impl P2PContext {
 		// TODO: combine this with the authentication thread?
 		std::thread::spawn(move || loop {
 			let mut parts = receive_multipart(&socket).unwrap();
-
+			P2P_MSG_RECEIVED.inc();
 			// We require that all messages exchanged between
 			// peers only consist of one part. ZMQ dealer
 			// sockets automatically prepend a sender id
