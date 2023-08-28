@@ -11927,6 +11927,7 @@ dependencies = [
  "num-traits",
  "pin-project",
  "predicates 3.0.3",
+ "scopeguard",
  "serde",
  "sp-rpc",
  "tempfile",
