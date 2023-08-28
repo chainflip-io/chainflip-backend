@@ -29,8 +29,7 @@ import { sendEth } from './send_eth';
 // maxGasFee & GasLimit.
 
 const BASE_GAS_OVERHEAD = 120000;
-const DEFAULT_GAS_CONSUMPTION = 200000;
-// const DEFAULT_GAS_CONSUMPTION = 270000;
+const DEFAULT_GAS_CONSUMPTION = 270000;
 const GAS_PER_BYTE = 16;
 const tagSuffix = ' CcmGasLimit';
 
