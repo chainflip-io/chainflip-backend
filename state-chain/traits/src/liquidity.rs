@@ -64,24 +64,6 @@ impl<T: frame_system::Config> SwappingApi for T {
 	}
 }
 
-// TODO Remove these in favour of a real mocks.
-impl<T: frame_system::Config> SwapDepositHandler for T {
-	type AccountId = T::AccountId;
-
-	fn schedule_swap_from_channel(
-		_deposit_address: ForeignChainAddress,
-		_deposit_block_height: u64,
-		_from: Asset,
-		_to: Asset,
-		_amount: AssetAmount,
-		_destination_address: ForeignChainAddress,
-		_broker_id: Self::AccountId,
-		_broker_commission_bps: BasisPoints,
-		_channel_id: ChannelId,
-	) {
-	}
-}
-
 impl<T: frame_system::Config> LpBalanceApi for T {
 	type AccountId = T::AccountId;
 
