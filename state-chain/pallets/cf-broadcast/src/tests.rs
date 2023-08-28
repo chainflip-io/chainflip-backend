@@ -513,3 +513,8 @@ fn threshold_sign_and_broadcast_with_callback() {
 		);
 	});
 }
+
+#[test]
+fn ensure_save_mode() {
+	new_test_ext().execute_with(|| {});
+}
