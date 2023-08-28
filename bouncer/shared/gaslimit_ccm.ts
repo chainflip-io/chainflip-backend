@@ -87,7 +87,6 @@ async function testGasLimitSwap(
 
   // If sourceAsset is ETH then deposited gasAmount won't be swapped, so we need to observe the principal swap
   // instead. In any other scenario, including when destAsset is ETH, both principal and gasLimitBudget are being swapped.
-  let egressBudgetAmount;
   let swapScheduledHandle;
   if (sourceAsset === Assets.ETH) {
     swapScheduledHandle = observeSwapScheduled(
@@ -101,7 +100,6 @@ async function testGasLimitSwap(
   }
 
   Promise.all([send(sourceAsset, depositAddress), swapScheduledHandle]);
-  egressBudgetAmount = messageMetadata.gasBudget;
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
   const swapIdToEgressAmount: { [key: string]: string } = {};
@@ -153,7 +151,7 @@ async function testGasLimitSwap(
   swapScheduledObserved = true;
   await Promise.all([swapExecutedHandle, swapEgressHandle, ccmBroadcastHandle]);
 
-  egressBudgetAmount =
+  const egressBudgetAmount =
     sourceAsset !== Assets.ETH
       ? Number(swapIdToEgressAmount[swapId].replace(/,/g, ''))
       : messageMetadata.gasBudget;
@@ -214,13 +212,15 @@ async function testGasLimitSwap(
     const gasUsed = receipt.gasUsed;
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
+    const percBudgetUsed = (totalFee * 100) / egressBudgetAmount;
+    const percGasUsed = (gasUsed * 100) / gasLimitBudget;
     console.log('gasUsed            ', gasUsed);
     console.log('gasPrice           ', gasPrice);
     console.log('totalFee           ', totalFee);
     console.log('egressBudgetAmount ', egressBudgetAmount);
     console.log('diff               ', egressBudgetAmount - totalFee);
-    console.log('percBudgetUsed     ', (totalFee * 100) / egressBudgetAmount);
-    console.log('percGasUsed        ', (gasUsed * 100) / gasLimitBudget);
+    console.log('percBudgetUsed     ', percBudgetUsed);
+    console.log('percGasUsed        ', percGasUsed);
     // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
     if (totalFee > egressBudgetAmount) {
       throw new Error(`${tag} Transaction fee paid is higher than the budget paid by the user!`);
@@ -234,7 +234,7 @@ let spam = true;
 async function spamEthereum() {
   while (spam) {
     sendEth('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
-    await sleep(1000);
+    await sleep(500);
   }
 }
 
