@@ -90,17 +90,15 @@ fn print_total() {
 
 // Remember to add some extra funds to the dwarves to ensure they remain in the authority set.
 fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	[
-		include!("perseverance.snapshot")
-	]
-	.into_iter()
-	.map(|(addr, name, balance)| {
-		(
-			parse_account(addr),
-			AccountRole::Validator,
-			balance,
-			if name.is_empty() { None } else { Some(name.as_bytes().to_vec()) },
-		)
-	})
-	.collect::<Vec<_>>()
+	include!("perseverance.snapshot")
+		.into_iter()
+		.map(|(addr, name, balance)| {
+			(
+				parse_account(addr),
+				AccountRole::Validator,
+				balance,
+				if name.is_empty() { None } else { Some(name.as_bytes().to_vec()) },
+			)
+		})
+		.collect::<Vec<_>>()
 }
