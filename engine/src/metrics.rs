@@ -17,9 +17,6 @@ lazy_static::lazy_static! {
 
 	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpcMethod"]);
 	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpcMethod"]);
-
-	pub static ref P2P_MSG_RECEIVED: IntCounterVec = create_and_register_counter_vec("p2p_msg_received", "number of p2p messages received", &["from", "to"]);
-	pub static ref P2P_MSG_SENT: IntCounterVec = create_and_register_counter_vec("p2p_msg_sent", "number of p2p messages sent", &["from", "to"]);
 }
 
 fn create_and_register_counter_vec(name: &str, help: &str, labels: &[&str]) -> IntCounterVec {
@@ -103,7 +100,6 @@ mod test {
 					}
 				};
 
-				// starts with `has_completed_initialising` set to false
 				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"A\"} 1\ntest{label=\"B\"} 10\n").await;
 				request_test("invalid", reqwest::StatusCode::NOT_FOUND, "").await;
 
