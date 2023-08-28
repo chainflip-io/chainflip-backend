@@ -6,7 +6,6 @@ use cf_chains::{
 	Polkadot,
 };
 use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
-use codec::Encode;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -191,8 +190,6 @@ where
 		.await
 		.then({
 			let state_chain_client = state_chain_client.clone();
-
-			// maybe don't need this clone
 			let dot_client = dot_client.clone();
 			move |epoch, header| {
 				let state_chain_client = state_chain_client.clone();
@@ -206,8 +203,8 @@ where
 
 					for (extrinsic_index, tx_fee) in transaction_fee_paids(&broadcast_indices, &events) {
 						let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-						let xt_encoded = xt.0.encode();
-						let mut xt_bytes = xt_encoded.as_slice();
+						let mut xt_bytes = xt.0.as_slice();
+
 						let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 						if let Ok(unchecked) = unchecked {
 							if let Some(signature) = unchecked.signature() {
@@ -356,6 +353,7 @@ fn proxy_addeds(
 
 #[cfg(test)]
 mod test {
+
 	use super::{polkadot::runtime_types::polkadot_runtime::ProxyType as PolkadotProxyType, *};
 
 	fn mock_transfer(
