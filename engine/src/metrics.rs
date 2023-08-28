@@ -7,7 +7,7 @@ use std::net::IpAddr;
 
 use crate::settings;
 use lazy_static;
-use prometheus::{IntCounterVec, Opts, Registry};
+use prometheus::{IntCounter, IntCounterVec, Opts, Registry};
 use tracing::info;
 use utilities::task_scope;
 use warp::Filter;
@@ -17,10 +17,19 @@ lazy_static::lazy_static! {
 
 	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpcMethod"]);
 	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpcMethod"]);
+
+	pub static ref P2P_MSG_RECEIVED: IntCounter = create_and_register_counter("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)");
+	pub static ref P2P_BAD_MSG: IntCounterVec = create_and_register_counter_vec("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"]);
 }
 
 fn create_and_register_counter_vec(name: &str, help: &str, labels: &[&str]) -> IntCounterVec {
 	let m = IntCounterVec::new(Opts::new(name, help), labels).expect("Metric succesfully created");
+	REGISTRY.register(Box::new(m.clone())).expect("Metric succesfully register");
+	m
+}
+
+fn create_and_register_counter(name: &str, help: &str) -> IntCounter {
+	let m = IntCounter::new(name, help).expect("Metric succesfully created");
 	REGISTRY.register(Box::new(m.clone())).expect("Metric succesfully register");
 	m
 }
