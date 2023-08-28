@@ -310,7 +310,7 @@ fn can_mint_limit_order_with_validity() {
 		assert_ok!(LiquidityPools::collect_and_mint_limit_order(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Flip,
-			crate::Order::Buy,
+			crate::BuyOrSell::Buy,
 			0,
 			55,
 			Some(OrderValidity { valid_at: Range { end: 5, start: 2 }, valid_until: 4 }),
@@ -339,7 +339,7 @@ fn gets_rejected_if_order_window_has_already_passed() {
 			LiquidityPools::collect_and_mint_limit_order(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Flip,
-				crate::Order::Buy,
+				crate::BuyOrSell::Buy,
 				0,
 				55,
 				Some(OrderValidity { valid_at: Range { end: 0, start: 0 }, valid_until: 4 }),

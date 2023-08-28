@@ -12,7 +12,7 @@ use chainflip_engine::state_chain_observer::client::{
 };
 pub use core::ops::Range;
 use pallet_cf_pools::OrderValidity;
-pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, RangeOrderSize};
+pub use pallet_cf_pools::{utilities as pool_utilities, BuyOrSell, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
@@ -181,7 +181,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn mint_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		buy_or_sell: BuyOrSell,
 		price: Tick,
 		amount: AssetAmount,
 		validity: Option<OrderValidity<u32>>,
@@ -190,7 +190,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_limit_order {
 				unstable_asset: asset,
-				order,
+				buy_or_sell,
 				price_as_tick: price,
 				amount,
 				validity,
@@ -220,7 +220,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn burn_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		buy_or_sell: BuyOrSell,
 		price: Tick,
 		amount: AssetAmount,
 	) -> Result<BurnLimitOrderReturn> {
@@ -230,7 +230,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_limit_order {
 				unstable_asset: asset,
-				order,
+				buy_or_sell,
 				price_as_tick: price,
 				amount,
 			})

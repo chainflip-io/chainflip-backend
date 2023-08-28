@@ -6,7 +6,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSellOrder, LpApi, MintLimitOrderReturn,
+		BurnLimitOrderReturn, BurnRangeOrderReturn, BuyOrSell, LpApi, MintLimitOrderReturn,
 		MintRangeOrderReturn, Tick,
 	},
 	primitives::{
@@ -142,7 +142,7 @@ pub trait Rpc {
 	async fn mint_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		buy_or_sell: BuyOrSell,
 		price: Tick,
 		amount: NumberOrHex,
 		validity: Option<OrderValidity<u32>>,
@@ -152,7 +152,7 @@ pub trait Rpc {
 	async fn burn_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		buy_or_sell: BuyOrSell,
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<BurnLimitOrderReturn, Error>;
@@ -293,7 +293,7 @@ impl RpcServer for RpcServerImpl {
 	async fn mint_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		buy_or_sell: BuyOrSell,
 		price: Tick,
 		amount: NumberOrHex,
 		validity: Option<OrderValidity<u32>>,
@@ -301,7 +301,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.lp_api()
-			.mint_limit_order(asset, order, price, try_parse_number_or_hex(amount)?, validity)
+			.mint_limit_order(asset, buy_or_sell, price, try_parse_number_or_hex(amount)?, validity)
 			.await?)
 	}
 
@@ -310,14 +310,14 @@ impl RpcServer for RpcServerImpl {
 	async fn burn_limit_order(
 		&self,
 		asset: Asset,
-		order: BuyOrSellOrder,
+		buy_or_sell: BuyOrSell,
 		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<BurnLimitOrderReturn, Error> {
 		Ok(self
 			.api
 			.lp_api()
-			.burn_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
+			.burn_limit_order(asset, buy_or_sell, price, try_parse_number_or_hex(amount)?)
 			.await?)
 	}
 

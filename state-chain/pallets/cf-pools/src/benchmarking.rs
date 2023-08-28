@@ -115,7 +115,7 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000, Some(OrderValidity {
+	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, BuyOrSell::Sell, 100, 1_000_000, Some(OrderValidity {
 		valid_at: Range {start: BlockNumberFor::<T>::one(), end: BlockNumberFor::<T>::one()},
 		valid_until: BlockNumberFor::<T>::one()
 	}))
@@ -134,8 +134,8 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000, None));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
+		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, BuyOrSell::Sell, 100, 1_000, None));
+	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, BuyOrSell::Sell, 100, 1_000)
 	verify {}
 
 	impl_benchmark_test_suite!(

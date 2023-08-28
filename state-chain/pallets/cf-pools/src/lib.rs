@@ -70,7 +70,7 @@ pub mod pallet {
 
 	#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-	pub enum Order {
+	pub enum BuyOrSell {
 		Buy,
 		Sell,
 	}
@@ -86,7 +86,7 @@ pub mod pallet {
 	pub struct LimitOrderDetails<AccountId> {
 		pub lp: AccountId,
 		pub unstable_asset: any::Asset,
-		pub order: Order,
+		pub buy_or_sell: BuyOrSell,
 		pub price_as_tick: Tick,
 		pub amount: AssetAmount,
 	}
@@ -289,7 +289,7 @@ pub mod pallet {
 		LimitOrderMinted {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			order: Order,
+			buy_or_sell: BuyOrSell,
 			price_as_tick: Tick,
 			assets_debited: AssetAmount,
 			collected_fees: AssetAmount,
@@ -298,7 +298,7 @@ pub mod pallet {
 		LimitOrderBurned {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			order: Order,
+			buy_or_sell: BuyOrSell,
 			price_as_tick: Tick,
 			assets_credited: AssetAmount,
 			collected_fees: AssetAmount,
@@ -640,7 +640,7 @@ pub mod pallet {
 		pub fn collect_and_mint_limit_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			order: Order,
+			buy_or_sell: BuyOrSell,
 			price_as_tick: Tick,
 			amount: AssetAmount,
 			validity: Option<OrderValidity<BlockNumberFor<T>>>,
@@ -662,7 +662,7 @@ pub mod pallet {
 					Self::collect_and_mint_limit_order_inner(
 						lp.clone(),
 						unstable_asset,
-						order,
+						buy_or_sell,
 						price_as_tick,
 						amount,
 					)?;
@@ -676,7 +676,7 @@ pub mod pallet {
 							details: LimitOrderDetails {
 								lp,
 								unstable_asset,
-								order,
+								buy_or_sell,
 								price_as_tick,
 								amount,
 							},
@@ -688,7 +688,7 @@ pub mod pallet {
 				Self::collect_and_mint_limit_order_inner(
 					lp,
 					unstable_asset,
-					order,
+					buy_or_sell,
 					price_as_tick,
 					amount,
 				)?;
@@ -717,7 +717,7 @@ pub mod pallet {
 		pub fn collect_and_burn_limit_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			order: Order,
+			buy_or_sell: BuyOrSell,
 			price_as_tick: Tick,
 			amount: AssetAmount,
 		) -> DispatchResult {
@@ -729,7 +729,7 @@ pub mod pallet {
 			Self::collect_and_burn_limit_order_inner(
 				lp,
 				unstable_asset,
-				order,
+				buy_or_sell,
 				price_as_tick,
 				amount,
 			)?;
@@ -823,7 +823,7 @@ impl<T: Config> Pallet<T> {
 						match Self::collect_and_mint_limit_order_inner(
 							order.details.lp,
 							order.details.unstable_asset,
-							order.details.order,
+							order.details.buy_or_sell,
 							order.details.price_as_tick,
 							order.details.amount,
 						) {
@@ -850,7 +850,7 @@ impl<T: Config> Pallet<T> {
 						if let Err(err) = Self::collect_and_burn_limit_order_inner(
 							order.details.lp,
 							order.details.unstable_asset,
-							order.details.order,
+							order.details.buy_or_sell,
 							order.details.price_as_tick,
 							order.details.amount,
 						) {
@@ -869,12 +869,12 @@ impl<T: Config> Pallet<T> {
 	pub fn collect_and_burn_limit_order_inner(
 		lp: T::AccountId,
 		unstable_asset: any::Asset,
-		order: Order,
+		buy_or_sell: BuyOrSell,
 		price_as_tick: Tick,
 		amount: AssetAmount,
 	) -> DispatchResult {
 		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-			let side = utilities::order_to_side(order);
+			let side = utilities::order_to_side(buy_or_sell);
 
 			let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }, _) =
 				(match side {
@@ -896,7 +896,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::LimitOrderBurned {
 				lp,
 				unstable_asset,
-				order,
+				buy_or_sell,
 				price_as_tick,
 				assets_credited,
 				collected_fees,
@@ -910,12 +910,12 @@ impl<T: Config> Pallet<T> {
 	pub fn collect_and_mint_limit_order_inner(
 		lp: T::AccountId,
 		unstable_asset: any::Asset,
-		order: Order,
+		buy_or_sell: BuyOrSell,
 		price_as_tick: Tick,
 		amount: AssetAmount,
 	) -> DispatchResult {
 		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-			let side = utilities::order_to_side(order);
+			let side = utilities::order_to_side(buy_or_sell);
 
 			Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
@@ -942,7 +942,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::LimitOrderMinted {
 				lp,
 				unstable_asset,
-				order,
+				buy_or_sell,
 				price_as_tick,
 				assets_debited: amount,
 				collected_fees,
@@ -1096,10 +1096,10 @@ pub mod utilities {
 		}
 	}
 
-	pub fn order_to_side(order: Order) -> Side {
-		match order {
-			Order::Buy => Side::One,
-			Order::Sell => Side::Zero,
+	pub fn order_to_side(buy_or_sell: BuyOrSell) -> Side {
+		match buy_or_sell {
+			BuyOrSell::Buy => Side::One,
+			BuyOrSell::Sell => Side::Zero,
 		}
 	}
 

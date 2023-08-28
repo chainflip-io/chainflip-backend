@@ -16,7 +16,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::{Order, RangeOrderSize};
+use pallet_cf_pools::{BuyOrSell, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
@@ -127,7 +127,7 @@ fn mint_range_order(
 fn mint_limit_order(
 	account_id: &AccountId,
 	unstable_asset: Asset,
-	order: Order,
+	order: BuyOrSell,
 	tick: Tick,
 	amount: AssetAmount,
 ) {
@@ -147,7 +147,7 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
 	let new_stable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	if order == Order::Sell {
+	if order == BuyOrSell::Sell {
 		assert_eq!(new_unstable_balance, unstable_balance - amount);
 		assert_eq!(new_stable_balance, stable_balance);
 	} else {
@@ -197,10 +197,10 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Eth, Order::Sell, 0, 500_000);
+		mint_limit_order(&DORIS, Asset::Eth, BuyOrSell::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Eth, -10..10, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Flip, Order::Sell, 0, 500_000);
+		mint_limit_order(&DORIS, Asset::Flip, BuyOrSell::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Flip, -10..10, 1_000_000);
 
 		new_account(&ZION, AccountRole::Broker);
