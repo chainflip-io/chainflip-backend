@@ -10,7 +10,7 @@ use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
+		traits::{AtLeast32BitUnsigned, CheckedSub},
 		DispatchError,
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
@@ -74,12 +74,11 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ Default
-		+ Saturating
+		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
-		+ BenchmarkValue
-		+ Ord;
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
