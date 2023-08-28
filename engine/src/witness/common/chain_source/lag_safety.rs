@@ -155,7 +155,7 @@ mod tests {
 			&self,
 		) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 			let mut guard = self.stream.lock().await;
-			let stream = guard.take().unwrap();
+			let stream = guard.take().expect("should only be called once, with a stream set");
 			(Box::pin(stream), self.client.clone())
 		}
 	}
@@ -218,7 +218,10 @@ mod tests {
 			assert_eq!(chain_stream.next().await.unwrap().index, i);
 		}
 		assert!(chain_stream.next().await.is_none());
-		assert_eq!(client.queried_indices().await, vec![3, 4]);
+		assert_eq!(
+			client.queried_indices().await,
+			(INDICES.start - MARGIN as u64..INDICES.start).collect::<Vec<_>>()
+		);
 	}
 
 	fn test_header(index: u64, hash: u64, parent_hash: u64) -> Header<u64, u64, ()> {
@@ -273,14 +276,16 @@ mod tests {
 	}
 
 	// This is not ideal, but it's an accepted risk. We test this to ensure that we don't crash or
-	// some other strange behaviour.
+	// encounter some other strange, unaccounted for behaviour.
 	#[tokio::test]
 	async fn reorg_with_depth_less_than_safety_margin_passes_through_bad_block() {
 		const MARGIN: usize = 2;
 
+		let bad_block = test_header(5, 55, 44);
+
 		let mock_chain_source = MockChainSource::new(stream::iter([
 			// these three are on a bad fork
-			test_header(5, 55, 44),
+			bad_block,
 			test_header(6, 66, 55),
 			test_header(7, 77, 66),
 			// canonical chain
@@ -294,13 +299,13 @@ mod tests {
 		let lag_safety = LagSafety::new(mock_chain_source, MARGIN);
 		let (mut chain_stream, client) = lag_safety.stream_and_client().await;
 
-		for i in (5 - MARGIN as u64)..(5 as u64) {
+		for i in (5 - MARGIN as u64)..5 {
 			assert_eq!(chain_stream.next().await, Some(normal_header(i)));
 		}
 		// Here's the bad block, we consider it safe now, because within the bad fork it's safe.
-		assert_eq!(chain_stream.next().await.unwrap(), test_header(5, 55, 44));
+		assert_eq!(chain_stream.next().await.unwrap(), bad_block);
 
-		for i in (6 as u64)..(12 - MARGIN as u64) {
+		for i in 6..(12 - MARGIN as u64) {
 			assert_eq!(chain_stream.next().await, Some(normal_header(i)));
 		}
 
