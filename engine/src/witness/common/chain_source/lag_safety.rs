@@ -7,6 +7,9 @@ use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
 use super::{BoxChainStream, ChainSource, Header};
 
+/// Outputs the block index that is `margin` less than the last block pulled from the inner source.
+/// This means it's possible it produces two of the same block, for example, if strictly monotonic
+/// is not applied before the lag_safety.
 #[derive(Clone)]
 pub struct LagSafety<InnerSource> {
 	inner_source: InnerSource,
