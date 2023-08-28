@@ -940,6 +940,9 @@ fn basic_balance_tracking() {
 	const ETH_DEPOSIT_AMOUNT: u128 = 1_000;
 	const FLIP_DEPOSIT_AMOUNT: u128 = 2_000;
 	const USDC_DEPOSIT_AMOUNT: u128 = 3_000;
+	// Expiry just needs to be sufficiently high so that it won't trigger.
+	const EXPIRY_BLOCK: u64 = 1_000;
+
 	new_test_ext()
 		.check_deposit_balances(&[
 			(eth::Asset::Eth, 0),
@@ -950,7 +953,7 @@ fn basic_balance_tracking() {
 			DepositRequest::Liquidity {
 				lp_account: ALICE,
 				asset: eth::Asset::Eth,
-				expiry_block: 10,
+				expiry_block: EXPIRY_BLOCK,
 			},
 			ETH_DEPOSIT_AMOUNT,
 		)])
@@ -963,7 +966,7 @@ fn basic_balance_tracking() {
 			DepositRequest::Liquidity {
 				lp_account: ALICE,
 				asset: eth::Asset::Flip,
-				expiry_block: 10,
+				expiry_block: EXPIRY_BLOCK,
 			},
 			FLIP_DEPOSIT_AMOUNT,
 		)])
@@ -976,7 +979,7 @@ fn basic_balance_tracking() {
 			DepositRequest::Liquidity {
 				lp_account: ALICE,
 				asset: eth::Asset::Usdc,
-				expiry_block: 10,
+				expiry_block: EXPIRY_BLOCK,
 			},
 			USDC_DEPOSIT_AMOUNT,
 		)])
@@ -989,7 +992,7 @@ fn basic_balance_tracking() {
 			DepositRequest::Liquidity {
 				lp_account: ALICE,
 				asset: eth::Asset::Eth,
-				expiry_block: 10,
+				expiry_block: EXPIRY_BLOCK,
 			},
 			ETH_DEPOSIT_AMOUNT,
 		)])
@@ -1003,7 +1006,7 @@ fn basic_balance_tracking() {
 				source_asset: eth::Asset::Eth,
 				destination_asset: eth::Asset::Flip,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				expiry_block: 1_000u64,
+				expiry_block: EXPIRY_BLOCK,
 			},
 			ETH_DEPOSIT_AMOUNT,
 		)])

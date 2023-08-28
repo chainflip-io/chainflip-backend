@@ -181,12 +181,18 @@ pub mod pallet {
 		}
 
 		pub fn register_transfer(&mut self, amount: TargetChainAmount<T, I>) {
+			if amount < self.fetched {
+				log::error!("Transfer amount is greater than available funds");
+			}
 			self.fetched.saturating_reduce(amount);
 		}
 
 		pub fn mark_as_fetched(&mut self, amount: TargetChainAmount<T, I>) {
-			let amount = amount.min(self.unfetched);
-			self.unfetched -= amount;
+			debug_assert!(
+				self.unfetched >= amount,
+				"Accounting error: not enough unfetched funds."
+			);
+			self.unfetched.saturating_reduce(amount);
 			self.fetched.saturating_accrue(amount);
 		}
 	}
