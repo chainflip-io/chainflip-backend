@@ -31,10 +31,9 @@ sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfl
 tokio = "1.20.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-cf-amm = { path = "../../../state-chain/amm" }
-pallet-cf-pools = { path = '../../../state-chain/pallets/cf-pools' }
-cf-primitives = { path = "../../../state-chain/primitives" }
 
 # Local
-chainflip-api = { path = "../../lib" }
+cf-primitives = { path = "../../../state-chain/primitives" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
+chainflip-api = { path = "../../lib" }
+pallet-cf-pools = { path = '../../../state-chain/pallets/cf-pools' }
