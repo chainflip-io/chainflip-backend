@@ -11,7 +11,7 @@ use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, Percent,
+	Percent,
 };
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -139,22 +139,13 @@ pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
 pub const PETER: <Test as frame_system::Config>::AccountId = 988u64;
 pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		governance: GovernanceConfig {
 			members: BTreeSet::from([ALICE, BOB, CHARLES]),
 			expiry_span: 50,
 		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		// This is required to log events.
-		System::set_block_number(1);
-	});
-
-	ext
+	}
 }

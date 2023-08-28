@@ -5,10 +5,7 @@ use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleReg
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_std::collections::btree_set::BTreeSet;
 
 type AccountId = u64;
@@ -87,23 +84,16 @@ pub const ALISSA: <Test as frame_system::Config>::AccountId = 1u64;
 pub const BOBSON: <Test as frame_system::Config>::AccountId = 2u64;
 pub const CHARLEMAGNE: <Test as frame_system::Config>::AccountId = 3u64;
 pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 4u64;
+const GENESIS_AUTHORITIES: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities =
-		system::GenesisConfig::<Test>::default().build_storage().unwrap().into();
-
-	const GENESIS_AUTHORITIES: [u64; 3] = [ALISSA, BOBSON, CHARLEMAGNE];
-
-	ext.execute_with(|| {
-		// This is required to log events.
-		System::set_block_number(1);
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	||{
 		MockEpochInfo::next_epoch(BTreeSet::from(GENESIS_AUTHORITIES));
 		for id in GENESIS_AUTHORITIES.iter().chain(&[DEIRDRE]) {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
 				.unwrap();
 		}
-	});
-
-	ext
+	}
 }
