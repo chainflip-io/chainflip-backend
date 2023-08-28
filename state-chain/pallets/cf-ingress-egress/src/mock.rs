@@ -126,6 +126,7 @@ impl crate::Config for Test {
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
 
 // Configure a mock runtime to test the pallet.
 impl_test_helpers!(Test);
