@@ -16,8 +16,6 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use sp_arithmetic::traits::Zero;
 
-use sp_std::vec;
-
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +41,7 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+	use frame_support::DefaultNoBound;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::{vec, vec::Vec};
 
@@ -50,11 +49,65 @@ pub mod pallet {
 
 	/// This is the actual type we use to determine if an order is valid.
 	/// We can extend this later on with Price/Quantity constraints.
-	#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+	#[derive(
+		Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen, DefaultNoBound,
+	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct OrderValidity<BlockNumber: PartialOrd + Copy> {
-		pub valid_at: Range<BlockNumber>,
-		pub valid_until: BlockNumber,
+		valid_at: Option<Range<BlockNumber>>,
+		valid_until: Option<BlockNumber>,
+	}
+
+	impl<BlockNumber: PartialOrd + Copy> OrderValidity<BlockNumber> {
+		#[cfg(test)]
+		pub fn new(valid_at: Option<Range<BlockNumber>>, valid_until: Option<BlockNumber>) -> Self {
+			let validity = Self { valid_at, valid_until };
+			assert!(validity.is_internally_consistent());
+			validity
+		}
+
+		/// Returns false if the constructed validity is internally inconsistent.
+		pub fn is_internally_consistent(&self) -> bool {
+			self.valid_at.as_ref().map_or(true, |range| {
+				!range.is_empty() && self.valid_until.map_or(true, |until| until > range.end)
+			})
+		}
+
+		/// The future block at which the order should be minted.
+		pub fn mint_block(&self) -> Option<BlockNumber> {
+			self.valid_at.as_ref().map(|range| range.start)
+		}
+
+		/// The future block at which the order should be burned.
+		pub fn burn_block(&self) -> Option<BlockNumber> {
+			self.valid_until
+		}
+
+		/// Whether this validity will *ever* be ready.
+		pub fn is_valid_at(&self, block_number: BlockNumber) -> bool {
+			debug_assert!(self.is_internally_consistent());
+			let entry_window_not_past = match self.valid_at {
+				Some(ref range) => range.end > block_number,
+				None => true,
+			};
+			let expiry_not_past = match self.valid_until {
+				Some(expiry_block) => expiry_block > block_number,
+				None => true,
+			};
+			entry_window_not_past && expiry_not_past
+		}
+
+		/// Whether this validity is ready at a given block number.
+		pub fn is_ready_at(&self, block_number: BlockNumber) -> bool {
+			debug_assert!(self.is_internally_consistent());
+			match self.valid_at {
+				Some(ref range) => range.contains(&block_number),
+				None => match self.valid_until {
+					Some(until) => block_number < until,
+					None => true,
+				},
+			}
+		}
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
@@ -76,12 +129,11 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub enum OrderLifetime {
-		Pending,
-		Canceled,
+	pub enum OrderUpdate<AccountId, BlockNumber> {
+		Mint { order_details: LimitOrderDetails<AccountId>, expiry_block: Option<BlockNumber> },
+		Burn { order_details: LimitOrderDetails<AccountId> },
 	}
 
-	// TODO: add needed fields to this struct for mint/burn.
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub struct LimitOrderDetails<AccountId> {
 		pub lp: AccountId,
@@ -89,13 +141,6 @@ pub mod pallet {
 		pub buy_or_sell: BuyOrSell,
 		pub price_as_tick: Tick,
 		pub amount: AssetAmount,
-	}
-
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct OrderDetails<AccountId, BlockNumber: PartialOrd + Copy> {
-		pub lifetime: OrderLifetime,
-		pub validity: OrderValidity<BlockNumber>,
-		pub details: LimitOrderDetails<AccountId>,
 	}
 
 	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
@@ -148,8 +193,8 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		BlockNumberFor<T>,
-		Vec<OrderDetails<T::AccountId, BlockNumberFor<T>>>,
-		OptionQuery,
+		Vec<OrderUpdate<T::AccountId, BlockNumberFor<T>>>,
+		ValueQuery,
 	>;
 
 	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
@@ -253,6 +298,8 @@ pub mod pallet {
 		BurningLimitOrderDisabled,
 		/// The order is expired.
 		OrderValidityExpired,
+		/// The specified order validity is internally inconsistent.
+		OrderValidityInconsistent,
 	}
 
 	#[pallet::event]
@@ -650,49 +697,38 @@ pub mod pallet {
 				Error::<T>::MintingLimitOrderDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			if let Some(order_validity) = validity {
-				let current_block = <frame_system::Pallet<T>>::block_number();
-				// Ensure that the order is not added after the creation window has ended.
-				ensure!(
-					current_block <= order_validity.valid_at.end,
-					Error::<T>::OrderValidityExpired
-				);
-				// Order is already inside the creation window
-				if current_block >= order_validity.valid_at.start {
-					Self::collect_and_mint_limit_order_inner(
-						lp.clone(),
-						unstable_asset,
-						buy_or_sell,
-						price_as_tick,
-						amount,
-					)?;
-				} else {
-					// Schedule the mint
-					Self::add_to_order_queue(
-						order_validity.valid_at.start,
-						OrderDetails {
-							lifetime: OrderLifetime::Pending,
-							validity: order_validity,
-							details: LimitOrderDetails {
-								lp,
-								unstable_asset,
-								buy_or_sell,
-								price_as_tick,
-								amount,
-							},
-						},
-					);
-				}
-				Ok(())
-			} else {
+			let validity = validity.unwrap_or_default();
+			let current_block = <frame_system::Pallet<T>>::block_number();
+
+			ensure!(validity.is_internally_consistent(), Error::<T>::OrderValidityInconsistent);
+			ensure!(validity.is_valid_at(current_block), Error::<T>::OrderValidityExpired);
+
+			if validity.is_ready_at(current_block) {
 				Self::collect_and_mint_limit_order_inner(
-					lp,
+					lp.clone(),
 					unstable_asset,
 					buy_or_sell,
 					price_as_tick,
 					amount,
-				)?;
+				)
+			} else if let Some(mint_block) = validity.mint_block() {
+				LimitOrderQueue::<T>::append(
+					mint_block,
+					OrderUpdate::Mint {
+						order_details: LimitOrderDetails {
+							lp,
+							unstable_asset,
+							buy_or_sell,
+							price_as_tick,
+							amount,
+						},
+						expiry_block: validity.burn_block(),
+					},
+				);
 				Ok(())
+			} else {
+				log::error!("Order validity checks failed.");
+				Err(Error::<T>::OrderValidityExpired.into())
 			}
 		}
 
@@ -801,69 +837,62 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn add_to_order_queue(
-		block_number: BlockNumberFor<T>,
-		order: OrderDetails<T::AccountId, BlockNumberFor<T>>,
-	) {
-		LimitOrderQueue::<T>::mutate(block_number, |orders| {
-			if let Some(orders) = orders {
-				orders.push(order);
-			} else {
-				*orders = Some(vec![order]);
-			}
-		});
-	}
-
 	pub fn mint_or_burn_orders(current_block: BlockNumberFor<T>) -> Weight {
-		if let Some(orders) = LimitOrderQueue::<T>::take(current_block) {
-			for order in orders.into_iter() {
-				match order.lifetime {
-					OrderLifetime::Pending => {
-						let details_copy = order.clone().details;
-						match Self::collect_and_mint_limit_order_inner(
-							order.details.lp,
-							order.details.unstable_asset,
-							order.details.buy_or_sell,
-							order.details.price_as_tick,
-							order.details.amount,
-						) {
-							Ok(_) => {
-								Self::add_to_order_queue(
-									order.validity.valid_until,
-									OrderDetails {
-										lifetime: OrderLifetime::Canceled,
-										validity: order.validity,
-										details: details_copy,
+		let mut weight_used = Weight::zero();
+		for command in LimitOrderQueue::<T>::take(current_block) {
+			match command {
+				OrderUpdate::Mint {
+					order_details:
+						LimitOrderDetails { lp, unstable_asset, buy_or_sell, price_as_tick, amount },
+					expiry_block,
+				} => {
+					weight_used += T::WeightInfo::collect_and_mint_limit_order();
+					match Self::collect_and_mint_limit_order_inner(
+						lp.clone(),
+						unstable_asset,
+						buy_or_sell,
+						price_as_tick,
+						amount,
+					) {
+						Ok(_) =>
+							if let Some(expiry_block) = expiry_block {
+								LimitOrderQueue::<T>::append(
+									expiry_block,
+									OrderUpdate::Burn {
+										order_details: LimitOrderDetails {
+											lp,
+											unstable_asset,
+											buy_or_sell,
+											price_as_tick,
+											amount,
+										},
 									},
 								);
 							},
-							Err(err) => {
-								Self::deposit_event(Event::<T>::MintingLimitOrderFailed {
-									lp: details_copy.lp,
-									error: err,
-								});
-							},
-						}
-					},
-					OrderLifetime::Canceled => {
-						let details_copy = order.clone().details;
-						if let Err(err) = Self::collect_and_burn_limit_order_inner(
-							order.details.lp,
-							order.details.unstable_asset,
-							order.details.buy_or_sell,
-							order.details.price_as_tick,
-							order.details.amount,
-						) {
-							Self::deposit_event(Event::<T>::BurningLimitOrderFailed {
-								lp: details_copy.lp,
-								error: err,
-							});
-						}
-					},
-				}
+						Err(error) => {
+							Self::deposit_event(Event::<T>::MintingLimitOrderFailed { lp, error });
+						},
+					}
+				},
+				OrderUpdate::Burn {
+					order_details:
+						LimitOrderDetails { lp, unstable_asset, buy_or_sell, price_as_tick, amount },
+				} => {
+					weight_used.saturating_accrue(T::WeightInfo::collect_and_burn_limit_order());
+					if let Err(error) = Self::collect_and_burn_limit_order_inner(
+						lp.clone(),
+						unstable_asset,
+						buy_or_sell,
+						price_as_tick,
+						amount,
+					) {
+						Self::deposit_event(Event::<T>::BurningLimitOrderFailed { lp, error });
+					}
+				},
 			}
 		}
-		Weight::default()
+
+		weight_used
 	}
 
 	pub fn collect_and_burn_limit_order_inner(

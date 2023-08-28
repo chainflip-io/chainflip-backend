@@ -115,10 +115,14 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, BuyOrSell::Sell, 100, 1_000_000, Some(OrderValidity {
-		valid_at: Range {start: BlockNumberFor::<T>::one(), end: BlockNumberFor::<T>::one()},
-		valid_until: BlockNumberFor::<T>::one()
-	}))
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		Asset::Eth,
+		BuyOrSell::Sell,
+		100,
+		1_000_000,
+		Some(Default::default())
+	)
 	verify {}
 
 	collect_and_burn_limit_order {

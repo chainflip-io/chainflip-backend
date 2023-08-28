@@ -1,4 +1,4 @@
-use core::{ops::Range, panic};
+use core::panic;
 
 use crate::{
 	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, LimitOrderQueue,
@@ -313,16 +313,20 @@ fn can_mint_limit_order_with_validity() {
 			crate::BuyOrSell::Buy,
 			0,
 			55,
-			Some(OrderValidity { valid_at: Range { end: 5, start: 2 }, valid_until: 4 }),
+			Some(OrderValidity::new(Some(2..5), Some(6))),
 		));
 		// Not yet minted.
-		assert!(LimitOrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_some());
+		assert!(!LimitOrderQueue::<Test>::get(2).is_empty());
 		// We mint the order.
-		LiquidityPools::on_initialize(BlockNumberFor::<Test>::from(2u64));
+		LiquidityPools::on_initialize(2);
 		// Removed as minted from the order queue.
-		assert!(LimitOrderQueue::<Test>::get(BlockNumberFor::<Test>::from(2u64)).is_none());
+		assert!(
+			LimitOrderQueue::<Test>::get(2).is_empty(),
+			"Should be empty, but is {:?}",
+			LimitOrderQueue::<Test>::get(2)
+		);
 		// Order is getting moved to the block where we expect it to ge burned.
-		assert!(LimitOrderQueue::<Test>::get(BlockNumberFor::<Test>::from(4u64)).is_some());
+		assert!(!LimitOrderQueue::<Test>::get(6).is_empty());
 	});
 }
 
@@ -335,6 +339,7 @@ fn gets_rejected_if_order_window_has_already_passed() {
 			Default::default(),
 			sqrt_price_at_tick(0),
 		));
+		System::set_block_number(1);
 		assert_noop!(
 			LiquidityPools::collect_and_mint_limit_order(
 				RuntimeOrigin::signed(ALICE),
@@ -342,11 +347,75 @@ fn gets_rejected_if_order_window_has_already_passed() {
 				crate::BuyOrSell::Buy,
 				0,
 				55,
-				Some(OrderValidity { valid_at: Range { end: 0, start: 0 }, valid_until: 4 }),
+				Some(OrderValidity::new(Some(0..1), None)),
 			),
 			Error::<Test>::OrderValidityExpired
 		);
 	});
+}
+
+mod order_validity_tests {
+	use super::*;
+
+	#[test]
+	fn default_is_always_valid() {
+		let validity = OrderValidity::default();
+
+		assert!(validity.is_valid_at(0));
+		assert!(validity.is_valid_at(1));
+		assert!(validity.is_valid_at(BlockNumberFor::<Test>::MAX));
+
+		assert!(validity.is_ready_at(0));
+		assert!(validity.is_ready_at(1));
+		assert!(validity.is_ready_at(BlockNumberFor::<Test>::MAX));
+	}
+
+	#[test]
+	fn validity_window() {
+		let validity = OrderValidity::new(Some(2u32..5), None);
+
+		assert!(validity.is_valid_at(1));
+		assert!(validity.is_valid_at(2));
+		assert!(validity.is_valid_at(3));
+		assert!(validity.is_valid_at(4));
+		assert!(!validity.is_valid_at(5));
+
+		assert!(!validity.is_ready_at(1));
+		assert!(validity.is_ready_at(2));
+		assert!(validity.is_ready_at(3));
+		assert!(validity.is_ready_at(4));
+		assert!(!validity.is_ready_at(5));
+	}
+
+	#[test]
+	fn expiry() {
+		let validity = OrderValidity::new(None, Some(3));
+
+		assert!(validity.is_valid_at(2));
+		assert!(!validity.is_valid_at(3));
+		assert!(!validity.is_valid_at(4));
+
+		assert!(validity.is_ready_at(2));
+		assert!(!validity.is_ready_at(3));
+		assert!(!validity.is_ready_at(4));
+	}
+
+	#[test]
+	fn combined() {
+		let validity = OrderValidity::new(Some(2..4), Some(5));
+
+		assert!(validity.is_valid_at(2));
+		assert!(validity.is_valid_at(3));
+		assert!(!validity.is_valid_at(4));
+		assert!(!validity.is_valid_at(5));
+		assert!(!validity.is_valid_at(6));
+
+		assert!(validity.is_ready_at(2));
+		assert!(validity.is_ready_at(3));
+		assert!(!validity.is_ready_at(4));
+		assert!(!validity.is_ready_at(5));
+		assert!(!validity.is_ready_at(5));
+	}
 }
 
 /*
