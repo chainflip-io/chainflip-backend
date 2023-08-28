@@ -60,8 +60,8 @@ impl core::ops::Not for Side {
 	Deserialize,
 )]
 pub struct SideMap<T> {
-	zero: T,
-	one: T,
+	pub zero: T,
+	pub one: T,
 }
 impl<T> SideMap<T> {
 	pub fn from_array(array: [T; 2]) -> Self {
@@ -105,12 +105,12 @@ impl<T: std::ops::Add<R>, R> std::ops::Add<SideMap<R>> for SideMap<T> {
 	}
 }
 
-pub(super) fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	let c: U512 = c.into();
 	(U256::full_mul(a, b) / c).try_into().unwrap()
 }
 
-pub(super) fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	mul_div(a, b, c).1
 }
 

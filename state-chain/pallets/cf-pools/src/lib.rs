@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Order, Price, Side},
+	common::{mul_div_ceil, Amount, Order, Price, Side, SideMap},
 	limit_orders, range_orders, NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
@@ -140,8 +140,14 @@ impl<T: Config> AssetPair<T> {
 		&self,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
 	) -> Result<AssetAmounts, <cf_amm::common::Amount as TryInto<AssetAmount>>::Error> {
-		let side_map = side_map.try_map(|_, amount| amount.try_into())?;
-		Ok(AssetAmounts { base: side_map[self.base_side], pair: side_map[!self.base_side] })
+		Ok(self.side_map_to_assets_map(side_map.try_map(|_, amount| amount.try_into())?))
+	}
+
+	fn side_map_to_assets_map<R>(&self, side_map: cf_amm::common::SideMap<R>) -> AssetsMap<R> {
+		match self.base_side {
+			Side::Zero => AssetsMap { base: side_map.zero, pair: side_map.one },
+			Side::One => AssetsMap { base: side_map.one, pair: side_map.zero },
+		}
 	}
 
 	fn try_debit_assets(
@@ -229,10 +235,12 @@ pub mod pallet {
 		Deserialize,
 		Serialize,
 	)]
-	pub struct AssetAmounts {
-		pub base: AssetAmount,
-		pub pair: AssetAmount,
+	pub struct AssetsMap<T> {
+		pub base: T,
+		pub pair: T,
 	}
+
+	pub type AssetAmounts = AssetsMap<AssetAmount>;
 
 	#[derive(
 		Copy,
@@ -1150,6 +1158,49 @@ impl<T: Config> Pallet<T> {
 		let asset_pair = &AssetPair::new(from, to).ok()?;
 		Pools::<T>::get(&asset_pair.canonical_asset_pair)
 			.and_then(|mut pool| pool.pool_state.current_price(asset_pair.base_side, Order::Sell))
+	}
+
+	pub fn required_asset_ratio_for_range_order(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+		tick_range: Range<cf_amm::common::Tick>,
+	) -> Result<AssetAmounts, Error<T>> {
+		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
+		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair.clone())
+			.ok_or(Error::<T>::PoolDoesNotExist)?;
+
+		pool.pool_state
+			.required_asset_ratio_for_range_order(tick_range)
+			.map_err(|error| match error {
+				range_orders::RequiredAssetRatioError::InvalidTickRange =>
+					Error::<T>::InvalidTickRange,
+			})
+			.map(|side_map| {
+				#[allow(clippy::collapsible_else_if)]
+				asset_pair.side_map_to_assets_map(if side_map[Side::Zero] > side_map[Side::One] {
+					if side_map[Side::Zero] > Amount::from(AssetAmount::MAX) {
+						SideMap::from_array([
+							u128::MAX,
+							mul_div_ceil(side_map[Side::One], u128::MAX.into(), Amount::MAX)
+								.try_into()
+								.unwrap(),
+						])
+					} else {
+						side_map.map(|_, amount| amount.try_into().unwrap())
+					}
+				} else {
+					if side_map[Side::One] > Amount::from(AssetAmount::MAX) {
+						SideMap::from_array([
+							mul_div_ceil(side_map[Side::Zero], u128::MAX.into(), Amount::MAX)
+								.try_into()
+								.unwrap(),
+							u128::MAX,
+						])
+					} else {
+						side_map.map(|_, amount| amount.try_into().unwrap())
+					}
+				})
+			})
 	}
 }
 

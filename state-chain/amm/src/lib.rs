@@ -237,4 +237,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	> {
 		self.range_orders.collect_and_burn(lp, tick_range.start, tick_range.end, size)
 	}
+
+	pub fn required_asset_ratio_for_range_order(
+		&self,
+		tick_range: core::ops::Range<Tick>,
+	) -> Result<SideMap<Amount>, range_orders::RequiredAssetRatioError> {
+		self.range_orders
+			.required_asset_ratio::<false>(tick_range.start, tick_range.end)
+	}
 }

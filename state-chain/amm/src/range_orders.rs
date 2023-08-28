@@ -36,7 +36,8 @@ use crate::common::{
 pub type Liquidity = u128;
 type FeeGrowthQ128F128 = U256;
 
-const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
+pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
+	Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Position {
@@ -339,11 +340,9 @@ pub enum BurnError {
 pub enum CollectError {}
 
 #[derive(Debug)]
-pub enum LiquidityToAmountsError {
+pub enum RequiredAssetRatioError {
 	/// Invalid Tick range
 	InvalidTickRange,
-	/// The specified liquidity is greater than the maximum
-	InvalidLiquidityAmount,
 }
 
 #[derive(Debug)]
@@ -821,23 +820,23 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.ok_or(PositionError::InvalidTickRange)
 	}
 
-	/// Returns the value of a range order, and the liquidity that would contribute to the current
-	/// liquidity level given the current price.
+	/// Returns the ratio of assets required to create a range order at the given tick range
 	///
 	/// This function never panics
-	#[allow(dead_code)]
-	pub(super) fn liquidity_to_amounts<const ROUND_UP: bool>(
+	pub(super) fn required_asset_ratio<const ROUND_UP: bool>(
 		&self,
-		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<(SideMap<Amount>, Liquidity), LiquidityToAmountsError> {
-		(liquidity <= MAX_TICK_GROSS_LIQUIDITY)
-			.then_some(())
-			.ok_or(LiquidityToAmountsError::InvalidLiquidityAmount)?;
+	) -> Result<SideMap<Amount>, RequiredAssetRatioError> {
 		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
-			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
-		Ok(self.inner_liquidity_to_amounts::<ROUND_UP>(liquidity, lower_tick, upper_tick))
+			.map_err(|_err| RequiredAssetRatioError::InvalidTickRange)?;
+		Ok(self
+			.inner_liquidity_to_amounts::<ROUND_UP>(
+				MAX_TICK_GROSS_LIQUIDITY,
+				lower_tick,
+				upper_tick,
+			)
+			.0)
 	}
 
 	fn inner_liquidity_to_amounts<const ROUND_UP: bool>(

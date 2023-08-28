@@ -75,6 +75,44 @@ fn output_amounts_bounded() {
 	.unwrap();
 }
 
+#[test]
+fn required_amounts_test() {
+	let mut max_sidemap = SideMap::default();
+	let mut max_zero = None;
+	let mut max_one = None;
+	let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
+	for _i in 0..10 {
+		let tick = rand::distributions::Uniform::new(MIN_TICK, MAX_TICK).sample(&mut rng);
+		let pool_state = PoolState::new(0, sqrt_price_at_tick(MIN_TICK)).unwrap();
+
+		let lower_tick = rand::distributions::Uniform::new(MIN_TICK, MAX_TICK).sample(&mut rng);
+		let upper_tick =
+			rand::distributions::Uniform::new_inclusive(lower_tick + 1, MAX_TICK).sample(&mut rng);
+
+		let sidemap = pool_state
+			.inner_liquidity_to_amounts::<false>(MAX_TICK_GROSS_LIQUIDITY, MIN_TICK, MAX_TICK)
+			.0;
+
+		if sidemap[Side::Zero] > max_sidemap[Side::Zero] {
+			max_sidemap[Side::Zero] = sidemap[Side::Zero];
+			max_zero = Some((tick, lower_tick, upper_tick, sidemap[Side::One]));
+		}
+
+		if sidemap[Side::One] > max_sidemap[Side::One] {
+			max_sidemap[Side::One] = sidemap[Side::One];
+			max_one = Some((tick, lower_tick, upper_tick, sidemap[Side::Zero]));
+		}
+	}
+
+	println!("{:?} {:?} {:?}", max_zero, max_one, max_sidemap);
+	println!("{}", U256::from(u128::MAX));
+	println!(
+		"{}",
+		U256::from_dec_str("26959946667150639794667015087019630673557916260026308143510066298880")
+			.unwrap() / crate::common::MIN_SQRT_PRICE
+	);
+}
+
 #[cfg(feature = "slow-tests")]
 #[test]
 fn maximum_liquidity_swap() {
@@ -150,8 +188,7 @@ fn test_amounts_to_liquidity() {
 							.sample(&mut rng);
 
 					let amounts = pool_state
-						.liquidity_to_amounts::<false>(original_liquidity, lower, upper)
-						.unwrap()
+						.inner_liquidity_to_amounts::<false>(original_liquidity, lower, upper)
 						.0;
 
 					let resultant_liquidity =
