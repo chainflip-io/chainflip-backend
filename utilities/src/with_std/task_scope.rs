@@ -120,12 +120,12 @@ pub fn task_scope<
 	let location = core::panic::Location::caller();
 
 	async move {
-		tracing::info!(target: "task_scope", "opened: '{}'", location);
+		tracing::info!(target: "task_scope", "opened: '{location}'");
 		let guard = scopeguard::guard((), move |_| {
 			if std::thread::panicking() {
-				tracing::error!(target: "task_scope", "closed by panic: '{}'", location);
+				tracing::error!(target: "task_scope", "closed by panic: '{location}'");
 			} else {
-				tracing::error!(target: "task_scope", "closed by cancellation: '{}'", location);
+				tracing::error!(target: "task_scope", "closed by cancellation: '{location}'");
 			}
 		});
 
@@ -155,21 +155,21 @@ pub fn task_scope<
 			// This async move scope ensures scope is dropped when top_level_task and its returned
 			// future finish (Instead of when this function exits)
 			async move {
-				tracing::info!(target: "task_scope", "parent task started: '{}'", location);
+				tracing::info!(target: "task_scope", "parent task started: '{location}'");
 				let guard = scopeguard::guard((), move |_| {
 					if std::thread::panicking() {
-						tracing::error!(target: "task_scope", "parent task ended by panic: '{}'", location);
+						tracing::error!(target: "task_scope", "parent task ended by panic: '{location}'");
 					} else {
-						tracing::error!(target: "task_scope", "parent task ended by cancellation: '{}'", location);
+						tracing::error!(target: "task_scope", "parent task ended by cancellation: '{location}'");
 					}
 				});
 				let result = top_level_task(&scope).await;
 				scopeguard::ScopeGuard::into_inner(guard);
 				match &result {
 					Ok(_) =>
-						tracing::info!(target: "task_scope", "parent task ended: '{}'", location),
+						tracing::info!(target: "task_scope", "parent task ended: '{location}'"),
 					Err(error) =>
-						tracing::error!(target: "task_scope", "parent task ended by error '{error:?}': '{}'", location),
+						tracing::error!(target: "task_scope", "parent task ended by error '{error:?}': '{location}'"),
 				}
 				result
 			}
@@ -179,11 +179,11 @@ pub fn task_scope<
 
 		match result {
 			Ok((_, t)) => {
-				tracing::info!(target: "task_scope", "closed: '{}'", location);
+				tracing::info!(target: "task_scope", "closed: '{location}'", );
 				Ok(t)
 			},
 			Err(error) => {
-				tracing::error!(target: "task_scope", "closed by error {error:?}: '{}'", location);
+				tracing::error!(target: "task_scope", "closed by error {error:?}: '{location}'");
 				Err(error)
 			},
 		}
