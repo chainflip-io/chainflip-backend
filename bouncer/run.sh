@@ -5,10 +5,12 @@ set -e
 ./tests/all_concurrent_tests.ts
 ./tests/gaslimit_ccm.ts
 ./tests/rotates_through_btc_swap.ts
-if [[ $LOCALNET == true ]] ; then
+
+if [[ $LOCALNET == false ]] && if [[ -z "${LOCALNET}" ]]; then
+  echo "🤫 Skipping tests that require localnet"
+else
   echo "🚀 Running tests that require localnet"
   ./tests/swap_after_temp_disconnecting_chains.ts
-else
-  echo "🤫 Skipping tests that require localnet"
 fi
+
 ./tests/multiple_members_governance.ts
