@@ -1275,10 +1275,7 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
-	pub fn pool_info(
-		base_asset: any::Asset,
-		pair_asset: any::Asset,
-	) -> Result<PoolInfo, DispatchError> {
+	pub fn pool_info(base_asset: any::Asset, pair_asset: any::Asset) -> Result<PoolInfo, Error<T>> {
 		let pool = Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolInfo {
@@ -1291,7 +1288,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		lp: &T::AccountId,
-	) -> Result<PoolOrders, DispatchError> {
+	) -> Result<PoolOrders, Error<T>> {
 		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
 		let pool =
 			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1326,6 +1323,26 @@ impl<T: Config> Pallet<T> {
 				})
 				.collect(),
 		})
+	}
+
+	pub fn pool_range_order_liquidity_value(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+		tick_range: Range<Tick>,
+		liquidity: Liquidity,
+	) -> Result<AssetsMap<Amount>, Error<T>> {
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
+		let pool =
+			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
+		pool.pool_state
+			.range_order_liquidity_value(tick_range, liquidity)
+			.map_err(|error| match error {
+				range_orders::LiquidityToAmountsError::InvalidTickRange =>
+					Error::<T>::InvalidTickRange,
+				range_orders::LiquidityToAmountsError::MaximumLiquidity =>
+					Error::<T>::MaximumGrossLiquidity,
+			})
+			.map(|side_map| asset_pair.side_map_to_assets_map(side_map))
 	}
 }
 

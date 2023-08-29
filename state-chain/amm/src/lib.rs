@@ -10,6 +10,7 @@ use common::{
 	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap,
 	SqrtPriceQ64F96, Tick, ZeroToOne,
 };
+use range_orders::Liquidity;
 use scale_info::TypeInfo;
 
 pub mod common;
@@ -238,6 +239,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		range_orders::PositionError<range_orders::BurnError>,
 	> {
 		self.range_orders.collect_and_burn(lp, tick_range.start, tick_range.end, size)
+	}
+	
+	pub fn range_order_liquidity_value(
+		&self,
+		tick_range: core::ops::Range<Tick>,
+		liquidity: Liquidity,
+	) -> Result<SideMap<Amount>, range_orders::LiquidityToAmountsError> {
+		self.range_orders
+			.liquidity_to_amounts::<true>(liquidity, tick_range.start, tick_range.end)
 	}
 
 	pub fn required_asset_ratio_for_range_order(

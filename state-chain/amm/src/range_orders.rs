@@ -346,9 +346,11 @@ pub enum RequiredAssetRatioError {
 }
 
 #[derive(Debug)]
-pub enum AmountsToLiquidityError {
+pub enum LiquidityToAmountsError {
 	/// Invalid Tick range
 	InvalidTickRange,
+	/// `liquidity` is larger than the maximum
+	MaximumLiquidity,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -837,6 +839,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				upper_tick,
 			)
 			.0)
+	}
+
+	pub(super) fn liquidity_to_amounts<const ROUND_UP: bool>(
+		&self,
+		liquidity: Liquidity,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> Result<SideMap<Amount>, LiquidityToAmountsError> {
+		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
+			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
+		if liquidity > MAX_TICK_GROSS_LIQUIDITY {
+			Err(LiquidityToAmountsError::MaximumLiquidity)
+		} else {
+			Ok(self.inner_liquidity_to_amounts::<ROUND_UP>(liquidity, lower_tick, upper_tick).0)
+		}
 	}
 
 	fn inner_liquidity_to_amounts<const ROUND_UP: bool>(
