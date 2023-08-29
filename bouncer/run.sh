@@ -6,7 +6,7 @@ set -e
 ./tests/gaslimit_ccm.ts
 ./tests/rotates_through_btc_swap.ts
 
-if ! [[ -z "${LOCALNET}" ]] || [[ $LOCALNET == false ]]; then
+if [[ $LOCALNET == false ]]; then
   echo "🤫 Skipping tests that require localnet"
 else
   echo "🚀 Running tests that require localnet"
