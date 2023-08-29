@@ -206,11 +206,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		}
 	}
 
-	fn abort_vault_rotation() {
+	fn reset_vault_rotation() {
 		PendingVaultRotation::<T, I>::kill();
 		KeyHandoverResolutionPendingSince::<T, I>::kill();
 		KeygenResolutionPendingSince::<T, I>::kill();
-		Self::deposit_event(Event::<T, I>::VaultRotationAborted);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

@@ -1124,8 +1124,8 @@ fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 			Some(VaultRotationStatus::Failed { .. })
 		));
 
-		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		// Abort by resetting vault rotation state
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1163,7 +1163,7 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 		));
 
 		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1221,8 +1221,8 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 			Some(VaultRotationStatus::KeyHandoverFailed { .. })
 		));
 
-		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		// Abort by resetting vault rotation state
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
