@@ -276,4 +276,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				self.limit_orders.position::<ZeroToOne>(lp, tick),
 		}
 	}
+
+	pub fn limit_order_fee(&self) -> u32 {
+		self.limit_orders.fee_hundredth_pips
+	}
+
+	pub fn range_order_fee(&self) -> u32 {
+		self.range_orders.fee_hundredth_pips
+	}
 }

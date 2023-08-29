@@ -912,6 +912,11 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
+pub struct PoolInfo {
+	pub limit_order_fee_hundredth_pips: u32,
+	pub range_order_fee_hundredth_pips: u32,
+}
+
 impl<T: Config> Pallet<T> {
 	#[allow(clippy::too_many_arguments)]
 	fn inner_update_limit_order(
@@ -1242,6 +1247,24 @@ impl<T: Config> Pallet<T> {
 		lps.dedup();
 
 		Ok(lps)
+	}
+
+	pub fn pools() -> Vec<(Asset, Asset)> {
+		Pools::<T>::iter_keys()
+			.map(|canonical_asset_pair| {
+				(canonical_asset_pair.assets[Side::Zero], canonical_asset_pair.assets[Side::One])
+			})
+			.collect()
+	}
+
+	pub fn pool_info(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+	) -> Result<Option<PoolInfo>, DispatchError> {
+		Ok(Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset)?).map(|pool| PoolInfo {
+			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
+			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
+		}))
 	}
 }
 

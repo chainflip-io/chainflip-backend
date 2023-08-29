@@ -274,7 +274,7 @@ pub(super) struct FixedPool {
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub(super) struct PoolState<LiquidityProvider> {
-	fee_hundredth_pips: u32,
+	pub(super) fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
