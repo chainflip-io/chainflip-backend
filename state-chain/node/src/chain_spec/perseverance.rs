@@ -17,17 +17,17 @@ pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
 pub const PROTOCOL_ID: &str = "flip-pers";
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("1194C91d47Fc1b65bE18db38380B5344682b67db"),
+	flip_token_address: hex_literal::hex!("0485D65da68b2A6b48C3fA28D7CCAce196798B94"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	state_chain_gateway_address: hex_literal::hex!("C960C4eEe4ADf40d24374D85094f3219cf2DD8EB"),
-	key_manager_address: hex_literal::hex!("56a10b82180D4b8F6203541FEaF2c88a3999e847"),
-	eth_vault_address: hex_literal::hex!("F1B061aCCDAa4B7c029128b49aBc047F89D5CB8d"),
-	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+	state_chain_gateway_address: hex_literal::hex!("38AA40B7b5a70d738baBf6699a45DacdDBBEB3fc"),
+	key_manager_address: hex_literal::hex!("Aa4376388C6432d36CFF33198D9f80295482f120"),
+	eth_vault_address: hex_literal::hex!("40caFF3f3B6706Da904a7895e0fC7F7922437e9B"),
+	eth_address_checker_address: hex_literal::hex!("6Ab555596F452Ba302163d1cBFEFfDFCA7423F07"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"036e4e4d5e5b36c66ad380541929a66bb1f7eaa267b3fa07b342ef390f9a271093"
+		"02661d4b647d4b49660976ad402f4890cb8f2f4d872dfa5e1c5f33b1da53f4a637"
 	),
-	ethereum_deployment_block: 9216168u64,
+	ethereum_deployment_block: 9595582u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
