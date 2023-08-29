@@ -2,8 +2,10 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap},
-	limit_orders, range_orders, NewError, PoolState,
+	common::{Amount, Order, Price, Side, SideMap, Tick},
+	limit_orders, range_orders,
+	range_orders::Liquidity,
+	NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -36,12 +38,15 @@ enum Stability {
 	Unstable,
 }
 
-#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
+#[derive(
+	Clone, DebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEqNoBound, EqNoBound,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct CanonicalAssetPair<T: Config> {
 	assets: cf_amm::common::SideMap<Asset>,
 	_phantom: core::marker::PhantomData<T>,
 }
+impl<T: Config> Copy for CanonicalAssetPair<T> {}
 impl<T: Config> CanonicalAssetPair<T> {
 	pub fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
 		match (base_asset, pair_asset) {
@@ -234,20 +239,14 @@ pub mod pallet {
 			AssetsMap { base: f(self.base), pair: f(self.pair) }
 		}
 
-		pub fn map_with_asset<T: Config, R, F: FnMut(Asset, S) -> R>(
+		pub fn map_with_side<T: Config, R, F: FnMut(Side, S) -> R>(
 			self,
 			asset_pair: &AssetPair<T>,
 			mut f: F,
 		) -> AssetsMap<R> {
 			AssetsMap {
-				base: f(
-					asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
-					self.base,
-				),
-				pair: f(
-					asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
-					self.pair,
-				),
+				base: f(asset_pair.base_side, self.base),
+				pair: f(!asset_pair.base_side, self.pair),
 			}
 		}
 
@@ -912,9 +911,28 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct PoolInfo {
 	pub limit_order_fee_hundredth_pips: u32,
 	pub range_order_fee_hundredth_pips: u32,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolOrders {
+	pub limit_orders: AssetsMap<Vec<(OrderId, Tick, Amount)>>,
+	pub range_orders: Vec<(OrderId, Range<Tick>, Liquidity)>,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1155,7 +1173,7 @@ impl<T: Config> Pallet<T> {
 		f: F,
 	) -> Result<R, E> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
-		Pools::<T>::try_mutate(&asset_pair.canonical_asset_pair, |maybe_pool| {
+		Pools::<T>::try_mutate(asset_pair.canonical_asset_pair, |maybe_pool| {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 			f(&asset_pair, pool)
 		})
@@ -1177,8 +1195,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn current_price(from: Asset, to: Asset) -> Option<Price> {
-		let asset_pair = &AssetPair::new(from, to).ok()?;
-		Pools::<T>::get(&asset_pair.canonical_asset_pair)
+		let asset_pair = AssetPair::new(from, to).ok()?;
+		Pools::<T>::get(asset_pair.canonical_asset_pair)
 			.and_then(|mut pool| pool.pool_state.current_price(asset_pair.base_side, Order::Sell))
 	}
 
@@ -1188,8 +1206,8 @@ impl<T: Config> Pallet<T> {
 		tick_range: Range<cf_amm::common::Tick>,
 	) -> Result<AssetsMap<Amount>, Error<T>> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
-		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair.clone())
-			.ok_or(Error::<T>::PoolDoesNotExist)?;
+		let pool =
+			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 
 		pool.pool_state
 			.required_asset_ratio_for_range_order(tick_range)
@@ -1260,11 +1278,54 @@ impl<T: Config> Pallet<T> {
 	pub fn pool_info(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
-	) -> Result<Option<PoolInfo>, DispatchError> {
-		Ok(Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset)?).map(|pool| PoolInfo {
+	) -> Result<PoolInfo, DispatchError> {
+		let pool = Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset)?)
+			.ok_or(Error::<T>::PoolDoesNotExist)?;
+		Ok(PoolInfo {
 			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
-		}))
+		})
+	}
+
+	pub fn pool_orders(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+		lp: &T::AccountId,
+	) -> Result<PoolOrders, DispatchError> {
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
+		let pool =
+			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
+		Ok(PoolOrders {
+			limit_orders: AssetsMap::<()>::default().map_with_side(&asset_pair, |side, ()| {
+				pool.limit_orders[side]
+					.get(lp)
+					.into_iter()
+					.flat_map(|limit_orders| {
+						limit_orders.iter().map(|(id, tick)| {
+							let (_collected, position_info) = pool
+								.pool_state
+								.limit_order(&(lp.clone(), *id), side, Order::Sell, *tick)
+								.unwrap();
+							(*id, *tick, position_info.amount)
+						})
+					})
+					.collect()
+			}),
+			range_orders: pool
+				.range_orders
+				.get(lp)
+				.into_iter()
+				.flat_map(|range_orders| {
+					range_orders.iter().map(|(id, tick_range)| {
+						let (_collected, position_info) = pool
+							.pool_state
+							.range_order(&(lp.clone(), *id), tick_range.clone())
+							.unwrap();
+						(*id, tick_range.clone(), position_info.liquidity)
+					})
+				})
+				.collect(),
+		})
 	}
 }
 
