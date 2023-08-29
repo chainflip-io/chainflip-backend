@@ -521,7 +521,7 @@ fn ensure_save_mode_is_moving_timeouts() {
 		let _ = start_mock_broadcast();
 		assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 1);
 		Broadcaster::on_initialize(5);
-		assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 0);
+		assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
 		assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 	});
