@@ -935,6 +935,12 @@ pub struct PoolOrders {
 	pub range_orders: Vec<(OrderId, Range<Tick>, Liquidity)>,
 }
 
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolLiquidity {
+	pub limit_orders: AssetsMap<Vec<(Tick, Amount)>>,
+	pub range_orders: Vec<(Tick, Liquidity)>,
+}
+
 impl<T: Config> Pallet<T> {
 	#[allow(clippy::too_many_arguments)]
 	fn inner_update_limit_order(
@@ -1204,18 +1210,22 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
-	) -> Result<AssetsMap<Amount>, Error<T>> {
-		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
-		let pool =
-			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
+	) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
+		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
+		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 
-		pool.pool_state
-			.required_asset_ratio_for_range_order(tick_range)
-			.map_err(|error| match error {
-				range_orders::RequiredAssetRatioError::InvalidTickRange =>
-					Error::<T>::InvalidTickRange,
-			})
-			.map(|side_map| asset_pair.side_map_to_assets_map(side_map))
+		Some(
+			pool.pool_state
+				.required_asset_ratio_for_range_order(tick_range)
+				.map_err(|error| {
+					match error {
+						range_orders::RequiredAssetRatioError::InvalidTickRange =>
+							Error::<T>::InvalidTickRange,
+					}
+					.into()
+				})
+				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
+		)
 	}
 
 	pub fn pool_liquidity_providers(
@@ -1275,12 +1285,22 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
-	pub fn pool_info(base_asset: any::Asset, pair_asset: any::Asset) -> Result<PoolInfo, Error<T>> {
-		let pool = Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset)?)
-			.ok_or(Error::<T>::PoolDoesNotExist)?;
-		Ok(PoolInfo {
+	pub fn pool_info(base_asset: any::Asset, pair_asset: any::Asset) -> Option<PoolInfo> {
+		let pool = Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset).ok()?)?;
+		Some(PoolInfo {
 			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
+		})
+	}
+
+	pub fn pool_liquidity(base_asset: any::Asset, pair_asset: any::Asset) -> Option<PoolLiquidity> {
+		let asset_pair = AssetPair::new(base_asset, pair_asset).ok()?;
+		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
+		Some(PoolLiquidity {
+			limit_orders: AssetsMap::<()>::default().map_with_side(&asset_pair, |side, ()| {
+				pool.pool_state.limit_order_liquidity(side, Order::Sell)
+			}),
+			range_orders: pool.pool_state.range_order_liquidity(),
 		})
 	}
 
@@ -1288,11 +1308,10 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		lp: &T::AccountId,
-	) -> Result<PoolOrders, Error<T>> {
-		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
-		let pool =
-			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
-		Ok(PoolOrders {
+	) -> Option<PoolOrders> {
+		let asset_pair = AssetPair::new(base_asset, pair_asset).ok()?;
+		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
+		Some(PoolOrders {
 			limit_orders: AssetsMap::<()>::default().map_with_side(&asset_pair, |side, ()| {
 				pool.limit_orders[side]
 					.get(lp)
@@ -1330,19 +1349,23 @@ impl<T: Config> Pallet<T> {
 		pair_asset: any::Asset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
-	) -> Result<AssetsMap<Amount>, Error<T>> {
-		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
-		let pool =
-			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
-		pool.pool_state
-			.range_order_liquidity_value(tick_range, liquidity)
-			.map_err(|error| match error {
-				range_orders::LiquidityToAmountsError::InvalidTickRange =>
-					Error::<T>::InvalidTickRange,
-				range_orders::LiquidityToAmountsError::MaximumLiquidity =>
-					Error::<T>::MaximumGrossLiquidity,
-			})
-			.map(|side_map| asset_pair.side_map_to_assets_map(side_map))
+	) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
+		let asset_pair = AssetPair::new(base_asset, pair_asset).ok()?;
+		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
+		Some(
+			pool.pool_state
+				.range_order_liquidity_value(tick_range, liquidity)
+				.map_err(|error| {
+					match error {
+						range_orders::LiquidityToAmountsError::InvalidTickRange =>
+							Error::<T>::InvalidTickRange,
+						range_orders::LiquidityToAmountsError::MaximumLiquidity =>
+							Error::<T>::MaximumGrossLiquidity,
+					}
+					.into()
+				})
+				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
+		)
 	}
 }
 

@@ -1,5 +1,8 @@
 use crate::chainflip::Offence;
-use cf_amm::common::Price;
+use cf_amm::{
+	common::{Amount, Price, Tick},
+	range_orders::Liquidity,
+};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::PolkadotHash,
@@ -7,11 +10,14 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
+use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
+use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
@@ -111,6 +117,20 @@ decl_runtime_apis!(
 		fn cf_pool_price(from: Asset, to: Asset) -> Option<Price>;
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
+		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo>;
+		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity>;
+		fn cf_required_asset_ratio_for_range_order(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
+		fn cf_pool_orders(base: Asset, pair: Asset, lp: AccountId32) -> Option<PoolOrders>;
+		fn cf_pool_range_order_liquidity_value(
+			base: Asset,
+			pair: Asset,
+			tick_range: Range<Tick>,
+			liquidity: Liquidity,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
 		fn cf_environment() -> Environment;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 	}

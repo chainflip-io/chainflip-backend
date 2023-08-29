@@ -14,17 +14,23 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_amm::common::Price;
+use cf_amm::{
+	common::{Amount, Price, Tick},
+	range_orders::Liquidity,
+};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	Bitcoin, Polkadot,
 };
+use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_pools::{AssetsMap, PoolLiquidity};
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use sp_runtime::DispatchError;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -47,6 +53,7 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 use pallet_cf_funding::MinimumFunding;
+use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -1005,6 +1012,39 @@ impl_runtime_apis! {
 		/// layer and would not affect on-chain storage.
 		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapOutput> {
 			LiquidityPools::swap_with_network_fee(from, to, amount).ok()
+		}
+
+		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo> {
+			LiquidityPools::pool_info(base_asset, pair_asset)
+		}
+
+		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity> {
+			LiquidityPools::pool_liquidity(base_asset, pair_asset)
+		}
+
+		fn cf_required_asset_ratio_for_range_order(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
+			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		}
+
+		fn cf_pool_orders(
+			from: Asset,
+			to: Asset,
+			lp: AccountId,
+		) -> Option<PoolOrders> {
+			LiquidityPools::pool_orders(from, to, &lp)
+		}
+
+		fn cf_pool_range_order_liquidity_value(
+			base: Asset,
+			pair: Asset,
+			tick_range: Range<Tick>,
+			liquidity: Liquidity,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
+			LiquidityPools::pool_range_order_liquidity_value(base, pair, tick_range, liquidity)
 		}
 
 		fn cf_environment() -> runtime_apis::Environment {

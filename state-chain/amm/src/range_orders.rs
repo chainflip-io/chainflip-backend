@@ -21,7 +21,7 @@
 
 mod tests;
 
-use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -998,6 +998,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			),
 			PositionInfo::from(&position),
 		))
+	}
+
+	pub(super) fn liquidity(&self) -> Vec<(Tick, Liquidity)> {
+		let mut liquidity = 0u128;
+		self.liquidity_map
+			.iter()
+			.map(|(tick, tick_delta)| {
+				liquidity = liquidity
+					.checked_add_signed(OneToZero::liquidity_delta_on_crossing_tick(tick_delta))
+					.unwrap();
+
+				(*tick, liquidity)
+			})
+			.collect()
 	}
 }
 

@@ -12,6 +12,7 @@ use common::{
 };
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
+use sp_std::vec::Vec;
 
 pub mod common;
 pub mod limit_orders;
@@ -240,7 +241,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	> {
 		self.range_orders.collect_and_burn(lp, tick_range.start, tick_range.end, size)
 	}
-	
+
 	pub fn range_order_liquidity_value(
 		&self,
 		tick_range: core::ops::Range<Tick>,
@@ -293,5 +294,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	pub fn range_order_fee(&self) -> u32 {
 		self.range_orders.fee_hundredth_pips
+	}
+
+	pub fn limit_order_liquidity(&self, side: Side, order: Order) -> Vec<(Tick, Amount)> {
+		match (side, order) {
+			(Side::Zero, Order::Sell) | (Side::One, Order::Buy) =>
+				self.limit_orders.liquidity::<OneToZero>(),
+			(Side::Zero, Order::Buy) | (Side::One, Order::Sell) =>
+				self.limit_orders.liquidity::<ZeroToOne>(),
+		}
+	}
+
+	pub fn range_order_liquidity(&self) -> Vec<(Tick, Liquidity)> {
+		self.range_orders.liquidity()
 	}
 }
