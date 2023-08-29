@@ -1,3 +1,4 @@
+export LOCALNET=true
 function check_endpoint_health() {
   retries=15   # Number of retries
   delay=5     # Delay between retries in seconds
