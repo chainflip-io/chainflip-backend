@@ -12,7 +12,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
-import { sendEth } from './send_eth';
+import { signAndSendTxEthSilent } from './send_eth';
 
 // TODO: We should probably put a cap on the message length to avoid issues. However will still not lose money
 // as the user will be paying for the entire transfer anyway => example of a message length limit could be 10000 bytes.
@@ -213,11 +213,13 @@ async function testGasLimitSwap(
     const totalFee = gasUsed * Number(gasPrice);
     const percBudgetUsed = (totalFee * 100) / egressBudgetAmount;
     const percGasUsed = (gasUsed * 100) / gasLimitBudget;
+    console.log(tag);
+    console.log('gasLimitBudget     ', gasLimitBudget);
     console.log('gasUsed            ', gasUsed);
+    console.log('maxFeePerGas       ', maxFeePerGas);
     console.log('gasPrice           ', gasPrice);
     console.log('totalFee           ', totalFee);
     console.log('egressBudgetAmount ', egressBudgetAmount);
-    console.log('diff               ', egressBudgetAmount - totalFee);
     console.log('percBudgetUsed     ', percBudgetUsed);
     console.log('percGasUsed        ', percGasUsed);
     // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
@@ -232,7 +234,7 @@ async function testGasLimitSwap(
 let spam = true;
 async function spamEthereum() {
   while (spam) {
-    sendEth('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
+    signAndSendTxEthSilent('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
     await sleep(500);
   }
 }
@@ -249,52 +251,56 @@ export async function testGasLimitCcmSwaps() {
 
   const gasLimitSwapsSufBudget = [
     testGasLimitSwap('DOT', 'FLIP'),
+    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 3), // % 10
     testGasLimitSwap('ETH', 'USDC'),
+    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 4), // % 100
     testGasLimitSwap('FLIP', 'ETH'),
+    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 3), // % 10
     testGasLimitSwap('BTC', 'ETH'),
+    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 3), // % 10
   ];
 
   // This amount of gasLimitBudget will be swapped into not enough destination gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
   const gasLimitSwapsInsufBudget = [
-    // testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 6),
-    // testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 8),
-    // testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 6),
-    // testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 4),
+    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 6),
+    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 8),
+    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 6),
+    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 4),
   ];
 
   // As of now this is broadcasted regardless of the gasLimitBudget budget and even when the final solution is implemented
   // this should be broadcasted, since the gasLimitBudget budget should be enough, since by default gasBudget is 1% of the
   // principal and the gasPrice is very low in localnet (~7wei).
   const ccmgasLimitSwapsDefault = [
-    // testSwap(
-    //   'DOT',
-    //   'FLIP',
-    //   undefined,
-    //   gasTestCcmMetadata('DOT'),
-    //   tagSuffix + ' SufficientGasBudget',
-    // ),
-    // testSwap(
-    //   'ETH',
-    //   'USDC',
-    //   undefined,
-    //   gasTestCcmMetadata('ETH'),
-    //   tagSuffix + ' SufficientGasBudget',
-    // ),
-    // testSwap(
-    //   'FLIP',
-    //   'ETH',
-    //   undefined,
-    //   gasTestCcmMetadata('FLIP'),
-    //   tagSuffix + ' SufficientGasBudget',
-    // ),
-    // testSwap(
-    //   'BTC',
-    //   'ETH',
-    //   undefined,
-    //   gasTestCcmMetadata('BTC'),
-    //   tagSuffix + ' SufficientGasBudget',
-    // ),
+    testSwap(
+      'DOT',
+      'FLIP',
+      undefined,
+      gasTestCcmMetadata('DOT'),
+      tagSuffix + ' SufficientGasBudget',
+    ),
+    testSwap(
+      'ETH',
+      'USDC',
+      undefined,
+      gasTestCcmMetadata('ETH'),
+      tagSuffix + ' SufficientGasBudget',
+    ),
+    testSwap(
+      'FLIP',
+      'ETH',
+      undefined,
+      gasTestCcmMetadata('FLIP'),
+      tagSuffix + ' SufficientGasBudget',
+    ),
+    testSwap(
+      'BTC',
+      'ETH',
+      undefined,
+      gasTestCcmMetadata('BTC'),
+      tagSuffix + ' SufficientGasBudget',
+    ),
   ];
 
   await Promise.all([
