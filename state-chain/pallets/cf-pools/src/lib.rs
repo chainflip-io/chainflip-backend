@@ -393,8 +393,8 @@ pub mod pallet {
 		InvalidTick,
 		/// One of the referenced ticks reached its maximum gross liquidity
 		MaximumGrossLiquidity,
-		/// The user's position does not exist.
-		PositionDoesNotExist,
+		/// The user's order does not exist.
+		OrderDoesNotExist,
 		/// It is no longer possible to mint limit orders due to reaching the maximum pool
 		/// instances, other than for ticks where a fixed pool currently exists.
 		MaximumPoolInstances,
@@ -917,7 +917,7 @@ impl<T: Config> Pallet<T> {
 							if allow_noop {
 								return Ok(Default::default())
 							} else {
-								Error::<T>::PositionDoesNotExist
+								Error::<T>::OrderDoesNotExist
 							},
 						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
 						limit_orders::PositionError::Other(
@@ -946,7 +946,7 @@ impl<T: Config> Pallet<T> {
 								if allow_noop {
 									return Ok(Default::default())
 								} else {
-									Error::<T>::PositionDoesNotExist
+									Error::<T>::OrderDoesNotExist
 								},
 							limit_orders::PositionError::InvalidTick => Error::InvalidTick,
 							limit_orders::PositionError::Other(error) => match error {},
@@ -1030,7 +1030,7 @@ impl<T: Config> Pallet<T> {
 								if allow_noop {
 									return Ok(Default::default())
 								} else {
-									Error::<T>::PositionDoesNotExist.into()
+									Error::<T>::OrderDoesNotExist.into()
 								},
 							range_orders::PositionError::Other(
 								range_orders::MintError::CallbackFailed(e),
@@ -1059,7 +1059,7 @@ impl<T: Config> Pallet<T> {
 							if allow_noop {
 								return Ok(Default::default())
 							} else {
-								Error::<T>::PositionDoesNotExist
+								Error::<T>::OrderDoesNotExist
 							},
 						range_orders::PositionError::Other(e) => match e {
 							range_orders::BurnError::AssetRatioUnachieveable =>
