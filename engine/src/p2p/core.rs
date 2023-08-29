@@ -27,7 +27,7 @@ use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONN
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
 
-use crate::metrics::P2P_MSG_RECEIVED;
+use crate::metrics::{P2P_BAD_MSG, P2P_MSG_RECEIVED};
 
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
@@ -343,6 +343,7 @@ impl P2PContext {
 			trace!("Received a message from {acc_id}");
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
+			P2P_BAD_MSG.with_label_values(&["unknown_x25519_key"]).inc();
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
 		}
 	}
@@ -521,6 +522,7 @@ impl P2PContext {
 
 				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
 			} else {
+				P2P_BAD_MSG.with_label_values(&["bad_number_of_parts"]).inc();
 				warn!(
 					"Ignoring a multipart message with unexpected number of parts ({})",
 					parts.len()
