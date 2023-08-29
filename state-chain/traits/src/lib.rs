@@ -173,9 +173,9 @@ pub trait VaultRotator {
 	/// on the contract for a smart contract chain.
 	fn activate();
 
-	/// Terminate the current key rotation because of Safe Mode.
-	/// No validators are slashed.
-	fn abort_vault_rotation();
+	/// Reset the state associated with the current key rotation
+	/// in preparation for a new one.
+	fn reset_vault_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
