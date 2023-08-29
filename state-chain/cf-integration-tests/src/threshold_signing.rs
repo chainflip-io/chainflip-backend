@@ -200,7 +200,7 @@ impl KeyUtils for BtcKeyComponents {
 		let secp = secp256k1::Secp256k1::new();
 		let keypair = secp256k1::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
 		let pubkey_x = secp256k1::XOnlyPublicKey::from_keypair(&keypair).0.serialize();
-		let agg_key = btc::AggKey { previous: None, current: pubkey_x };
+		let agg_key = btc::AggKey { previous: Some(pubkey_x), current: pubkey_x };
 
 		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
 	}

@@ -1,6 +1,6 @@
 use crate::{
-	genesis, get_validator_state, network, ChainflipAccountState, NodeId, HEARTBEAT_BLOCK_INTERVAL,
-	VAULT_ROTATION_BLOCKS,
+	genesis, get_validator_state, network, AllVaults, ChainflipAccountState, NodeId,
+	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
 
 use frame_support::assert_ok;
@@ -50,6 +50,88 @@ fn fund_authorities_and_join_auction(
 	}
 
 	(testnet, genesis_authorities, init_backup_nodes)
+}
+
+/// Tests that Validator and Vaults work together to complete a Authority Rotation
+/// by going through the correct sequence in sync.
+#[test]
+fn authority_rotates_with_correct_sequence() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			// Skip the first authority rotation, as key handover is guaranteed to succeed
+			// when rotating for the first time.
+			testnet.move_forward_blocks(EPOCH_BLOCKS);
+			testnet.submit_heartbeat_all_engines();
+			testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS);
+			testnet.submit_heartbeat_all_engines();
+
+			// Start the Authority and Vault rotation
+			// idle -> Keygen
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeygensInProgress(..)
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Pending);
+
+			// Key verification
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeygensInProgress(..)
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
+
+			// Key handover.
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeyHandoversInProgress(..)
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Pending,);
+
+			// Key Handover complete.
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeyHandoversInProgress(..)
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+
+			// Activate new key.
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::ActivatingKeys(..)
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+
+			// Rotating session
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::SessionRotating(..)
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+
+			// Rotation Completed.
+			testnet.move_forward_blocks(1);
+			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+
+			assert_eq!(
+				GENESIS_EPOCH + 2,
+				Validator::epoch_index(),
+				"We should be in the next epoch."
+			);
+		});
 }
 
 #[test]
@@ -191,7 +273,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 
 			// Run until key gen is completed.
 			testnet.move_forward_blocks(2);
-			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
+			matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
 
 			// This is the last chance to abort validator rotation. Activate code red here.
 			assert_ok!(Environment::update_safe_mode(
@@ -202,13 +284,13 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 
 			// Ensure Validator and Vault rotation have been aborted.
 			assert_eq!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle);
-			assert_eq!(EthereumVault::status(), AsyncResult::Void);
+			assert_eq!(AllVaults::status(), AsyncResult::Void);
 
 			// Authority rotation does not start while in Safe Mode.
 			testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 			assert_eq!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle);
-			assert_eq!(EthereumVault::status(), AsyncResult::Void);
+			assert_eq!(AllVaults::status(), AsyncResult::Void);
 
 			// Changing to code green should restart the Authority rotation
 			assert_ok!(Environment::update_safe_mode(
@@ -241,7 +323,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 			// Run until key handover starts
 			testnet.move_forward_blocks(3);
 			assert!(matches!(
-				EthereumVault::status(),
+				AllVaults::status(),
 				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
 			));
 
@@ -254,7 +336,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 
 			// Authority rotation is stalled while in Code Red because of disabling dispatching
 			// witness extrinsics and so witnessing vault rotation will be stalled.
-			matches!(EthereumVault::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
+			matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
 
 			// We activate witnessing calls by setting safe mode to code green just for the
 			// witnesser pallet.
@@ -278,6 +360,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 
 			// rotation should now complete since the witness calls are now dispatched.
 			testnet.move_forward_blocks(3);
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 		});
 }
 
@@ -305,7 +388,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 				Validator::current_rotation_phase(),
 				RotationPhase::KeygensInProgress(..)
 			));
-			assert_eq!(EthereumVault::status(), AsyncResult::Pending);
+			assert_eq!(AllVaults::status(), AsyncResult::Pending);
 			backup_nodes.iter().for_each(|validator| {
 				assert_ok!(EthereumVault::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
@@ -330,8 +413,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			});
 			testnet.submit_heartbeat_all_engines();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
-
-			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new	epoch");
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 		});
 }
 
@@ -375,7 +457,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 				RotationPhase::KeyHandoversInProgress(..)
 			));
 			assert_eq!(
-				BitcoinVault::status(),
+				AllVaults::status(),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::default()))
 			);
 
@@ -385,8 +467,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 				testnet.set_active(validator, true);
 			});
 			testnet.submit_heartbeat_all_engines();
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
-
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in a new epoch");
 		});
 }
