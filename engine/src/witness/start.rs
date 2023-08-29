@@ -52,28 +52,34 @@ where
 			.participating(state_chain_client.account_id())
 			.await;
 
-	super::eth::start(
+	let start_eth = super::eth::start(
 		scope,
 		eth_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
 		db.clone(),
-	)
-	.await?;
+	);
 
-	super::btc::start(
+	let start_btc = super::btc::start(
 		scope,
 		btc_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
 		db.clone(),
-	)
-	.await?;
+	);
 
-	super::dot::start(scope, dot_client, state_chain_client, state_chain_stream, epoch_source, db)
-		.await?;
+	let start_dot = super::dot::start(
+		scope,
+		dot_client,
+		state_chain_client,
+		state_chain_stream,
+		epoch_source,
+		db,
+	);
+
+	futures::future::try_join3(start_eth, start_btc, start_dot).await?;
 
 	Ok(())
 }
