@@ -5858,6 +5858,7 @@ dependencies = [
  "num-bigint",
  "num-derive 0.3.3",
  "num-traits",
+ "prometheus",
  "public-ip",
  "rand 0.8.5",
  "rayon",

@@ -55,6 +55,7 @@ tracing = "0.1"
 strum = { default-features = false, version = '0.24' }
 strum_macros = { default-features = false, version = '0.24' }
 blake2 = "0.10"
+prometheus = { version = "0.13.0", default-features = false }
 
 # Local deps
 cf-chains = { path = "../../state-chain/chains" }

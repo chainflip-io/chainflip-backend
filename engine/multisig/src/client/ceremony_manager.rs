@@ -47,6 +47,20 @@ use super::{
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
 
+use lazy_static;
+use prometheus::{IntCounterVec, Opts, Registry};
+lazy_static::lazy_static! {
+	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("CEREMONY_MANAGER_BAD_MSG", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
+	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("CEREMONY_RUNNER_BAD_MSG", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
+}
+
+fn register_metrics(reg: Registry) {
+	reg.register(Box::new(CEREMONY_MANAGER_BAD_MSG.clone()))
+		.expect("Metric succesfully register");
+	reg.register(Box::new(CEREMONY_RUNNER_BAD_MSG.clone()))
+		.expect("Metric succesfully register");
+}
+
 pub type CeremonyOutcome<C> = Result<
 	<C as CeremonyTrait>::Output,
 	(BTreeSet<AccountId>, <C as CeremonyTrait>::FailureReason),
@@ -328,7 +342,9 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		my_account_id: AccountId,
 		outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 		latest_ceremony_id: CeremonyId,
+		register: Registry,
 	) -> Self {
+		register_metrics(register);
 		CeremonyManager {
 			my_account_id,
 			outgoing_p2p_message_sender,
@@ -412,6 +428,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 							match deserialize_for_version::<Chain::CryptoScheme>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
+									CEREMONY_MANAGER_BAD_MSG.with_label_values(&["deserialize_for_version", sender_id.to_string().as_str()]).inc();
 									warn!("Failed to deserialize message from: {sender_id}");
 								},
 							}
@@ -693,9 +710,18 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Chain>(ceremony_id);
 			if ceremony_id > latest_ceremony_id + Chain::CEREMONY_ID_WINDOW {
+				CEREMONY_MANAGER_BAD_MSG
+					.with_label_values(&[
+						"unexpected_future_ceremony_id",
+						sender_id.to_string().as_str(),
+					])
+					.inc();
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {
+				CEREMONY_MANAGER_BAD_MSG
+					.with_label_values(&["old_ceremony_id", sender_id.to_string().as_str()])
+					.inc();
 				trace!("Ignoring data: old ceremony id {ceremony_id_string}",);
 				return
 			} else {

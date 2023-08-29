@@ -6,6 +6,7 @@ use tracing::{info, info_span, Instrument};
 
 use crate::{
 	db::KeyStore,
+	metrics::REGISTRY,
 	p2p::{MultisigMessageReceiver, MultisigMessageSender},
 };
 use state_chain_runtime::AccountId;
@@ -33,6 +34,7 @@ pub fn start_client<C: ChainSigning>(
 			my_account_id,
 			outgoing_p2p_message_sender.0,
 			latest_ceremony_id,
+			REGISTRY.clone(),
 		);
 
 		ceremony_manager

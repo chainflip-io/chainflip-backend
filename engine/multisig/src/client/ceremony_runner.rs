@@ -30,7 +30,7 @@ use super::{
 	ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
 	common::PreProcessStageDataCheck,
 };
-
+use crate::client::ceremony_manager::CEREMONY_RUNNER_BAD_MSG;
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
 type OptionalCeremonyReturn<C> = Option<
@@ -214,6 +214,9 @@ where
 		match &mut self.stage {
 			None => {
 				if !data.should_delay_unauthorised() {
+					CEREMONY_RUNNER_BAD_MSG
+						.with_label_values(&["non_initial_stage", sender_id.to_string().as_str()])
+						.inc();
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: non-initial stage data"
@@ -222,6 +225,12 @@ where
 				}
 
 				if !data.is_initial_stage_data_size_valid::<Chain>() {
+					CEREMONY_RUNNER_BAD_MSG
+						.with_label_values(&[
+							"incorrect_number_elements",
+							sender_id.to_string().as_str(),
+						])
+						.inc();
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: incorrect number of elements"
@@ -237,6 +246,12 @@ where
 				{
 					Some(idx) => idx,
 					None => {
+						CEREMONY_RUNNER_BAD_MSG
+							.with_label_values(&[
+								"not_valid_participant",
+								sender_id.to_string().as_str(),
+							])
+							.inc();
 						debug!("Ignoring data: sender {sender_id} is not a valid participant",);
 						return None
 					},
@@ -247,6 +262,12 @@ where
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
 					stage.ceremony_common().number_of_signing_payloads,
 				) {
+					CEREMONY_RUNNER_BAD_MSG
+						.with_label_values(&[
+							"incorrect_number_elements",
+							sender_id.to_string().as_str(),
+						])
+						.inc();
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data: incorrect number of elements"
@@ -301,8 +322,11 @@ where
 		};
 		let total_delayed = self.delayed_messages.len() + 1;
 
-		match self.delayed_messages.entry(id) {
+		match self.delayed_messages.entry(id.clone()) {
 			btree_map::Entry::Occupied(_) => {
+				CEREMONY_RUNNER_BAD_MSG
+					.with_label_values(&["redundant_delayed_msg", id.to_string().as_str()])
+					.inc();
 				warn!("Ignoring a redundant delayed message from {party_and_stage}");
 			},
 			btree_map::Entry::Vacant(entry) => {
