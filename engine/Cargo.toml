@@ -48,13 +48,14 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.11"
+prometheus = { version = "0.13.0", default-features = false }
 
 # Same version of jsonrpsee as the substrate version our StateChain is on.
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 
 dyn-clone = "1.0.4"
 ethbloom = "0.13"
-ethers = { version = "2.0.7", features = ["rustls", "ws"] }
+ethers = { version = "2.0.8", features = ["rustls"] }
 lazy_static = "1.4"
 num-bigint = "0.4"
 num-derive = "0.4"

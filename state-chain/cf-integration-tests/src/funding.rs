@@ -56,7 +56,8 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 				assert_ok!(Funding::redeem(
 					RuntimeOrigin::signed(node.clone()),
 					(MIN_FUNDING + 1).into(),
-					ETH_DUMMY_ADDR
+					ETH_DUMMY_ADDR,
+					Default::default()
 				));
 			}
 
@@ -70,7 +71,8 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 					Funding::redeem(
 						RuntimeOrigin::signed(node.clone()),
 						funding_amount.into(),
-						ETH_DUMMY_ADDR
+						ETH_DUMMY_ADDR,
+						Default::default()
 					),
 					Error::<Runtime>::AuctionPhase
 				);
@@ -107,7 +109,8 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 					Funding::redeem(
 						RuntimeOrigin::signed(node.clone()),
 						(MIN_FUNDING + 1).into(),
-						ETH_DUMMY_ADDR
+						ETH_DUMMY_ADDR,
+						Default::default()
 					),
 					Error::<Runtime>::PendingRedemption
 				);

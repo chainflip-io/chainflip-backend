@@ -13,7 +13,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32, BuildStorage,
+	AccountId32,
 };
 use std::time::Duration;
 
@@ -104,7 +104,13 @@ pub struct MockRegisterRedemption {
 }
 
 impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
-	fn new_unsigned(_node_id: &[u8; 32], amount: u128, _address: &[u8; 20], _expiry: u64) -> Self {
+	fn new_unsigned(
+		_node_id: &[u8; 32],
+		amount: u128,
+		_address: &[u8; 20],
+		_expiry: u64,
+		_executor: Option<cf_chains::eth::Address>,
+	) -> Self {
 		Self { amount }
 	}
 
@@ -188,9 +194,9 @@ pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 pub const MIN_FUNDING: u128 = 10;
 pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {
@@ -199,15 +205,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
 		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
+	},
+	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
 			.unwrap();
-		System::set_block_number(1);
-	});
-
-	ext
+	}
 }

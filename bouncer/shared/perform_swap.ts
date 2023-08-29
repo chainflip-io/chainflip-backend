@@ -58,7 +58,15 @@ export async function requestNewSwap(
         destAddressEvent.toLowerCase() ===
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-      return destAddressMatches && destAssetMatches && sourceAssetMatches;
+      // CF Parameters is always set to '' by the SDK for now
+      const ccmMetadataMatches = messageMetadata
+        ? event.data.channelMetadata !== null &&
+          event.data.channelMetadata.message === messageMetadata.message &&
+          Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
+            messageMetadata.gasBudget
+        : event.data.channelMetadata === null;
+
+      return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   );
   await newSwap(sourceAsset, destAsset, destAddress, messageMetadata);
@@ -96,7 +104,7 @@ export async function doPerformSwap(
 
   console.log(`${tag} Old balance: ${oldBalance}`);
 
-  const swapScheduledHandle = observeSwapScheduled(sourceAsset, channelId);
+  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, channelId);
 
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)

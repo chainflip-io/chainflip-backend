@@ -5,7 +5,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
-	health, p2p,
+	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -34,11 +34,6 @@ lazy_static::lazy_static! {
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
 	};
-}
-
-fn is_compatible_with_runtime(runtime_compatibility_version: &SemVer) -> bool {
-	CFE_VERSION.major == runtime_compatibility_version.major &&
-		CFE_VERSION.minor == runtime_compatibility_version.minor
 }
 
 enum CfeStatus {
@@ -76,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
 					.unwrap();
 
 				let compatible =
-					is_compatible_with_runtime(&runtime_compatibility_version);
+					CFE_VERSION.is_compatible_with(runtime_compatibility_version);
 
 				match cfe_status {
 					CfeStatus::Active(_) =>
@@ -118,6 +113,10 @@ async fn start(
 
 	if let Some(health_check_settings) = &settings.health_check {
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
+	}
+
+	if let Some(prometheus_settings) = &settings.prometheus {
+		metrics::start(scope, prometheus_settings).await?;
 	}
 
 	let (state_chain_stream, state_chain_client) =

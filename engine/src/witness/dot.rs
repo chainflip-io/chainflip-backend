@@ -6,7 +6,6 @@ use cf_chains::{
 	Polkadot,
 };
 use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
-use codec::Encode;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -38,6 +37,9 @@ use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
 use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
+// To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
+// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment --url
+// wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.json.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
 
@@ -188,8 +190,6 @@ where
 		.await
 		.then({
 			let state_chain_client = state_chain_client.clone();
-
-			// maybe don't need this clone
 			let dot_client = dot_client.clone();
 			move |epoch, header| {
 				let state_chain_client = state_chain_client.clone();
@@ -203,8 +203,8 @@ where
 
 					for (extrinsic_index, tx_fee) in transaction_fee_paids(&broadcast_indices, &events) {
 						let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-						let xt_encoded = xt.0.encode();
-						let mut xt_bytes = xt_encoded.as_slice();
+						let mut xt_bytes = xt.0.as_slice();
+
 						let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 						if let Ok(unchecked) = unchecked {
 							if let Some(signature) = unchecked.signature() {
@@ -282,11 +282,15 @@ fn deposit_witnesses(
 						amount: *amount,
 						deposit_details: (),
 					});
-				} else if &PolkadotAccountId::from_aliased(from.0) == our_vault {
-					tracing::info!("Transfer from our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
-					extrinsic_indices.insert(*extrinsic_index);
-				} else if &deposit_address == our_vault {
-					tracing::info!("Transfer to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+				}
+				// It's possible a transfer to one of the monitored addresses comes from our_vault,
+				// so this cannot be an else if
+				if &PolkadotAccountId::from_aliased(from.0) == our_vault ||
+					&deposit_address == our_vault
+				{
+					tracing::info!(
+						"Interesting transfer at block: {block_number}, extrinsic index: {extrinsic_index} from: {from:?} to: {to:?}", 
+					);
 					extrinsic_indices.insert(*extrinsic_index);
 				}
 			}
@@ -349,6 +353,7 @@ fn proxy_addeds(
 
 #[cfg(test)]
 mod test {
+
 	use super::{polkadot::runtime_types::polkadot_runtime::ProxyType as PolkadotProxyType, *};
 
 	fn mock_transfer(
@@ -408,6 +413,9 @@ mod test {
 		const TRANSFER_FROM_OUR_VAULT_INDEX: u32 = 7;
 		const TRANFER_TO_OUR_VAULT_INDEX: u32 = 8;
 
+		const TRANSFER_TO_SELF_INDEX: u32 = 9;
+		const TRANSFER_TO_SELF_AMOUNT: PolkadotBalance = 30000;
+
 		let block_event_details = phase_and_events(vec![
 			// we'll be witnessing this from the start
 			(
@@ -444,6 +452,14 @@ mod test {
 				TRANFER_TO_OUR_VAULT_INDEX,
 				mock_transfer(&PolkadotAccountId::from_aliased([9; 32]), &our_vault, 93232),
 			),
+			// Example: Someone generates a DOT -> ETH swap, getting the DOT address that we're now
+			// monitoring for inputs. They now generate a BTC -> DOT swap, and set the destination
+			// address of the DOT to the address they generated earlier.
+			// Now our Polakdot vault is sending to an address we're monitoring for deposits.
+			(
+				TRANSFER_TO_SELF_INDEX,
+				mock_transfer(&our_vault, &transfer_2_deposit_address, TRANSFER_TO_SELF_AMOUNT),
+			),
 		]);
 
 		let (deposit_witnesses, broadcast_indices) = deposit_witnesses(
@@ -453,14 +469,16 @@ mod test {
 			&our_vault,
 		);
 
-		assert_eq!(deposit_witnesses.len(), 2);
+		assert_eq!(deposit_witnesses.len(), 3);
 		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
 		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
+		assert_eq!(deposit_witnesses.get(2).unwrap().amount, TRANSFER_TO_SELF_AMOUNT);
 
 		// Check the egress and ingress fetch
-		assert_eq!(broadcast_indices.len(), 2);
+		assert_eq!(broadcast_indices.len(), 3);
 		assert!(broadcast_indices.contains(&TRANSFER_FROM_OUR_VAULT_INDEX));
 		assert!(broadcast_indices.contains(&TRANFER_TO_OUR_VAULT_INDEX));
+		assert!(broadcast_indices.contains(&TRANSFER_TO_SELF_INDEX));
 	}
 
 	#[test]

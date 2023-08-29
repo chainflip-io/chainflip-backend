@@ -110,6 +110,7 @@ jobs:
           - chainflip-node
           - generate-genesis-keys
           - rust-base
+          - chainflip-btc-deposit-tracker
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3

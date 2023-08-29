@@ -182,6 +182,9 @@ pub struct MockThresholdSignature<K, P> {
 )]
 pub struct MockAggKey(pub [u8; 4]);
 
+/// A key that should be not accepted as handover result
+pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
+
 impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
@@ -199,8 +202,14 @@ impl ChainCrypto for MockEthereum {
 		signature.signing_key == *agg_key && signature.signed_payload == *payload
 	}
 
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		agg_key.0
+	}
+
+	fn handover_key_matches(_current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
+		// In tests we don't look to the current key, but instead
+		// compare to some "bad" value for simplicity
+		new_key != &BAD_AGG_KEY_POST_HANDOVER
 	}
 }
 
@@ -216,6 +225,7 @@ pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 
 impl ChainAbi for MockEthereum {
 	type Transaction = MockTransaction;
+	type ReplayProtectionParams = ();
 	type ReplayProtection = EthereumReplayProtection;
 }
 

@@ -18,6 +18,37 @@ pub struct RegisterRedemption {
 	pub address: Address,
 	/// The expiry duration in seconds.
 	pub expiry: Uint,
+	/// The authorised executor of the redemption.
+	pub executor: RedemptionExecutor,
+}
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum RedemptionExecutor {
+	#[default]
+	AnyAddress,
+	OnlyAddress(Address),
+}
+
+impl From<Option<Address>> for RedemptionExecutor {
+	fn from(address: Option<Address>) -> Self {
+		match address {
+			Some(address) => RedemptionExecutor::OnlyAddress(address),
+			None => RedemptionExecutor::AnyAddress,
+		}
+	}
+}
+
+impl Tokenizable for RedemptionExecutor {
+	fn tokenize(self) -> Token {
+		match self {
+			RedemptionExecutor::AnyAddress => Address::zero().tokenize(),
+			RedemptionExecutor::OnlyAddress(address) => address.tokenize(),
+		}
+	}
+
+	fn param_type() -> ParamType {
+		ParamType::Address
+	}
 }
 
 impl RegisterRedemption {
@@ -27,12 +58,14 @@ impl RegisterRedemption {
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
+		executor: impl Into<RedemptionExecutor>,
 	) -> Self {
 		Self {
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
+			executor: executor.into(),
 		}
 	}
 }
@@ -46,6 +79,7 @@ impl EthereumCall for RegisterRedemption {
 			("amount", Uint::param_type()),
 			("funder", Address::param_type()),
 			("expiryTime", ParamType::Uint(48)),
+			("executor", RedemptionExecutor::param_type()),
 		]
 	}
 
@@ -55,6 +89,7 @@ impl EthereumCall for RegisterRedemption {
 			self.amount.tokenize(),
 			self.address.tokenize(),
 			self.expiry.tokenize(),
+			self.executor.tokenize(),
 		]
 	}
 }
@@ -95,7 +130,13 @@ mod test_register_redemption {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_SCGW_ADDR.into(),
 			},
-			super::RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS),
+			super::RegisterRedemption::new(
+				&TEST_ACCT,
+				AMOUNT,
+				&TEST_ADDR,
+				EXPIRY_SECS,
+				RedemptionExecutor::OnlyAddress(TEST_ADDR.into()),
+			),
 		);
 
 		let expected_msg_hash = register_redemption_runtime.threshold_signature_payload();
@@ -129,13 +170,10 @@ mod test_register_redemption {
 					Token::Address(TEST_ADDR.into()),
 					// epiryTime: uint48
 					Token::Uint(EXPIRY_SECS.into()),
+					// executor: Address
+					Token::Address(TEST_ADDR.into()),
 				])
 				.unwrap()
 		);
-	}
-
-	#[test]
-	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<super::RegisterRedemption>();
 	}
 }

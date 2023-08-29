@@ -18,10 +18,7 @@ use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -66,8 +63,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
-
-impl_mock_chainflip!(Test);
 
 pub const BROADCAST_EXPIRY_BLOCKS: BlockNumberFor<Test> = 4;
 
@@ -152,20 +147,15 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 }
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities =
-		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
+impl_mock_chainflip!(Test);
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
 		MockEpochInfo::next_epoch((0..3).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		for id in &MockEpochInfo::current_authorities() {
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
-				.unwrap();
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();
 		}
-	});
-
-	ext
+	}
 }

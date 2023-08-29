@@ -16,10 +16,7 @@ use cf_traits::{
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::{H160, H256};
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -172,9 +169,9 @@ pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
 pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
 			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
@@ -189,13 +186,5 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			network_environment: Default::default(),
 			..Default::default()
 		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-	});
-
-	ext
+	}
 }

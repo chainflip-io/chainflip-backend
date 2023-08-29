@@ -91,7 +91,10 @@ where
 	///
 	/// Otherwise, determine unresponsive, dissenting and blamed nodes and return
 	/// `Failure(unresponsive | dissenting | blamed)`
-	pub fn resolve_keygen_outcome(self) -> KeygenOutcomeFor<T, I> {
+	pub fn resolve_keygen_outcome(
+		self,
+		final_key_check: impl Fn(AggKeyFor<T, I>) -> KeygenOutcomeFor<T, I>,
+	) -> KeygenOutcomeFor<T, I> {
 		// If and only if *all* candidates agree on the same key, return success.
 		if let Some((key, votes)) = self.success_votes.iter().next() {
 			if *votes == self.candidate_count() {
@@ -99,7 +102,7 @@ where
 				// We may want to revise.
 				// See https://github.com/paritytech/substrate/pull/11490
 				let _ignored = SuccessVoters::clear(u32::MAX, None);
-				return Ok(*key)
+				return final_key_check(*key)
 			}
 		}
 
@@ -282,7 +285,7 @@ mod tests {
 			}
 		}
 
-		let outcome = status.resolve_keygen_outcome();
+		let outcome = status.resolve_keygen_outcome(Ok);
 		assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
 		assert!(!KeygenFailureVoters::<Test, _>::exists());
 		outcome

@@ -10,7 +10,7 @@ use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
+		traits::{AtLeast32BitUnsigned, CheckedSub},
 		DispatchError,
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
@@ -74,12 +74,11 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ Default
-		+ Saturating
+		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
-		+ BenchmarkValue
-		+ Ord;
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
@@ -123,7 +122,7 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ for<'a> From<&'a DepositChannel<Self>>;
 
-	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
 	type DepositDetails: Member + Parameter + BenchmarkValue;
@@ -157,18 +156,27 @@ pub trait ChainCrypto: Chain {
 	) -> bool;
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
+	fn agg_key_to_payload(agg_key: Self::AggKey, for_handover: bool) -> Self::Payload;
+
+	/// For a chain that supports key handover, check that the key produced during
+	/// the handover ceremony (stored in new_key) matches the current key. (Defaults
+	/// to always trivially returning `true` for chains without handover.)
+	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
+		true
+	}
 }
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
+	/// Passed in to construct the replay protection.
+	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
 }
 
 /// Provides chain-specific replay protection data.
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection() -> Abi::ReplayProtection;
+	fn replay_protection(params: Abi::ReplayProtectionParams) -> Abi::ReplayProtection;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
@@ -282,7 +290,13 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 
 /// Constructs the `RegisterRedemption` api call.
 pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self;
+	fn new_unsigned(
+		node_id: &[u8; 32],
+		amount: u128,
+		address: &[u8; 20],
+		expiry: u64,
+		executor: Option<eth::Address>,
+	) -> Self;
 
 	fn amount(&self) -> u128;
 }

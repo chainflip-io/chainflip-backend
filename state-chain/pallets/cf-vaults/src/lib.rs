@@ -83,6 +83,11 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeyHandover {
 		ceremony_id: CeremonyId,
 		response_status: KeyHandoverResponseStatus<T, I>,
+		receiving_participants: BTreeSet<T::ValidatorId>,
+		next_epoch: EpochIndex,
+		new_public_key: AggKeyFor<T, I>,
+	},
+	AwaitingKeyHandoverVerification {
 		new_public_key: AggKeyFor<T, I>,
 	},
 	KeyHandoverComplete {
@@ -222,6 +227,8 @@ pub mod pallet {
 						response_status,
 						ceremony_id,
 						current_block,
+						// no extra checks are necessary for regular keygen
+						Ok,
 						|new_public_key| {
 							Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 							Self::trigger_keygen_verification(
@@ -242,6 +249,8 @@ pub mod pallet {
 				Some(VaultRotationStatus::<T, I>::AwaitingKeyHandover {
 					ceremony_id,
 					response_status,
+					receiving_participants,
+					next_epoch,
 					new_public_key,
 				}) => {
 					weight += Self::progress_rotation::<
@@ -252,10 +261,44 @@ pub mod pallet {
 						response_status,
 						ceremony_id,
 						current_block,
-						|new_public_key| {
+						// For key handover we also check that the key is the same as before
+						|reported_new_agg_key| {
+							let current_key = Self::active_epoch_key()
+								.expect("key must exist during handover")
+								.key;
+
+							if <T::Chain as ChainCrypto>::handover_key_matches(
+								&current_key,
+								&reported_new_agg_key,
+							) {
+								Ok(reported_new_agg_key)
+							} else {
+								log::error!(
+									"Handover resulted in an unexpected key: {:?}",
+									&reported_new_agg_key
+								);
+								Err(Default::default())
+							}
+						},
+						|reported_new_public_key| {
 							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
-							PendingVaultRotation::<T, I>::put(
-								VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
+
+							Self::trigger_key_verification(
+								reported_new_public_key,
+								receiving_participants,
+								true,
+								next_epoch,
+								|req_id| {
+									Call::on_handover_verification_result {
+										handover_ceremony_id: ceremony_id,
+										threshold_request_id: req_id,
+										new_public_key: reported_new_public_key,
+									}
+									.into()
+								},
+								VaultRotationStatus::<T, I>::AwaitingKeyHandoverVerification {
+									new_public_key: reported_new_public_key,
+								},
 							);
 						},
 						|offenders| {
@@ -406,9 +449,15 @@ pub mod pallet {
 		KeygenVerificationSuccess {
 			agg_key: <T::Chain as ChainCrypto>::AggKey,
 		},
+		KeyHandoverVerificationSuccess {
+			agg_key: <T::Chain as ChainCrypto>::AggKey,
+		},
 		/// Verification of the new key has failed.
 		KeygenVerificationFailure {
 			keygen_ceremony_id: CeremonyId,
+		},
+		KeyHandoverVerificationFailure {
+			handover_ceremony_id: CeremonyId,
 		},
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
@@ -577,35 +626,30 @@ pub mod pallet {
 			threshold_request_id: ThresholdSignatureRequestId,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureThresholdSigned::ensure_origin(origin)?;
+			Self::on_key_verification_result(
+				origin,
+				threshold_request_id,
+				VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key },
+				Event::KeygenVerificationSuccess { agg_key: new_public_key },
+				Event::KeygenVerificationFailure { keygen_ceremony_id },
+			)
+		}
 
-			match T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
-				log::error!(
-					"Signature not found for threshold request {:?}. Request status: {:?}",
-					threshold_request_id,
-					r
-				);
-				Error::<T, I>::ThresholdSignatureUnavailable
-			})? {
-				Ok(_) => {
-					// Now the validator pallet can use this to check for readiness.
-					PendingVaultRotation::<T, I>::put(
-						VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key },
-					);
-
-					Self::deposit_event(Event::KeygenVerificationSuccess {
-						agg_key: new_public_key,
-					});
-
-					// We don't do any more here. We wait for the validator pallet to
-					// let us know when we can start the external rotation.
-				},
-				Err(offenders) => Self::terminate_rotation(
-					&offenders[..],
-					Event::KeygenVerificationFailure { keygen_ceremony_id },
-				),
-			};
-			Ok(().into())
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::on_keygen_verification_result())]
+		pub fn on_handover_verification_result(
+			origin: OriginFor<T>,
+			handover_ceremony_id: CeremonyId,
+			threshold_request_id: ThresholdSignatureRequestId,
+			new_public_key: AggKeyFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			Self::on_key_verification_result(
+				origin,
+				threshold_request_id,
+				VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
+				Event::KeyHandoverVerificationSuccess { agg_key: new_public_key },
+				Event::KeyHandoverVerificationFailure { handover_ceremony_id },
+			)
 		}
 
 		/// A vault rotation event has been witnessed, we update the vault with the new key.
@@ -745,6 +789,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		response_status: ResponseStatus<T, SuccessVoters, FailureVoters, I>,
 		ceremony_id: CeremonyId,
 		current_block: BlockNumberFor<T>,
+		final_key_check: impl Fn(AggKeyFor<T, I>) -> KeygenOutcomeFor<T, I>,
 		on_success_outcome: impl FnOnce(AggKeyFor<T, I>),
 		on_failure_outcome: impl FnOnce(BTreeSet<T::ValidatorId>),
 	) -> Weight
@@ -772,7 +817,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		let candidate_count = response_status.candidate_count();
-		let weight = match response_status.resolve_keygen_outcome() {
+		let weight = match response_status.resolve_keygen_outcome(final_key_check) {
 			Ok(new_public_key) => {
 				debug_assert_eq!(
 					remaining_candidate_count, 0,
@@ -814,30 +859,47 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		participants: BTreeSet<T::ValidatorId>,
 		new_epoch_index: EpochIndex,
 	) -> ThresholdSignatureRequestId {
-		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
-			T::Chain::agg_key_to_payload(new_public_key),
-			participants,
+		Self::trigger_key_verification(
 			new_public_key,
+			participants,
+			false,
 			new_epoch_index,
+			|req_id| {
+				Call::on_keygen_verification_result {
+					keygen_ceremony_id,
+					threshold_request_id: req_id,
+					new_public_key,
+				}
+				.into()
+			},
+			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
+		)
+	}
+
+	fn trigger_key_verification(
+		new_agg_key: AggKeyFor<T, I>,
+		participants: BTreeSet<T::ValidatorId>,
+		is_handover: bool,
+		next_epoch: EpochIndex,
+		signature_callback_fn: impl FnOnce(ThresholdSignatureRequestId) -> <T as Config<I>>::RuntimeCall,
+		status_to_set: VaultRotationStatus<T, I>,
+	) -> ThresholdSignatureRequestId {
+		let request_id = T::ThresholdSigner::request_verification_signature(
+			T::Chain::agg_key_to_payload(new_agg_key, is_handover),
+			participants,
+			new_agg_key,
+			next_epoch,
 		);
-		T::ThresholdSigner::register_callback(request_id, {
-			Call::on_keygen_verification_result {
-				keygen_ceremony_id,
-				threshold_request_id: request_id,
-				new_public_key,
-			}
-			.into()
-		})
-		.unwrap_or_else(|e| {
-			log::error!(
+
+		T::ThresholdSigner::register_callback(request_id, signature_callback_fn(request_id))
+			.unwrap_or_else(|e| {
+				log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
-		});
+			});
 
-		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
-		);
+		PendingVaultRotation::<T, I>::put(status_to_set);
 
 		request_id
 	}
@@ -853,6 +915,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			offenders: offenders.iter().cloned().collect(),
 		});
 		Self::deposit_event(event);
+	}
+
+	fn on_key_verification_result(
+		origin: OriginFor<T>,
+		threshold_request_id: ThresholdSignatureRequestId,
+		status_on_success: VaultRotationStatus<T, I>,
+		event_on_success: Event<T, I>,
+		event_on_error: Event<T, I>,
+	) -> DispatchResultWithPostInfo {
+		T::EnsureThresholdSigned::ensure_origin(origin)?;
+
+		match T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
+			log::error!(
+				"Signature not found for threshold request {:?}. Request status: {:?}",
+				threshold_request_id,
+				r
+			);
+			Error::<T, I>::ThresholdSignatureUnavailable
+		})? {
+			Ok(_) => {
+				// Now the validator pallet can use this to check for readiness.
+				PendingVaultRotation::<T, I>::put(status_on_success);
+
+				Self::deposit_event(event_on_success);
+
+				// We don't do any more here. We wait for the validator pallet to
+				// let us know when we can proceed.
+			},
+			Err(offenders) => Self::terminate_rotation(&offenders[..], event_on_error),
+		};
+		Ok(().into())
 	}
 
 	fn activate_new_key(new_agg_key: AggKeyFor<T, I>, block_number: ChainBlockNumberFor<T, I>) {

@@ -62,6 +62,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 							VaultRotationStatus::AwaitingKeyHandover {
 								ceremony_id,
 								response_status: KeyHandoverResponseStatus::new(all_participants),
+								receiving_participants: receiving_participants.clone(),
+								next_epoch: new_epoch_index,
 								new_public_key,
 							},
 						);
@@ -108,6 +110,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			match status_variant {
 				VaultRotationStatusVariant::AwaitingKeygen => AsyncResult::Pending,
 				VaultRotationStatusVariant::AwaitingKeygenVerification => AsyncResult::Pending,
+				VaultRotationStatusVariant::AwaitingKeyHandoverVerification => AsyncResult::Pending,
 				// It's at this point we want the vault to be considered ready to commit to. We
 				// don't want to commit until the other vaults are ready
 				VaultRotationStatusVariant::KeygenVerificationComplete =>
