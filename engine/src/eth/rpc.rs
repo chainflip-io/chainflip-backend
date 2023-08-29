@@ -1,6 +1,7 @@
 pub mod address_checker;
 
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
+use futures_core::Future;
 
 use crate::{
 	constants::{ETH_AVERAGE_BLOCK_TIME, SYNC_POLL_INTERVAL},
@@ -28,7 +29,10 @@ pub struct EthRpcClient {
 }
 
 impl EthRpcClient {
-	pub async fn new(eth_settings: settings::Eth, expected_chain_id: u64) -> Result<Self> {
+	pub fn new(
+		eth_settings: settings::Eth,
+		expected_chain_id: u64,
+	) -> Result<impl Future<Output = Self>> {
 		let provider =
 			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
 		let wallet = read_clean_and_decode_hex_str_file(
@@ -36,35 +40,36 @@ impl EthRpcClient {
 			"Ethereum Private Key",
 			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
 		)?;
+
 		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(expected_chain_id));
 
 		let client = Self { signer, nonce_info: Arc::new(Mutex::new(None)) };
 
-		// We don't want to return an error here. Returning an error means that we'll exit the CFE.
-		// So on client creation we wait until we can be successfully connected to the ETH node. So
-		// the other chains are unaffected
-		let mut poll_interval = make_periodic_tick(ETH_AVERAGE_BLOCK_TIME, true);
-		loop {
-			poll_interval.tick().await;
-			match client.chain_id().await {
-				Ok(chain_id) if chain_id == expected_chain_id.into() => break,
-				Ok(chain_id) => {
-					tracing::warn!(
+		Ok(async move {
+			// We don't want to return an error here. Returning an error means that we'll exit the
+			// CFE. So on client creation we wait until we can be successfully connected to the ETH
+			// node. So the other chains are unaffected
+			let mut poll_interval = make_periodic_tick(ETH_AVERAGE_BLOCK_TIME, true);
+			loop {
+				poll_interval.tick().await;
+				match client.chain_id().await {
+					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
+					Ok(chain_id) => {
+						tracing::warn!(
 						"Connected to Ethereum node but with chain_id {}, expected {}. Please check your CFE
 						configuration file...", 				
 						chain_id,
 						expected_chain_id
 					);
-				},
-				Err(e) => tracing::error!(
+					},
+					Err(e) => tracing::error!(
 					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE
 					configuration file. Retrying...",
 					eth_settings.http_node_endpoint
 				),
+				}
 			}
-		}
-
-		Ok(client)
+		})
 	}
 
 	async fn get_next_nonce(&self) -> Result<U256> {
