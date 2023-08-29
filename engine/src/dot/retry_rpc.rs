@@ -21,8 +21,6 @@ use super::{
 };
 
 use crate::dot::rpc::DotRpcApi;
-
-// We do need the Sync bound.
 pub struct DotRetryRpcClient<
 	DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
 	DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
