@@ -29,7 +29,8 @@ import { signAndSendTxEthSilent } from './send_eth';
 // maxGasFee & GasLimit.
 
 const BASE_GAS_OVERHEAD = 120000;
-const DEFAULT_GAS_CONSUMPTION = 270000;
+// 270k also works in general but in some scenarios it might be slight bit too much
+const DEFAULT_GAS_CONSUMPTION = 260000;
 const GAS_PER_BYTE = 16;
 const tagSuffix = ' CcmGasLimit';
 
@@ -175,6 +176,7 @@ async function testGasLimitSwap(
     `${tag} egressBudgetAmount: ${egressBudgetAmount}, baseFee: ${baseFee}, priorityFee: ${priorityFee}, gasLimitBudget: ${gasLimitBudget}`,
   );
   console.log('extra gasLimitBudget', byteLength * GAS_PER_BYTE);
+  // This is a rough approximation, will be slightly different for each swap/egressToken/message
   console.log(
     'total gasLimitBudget limit needed: ',
     gasConsumption +
@@ -190,6 +192,7 @@ async function testGasLimitSwap(
       byteLength * GAS_PER_BYTE /* + probably some gasLimit margin */ >=
     gasLimitBudget
   ) {
+    console.log(`${tag} Gas budget is too low. Expecting BroadcastAborted event.`);
     // Expect Broadcast Aborted
     await observeEvent(
       'ethereumBroadcaster:BroadcastAborted',
@@ -220,8 +223,8 @@ async function testGasLimitSwap(
     console.log('gasPrice           ', gasPrice);
     console.log('totalFee           ', totalFee);
     console.log('egressBudgetAmount ', egressBudgetAmount);
-    console.log('percBudgetUsed     ', percBudgetUsed);
-    console.log('percGasUsed        ', percGasUsed);
+    console.log(`percBudgetUsed     ${percBudgetUsed}%`);
+    console.log(`percGasUsed        ${percGasUsed}%`);
     // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
     if (totalFee > egressBudgetAmount) {
       throw new Error(`${tag} Transaction fee paid is higher than the budget paid by the user!`);
@@ -249,15 +252,22 @@ export async function testGasLimitCcmSwaps() {
   // TODO: Add some test with a long enough message that we shouldn't be broadcasting beacuse user hasn't paid enough gasLimitBudget.
   // E.g. Gas = 120k (overhead) + 10000 bytes * 16 gasLimitBudget/byte = 280k gasLimitBudget => Pay less than that as the fee.
 
+  // TODO: Check if this tests are passing enough gasLimitBudget to the CCM.
   const gasLimitSwapsSufBudget = [
     testGasLimitSwap('DOT', 'FLIP'),
-    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 3), // % 10
+    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 867k
     testGasLimitSwap('ETH', 'USDC'),
-    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 4), // % 100
+    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 4), // % 100 ~ gasLimitBudget ~= 499k
     testGasLimitSwap('FLIP', 'ETH'),
-    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 3), // % 10
+    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 389k
     testGasLimitSwap('BTC', 'ETH'),
-    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 3), // % 10
+    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 862k
+
+    // None of this should be broadcasted as the gasLimitBudget is not enough
+    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 4),
+    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 5),
+    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 4),
+    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 4),
   ];
 
   // This amount of gasLimitBudget will be swapped into not enough destination gasLimitBudget. Not into zero as that will cause a debug_assert to
