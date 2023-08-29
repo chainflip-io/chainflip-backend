@@ -220,7 +220,6 @@ impl<
 	}
 }
 
-// We definitely don't want clone here
 #[async_trait::async_trait]
 impl<
 		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
