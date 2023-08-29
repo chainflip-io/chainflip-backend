@@ -6,7 +6,7 @@ use cf_amm::{
 	limit_orders, range_orders, NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, SwappingApi};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
@@ -78,36 +78,6 @@ impl<T: Config> CanonicalAssetPair<T> {
 			Side::One => Stability::Stable,
 		}
 	}
-
-	fn try_debit_asset(
-		&self,
-		lp: &T::AccountId,
-		side: Side,
-		amount: cf_amm::common::Amount,
-	) -> Result<AssetAmount, DispatchError> {
-		use cf_traits::LpBalanceApi;
-
-		let asset_amount: AssetAmount = amount.try_into()?;
-
-		T::LpBalance::try_debit_account(lp, self.side_to_asset(side), asset_amount)?;
-
-		Ok(asset_amount)
-	}
-
-	fn try_credit_asset(
-		&self,
-		lp: &T::AccountId,
-		side: Side,
-		amount: cf_amm::common::Amount,
-	) -> Result<AssetAmount, DispatchError> {
-		use cf_traits::LpBalanceApi;
-
-		let asset_amount: AssetAmount = amount.try_into()?;
-
-		T::LpBalance::try_credit_account(lp, self.side_to_asset(side), asset_amount)?;
-
-		Ok(asset_amount)
-	}
 }
 
 pub struct AssetPair<T: Config> {
@@ -151,27 +121,24 @@ impl<T: Config> AssetPair<T> {
 		}
 	}
 
+	fn try_xxx_assets<F: Fn(&T::AccountId, Asset, AssetAmount) -> DispatchResult>(
+		&self,
+		lp: &T::AccountId,
+		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
+		f: F,
+	) -> Result<AssetAmounts, DispatchError> {
+		self.side_map_to_asset_amounts(side_map)?
+			.try_map_with_asset(self, |asset, asset_amount| {
+				f(lp, asset, asset_amount).map(|_| asset_amount)
+			})
+	}
+
 	fn try_debit_assets(
 		&self,
 		lp: &T::AccountId,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
 	) -> Result<AssetAmounts, DispatchError> {
-		use cf_traits::LpBalanceApi;
-
-		let asset_amounts = self.side_map_to_asset_amounts(side_map)?;
-
-		T::LpBalance::try_debit_account(
-			lp,
-			self.canonical_asset_pair.side_to_asset(self.base_side),
-			asset_amounts.base,
-		)?;
-		T::LpBalance::try_debit_account(
-			lp,
-			self.canonical_asset_pair.side_to_asset(!self.base_side),
-			asset_amounts.pair,
-		)?;
-
-		Ok(asset_amounts)
+		self.try_xxx_assets(lp, side_map, T::LpBalance::try_debit_account)
 	}
 
 	fn try_credit_assets(
@@ -179,22 +146,37 @@ impl<T: Config> AssetPair<T> {
 		lp: &T::AccountId,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
 	) -> Result<AssetAmounts, DispatchError> {
-		use cf_traits::LpBalanceApi;
+		self.try_xxx_assets(lp, side_map, T::LpBalance::try_credit_account)
+	}
 
-		let asset_amounts = self.side_map_to_asset_amounts(side_map)?;
+	fn try_xxx_asset<F: FnOnce(&T::AccountId, Asset, AssetAmount) -> DispatchResult>(
+		&self,
+		lp: &T::AccountId,
+		side: Side,
+		amount: cf_amm::common::Amount,
+		f: F,
+	) -> Result<AssetAmount, DispatchError> {
+		let asset_amount: AssetAmount = amount.try_into()?;
+		f(lp, self.canonical_asset_pair.side_to_asset(side), asset_amount)?;
+		Ok(asset_amount)
+	}
 
-		T::LpBalance::try_credit_account(
-			lp,
-			self.canonical_asset_pair.side_to_asset(self.base_side),
-			asset_amounts.base,
-		)?;
-		T::LpBalance::try_credit_account(
-			lp,
-			self.canonical_asset_pair.side_to_asset(!self.base_side),
-			asset_amounts.pair,
-		)?;
+	fn try_debit_asset(
+		&self,
+		lp: &T::AccountId,
+		side: Side,
+		amount: cf_amm::common::Amount,
+	) -> Result<AssetAmount, DispatchError> {
+		self.try_xxx_asset(lp, side, amount, T::LpBalance::try_debit_account)
+	}
 
-		Ok(asset_amounts)
+	fn try_credit_asset(
+		&self,
+		lp: &T::AccountId,
+		side: Side,
+		amount: cf_amm::common::Amount,
+	) -> Result<AssetAmount, DispatchError> {
+		self.try_xxx_asset(lp, side, amount, T::LpBalance::try_credit_account)
 	}
 }
 
@@ -252,23 +234,38 @@ pub mod pallet {
 			AssetsMap { base: f(self.base), pair: f(self.pair) }
 		}
 
-		pub fn map_with_asset<T: Config, R, F: FnMut(Side, Asset, S) -> R>(
+		pub fn map_with_asset<T: Config, R, F: FnMut(Asset, S) -> R>(
 			self,
 			asset_pair: &AssetPair<T>,
 			mut f: F,
 		) -> AssetsMap<R> {
 			AssetsMap {
 				base: f(
-					asset_pair.base_side,
 					asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
 					self.base,
 				),
 				pair: f(
-					!asset_pair.base_side,
 					asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
 					self.pair,
 				),
 			}
+		}
+
+		pub fn try_map_with_asset<T: Config, R, E, F: FnMut(Asset, S) -> Result<R, E>>(
+			self,
+			asset_pair: &AssetPair<T>,
+			mut f: F,
+		) -> Result<AssetsMap<R>, E> {
+			Ok(AssetsMap {
+				base: f(
+					asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
+					self.base,
+				)?,
+				pair: f(
+					asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
+					self.pair,
+				)?,
+			})
 		}
 	}
 
@@ -929,11 +926,8 @@ impl<T: Config> Pallet<T> {
 	) -> Result<AssetAmount, DispatchError> {
 		let (amount_delta, position_info, collected) = match increase_or_decrease {
 			IncreaseOrDecrease::Increase => {
-				let debited_asset_amount = asset_pair.canonical_asset_pair.try_debit_asset(
-					lp,
-					asset_pair.base_side,
-					amount,
-				)?;
+				let debited_asset_amount =
+					asset_pair.try_debit_asset(lp, asset_pair.base_side, amount)?;
 
 				let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
 					&(lp.clone(), id),
@@ -984,11 +978,8 @@ impl<T: Config> Pallet<T> {
 						}),
 					}?;
 
-				let withdrawn_asset_amount = asset_pair.canonical_asset_pair.try_credit_asset(
-					lp,
-					asset_pair.base_side,
-					withdrawn_amount,
-				)?;
+				let withdrawn_asset_amount =
+					asset_pair.try_credit_asset(lp, asset_pair.base_side, withdrawn_amount)?;
 
 				(withdrawn_asset_amount, position_info, collected)
 			},
@@ -1006,16 +997,10 @@ impl<T: Config> Pallet<T> {
 			limit_orders.entry(lp.clone()).or_default().insert(id, tick);
 		}
 
-		let collected_fees = asset_pair.canonical_asset_pair.try_credit_asset(
-			lp,
-			!asset_pair.base_side,
-			collected.fees,
-		)?;
-		let swapped_liquidity = asset_pair.canonical_asset_pair.try_credit_asset(
-			lp,
-			!asset_pair.base_side,
-			collected.swapped_liquidity,
-		)?;
+		let collected_fees =
+			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.fees)?;
+		let swapped_liquidity =
+			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.swapped_liquidity)?;
 
 		Self::deposit_event(Event::<T>::LimitOrderUpdated {
 			lp: lp.clone(),
@@ -1217,13 +1202,13 @@ impl<T: Config> Pallet<T> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
 		let pool =
 			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
-		let pool = &pool;
 
 		let mut lps = Iterator::chain(
-			[Side::Zero, Side::One]
-				.into_iter()
-				.flat_map(|side| {
-					pool.limit_orders[side].iter().filter(move |(lp, positions)| {
+			pool.limit_orders.as_ref().into_iter().flat_map(|(side, limit_orders)| {
+				let pool = &pool;
+				limit_orders
+					.iter()
+					.filter(move |(lp, positions)| {
 						positions.iter().any(move |(id, tick)| {
 							!pool
 								.pool_state
@@ -1234,8 +1219,8 @@ impl<T: Config> Pallet<T> {
 								.is_zero()
 						})
 					})
-				})
-				.map(|(lp, _positions)| lp.clone()),
+					.map(|(lp, _positions)| lp.clone())
+			}),
 			pool.range_orders
 				.iter()
 				.filter(|(lp, positions)| {
