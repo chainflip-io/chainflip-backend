@@ -79,6 +79,23 @@ impl<T> SideMap<T> {
 	) -> Result<SideMap<R>, E> {
 		Ok(SideMap { zero: f(Side::Zero, self.zero)?, one: f(Side::One, self.one)? })
 	}
+
+	pub fn as_ref(&self) -> SideMap<&T> {
+		SideMap { zero: &self.zero, one: &self.one }
+	}
+
+	pub fn as_mut(&mut self) -> SideMap<&mut T> {
+		SideMap { zero: &mut self.zero, one: &mut self.one }
+	}
+}
+impl<T> IntoIterator for SideMap<T> {
+	type Item = (Side, T);
+
+	type IntoIter = core::array::IntoIter<(Side, T), 2>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		[(Side::Zero, self.zero), (Side::One, self.one)].into_iter()
+	}
 }
 impl<T> core::ops::Index<Side> for SideMap<T> {
 	type Output = T;

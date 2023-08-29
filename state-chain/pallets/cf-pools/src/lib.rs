@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{mul_div_ceil, Amount, Order, Price, Side, SideMap},
+	common::{Amount, Order, Price, Side, SideMap},
 	limit_orders, range_orders, NewError, PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
@@ -110,12 +110,12 @@ impl<T: Config> CanonicalAssetPair<T> {
 	}
 }
 
-struct AssetPair<T: Config> {
+pub struct AssetPair<T: Config> {
 	canonical_asset_pair: CanonicalAssetPair<T>,
 	base_side: Side,
 }
 impl<T: Config> AssetPair<T> {
-	fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
+	pub fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
 		Ok(Self {
 			canonical_asset_pair: CanonicalAssetPair::new(base_asset, pair_asset)?,
 			base_side: CanonicalAssetPair::<T>::stability_to_side(match (base_asset, pair_asset) {
@@ -127,7 +127,7 @@ impl<T: Config> AssetPair<T> {
 		})
 	}
 
-	fn asset_amounts_to_side_map(
+	pub fn asset_amounts_to_side_map(
 		&self,
 		asset_amounts: AssetAmounts,
 	) -> cf_amm::common::SideMap<cf_amm::common::Amount> {
@@ -137,14 +137,14 @@ impl<T: Config> AssetPair<T> {
 		})
 	}
 
-	fn side_map_to_asset_amounts(
+	pub fn side_map_to_asset_amounts(
 		&self,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
 	) -> Result<AssetAmounts, <cf_amm::common::Amount as TryInto<AssetAmount>>::Error> {
 		Ok(self.side_map_to_assets_map(side_map.try_map(|_, amount| amount.try_into())?))
 	}
 
-	fn side_map_to_assets_map<R>(&self, side_map: cf_amm::common::SideMap<R>) -> AssetsMap<R> {
+	pub fn side_map_to_assets_map<R>(&self, side_map: cf_amm::common::SideMap<R>) -> AssetsMap<R> {
 		match self.base_side {
 			Side::Zero => AssetsMap { base: side_map.zero, pair: side_map.one },
 			Side::One => AssetsMap { base: side_map.one, pair: side_map.zero },
@@ -236,9 +236,40 @@ pub mod pallet {
 		Deserialize,
 		Serialize,
 	)]
-	pub struct AssetsMap<T> {
-		pub base: T,
-		pub pair: T,
+	pub struct AssetsMap<S> {
+		pub base: S,
+		pub pair: S,
+	}
+	impl<S> AssetsMap<S> {
+		pub fn try_map<R, E, F: FnMut(S) -> Result<R, E>>(
+			self,
+			mut f: F,
+		) -> Result<AssetsMap<R>, E> {
+			Ok(AssetsMap { base: f(self.base)?, pair: f(self.pair)? })
+		}
+
+		pub fn map<R, F: FnMut(S) -> R>(self, mut f: F) -> AssetsMap<R> {
+			AssetsMap { base: f(self.base), pair: f(self.pair) }
+		}
+
+		pub fn map_with_asset<T: Config, R, F: FnMut(Side, Asset, S) -> R>(
+			self,
+			asset_pair: &AssetPair<T>,
+			mut f: F,
+		) -> AssetsMap<R> {
+			AssetsMap {
+				base: f(
+					asset_pair.base_side,
+					asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
+					self.base,
+				),
+				pair: f(
+					!asset_pair.base_side,
+					asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
+					self.pair,
+				),
+			}
+		}
 	}
 
 	pub type AssetAmounts = AssetsMap<AssetAmount>;
