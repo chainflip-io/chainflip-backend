@@ -169,6 +169,8 @@ impl P2PMuxer {
 				P2P_BAD_MSG.with_label_values(&["unexpected_version"]).inc();
 				trace!("ignoring p2p message with unexpected version: {version}",);
 			}
+		} else {
+			P2P_BAD_MSG.with_label_values(&["deserialization_versioned_msg"]).inc();
 		}
 	}
 
