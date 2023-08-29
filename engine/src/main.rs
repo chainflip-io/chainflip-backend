@@ -261,7 +261,6 @@ async fn start(
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		// These should take retriers not raw clients
 		eth_client,
 		dot_client,
 		btc_client,
