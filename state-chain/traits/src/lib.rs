@@ -551,7 +551,8 @@ where
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
 			C::is_qualified(validator_id) &&
-			D::is_qualified(validator_id)
+			D::is_qualified(validator_id) &&
+			E::is_qualified(validator_id)
 	}
 
 	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
