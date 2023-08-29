@@ -93,6 +93,9 @@ async fn run_cli() -> Result<()> {
 				Redeem { amount, eth_address, executor } => {
 					request_redemption(api.operator_api(), amount, &eth_address, executor).await?;
 				},
+				BindRedeemAddress { eth_address } => {
+					bind_redeem_address(api.operator_api(), &eth_address).await?;
+				},
 				RegisterAccountRole { role } => {
 					println!(
 					"Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
@@ -173,6 +176,28 @@ async fn request_redemption(
 	println!(
 		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
 	);
+
+	Ok(())
+}
+
+async fn bind_redeem_address(api: Arc<impl OperatorApi + Sync>, eth_address: &str) -> Result<()> {
+	let eth_address = EthereumAddress::from_slice(
+		clean_hex_address::<[u8; 20]>(eth_address)
+			.context("Invalid ETH address supplied")?
+			.as_slice(),
+	);
+
+	println!(
+		"Binding your account to a redemption address is irreversible. You will only ever be able to redeem to this address: 0x{}",
+		hex::encode(eth_address)
+	);
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	let tx_hash = api.bind_redeem_address(eth_address).await?;
+
+	println!("Account bound to address, transaction hash: `{tx_hash:#x}`.");
 
 	Ok(())
 }

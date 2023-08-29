@@ -164,6 +164,16 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		Ok(tx_hash)
 	}
 
+	async fn bind_redeem_address(&self, address: EthereumAddress) -> Result<H256> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_redeem_address { address })
+			.await
+			.until_finalized()
+			.await?;
+
+		Ok(tx_hash)
+	}
+
 	async fn register_account_role(&self, role: AccountRole) -> Result<H256> {
 		let call = match role {
 			AccountRole::Validator =>
