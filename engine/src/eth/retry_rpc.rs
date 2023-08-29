@@ -48,7 +48,7 @@ impl<
 	}
 }
 
-const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
+const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl<

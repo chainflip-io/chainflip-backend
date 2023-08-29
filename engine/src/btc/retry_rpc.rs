@@ -23,7 +23,7 @@ impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> Clone
 	}
 }
 
-const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
+const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>

@@ -8,7 +8,7 @@ use chainflip_engine::{
 		retry_rpc::EthersRetryRpcClient,
 		rpc::{EthRpcClient, ReconnectSubscriptionClient},
 	},
-	health, p2p,
+	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -221,7 +221,6 @@ async fn start(
 	scope.spawn(btc_multisig_client_backend_future);
 
 	// Create all the clients
-
 	let expected_chain_id = web3::types::U256::from(
 		state_chain_client
 			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
@@ -277,7 +276,6 @@ async fn start(
 	)
 	.await?;
 
-	println!("Witnessing has started");
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -291,10 +289,7 @@ async fn start(
 		peer_update_sender,
 	));
 
-	println!("State chain observer has started");
-
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
-	println!("Set has_completed_initialising to true");
 	Ok(())
 }
