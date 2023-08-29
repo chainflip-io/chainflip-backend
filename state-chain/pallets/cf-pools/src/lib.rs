@@ -1165,7 +1165,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
-	) -> Result<AssetAmounts, Error<T>> {
+	) -> Result<AssetsMap<Amount>, Error<T>> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
 		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair.clone())
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1176,32 +1176,7 @@ impl<T: Config> Pallet<T> {
 				range_orders::RequiredAssetRatioError::InvalidTickRange =>
 					Error::<T>::InvalidTickRange,
 			})
-			.map(|side_map| {
-				#[allow(clippy::collapsible_else_if)]
-				asset_pair.side_map_to_assets_map(if side_map[Side::Zero] > side_map[Side::One] {
-					if side_map[Side::Zero] > Amount::from(AssetAmount::MAX) {
-						SideMap::from_array([
-							u128::MAX,
-							mul_div_ceil(side_map[Side::One], u128::MAX.into(), Amount::MAX)
-								.try_into()
-								.unwrap(),
-						])
-					} else {
-						side_map.map(|_, amount| amount.try_into().unwrap())
-					}
-				} else {
-					if side_map[Side::One] > Amount::from(AssetAmount::MAX) {
-						SideMap::from_array([
-							mul_div_ceil(side_map[Side::Zero], u128::MAX.into(), Amount::MAX)
-								.try_into()
-								.unwrap(),
-							u128::MAX,
-						])
-					} else {
-						side_map.map(|_, amount| amount.try_into().unwrap())
-					}
-				})
-			})
+			.map(|side_map| asset_pair.side_map_to_assets_map(side_map))
 	}
 
 	pub fn pool_liquidity_providers(
