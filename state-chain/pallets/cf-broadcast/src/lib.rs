@@ -319,7 +319,6 @@ pub mod pallet {
 			// eventually. For outlying, unknown unknowns, these can be something governance can
 			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
-			// let save_mode_block_margin: BlockNumberFor<T> = BlockNumberFor::<T>::from(10u32);
 			if T::SafeMode::get().retry_enabled {
 				for attempt_id in expiries.iter() {
 					if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
@@ -340,28 +339,30 @@ pub mod pallet {
 
 		// We want to retry broadcasts when we have free block space.
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
-
-			let num_retries_that_fit = remaining_weight
-				.ref_time()
-				.checked_div(next_broadcast_weight.ref_time())
-				.expect("start_next_broadcast_attempt weight should not be 0")
-				as usize;
-
-			let mut retries = BroadcastRetryQueue::<T, I>::take();
-
-			if retries.len() >= num_retries_that_fit {
-				BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
-			}
-
-			let retries_len = retries.len();
-
 			if T::SafeMode::get().retry_enabled {
+				let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
+
+				let num_retries_that_fit = remaining_weight
+					.ref_time()
+					.checked_div(next_broadcast_weight.ref_time())
+					.expect("start_next_broadcast_attempt weight should not be 0")
+					as usize;
+
+				let mut retries = BroadcastRetryQueue::<T, I>::take();
+
+				if retries.len() >= num_retries_that_fit {
+					BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
+				}
+
+				let retries_len = retries.len();
+
 				for retry in retries {
 					Self::start_next_broadcast_attempt(retry);
 				}
+				next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
+			} else {
+				Weight::zero()
 			}
-			next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
 		}
 	}
 

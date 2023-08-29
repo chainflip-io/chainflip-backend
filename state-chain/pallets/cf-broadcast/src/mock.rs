@@ -17,7 +17,7 @@ use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
-use sp_core::H256;
+use sp_core::{ConstU64, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -148,6 +148,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastCallable = MockCallback;
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
+	type SaveModeBlockMargin = ConstU64<10>;
 }
 
 impl_mock_chainflip!(Test);
