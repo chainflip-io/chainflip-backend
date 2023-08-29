@@ -104,8 +104,10 @@ pub enum CliCommand {
 			long = "exact"
 		)]
 		amount: Option<f64>,
-		#[clap(help = "The Ethereum address you wish to redeem your FLIP to")]
-		eth_address: String,
+		#[clap(
+			help = "The Ethereum address you wish to redeem your FLIP to. If not specified, the redeem address bound to your account will be used."
+		)]
+		eth_address: Option<String>,
 		#[clap(
 			help = "Optional executor. If specified, only this address will be able to execute the redemption."
 		)]
@@ -116,6 +118,8 @@ pub enum CliCommand {
 		#[clap(help = "The Ethereum address you wish to bind your account to")]
 		eth_address: String,
 	},
+	#[clap(about = "Shows the redeem address your account is bound to")]
+	GetBoundRedeemAddress,
 	#[clap(
 		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
 	)]

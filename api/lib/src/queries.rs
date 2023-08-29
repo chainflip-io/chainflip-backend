@@ -182,6 +182,25 @@ impl QueryApi {
 			})
 			.collect())
 	}
+
+	pub async fn get_bound_redeem_address(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<Option<EthereumAddress>, anyhow::Error> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		Ok(self
+			.state_chain_client
+			.storage_map::<pallet_cf_funding::BoundAddress<state_chain_runtime::Runtime>, Vec<_>>(
+				block_hash,
+			)
+			.await?
+			.into_iter()
+			.find_map(|(id, address)| if id == account_id { Some(address) } else { None }))
+	}
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
