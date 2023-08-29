@@ -89,8 +89,6 @@ impl DotHttpRpcClient {
 		let online_client = loop {
 			poll_interval.tick().await;
 
-			// genesis-hash -> request -> request is where the error is lowest
-
 			match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
 				.await
 			{
