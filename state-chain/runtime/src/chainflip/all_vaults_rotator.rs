@@ -83,10 +83,10 @@ where
 		C::activate();
 	}
 
-	fn abort_vault_rotation() {
-		A::abort_vault_rotation();
-		B::abort_vault_rotation();
-		C::abort_vault_rotation();
+	fn reset_vault_rotation() {
+		A::reset_vault_rotation();
+		B::reset_vault_rotation();
+		C::reset_vault_rotation();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
