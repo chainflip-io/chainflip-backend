@@ -11,7 +11,10 @@ use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, VaultRotator, VaultStatus};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
-use state_chain_runtime::{Environment, EthereumVault, Flip, Runtime, Validator};
+use state_chain_runtime::{
+	BitcoinVault, Environment, EthereumVault, Flip, PolkadotVault, Runtime, RuntimeOrigin,
+	Validator,
+};
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
 fn fund_authorities_and_join_auction(
@@ -246,7 +249,115 @@ fn authority_rotation_cannot_be_aborted_after_key_handover() {
 
 			// Authority rotation is completed while in Code Red.
 			testnet.move_forward_blocks(3);
+		});
+}
+
+#[test]
+fn authority_rotation_can_recover_after_keygen_fails() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, backup_nodes) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			backup_nodes.iter().for_each(|validator| {
+				testnet.set_active(validator, false);
+			});
+
+			// Begin the rotation, but make Keygen fail.
+			testnet.move_to_next_epoch();
+			testnet.submit_heartbeat_all_engines();
+
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeygensInProgress(..)
+			));
+			assert_eq!(EthereumVault::status(), AsyncResult::Pending);
+			backup_nodes.iter().for_each(|validator| {
+				assert_ok!(EthereumVault::report_keygen_outcome(
+					RuntimeOrigin::signed(validator.clone()),
+					1,
+					Err(BTreeSet::default()),
+				));
+				assert_ok!(PolkadotVault::report_keygen_outcome(
+					RuntimeOrigin::signed(validator.clone()),
+					1,
+					Err(BTreeSet::default()),
+				));
+				assert_ok!(BitcoinVault::report_keygen_outcome(
+					RuntimeOrigin::signed(validator.clone()),
+					1,
+					Err(BTreeSet::default()),
+				));
+			});
+
+			// Authority rotation can recover and succeed.
+			backup_nodes.iter().for_each(|validator| {
+				testnet.set_active(validator, true);
+			});
+			testnet.submit_heartbeat_all_engines();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
 
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
+		});
+}
+
+#[test]
+fn authority_rotation_can_recover_after_key_handover_fails() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, backup_nodes) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			// Rotate authority atleast once to ensure epoch keys are set.
+			testnet.move_to_next_epoch();
+			testnet.submit_heartbeat_all_engines();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
+
+			// Begin the second rotation.
+			testnet.move_forward_blocks(EPOCH_BLOCKS);
+			testnet.submit_heartbeat_all_engines();
+			testnet.move_forward_blocks(2);
+
+			// Make Key Handover fail. Only Bitcoin vault can fail during Key Handover.
+			// Ethereum and Polkadot does not need to wait for Key Handover.
+			backup_nodes.iter().for_each(|validator| {
+				testnet.set_active(validator, false);
+			});
+			testnet.move_forward_blocks(2);
+			backup_nodes.iter().for_each(|validator| {
+				assert_ok!(BitcoinVault::report_key_handover_outcome(
+					RuntimeOrigin::signed(validator.clone()),
+					5,
+					Err(BTreeSet::default()),
+				));
+			});
+			testnet.move_forward_blocks(1);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::KeyHandoversInProgress(..)
+			));
+			assert_eq!(
+				BitcoinVault::status(),
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::default()))
+			);
+
+			// Key handovers are retried after failure.
+			// Authority rotation can recover and succeed.
+			backup_nodes.iter().for_each(|validator| {
+				testnet.set_active(validator, true);
+			});
+			testnet.submit_heartbeat_all_engines();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
+
+			assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in a new epoch");
 		});
 }

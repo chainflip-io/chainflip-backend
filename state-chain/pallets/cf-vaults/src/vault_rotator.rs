@@ -95,11 +95,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					},
 				},
 			_ => {
-				debug_assert!(
-					false,
-					"We should have completed keygen verification before starting key handover."
-				);
-				log::error!("Key handover called during wrong wrong state.");
+				// We can fall into here if other vault's key handover failed,
+				// and we need to restart the key handover.
+				log::info!("Key handover initiated but current vault rotation is not after `KeygenVerificationComplete` or `KeyHandoverFailed`");
 			},
 		}
 	}
