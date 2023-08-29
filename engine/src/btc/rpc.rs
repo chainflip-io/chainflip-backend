@@ -12,9 +12,6 @@ use crate::settings;
 
 use anyhow::{Context, Result};
 
-#[cfg(test)]
-use mockall::automock;
-
 // From jsonrpc crate
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcError {
@@ -139,7 +136,6 @@ pub struct BlockHeader {
 }
 
 #[async_trait::async_trait]
-#[cfg_attr(test, automock)]
 pub trait BtcRpcApi {
 	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<Block>;
 
@@ -226,7 +222,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "requires local node, useful for manual testing"]
 	async fn test_btc_async() {
-		let client = BtcRpcClient::new(&settings::Btc {
+		let client = BtcRpcClient::new(settings::Btc {
 			http_node_endpoint: "http://localhost:8332".to_string(),
 			rpc_user: "flip".to_string(),
 			rpc_password: "flip".to_string(),

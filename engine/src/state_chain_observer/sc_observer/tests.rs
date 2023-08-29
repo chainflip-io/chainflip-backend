@@ -1,7 +1,9 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-	btc::rpc::MockBtcRpcApi,
+	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
+	dot::retry_rpc::mocks::MockDotHttpRpcClient,
+	eth::retry_rpc::mocks::MockEthRetryRpcClient,
 	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
 use cf_chains::{
@@ -16,7 +18,6 @@ use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature
 use pallet_cf_broadcast::BroadcastAttemptId;
 use sp_runtime::{AccountId32, Digest};
 
-use crate::eth::rpc::MockEthRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
@@ -25,8 +26,6 @@ use state_chain_runtime::{
 use utilities::MakeCachedStream;
 
 use crate::{
-	btc::BtcBroadcaster,
-	dot::{rpc::MockDotRpcApi, DotBroadcaster},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 };
@@ -57,7 +56,7 @@ async fn start_sc_observer<
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
-	eth_rpc: MockEthRpcApi,
+	eth_rpc: MockEthRetryRpcClient,
 ) {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -66,8 +65,8 @@ async fn start_sc_observer<
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_rpc,
-		DotBroadcaster::new(MockDotRpcApi::new()),
-		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockDotHttpRpcClient::new(),
+		MockBtcRetryRpcClient::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
@@ -135,17 +134,11 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let mut eth_rpc_mock = MockEthRpcApi::new();
-	// when we are selected to sign we must estimate gas and sign
-	// NB: We only do this once, since we are only selected to sign once
-	eth_rpc_mock
-		.expect_estimate_gas()
-		.once()
-		.returning(|_| Ok(ethers::types::U256::from(100_000)));
+	let mut eth_rpc_mock = MockEthRetryRpcClient::new();
 
-	eth_rpc_mock.expect_send_transaction().once().return_once(|tx| {
+	eth_rpc_mock.expect_broadcast_transaction().once().return_once(|_| {
 		// return some hash
-		Ok(tx.sighash())
+		Ok(H256::from([1; 32]))
 	});
 
 	start_sc_observer(state_chain_client, sc_block_stream, eth_rpc_mock).await;
@@ -518,9 +511,9 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(MockEthRpcApi::new()),
-				DotBroadcaster::new(MockDotRpcApi::new()),
-				BtcBroadcaster::new(MockBtcRpcApi::new()),
+				MockEthRetryRpcClient::new(),
+				MockDotHttpRpcClient::new(),
+				MockBtcRetryRpcClient::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),

@@ -14,9 +14,6 @@ use utilities::make_periodic_tick;
 
 use utilities::read_clean_and_decode_hex_str_file;
 
-#[cfg(test)]
-use mockall::automock;
-
 struct NonceInfo {
 	next_nonce: U256,
 	requested_at: std::time::Instant,
@@ -105,7 +102,6 @@ impl EthRpcClient {
 	}
 }
 
-#[cfg_attr(test, automock)]
 #[async_trait::async_trait]
 pub trait EthRpcApi: Send {
 	fn address(&self) -> H160;
@@ -265,7 +261,7 @@ mod tests {
 	async fn eth_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let client = EthRpcClient::new(&settings.eth, 2u64).await.unwrap();
+		let client = EthRpcClient::new(settings.eth, 2u64).unwrap().await;
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 

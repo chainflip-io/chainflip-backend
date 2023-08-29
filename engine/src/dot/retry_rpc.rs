@@ -274,6 +274,37 @@ impl<
 }
 
 #[cfg(test)]
+pub mod mocks {
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub DotHttpRpcClient {}
+
+		impl Clone for DotHttpRpcClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl DotRetryRpcApi for DotHttpRpcClient {
+			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
+
+			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
+
+			async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
+
+			async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
+
+			async fn submit_raw_encoded_extrinsic(
+				&self,
+				encoded_bytes: Vec<u8>,
+			) -> anyhow::Result<PolkadotHash>;
+		}
+
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use futures_util::FutureExt;
 
@@ -286,12 +317,11 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				let dot_http_rpc_client =
-					DotHttpRpcClient::new("http://127.0.0.1:9945").await.unwrap();
-
-				let dot_sub_client = DotSubClient::new("ws://127.0.0.1:9945");
-				let dot_retry_rpc_client =
-					DotRetryRpcClient::new(scope, dot_http_rpc_client, dot_sub_client);
+				let dot_retry_rpc_client = DotRetryRpcClient::new(
+					scope,
+					DotHttpRpcClient::new("http://127.0.0.1:9945".to_string()).unwrap(),
+					async move { DotSubClient::new("ws://127.0.0.1:9945") },
+				);
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);
@@ -307,7 +337,8 @@ mod tests {
 
 				let hash = dot_retry_rpc_client
 					.submit_raw_encoded_extrinsic(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-					.await;
+					.await
+					.unwrap();
 				println!("Extrinsic hash: {}", hash);
 
 				Ok(())

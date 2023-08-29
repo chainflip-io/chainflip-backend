@@ -202,7 +202,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_http_rpc() {
 		let url = "http://localhost:9945";
-		let dot_http_rpc = DotHttpRpcClient::new(url).await.unwrap();
+		let dot_http_rpc = DotHttpRpcClient::new(url.to_string()).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

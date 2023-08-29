@@ -397,7 +397,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -446,7 +447,8 @@ mod tests {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -483,7 +485,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -521,7 +524,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -565,7 +569,8 @@ mod tests {
 
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 2);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 2);
 
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
@@ -642,7 +647,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request_with_limit(
@@ -668,7 +674,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move { () }, INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request(

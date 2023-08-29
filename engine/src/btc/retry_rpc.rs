@@ -182,3 +182,33 @@ impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> ChainClien
 			.await
 	}
 }
+
+#[cfg(test)]
+pub mod mocks {
+
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub BtcRetryRpcClient {}
+
+		impl Clone for BtcRetryRpcClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl BtcRetryRpcApi for BtcRetryRpcClient {
+			async fn block(&self, block_hash: BlockHash) -> Block;
+
+			async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
+
+			async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid>;
+
+			async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount>;
+
+			async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
+
+			async fn best_block_header(&self) -> BlockHeader;
+		}
+	}
+}

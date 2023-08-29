@@ -321,14 +321,15 @@ mod tests {
 					"e7f1725E7734CE288F8367e1Bb143E90bb3F0512".parse::<Address>().unwrap();
 
 				let settings = Settings::new_test().unwrap();
-
 				let client = EthersRetryRpcClient::new(
 					scope,
-					EthRpcClient::new(&settings.eth, 1337u64).await.unwrap(),
-					ReconnectSubscriptionClient::new(
-						settings.eth.ws_node_endpoint,
-						web3::types::U256::from(1337),
-					),
+					EthRpcClient::new(settings.eth.clone(), 1337u64).unwrap(),
+					async move {
+						ReconnectSubscriptionClient::new(
+							settings.eth.ws_node_endpoint,
+							web3::types::U256::from(1337),
+						)
+					},
 				);
 
 				let addresses = vec![

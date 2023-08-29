@@ -326,6 +326,45 @@ impl<
 }
 
 #[cfg(test)]
+pub mod mocks {
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub EthRetryRpcClient {}
+
+		impl Clone for EthRetryRpcClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl EthersRetryRpcApi for EthRetryRpcClient {
+			async fn broadcast_transaction(
+				&self,
+				tx: cf_chains::eth::Transaction,
+			) -> anyhow::Result<TxHash>;
+
+			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
+
+			async fn chain_id(&self) -> U256;
+
+			async fn transaction_receipt(&self, tx_hash: H256) -> TransactionReceipt;
+
+			async fn block(&self, block_number: U64) -> Block<H256>;
+
+			async fn block_with_txs(&self, block_number: U64) -> Block<Transaction>;
+
+			async fn fee_history(
+				&self,
+				block_count: U256,
+				newest_block: BlockNumber,
+				reward_percentiles: Vec<f64>,
+			) -> FeeHistory;
+		}
+	}
+}
+
+#[cfg(test)]
 mod tests {
 	use crate::settings::Settings;
 	use futures::FutureExt;
@@ -340,16 +379,13 @@ mod tests {
 			async move {
 				let settings = Settings::new_test().unwrap();
 
-				let retry_client = EthersRetryRpcClient::new(
-					scope,
-					async move { EthRpcClient::new(&settings.eth, 1337u64).await.unwrap() },
-					async move {
-						ReconnectSubscriptionClient::new(
-							settings.eth.ws_node_endpoint,
-							web3::types::U256::from(1337),
-						)
-					},
-				);
+				let eth_rpc_client = EthRpcClient::new(settings.eth.clone(), 1337u64).unwrap();
+				let retry_client = EthersRetryRpcClient::new(scope, eth_rpc_client, async move {
+					ReconnectSubscriptionClient::new(
+						settings.eth.ws_node_endpoint,
+						web3::types::U256::from(1337),
+					)
+				});
 
 				let chain_id = retry_client.chain_id().await;
 				println!("chain_id: {}", chain_id);

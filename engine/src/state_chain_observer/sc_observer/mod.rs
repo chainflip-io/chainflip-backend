@@ -229,7 +229,7 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_rpc: EthRpc,
-	dot_broadcaster: DotRpc,
+	dot_rpc: DotRpc,
 	btc_rpc: BtcRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
@@ -530,7 +530,7 @@ where
                                         },
                                     ) => {
                                         if nominee == account_id {
-                                            match dot_broadcaster.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
+                                            match dot_rpc.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
                                                 Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                 Err(error) => {
                                                     error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
