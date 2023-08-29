@@ -23,6 +23,10 @@ use super::common::epoch_source::EpochSource;
 use anyhow::Result;
 
 /// Starts all the witnessing tasks.
+// It's important that this function is not blocking, at any point, even if there is no connection
+// to any or all chains. This implies that the `start` function for each chain should not be
+// blocking. The chains must be able to witness independently, and if this blocks at any
+// point it means that on start up this will block, and the state chain observer will not start.
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthersRetryRpcClient<
