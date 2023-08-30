@@ -48,10 +48,10 @@ use super::{
 };
 
 use lazy_static;
-use prometheus::{IntCounterVec, IntGauge, Opts, Registry};
+use prometheus::{IntCounterVec, Opts, Registry, IntGaugeVec};
 lazy_static::lazy_static! {
 	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("CEREMONY_MANAGER_BAD_MSG", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
-	pub static ref UNAUTHORIZED_CEREMONY: IntGauge = IntGauge::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony beeing run").expect("Metric succesfully created");
+	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = IntGaugeVec::new(Opts::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony beeing run"), &["chain"]).expect("Metric succesfully created");
 	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("CEREMONY_RUNNER_BAD_MSG", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
 
 	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = IntCounterVec::new(Opts::new("ceremony_msg", "Count all the messages for a give ceremony"), &["ceremonyId", "fromAccountId"]).expect("Metric succesfully created");
@@ -740,7 +740,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 					})
 					.count() + 1;
 
-				UNAUTHORIZED_CEREMONY.set(total.try_into().unwrap());
+				UNAUTHORIZED_CEREMONY.with_label_values(&[Chain::NAME]).set(total.try_into().unwrap());
 				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
 				self.ceremony_handles.insert(
 					ceremony_id,
