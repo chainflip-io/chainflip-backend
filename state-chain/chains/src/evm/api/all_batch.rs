@@ -29,7 +29,7 @@ impl AllBatch {
 	}
 }
 
-impl EthereumCall for AllBatch {
+impl EvmCall for AllBatch {
 	const FUNCTION_NAME: &'static str = "allBatch";
 
 	fn function_call_args(&self) -> Vec<Token> {
@@ -55,7 +55,7 @@ mod test_all_batch {
 	use crate::{
 		eth::api::abi::load_abi,
 		evm::{
-			api::{EthereumTransactionBuilder, EvmReplayProtection},
+			api::{EvmReplayProtection, EvmTransactionBuilder},
 			EvmFetchId, SchnorrVerificationComponents,
 		},
 		AllBatch, ApiCall, FetchAssetParams,
@@ -115,7 +115,7 @@ mod test_all_batch {
 
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 
-		let all_batch_runtime = EthereumTransactionBuilder::new_unsigned(
+		let all_batch_runtime = EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,

@@ -17,7 +17,7 @@ impl SetGovKeyWithAggKey {
 	}
 }
 
-impl EthereumCall for SetGovKeyWithAggKey {
+impl EvmCall for SetGovKeyWithAggKey {
 	const FUNCTION_NAME: &'static str = "setGovKeyWithAggKey";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
@@ -35,7 +35,7 @@ mod test_set_gov_key_with_agg_key {
 	use crate::{
 		eth::api::abi::load_abi,
 		evm::{
-			api::{ApiCall, EthereumTransactionBuilder},
+			api::{ApiCall, EvmTransactionBuilder},
 			tests::asymmetrise,
 			SchnorrVerificationComponents,
 		},
@@ -52,7 +52,7 @@ mod test_set_gov_key_with_agg_key {
 
 		let key_manager = load_abi("IKeyManager");
 
-		let tx_builder = EthereumTransactionBuilder::new_unsigned(
+		let tx_builder = EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,

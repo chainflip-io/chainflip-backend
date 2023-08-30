@@ -57,7 +57,7 @@ impl ExecutexSwapAndCall {
 	}
 }
 
-impl EthereumCall for ExecutexSwapAndCall {
+impl EvmCall for ExecutexSwapAndCall {
 	const FUNCTION_NAME: &'static str = "executexSwapAndCall";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
@@ -86,7 +86,7 @@ mod test_execute_x_swap_and_execute {
 		dot::PolkadotAccountId,
 		eth::api::abi::load_abi,
 		evm::{
-			api::{ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+			api::{ApiCall, EvmReplayProtection, EvmTransactionBuilder},
 			SchnorrVerificationComponents,
 		},
 	};
@@ -123,7 +123,7 @@ mod test_execute_x_swap_and_execute {
 
 		let function_reference = eth_vault.function("executexSwapAndCall").unwrap();
 
-		let function_runtime = EthereumTransactionBuilder::new_unsigned(
+		let function_runtime = EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,

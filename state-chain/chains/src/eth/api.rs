@@ -3,8 +3,8 @@ use crate::{
 	evm::{
 		api::{
 			all_batch, execute_x_swap_and_call, set_agg_key_with_agg_key,
-			set_comm_key_with_agg_key, set_gov_key_with_agg_key, EthEnvironmentProvider,
-			EthereumCall, EthereumTransactionBuilder, EvmReplayProtection, SigData,
+			set_comm_key_with_agg_key, set_gov_key_with_agg_key, EthEnvironmentProvider, EvmCall,
+			EvmReplayProtection, EvmTransactionBuilder, SigData,
 		},
 		EvmFetchId, SchnorrVerificationComponents,
 	},
@@ -66,21 +66,19 @@ pub mod update_flip_supply;
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub enum EthereumApi<Environment: 'static> {
-	SetAggKeyWithAggKey(EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
-	RegisterRedemption(EthereumTransactionBuilder<register_redemption::RegisterRedemption>),
-	UpdateFlipSupply(EthereumTransactionBuilder<update_flip_supply::UpdateFlipSupply>),
-	SetGovKeyWithAggKey(EthereumTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>),
-	SetCommKeyWithAggKey(
-		EthereumTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>,
-	),
-	AllBatch(EthereumTransactionBuilder<all_batch::AllBatch>),
-	ExecutexSwapAndCall(EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
+	SetAggKeyWithAggKey(EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
+	RegisterRedemption(EvmTransactionBuilder<register_redemption::RegisterRedemption>),
+	UpdateFlipSupply(EvmTransactionBuilder<update_flip_supply::UpdateFlipSupply>),
+	SetGovKeyWithAggKey(EvmTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>),
+	SetCommKeyWithAggKey(EvmTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>),
+	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
+	ExecutexSwapAndCall(EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransactionBuilder<C> {
+impl<C: EvmCall + Parameter + 'static> ApiCall<Ethereum> for EvmTransactionBuilder<C> {
 	fn threshold_signature_payload(
 		&self,
 	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
@@ -126,7 +124,7 @@ where
 		_old_key: Option<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 		new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
-		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
+		Ok(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
 		)))
@@ -141,7 +139,7 @@ where
 		_maybe_old_key: Option<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey>,
 		new_gov_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey,
 	) -> Result<Self, ()> {
-		Ok(Self::SetGovKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
+		Ok(Self::SetGovKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_gov_key_with_agg_key::SetGovKeyWithAggKey::new(new_gov_key),
 		)))
@@ -155,7 +153,7 @@ where
 	fn new_unsigned(
 		new_comm_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey,
 	) -> Self {
-		Self::SetCommKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
+		Self::SetCommKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_comm_key_with_agg_key::SetCommKeyWithAggKey::new(new_comm_key),
 		))
@@ -173,7 +171,7 @@ where
 		expiry: u64,
 		executor: Option<Address>,
 	) -> Self {
-		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
+		Self::RegisterRedemption(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
 			register_redemption::RegisterRedemption::new(
 				node_id, amount, address, expiry, executor,
@@ -195,7 +193,7 @@ where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
-		Self::UpdateFlipSupply(EthereumTransactionBuilder::new_unsigned(
+		Self::UpdateFlipSupply(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::StateChainGateway)),
 			update_flip_supply::UpdateFlipSupply::new(new_total_supply, block_number),
 		))
@@ -233,7 +231,7 @@ where
 				return Err(AllBatchError::Other)
 			}
 		}
-		Ok(Self::AllBatch(EthereumTransactionBuilder::new_unsigned(
+		Ok(Self::AllBatch(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::Vault)),
 			all_batch::AllBatch::new(
 				fetch_deploy_params,
@@ -272,7 +270,7 @@ where
 			amount: transfer_param.amount,
 		};
 
-		Ok(Self::ExecutexSwapAndCall(EthereumTransactionBuilder::new_unsigned(
+		Ok(Self::ExecutexSwapAndCall(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::Vault)),
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
 				egress_id,
@@ -285,56 +283,52 @@ where
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
+impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
 	for EthereumApi<E>
 {
-	fn from(tx: EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>) -> Self {
+	fn from(tx: EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>) -> Self {
 		Self::SetAggKeyWithAggKey(tx)
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<register_redemption::RegisterRedemption>>
-	for EthereumApi<E>
-{
-	fn from(tx: EthereumTransactionBuilder<register_redemption::RegisterRedemption>) -> Self {
+impl<E> From<EvmTransactionBuilder<register_redemption::RegisterRedemption>> for EthereumApi<E> {
+	fn from(tx: EvmTransactionBuilder<register_redemption::RegisterRedemption>) -> Self {
 		Self::RegisterRedemption(tx)
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<update_flip_supply::UpdateFlipSupply>> for EthereumApi<E> {
-	fn from(tx: EthereumTransactionBuilder<update_flip_supply::UpdateFlipSupply>) -> Self {
+impl<E> From<EvmTransactionBuilder<update_flip_supply::UpdateFlipSupply>> for EthereumApi<E> {
+	fn from(tx: EvmTransactionBuilder<update_flip_supply::UpdateFlipSupply>) -> Self {
 		Self::UpdateFlipSupply(tx)
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>>
+impl<E> From<EvmTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>>
 	for EthereumApi<E>
 {
-	fn from(tx: EthereumTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>) -> Self {
+	fn from(tx: EvmTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>) -> Self {
 		Self::SetGovKeyWithAggKey(tx)
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>>
+impl<E> From<EvmTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>>
 	for EthereumApi<E>
 {
-	fn from(
-		tx: EthereumTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>,
-	) -> Self {
+	fn from(tx: EvmTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>) -> Self {
 		Self::SetCommKeyWithAggKey(tx)
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<all_batch::AllBatch>> for EthereumApi<E> {
-	fn from(tx: EthereumTransactionBuilder<all_batch::AllBatch>) -> Self {
+impl<E> From<EvmTransactionBuilder<all_batch::AllBatch>> for EthereumApi<E> {
+	fn from(tx: EvmTransactionBuilder<all_batch::AllBatch>) -> Self {
 		Self::AllBatch(tx)
 	}
 }
 
-impl<E> From<EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>>
+impl<E> From<EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>>
 	for EthereumApi<E>
 {
-	fn from(tx: EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>) -> Self {
+	fn from(tx: EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>) -> Self {
 		Self::ExecutexSwapAndCall(tx)
 	}
 }

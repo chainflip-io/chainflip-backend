@@ -2,7 +2,7 @@
 
 use crate::{
 	benchmarking_value::BenchmarkValue,
-	evm::api::{EthereumTransactionBuilder, EvmReplayProtection},
+	evm::api::{EvmReplayProtection, EvmTransactionBuilder},
 };
 
 use super::{
@@ -12,7 +12,7 @@ use super::{
 
 impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
-		EthereumTransactionBuilder::new_unsigned(
+		EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection::default(),
 			UpdateFlipSupply::new(1000000u128, 1u64),
 		)

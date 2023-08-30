@@ -24,7 +24,7 @@ impl UpdateFlipSupply {
 	}
 }
 
-impl EthereumCall for UpdateFlipSupply {
+impl EvmCall for UpdateFlipSupply {
 	const FUNCTION_NAME: &'static str = "updateFlipSupply";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
@@ -39,7 +39,7 @@ impl EthereumCall for UpdateFlipSupply {
 #[cfg(test)]
 mod test_update_flip_supply {
 	use crate::{
-		eth::api::{abi::load_abi, ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+		eth::api::{abi::load_abi, ApiCall, EvmReplayProtection, EvmTransactionBuilder},
 		evm::SchnorrVerificationComponents,
 	};
 
@@ -62,7 +62,7 @@ mod test_update_flip_supply {
 
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
-		let update_flip_supply_runtime = EthereumTransactionBuilder::new_unsigned(
+		let update_flip_supply_runtime = EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,

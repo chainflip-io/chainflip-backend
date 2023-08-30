@@ -70,7 +70,7 @@ impl RegisterRedemption {
 	}
 }
 
-impl EthereumCall for RegisterRedemption {
+impl EvmCall for RegisterRedemption {
 	const FUNCTION_NAME: &'static str = "registerRedemption";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
@@ -97,7 +97,7 @@ impl EthereumCall for RegisterRedemption {
 #[cfg(test)]
 mod test_register_redemption {
 	use crate::{
-		eth::api::{abi::load_abi, ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+		eth::api::{abi::load_abi, ApiCall, EvmReplayProtection, EvmTransactionBuilder},
 		evm::SchnorrVerificationComponents,
 	};
 
@@ -123,7 +123,7 @@ mod test_register_redemption {
 		let register_redemption_reference =
 			state_chain_gateway.function("registerRedemption").unwrap();
 
-		let register_redemption_runtime = EthereumTransactionBuilder::new_unsigned(
+		let register_redemption_runtime = EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,

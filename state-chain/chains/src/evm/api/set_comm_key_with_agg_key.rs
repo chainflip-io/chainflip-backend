@@ -17,7 +17,7 @@ impl SetCommKeyWithAggKey {
 	}
 }
 
-impl EthereumCall for SetCommKeyWithAggKey {
+impl EvmCall for SetCommKeyWithAggKey {
 	const FUNCTION_NAME: &'static str = "setCommKeyWithAggKey";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
@@ -34,7 +34,7 @@ mod test_set_comm_key_with_agg_key {
 	use super::*;
 	use crate::{
 		eth::api::abi::load_abi,
-		evm::{api::EthereumTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
+		evm::{api::EvmTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
 		ApiCall,
 	};
 
@@ -51,7 +51,7 @@ mod test_set_comm_key_with_agg_key {
 
 		let key_manager = load_abi("IKeyManager");
 
-		let tx_builder = EthereumTransactionBuilder::new_unsigned(
+		let tx_builder = EvmTransactionBuilder::new_unsigned(
 			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,

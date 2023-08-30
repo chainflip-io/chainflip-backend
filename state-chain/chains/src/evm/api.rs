@@ -95,7 +95,7 @@ impl Tokenizable for SigData {
 	}
 }
 
-pub trait EthereumCall {
+pub trait EvmCall {
 	const FUNCTION_NAME: &'static str;
 
 	/// The function names and parameters, not including sigData.
@@ -116,7 +116,7 @@ pub trait EthereumCall {
 			state_mutability: ethabi::StateMutability::NonPayable,
 		}
 	}
-	/// Encodes the call and signature into Ethereum Abi format.
+	/// Encodes the call and signature into EVM Abi format.
 	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
 		Self::get_function()
 			.encode_input(
@@ -142,13 +142,13 @@ pub trait EthereumCall {
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct EthereumTransactionBuilder<C> {
+pub struct EvmTransactionBuilder<C> {
 	pub sig_data: Option<SigData>,
 	pub replay_protection: EvmReplayProtection,
 	pub call: C,
 }
 
-impl<C: EthereumCall> EthereumTransactionBuilder<C> {
+impl<C: EvmCall> EvmTransactionBuilder<C> {
 	pub fn new_unsigned(replay_protection: EvmReplayProtection, call: C) -> Self {
 		Self { replay_protection, call, sig_data: None }
 	}
