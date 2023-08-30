@@ -32,6 +32,7 @@ use super::{
 };
 use crate::client::ceremony_manager::CEREMONY_RUNNER_BAD_MSG;
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
+const INCORRECT_NUMBER_ELEMENTS: &str = "incorrect_number_elements";
 
 type OptionalCeremonyReturn<C> = Option<
 	Result<
@@ -227,7 +228,7 @@ where
 				if !data.is_initial_stage_data_size_valid::<Chain>() {
 					CEREMONY_RUNNER_BAD_MSG
 						.with_label_values(&[
-							"incorrect_number_elements",
+							INCORRECT_NUMBER_ELEMENTS,
 							sender_id.to_string().as_str(),
 						])
 						.inc();
@@ -264,7 +265,7 @@ where
 				) {
 					CEREMONY_RUNNER_BAD_MSG
 						.with_label_values(&[
-							"incorrect_number_elements",
+							INCORRECT_NUMBER_ELEMENTS,
 							sender_id.to_string().as_str(),
 						])
 						.inc();
