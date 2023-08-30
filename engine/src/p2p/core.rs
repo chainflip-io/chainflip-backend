@@ -27,7 +27,9 @@ use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONN
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
 
-use crate::metrics::{P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT};
+use crate::metrics::{
+	P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
+};
 
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
@@ -369,6 +371,7 @@ impl P2PContext {
 		// TODO: ensure that stale/inactive connections are terminated
 
 		if let Some(existing_socket) = self.active_connections.remove(&account_id) {
+			P2P_ACTIVE_CONNECTIONS.dec();
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
 			error!("Failed remove unknown peer: {account_id}");
@@ -387,7 +390,9 @@ impl P2PContext {
 	fn handle_monitor_event(&mut self, event: MonitorEvent) {
 		match event {
 			MonitorEvent::ConnectionFailure(account_id) => {
-				let Some(_existing_socket) = self.active_connections.remove(&account_id) else {
+				if let Some(_existing_socket) = self.active_connections.remove(&account_id) {
+					P2P_ACTIVE_CONNECTIONS.dec();
+				} else {
 					// NOTE: this should not happen, but this guards against any surprising ZMQ
 					// behaviour
 					error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
@@ -421,6 +426,7 @@ impl P2PContext {
 		let connected_socket = socket.connect(peer);
 
 		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
+		P2P_ACTIVE_CONNECTIONS.inc();
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
@@ -440,6 +446,7 @@ impl P2PContext {
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
+			P2P_ACTIVE_CONNECTIONS.dec();
 			debug!(
 				peer_info = peer.to_string(),
 				"Received info for known peer with account id {}, updating info and reconnecting",

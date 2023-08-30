@@ -7,7 +7,7 @@ use std::net::IpAddr;
 
 use crate::settings;
 use lazy_static;
-use prometheus::{IntCounter, IntCounterVec, Opts, Registry};
+use prometheus::{IntCounter, IntCounterVec, IntGauge, Opts, Registry};
 use tracing::info;
 use utilities::task_scope;
 use warp::Filter;
@@ -20,6 +20,12 @@ lazy_static::lazy_static! {
 
 	pub static ref P2P_MSG_SENT: IntCounter = create_and_register_counter("p2p_msg_sent", "Count all the p2p msgs sent by the engine");
 	pub static ref P2P_MSG_RECEIVED: IntCounter = create_and_register_counter("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)");
+	pub static ref P2P_RECONNECT_PEERS: IntGauge = create_and_register_gauge("p2p_reconnect_peers", "Count the number of peers we need to reconnect to");
+	pub static ref P2P_ACTIVE_CONNECTIONS: IntGauge = create_and_register_gauge("p2p_active_connections", "Count the number of active connections");
+	pub static ref P2P_MONITOR_EVENT: IntCounterVec = create_and_register_counter_vec("p2p_monitor_event", "Count the number of events received from the engine/monitor", &["eventType"]);
+	pub static ref P2P_ALLOWED_PUBKEYS: IntGauge = create_and_register_gauge("p2p_allowed_pubkeys", "Count the number of allowed pubkeys");
+	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = create_and_register_gauge("p2p_declined_connections", "Count the number times we decline a connection");
+
 	pub static ref P2P_BAD_MSG: IntCounterVec = create_and_register_counter_vec("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"]);
 }
 
@@ -31,6 +37,12 @@ fn create_and_register_counter_vec(name: &str, help: &str, labels: &[&str]) -> I
 
 fn create_and_register_counter(name: &str, help: &str) -> IntCounter {
 	let m = IntCounter::new(name, help).expect("Metric succesfully created");
+	REGISTRY.register(Box::new(m.clone())).expect("Metric succesfully register");
+	m
+}
+
+fn create_and_register_gauge(name: &str, help: &str) -> IntGauge {
+	let m = IntGauge::new(name, help).expect("Metric succesfully created");
 	REGISTRY.register(Box::new(m.clone())).expect("Metric succesfully register");
 	m
 }

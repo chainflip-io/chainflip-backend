@@ -15,6 +15,7 @@ use super::{socket::DO_NOT_LINGER, PeerInfo};
 
 use super::{pk_to_string, XPublicKey};
 
+use crate::metrics::{P2P_ALLOWED_PUBKEYS, P2P_DECLINED_CONNECTIONS};
 /// These values are ZMQ convention
 const ZAP_AUTH_SUCCESS: &str = "200";
 const ZAP_AUTH_FAILURE: &str = "400";
@@ -48,6 +49,7 @@ impl Authenticator {
 			.write()
 			.unwrap()
 			.insert(peer.pubkey, peer.account_id.clone());
+		P2P_ALLOWED_PUBKEYS.inc();
 	}
 
 	pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
@@ -56,6 +58,7 @@ impl Authenticator {
 				"Removed from the list of allowed peers: {account_id} (public key: {})",
 				pk_to_string(peer_pubkey)
 			);
+			P2P_ALLOWED_PUBKEYS.dec();
 		}
 	}
 
@@ -72,6 +75,7 @@ impl Authenticator {
 				"Declining an incoming connection for an unknown pubkey: {}",
 				pk_to_string(&req.pubkey)
 			);
+			P2P_DECLINED_CONNECTIONS.inc();
 			send_auth_response(socket, &req.request_id, ZAP_AUTH_FAILURE, &req.pubkey)
 		}
 	}
