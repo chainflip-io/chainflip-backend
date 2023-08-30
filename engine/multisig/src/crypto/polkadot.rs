@@ -68,7 +68,7 @@ pub struct PolkadotCryptoScheme;
 
 impl ChainSigning for PolkadotSigning {
 	type CryptoScheme = PolkadotCryptoScheme;
-	type Chain = <Polkadot as Chain>::ChainCrypto;
+	type ChainCrypto = <Polkadot as Chain>::ChainCrypto;
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
 }

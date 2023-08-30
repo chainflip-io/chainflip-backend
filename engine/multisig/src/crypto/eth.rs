@@ -64,7 +64,7 @@ pub struct EvmCryptoScheme;
 
 impl ChainSigning for EthSigning {
 	type CryptoScheme = EvmCryptoScheme;
-	type Chain = <Ethereum as Chain>::ChainCrypto;
+	type ChainCrypto = <Ethereum as Chain>::ChainCrypto;
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
 }

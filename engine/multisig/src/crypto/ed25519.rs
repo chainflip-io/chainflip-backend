@@ -50,7 +50,7 @@ pub struct Ed25519CryptoScheme;
 impl ChainSigning for Ed25519Signing {
 	type CryptoScheme = Ed25519CryptoScheme;
 	// This scheme isn't implemented on the state chain.
-	type Chain = <cf_chains::none::NoneChain as Chain>::ChainCrypto;
+	type ChainCrypto = <cf_chains::none::NoneChain as Chain>::ChainCrypto;
 
 	const NAME: &'static str = "Ed25519";
 

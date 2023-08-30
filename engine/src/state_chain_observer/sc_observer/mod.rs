@@ -55,9 +55,9 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: ChainSigning<Chain = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto>
+	C: ChainSigning<ChainCrypto = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto>
 		+ 'static,
-	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
+	I: CryptoCompat<C, C::ChainCrypto> + 'static + Sync + Send,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {

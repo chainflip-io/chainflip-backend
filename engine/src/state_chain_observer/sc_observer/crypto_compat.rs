@@ -11,7 +11,7 @@ use state_chain_runtime::{BitcoinInstance, EthereumInstance, PolkadotInstance};
 
 /// Compatibility layer for converting between public keys generated using the [CryptoScheme] types
 /// and the on-chain representation as defined by [ChainCrypto].
-pub trait CryptoCompat<S: ChainSigning<Chain = C>, C: ChainCrypto> {
+pub trait CryptoCompat<S: ChainSigning<ChainCrypto = C>, C: ChainCrypto> {
 	fn pubkey_to_aggkey(
 		pubkey: <<S as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
 	) -> C::AggKey;

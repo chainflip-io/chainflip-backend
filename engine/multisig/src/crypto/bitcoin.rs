@@ -64,7 +64,7 @@ pub struct BtcCryptoScheme;
 
 impl ChainSigning for BtcSigning {
 	type CryptoScheme = BtcCryptoScheme;
-	type Chain = <Bitcoin as Chain>::ChainCrypto;
+	type ChainCrypto = <Bitcoin as Chain>::ChainCrypto;
 	const NAME: &'static str = "Bitcoin";
 	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
 

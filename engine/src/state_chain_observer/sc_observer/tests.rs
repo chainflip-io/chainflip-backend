@@ -311,10 +311,10 @@ mod dot_signing {
 async fn should_handle_keygen_request<C, I>()
 where
 	C: ChainSigning<
-			Chain = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
+			ChainCrypto = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
 		> + Send
 		+ Sync,
-	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
+	I: CryptoCompat<C, C::ChainCrypto> + 'static + Send + Sync,
 	Runtime: pallet_cf_vaults::Config<I>,
 	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
 {
