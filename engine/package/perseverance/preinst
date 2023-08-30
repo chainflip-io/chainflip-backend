@@ -42,6 +42,11 @@ if [ -f "/var/log/chainflip-engine.log" ]; then
     rm -rf "/var/log/chainflip-engine*"
 fi
 
+echo "Updating pDOT endpoint ..."
+sed -i 's|wss://pdot.chainflip.xyz:443|wss://rpc-pdot.chainflip.io:443|g' /etc/chainflip/config/Settings.toml
+
+echo "Migration complete. Restarting chainflip-engine..."
+
 systemctl daemon-reload
 
 #DEBHELPER#
