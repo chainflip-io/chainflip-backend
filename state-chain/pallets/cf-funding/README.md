@@ -36,7 +36,7 @@ Redemptions can be subject to certain rules and restrictions. The following cate
 
 #### Bonded Funds
 
-Funds are bonded when a validator wins an authority slot in the auction. A validator may withdraw an FLIP in excess of the bond.
+Funds are bonded when a validator wins an authority slot in the auction. A validator may redeem any FLIP they own in excess of the bond.
 
 The size of the bond depends on the outcome of the auction: The bond is set to the minimum winning auction bid.
 
