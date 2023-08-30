@@ -33,6 +33,14 @@ function predictBtcAddress(pubkey: string, salt: number): string {
     return address;
 }
 
+//how to use this function:
+/*
+let chainflip = await getChainflipApi();
+let pubkey = ((await chainflip.query.environment.polkadotVaultAccountId()).toJSON()! as string).substring(2);
+let salt = ((await chainflip.query.polkadotIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
+let dot = predictDotAddress(pubkey, salt);
+console.log(dot); */
+
 function predictDotAddress(pubkey: string, salt: number): string {
     const buffer_size = 16 + 32 + 2;
     let buffer = new Uint8Array(buffer_size);
@@ -49,10 +57,10 @@ function price2tick(price: number): number {
     return Math.round(Math.log(Math.sqrt(price))/Math.log(Math.sqrt(1.0001)));
 }
 
-async function playLp(asset: string, price: number){
+async function playLp(asset: string, price: number, liquidity: number){
     let offset = 0;
     const spread = 0.01*price;
-    const liquidity = 1000000*1e6;
+    const liquidity_fine = liquidity*1e6;
     while(true){
         const buy_tick  = price2tick(price+offset+spread);
         const sell_tick = price2tick(price+offset-spread);
@@ -60,10 +68,10 @@ async function playLp(asset: string, price: number){
         const new_buy_tick  = price2tick(price+new_offset+spread);
         const new_sell_tick = price2tick(price+new_offset-spread);
         const result = await Promise.all([
-            call('lp_burnLimitOrder', [asset, 'Buy', buy_tick, liquidity.toString(16)], `Burn Buy ${asset}`),
-            call('lp_burnLimitOrder', [asset, 'Sell', sell_tick, (liquidity/price).toString(16)], `Burn Sell ${asset}`),
-            call('lp_mintLimitOrder', [asset, 'Buy', new_buy_tick, liquidity.toString(16)], `Mint Buy ${asset}`),
-            call('lp_mintLimitOrder', [asset, 'Sell', new_sell_tick, (liquidity/price).toString(16)], `Mint Sell ${asset}`),
+            call('lp_burnLimitOrder', [asset, 'Buy', buy_tick, liquidity_fine.toString(16)], `Burn Buy ${asset}`),
+            call('lp_burnLimitOrder', [asset, 'Sell', sell_tick, (liquidity_fine/price).toString(16)], `Burn Sell ${asset}`),
+            call('lp_mintLimitOrder', [asset, 'Buy', new_buy_tick, liquidity_fine.toString(16)], `Mint Buy ${asset}`),
+            call('lp_mintLimitOrder', [asset, 'Sell', new_sell_tick, (liquidity_fine/price).toString(16)], `Mint Sell ${asset}`),
         ]);
         result.forEach((r) => {
             if(r.data.error){
@@ -121,15 +129,9 @@ const price = new Map<Asset, number>([
     ['FLIP', 10],
 ]);
 
-const deposits = new Map<Asset, number>([
-    ['DOT', 10000000/price.get('DOT')!],
-    ['ETH', 10000000/price.get('ETH')!],
-    ['BTC', 10000000/price.get('BTC')!],
-    ['USDC', 50000000],
-    ['FLIP', 10000000/price.get('FLIP')!],
-]);
-
 async function bananas(){
+    const liquidity_usdc = 100000;
+
     await Promise.all([
         createLpPool('ETH', price.get('ETH')!),
         createLpPool('DOT', price.get('DOT')!),
@@ -138,26 +140,21 @@ async function bananas(){
     ]);
 
     await Promise.all([
-        provideLiquidity('USDC', 2*deposits.get('USDC')!),
-        provideLiquidity('ETH', 2*deposits.get('ETH')!),
-        provideLiquidity('DOT', 2*deposits.get('DOT')!),
-        provideLiquidity('BTC', 2*deposits.get('BTC')!),
-        provideLiquidity('FLIP', 2*deposits.get('FLIP')!),
+        provideLiquidity('USDC', 8*liquidity_usdc),
+        provideLiquidity('ETH', 2*liquidity_usdc/price.get('ETH')!),
+        provideLiquidity('DOT', 2*liquidity_usdc/price.get('DOT')!),
+        provideLiquidity('BTC', 2*liquidity_usdc/price.get('BTC')!),
+        provideLiquidity('FLIP', 2*liquidity_usdc/price.get('FLIP')!),
     ]);
     await Promise.all([
-        playLp('Eth', price.get('ETH')!*Math.pow(10, 6-18)),
-        playLp('Btc', price.get('BTC')!*Math.pow(10, 6-8)),
-        playLp('Dot', price.get('DOT')!*Math.pow(10, 6-8)),
-        playLp('Flip', price.get('FLIP')!*Math.pow(10, 6-8)),
+        playLp('Eth', price.get('ETH')!*Math.pow(10, 6-18), liquidity_usdc),
+        playLp('Btc', price.get('BTC')!*Math.pow(10, 6-8), liquidity_usdc),
+        playLp('Dot', price.get('DOT')!*Math.pow(10, 6-8), liquidity_usdc),
+        playLp('Flip', price.get('FLIP')!*Math.pow(10, 6-8), liquidity_usdc),
         playSwapper(),
         launchTornado(),
     ]);
 }
 
-let chainflip = await getChainflipApi();
-let pubkey = ((await chainflip.query.environment.polkadotVaultAccountId()).toJSON()! as string).substring(2);
-let salt = ((await chainflip.query.polkadotIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
-let dot = predictDotAddress(pubkey, salt);
-console.log(dot);
-//await bananas();
+await bananas();
 process.exit(0);
