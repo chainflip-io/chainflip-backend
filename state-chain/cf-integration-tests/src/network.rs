@@ -10,15 +10,25 @@ use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENE
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
-use frame_support::traits::{OnFinalize, OnIdle};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	inherent::ProvideInherent,
+	pallet_prelude::InherentData,
+	traits::{OnFinalize, OnIdle},
+};
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_validator::RotationPhase;
+use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, BitcoinInstance, EthereumInstance, PolkadotInstance,
-	Runtime, RuntimeEvent, RuntimeOrigin, Timestamp, Weight,
+	Runtime, RuntimeEvent, RuntimeOrigin, Weight,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+	cell::RefCell,
+	collections::{HashMap, VecDeque},
+	rc::Rc,
+};
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
@@ -422,6 +432,12 @@ pub struct Network {
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 }
 
+thread_local! {
+	// TODO: USE THIS IN WHEN HANDLING EVENTS INSTEAD OF DISPATCHING CALLS DIRECTLY
+	static PENDING_EXTRINSICS: RefCell<VecDeque<state_chain_runtime::RuntimeCall>> = RefCell::default();
+	static TIMESTAMP: RefCell<u64> = RefCell::new(SLOT_DURATION);
+}
+
 impl Network {
 	pub fn next_node_id(&mut self) -> NodeId {
 		self.node_counter += 1;
@@ -495,22 +511,44 @@ impl Network {
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
-		let current_block_number = System::block_number();
-		while System::block_number() < current_block_number + n {
-			let block_number = System::block_number() + 1;
+		let start_block = System::block_number() + 1;
+		for block_number in start_block..=(start_block + n) {
+			// Inherent data.
+			let timestamp = TIMESTAMP.with_borrow_mut(|t| std::mem::replace(t, *t + SLOT_DURATION));
+			let slot = sp_consensus_aura::Slot::from_timestamp(
+				sp_timestamp::Timestamp::new(timestamp),
+				SlotDuration::from_millis(SLOT_DURATION),
+			);
+			let mut inherent_data = InherentData::new();
+			inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &timestamp).unwrap();
+			inherent_data
+				.put_data(sp_consensus_aura::inherents::INHERENT_IDENTIFIER, &slot)
+				.unwrap();
 
-			System::initialize(&block_number, &System::block_hash(block_number), &{
-				let mut digest = sp_runtime::Digest::default();
-				digest.push(sp_runtime::DigestItem::PreRuntime(
-					sp_consensus_aura::AURA_ENGINE_ID,
-					sp_consensus_aura::Slot::from(block_number as u64).encode(),
-				));
-				digest
-			});
+			// Header digest.
+			let mut digest = sp_runtime::Digest::default();
+			digest.push(sp_runtime::DigestItem::PreRuntime(
+				sp_consensus_aura::AURA_ENGINE_ID,
+				slot.encode(),
+			));
 
+			// Initialize
+			System::initialize(&block_number, &System::block_hash(block_number), &digest);
 			AllPalletsWithSystem::on_initialize(block_number);
 
-			// Process Engine responses
+			// Inherents
+			assert_ok!(state_chain_runtime::Timestamp::create_inherent(&inherent_data)
+				.unwrap()
+				.dispatch_bypass_filter(RuntimeOrigin::none()));
+
+			// Provide very large weight to ensure all on_idle processing can occur
+			AllPalletsWithSystem::on_idle(block_number, Weight::from_parts(1_000_000_000_000, 0));
+
+			// We must finalise this to clear the previous author which is otherwise cached
+			AllPalletsWithSystem::on_finalize(block_number);
+
+			// Process Engine responses:
+			// TODO: REPLACE WITH PENDING_EXTRINSICS INSTEAD OF DISPATCHING CALLS DIRECTLY.
 			for event in self.state_chain_gateway_contract.events() {
 				for engine in self.engines.values() {
 					engine.on_contract_event(&event);
@@ -527,14 +565,6 @@ impl Network {
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
 			}
-
-			// Provide very large weight to ensure all on_idle processing can occur
-			AllPalletsWithSystem::on_idle(block_number, Weight::from_parts(1_000_000_000_000, 0));
-
-			let _ = Timestamp::set(RuntimeOrigin::none(), (block_number as u64) * SLOT_DURATION);
-
-			// We must finalise this to clear the previous author which is otherwise cached
-			AllPalletsWithSystem::on_finalize(block_number);
 		}
 	}
 }
