@@ -194,12 +194,11 @@ impl QueryApi {
 
 		Ok(self
 			.state_chain_client
-			.storage_map::<pallet_cf_funding::BoundAddress<state_chain_runtime::Runtime>, Vec<_>>(
+			.storage_map_entry::<pallet_cf_funding::BoundAddress<state_chain_runtime::Runtime>>(
 				block_hash,
+				&account_id,
 			)
-			.await?
-			.into_iter()
-			.find_map(|(id, address)| if id == account_id { Some(address) } else { None }))
+			.await?)
 	}
 }
 
