@@ -10,7 +10,7 @@ use super::{
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
 use anyhow::Context;
-use cf_chains::{eth::ParityBit, Chain, ChainCrypto, Ethereum};
+use cf_chains::{evm::ParityBit, Chain, ChainCrypto, Ethereum};
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub struct EthSchnorrSignature {
 	pub r: secp256k1::PublicKey,
 }
 
-impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
+impl From<EthSchnorrSignature> for cf_chains::evm::SchnorrVerificationComponents {
 	fn from(cfe_sig: EthSchnorrSignature) -> Self {
 		Self { s: cfe_sig.s, k_times_g_address: pubkey_to_eth_addr(cfe_sig.r) }
 	}
@@ -71,7 +71,7 @@ impl ChainSigning for EthSigning {
 impl CryptoScheme for EvmCryptoScheme {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;
-	type PublicKey = cf_chains::eth::AggKey;
+	type PublicKey = cf_chains::evm::AggKey;
 	type SigningPayload = SigningPayload;
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Evm;
 	const NAME: &'static str = "Evm Crypto";
@@ -86,7 +86,7 @@ impl CryptoScheme for EvmCryptoScheme {
 		nonce_commitment: Self::Point,
 		payload: &Self::SigningPayload,
 	) -> Scalar {
-		use cf_chains::eth::AggKey;
+		use cf_chains::evm::AggKey;
 
 		let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize())
 			.message_challenge(&payload.0, &pubkey_to_eth_addr(nonce_commitment.get_element()));
@@ -132,7 +132,7 @@ impl CryptoScheme for EvmCryptoScheme {
 	}
 
 	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {
-		cf_chains::eth::AggKey {
+		cf_chains::evm::AggKey {
 			pub_key_x: pubkey_point.x_bytes(),
 			pub_key_y_parity: if pubkey_point.is_even_y() {
 				ParityBit::Even

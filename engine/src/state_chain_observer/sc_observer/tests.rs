@@ -5,7 +5,7 @@ use crate::{
 	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
 use cf_chains::{
-	eth::{SchnorrVerificationComponents, Transaction},
+	evm::{SchnorrVerificationComponents, Transaction},
 	Chain, ChainCrypto,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};

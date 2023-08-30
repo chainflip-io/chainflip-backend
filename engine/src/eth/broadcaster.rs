@@ -34,7 +34,7 @@ where
 	pub async fn send(
 		&self,
 		// This is from the SC.
-		unsigned_tx: cf_chains::eth::Transaction,
+		unsigned_tx: cf_chains::evm::Transaction,
 	) -> Result<TxHash> {
 		async move {
 			let mut transaction_request = Eip1559TransactionRequest {

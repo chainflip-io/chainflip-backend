@@ -96,16 +96,16 @@ impl EthereumCall for RegisterRedemption {
 
 #[cfg(test)]
 mod test_register_redemption {
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::api::{abi::load_abi, ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
+		evm::SchnorrVerificationComponents,
 	};
 
 	use super::*;
 
 	#[test]
 	fn test_redemption_payload() {
-		use crate::eth::tests::asymmetrise;
+		use crate::evm::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const FAKE_SCGW_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
@@ -124,7 +124,7 @@ mod test_register_redemption {
 			state_chain_gateway.function("registerRedemption").unwrap();
 
 		let register_redemption_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

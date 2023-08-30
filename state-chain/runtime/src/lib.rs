@@ -21,7 +21,8 @@ use cf_amm::{
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinNetwork},
 	dot::{self, PolkadotCrypto, PolkadotHash},
-	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum, EvmCrypto},
+	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
+	evm::EvmCrypto,
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;

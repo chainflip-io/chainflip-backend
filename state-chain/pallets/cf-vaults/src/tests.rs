@@ -9,7 +9,7 @@ use crate::{
 };
 use cf_chains::{
 	btc::BitcoinCrypto,
-	eth::EvmCrypto,
+	evm::EvmCrypto,
 	mocks::{MockAggKey, MockOptimisticActivation},
 };
 use cf_primitives::GENESIS_EPOCH;

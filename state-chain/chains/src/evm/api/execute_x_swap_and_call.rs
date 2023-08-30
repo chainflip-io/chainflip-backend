@@ -84,8 +84,9 @@ mod test_execute_x_swap_and_execute {
 	use super::*;
 	use crate::{
 		dot::PolkadotAccountId,
-		eth::{
-			api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		eth::api::abi::load_abi,
+		evm::{
+			api::{ApiCall, EthereumTransactionBuilder, EvmReplayProtection},
 			SchnorrVerificationComponents,
 		},
 	};
@@ -93,7 +94,7 @@ mod test_execute_x_swap_and_execute {
 
 	#[test]
 	fn test_payload() {
-		use crate::eth::tests::asymmetrise;
+		use crate::evm::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
@@ -123,7 +124,7 @@ mod test_execute_x_swap_and_execute {
 		let function_reference = eth_vault.function("executexSwapAndCall").unwrap();
 
 		let function_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

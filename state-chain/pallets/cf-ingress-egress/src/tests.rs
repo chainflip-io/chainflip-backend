@@ -5,7 +5,7 @@ use crate::{
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, eth::EthereumFetchId, CcmChannelMetadata, DepositChannel,
+	address::AddressConverter, evm::EthereumFetchId, CcmChannelMetadata, DepositChannel,
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -607,7 +607,7 @@ fn multi_use_deposit_same_block() {
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
 					.deposit_channel
-					.state == cf_chains::eth::DeploymentStatus::Undeployed
+					.state == cf_chains::evm::DeploymentStatus::Undeployed
 			);
 		})
 		.then_apply_extrinsics(|&(_, deposit_address, asset)| {
@@ -639,7 +639,7 @@ fn multi_use_deposit_same_block() {
 					.unwrap()
 					.deposit_channel
 					.state,
-				cf_chains::eth::DeploymentStatus::Pending,
+				cf_chains::evm::DeploymentStatus::Pending,
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
@@ -687,7 +687,7 @@ fn multi_use_deposit_same_block() {
 					.unwrap()
 					.deposit_channel
 					.state,
-				cf_chains::eth::DeploymentStatus::Deployed
+				cf_chains::evm::DeploymentStatus::Deployed
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();

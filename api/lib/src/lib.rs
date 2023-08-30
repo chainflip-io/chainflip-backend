@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::EncodedAddress,
-	eth::{to_ethereum_address, Address as EthereumAddress},
+	evm::{to_ethereum_address, Address as EthereumAddress},
 	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};

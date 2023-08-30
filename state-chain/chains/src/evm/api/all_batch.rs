@@ -53,20 +53,20 @@ impl EthereumCall for AllBatch {
 mod test_all_batch {
 	use super::*;
 	use crate::{
-		eth::{
-			self,
-			api::{abi::load_abi, EthereumReplayProtection, EthereumTransactionBuilder},
+		eth::api::abi::load_abi,
+		evm::{
+			api::{EthereumTransactionBuilder, EvmReplayProtection},
 			EthereumFetchId, SchnorrVerificationComponents,
 		},
 		AllBatch, ApiCall, FetchAssetParams,
 	};
 	use cf_primitives::chains::assets;
 
-	use super::EthereumApi;
+	use eth::api::EthereumApi;
 
 	#[test]
 	fn test_payload() {
-		use crate::eth::tests::asymmetrise;
+		use crate::evm::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
@@ -116,7 +116,7 @@ mod test_all_batch {
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 
 		let all_batch_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
@@ -168,8 +168,8 @@ mod test_all_batch {
 	const CHANNEL_ID: u64 = 12345;
 
 	impl ReplayProtectionProvider<Ethereum> for MockEnvironment {
-		fn replay_protection(contract_address: eth::Address) -> EthereumReplayProtection {
-			EthereumReplayProtection {
+		fn replay_protection(contract_address: eth::Address) -> EvmReplayProtection {
+			EvmReplayProtection {
 				nonce: Self::next_nonce(),
 				chain_id: Self::chain_id(),
 				key_manager_address: Self::key_manager_address(),
@@ -183,11 +183,11 @@ mod test_all_batch {
 			Some(eth::Address::from_low_u64_be(asset as u64))
 		}
 
-		fn contract_address(contract: super::EthereumContract) -> eth::Address {
+		fn contract_address(contract: eth::api::EthereumContract) -> eth::Address {
 			eth::Address::from_low_u64_be(contract as u64)
 		}
 
-		fn chain_id() -> super::EthereumChainId {
+		fn chain_id() -> super::EvmChainId {
 			CHAIN_ID
 		}
 
@@ -229,7 +229,7 @@ mod test_all_batch {
 
 		assert_eq!(
 			tx_builder.call,
-			super::AllBatch {
+			all_batch::AllBatch {
 				fetch_deploy_params: vec![EncodableFetchDeployAssetParams {
 					channel_id: CHANNEL_ID,
 					asset: eth::Address::from_low_u64_be(assets::eth::Asset::Eth as u64),

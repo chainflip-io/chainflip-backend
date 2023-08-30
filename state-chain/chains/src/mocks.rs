@@ -1,7 +1,7 @@
 #![cfg(debug_assertions)]
 
 use crate::{
-	eth::{api::EthereumReplayProtection, TransactionFee},
+	evm::{api::EvmReplayProtection, TransactionFee},
 	*,
 };
 use cf_utilities::SliceToArray;
@@ -66,7 +66,7 @@ impl Chain for MockEthereum {
 	type DepositDetails = [u8; 4];
 	type Transaction = MockTransaction;
 	type ReplayProtectionParams = ();
-	type ReplayProtection = EthereumReplayProtection;
+	type ReplayProtection = EvmReplayProtection;
 }
 
 impl ToHumanreadableAddress for u64 {

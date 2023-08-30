@@ -36,6 +36,7 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod evm;
 pub mod none;
 
 pub mod address;
@@ -47,9 +48,9 @@ pub mod mocks;
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {
-	type ChainCrypto: ChainCrypto;
-
 	const NAME: &'static str;
+
+	type ChainCrypto: ChainCrypto;
 
 	type KeyHandoverIsRequired: Get<bool>;
 	type OptimisticActivation: Get<bool>;

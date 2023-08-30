@@ -1,7 +1,7 @@
 use cf_chains::{
 	btc::BitcoinCrypto,
 	dot::{PolkadotCrypto, PolkadotPublicKey},
-	eth::EvmCrypto,
+	evm::EvmCrypto,
 	ChainCrypto,
 };
 use multisig::{

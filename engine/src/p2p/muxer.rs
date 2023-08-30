@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, eth::EvmCrypto};
+use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

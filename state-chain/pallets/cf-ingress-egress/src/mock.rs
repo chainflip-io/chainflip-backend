@@ -2,10 +2,7 @@ use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	address::{AddressDerivationApi, ForeignChainAddress},
-	eth::{
-		api::{EthereumApi, EthereumReplayProtection},
-		Address as EthereumAddress,
-	},
+	eth::{api::EthereumApi, Address as EthereumAddress},
 	CcmDepositMetadata, Chain, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;

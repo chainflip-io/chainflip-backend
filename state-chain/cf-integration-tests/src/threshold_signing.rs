@@ -2,7 +2,7 @@ use arrayref::array_ref;
 use cf_chains::{
 	btc,
 	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
-	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
+	evm::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
 };
 use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};

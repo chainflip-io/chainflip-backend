@@ -1,6 +1,6 @@
 use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash},
-	eth, ChainState,
+	ChainState,
 };
 use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment};
 
@@ -589,7 +589,7 @@ fn testnet_genesis(
 		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
-			vault_key: Some(eth::AggKey::from_pubkey_compressed(eth_init_agg_key)),
+			vault_key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},

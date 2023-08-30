@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::eth::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
+use cf_chains::evm::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
 use ethers::{
 	prelude::abigen,
 	types::{Bloom, TransactionReceipt},
@@ -108,7 +108,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 												<Inner::Chain as PalletInstanceAlias>::Instance,
 											>::vault_key_rotated_externally {
 												new_public_key:
-													cf_chains::eth::AggKey::from_pubkey_compressed(
+													cf_chains::evm::AggKey::from_pubkey_compressed(
 														new_agg_key.serialize(),
 													),
 												block_number: header.index,

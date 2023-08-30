@@ -30,9 +30,13 @@ use cf_chains::{
 	},
 	eth::{
 		self,
-		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
+		api::{EthereumApi, EthereumContract},
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
+	},
+	evm::{
+		api::{EthEnvironmentProvider, EvmReplayProtection},
+		Transaction,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
@@ -155,7 +159,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 			// None means there is no gas limit.
 			_ => Some(DEFAULT_GAS_LIMIT.into()),
 		};
-		eth::Transaction {
+		Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
@@ -277,8 +281,8 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	fn replay_protection(contract_address: eth::Address) -> EthereumReplayProtection {
-		EthereumReplayProtection {
+	fn replay_protection(contract_address: eth::Address) -> EvmReplayProtection {
+		EvmReplayProtection {
 			nonce: Self::next_nonce(),
 			chain_id: Self::chain_id(),
 			key_manager_address: Self::key_manager_address(),
@@ -303,7 +307,7 @@ impl EthEnvironmentProvider for EthEnvironment {
 		}
 	}
 
-	fn chain_id() -> eth::api::EthereumChainId {
+	fn chain_id() -> cf_chains::evm::api::EvmChainId {
 		Environment::ethereum_chain_id()
 	}
 

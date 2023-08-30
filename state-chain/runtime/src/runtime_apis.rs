@@ -3,11 +3,7 @@ use cf_amm::{
 	common::{SqrtPriceQ64F96, Tick},
 	range_orders::{AmountsToLiquidityError, Liquidity},
 };
-use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
-	eth::{api::EthereumChainId, Address as EthereumAddress},
-};
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
 use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
@@ -79,7 +75,7 @@ pub struct AuctionState {
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct Environment {
 	pub bitcoin_network: BitcoinNetwork,
-	pub ethereum_chain_id: EthereumChainId,
+	pub ethereum_chain_id: cf_chains::evm::api::EvmChainId,
 	pub polkadot_genesis_hash: PolkadotHash,
 }
 

@@ -23,7 +23,7 @@ pub use self::{
 	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Context;
-use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, eth::EvmCrypto, ChainCrypto};
+use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, ChainCrypto};
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
