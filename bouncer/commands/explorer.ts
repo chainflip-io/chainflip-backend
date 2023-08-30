@@ -1,6 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 
 // Set the node you want to query by setting the `CF_NODE_ENDPOINT` environment variable.
+// e.g. CF_NODE_ENDPOINT=wss://perseverance.chainflip.xyz
 // Call with a range of blocks to query, like:
 // ./explorer.js 1234 1300
 // Alternatively, the first argument can be the string "live" to query the latest blocks.
@@ -52,8 +53,9 @@ function printEventsForExtrinsicId(events: any, extrinsicId: number, blockNum: n
     ) {
       const tag = extrinsicId === -1 ? decodedEvent.phase : extrinsicId;
       console.log(
-        `    Event ${blockNum}-${tag}-${i}: ${decodedEvent.event.section}.${decodedEvent.event.method}
-        (${argsToString(event.event.data)})`,
+        `    Event ${blockNum}-${tag}-${i}: ${decodedEvent.event.section}.${
+          decodedEvent.event.method
+        }(${argsToString(event.event.data)})`,
       );
     }
   });
