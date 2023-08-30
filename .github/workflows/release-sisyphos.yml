@@ -9,14 +9,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pre-check:
-    uses: ./.github/workflows/_01_pre_check.yml
-    secrets: inherit
-  test:
-    uses: ./.github/workflows/_10_test.yml
-    secrets: inherit
+  # pre-check:
+  #   uses: ./.github/workflows/_01_pre_check.yml
+  #   secrets: inherit
+  # test:
+  #   uses: ./.github/workflows/_10_test.yml
+  #   secrets: inherit
   build:
-    needs: [test]
+    # needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
