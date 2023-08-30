@@ -27,7 +27,7 @@ use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONN
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
 
-use crate::metrics::{P2P_BAD_MSG, P2P_MSG_RECEIVED};
+use crate::metrics::{P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT};
 
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
@@ -321,6 +321,7 @@ impl P2PContext {
 	}
 
 	fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
+		P2P_MSG_SENT.inc();
 		match self.active_connections.get(&account_id) {
 			Some(socket) => {
 				socket.send(payload);
