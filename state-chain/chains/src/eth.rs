@@ -6,7 +6,7 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::{
-	evm::{DeploymentStatus, EthereumFetchId, Transaction},
+	evm::{DeploymentStatus, EvmFetchId, Transaction},
 	*,
 };
 use cf_primitives::chains::assets;
@@ -41,7 +41,7 @@ impl Chain for Ethereum {
 	type ChainAccount = evm::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type DepositFetchId = EthereumFetchId;
+	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
 	type Transaction = Transaction;
@@ -89,6 +89,21 @@ impl FeeRefundCalculator<Ethereum> for Transaction {
 		.saturating_mul(fee_paid.gas_used)
 	}
 }
+
+impl From<&DepositChannel<Ethereum>> for EvmFetchId {
+	fn from(channel: &DepositChannel<Ethereum>) -> Self {
+		match channel.state {
+			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(channel.channel_id),
+			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+				if channel.asset == assets::eth::Asset::Eth {
+					EvmFetchId::NotRequired
+				} else {
+					EvmFetchId::Fetch(channel.address)
+				},
+		}
+	}
+}
+
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod sig_constants {
 	/*
@@ -135,8 +150,8 @@ mod lifecycle_tests {
 		let mut state = DeploymentStatus::default();
 		assert_eq!(state, DeploymentStatus::Undeployed);
 		assert!(state.can_fetch());
-		expect_deposit_state!(state, ETH, EthereumFetchId::DeployAndFetch(..));
-		expect_deposit_state!(state, USDC, EthereumFetchId::DeployAndFetch(..));
+		expect_deposit_state!(state, ETH, EvmFetchId::DeployAndFetch(..));
+		expect_deposit_state!(state, USDC, EvmFetchId::DeployAndFetch(..));
 
 		// Pending channels can't be fetched from.
 		assert!(state.on_fetch_scheduled());
@@ -152,16 +167,16 @@ mod lifecycle_tests {
 		assert!(state.on_fetch_completed());
 		assert_eq!(state, DeploymentStatus::Deployed);
 		assert!(state.can_fetch());
-		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
-		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
+		expect_deposit_state!(state, ETH, EvmFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EvmFetchId::Fetch(..));
 
 		// Channel is now in its final deployed state and be fetched from at any time.
 		assert!(!state.on_fetch_scheduled());
 		assert!(state.can_fetch());
 		assert!(!state.on_fetch_completed());
 		assert!(state.can_fetch());
-		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
-		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
+		expect_deposit_state!(state, ETH, EvmFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EvmFetchId::Fetch(..));
 
 		assert_eq!(state, DeploymentStatus::Deployed);
 		assert!(!state.on_fetch_scheduled());

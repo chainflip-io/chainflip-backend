@@ -56,7 +56,7 @@ mod test_all_batch {
 		eth::api::abi::load_abi,
 		evm::{
 			api::{EthereumTransactionBuilder, EvmReplayProtection},
-			EthereumFetchId, SchnorrVerificationComponents,
+			EvmFetchId, SchnorrVerificationComponents,
 		},
 		AllBatch, ApiCall, FetchAssetParams,
 	};
@@ -201,17 +201,15 @@ mod test_all_batch {
 		let all_batch: EthereumApi<MockEnvironment> = AllBatch::new_unsigned(
 			vec![
 				FetchAssetParams {
-					deposit_fetch_id: EthereumFetchId::Fetch(eth::Address::from_low_u64_be(
-						CHANNEL_ID,
-					)),
+					deposit_fetch_id: EvmFetchId::Fetch(eth::Address::from_low_u64_be(CHANNEL_ID)),
 					asset: assets::eth::Asset::Usdc,
 				},
 				FetchAssetParams {
-					deposit_fetch_id: EthereumFetchId::DeployAndFetch(CHANNEL_ID),
+					deposit_fetch_id: EvmFetchId::DeployAndFetch(CHANNEL_ID),
 					asset: assets::eth::Asset::Eth,
 				},
 				FetchAssetParams {
-					deposit_fetch_id: EthereumFetchId::NotRequired,
+					deposit_fetch_id: EvmFetchId::NotRequired,
 					asset: assets::eth::Asset::Eth,
 				},
 			],

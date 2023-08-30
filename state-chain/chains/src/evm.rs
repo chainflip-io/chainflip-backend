@@ -3,8 +3,7 @@ pub mod benchmarking;
 pub mod tokenizable;
 
 use crate::*;
-pub use cf_primitives::chains::Ethereum;
-use cf_primitives::{chains::assets, ChannelId};
+use cf_primitives::ChannelId;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::ParamType;
 pub use ethabi::{
@@ -76,7 +75,7 @@ impl Display for AggKeyVerificationError {
 }
 
 /// A parity bit can be either odd or even, but can have different representations depending on its
-/// use. Ethereum generaly assumes `0` or `1` but the standard serialization format used in most
+/// use. EVM generaly assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.
 #[derive(
 	Encode,
@@ -110,7 +109,7 @@ impl ParityBit {
 	}
 }
 
-/// Ethereum contracts use `0` and `1` to represent parity bits.
+/// EVM contracts use `0` and `1` to represent parity bits.
 impl From<ParityBit> for Uint {
 	fn from(parity_bit: ParityBit) -> Self {
 		match parity_bit {
@@ -151,16 +150,16 @@ pub struct AggKey {
 	pub pub_key_y_parity: ParityBit,
 }
 
-pub fn to_ethereum_address(pubkey: PublicKey) -> eth::Address {
+pub fn to_evm_address(pubkey: PublicKey) -> Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
-	eth::Address::from_slice(&h.0[12..])
+	Address::from_slice(&h.0[12..])
 }
 
 impl AggKey {
 	/// Convert from compressed `[y, x]` coordinates where y==2 means "even" and y==3 means "odd".
 	///
-	/// Note that the ethereum contract expects y==0 for "even" and y==1 for "odd". We convert to
+	/// Note that the evm contract expects y==0 for "even" and y==1 for "odd". We convert to
 	/// the required 0 / 1 representation by subtracting 2 from the supplied values, so if the
 	/// source format doesn't conform to the expected 2/3 even/odd convention, bad things will
 	/// happen.
@@ -190,7 +189,7 @@ impl AggKey {
 		result
 	}
 
-	/// Compute the message challenge e according to the format expected by the ethereum contracts.
+	/// Compute the message challenge e according to the format expected by the evm contracts.
 	/// Note that the result is not reduced to group order at this point, so we need to be careful
 	/// when converting the result to a scalar.
 	///
@@ -236,7 +235,7 @@ impl AggKey {
 		use sp_std::ops::Neg;
 
 		// Compute s = (k - d * e) % Q
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
+		let k_times_g_address = to_evm_address(PublicKey::from_secret_key(sig_nonce));
 		let e = self.message_challenge_scalar(msg_hash, k_times_g_address.as_fixed_bytes());
 
 		let d: Scalar = (*secret).into();
@@ -297,7 +296,7 @@ impl AggKey {
 
 		// We now have the recovered value for k_times_g, however we only have a
 		// k_times_g_address to compare against. So we need to convert our recovered k_times_g to
-		// an Ethereum address to compare against our expected value.
+		// an EVM address to compare against our expected value.
 		let k_times_g_hash_recovered = Keccak256::hash(&k_times_g_recovered.serialize()[1..]);
 
 		// The signature is valid if the recovered value matches the provided one.
@@ -330,7 +329,7 @@ pub struct SchnorrVerificationComponents {
 	pub k_times_g_address: [u8; 20],
 }
 
-/// Required information to construct and sign an ethereum transaction. Equivalent to
+/// Required information to construct and sign an evm transaction. Equivalent to
 /// [ethereum::EIP1559TransactionMessage] with the following fields omitted: nonce,
 ///
 /// The signer will need to add its account nonce and then sign and rlp-encode the transaction.
@@ -533,30 +532,16 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub enum EthereumFetchId {
+pub enum EvmFetchId {
 	/// If the contract is not yet deployed, we need to deploy and fetch using the channel id.
 	DeployAndFetch(ChannelId),
 	/// Once the contract is deployed, we can fetch from the address.
 	Fetch(Address),
-	/// Fetching is not required for Ethereum deposits into a deployed contract.
+	/// Fetching is not required for EVM deposits into a deployed contract.
 	NotRequired,
 }
 
-impl From<&DepositChannel<Ethereum>> for EthereumFetchId {
-	fn from(channel: &DepositChannel<Ethereum>) -> Self {
-		match channel.state {
-			DeploymentStatus::Undeployed => EthereumFetchId::DeployAndFetch(channel.channel_id),
-			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
-				if channel.asset == assets::eth::Asset::Eth {
-					EthereumFetchId::NotRequired
-				} else {
-					EthereumFetchId::Fetch(channel.address)
-				},
-		}
-	}
-}
-
-/// Errors that can occur when verifying an Ethereum transaction.
+/// Errors that can occur when verifying an EVM transaction.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum TransactionVerificationError {
 	/// The transaction's chain id is invalid.
@@ -573,7 +558,7 @@ pub enum TransactionVerificationError {
 	InvalidParam(CheckedTransactionParameter),
 }
 
-/// Parameters that are checked as part of Ethereum transaction verification.
+/// Parameters that are checked as part of EVM transaction verification.
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum CheckedTransactionParameter {
 	ChainId,
@@ -653,7 +638,7 @@ mod verification_tests {
 		// Signature nonce
 		let sig_nonce: [u8; 32] = StdRng::seed_from_u64(200).gen();
 		let sig_nonce = SecretKey::parse(&sig_nonce).unwrap();
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
+		let k_times_g_address = to_evm_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		// Public agg key
 		let agg_key = AggKey::from_private_key_bytes(agg_key_priv);
@@ -674,7 +659,7 @@ mod verification_tests {
 		assert_eq!(agg_key.to_pubkey_compressed(), AGG_KEY_PUB);
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k)).0;
+		let k_times_g_address = to_evm_address(PublicKey::from_secret_key(&k)).0;
 		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
 
 		// This should pass.

@@ -4,7 +4,7 @@ use super::TransactionFee;
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::api::EthereumApi,
-	evm::{to_ethereum_address, Address, AggKey, SchnorrVerificationComponents, Transaction, H256},
+	evm::{to_evm_address, Address, AggKey, SchnorrVerificationComponents, Transaction, H256},
 	ApiCall,
 };
 use cf_primitives::EthAmount;
@@ -18,7 +18,7 @@ impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
 		let sig_nonce = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
 		let private_key = SecretKey::parse(&PRIVATE_KEY).expect("Valid private key");
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&sig_nonce)).0;
+		let k_times_g_address = to_evm_address(PublicKey::from_secret_key(&sig_nonce)).0;
 
 		let agg_key = AggKey::benchmark_value();
 
@@ -32,7 +32,7 @@ impl BenchmarkValue for SchnorrVerificationComponents {
 
 impl BenchmarkValue for Address {
 	fn benchmark_value() -> Self {
-		to_ethereum_address(PublicKey::from_secret_key(
+		to_evm_address(PublicKey::from_secret_key(
 			&SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce"),
 		))
 	}
@@ -40,7 +40,7 @@ impl BenchmarkValue for Address {
 
 impl BenchmarkValueExtended for Address {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		to_ethereum_address(PublicKey::from_secret_key(
+		to_evm_address(PublicKey::from_secret_key(
 			&SecretKey::parse(&[id; 32]).expect("Valid signature nonce"),
 		))
 	}

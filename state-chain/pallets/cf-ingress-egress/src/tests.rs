@@ -5,7 +5,7 @@ use crate::{
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, evm::EthereumFetchId, CcmChannelMetadata, DepositChannel,
+	address::AddressConverter, evm::EvmFetchId, CcmChannelMetadata, DepositChannel,
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -666,7 +666,7 @@ fn multi_use_deposit_same_block() {
 						..
 					}) if matches!(
 						fetch_params.last().unwrap().deposit_fetch_id,
-						EthereumFetchId::DeployAndFetch(id) if id == *channel_id
+						EvmFetchId::DeployAndFetch(id) if id == *channel_id
 					)
 				),
 				"Expected one AllBatch apicall to be scheduled for address deployment, got {:?}.",
@@ -703,7 +703,7 @@ fn multi_use_deposit_same_block() {
 						..
 					}) if matches!(
 						fetch_params.last().unwrap().deposit_fetch_id,
-						EthereumFetchId::Fetch(address) if address == *deposit_address
+						EvmFetchId::Fetch(address) if address == *deposit_address
 					)
 				),
 				"Expected a new AllBatch apicall to be scheduled to fetch from a deployed address, got {:?}.",

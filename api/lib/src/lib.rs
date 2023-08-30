@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::EncodedAddress,
-	evm::{to_ethereum_address, Address as EthereumAddress},
+	evm::{to_evm_address, Address as EthereumAddress},
 	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
@@ -424,7 +424,7 @@ pub fn generate_ethereum_key(
 			secret_key: secret_key.serialize().to_vec(),
 			public_key: public_key.serialize_compressed().to_vec(),
 		},
-		to_ethereum_address(public_key),
+		to_evm_address(public_key),
 	))
 }
 

@@ -6,7 +6,7 @@ use crate::{
 			set_comm_key_with_agg_key, set_gov_key_with_agg_key, EthEnvironmentProvider,
 			EthereumCall, EthereumTransactionBuilder, EvmReplayProtection, SigData,
 		},
-		EthereumFetchId, SchnorrVerificationComponents,
+		EvmFetchId, SchnorrVerificationComponents,
 	},
 	*,
 };
@@ -215,7 +215,7 @@ where
 		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
 			if let Some(token_address) = E::token_address(asset) {
 				match deposit_fetch_id {
-					EthereumFetchId::Fetch(contract_address) => {
+					EvmFetchId::Fetch(contract_address) => {
 						debug_assert!(
 							asset != assets::eth::Asset::Eth,
 							"Eth should not be fetched. It is auto-fetched in the smart contract."
@@ -225,9 +225,9 @@ where
 							asset: token_address,
 						})
 					},
-					EthereumFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
+					EvmFetchId::DeployAndFetch(channel_id) => fetch_deploy_params
 						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
-					EthereumFetchId::NotRequired => (),
+					EvmFetchId::NotRequired => (),
 				};
 			} else {
 				return Err(AllBatchError::Other)
