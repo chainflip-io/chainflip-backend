@@ -157,8 +157,7 @@ where
 	fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult {
 		CEREMONY_PROCESSED_MSG
 			.with_label_values(&[
-				self.common.ceremony_id.to_string().as_str(),
-				self.common.validator_mapping.get_id(signer_idx).to_string().as_str(),
+				self.common.ceremony_id.to_string().as_str()
 			])
 			.inc();
 		let m: Stage::Message = match m.try_into() {
