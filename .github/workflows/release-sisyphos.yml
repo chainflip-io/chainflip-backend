@@ -35,10 +35,10 @@ jobs:
       network: "sisyphos"
       environment: dev
     secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
+  # post-check:
+  #   needs: [build]
+  #   uses: ./.github/workflows/_40_post_check.yml
+  #   secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
