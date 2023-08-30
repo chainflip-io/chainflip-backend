@@ -1,12 +1,12 @@
 import Module from 'node:module';
-
+import * as ecc from 'tiny-secp256k1';
 import { ECPairFactory } from 'ecpair';
 import bitcoin from 'bitcoinjs-lib';
 import axios from 'axios';
 import { sha256, btcClientMutex } from '../shared/utils';
 
 const require = Module.createRequire(import.meta.url);
-
+bitcoin.initEccLib(ecc);
 export const btcAddressTypes = ['P2PKH', 'P2SH', 'P2WPKH', 'P2WSH'] as const;
 export type BtcAddressType = (typeof btcAddressTypes)[number];
 
