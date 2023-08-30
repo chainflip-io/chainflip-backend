@@ -523,7 +523,6 @@ fn ensure_save_mode_is_moving_timeouts() {
 		Broadcaster::on_initialize(5);
 		assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
 		assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
-		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 	});
 }
 
@@ -538,6 +537,5 @@ fn ensure_retries_are_skipped_during_save_mode() {
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
-		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 	});
 }
