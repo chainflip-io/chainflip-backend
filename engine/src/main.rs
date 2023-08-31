@@ -5,7 +5,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
-	health, metrics, p2p,
+	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -26,6 +26,7 @@ use utilities::{
 	make_periodic_tick,
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
+	metrics::{self, Prometheus}
 };
 
 lazy_static::lazy_static! {
@@ -114,10 +115,12 @@ async fn start(
 	if let Some(health_check_settings) = &settings.health_check {
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
 	}
-
-	if let Some(prometheus_settings) = &settings.prometheus {
-		metrics::start(scope, prometheus_settings).await?;
-	}
+	// TODO remove hardcoded struct here and read from some settings
+	let prometheus_settings = Prometheus {
+		hostname: "0.0.0.0".to_string(),
+		port: 5566,
+	};
+	metrics::start(scope, &prometheus_settings).await?;
 
 	let (state_chain_stream, state_chain_client) =
 		state_chain_observer::client::StateChainClient::connect_with_account(

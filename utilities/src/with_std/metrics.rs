@@ -5,15 +5,14 @@
 
 use std::net::IpAddr;
 
-use crate::settings;
+use super::task_scope;
 use lazy_static;
-use prometheus::{IntCounter, IntCounterVec, IntGauge, Opts, Registry};
+use prometheus::{IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry};
 use tracing::info;
-use utilities::task_scope;
 use warp::Filter;
 
 lazy_static::lazy_static! {
-	pub static ref REGISTRY: Registry = Registry::new();
+	static ref REGISTRY: Registry = Registry::new();
 
 	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpcMethod"]);
 	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpcMethod"]);
@@ -27,6 +26,13 @@ lazy_static::lazy_static! {
 	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = create_and_register_gauge("p2p_declined_connections", "Count the number times we decline a connection");
 
 	pub static ref P2P_BAD_MSG: IntCounterVec = create_and_register_counter_vec("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"]);
+
+	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_manager_bad_msg", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id", &["reason", "senderId"]);
+	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = create_and_register_gauge_vec("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony beeing run", &["chain"]);
+	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_runner_bad_msg", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id", &["reason", "senderId"]);
+	pub static ref BROADCAST_BAD_MSG: IntCounterVec = create_and_register_counter_vec("broadcast_bad_msg", "Count all the bad msgs processed by the broadcast and labels them by the reason they got discarded and the sender Id", &["reason", "senderId"]);
+
+	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_msg", "Count all the messages for a give ceremony", &["ceremonyId"]);
 }
 
 fn create_and_register_counter_vec(name: &str, help: &str, labels: &[&str]) -> IntCounterVec {
@@ -47,10 +53,21 @@ fn create_and_register_gauge(name: &str, help: &str) -> IntGauge {
 	m
 }
 
+fn create_and_register_gauge_vec(name: &str, help: &str, labels: &[&str]) -> IntGaugeVec {
+	let m = IntGaugeVec::new(Opts::new(name, help), labels).expect("Metric succesfully created");
+	REGISTRY.register(Box::new(m.clone())).expect("Metric succesfully register");
+	m
+}
+
+pub struct Prometheus {
+	pub hostname: String,
+	pub port: u16,
+}
+
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
 pub async fn start<'a, 'env>(
 	scope: &'a task_scope::Scope<'env, anyhow::Error>,
-	prometheus_settings: &'a settings::Prometheus,
+	prometheus_settings: &'a Prometheus,
 ) -> Result<(), anyhow::Error> {
 	info!("Starting");
 

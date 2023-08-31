@@ -34,6 +34,8 @@ warp = { version = "0.3.5", optional = true }
 sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08", optional = true }
 num-traits = { version = "0.2", optional = true }
 scopeguard = { version = "1.2.0" }
+prometheus = { version = "0.13.0", default-features = false }
+lazy_static = "1.4"
 
 [dev-dependencies]
 tempfile = "3.7.0"

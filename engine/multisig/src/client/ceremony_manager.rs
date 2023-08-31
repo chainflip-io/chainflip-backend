@@ -27,7 +27,10 @@ use crate::{
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
-use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle};
+use utilities::{
+	metrics::{CEREMONY_MANAGER_BAD_MSG, UNAUTHORIZED_CEREMONY},
+	task_scope::{task_scope, Scope, ScopedJoinHandle},
+};
 
 use client::{ceremony_runner::CeremonyRunner, utils::PartyIdxMapping};
 
@@ -46,28 +49,6 @@ use super::{
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
-
-use lazy_static;
-use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry};
-lazy_static::lazy_static! {
-	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("ceremony_manager_bad_msg", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
-	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = IntGaugeVec::new(Opts::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony beeing run"), &["chain"]).expect("Metric succesfully created");
-	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("ceremony_runner_bad_msg", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
-	pub static ref BROADCAST_BAD_MSG: IntCounterVec = IntCounterVec::new(Opts::new("broadcast_bad_msg", "Count all the bad msgs processed by the broadcast and labels them by the reason they got discarded and the sender Id"), &["reason", "senderId"]).expect("Metric succesfully created");
-
-	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = IntCounterVec::new(Opts::new("ceremony_msg", "Count all the messages for a give ceremony"), &["ceremonyId"]).expect("Metric succesfully created");
-}
-
-fn register_metrics(reg: Registry) {
-	reg.register(Box::new(CEREMONY_MANAGER_BAD_MSG.clone()))
-		.expect("Metric succesfully register");
-	reg.register(Box::new(UNAUTHORIZED_CEREMONY.clone()))
-		.expect("Metric succesfully register");
-	reg.register(Box::new(CEREMONY_RUNNER_BAD_MSG.clone()))
-		.expect("Metric succesfully register");
-	reg.register(Box::new(CEREMONY_PROCESSED_MSG.clone()))
-		.expect("Metric succesfully register");
-}
 
 pub type CeremonyOutcome<C> = Result<
 	<C as CeremonyTrait>::Output,

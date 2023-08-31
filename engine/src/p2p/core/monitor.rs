@@ -17,7 +17,7 @@ use super::socket::DO_NOT_LINGER;
 
 use super::{socket::OutgoingSocket, PeerInfo};
 
-use crate::metrics::P2P_MONITOR_EVENT;
+use utilities::metrics::P2P_MONITOR_EVENT;
 /// Describes peer connection to start monitoring
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SocketToMonitor {

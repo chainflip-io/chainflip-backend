@@ -17,7 +17,12 @@ use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use utilities::Port;
+use utilities::{
+	metrics::{
+		P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
+	},
+	Port,
+};
 use x25519_dalek::StaticSecret;
 
 use crate::p2p::{pk_to_string, OutgoingMultisigStageMessages};
@@ -26,10 +31,6 @@ use monitor::MonitorEvent;
 use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
 
 use super::{EdPublicKey, P2PKey, XPublicKey};
-
-use crate::metrics::{
-	P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
-};
 
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep

@@ -5,12 +5,10 @@ use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
-use crate::{
-	metrics::P2P_BAD_MSG,
-	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
-};
+use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
 use multisig::ChainTag;
+use utilities::metrics::P2P_BAD_MSG;
 
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,

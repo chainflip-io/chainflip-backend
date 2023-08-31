@@ -15,7 +15,7 @@ use super::{socket::DO_NOT_LINGER, PeerInfo};
 
 use super::{pk_to_string, XPublicKey};
 
-use crate::metrics::{P2P_ALLOWED_PUBKEYS, P2P_DECLINED_CONNECTIONS};
+use utilities::metrics::{P2P_ALLOWED_PUBKEYS, P2P_DECLINED_CONNECTIONS};
 /// These values are ZMQ convention
 const ZAP_AUTH_SUCCESS: &str = "200";
 const ZAP_AUTH_FAILURE: &str = "400";

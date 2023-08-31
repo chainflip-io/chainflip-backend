@@ -15,7 +15,7 @@ use tokio::sync::{
 	oneshot,
 };
 use tracing::{debug, warn, Instrument};
-use utilities::format_iterator;
+use utilities::{format_iterator, metrics::CEREMONY_RUNNER_BAD_MSG};
 
 use crate::{
 	client::{
@@ -30,7 +30,6 @@ use super::{
 	ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
 	common::PreProcessStageDataCheck,
 };
-use crate::client::ceremony_manager::CEREMONY_RUNNER_BAD_MSG;
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 const INCORRECT_NUMBER_ELEMENTS: &str = "incorrect_number_elements";
 

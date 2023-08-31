@@ -13,7 +13,6 @@ use std::{
 	time::Duration,
 };
 
-use crate::metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS};
 use anyhow::Result;
 use core::cmp::min;
 use futures::Future;
@@ -21,7 +20,11 @@ use futures_util::stream::FuturesUnordered;
 use rand::Rng;
 use std::fmt;
 use tokio::sync::{mpsc, oneshot};
-use utilities::{task_scope::Scope, UnendingStream};
+use utilities::{
+	metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS},
+	task_scope::Scope,
+	UnendingStream,
+};
 
 #[derive(Debug, Clone)]
 enum RetryLimit {

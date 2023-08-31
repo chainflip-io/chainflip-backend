@@ -10,7 +10,6 @@ pub mod common;
 pub mod constants;
 pub mod db;
 pub mod health;
-pub mod metrics;
 pub mod multisig;
 pub mod p2p;
 pub mod retrier;

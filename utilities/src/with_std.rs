@@ -11,6 +11,7 @@ pub mod future_map;
 pub mod loop_select;
 pub mod rle_bitmap;
 pub mod spmc;
+pub mod metrics;
 pub mod task_scope;
 pub mod unending_stream;
 pub use unending_stream::UnendingStream;
