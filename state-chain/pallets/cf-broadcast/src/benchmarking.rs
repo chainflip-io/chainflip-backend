@@ -61,7 +61,7 @@ benchmarks_instance_pallet! {
 			Timeouts::<T, I>::append(timeout_block, broadcast_attempt_id);
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		let valid_key = <<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	} : {
 		Pallet::<T, I>::on_initialize(timeout_block);
@@ -79,7 +79,7 @@ benchmarks_instance_pallet! {
 		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		let valid_key = <<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
@@ -94,7 +94,7 @@ benchmarks_instance_pallet! {
 		};
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		let valid_key = <<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())? }
 	verify {
@@ -113,7 +113,7 @@ benchmarks_instance_pallet! {
 			1
 		);
 
-		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
+		T::KeyProvider::set_key(<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey::benchmark_value());
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
 
 	} : {
@@ -142,7 +142,7 @@ benchmarks_instance_pallet! {
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 		};
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		let valid_key = <<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap())? }
 	verify {

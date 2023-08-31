@@ -1,13 +1,11 @@
+use super::AddressDerivation;
 use crate::{Environment, EthEnvironment};
 use cf_chains::{
-	address::AddressDerivationApi,
-	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address},
-	Chain, Ethereum,
+	address::AddressDerivationApi, eth::deposit_address::get_create_2_address,
+	evm::api::EthEnvironmentProvider, Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};
 use frame_support::sp_runtime::DispatchError;
-
-use super::AddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for AddressDerivation {
 	fn generate_address(

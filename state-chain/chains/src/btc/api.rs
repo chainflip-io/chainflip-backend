@@ -1,8 +1,8 @@
 pub mod batch_transfer;
 
 use super::{
-	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinOutput, BtcAmount, Utxo,
-	CHANGE_ADDRESS_SALT,
+	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinCrypto, BitcoinOutput, BtcAmount,
+	Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -69,13 +69,13 @@ where
 	}
 }
 
-impl<E> SetAggKeyWithAggKey<Bitcoin> for BitcoinApi<E>
+impl<E> SetAggKeyWithAggKey<BitcoinCrypto> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>,
 {
 	fn new_unsigned(
-		maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
-		new_key: <Bitcoin as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
+		new_key: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
@@ -115,8 +115,8 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 	}
 }
 
-impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
-	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
+impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
+	fn threshold_signature_payload(&self) -> <BitcoinCrypto as ChainCrypto>::Payload {
 		match self {
 			BitcoinApi::BatchTransfer(tx) => tx.threshold_signature_payload(),
 
@@ -124,7 +124,10 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 		}
 	}
 
-	fn signed(self, threshold_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+	) -> Self {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature).into(),
 
@@ -148,7 +151,7 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 		}
 	}
 
-	fn transaction_out_id(&self) -> <Bitcoin as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.transaction_out_id(),
 			BitcoinApi::_Phantom(..) => unreachable!(),

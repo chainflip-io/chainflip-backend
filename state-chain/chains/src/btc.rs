@@ -7,7 +7,7 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainAbi, ChainCrypto, DepositChannel, FeeRefundCalculator};
+use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -174,6 +174,7 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
+	type ChainCrypto = BitcoinCrypto;
 	type KeyHandoverIsRequired = ConstBool<true>;
 	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = BlockNumber;
@@ -186,6 +187,10 @@ impl Chain for Bitcoin {
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
+	type Transaction = BitcoinTransactionData;
+	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
+	type ReplayProtectionParams = ();
+	type ReplayProtection = ();
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -194,7 +199,8 @@ pub enum PreviousOrCurrent {
 	Current,
 }
 
-impl ChainCrypto for Bitcoin {
+pub struct BitcoinCrypto;
+impl ChainCrypto for BitcoinCrypto {
 	type AggKey = AggKey;
 
 	// A single transaction can sign over multiple UTXOs
@@ -283,14 +289,6 @@ fn verify_single_threshold_signature(
 	}
 	recovered_r.x.normalize();
 	recovered_r.x.eq_var(&rx)
-}
-
-impl ChainAbi for Bitcoin {
-	type Transaction = BitcoinTransactionData;
-
-	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
-	type ReplayProtectionParams = ();
-	type ReplayProtection = ();
 }
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
@@ -700,7 +698,9 @@ impl BitcoinTransaction {
 		transaction_bytes
 	}
 
-	pub fn get_signing_payloads(&self) -> <Bitcoin as ChainCrypto>::Payload {
+	pub fn get_signing_payloads(
+		&self,
+	) -> <<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");

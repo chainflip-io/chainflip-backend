@@ -46,8 +46,8 @@ use weights::WeightInfo;
 /// The type used for counting signing attempts.
 type AttemptCount = AuthorityCount;
 
-type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
-type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
+type SignatureFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::ThresholdSignature;
+type PayloadFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::Payload;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
@@ -103,7 +103,7 @@ pub mod pallet {
 		/// The epoch in which the ceremony was started.
 		pub epoch: EpochIndex,
 		/// The key we want to sign with.
-		pub key: <T::TargetChain as ChainCrypto>::AggKey,
+		pub key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		/// Determines how/if we deal with ceremony failure.
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
@@ -125,7 +125,7 @@ pub mod pallet {
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		pub request_type:
-			RequestType<<T::TargetChain as ChainCrypto>::AggKey, BTreeSet<T::ValidatorId>>,
+			RequestType<<T::TargetChainCrypto as ChainCrypto>::AggKey, BTreeSet<T::ValidatorId>>,
 	}
 
 	impl<T: Config<I>, I: 'static> RequestInstruction<T, I> {
@@ -134,7 +134,7 @@ pub mod pallet {
 			attempt_count: AttemptCount,
 			payload: PayloadFor<T, I>,
 			request_type: RequestType<
-				<T::TargetChain as ChainCrypto>::AggKey,
+				<T::TargetChainCrypto as ChainCrypto>::AggKey,
 				BTreeSet<T::ValidatorId>,
 			>,
 		) -> Self {
@@ -217,13 +217,13 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: ChainCrypto;
+		type TargetChainCrypto: ChainCrypto;
 
 		/// Signer nomination.
 		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;
 
 		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChain>;
+		type KeyProvider: KeyProvider<Self::TargetChainCrypto>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
@@ -327,7 +327,7 @@ pub mod pallet {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
 			epoch: EpochIndex,
-			key: <T::TargetChain as ChainCrypto>::AggKey,
+			key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 			signatories: BTreeSet<T::ValidatorId>,
 			payload: PayloadFor<T, I>,
 		},
@@ -481,7 +481,7 @@ pub mod pallet {
 				let CeremonyContext { key, request_context, .. } =
 					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
-				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
+				if <T::TargetChainCrypto as ChainCrypto>::verify_threshold_signature(
 					&key,
 					&request_context.payload,
 					signature,
@@ -647,7 +647,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
 		request_type: RequestType<
-			<T::TargetChain as ChainCrypto>::AggKey,
+			<T::TargetChainCrypto as ChainCrypto>::AggKey,
 			BTreeSet<T::ValidatorId>,
 		>,
 	) -> RequestId {
@@ -806,7 +806,7 @@ where
 	}
 }
 
-impl<T, I: 'static> cf_traits::ThresholdSigner<T::TargetChain> for Pallet<T, I>
+impl<T, I: 'static> cf_traits::ThresholdSigner<T::TargetChainCrypto> for Pallet<T, I>
 where
 	T: Config<I>,
 {
@@ -819,9 +819,9 @@ where
 	}
 
 	fn request_verification_signature(
-		payload: <T::TargetChain as ChainCrypto>::Payload,
+		payload: <T::TargetChainCrypto as ChainCrypto>::Payload,
 		participants: BTreeSet<Self::ValidatorId>,
-		key: <T::TargetChain as ChainCrypto>::AggKey,
+		key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		epoch_index: EpochIndex,
 	) -> RequestId {
 		Self::inner_request_signature(
@@ -849,7 +849,7 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(
 		request_id: RequestId,
-		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
+		signature: <T::TargetChainCrypto as ChainCrypto>::ThresholdSignature,
 	) {
 		Signature::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
 	}
