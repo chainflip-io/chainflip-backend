@@ -476,7 +476,7 @@ pub mod pallet {
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin.clone())?;
+			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
 			let broadcast_id = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 				.ok_or(Error::<T, I>::InvalidPayload)?;

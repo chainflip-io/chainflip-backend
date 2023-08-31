@@ -646,8 +646,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Binds an account to a redeem address. This is used to allow an account to redeem their
-		/// funds to a specific address.
+		/// Binds an account to a redeem address. This is used to allow an account to redeem
+		/// their funds only to a specific address.
 		///
 		/// ## Errors
 		///
