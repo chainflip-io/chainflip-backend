@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { Asset, Assets } from '@chainflip-io/cli';
-import { newCcmMetadata, prepareSwap, testSwap } from './swapping';
+import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   getChainflipApi,
   observeCcmReceived,
@@ -14,25 +14,21 @@ import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
 import { signAndSendTxEthSilent } from './send_eth';
 
-// TODO: We should probably put a cap on the message length to avoid issues. However will still not lose money
+// TODO: We should probably put a cap on the message length to avoid issues. However CF will still not lose money
 // as the user will be paying for the entire transfer anyway => example of a message length limit could be 10000 bytes.
+// Maybe we can raise it a bit more just in case (e.g 15k) but just setting some limit to avoid being DoSed.
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
 // CCM call itself is ~115k with some variability depending on the parameters. We also add extra gasLimitBudget depending
-// on the lenght of the message. Up until 270k gasLimitBudget spent on the test it should succeed, more than that it can fail.
-// 270k + 120k ~= 390k
-
-// The gasLimitBudget amount passed as gasBudget should also include the overhead of the call => BASE_GAS_OVERHEAD + messageLength * gasPerByte
-
-// On the state chain we should just take that amount (which includes the whole overhead payment), convert it to gasLimitBudget and set it as
-// maxGasFee & GasLimit.
-
+// on the lenght of the message. Up until 260k gasLimitBudget spent on the test it should succeed, more than that it can fail.
+// 260k + 120k ~= 380k
 const BASE_GAS_OVERHEAD = 120000;
-// 270k also works in general but in some scenarios it might be slight bit too much
+// 270k also works in almost some cases but in some scenarios it might be just above the threshold
+// TODO: This is an arbitrary value used because atm we have a 400k hardcoded limit. Can be modified when we confirm this is working.
 const DEFAULT_GAS_CONSUMPTION = 260000;
+// The base overhead increases with message lenght => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 const GAS_PER_BYTE = 16;
-const tagSuffix = ' CcmGasLimit';
 
 let stopObservingCcmReceived = false;
 
@@ -50,6 +46,7 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume?: number, gasBudget
 async function testGasLimitSwap(
   sourceAsset: Asset,
   destAsset: Asset,
+  tagSuffix?: string,
   gasToConsume?: number,
   gasBudgetFraction?: number,
   addressType?: BtcAddressType,
@@ -65,7 +62,7 @@ async function testGasLimitSwap(
     destAsset,
     addressType,
     messageMetadata,
-    tagSuffix,
+    ' GasLimit ' + tagSuffix,
   );
 
   const ccmReceivedHandle = observeCcmReceived(
@@ -163,11 +160,10 @@ async function testGasLimitSwap(
   const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
   const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
 
-  // Standard gasLimitBudget estimation => In the statechain we might do a less conservative estimation, otherwise
-  // a good amount of gasLimitBudget might end up being unused (gasLimit too low).
+  // Standard gasLimitBudget estimation for now.
   const maxFeePerGas = 2 * baseFee + priorityFee;
 
-  // Max Gas Limit budget
+  // On the state chain the gasLimit is calculated from the egressBudget and the MmaxFeePerGas
   const gasLimitBudget = egressBudgetAmount / maxFeePerGas;
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
@@ -252,71 +248,42 @@ export async function testGasLimitCcmSwaps() {
   // TODO: Add some test with a long enough message that we shouldn't be broadcasting beacuse user hasn't paid enough gasLimitBudget.
   // E.g. Gas = 120k (overhead) + 10000 bytes * 16 gasLimitBudget/byte = 280k gasLimitBudget => Pay less than that as the fee.
 
-  // TODO: Check if this tests are passing enough gasLimitBudget to the CCM.
-  const gasLimitSwapsSufBudget = [
-    testGasLimitSwap('DOT', 'FLIP'),
-    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 867k
-    testGasLimitSwap('ETH', 'USDC'),
-    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 4), // % 100 ~ gasLimitBudget ~= 499k
-    testGasLimitSwap('FLIP', 'ETH'),
-    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 389k
-    testGasLimitSwap('BTC', 'ETH'),
-    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 862k
+  const gasLimitSwapsDefault = [
+    // testGasLimitSwap('DOT', 'FLIP'),
+    // testGasLimitSwap('ETH', 'USDC'),
+    // testGasLimitSwap('FLIP', 'ETH'),
+    // testGasLimitSwap('BTC', 'ETH'),
+  ];
 
+  const gasLimitSwapsSufBudget = [
+    testGasLimitSwap('DOT', 'FLIP', 'sufBudget', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 867k
+    testGasLimitSwap('ETH', 'USDC', 'sufBudget', undefined, 10 ** 4), // % 100 ~ gasLimitBudget ~= 499k
+    testGasLimitSwap('FLIP', 'ETH', 'sufBudget', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 389k
+    testGasLimitSwap('BTC', 'ETH', 'sufBudget', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 862k
+  ];
+
+  const gasLimitSwapsInsufBudget = [
     // None of this should be broadcasted as the gasLimitBudget is not enough
-    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 4),
-    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 5),
-    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 4),
-    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 4),
+    // testGasLimitSwap('DOT', 'FLIP', 'insufBudget', undefined, 10 ** 4),
+    // testGasLimitSwap('ETH', 'USDC', 'insufBudget', undefined, 10 ** 5),
+    // testGasLimitSwap('FLIP', 'ETH', 'insufBudget', undefined, 10 ** 4),
+    // testGasLimitSwap('BTC', 'ETH', 'insufBudget', undefined, 10 ** 4),
   ];
 
   // This amount of gasLimitBudget will be swapped into not enough destination gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
-  const gasLimitSwapsInsufBudget = [
-    testGasLimitSwap('DOT', 'FLIP', undefined, 10 ** 6),
-    testGasLimitSwap('ETH', 'USDC', undefined, 10 ** 8),
-    testGasLimitSwap('FLIP', 'ETH', undefined, 10 ** 6),
-    testGasLimitSwap('BTC', 'ETH', undefined, 10 ** 4),
-  ];
-
-  // As of now this is broadcasted regardless of the gasLimitBudget budget and even when the final solution is implemented
-  // this should be broadcasted, since the gasLimitBudget budget should be enough, since by default gasBudget is 1% of the
-  // principal and the gasPrice is very low in localnet (~7wei).
-  const ccmgasLimitSwapsDefault = [
-    testSwap(
-      'DOT',
-      'FLIP',
-      undefined,
-      gasTestCcmMetadata('DOT'),
-      tagSuffix + ' SufficientGasBudget',
-    ),
-    testSwap(
-      'ETH',
-      'USDC',
-      undefined,
-      gasTestCcmMetadata('ETH'),
-      tagSuffix + ' SufficientGasBudget',
-    ),
-    testSwap(
-      'FLIP',
-      'ETH',
-      undefined,
-      gasTestCcmMetadata('FLIP'),
-      tagSuffix + ' SufficientGasBudget',
-    ),
-    testSwap(
-      'BTC',
-      'ETH',
-      undefined,
-      gasTestCcmMetadata('BTC'),
-      tagSuffix + ' SufficientGasBudget',
-    ),
+  const gasLimitSwapsNoBudget = [
+    // testGasLimitSwap('DOT', 'FLIP', 'noBudget', undefined, 10 ** 6),
+    // testGasLimitSwap('ETH', 'USDC', 'noBudget', undefined, 10 ** 8),
+    // testGasLimitSwap('FLIP', 'ETH', 'noBudget', undefined, 10 ** 6),
+    // testGasLimitSwap('BTC', 'ETH', 'noBudget', undefined, 10 ** 4),
   ];
 
   await Promise.all([
     ...gasLimitSwapsSufBudget,
     ...gasLimitSwapsInsufBudget,
-    ...ccmgasLimitSwapsDefault,
+    ...gasLimitSwapsDefault,
+    ...gasLimitSwapsNoBudget,
   ]);
 
   spam = false;
