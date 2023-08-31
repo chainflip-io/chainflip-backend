@@ -350,9 +350,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		my_account_id: AccountId,
 		outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 		latest_ceremony_id: CeremonyId,
-		register: Registry,
 	) -> Self {
-		register_metrics(register);
 		CeremonyManager {
 			my_account_id,
 			outgoing_p2p_message_sender,
