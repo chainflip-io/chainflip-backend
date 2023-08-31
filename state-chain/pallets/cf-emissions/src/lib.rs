@@ -182,8 +182,8 @@ pub mod pallet {
 							),
 							None,
 						);
+						T::Issuance::burn(flip_to_burn.into());
 					}
-					T::Issuance::burn(flip_to_burn.into());
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,
