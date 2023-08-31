@@ -24,9 +24,9 @@ use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSig
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
 	make_periodic_tick,
+	metrics::{self, Prometheus},
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
-	metrics::{self, Prometheus}
 };
 
 lazy_static::lazy_static! {
@@ -116,10 +116,7 @@ async fn start(
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
 	}
 	// TODO remove hardcoded struct here and read from some settings
-	let prometheus_settings = Prometheus {
-		hostname: "0.0.0.0".to_string(),
-		port: 5566,
-	};
+	let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
 	metrics::start(scope, &prometheus_settings).await?;
 
 	let (state_chain_stream, state_chain_client) =
