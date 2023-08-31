@@ -1,4 +1,4 @@
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::ChainCrypto;
 use cf_primitives::ThresholdSignatureRequestId;
 
 use super::{MockPallet, MockPalletStorage};
@@ -6,9 +6,9 @@ use crate::{EpochKey, KeyState};
 use std::marker::PhantomData;
 
 #[derive(Default)]
-pub struct MockKeyProvider<C: Chain>(PhantomData<C>);
+pub struct MockKeyProvider<C: ChainCrypto>(PhantomData<C>);
 
-impl<C: Chain> MockPallet for MockKeyProvider<C> {
+impl<C: ChainCrypto> MockPallet for MockKeyProvider<C> {
 	const PREFIX: &'static [u8] = b"MockKeyProvider::";
 }
 

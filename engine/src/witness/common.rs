@@ -2,7 +2,7 @@ pub mod chain_source;
 pub mod chunked_chain_source;
 pub mod epoch_source;
 
-use cf_chains::{Chain, ChainAbi};
+use cf_chains::Chain;
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
@@ -105,8 +105,8 @@ where
 {
 }
 
-pub trait ExternalChain: ChainAbi + PalletInstanceAlias {}
-impl<T: ChainAbi + PalletInstanceAlias> ExternalChain for T {}
+pub trait ExternalChain: Chain + PalletInstanceAlias {}
+impl<T: Chain + PalletInstanceAlias> ExternalChain for T {}
 
 pub trait ExternalChainSource:
 	ChainSource<Index = <Self::Chain as Chain>::ChainBlockNumber>

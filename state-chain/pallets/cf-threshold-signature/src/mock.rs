@@ -5,7 +5,7 @@ use crate::{
 	PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	mocks::{MockAggKey, MockEthereum, MockThresholdSignature},
+	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
 use cf_traits::{
@@ -76,7 +76,7 @@ thread_local! {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
-impl MockCallback<MockEthereum> {
+impl MockCallback<MockEthereumChainCrypto> {
 	pub fn new(id: RequestId) -> Self {
 		Self(id, Default::default())
 	}
@@ -99,7 +99,7 @@ impl MockCallback<MockEthereum> {
 	}
 }
 
-impl UnfilteredDispatchable for MockCallback<MockEthereum> {
+impl UnfilteredDispatchable for MockCallback<MockEthereumChainCrypto> {
 	type RuntimeOrigin = RuntimeOrigin;
 
 	fn dispatch_bypass_filter(
@@ -112,20 +112,20 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 	}
 }
 
-pub fn current_agg_key() -> <MockEthereum as ChainCrypto>::AggKey {
+pub fn current_agg_key() -> <MockEthereumChainCrypto as ChainCrypto>::AggKey {
 	<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap().key
 }
 
 pub fn sign(
-	payload: <MockEthereum as ChainCrypto>::Payload,
+	payload: <MockEthereumChainCrypto as ChainCrypto>::Payload,
 ) -> MockThresholdSignature<
-	<MockEthereum as ChainCrypto>::AggKey,
-	<MockEthereum as ChainCrypto>::Payload,
+	<MockEthereumChainCrypto as ChainCrypto>::AggKey,
+	<MockEthereumChainCrypto as ChainCrypto>::Payload,
 > {
 	MockThresholdSignature::<_, _> { signing_key: current_agg_key(), signed_payload: payload }
 }
 
-pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
+pub const INVALID_SIGNATURE: <MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature =
 	MockThresholdSignature::<_, _> { signing_key: MockAggKey(*b"BAD!"), signed_payload: *b"BAD!" };
 
 parameter_types! {
@@ -139,10 +139,10 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type RuntimeOrigin = RuntimeOrigin;
-	type ThresholdCallable = MockCallback<MockEthereum>;
-	type TargetChain = MockEthereum;
+	type ThresholdCallable = MockCallback<MockEthereumChainCrypto>;
+	type TargetChainCrypto = MockEthereumChainCrypto;
 	type ThresholdSignerNomination = MockNominator;
-	type KeyProvider = MockKeyProvider<MockEthereum>;
+	type KeyProvider = MockKeyProvider<MockEthereumChainCrypto>;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -155,11 +155,11 @@ pub const AGG_KEY: [u8; 4] = *b"AKEY";
 pub trait TestHelper {
 	fn with_nominees(self, nominees: impl IntoIterator<Item = u64>) -> Self;
 	fn with_authorities(self, validators: impl IntoIterator<Item = u64>) -> Self;
-	fn with_request(self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self;
+	fn with_request(self, message: &<MockEthereumChainCrypto as ChainCrypto>::Payload) -> Self;
 	fn with_request_and_callback(
 		self,
-		message: &<MockEthereum as ChainCrypto>::Payload,
-		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereum>,
+		message: &<MockEthereumChainCrypto as ChainCrypto>::Payload,
+		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereumChainCrypto>,
 	) -> Self;
 	fn execute_with_consistency_checks<R>(self, f: impl FnOnce() -> R) -> TestRunner<R>;
 	fn do_consistency_check();
@@ -183,7 +183,7 @@ impl TestHelper for TestRunner<()> {
 		})
 	}
 
-	fn with_request(self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
+	fn with_request(self, message: &<MockEthereumChainCrypto as ChainCrypto>::Payload) -> Self {
 		self.execute_with(|| {
 			let initial_ceremony_id = MockCeremonyIdProvider::get();
 			// Initiate request
@@ -213,8 +213,8 @@ impl TestHelper for TestRunner<()> {
 
 	fn with_request_and_callback(
 		self,
-		message: &<MockEthereum as ChainCrypto>::Payload,
-		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereum>,
+		message: &<MockEthereumChainCrypto as ChainCrypto>::Payload,
+		callback_gen: impl Fn(RequestId) -> MockCallback<MockEthereumChainCrypto>,
 	) -> Self {
 		self.execute_with(|| {
 			// Initiate request
@@ -256,5 +256,5 @@ impl TestHelper for TestRunner<()> {
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
-	|| MockKeyProvider::<MockEthereum>::add_key(MockAggKey(AGG_KEY))
+	|| MockKeyProvider::<MockEthereumChainCrypto>::add_key(MockAggKey(AGG_KEY))
 }

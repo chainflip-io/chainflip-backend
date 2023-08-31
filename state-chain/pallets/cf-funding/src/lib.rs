@@ -97,7 +97,7 @@ pub mod pallet {
 		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The implementation of the register redemption transaction.
-		type RegisterRedemption: RegisterRedemption<Ethereum> + Member + Parameter;
+		type RegisterRedemption: RegisterRedemption + Member + Parameter;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;

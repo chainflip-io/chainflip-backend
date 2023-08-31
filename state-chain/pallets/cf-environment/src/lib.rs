@@ -126,7 +126,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
 	/// The ETH chain id
-	pub type EthereumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
+	pub type EthereumChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
 
 	#[pallet::storage]
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;

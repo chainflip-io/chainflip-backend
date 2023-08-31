@@ -14,9 +14,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
-	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelLifecycleHooks,
+	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -212,7 +212,7 @@ pub mod pallet {
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Marks which chain this pallet is interacting with.
-		type TargetChain: ChainAbi + Get<ForeignChain>;
+		type TargetChain: Chain + Get<ForeignChain>;
 
 		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
