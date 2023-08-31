@@ -173,12 +173,16 @@ pub mod pallet {
 			if Self::should_update_supply_at(current_block) {
 				if T::SafeMode::get().emissions_sync_enabled {
 					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
-					T::EgressHandler::schedule_egress(
-						Asset::Flip,
-						flip_to_burn,
-						ForeignChainAddress::Eth(T::EthEnvironment::state_chain_gateway_address()),
-						None,
-					);
+					if flip_to_burn > Zero::zero() {
+						T::EgressHandler::schedule_egress(
+							Asset::Flip,
+							flip_to_burn,
+							ForeignChainAddress::Eth(
+								T::EthEnvironment::state_chain_gateway_address(),
+							),
+							None,
+						);
+					}
 					T::Issuance::burn(flip_to_burn.into());
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
