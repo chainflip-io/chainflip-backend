@@ -46,7 +46,7 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume?: number, gasBudget
 async function testGasLimitSwap(
   sourceAsset: Asset,
   destAsset: Asset,
-  tagSuffix?: string,
+  testTag?: string,
   gasToConsume?: number,
   gasBudgetFraction?: number,
   addressType?: BtcAddressType,
@@ -56,13 +56,12 @@ async function testGasLimitSwap(
   const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION;
 
   const messageMetadata = gasTestCcmMetadata(sourceAsset, gasConsumption, gasBudgetFraction);
-
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
     addressType,
     messageMetadata,
-    ' GasLimit ' + tagSuffix,
+    ` GasLimit${testTag || ''}`,
   );
 
   const ccmReceivedHandle = observeCcmReceived(
@@ -180,6 +179,9 @@ async function testGasLimitSwap(
       byteLength * GAS_PER_BYTE /* + probably some gasLimit margin */,
   );
 
+  console.log(tag);
+  console.log(`${tag} gasLimitBudget     : ${gasLimitBudget}`);
+
   // This is a very rough approximation as there might be extra overhead in the logic but it's probably good
   // enough for testing if we add some margins around the gasBudget cutoff.
   if (
@@ -212,8 +214,6 @@ async function testGasLimitSwap(
     const totalFee = gasUsed * Number(gasPrice);
     const percBudgetUsed = (totalFee * 100) / egressBudgetAmount;
     const percGasUsed = (gasUsed * 100) / gasLimitBudget;
-    console.log(tag);
-    console.log('gasLimitBudget     ', gasLimitBudget);
     console.log('gasUsed            ', gasUsed);
     console.log('maxFeePerGas       ', maxFeePerGas);
     console.log('gasPrice           ', gasPrice);
@@ -247,36 +247,36 @@ export async function testGasLimitCcmSwaps() {
 
   // TODO: Add some test with a long enough message that we shouldn't be broadcasting beacuse user hasn't paid enough gasLimitBudget.
   // E.g. Gas = 120k (overhead) + 10000 bytes * 16 gasLimitBudget/byte = 280k gasLimitBudget => Pay less than that as the fee.
-
   const gasLimitSwapsDefault = [
-    // testGasLimitSwap('DOT', 'FLIP'),
-    // testGasLimitSwap('ETH', 'USDC'),
-    // testGasLimitSwap('FLIP', 'ETH'),
-    // testGasLimitSwap('BTC', 'ETH'),
+    testGasLimitSwap('DOT', 'FLIP'),
+    testGasLimitSwap('ETH', 'USDC'),
+    testGasLimitSwap('FLIP', 'ETH'),
+    testGasLimitSwap('BTC', 'ETH'),
   ];
 
   const gasLimitSwapsSufBudget = [
-    testGasLimitSwap('DOT', 'FLIP', 'sufBudget', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 867k
-    testGasLimitSwap('ETH', 'USDC', 'sufBudget', undefined, 10 ** 4), // % 100 ~ gasLimitBudget ~= 499k
-    testGasLimitSwap('FLIP', 'ETH', 'sufBudget', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 389k
-    testGasLimitSwap('BTC', 'ETH', 'sufBudget', undefined, 10 ** 3), // % 10 ~ gasLimitBudget ~= 862k
+    // 7.5% (or 0.75%) of the input amount used for gas to achieve a gasLimitBudget ~= 660k, which is enough for the CCM broadcast.
+    testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
+    testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
+    testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 750),
+    testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
   ];
 
   const gasLimitSwapsInsufBudget = [
-    // None of this should be broadcasted as the gasLimitBudget is not enough
-    // testGasLimitSwap('DOT', 'FLIP', 'insufBudget', undefined, 10 ** 4),
-    // testGasLimitSwap('ETH', 'USDC', 'insufBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('FLIP', 'ETH', 'insufBudget', undefined, 10 ** 4),
-    // testGasLimitSwap('BTC', 'ETH', 'insufBudget', undefined, 10 ** 4),
+    // None of this should be broadcasted as the gasLimitBudget is not enough - ~50k gasLimitBudget
+    testGasLimitSwap('DOT', 'FLIP', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('ETH', 'USDC', ' insufBudget', undefined, 10 ** 5),
+    testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('BTC', 'ETH', ' insufBudget', undefined, 10 ** 4),
   ];
 
   // This amount of gasLimitBudget will be swapped into not enough destination gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap intput amount. So for now we provide the minimum so it gets swapped to just > 0.
   const gasLimitSwapsNoBudget = [
-    // testGasLimitSwap('DOT', 'FLIP', 'noBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('ETH', 'USDC', 'noBudget', undefined, 10 ** 8),
-    // testGasLimitSwap('FLIP', 'ETH', 'noBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('BTC', 'ETH', 'noBudget', undefined, 10 ** 4),
+    testGasLimitSwap('DOT', 'FLIP', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('ETH', 'USDC', ' noBudget', undefined, 10 ** 8),
+    testGasLimitSwap('FLIP', 'ETH', ' noBudget', undefined, 10 ** 6),
+    testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 4),
   ];
 
   await Promise.all([
