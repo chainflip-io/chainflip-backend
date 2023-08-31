@@ -59,6 +59,7 @@ fn create_and_register_gauge_vec(name: &str, help: &str, labels: &[&str]) -> Int
 	m
 }
 
+#[derive(Clone)]
 pub struct Prometheus {
 	pub hostname: String,
 	pub port: u16,
@@ -106,15 +107,12 @@ fn metrics_handler() -> String {
 mod test {
 	use crate::metrics;
 
-	use futures_util::FutureExt;
-
-	use crate::settings::Settings;
-
 	use super::*;
+	use futures::FutureExt;
 
 	#[tokio::test]
 	async fn prometheus_test() {
-		let prometheus_settings = Settings::new_test().unwrap().prometheus.unwrap();
+		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
 		create_and_register_metric();
 
 		task_scope::task_scope(|scope| {

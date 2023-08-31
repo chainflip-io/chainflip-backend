@@ -11930,6 +11930,7 @@ dependencies = [
  "pin-project",
  "predicates 3.0.3",
  "prometheus",
+ "reqwest",
  "scopeguard",
  "serde",
  "sp-rpc",
