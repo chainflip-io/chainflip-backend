@@ -181,7 +181,7 @@ pub mod pallet {
 		}
 
 		pub fn register_transfer(&mut self, amount: TargetChainAmount<T, I>) {
-			if amount < self.fetched {
+			if amount > self.fetched {
 				log::error!("Transfer amount is greater than available funds");
 			}
 			self.fetched.saturating_reduce(amount);
