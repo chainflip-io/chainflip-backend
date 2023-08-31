@@ -1,5 +1,5 @@
 #![feature(absolute_path)]
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
@@ -10,8 +10,8 @@ use crate::settings::{
 	LiquidityProviderSubcommands,
 };
 use api::{
-	lp::LpApi, primitives::RedemptionAmount, AccountId32, BrokerApi, GovernanceApi, KeyPair,
-	OperatorApi, StateChainApi, SwapDepositAddress,
+	lp::LpApi, primitives::RedemptionAmount, queries::QueryApi, AccountId32, BrokerApi,
+	GovernanceApi, KeyPair, OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
@@ -91,7 +91,13 @@ async fn run_cli() -> Result<()> {
 					println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
 				},
 				Redeem { amount, eth_address, executor } => {
-					request_redemption(api.operator_api(), amount, &eth_address, executor).await?;
+					request_redemption(api, amount, eth_address, executor).await?;
+				},
+				BindRedeemAddress { eth_address } => {
+					bind_redeem_address(api.operator_api(), &eth_address).await?;
+				},
+				GetBoundRedeemAddress {} => {
+					get_bound_redeem_address(api.query_api()).await?;
 				},
 				RegisterAccountRole { role } => {
 					println!(
@@ -129,36 +135,51 @@ async fn run_cli() -> Result<()> {
 }
 
 async fn request_redemption(
-	api: Arc<impl OperatorApi + Sync>,
+	api: StateChainApi,
 	amount: Option<f64>,
-	eth_address: &str,
+	supplied_address: Option<String>,
 	executor: Option<cf_chains::eth::Address>,
 ) -> Result<()> {
-	// Sanitise data
-	let eth_address = EthereumAddress::from_slice(
-		clean_hex_address::<[u8; 20]>(eth_address)
-			.context("Invalid ETH address supplied")?
-			.as_slice(),
-	);
+	let supplied_address = if let Some(address) = supplied_address {
+		Some(EthereumAddress::from(
+			clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
+		))
+	} else {
+		None
+	};
+
+	let account_id = api.state_chain_client.account_id();
+	let bound_address =
+		api.query_api().get_bound_redeem_address(None, Some(account_id.clone())).await?;
+
+	let redeem_address = match (supplied_address, bound_address) {
+		(Some(supplied_address), Some(bound_address)) =>
+			if supplied_address != bound_address {
+				bail!("Supplied ETH address `{supplied_address:?}` does not match bound address for this account `{bound_address:?}`.");
+			} else {
+				bound_address
+			},
+		(Some(supplied_address), None) => supplied_address,
+		(None, Some(bound_address)) => {
+			println!("Using bound redeem address.");
+			bound_address
+		},
+		(None, None) =>
+			bail!("No redeem address supplied and no bound redeem address found for your account {account_id}."),
+	};
 
 	let amount = match amount {
 		Some(amount_float) => {
 			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
 
 			println!(
-				"Submitting redemption with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-				amount_float,
-				atomic_amount,
-				hex::encode(eth_address)
+				"Submitting redemption with amount `{amount_float}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`."
 			);
 
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => {
-			println!(
-				"Submitting redemption with MAX amount to ETH address `0x{}`.",
-				hex::encode(eth_address)
-			);
+			println!("Submitting redemption with MAX amount to ETH address `{redeem_address:?}`.");
 
 			RedemptionAmount::Max
 		},
@@ -168,11 +189,40 @@ async fn request_redemption(
 		return Ok(())
 	}
 
-	let tx_hash = api.request_redemption(amount, eth_address, executor).await?;
+	let tx_hash = api.operator_api().request_redemption(amount, redeem_address, executor).await?;
 
 	println!(
 		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
 	);
+
+	Ok(())
+}
+
+async fn bind_redeem_address(api: Arc<impl OperatorApi + Sync>, eth_address: &str) -> Result<()> {
+	let eth_address = EthereumAddress::from(
+		clean_hex_address::<[u8; 20]>(eth_address).context("Invalid ETH address supplied")?,
+	);
+
+	println!(
+		"Binding your account to a redemption address is irreversible. You will only ever be able to redeem to this address: {eth_address:?}.",
+	);
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	let tx_hash = api.bind_redeem_address(eth_address).await?;
+
+	println!("Account bound to address {eth_address}, transaction hash: `{tx_hash:#x}`.");
+
+	Ok(())
+}
+
+async fn get_bound_redeem_address(api: QueryApi) -> Result<()> {
+	if let Some(bound_address) = api.get_bound_redeem_address(None, None).await? {
+		println!("Your account is bound to redeem address: {bound_address:?}");
+	} else {
+		println!("Your account is not bound to any redeem address.");
+	}
 
 	Ok(())
 }
