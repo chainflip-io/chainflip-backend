@@ -1,8 +1,8 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, Ethereum,
-	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
+	evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment,
+	Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
@@ -33,17 +33,12 @@ pub enum MockEthereumApiCall<MockEthEnvironment> {
 	ExecutexSwapAndCall(MockExecutexSwapAndCall<MockEthEnvironment>),
 }
 
-impl ApiCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
-	fn threshold_signature_payload(
-		&self,
-	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
+impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEthEnvironment> {
+	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
-	fn signed(
-		self,
-		_threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
-	) -> Self {
+	fn signed(self, _threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
 		unimplemented!()
 	}
 
@@ -55,9 +50,7 @@ impl ApiCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(
-		&self,
-	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
 }

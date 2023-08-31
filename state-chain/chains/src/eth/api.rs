@@ -6,7 +6,7 @@ use crate::{
 			set_comm_key_with_agg_key, set_gov_key_with_agg_key, EthEnvironmentProvider, EvmCall,
 			EvmReplayProtection, EvmTransactionBuilder, SigData,
 		},
-		EvmFetchId, SchnorrVerificationComponents,
+		EvmCrypto, EvmFetchId, SchnorrVerificationComponents,
 	},
 	*,
 };
@@ -78,10 +78,8 @@ pub enum EthereumApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-impl<C: EvmCall + Parameter + 'static> ApiCall<Ethereum> for EvmTransactionBuilder<C> {
-	fn threshold_signature_payload(
-		&self,
-	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
+impl<C: EvmCall + Parameter + 'static> ApiCall<EvmCrypto> for EvmTransactionBuilder<C> {
+	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		Keccak256::hash(&ethabi::encode(&[
 			self.call.msg_hash().tokenize(),
 			self.replay_protection.tokenize(),
@@ -90,7 +88,7 @@ impl<C: EvmCall + Parameter + 'static> ApiCall<Ethereum> for EvmTransactionBuild
 
 	fn signed(
 		mut self,
-		threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
 		self
@@ -105,9 +103,7 @@ impl<C: EvmCall + Parameter + 'static> ApiCall<Ethereum> for EvmTransactionBuild
 		self.sig_data.is_some()
 	}
 
-	fn transaction_out_id(
-		&self,
-	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
 		SchnorrVerificationComponents {
 			s: sig_data.sig.into(),
@@ -116,13 +112,13 @@ impl<C: EvmCall + Parameter + 'static> ApiCall<Ethereum> for EvmTransactionBuild
 	}
 }
 
-impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
+impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
-		_old_key: Option<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
-		new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		_old_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
+		new_key: <EvmCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
@@ -131,13 +127,13 @@ where
 	}
 }
 
-impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
+impl<E> SetGovKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
-		_maybe_old_key: Option<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey>,
-		new_gov_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey,
+		_maybe_old_key: Option<<EvmCrypto as ChainCrypto>::GovKey>,
+		new_gov_key: <EvmCrypto as ChainCrypto>::GovKey,
 	) -> Result<Self, ()> {
 		Ok(Self::SetGovKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
@@ -146,13 +142,11 @@ where
 	}
 }
 
-impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
+impl<E> SetCommKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(
-		new_comm_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey,
-	) -> Self {
+	fn new_unsigned(new_comm_key: <EvmCrypto as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::KeyManager)),
 			set_comm_key_with_agg_key::SetCommKeyWithAggKey::new(new_comm_key),
@@ -160,7 +154,7 @@ where
 	}
 }
 
-impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
+impl<E> RegisterRedemption for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
@@ -188,7 +182,7 @@ where
 	}
 }
 
-impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
+impl<E> UpdateFlipSupply<EvmCrypto> for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
@@ -354,17 +348,12 @@ impl<E> EthereumApi<E> {
 	}
 }
 
-impl<E> ApiCall<Ethereum> for EthereumApi<E> {
-	fn threshold_signature_payload(
-		&self,
-	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
+impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
+	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
 
-	fn signed(
-		self,
-		threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
-	) -> Self {
+	fn signed(self, threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
 		map_over_api_variants!(self, call, call.signed(threshold_signature).into())
 	}
 
@@ -376,9 +365,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 		map_over_api_variants!(self, call, call.is_signed())
 	}
 
-	fn transaction_out_id(
-		&self,
-	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
 	}
 }

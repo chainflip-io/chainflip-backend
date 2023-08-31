@@ -473,7 +473,7 @@ where
 /// chains.
 pub trait Broadcaster<C: Chain> {
 	/// Supported api calls for this chain.
-	type ApiCall: ApiCall<C>;
+	type ApiCall: ApiCall<C::ChainCrypto>;
 
 	/// The callback that gets executed when the signature is accepted.
 	type Callback: UnfilteredDispatchable;
@@ -801,7 +801,7 @@ impl CcmHandler for () {
 }
 
 pub trait OnBroadcastReady<C: Chain> {
-	type ApiCall: ApiCall<C>;
+	type ApiCall: ApiCall<C::ChainCrypto>;
 
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
 }

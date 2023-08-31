@@ -147,7 +147,10 @@ pub mod pallet {
 		type TargetChain: Chain;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue + Send + Sync;
+		type ApiCall: ApiCall<<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto>
+			+ BenchmarkValue
+			+ Send
+			+ Sync;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;

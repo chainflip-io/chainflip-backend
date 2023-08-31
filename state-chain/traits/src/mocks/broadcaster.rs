@@ -19,7 +19,7 @@ impl<T> MockPallet for MockBroadcaster<T> {
 
 impl<
 		Api: Chain,
-		A: ApiCall<Api> + Member + Parameter,
+		A: ApiCall<Api::ChainCrypto> + Member + Parameter,
 		C: UnfilteredDispatchable + Member + Parameter,
 	> Broadcaster<Api> for MockBroadcaster<(A, C)>
 {
@@ -51,7 +51,7 @@ impl<
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let ids @ (id, _) = Self::threshold_sign_and_broadcast(api_call);
+		let ids @ (id, _) = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call);
 		Self::put_storage(b"CALLBACKS", id, callback);
 		ids
 	}

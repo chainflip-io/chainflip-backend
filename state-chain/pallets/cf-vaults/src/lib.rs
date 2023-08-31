@@ -170,7 +170,9 @@ pub mod pallet {
 		type Chain: Chain;
 
 		/// The supported api calls for the chain.
-		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<
+			<<Self as pallet::Config<I>>::Chain as Chain>::ChainCrypto,
+		>;
 
 		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 

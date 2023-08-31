@@ -128,7 +128,7 @@ impl MockKeyProvider {
 
 pub struct MockBroadcastReadyProvider;
 impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
-	type ApiCall = MockApiCall<MockEthereum>;
+	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -136,7 +136,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
 	type TargetChain = MockEthereum;
-	type ApiCall = MockApiCall<MockEthereum>;
+	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
 	type BroadcastSignerNomination = MockNominator;

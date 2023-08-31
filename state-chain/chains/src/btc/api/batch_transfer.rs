@@ -2,9 +2,9 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
-use crate::btc::{AggKey, Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
+use crate::btc::{AggKey, BitcoinCrypto, BitcoinOutput, BitcoinTransaction, Utxo};
 
-use crate::{ApiCall, Chain, ChainCrypto};
+use crate::{ApiCall, ChainCrypto};
 
 use frame_support::sp_runtime::RuntimeDebug;
 
@@ -35,17 +35,12 @@ impl BatchTransfer {
 	}
 }
 
-impl ApiCall<Bitcoin> for BatchTransfer {
-	fn threshold_signature_payload(
-		&self,
-	) -> <<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload {
+impl ApiCall<BitcoinCrypto> for BatchTransfer {
+	fn threshold_signature_payload(&self) -> <BitcoinCrypto as ChainCrypto>::Payload {
 		self.bitcoin_transaction.get_signing_payloads()
 	}
 
-	fn signed(
-		mut self,
-		signatures: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
-	) -> Self {
+	fn signed(mut self, signatures: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature) -> Self {
 		self.bitcoin_transaction.add_signatures(signatures.clone());
 		self
 	}
@@ -58,9 +53,7 @@ impl ApiCall<Bitcoin> for BatchTransfer {
 		self.bitcoin_transaction.is_signed()
 	}
 
-	fn transaction_out_id(
-		&self,
-	) -> <<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
 		self.bitcoin_transaction.txid()
 	}
 }

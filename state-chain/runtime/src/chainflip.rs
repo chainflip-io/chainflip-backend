@@ -36,7 +36,7 @@ use cf_chains::{
 	},
 	evm::{
 		api::{EthEnvironmentProvider, EvmReplayProtection},
-		Transaction,
+		EvmCrypto, Transaction,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
@@ -387,14 +387,14 @@ impl TokenholderGovernanceBroadcaster {
 	where
 		C: Chain,
 		B: Broadcaster<C>,
-		<B as Broadcaster<C>>::ApiCall: cf_chains::SetGovKeyWithAggKey<C>,
+		<B as Broadcaster<C>>::ApiCall: cf_chains::SetGovKeyWithAggKey<C::ChainCrypto>,
 	{
 		let maybe_old_key = if let Some(old_key) = maybe_old_key {
 			Some(Decode::decode(&mut &old_key[..]).or(Err(()))?)
 		} else {
 			None
 		};
-		let api_call = SetGovKeyWithAggKey::<C>::new_unsigned(
+		let api_call = SetGovKeyWithAggKey::<C::ChainCrypto>::new_unsigned(
 			maybe_old_key,
 			Decode::decode(&mut &new_key[..]).or(Err(()))?,
 		)?;
@@ -436,7 +436,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey) {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
-			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
+			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
 			None::<RuntimeCall>,
 		);
 	}

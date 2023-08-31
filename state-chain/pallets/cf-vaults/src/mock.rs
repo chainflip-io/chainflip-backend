@@ -90,7 +90,7 @@ impl MockSetAggKeyWithAggKey {
 	}
 }
 
-impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
+impl SetAggKeyWithAggKey<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 		new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
@@ -103,7 +103,7 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	}
 }
 
-impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
+impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn threshold_signature_payload(
 		&self,
 	) -> <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::Payload {

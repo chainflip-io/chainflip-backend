@@ -120,13 +120,13 @@ pub struct MockUpdateFlipSupply {
 	pub block_number: u64,
 }
 
-impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
+impl UpdateFlipSupply<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self { new_total_supply, block_number }
 	}
 }
 
-impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
+impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	fn threshold_signature_payload(&self) -> <MockEthereumChainCrypto as ChainCrypto>::Payload {
 		[0xcf; 4]
 	}

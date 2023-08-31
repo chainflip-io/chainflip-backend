@@ -1,6 +1,6 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
-use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
+use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
@@ -103,7 +103,7 @@ pub struct MockRegisterRedemption {
 	amount: <Ethereum as Chain>::ChainAmount,
 }
 
-impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
+impl cf_chains::RegisterRedemption for MockRegisterRedemption {
 	fn new_unsigned(
 		_node_id: &[u8; 32],
 		amount: u128,
@@ -119,7 +119,7 @@ impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
 	}
 }
 
-impl ApiCall<Ethereum> for MockRegisterRedemption {
+impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 	fn threshold_signature_payload(
 		&self,
 	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload {

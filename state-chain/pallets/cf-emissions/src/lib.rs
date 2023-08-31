@@ -82,7 +82,7 @@ pub mod pallet {
 		>;
 
 		/// An outgoing api call that supports UpdateFlipSupply.
-		type ApiCall: UpdateFlipSupply<Self::HostChain>;
+		type ApiCall: UpdateFlipSupply<<<Self as pallet::Config>::HostChain as Chain>::ChainCrypto>;
 
 		/// Transaction broadcaster for the host chain.
 		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;

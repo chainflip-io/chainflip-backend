@@ -183,15 +183,12 @@ pub trait ReplayProtectionProvider<C: Chain> {
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
-pub trait ApiCall<C: Chain>: Parameter {
+pub trait ApiCall<C: ChainCrypto>: Parameter {
 	/// Get the payload over which the threshold signature should be generated.
-	fn threshold_signature_payload(&self) -> <<C as Chain>::ChainCrypto as ChainCrypto>::Payload;
+	fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload;
 
 	/// Add the threshold signature to the api call.
-	fn signed(
-		self,
-		threshold_signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
-	) -> Self;
+	fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self;
 
 	/// Construct the signed call, encoded according to the chain's native encoding.
 	///
@@ -202,14 +199,14 @@ pub trait ApiCall<C: Chain>: Parameter {
 	fn is_signed(&self) -> bool;
 
 	/// Generates an identifier for the output of the transaction.
-	fn transaction_out_id(&self) -> <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
+	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
 pub trait TransactionBuilder<C, Call>
 where
 	C: Chain,
-	Call: ApiCall<C>,
+	Call: ApiCall<C::ChainCrypto>,
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
 	/// Doesn't include any time-sensitive data e.g. gas price.
@@ -268,32 +265,32 @@ pub enum SetAggKeyWithAggKeyError {
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
 #[allow(clippy::result_unit_err)]
-pub trait SetAggKeyWithAggKey<C: Chain>: ApiCall<C> {
+pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
-		maybe_old_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
-		new_key: <<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
+		new_key: <C as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]
-pub trait SetGovKeyWithAggKey<C: Chain>: ApiCall<C> {
+pub trait SetGovKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
-		maybe_old_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::GovKey>,
-		new_key: <<C as Chain>::ChainCrypto as ChainCrypto>::GovKey,
+		maybe_old_key: Option<<C as ChainCrypto>::GovKey>,
+		new_key: <C as ChainCrypto>::GovKey,
 	) -> Result<Self, ()>;
 }
 
-pub trait SetCommKeyWithAggKey<C: Chain>: ApiCall<C> {
-	fn new_unsigned(new_comm_key: <<C as Chain>::ChainCrypto as ChainCrypto>::GovKey) -> Self;
+pub trait SetCommKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
+	fn new_unsigned(new_comm_key: <C as ChainCrypto>::GovKey) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
-pub trait UpdateFlipSupply<C: Chain>: ApiCall<C> {
+pub trait UpdateFlipSupply<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self;
 }
 
 /// Constructs the `RegisterRedemption` api call.
-pub trait RegisterRedemption<C: Chain>: ApiCall<C> {
+pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 	fn new_unsigned(
 		node_id: &[u8; 32],
 		amount: u128,
@@ -312,7 +309,7 @@ pub enum AllBatchError {
 }
 
 #[allow(clippy::result_unit_err)]
-pub trait AllBatch<C: Chain>: ApiCall<C> {
+pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
 		transfer_params: Vec<TransferAssetParams<C>>,
@@ -320,7 +317,7 @@ pub trait AllBatch<C: Chain>: ApiCall<C> {
 }
 
 #[allow(clippy::result_unit_err)]
-pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C> {
+pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<C>,
