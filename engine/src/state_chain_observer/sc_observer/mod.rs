@@ -3,7 +3,10 @@ mod crypto_compat;
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::btc::{self, PreviousOrCurrent};
+use cf_chains::{
+	btc::{self, PreviousOrCurrent},
+	Chain,
+};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
@@ -52,9 +55,9 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: ChainSigning<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+	C: ChainSigning<ChainCrypto = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto>
 		+ 'static,
-	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
+	I: CryptoCompat<C, C::ChainCrypto> + 'static + Sync + Send,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
@@ -150,7 +153,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
-		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain,
+		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
 	>,
 {
 	if signers.contains(&state_chain_client.account_id()) {

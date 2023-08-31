@@ -3,7 +3,7 @@
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},
-	dot::api::CreatePolkadotVault,
+	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
@@ -70,8 +70,10 @@ impl CreatePolkadotVault for MockCreatePolkadotVault {
 		Self
 	}
 }
-impl ApiCall<Polkadot> for MockCreatePolkadotVault {
-	fn threshold_signature_payload(&self) -> <Polkadot as cf_chains::ChainCrypto>::Payload {
+impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::Payload {
 		unimplemented!()
 	}
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -79,7 +81,7 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 	}
 	fn signed(
 		self,
-		_threshold_signature: &<Polkadot as cf_chains::ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		unimplemented!()
 	}
@@ -87,7 +89,9 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
 }

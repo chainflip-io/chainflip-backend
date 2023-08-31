@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, eth::api::EthEnvironmentProvider, UpdateFlipSupply};
+use cf_chains::{address::ForeignChainAddress, evm::api::EthEnvironmentProvider, UpdateFlipSupply};
 use cf_traits::{
 	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
 	RewardsDistribution,
@@ -36,7 +36,7 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::ChainAbi;
+	use cf_chains::Chain;
 	use frame_support::{pallet_prelude::*, DefaultNoBound};
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -51,7 +51,7 @@ pub mod pallet {
 		///
 		/// In practice this is always [Ethereum] but making this configurable simplifies
 		/// testing.
-		type HostChain: ChainAbi;
+		type HostChain: Chain;
 
 		/// The Flip token denomination.
 		type FlipBalance: Member
@@ -82,7 +82,7 @@ pub mod pallet {
 		>;
 
 		/// An outgoing api call that supports UpdateFlipSupply.
-		type ApiCall: UpdateFlipSupply<Self::HostChain>;
+		type ApiCall: UpdateFlipSupply<<<Self as pallet::Config>::HostChain as Chain>::ChainCrypto>;
 
 		/// Transaction broadcaster for the host chain.
 		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
