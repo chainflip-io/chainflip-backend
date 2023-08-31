@@ -515,7 +515,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 }
 
 #[test]
-fn ensure_save_mode_is_moving_timeouts() {
+fn ensure_safe_mode_is_moving_timeouts() {
 	new_test_ext().execute_with(|| {
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		let _ = start_mock_broadcast();
@@ -527,7 +527,7 @@ fn ensure_save_mode_is_moving_timeouts() {
 }
 
 #[test]
-fn ensure_retries_are_skipped_during_save_mode() {
+fn ensure_retries_are_skipped_during_safe_mode() {
 	new_test_ext().execute_with(|| {
 		let _ = start_mock_broadcast();
 		MockCfe::respond(Scenario::SigningFailure);

@@ -186,7 +186,7 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode>;
 
 		/// The save mode block margin
-		type SaveModeBlockMargin: Get<BlockNumberFor<Self>>;
+		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -330,7 +330,7 @@ pub mod pallet {
 				}
 			} else {
 				Timeouts::<T, I>::insert(
-					block_number.saturating_add(T::SaveModeBlockMargin::get()),
+					block_number.saturating_add(T::SafeModeBlockMargin::get()),
 					expiries.clone(),
 				);
 			}

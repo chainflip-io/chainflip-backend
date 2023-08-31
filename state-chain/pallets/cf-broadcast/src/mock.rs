@@ -148,7 +148,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastCallable = MockCallback;
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
-	type SaveModeBlockMargin = ConstU64<10>;
+	type SafeModeBlockMargin = ConstU64<10>;
 }
 
 impl_mock_chainflip!(Test);
