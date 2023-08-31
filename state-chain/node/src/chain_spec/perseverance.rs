@@ -92,7 +92,7 @@ fn print_total() {
 fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	include!("perseverance.snapshot")
 		.into_iter()
-		.map(|(addr, name, balance)| {
+		.map(|(addr, name, balance): (&str, &str, u128)| {
 			(
 				parse_account(addr),
 				AccountRole::Validator,
