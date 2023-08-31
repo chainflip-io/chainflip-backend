@@ -98,6 +98,12 @@ pub struct HealthCheck {
 	pub port: Port,
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Prometheus {
+	pub hostname: String,
+	pub port: Port,
+}
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
@@ -114,6 +120,7 @@ pub struct Settings {
 	pub btc: Btc,
 
 	pub health_check: Option<HealthCheck>,
+	pub prometheus: Option<Prometheus>,
 	pub signing: Signing,
 }
 
@@ -193,6 +200,12 @@ pub struct CommandLineOptions {
 	#[clap(long = "health_check.port")]
 	health_check_port: Option<Port>,
 
+	// Prometheus Settings
+	#[clap(long = "prometheus.hostname")]
+	prometheus_hostname: Option<String>,
+	#[clap(long = "prometheus.port")]
+	prometheus_port: Option<Port>,
+
 	// Signing Settings
 	#[clap(long = "signing.db_file", parse(from_os_str))]
 	signing_db_file: Option<PathBuf>,
@@ -209,6 +222,8 @@ impl Default for CommandLineOptions {
 			btc_opts: BtcOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
+			prometheus_hostname: None,
+			prometheus_port: None,
 			signing_db_file: None,
 		}
 	}
@@ -396,6 +411,10 @@ impl Source for CommandLineOptions {
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
+
+		insert_command_line_option(&mut map, "prometheus.hostname", &self.prometheus_hostname);
+		insert_command_line_option(&mut map, "prometheus.port", &self.prometheus_port);
+
 		insert_command_line_option_path(&mut map, SIGNING_DB_FILE, &self.signing_db_file);
 
 		Ok(map)
@@ -679,6 +698,8 @@ mod tests {
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
+			prometheus_hostname: Some(("prometheus_hostname").to_owned()),
+			prometheus_port: Some(9999),
 			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
 		};
 
@@ -716,6 +737,12 @@ mod tests {
 			settings.health_check.as_ref().unwrap().hostname
 		);
 		assert_eq!(opts.health_check_port.unwrap(), settings.health_check.as_ref().unwrap().port);
+
+		assert_eq!(
+			opts.prometheus_hostname.unwrap(),
+			settings.prometheus.as_ref().unwrap().hostname
+		);
+		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
 
 		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 	}

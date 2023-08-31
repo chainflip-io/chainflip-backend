@@ -322,11 +322,11 @@ macro_rules! network_spec {
 					"{}-{}",
 					PROTOCOL_ID,
 					hex::encode(
-						SystemTime::now()
+						&SystemTime::now()
 							.duration_since(UNIX_EPOCH)
 							.unwrap()
-							.as_millis()
-							.to_be_bytes(),
+							.as_secs()
+							.to_be_bytes()[4..],
 					)
 				);
 				Ok(ChainSpec::from_genesis(
