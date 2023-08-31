@@ -137,10 +137,10 @@ async fn run_cli() -> Result<()> {
 async fn request_redemption(
 	api: StateChainApi,
 	amount: Option<f64>,
-	eth_address: Option<String>,
+	supplied_address: Option<String>,
 	executor: Option<cf_chains::eth::Address>,
 ) -> Result<()> {
-	let supplied_address = if let Some(address) = eth_address {
+	let supplied_address = if let Some(address) = supplied_address {
 		Some(EthereumAddress::from(
 			clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
 		))
@@ -152,10 +152,10 @@ async fn request_redemption(
 	let bound_address =
 		api.query_api().get_bound_redeem_address(None, Some(account_id.clone())).await?;
 
-	let eth_address = match (supplied_address, bound_address) {
+	let redeem_address = match (supplied_address, bound_address) {
 		(Some(supplied_address), Some(bound_address)) =>
 			if supplied_address != bound_address {
-				bail!("Supplied ETH address ({supplied_address:?}) does not match bound address for this account ({bound_address:?}).");
+				bail!("Supplied ETH address `{supplied_address:?}` does not match bound address for this account `{bound_address:?}`.");
 			} else {
 				bound_address
 			},
@@ -173,13 +173,13 @@ async fn request_redemption(
 			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
 
 			println!(
-				"Submitting redemption with amount `{amount_float}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{eth_address:?}`."
+				"Submitting redemption with amount `{amount_float}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`."
 			);
 
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => {
-			println!("Submitting redemption with MAX amount to ETH address `{eth_address:?}`.");
+			println!("Submitting redemption with MAX amount to ETH address `{redeem_address:?}`.");
 
 			RedemptionAmount::Max
 		},
@@ -189,7 +189,7 @@ async fn request_redemption(
 		return Ok(())
 	}
 
-	let tx_hash = api.operator_api().request_redemption(amount, eth_address, executor).await?;
+	let tx_hash = api.operator_api().request_redemption(amount, redeem_address, executor).await?;
 
 	println!(
 		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
