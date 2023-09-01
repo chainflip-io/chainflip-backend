@@ -230,18 +230,22 @@ async fn start(
 			.expect(STATE_CHAIN_CONNECTION),
 	);
 
-	let eth_rpc_client = EthRpcClient::new(settings.eth.clone(), expected_chain_id.as_u64())?;
-	let eth_client = EthersRetryRpcClient::new(scope, eth_rpc_client, async move {
-		ReconnectSubscriptionClient::new(settings.eth.ws_node_endpoint, expected_chain_id)
-	});
+	let eth_client = EthersRetryRpcClient::new(
+		scope,
+		EthRpcClient::new(settings.eth.clone(), expected_chain_id.as_u64())?,
+		async move {
+			ReconnectSubscriptionClient::new(settings.eth.ws_node_endpoint, expected_chain_id)
+		},
+	);
 
 	let btc_rpc_client = BtcRpcClient::new(settings.btc)?;
 	let btc_client = BtcRetryRpcClient::new(scope, async move { btc_rpc_client });
 
-	let dot_rpc_client = DotHttpRpcClient::new(settings.dot.http_node_endpoint)?;
-	let dot_client = DotRetryRpcClient::new(scope, dot_rpc_client, async move {
-		DotSubClient::new(&settings.dot.ws_node_endpoint)
-	});
+	let dot_client = DotRetryRpcClient::new(
+		scope,
+		DotHttpRpcClient::new(settings.dot.http_node_endpoint)?,
+		async move { DotSubClient::new(&settings.dot.ws_node_endpoint) },
+	);
 
 	witness::start::start(
 		scope,
