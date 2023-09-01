@@ -60,7 +60,7 @@ impl DotRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-pub trait DotRetryRpcApi {
+pub trait DotRetryRpcApi: Clone {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;

@@ -21,7 +21,7 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, info, info_span, trace, Instrument};
+use tracing::{debug, error, info, info_span, Instrument};
 
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,
@@ -502,24 +502,32 @@ where
                                             // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
                                             transaction_out_id: _,
                                         },
-                                    ) if nominee == account_id => {
-                                        match eth_rpc.broadcast_transaction(transaction_payload).await {
-                                            Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                            Err(error) => {
-                                                // Note: this error can indicate that we failed to estimate gas, or that there is
-                                                // a problem with the ethereum rpc node, or with the configured account. For example
-                                                // if the account balance is too low to pay for required gas.
-                                                error!("Error on Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                state_chain_client.submit_signed_extrinsic(
-                                                    state_chain_runtime::RuntimeCall::EthereumBroadcaster(
-                                                        pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                            broadcast_attempt_id,
-                                                        },
-                                                    ),
-                                                )
-                                                .await;
+                                    ) => {
+                                        let eth_rpc = eth_rpc.clone();
+                                        let state_chain_client = state_chain_client.clone();
+                                        let account_id = account_id.clone();
+                                        scope.spawn(async move {
+                                            if nominee == account_id {
+                                                match eth_rpc.broadcast_transaction(transaction_payload).await {
+                                                    Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        // Note: this error can indicate that we failed to estimate gas, or that there is
+                                                        // a problem with the ethereum rpc node, or with the configured account. For example
+                                                        // if the account balance is too low to pay for required gas.
+                                                        error!("Error on Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
+                                                        state_chain_client.submit_signed_extrinsic(
+                                                            state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                    broadcast_attempt_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
                                             }
-                                        }
+                                            Ok(())
+                                        })
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
@@ -529,22 +537,28 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) => {
-                                        if nominee == account_id {
-                                            match dot_rpc.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
-                                                Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                Err(error) => {
-                                                    error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                    state_chain_client.submit_signed_extrinsic(
-                                                        state_chain_runtime::RuntimeCall::PolkadotBroadcaster(
-                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                broadcast_attempt_id,
-                                                            },
-                                                        ),
-                                                    )
-                                                    .await;
+                                        let dot_rpc = dot_rpc.clone();
+                                        let state_chain_client = state_chain_client.clone();
+                                        let account_id = account_id.clone();
+                                        scope.spawn(async move {
+                                            if nominee == account_id {
+                                                match dot_rpc.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
+                                                    Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
+                                                        state_chain_client.submit_signed_extrinsic(
+                                                            state_chain_runtime::RuntimeCall::PolkadotBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                    broadcast_attempt_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
                                                 }
                                             }
-                                        }
+                                            Ok(())
+                                        });
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
@@ -554,22 +568,28 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) => {
-                                        if nominee == account_id {
-                                            match btc_rpc.send_raw_transaction(transaction_payload.encoded_transaction).await {
-                                                Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                Err(error) => {
-                                                    error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                    state_chain_client.submit_signed_extrinsic(
-                                                        state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
-                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                broadcast_attempt_id,
-                                                            },
-                                                        ),
-                                                    )
-                                                    .await;
+                                        let btc_rpc = btc_rpc.clone();
+                                        let state_chain_client = state_chain_client.clone();
+                                        let account_id = account_id.clone();
+                                        scope.spawn(async move {
+                                            if nominee == account_id {
+                                                match btc_rpc.send_raw_transaction(transaction_payload.encoded_transaction).await {
+                                                    Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
+                                                        state_chain_client.submit_signed_extrinsic(
+                                                            state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                    broadcast_attempt_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
                                                 }
                                             }
-                                        }
+                                            Ok(())
+                                        });
                                     }
                                 }}}}
                                 Err(error) => {

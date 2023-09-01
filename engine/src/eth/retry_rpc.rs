@@ -65,7 +65,7 @@ impl EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-pub trait EthersRetryRpcApi {
+pub trait EthersRetryRpcApi: Clone {
 	async fn broadcast_transaction(
 		&self,
 		tx: cf_chains::eth::Transaction,
