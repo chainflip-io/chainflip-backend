@@ -1,4 +1,7 @@
-use crate::witness::common::chain_source::{ChainClient, Header};
+use crate::{
+	retrier::Attempt,
+	witness::common::chain_source::{ChainClient, Header},
+};
 use cf_chains::{
 	dot::{PolkadotHash, RuntimeVersion},
 	Polkadot,
@@ -30,6 +33,8 @@ pub struct DotRetryRpcClient {
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
+
+const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl DotRetryRpcClient {
 	pub fn new<
@@ -147,7 +152,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					)
 				}),
 				log,
-				5,
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}

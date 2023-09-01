@@ -3,7 +3,7 @@ use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
-	retrier::{RequestLog, RetrierClient},
+	retrier::{Attempt, RequestLog, RetrierClient},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::Bitcoin;
@@ -18,6 +18,8 @@ pub struct BtcRetryRpcClient {
 
 const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
+
+const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl BtcRetryRpcClient {
 	pub fn new<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>(
@@ -90,7 +92,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
 				}),
 				log,
-				5,
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}

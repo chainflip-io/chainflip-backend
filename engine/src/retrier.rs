@@ -43,7 +43,7 @@ type FutureAnyGenerator<Client> = TypedFutureGenerator<BoxAny, Client>;
 // The id per *request* from the external caller. This is not tracking *submissions*.
 type RequestId = u64;
 
-type Attempt = u32;
+pub type Attempt = u32;
 
 #[derive(Debug, Clone)]
 pub struct RequestLog {

@@ -13,7 +13,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	eth::rpc::EthRpcApi,
-	retrier::{RequestLog, RetrierClient},
+	retrier::{Attempt, RequestLog, RetrierClient},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
@@ -35,6 +35,8 @@ pub struct EthersRetryRpcClient {
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
+
+const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl EthersRetryRpcClient {
 	pub fn new<
@@ -136,7 +138,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					})
 				}),
 				log,
-				5,
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}

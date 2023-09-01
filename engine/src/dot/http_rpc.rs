@@ -85,8 +85,8 @@ impl DotHttpRpcClient {
 
 		Ok(async move {
 			// We don't want to return an error here. Returning an error means that we'll exit the
-			// CFE. So on client creation we wait until we can be successfully connected to the ETH
-			// node. So the other chains are unaffected
+			// CFE. So on client creation we wait until we can be successfully connected to the
+			// Polkadot node. So the other chains are unaffected
 			let mut poll_interval = make_periodic_tick(DOT_AVERAGE_BLOCK_TIME, true);
 			let online_client = loop {
 				poll_interval.tick().await;
