@@ -134,14 +134,19 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let mut eth_rpc_mock = MockEthRetryRpcClient::new();
+	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
 
-	eth_rpc_mock.expect_broadcast_transaction().once().return_once(|_| {
+	// This doesn't always get called since the test can finish without the scope that spwans the
+	// broadcast task finishing.
+	eth_rpc_mock_broadcast.expect_broadcast_transaction().return_once(|_| {
 		// return some hash
 		Ok(H256::from([1; 32]))
 	});
 
-	start_sc_observer(state_chain_client, sc_block_stream, eth_rpc_mock).await;
+	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
+
+	start_sc_observer(state_chain_client, sc_block_stream, eth_mock_clone).await;
 }
 
 // TODO: Test that when we return None for polkadot vault

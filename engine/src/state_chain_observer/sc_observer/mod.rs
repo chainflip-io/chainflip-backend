@@ -503,11 +503,10 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) => {
-                                        let eth_rpc = eth_rpc.clone();
-                                        let state_chain_client = state_chain_client.clone();
-                                        let account_id = account_id.clone();
-                                        scope.spawn(async move {
-                                            if nominee == account_id {
+                                        if nominee == account_id {
+                                            let eth_rpc = eth_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
                                                 match eth_rpc.broadcast_transaction(transaction_payload).await {
                                                     Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -525,9 +524,9 @@ where
                                                         .await;
                                                     }
                                                 }
-                                            }
-                                            Ok(())
-                                        })
+                                                Ok(())
+                                            })
+                                        }
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
@@ -537,11 +536,10 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) => {
-                                        let dot_rpc = dot_rpc.clone();
-                                        let state_chain_client = state_chain_client.clone();
-                                        let account_id = account_id.clone();
-                                        scope.spawn(async move {
-                                            if nominee == account_id {
+                                        if nominee == account_id {
+                                            let dot_rpc = dot_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
                                                 match dot_rpc.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
                                                     Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -556,9 +554,9 @@ where
                                                         .await;
                                                     }
                                                 }
-                                            }
-                                            Ok(())
-                                        });
+                                                Ok(())
+                                            });
+                                        }
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
@@ -568,11 +566,10 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) => {
-                                        let btc_rpc = btc_rpc.clone();
-                                        let state_chain_client = state_chain_client.clone();
-                                        let account_id = account_id.clone();
-                                        scope.spawn(async move {
-                                            if nominee == account_id {
+                                        if nominee == account_id {
+                                            let btc_rpc = btc_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
                                                 match btc_rpc.send_raw_transaction(transaction_payload.encoded_transaction).await {
                                                     Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
@@ -587,9 +584,9 @@ where
                                                         .await;
                                                     }
                                                 }
-                                            }
-                                            Ok(())
-                                        });
+                                                Ok(())
+                                            });
+                                        }
                                     }
                                 }}}}
                                 Err(error) => {
