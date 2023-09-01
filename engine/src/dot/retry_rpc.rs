@@ -21,36 +21,21 @@ use super::{
 };
 
 use crate::dot::rpc::DotRpcApi;
-pub struct DotRetryRpcClient<
-	DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
-	DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-> {
-	rpc_retry_client: RetrierClient<DotHttpRpcClientFut, DotHttpRpcClient>,
-	sub_retry_client: RetrierClient<DotSubClientFut, DotSubClient>,
-}
 
-impl<
-		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
-		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-	> Clone for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
-{
-	fn clone(&self) -> Self {
-		Self {
-			rpc_retry_client: self.rpc_retry_client.clone(),
-			sub_retry_client: self.sub_retry_client.clone(),
-		}
-	}
+#[derive(Clone)]
+pub struct DotRetryRpcClient {
+	rpc_retry_client: RetrierClient<DotHttpRpcClient>,
+	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
-impl<
+impl DotRetryRpcClient {
+	pub fn new<
 		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
 		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-	> DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
-{
-	pub fn new(
+	>(
 		scope: &Scope<'_, anyhow::Error>,
 		dot_rpc_client: DotHttpRpcClientFut,
 		dot_sub_client: DotSubClientFut,
@@ -91,11 +76,7 @@ pub trait DotRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl<
-		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
-		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-	> DotRetryRpcApi for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
-{
+impl DotRetryRpcApi for DotRetryRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash> {
 		self.rpc_retry_client
 			.request(
@@ -186,11 +167,7 @@ pub trait DotRetrySubscribeApi {
 use crate::dot::rpc::DotSubscribeApi;
 
 #[async_trait::async_trait]
-impl<
-		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
-		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-	> DotRetrySubscribeApi for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
-{
+impl DotRetrySubscribeApi for DotRetryRpcClient {
 	async fn subscribe_best_heads(
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
@@ -221,11 +198,7 @@ impl<
 }
 
 #[async_trait::async_trait]
-impl<
-		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
-		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-	> ChainClient for DotRetryRpcClient<DotHttpRpcClientFut, DotSubClientFut>
-{
+impl ChainClient for DotRetryRpcClient {
 	type Index = <Polkadot as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;

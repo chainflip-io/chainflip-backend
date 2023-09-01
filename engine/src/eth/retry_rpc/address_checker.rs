@@ -1,10 +1,6 @@
 use ethers::prelude::*;
-use futures_core::Future;
 
-use crate::eth::rpc::{
-	address_checker::{AddressCheckerRpcApi, *},
-	EthRpcClient, ReconnectSubscriptionClient,
-};
+use crate::eth::rpc::address_checker::{AddressCheckerRpcApi, *};
 
 use super::EthersRetryRpcClient;
 
@@ -28,12 +24,7 @@ pub trait AddressCheckerRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl<
-		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
-		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-	> AddressCheckerRetryRpcApi
-	for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
-{
+impl AddressCheckerRetryRpcApi for EthersRetryRpcClient {
 	async fn address_states(
 		&self,
 		block_hash: H256,

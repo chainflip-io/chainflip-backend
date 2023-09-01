@@ -27,36 +27,20 @@ use cf_chains::Ethereum;
 
 use anyhow::Context;
 
-pub struct EthersRetryRpcClient<
-	EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
-	ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-> {
-	rpc_retry_client: RetrierClient<EthRpcClientFut, EthRpcClient>,
-	sub_retry_client: RetrierClient<ReconnectSubscriptionClientFut, ReconnectSubscriptionClient>,
-}
-
-impl<
-		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
-		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-	> Clone for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
-{
-	fn clone(&self) -> Self {
-		Self {
-			rpc_retry_client: self.rpc_retry_client.clone(),
-			sub_retry_client: self.sub_retry_client.clone(),
-		}
-	}
+#[derive(Clone)]
+pub struct EthersRetryRpcClient {
+	rpc_retry_client: RetrierClient<EthRpcClient>,
+	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-impl<
+impl EthersRetryRpcClient {
+	pub fn new<
 		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
 		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-	> EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
-{
-	pub fn new(
+	>(
 		scope: &Scope<'_, anyhow::Error>,
 		eth_rpc_client: EthRpcClientFut,
 		sub_client: ReconnectSubscriptionClientFut,
@@ -106,11 +90,7 @@ pub trait EthersRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl<
-		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
-		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-	> EthersRetryRpcApi for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
-{
+impl EthersRetryRpcApi for EthersRetryRpcClient {
 	/// Estimates gas and then sends the transaction to the network.
 	async fn broadcast_transaction(
 		&self,
@@ -261,12 +241,7 @@ pub trait EthersRetrySubscribeApi {
 }
 
 #[async_trait::async_trait]
-impl<
-		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
-		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-	> EthersRetrySubscribeApi
-	for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
-{
+impl EthersRetrySubscribeApi for EthersRetryRpcClient {
 	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
@@ -281,11 +256,7 @@ impl<
 }
 
 #[async_trait::async_trait]
-impl<
-		EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static,
-		ReconnectSubscriptionClientFut: Future<Output = ReconnectSubscriptionClient> + Send + 'static,
-	> ChainClient for EthersRetryRpcClient<EthRpcClientFut, ReconnectSubscriptionClientFut>
-{
+impl ChainClient for EthersRetryRpcClient {
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;

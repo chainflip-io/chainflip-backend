@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
-use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
-	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
+	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
-	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
-	eth::{
-		retry_rpc::EthersRetryRpcClient,
-		rpc::{EthRpcClient, ReconnectSubscriptionClient},
-	},
+	dot::retry_rpc::DotRetryRpcClient,
+	eth::retry_rpc::EthersRetryRpcClient,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -29,15 +25,9 @@ use anyhow::Result;
 // point it means that on start up this will block, and the state chain observer will not start.
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthersRetryRpcClient<
-		impl Future<Output = EthRpcClient> + Send,
-		impl Future<Output = ReconnectSubscriptionClient> + Send,
-	>,
-	btc_client: BtcRetryRpcClient<impl Future<Output = BtcRpcClient> + Send>,
-	dot_client: DotRetryRpcClient<
-		impl Future<Output = DotHttpRpcClient> + Send,
-		impl Future<Output = DotSubClient> + Send,
-	>,
+	eth_client: EthersRetryRpcClient,
+	btc_client: BtcRetryRpcClient,
+	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	db: Arc<PersistentKeyDB>,

@@ -9,17 +9,13 @@ use cf_chains::{
 	Bitcoin,
 };
 use cf_primitives::chains::assets::btc;
-use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use secp256k1::hashes::Hash;
 use state_chain_runtime::BitcoinInstance;
 use utilities::task_scope::Scope;
 
 use crate::{
-	btc::{
-		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
-		rpc::BtcRpcClient,
-	},
+	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
 	db::PersistentKeyDB,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
@@ -35,7 +31,7 @@ const SAFETY_MARGIN: usize = 6;
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	btc_client: BtcRetryRpcClient<impl Future<Output = BtcRpcClient> + Send>,
+	btc_client: BtcRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,

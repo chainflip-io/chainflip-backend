@@ -11,25 +11,19 @@ use core::time::Duration;
 
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
 
-pub struct BtcRetryRpcClient<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> {
-	retry_client: RetrierClient<BtcRpcClientFut, BtcRpcClient>,
-}
-
-impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> Clone
-	for BtcRetryRpcClient<BtcRpcClientFut>
-{
-	fn clone(&self) -> Self {
-		Self { retry_client: self.retry_client.clone() }
-	}
+#[derive(Clone)]
+pub struct BtcRetryRpcClient {
+	retry_client: RetrierClient<BtcRpcClient>,
 }
 
 const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>
-	BtcRetryRpcClient<BtcRpcClientFut>
-{
-	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClientFut) -> Self {
+impl BtcRetryRpcClient {
+	pub fn new<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>(
+		scope: &Scope<'_, anyhow::Error>,
+		btc_client: BtcRpcClientFut,
+	) -> Self {
 		Self {
 			retry_client: RetrierClient::new(
 				scope,
@@ -58,9 +52,7 @@ pub trait BtcRetryRpcApi: Clone {
 }
 
 #[async_trait::async_trait]
-impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> BtcRetryRpcApi
-	for BtcRetryRpcClient<BtcRpcClientFut>
-{
+impl BtcRetryRpcApi for BtcRetryRpcClient {
 	async fn block(&self, block_hash: BlockHash) -> Block {
 		self.retry_client
 			.request(
@@ -149,9 +141,7 @@ impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> BtcRetryRp
 }
 
 #[async_trait::async_trait]
-impl<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static> ChainClient
-	for BtcRetryRpcClient<BtcRpcClientFut>
-{
+impl ChainClient for BtcRetryRpcClient {
 	type Index = <Bitcoin as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = BlockHash;
 	type Data = ();

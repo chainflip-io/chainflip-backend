@@ -84,31 +84,10 @@ type RequestSent<Client> =
 	(oneshot::Sender<BoxAny>, RequestLog, FutureAnyGenerator<Client>, RetryLimit);
 
 /// Tracks all the retries
-pub struct RetrierClient<ClientFut, Client> {
+#[derive(Clone)]
+pub struct RetrierClient<Client> {
 	// The channel to send requests to the client.
 	request_sender: mpsc::Sender<RequestSent<Client>>,
-
-	// We need the Client to be Send and Sync
-	// but the ClientFut can only be Send (not Sync). We don't need the future to be Sync,
-	// so we can just wrap it in this Send and Sync PhantomData to make the type Sync.
-	_phantom: PhantomDataSendSync<ClientFut>,
-}
-
-pub struct PhantomDataSendSync<T>(core::marker::PhantomData<T>);
-
-impl<T> PhantomDataSendSync<T> {
-	pub(crate) fn new() -> Self {
-		Self(core::marker::PhantomData)
-	}
-}
-
-unsafe impl<T> Send for PhantomDataSendSync<T> {}
-unsafe impl<T> Sync for PhantomDataSendSync<T> {}
-
-impl<ClientFut, Client: Clone> Clone for RetrierClient<ClientFut, Client> {
-	fn clone(&self) -> Self {
-		Self { request_sender: self.request_sender.clone(), _phantom: PhantomDataSendSync::new() }
-	}
 }
 
 #[derive(Default)]
@@ -217,12 +196,11 @@ fn submission_future<Client: Clone>(
 /// Requests submitted to this client will be retried until success.
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
-impl<ClientFut, Client> RetrierClient<ClientFut, Client>
+impl<Client> RetrierClient<Client>
 where
-	ClientFut: Future<Output = Client> + Send + 'static,
 	Client: Clone + Send + Sync + 'static,
 {
-	pub fn new(
+	pub fn new<ClientFut: Future<Output = Client> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
 		// The name of the retrier that appears in the logs.
 		name: &'static str,
@@ -300,7 +278,7 @@ where
 			Ok(())
 		});
 
-		Self { request_sender, _phantom: PhantomDataSendSync::new() }
+		Self { request_sender }
 	}
 
 	// Separate function so we can more easily test.

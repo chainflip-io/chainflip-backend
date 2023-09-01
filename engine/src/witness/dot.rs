@@ -6,7 +6,6 @@ use cf_chains::{
 	Polkadot,
 };
 use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
-use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -22,11 +21,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	dot::{
-		http_rpc::DotHttpRpcClient,
-		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
-		rpc::DotSubClient,
-	},
+	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -81,10 +76,7 @@ fn filter_map_events(
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	dot_client: DotRetryRpcClient<
-		impl Future<Output = DotHttpRpcClient> + Send,
-		impl Future<Output = DotSubClient> + Send,
-	>,
+	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,

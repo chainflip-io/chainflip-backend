@@ -10,16 +10,12 @@ pub mod vault;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_primitives::chains::assets::eth;
-use futures_core::Future;
 use sp_core::H160;
 use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::{
-		retry_rpc::EthersRetryRpcClient,
-		rpc::{EthRpcClient, ReconnectSubscriptionClient},
-	},
+	eth::retry_rpc::EthersRetryRpcClient,
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
@@ -39,10 +35,7 @@ const SAFETY_MARGIN: usize = 7;
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthersRetryRpcClient<
-		impl Future<Output = EthRpcClient> + Send,
-		impl Future<Output = ReconnectSubscriptionClient> + Send,
-	>,
+	eth_client: EthersRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
