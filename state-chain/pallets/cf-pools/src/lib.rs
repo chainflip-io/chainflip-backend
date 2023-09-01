@@ -955,9 +955,6 @@ impl<T: Config> Pallet<T> {
 	) -> Result<AssetAmount, DispatchError> {
 		let (amount_delta, position_info, collected) = match increase_or_decrease {
 			IncreaseOrDecrease::Increase => {
-				let debited_asset_amount =
-					asset_pair.try_debit_asset(lp, asset_pair.base_side, amount)?;
-
 				let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
 					&(lp.clone(), id),
 					asset_pair.base_side,
@@ -982,6 +979,9 @@ impl<T: Config> Pallet<T> {
 						) => Error::<T>::AssetRatioUnachieveable,
 					}),
 				}?;
+
+				let debited_asset_amount =
+					asset_pair.try_debit_asset(lp, asset_pair.base_side, amount)?;
 
 				(debited_asset_amount, position_info, collected)
 			},
