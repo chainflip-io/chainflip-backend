@@ -1,20 +1,24 @@
 use anyhow::Context;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
-	btc::{rpc::BtcRpcClient, BtcBroadcaster},
+	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
 	db::{KeyStore, PersistentKeyDB},
-	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
+	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
+	eth::{
+		retry_rpc::EthersRetryRpcClient,
+		rpc::{EthRpcClient, ReconnectSubscriptionClient},
+	},
 	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
 		client::{
+			chain_api::ChainApi,
 			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 			storage_api::StorageApi,
 		},
 	},
-	witness,
+	witness::{self, common::STATE_CHAIN_CONNECTION},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -129,9 +133,6 @@ async fn start(
 		)
 		.await?;
 
-	let btc_rpc_client =
-		BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
-
 	state_chain_client
 		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
 			new_version: *CFE_VERSION,
@@ -219,9 +220,36 @@ async fn start(
 
 	scope.spawn(btc_multisig_client_backend_future);
 
+	// Create all the clients
+	let expected_chain_id = web3::types::U256::from(
+		state_chain_client
+			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+				state_chain_client.latest_finalized_hash(),
+			)
+			.await
+			.expect(STATE_CHAIN_CONNECTION),
+	);
+
+	let eth_client = EthersRetryRpcClient::new(
+		scope,
+		EthRpcClient::new(settings.eth.clone(), expected_chain_id.as_u64())?,
+		ReconnectSubscriptionClient::new(settings.eth.ws_node_endpoint, expected_chain_id),
+	);
+
+	let btc_rpc_client = BtcRpcClient::new(settings.btc)?;
+	let btc_client = BtcRetryRpcClient::new(scope, async move { btc_rpc_client });
+
+	let dot_client = DotRetryRpcClient::new(
+		scope,
+		DotHttpRpcClient::new(settings.dot.http_node_endpoint)?,
+		DotSubClient::new(&settings.dot.ws_node_endpoint),
+	);
+
 	witness::start::start(
 		scope,
-		&settings,
+		eth_client.clone(),
+		btc_client.clone(),
+		dot_client.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		db.clone(),
@@ -231,9 +259,9 @@ async fn start(
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		EthBroadcaster::new(EthRpcClient::new(&settings.eth).await?),
-		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
-		BtcBroadcaster::new(btc_rpc_client.clone()),
+		eth_client,
+		dot_client,
+		btc_client,
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,
@@ -241,5 +269,6 @@ async fn start(
 	));
 
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+
 	Ok(())
 }
