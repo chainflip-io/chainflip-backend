@@ -67,7 +67,7 @@ impl EthersRetryRpcClient {
 pub trait EthersRetryRpcApi: Clone {
 	async fn broadcast_transaction(
 		&self,
-		tx: cf_chains::eth::Transaction,
+		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash>;
 
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
@@ -93,7 +93,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 	/// Estimates gas and then sends the transaction to the network.
 	async fn broadcast_transaction(
 		&self,
-		tx: cf_chains::eth::Transaction,
+		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
 		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
 		self.rpc_retry_client
@@ -311,7 +311,7 @@ pub mod mocks {
 		impl EthersRetryRpcApi for EthRetryRpcClient {
 			async fn broadcast_transaction(
 				&self,
-				tx: cf_chains::eth::Transaction,
+				tx: cf_chains::evm::Transaction,
 			) -> anyhow::Result<TxHash>;
 
 			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
