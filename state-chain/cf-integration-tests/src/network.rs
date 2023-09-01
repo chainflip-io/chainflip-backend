@@ -1,12 +1,8 @@
 use super::*;
 
-use crate::threshold_signing::{
-	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents,
-	EthThresholdSigner, KeyUtils, ThresholdSigner,
-};
-use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
+use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
-use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
+use cf_primitives::{AccountRole, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
@@ -22,13 +18,14 @@ use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, BitcoinInstance, EthereumInstance, PolkadotInstance,
-	Runtime, RuntimeEvent, RuntimeOrigin, Weight,
+	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Weight,
 };
 use std::{
 	cell::RefCell,
 	collections::{HashMap, VecDeque},
 	rc::Rc,
 };
+
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
@@ -175,35 +172,41 @@ impl Engine {
 		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
 			match event {
 				ContractEvent::Funded { node_id: validator_id, amount, epoch, .. } => {
-					state_chain_runtime::Witnesser::witness_at_epoch(
-						RuntimeOrigin::signed(self.node_id.clone()),
-						Box::new(
-							pallet_cf_funding::Call::funded {
-								account_id: validator_id.clone(),
-								amount: *amount,
-								funder: ETH_ZERO_ADDRESS,
-								tx_hash: TX_HASH,
-							}
-							.into(),
-						),
-						*epoch,
-					)
-					.expect("should be able to witness event for node");
+					PENDING_EXTRINSICS.with_borrow_mut(|v| {
+						v.push_back((
+							RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+								call: Box::new(
+									pallet_cf_funding::Call::funded {
+										account_id: validator_id.clone(),
+										amount: *amount,
+										funder: ETH_ZERO_ADDRESS,
+										tx_hash: TX_HASH,
+									}
+									.into(),
+								),
+								epoch_index: *epoch,
+							}),
+							RuntimeOrigin::signed(self.node_id.clone()),
+						));
+					});
 				},
 				ContractEvent::Redeemed { node_id, amount, epoch } => {
-					state_chain_runtime::Witnesser::witness_at_epoch(
-						RuntimeOrigin::signed(self.node_id.clone()),
-						Box::new(
-							pallet_cf_funding::Call::redeemed {
-								account_id: node_id.clone(),
-								redeemed_amount: *amount,
-								tx_hash: TX_HASH,
-							}
-							.into(),
-						),
-						*epoch,
-					)
-					.expect("should be able to witness event for node");
+					PENDING_EXTRINSICS.with_borrow_mut(|v| {
+						v.push_back((
+							RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+								call: Box::new(
+									pallet_cf_funding::Call::redeemed {
+										account_id: node_id.clone(),
+										redeemed_amount: *amount,
+										tx_hash: TX_HASH,
+									}
+									.into(),
+								),
+								epoch_index: *epoch,
+							}),
+							RuntimeOrigin::signed(self.node_id.clone()),
+						));
+					});
 				},
 			}
 		}
@@ -231,14 +234,14 @@ impl Engine {
 							payload,
 							..
 						}) => {
-
-						// if we unwrap on this, we'll panic, because we will have already succeeded
-						// on a previous submission (all nodes submit this)
-						let _result = state_chain_runtime::EthereumThresholdSigner::signature_success(
-							RuntimeOrigin::none(),
-							*ceremony_id,
-							self.eth_threshold_signer.borrow().sign_with_key(*key, payload.as_fixed_bytes()),
-						);
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::EthereumThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success{
+										ceremony_id: *ceremony_id,
+										signature: self.eth_threshold_signer.borrow().sign_with_key(*key, payload.as_fixed_bytes()),
+									}
+								), RuntimeOrigin::none()));
+							});
 					}
 
 					RuntimeEvent::PolkadotThresholdSigner(
@@ -248,11 +251,14 @@ impl Engine {
 							payload,
 							..
 						}) => {
-								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
-									RuntimeOrigin::none(),
-									*ceremony_id,
-									self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
-								);
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::PolkadotThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success{
+										ceremony_id: *ceremony_id,
+										signature: self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
+									}
+								), RuntimeOrigin::none()));
+							});
 					}
 
 					RuntimeEvent::BitcoinThresholdSigner(
@@ -262,11 +268,14 @@ impl Engine {
 							payload,
 							..
 						}) => {
-								let _result = state_chain_runtime::BitcoinThresholdSigner::signature_success(
-									RuntimeOrigin::none(),
-									*ceremony_id,
-									vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].1.clone()))],
-								);
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::BitcoinThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success{
+										ceremony_id: *ceremony_id,
+										signature: vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].1.clone()))],
+									}
+								), RuntimeOrigin::none()));
+							});
 					}
 					RuntimeEvent::Validator(
 						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
@@ -275,80 +284,59 @@ impl Engine {
 						// that for dot, given we don't have a key to sign with initially, it will work without extra test boilerplate.
 
 						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
-								// If we rotating let's witness the keys being rotated on the contract
-								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
-									RuntimeOrigin::signed(self.node_id.clone()),
-									Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-										block_number: 100,
-										tx_id: [1u8; 32].into(),
-									}.into()),
-									Validator::epoch_index()
-								);
-
-								if Validator::epoch_index() == GENESIS_EPOCH {
-									let _result = state_chain_runtime::Environment::witness_polkadot_vault_creation(
-										pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-										// Use a dummy key for polkadot - we don't sign anything with it
-										// in these tests.
-										Default::default(),
-										TxId {
-											block_number: 1,
-											extrinsic_index: 0,
-										},
-									);
-								}else {
-									let _result = state_chain_runtime::Witnesser::witness_at_epoch(
-										RuntimeOrigin::signed(self.node_id.clone()),
-										Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+							// If we rotating let's witness the keys being rotated on the contract
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::Witnesser(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call: Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
 											block_number: 100,
-											tx_id: TxId {
-												block_number: 2,
-												extrinsic_index: 1,
-											},
+											tx_id: [1u8; 32].into(),
 										}.into()),
-										Validator::epoch_index()
-									);
-								}
+										epoch_index: Validator::epoch_index(),
+									}
+								), RuntimeOrigin::signed(self.node_id.clone())));
+							});
 
+							if Validator::epoch_index() == GENESIS_EPOCH {
+								PENDING_EXTRINSICS.with_borrow_mut(|v| {
+									v.push_back((RuntimeCall::Environment(
+										pallet_cf_environment::Call::witness_polkadot_vault_creation {
+											dot_pure_proxy_vault_key: Default::default(),
+											tx_id: TxId {
+												block_number: 1,
+												extrinsic_index: 0,
+											},
+										}
+									), pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+								});
+							}else {
+								PENDING_EXTRINSICS.with_borrow_mut(|v| {
+									v.push_back((RuntimeCall::Witnesser(
+										pallet_cf_witnesser::Call::witness_at_epoch {
+											call: Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+												block_number: 100,
+												tx_id: TxId {
+													block_number: 2,
+													extrinsic_index: 1,
+												},
+											}.into()),
+											epoch_index: Validator::epoch_index()
+										}
+									), RuntimeOrigin::signed(self.node_id.clone())));
 
-								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
-									RuntimeOrigin::signed(self.node_id.clone()),
-									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
-										block_number: 100,
-										tx_id: [2u8; 32],
-									}.into()),
-									Validator::epoch_index()
-								);
+									v.push_back((RuntimeCall::Witnesser(
+										pallet_cf_witnesser::Call::witness_at_epoch {
+											call: Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
+												block_number: 100,
+												tx_id: [2u8; 32],
+											}.into()),
+											epoch_index: Validator::epoch_index()
+										}
+									), RuntimeOrigin::signed(self.node_id.clone())));
+							});
+						}
 					}
 				);
-			}
-
-			fn report_keygen_outcome_for_chain<
-				K: KeyUtils<
-						SigVerification = S,
-						AggKey = <<T as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey,
-					> + Clone,
-				S,
-				T: pallet_cf_vaults::Config<I>,
-				I: 'static,
-			>(
-				ceremony_id: CeremonyId,
-				authorities: &BTreeSet<NodeId>,
-				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
-				node_id: NodeId,
-			) where
-				<T as frame_system::Config>::RuntimeOrigin: From<RuntimeOrigin>,
-			{
-				if authorities.contains(&node_id) {
-					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
-						RuntimeOrigin::signed(node_id.clone()).into(),
-						ceremony_id,
-						Ok(threshold_signer.borrow_mut().propose_new_key()),
-					)
-					.unwrap_or_else(|_| {
-						panic!("should be able to report keygen outcome: {node_id}")
-					});
-				}
 			}
 
 			// Being funded we would be required to respond to keygen requests
@@ -356,27 +344,55 @@ impl Engine {
 				events,
 				RuntimeEvent::EthereumVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
+						if participants.contains(&self.node_id) {
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::EthereumVault(
+									pallet_cf_vaults::Call::report_keygen_outcome {
+										ceremony_id: *ceremony_id,
+										reported_outcome: Ok(self.eth_threshold_signer.borrow_mut().propose_new_key()),
+									}
+								), RuntimeOrigin::signed(self.node_id.clone())));
+							});
+						}
 				}
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+						if participants.contains(&self.node_id) {
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::PolkadotVault(
+									pallet_cf_vaults::Call::report_keygen_outcome {
+										ceremony_id: *ceremony_id,
+										reported_outcome: Ok(self.dot_threshold_signer.borrow_mut().propose_new_key()),
+									}
+								), RuntimeOrigin::signed(self.node_id.clone())));
+							});
+						}
 				}
 
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
-						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
+						if participants.contains(&self.node_id) {
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::BitcoinVault(
+									pallet_cf_vaults::Call::report_keygen_outcome {
+										ceremony_id: *ceremony_id,
+										reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
+									}
+								), RuntimeOrigin::signed(self.node_id.clone())));
+							});
+						}
 				}
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
 						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
-							pallet_cf_vaults::Pallet::<Runtime, BitcoinInstance>::report_key_handover_outcome(
-								RuntimeOrigin::signed(self.node_id.clone()),
-								*ceremony_id,
-								Ok(self.btc_threshold_signer.borrow_mut().current_agg_key()),
-							).unwrap_or_else(|_| {
-								panic!("should be able to report key handover outcome: {}", self.node_id)
+							PENDING_EXTRINSICS.with_borrow_mut(|v| {
+								v.push_back((RuntimeCall::BitcoinVault(
+									pallet_cf_vaults::Call::report_key_handover_outcome {
+										ceremony_id: *ceremony_id,
+										reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
+									}
+								), RuntimeOrigin::signed(self.node_id.clone())));
 							});
 						}
 
@@ -434,8 +450,37 @@ pub struct Network {
 
 thread_local! {
 	// TODO: USE THIS IN WHEN HANDLING EVENTS INSTEAD OF DISPATCHING CALLS DIRECTLY
-	static PENDING_EXTRINSICS: RefCell<VecDeque<state_chain_runtime::RuntimeCall>> = RefCell::default();
+	static PENDING_EXTRINSICS: RefCell<VecDeque<(state_chain_runtime::RuntimeCall, RuntimeOrigin)>> = RefCell::default();
 	static TIMESTAMP: RefCell<u64> = RefCell::new(SLOT_DURATION);
+}
+
+/// Dispatch all pending extrinsics in the queue.
+pub fn dispatch_all_pending_extrinsics() {
+	PENDING_EXTRINSICS.with_borrow_mut(|v| {
+		v.drain(..).for_each(|(call, origin)| {
+			let expect_ok = match call {
+				RuntimeCall::EthereumThresholdSigner(..) |
+				RuntimeCall::PolkadotThresholdSigner(..) |
+				RuntimeCall::BitcoinThresholdSigner(..) => {
+					// These are allowed to fail, since it is possible to sign things
+					// that have already succeeded
+					false
+				},
+				_ => true,
+			};
+			let res = call.clone().dispatch_bypass_filter(origin);
+			if expect_ok && res.is_err() {
+				// An extrinsic failed. Log as much info as needed to help debugging.
+				match call {
+					RuntimeCall::EthereumVault(..) => log::info!("Validator status: {:?}\nVault Status: {:?}", Validator::current_rotation_phase(), EthereumVault::pending_vault_rotations()),
+					RuntimeCall::PolkadotVault(..) => log::info!("Validator status: {:?}\nVault Status: {:?}", Validator::current_rotation_phase(), PolkadotVault::pending_vault_rotations()),
+					RuntimeCall::BitcoinVault(..) => log::info!("Validator status: {:?}\nVault Status: {:?}", Validator::current_rotation_phase(), BitcoinVault::pending_vault_rotations()),
+					_ => {}
+				}
+				panic!("Extrinsic Failed. Call: {:?} \n Result: {:?}", call, res);
+			}
+		});
+	});
 }
 
 impl Network {
@@ -512,7 +557,7 @@ impl Network {
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
 		let start_block = System::block_number() + 1;
-		for block_number in start_block..=(start_block + n) {
+		for block_number in start_block..(start_block + n) {
 			// Inherent data.
 			let timestamp = TIMESTAMP.with_borrow_mut(|t| std::mem::replace(t, *t + SLOT_DURATION));
 			let slot = sp_consensus_aura::Slot::from_timestamp(
@@ -541,14 +586,16 @@ impl Network {
 				.unwrap()
 				.dispatch_bypass_filter(RuntimeOrigin::none()));
 
+			dispatch_all_pending_extrinsics();
+
 			// Provide very large weight to ensure all on_idle processing can occur
 			AllPalletsWithSystem::on_idle(block_number, Weight::from_parts(1_000_000_000_000, 0));
 
 			// We must finalise this to clear the previous author which is otherwise cached
 			AllPalletsWithSystem::on_finalize(block_number);
 
-			// Process Engine responses:
-			// TODO: REPLACE WITH PENDING_EXTRINSICS INSTEAD OF DISPATCHING CALLS DIRECTLY.
+			// Process Engine responses. Store calls into a queue and dispatch these between
+			// `on_initialize` and `on_idle`
 			for event in self.state_chain_gateway_contract.events() {
 				for engine in self.engines.values() {
 					engine.on_contract_event(&event);

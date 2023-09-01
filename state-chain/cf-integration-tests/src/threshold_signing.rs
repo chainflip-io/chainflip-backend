@@ -99,10 +99,6 @@ where
 		}
 	}
 
-	pub fn current_agg_key(&self) -> AggKey {
-		self.key_components.agg_key()
-	}
-
 	pub fn propose_new_key(&mut self) -> AggKey {
 		let new_key = KeyComponents::generate_next(&self.key_components);
 		let agg_key = new_key.agg_key();

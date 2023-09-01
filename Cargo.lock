@@ -1017,6 +1017,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "libsecp256k1",
+ "log",
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",

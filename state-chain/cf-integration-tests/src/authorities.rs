@@ -41,7 +41,7 @@ fn fund_authorities_and_join_auction(
 
 	// Allow the funds to be registered, initialise the account keys and peer
 	// ids, register as a validator, then start bidding.
-	testnet.move_forward_blocks(1);
+	testnet.move_forward_blocks(2);
 
 	for node in &init_backup_nodes {
 		network::Cli::register_as_validator(node);
@@ -69,8 +69,29 @@ fn authority_rotates_with_correct_sequence() {
 			// when rotating for the first time.
 			testnet.move_forward_blocks(EPOCH_BLOCKS);
 			testnet.submit_heartbeat_all_engines();
+			use state_chain_runtime::{BitcoinVault, System};
+			for _ in 0..20 {
+				testnet.move_forward_blocks(1);
+				println!(
+					"Block {:?}: \nValidator: {:?} \nVault: {:?}",
+					System::block_number(),
+					Validator::current_rotation_phase(),
+					BitcoinVault::status()
+				);
+			}
+
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			// assert_eq!( GENESIS_EPOCH + 1, Validator::epoch_index());
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::Idle
+			));
+			assert_eq!(AllVaults::status(), AsyncResult::Void);
+
 			testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS);
 			testnet.submit_heartbeat_all_engines();
+
+			
 
 			// Start the Authority and Vault rotation
 			// idle -> Keygen
@@ -385,17 +406,17 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			backup_nodes.iter().for_each(|validator| {
 				assert_ok!(EthereumVault::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					1,
+					EthereumVault::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 				assert_ok!(PolkadotVault::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					1,
+					PolkadotVault::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 				assert_ok!(BitcoinVault::report_keygen_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					1,
+					BitcoinVault::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 			});
@@ -420,7 +441,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 		.build()
 		.execute_with(|| {
 			let (mut testnet, _, backup_nodes) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
-			// Rotate authority atleast once to ensure epoch keys are set.
+			// Rotate authority at least once to ensure epoch keys are set.
 			testnet.move_to_next_epoch();
 			testnet.submit_heartbeat_all_engines();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
@@ -432,7 +453,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			testnet.move_forward_blocks(1);
 
 			// Make Key Handover fail. Only Bitcoin vault can fail during Key Handover.
-			// Ethereum and Polkadot does not need to wait for Key Handover.
+			// Ethereum and Polkadot do not need to wait for Key Handover.
 			backup_nodes.iter().for_each(|validator| {
 				testnet.set_active(validator, false);
 			});
@@ -440,7 +461,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			backup_nodes.iter().for_each(|validator| {
 				assert_ok!(BitcoinVault::report_key_handover_outcome(
 					RuntimeOrigin::signed(validator.clone()),
-					5,
+					BitcoinVault::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
 			});
