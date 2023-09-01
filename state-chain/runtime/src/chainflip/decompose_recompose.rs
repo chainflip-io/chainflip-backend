@@ -1,26 +1,44 @@
 use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
+use cf_chains::{btc::BitcoinFeeInfo, dot::PolkadotBalance};
+use cf_primitives::EthAmount;
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
 
-fn select_median<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Option<T> {
+fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
 	if data.is_empty() {
 		return None
 	}
 
 	let len = data.len();
-	let median_index = if len % 2 == 0 { (len - 1) / 2 } else { len / 2 };
-	// Encoding is order-preserving so we can sort the raw encoded bytes and then decode
-	// just the result.
-	let (_, median_bytes, _) = data.select_nth_unstable(median_index);
+	let median_index = (len - 1) / 2;
+	let (_, median_value, _) = data.select_nth_unstable(median_index);
 
-	match Decode::decode(&mut &median_bytes[..]) {
-		Ok(median) => Some(median),
-		Err(e) => {
-			log::error!("Failed to decode median priority fee: {:?}", e);
-			None
-		},
+	Some(*median_value)
+}
+
+fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
+	data.iter_mut()
+		.map(|entry| T::decode(&mut entry.as_slice()))
+		.filter_map(Result::ok)
+		.collect()
+}
+
+fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
+	if data.is_empty() {
+		return None
 	}
+
+	Some(BitcoinFeeInfo {
+		fee_per_input_utxo: select_median(data.iter().map(|x| x.fee_per_input_utxo).collect())
+			.expect("non-empty list"),
+		fee_per_output_utxo: select_median(data.iter().map(|x| x.fee_per_output_utxo).collect())
+			.expect("non-empty list"),
+		min_fee_required_per_tx: select_median(
+			data.iter().map(|x| x.min_fee_required_per_tx).collect(),
+		)
+		.expect("non-empty list"),
+	})
 }
 
 impl WitnessDataExtraction for RuntimeCall {
@@ -64,19 +82,23 @@ impl WitnessDataExtraction for RuntimeCall {
 				EthereumInstance,
 			>::update_chain_state {
 				new_chain_state,
-			}) =>
-				if let Some(median) = select_median(data) {
+			}) => {
+				let fee_votes = decode_many::<EthAmount>(data);
+				if let Some(median) = select_median(fee_votes) {
 					new_chain_state.tracked_data.priority_fee = median;
-				},
+				}
+			},
 			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				BitcoinInstance,
 			>::update_chain_state {
 				new_chain_state,
 			}) => {
-				if let Some(median) = select_median(data) {
+				let fee_infos = decode_many::<BitcoinFeeInfo>(data);
+
+				if let Some(median) = select_median_btc_info(fee_infos) {
 					new_chain_state.tracked_data.btc_fee_info = median;
-				};
+				}
 			},
 			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
@@ -84,7 +106,8 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				new_chain_state,
 			}) => {
-				if let Some(median) = select_median(data) {
+				let tip_votes = decode_many::<PolkadotBalance>(data);
+				if let Some(median) = select_median(tip_votes) {
 					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
@@ -239,5 +262,45 @@ mod tests {
 				}
 			);
 		})
+	}
+
+	// Selecting median from integers spanning multiple bytes wasn't
+	// working correctly previously, so this serves as a regression test:
+	#[test]
+	fn select_median_multi_bytes_ints() {
+		let values = vec![1_u16, 8, 32, 256, 768];
+		assert_eq!(select_median::<u16>(values).unwrap(), 32);
+	}
+
+	// For BTC, we witness multiple values, and median should be
+	// selected for each value independently:
+	#[test]
+	fn select_median_btc_info_test() {
+		let votes = vec![
+			BitcoinFeeInfo {
+				fee_per_input_utxo: 10,
+				fee_per_output_utxo: 55,
+				min_fee_required_per_tx: 100,
+			},
+			BitcoinFeeInfo {
+				fee_per_input_utxo: 45,
+				fee_per_output_utxo: 100,
+				min_fee_required_per_tx: 10,
+			},
+			BitcoinFeeInfo {
+				fee_per_input_utxo: 100,
+				fee_per_output_utxo: 10,
+				min_fee_required_per_tx: 50,
+			},
+		];
+
+		assert_eq!(
+			select_median_btc_info(votes),
+			Some(BitcoinFeeInfo {
+				fee_per_input_utxo: 45,
+				fee_per_output_utxo: 55,
+				min_fee_required_per_tx: 50
+			})
+		);
 	}
 }
