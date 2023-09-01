@@ -230,21 +230,17 @@ async fn start(
 			.expect(STATE_CHAIN_CONNECTION),
 	);
 
-	let eth_settings = settings.eth.clone();
-	let eth_rpc_client = EthRpcClient::new(eth_settings.clone(), expected_chain_id.as_u64())?;
+	let eth_rpc_client = EthRpcClient::new(settings.eth.clone(), expected_chain_id.as_u64())?;
 	let eth_client = EthersRetryRpcClient::new(scope, eth_rpc_client, async move {
-		ReconnectSubscriptionClient::new(eth_settings.ws_node_endpoint.clone(), expected_chain_id)
+		ReconnectSubscriptionClient::new(settings.eth.ws_node_endpoint, expected_chain_id)
 	});
 
-	let btc_settings = settings.btc.clone();
-	let btc_rpc_client = BtcRpcClient::new(btc_settings)?;
+	let btc_rpc_client = BtcRpcClient::new(settings.btc)?;
 	let btc_client = BtcRetryRpcClient::new(scope, async move { btc_rpc_client });
 
-	let dot_settings = settings.dot.clone();
-
-	let dot_rpc_client = DotHttpRpcClient::new(dot_settings.http_node_endpoint)?;
+	let dot_rpc_client = DotHttpRpcClient::new(settings.dot.http_node_endpoint)?;
 	let dot_client = DotRetryRpcClient::new(scope, dot_rpc_client, async move {
-		DotSubClient::new(&dot_settings.ws_node_endpoint)
+		DotSubClient::new(&settings.dot.ws_node_endpoint)
 	});
 
 	witness::start::start(

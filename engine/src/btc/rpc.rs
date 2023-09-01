@@ -68,9 +68,9 @@ impl BtcRpcClient {
 	pub fn new(btc_settings: settings::Btc) -> Result<Self> {
 		Ok(Self {
 			client: Client::builder().build()?,
-			url: btc_settings.http_node_endpoint.clone(),
-			user: btc_settings.rpc_user.clone(),
-			password: btc_settings.rpc_password.clone(),
+			url: btc_settings.http_node_endpoint,
+			user: btc_settings.rpc_user,
+			password: btc_settings.rpc_password,
 		})
 	}
 
