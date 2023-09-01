@@ -126,8 +126,8 @@ decl_runtime_apis!(
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
 		fn cf_pool_orders(base: Asset, pair: Asset, lp: AccountId32) -> Option<PoolOrders>;
 		fn cf_pool_range_order_liquidity_value(
-			base: Asset,
-			pair: Asset,
+			base_asset: Asset,
+			pair_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;

@@ -590,21 +590,21 @@ where
 
 	fn cf_pool_orders(
 		&self,
-		from: Asset,
-		to: Asset,
+		base_asset: Asset,
+		pair_asset: Asset,
 		lp: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolOrders>> {
 		self.client
 			.runtime_api()
-			.cf_pool_orders(self.unwrap_or_best(at), from, to, lp)
+			.cf_pool_orders(self.unwrap_or_best(at), base_asset, pair_asset, lp)
 			.map_err(to_rpc_error)
 	}
 
 	fn cf_pool_range_order_liquidity_value(
 		&self,
-		base: Asset,
-		pair: Asset,
+		base_asset: Asset,
+		pair_asset: Asset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
@@ -613,8 +613,8 @@ where
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
 				self.unwrap_or_best(at),
-				base,
-				pair,
+				base_asset,
+				pair_asset,
 				tick_range,
 				liquidity,
 			)

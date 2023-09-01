@@ -1031,20 +1031,20 @@ impl_runtime_apis! {
 		}
 
 		fn cf_pool_orders(
-			from: Asset,
-			to: Asset,
+			base_asset: Asset,
+			pair_asset: Asset,
 			lp: AccountId,
 		) -> Option<PoolOrders> {
-			LiquidityPools::pool_orders(from, to, &lp)
+			LiquidityPools::pool_orders(base_asset, pair_asset, &lp)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
-			base: Asset,
-			pair: Asset,
+			base_asset: Asset,
+			pair_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-			LiquidityPools::pool_range_order_liquidity_value(base, pair, tick_range, liquidity)
+			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
 		}
 
 		fn cf_environment() -> runtime_apis::Environment {
