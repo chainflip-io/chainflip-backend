@@ -139,10 +139,6 @@ pub struct RuntimeVersion {
 	pub transaction_version: PolkadotTransactionVersion,
 }
 
-// Westend testnet
-pub const TEST_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
-
 pub type PolkadotSpecVersion = u32;
 pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
@@ -909,6 +905,10 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 		Self::from(id)
 	}
 }
+
+#[cfg(test)]
+pub const TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 #[cfg(test)]
 mod test_polkadot_extrinsics {
