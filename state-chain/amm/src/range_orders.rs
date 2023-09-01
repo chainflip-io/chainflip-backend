@@ -919,7 +919,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				let (possible, _) =
 					self.inner_liquidity_to_amounts::<false>(liquidity, lower_tick, upper_tick);
 
-				if possible[Side::Zero] < minimum[Side::Zero] &&
+				if possible[Side::Zero] < minimum[Side::Zero] ||
 					possible[Side::One] < minimum[Side::One]
 				{
 					None
