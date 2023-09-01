@@ -15,12 +15,8 @@ use state_chain_runtime::BitcoinInstance;
 use utilities::task_scope::Scope;
 
 use crate::{
-	btc::{
-		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
-		rpc::BtcRpcClient,
-	},
+	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
 	db::PersistentKeyDB,
-	settings::{self},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -35,7 +31,7 @@ const SAFETY_MARGIN: usize = 6;
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &settings::Btc,
+	btc_client: BtcRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -45,8 +41,6 @@ where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
 {
-	let btc_client = BtcRetryRpcClient::new(scope, BtcRpcClient::new(settings)?);
-
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 
 	btc_source
