@@ -237,12 +237,14 @@ mod tests {
 				};
 
 				let rpc_client = EthRpcClient::new(eth_settings.clone(), 1337u64).unwrap();
-				let retry_client = EthersRetryRpcClient::new(scope, rpc_client, async move {
+				let retry_client = EthersRetryRpcClient::new(
+					scope,
+					rpc_client,
 					ReconnectSubscriptionClient::new(
 						eth_settings.ws_node_endpoint,
 						web3::types::U256::from(10997),
-					)
-				});
+					),
+				);
 
 				let (state_chain_stream, state_chain_client) =
 					StateChainClient::connect_with_account(

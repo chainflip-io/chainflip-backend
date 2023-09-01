@@ -324,12 +324,10 @@ mod tests {
 				let client = EthersRetryRpcClient::new(
 					scope,
 					EthRpcClient::new(settings.eth.clone(), 1337u64).unwrap(),
-					async move {
-						ReconnectSubscriptionClient::new(
-							settings.eth.ws_node_endpoint,
-							web3::types::U256::from(1337),
-						)
-					},
+					ReconnectSubscriptionClient::new(
+						settings.eth.ws_node_endpoint,
+						web3::types::U256::from(1337),
+					),
 				);
 
 				let addresses = vec![

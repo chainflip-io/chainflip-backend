@@ -37,13 +37,10 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl DotRetryRpcClient {
-	pub fn new<
-		DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static,
-		DotSubClientFut: Future<Output = DotSubClient> + Send + 'static,
-	>(
+	pub fn new<DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
 		dot_rpc_client: DotHttpRpcClientFut,
-		dot_sub_client: DotSubClientFut,
+		dot_sub_client: DotSubClient,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
@@ -56,7 +53,7 @@ impl DotRetryRpcClient {
 			sub_retry_client: RetrierClient::new(
 				scope,
 				"dot_subscribe",
-				dot_sub_client,
+				async move { dot_sub_client },
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -295,7 +292,7 @@ mod tests {
 				let dot_retry_rpc_client = DotRetryRpcClient::new(
 					scope,
 					DotHttpRpcClient::new("http://127.0.0.1:9945".to_string()).unwrap(),
-					async move { DotSubClient::new("ws://127.0.0.1:9945") },
+					DotSubClient::new("ws://127.0.0.1:9945"),
 				);
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
