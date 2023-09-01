@@ -5,7 +5,7 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, GasUnit, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -322,6 +322,7 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 		transfer_param: TransferAssetParams<Abi>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_limit: GasUnit,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }

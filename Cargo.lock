@@ -6567,6 +6567,7 @@ dependencies = [
  "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",

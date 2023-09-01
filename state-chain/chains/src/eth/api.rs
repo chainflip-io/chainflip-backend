@@ -431,6 +431,7 @@ where
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_limit: GasUnit,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
@@ -446,6 +447,7 @@ where
 				transfer_param,
 				source_chain,
 				source_address,
+				gas_limit,
 				message,
 			),
 		)))

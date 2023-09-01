@@ -109,6 +109,7 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_transfer_param: TransferAssetParams<Bitcoin>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
+		_gas_limit: GasUnit,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))

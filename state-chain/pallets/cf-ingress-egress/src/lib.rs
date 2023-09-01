@@ -19,7 +19,7 @@ use cf_chains::{
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
+	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain, GasUnit,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -32,6 +32,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_arithmetic::Rational128;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
@@ -73,6 +74,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
+	pub gas_limit: GasUnit,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -677,6 +679,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 				ccm.source_chain,
 				ccm.source_address,
+				ccm.gas_limit,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -868,7 +871,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_message: Option<CcmDepositMetadata>,
+		maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
 			*id = id.saturating_add(1);
@@ -876,17 +879,20 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(CcmDepositMetadata { source_chain, source_address, channel_metadata }) =>
-				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-					egress_id,
-					asset,
-					amount,
-					destination_address: destination_address.clone(),
-					message: channel_metadata.message,
-					cf_parameters: channel_metadata.cf_parameters,
-					source_chain,
-					source_address,
-				}),
+			Some((
+				CcmDepositMetadata { source_chain, source_address, channel_metadata },
+				gas_limit,
+			)) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+				egress_id,
+				asset,
+				amount,
+				destination_address: destination_address.clone(),
+				message: channel_metadata.message,
+				cf_parameters: channel_metadata.cf_parameters,
+				source_chain,
+				source_address,
+				gas_limit,
+			}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
 			>::Transfer {

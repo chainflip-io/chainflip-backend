@@ -4,7 +4,7 @@ use cf_chains::{
 	AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, Ethereum,
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain};
+use cf_primitives::{chains::assets, EgressId, ForeignChain, GasUnit};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -99,6 +99,7 @@ pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
+	gas_limit: GasUnit,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockEthEnvironment>,
 }
@@ -109,6 +110,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_limit: GasUnit,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
@@ -120,6 +122,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 				transfer_param,
 				source_chain,
 				source_address,
+				gas_limit,
 				message,
 				_phantom: PhantomData,
 			}))

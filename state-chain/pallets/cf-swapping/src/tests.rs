@@ -23,6 +23,7 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
 
 use frame_support::traits::Hooks;
+use sp_arithmetic::{FixedU64, traits::{Zero, One}};
 use sp_runtime::traits::BlockNumberProvider;
 
 // Returns some test data
@@ -600,6 +601,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x01],
 				cf_parameters: vec![],
+				gas_limit: 40,
 			},]
 		);
 
@@ -683,6 +685,7 @@ fn can_process_ccms_via_extrinsic() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x02],
 				cf_parameters: vec![],
+				gas_limit: 80,
 			},]
 		);
 
@@ -772,6 +775,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				cf_parameters: vec![],
+				gas_limit: 40,
 			},]
 		);
 
@@ -856,6 +860,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				cf_parameters: vec![],
+				gas_limit: 40,
 			},]
 		);
 
@@ -925,6 +930,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				cf_parameters: vec![],
+				gas_limit: 40,
 			},]
 		);
 
@@ -1795,4 +1801,42 @@ fn can_handle_swaps_with_zero_outputs() {
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 0);
 		});
+}
+
+#[test]
+fn can_calculate_ccm_gas_limit() {
+	new_test_ext().execute_with(|| {
+		let c = ForeignChain::Ethereum;
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 2_500), 100); 
+
+		// Calculate gas limit based on dynamic gas price
+		GasPrice::set((33, 4));
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 7000), 100); 
+
+		GasPrice::set((100, 10));
+		CcmBaseGasFeeMultiplier::set(FixedU64::from_rational(3, 2));
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 16_000), 100); 
+	});
+}
+
+#[test]
+fn failed_ccm_gas_limit_calculation_uses_fallback_default() {
+	new_test_ext().execute_with(|| {
+		let c = ForeignChain::Ethereum;
+		let default = DefaultCcmGasLimit::get();
+		// In the case gas price is not available.
+		GasPrice::set((0, 0));
+
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default); 
+
+		// In the case the base multiplier is 0
+		GasPrice::set((100, 0));
+		CcmBaseGasFeeMultiplier::set(FixedU64::zero());
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default); 
+
+		// In the case the final u128 -> u64 cast overflowed
+		GasPrice::set((1, 0));
+		CcmBaseGasFeeMultiplier::set(FixedU64::one());
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, u128::MAX), default); 
+	});
 }

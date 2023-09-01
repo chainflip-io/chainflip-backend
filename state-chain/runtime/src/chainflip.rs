@@ -38,7 +38,9 @@ use cf_chains::{
 	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
+use cf_primitives::{
+	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, GasUnit,
+};
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
@@ -148,8 +150,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
 		// TODO: This should take into account the ccm gas budget. (See PRO-161)
-		const CCM_GAS_LIMIT: u64 = 400_000;
-		const DEFAULT_GAS_LIMIT: u64 = 15_000_000;
+		const CCM_GAS_LIMIT: GasUnit = 400_000;
+		const DEFAULT_GAS_LIMIT: GasUnit = 15_000_000;
 		let gas_limit = match signed_call {
 			EthereumApi::ExecutexSwapAndCall(_) => Some(CCM_GAS_LIMIT.into()),
 			// None means there is no gas limit.

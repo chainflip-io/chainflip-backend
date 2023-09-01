@@ -119,6 +119,7 @@ where
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
+		_gas_limit: GasUnit,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Not implemented"))
