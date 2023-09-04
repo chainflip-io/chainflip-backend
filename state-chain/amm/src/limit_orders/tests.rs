@@ -439,7 +439,7 @@ fn burn() {
 				)),
 				(
 					0.into(),
-					Collected { fees: 0.into(), swapped_liquidity: amount },
+					Collected { fees: 0.into(), bought_amount: amount },
 					PositionInfo::default()
 				)
 			);
@@ -467,7 +467,7 @@ fn burn() {
 				)),
 				(
 					amount - swap,
-					Collected { fees: 0.into(), swapped_liquidity: expected_output },
+					Collected { fees: 0.into(), bought_amount: expected_output },
 					PositionInfo::default()
 				)
 			);

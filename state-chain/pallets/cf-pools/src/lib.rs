@@ -477,7 +477,7 @@ pub mod pallet {
 			amount_delta: AssetAmount,
 			amount_total: AssetAmount,
 			collected_fees: AssetAmount,
-			swapped_liquidity: AssetAmount,
+			bought_amount: AssetAmount,
 		},
 		NetworkFeeTaken {
 			fee_amount: AssetAmount,
@@ -1028,8 +1028,8 @@ impl<T: Config> Pallet<T> {
 
 		let collected_fees =
 			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.fees)?;
-		let swapped_liquidity =
-			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.swapped_liquidity)?;
+		let bought_amount =
+			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.bought_amount)?;
 
 		Self::deposit_event(Event::<T>::LimitOrderUpdated {
 			lp: lp.clone(),
@@ -1041,7 +1041,7 @@ impl<T: Config> Pallet<T> {
 			amount_delta,
 			amount_total: position_info.amount.try_into()?,
 			collected_fees,
-			swapped_liquidity,
+			bought_amount,
 		});
 
 		Ok(amount_delta)

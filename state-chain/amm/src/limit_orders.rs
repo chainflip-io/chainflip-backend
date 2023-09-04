@@ -240,7 +240,7 @@ pub enum CollectError {}
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Collected {
 	pub fees: Amount,
-	pub swapped_liquidity: Amount,
+	pub bought_amount: Amount,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -462,7 +462,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			(
 				// We under-estimate used liquidity so that lp's don't receive more
-				// swapped_liquidity and fees than may exist in the pool
+				// bought_amount and fees than may exist in the pool
 				position.amount - remaining_amount_ceil,
 				// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
 				// than truely exists in the pool
@@ -478,15 +478,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			(position.amount, None)
 		};
 
-		let swapped_liquidity = SD::input_amount_floor(used_liquidity, price);
+		let bought_amount = SD::input_amount_floor(used_liquidity, price);
 		(
 			Collected {
 				fees: /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */ mul_div_floor(
-					swapped_liquidity,
+					bought_amount,
 					U256::from(fee_hundredth_pips),
 					U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
 				),
-				swapped_liquidity,
+				bought_amount,
 			},
 			option_position,
 		)

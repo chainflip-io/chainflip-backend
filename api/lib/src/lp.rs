@@ -61,7 +61,7 @@ pub struct LimitOrderReturn {
 	tick: Tick,
 	amount_total: AssetAmount,
 	collected_fees: AssetAmount,
-	swapped_liquidity: AssetAmount,
+	bought_amount: AssetAmount,
 	increase_or_decrease: IncreaseOrDecrease,
 	amount_delta: AssetAmount,
 }
@@ -78,7 +78,7 @@ fn collect_limit_order_returns(
 					amount_delta,
 					amount_total,
 					collected_fees,
-					swapped_liquidity,
+					bought_amount,
 					tick,
 					..
 				},
@@ -86,7 +86,7 @@ fn collect_limit_order_returns(
 				tick,
 				amount_total,
 				collected_fees,
-				swapped_liquidity,
+				bought_amount,
 				increase_or_decrease,
 				amount_delta,
 			}),
