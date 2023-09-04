@@ -3,13 +3,16 @@
 //! Returns the metrics encoded in a prometheus format
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 
-use std::net::IpAddr;
-
 use super::task_scope;
+use async_channel::{unbounded, Receiver, Sender, TryRecvError};
 use lazy_static;
 use prometheus::{IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry};
+use std::{net::IpAddr, sync::Mutex};
 use tracing::info;
 use warp::Filter;
+
+type CounterPair = (IntCounterVec, Vec<String>);
+type GaugePair = (IntGaugeVec, Vec<String>);
 
 #[derive(Clone)]
 pub struct Prometheus {
@@ -17,8 +20,54 @@ pub struct Prometheus {
 	pub port: u16,
 }
 
+#[derive(Clone)]
+pub struct DeleteMetricLabel {
+	pub delete_int_counter_vec_receiver: Receiver<CounterPair>,
+	pub delete_int_gauge_vec_receiver: Receiver<GaugePair>,
+}
+
+impl DeleteMetricLabel {
+	fn prepare_metric_to_delete(&self) -> (Vec<CounterPair>, Vec<GaugePair>) {
+		let mut vec_counter = vec![];
+		loop {
+			match self.delete_int_counter_vec_receiver.try_recv() {
+				Ok(msg) => {
+					vec_counter.push(msg);
+				},
+				Err(e) => match e {
+					TryRecvError::Closed => {},
+					TryRecvError::Empty => break,
+				},
+			}
+		}
+		let mut vec_gauge = vec![];
+		loop {
+			match self.delete_int_gauge_vec_receiver.try_recv() {
+				Ok(msg) => {
+					vec_gauge.push(msg);
+				},
+				Err(e) => match e {
+					TryRecvError::Closed => {},
+					TryRecvError::Empty => break,
+				},
+			}
+		}
+		(vec_counter, vec_gauge)
+	}
+}
+
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
+	pub static ref INT_GAUGE_CHANNEL: (Sender<GaugePair>, Mutex<Option<Receiver<GaugePair>>>) = {
+		let (sender, receiver) = unbounded::<GaugePair>();
+		let mutex_receiver = Mutex::new(Some(receiver));
+		(sender, mutex_receiver)
+	};
+	pub static ref INT_COUNTER_CHANNEL: (Sender<CounterPair>, Mutex<Option<Receiver<CounterPair>>>) = {
+		let (sender, receiver) = unbounded::<CounterPair>();
+		let mutex_receiver = Mutex::new(Some(receiver));
+		(sender, mutex_receiver)
+	};
 
 	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpcMethod"]);
 	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpcMethod"]);
@@ -74,9 +123,21 @@ pub async fn start<'a, 'env>(
 
 	const PATH: &str = "metrics";
 
-	let future =
-		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(metrics_handler))
-			.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port));
+	let future = {
+		let delete_metrics: DeleteMetricLabel = DeleteMetricLabel {
+			delete_int_counter_vec_receiver: (*INT_COUNTER_CHANNEL.1.lock().unwrap())
+				.take()
+				.unwrap(),
+			delete_int_gauge_vec_receiver: (*INT_GAUGE_CHANNEL.1.lock().unwrap()).take().unwrap(),
+		};
+		warp::serve(
+			warp::any()
+				.and(warp::path(PATH))
+				.and(warp::path::end())
+				.map(move || metrics_handler(&delete_metrics)),
+		)
+		.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
+	};
 
 	scope.spawn_weak(async move {
 		future.await;
@@ -86,20 +147,40 @@ pub async fn start<'a, 'env>(
 	Ok(())
 }
 
-fn metrics_handler() -> String {
+fn metrics_handler(delete_metrics: &DeleteMetricLabel) -> String {
 	use prometheus::Encoder;
 	let encoder = prometheus::TextEncoder::new();
 
+	let (vec_counter, vec_gauge) = delete_metrics.prepare_metric_to_delete();
 	let mut buffer = Vec::new();
 	if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
 		tracing::error!("could not encode custom metrics: {}", e);
 	};
-	match String::from_utf8(buffer) {
+	let res = match String::from_utf8(buffer) {
 		Ok(v) => v,
 		Err(e) => {
 			tracing::error!("custom metrics could not be from_utf8'd: {}", e);
 			String::default()
 		},
+	};
+	delete_labels(vec_counter, vec_gauge);
+	res
+}
+
+fn delete_labels(mut vec_counter: Vec<CounterPair>, mut vec_gauge: Vec<GaugePair>) {
+	while let Some(metric) = vec_counter.pop() {
+		let mut vec: Vec<&str> = vec![];
+		metric.1.iter().for_each(|s| {
+			vec.push(s.as_str());
+		});
+		let _ = metric.0.remove_label_values(&vec);
+	}
+	while let Some(metric) = vec_gauge.pop() {
+		let mut vec: Vec<&str> = vec![];
+		metric.1.iter().for_each(|s| {
+			vec.push(s.as_str());
+		});
+		let _ = metric.0.remove_label_values(&vec);
 	}
 }
 

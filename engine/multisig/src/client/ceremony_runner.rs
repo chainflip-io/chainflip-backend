@@ -15,7 +15,10 @@ use tokio::sync::{
 	oneshot,
 };
 use tracing::{debug, warn, Instrument};
-use utilities::{format_iterator, metrics::CEREMONY_RUNNER_BAD_MSG};
+use utilities::{
+	format_iterator,
+	metrics::{CEREMONY_PROCESSED_MSG, CEREMONY_RUNNER_BAD_MSG, INT_COUNTER_CHANNEL},
+};
 
 use crate::{
 	client::{
@@ -110,6 +113,10 @@ where
 		};
 
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
+		let _ = INT_COUNTER_CHANNEL
+			.0
+			.send((CEREMONY_PROCESSED_MSG.clone(), vec![ceremony_id.to_string()]))
+			.await;
 		Ok(())
 	}
 
