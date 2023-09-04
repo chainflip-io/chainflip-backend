@@ -8,7 +8,7 @@ pub mod runtime_apis;
 pub mod test_runner;
 mod weights;
 use crate::{
-	chainflip::Offence,
+	chainflip::{ChainflipGasPriceProvider, Offence},
 	runtime_apis::{
 		AuctionState, BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
 		RuntimeApiPenalty,
@@ -29,7 +29,7 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::PoolQueryError;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use sp_runtime::AccountId32;
+use sp_runtime::{AccountId32, FixedU64};
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -76,7 +76,9 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
+pub use cf_primitives::{
+	Asset, AssetAmount, BlockNumber, FlipBalance, GasUnit, SemVer, SwapOutput,
+};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
@@ -208,6 +210,10 @@ impl pallet_cf_environment::Config for Runtime {
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const CcmBaseGasFeeMultiplier: FixedU64 = FixedU64::from_rational(2, 1);
+	pub const DefaultCcmGasLimit: GasUnit = 400_000u64;
+}
 impl pallet_cf_swapping::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
@@ -215,6 +221,9 @@ impl pallet_cf_swapping::Config for Runtime {
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = chainflip::RuntimeSafeMode;
+	type GasPriceProvider = ChainflipGasPriceProvider;
+	type CcmBaseGasFeeMultiplier = CcmBaseGasFeeMultiplier;
+	type DefaultCcmGasLimit = DefaultCcmGasLimit;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 

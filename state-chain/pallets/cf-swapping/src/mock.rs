@@ -1,13 +1,13 @@
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET, GasUnit, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, GasUnit, SwapLeg, STABLE_ASSET};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
-	AccountRoleRegistry, SwappingApi, GasPriceProvider,
+	AccountRoleRegistry, GasPriceProvider, SwappingApi,
 };
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
@@ -129,7 +129,7 @@ impl WeightInfo for MockWeightInfo {
 pub struct MockGasPriceProvider;
 
 impl GasPriceProvider for MockGasPriceProvider {
-	fn gas_price_for_chain(_chain: ForeignChain) -> (AssetAmount, AssetAmount) {
+	fn gas_price_for_chain(_chain: ForeignChain) -> Option<(AssetAmount, AssetAmount)> {
 		GasPrice::get()
 	}
 }
@@ -137,7 +137,7 @@ impl GasPriceProvider for MockGasPriceProvider {
 parameter_types! {
 	pub static CcmBaseGasFeeMultiplier: FixedU64 = FixedU64::from_rational(2, 1);
 	pub const DefaultCcmGasLimit: GasUnit = 400_000u64;
-	pub static GasPrice: (AssetAmount, AssetAmount) = (10, 5);
+	pub static GasPrice: Option<(AssetAmount, AssetAmount)> = Some((10, 5));
 }
 
 impl pallet_cf_swapping::Config for Test {

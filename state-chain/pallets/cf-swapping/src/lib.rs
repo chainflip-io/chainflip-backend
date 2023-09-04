@@ -13,7 +13,8 @@ use frame_support::{pallet_prelude::*, storage::with_storage_layer};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, FixedU64, Rounding, FixedPointNumber,
+	helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, FixedPointNumber, FixedU64,
+	Rounding,
 };
 use sp_runtime::{
 	traits::{BlockNumberProvider, Get, Saturating},
@@ -881,15 +882,20 @@ pub mod pallet {
 
 		// Calculate the gas limit for CCM messages, using the current gas price.
 		// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+		// If calculation fails in anyway, the `DefaultCcmGasLimit` is used.
 		pub fn calculate_ccm_gas_limit(chain: ForeignChain, gas_budget: AssetAmount) -> GasUnit {
-			let (base_price, priority_fee) =
-				T::GasPriceProvider::gas_price_for_chain(chain);
-			let max_gas_price = T::CcmBaseGasFeeMultiplier::get()
-				.saturating_mul_int(base_price)
-				.saturating_add(priority_fee);
-			match gas_budget.checked_div(max_gas_price) {
-				Some(res) => res.try_into().unwrap_or(T::DefaultCcmGasLimit::get()),
-				None => T::DefaultCcmGasLimit::get(),
+			if let Some((base_price, priority_fee)) =
+				T::GasPriceProvider::gas_price_for_chain(chain)
+			{
+				let max_gas_price = T::CcmBaseGasFeeMultiplier::get()
+					.saturating_mul_int(base_price)
+					.saturating_add(priority_fee);
+				match gas_budget.checked_div(max_gas_price) {
+					Some(res) => res.try_into().unwrap_or(T::DefaultCcmGasLimit::get()),
+					None => T::DefaultCcmGasLimit::get(),
+				}
+			} else {
+				T::DefaultCcmGasLimit::get()
 			}
 		}
 
@@ -905,7 +911,8 @@ pub mod pallet {
 				CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
 			}
 
-			let gas_limit = Self::calculate_ccm_gas_limit(ccm_swap.destination_address.chain(), ccm_output_gas);
+			let gas_limit =
+				Self::calculate_ccm_gas_limit(ccm_swap.destination_address.chain(), ccm_output_gas);
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
 				ccm_swap.destination_asset,

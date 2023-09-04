@@ -32,7 +32,6 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_arithmetic::Rational128;
 use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.

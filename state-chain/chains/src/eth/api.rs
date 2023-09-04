@@ -204,6 +204,11 @@ pub trait EthereumCall {
 				.collect::<Vec<_>>(),
 		))
 	}
+
+	/// The gas limit allowed to be used for this call.
+	fn gas_limit(&self) -> Option<GasUnit> {
+		None
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -224,6 +229,10 @@ impl<C: EthereumCall> EthereumTransactionBuilder<C> {
 
 	pub fn chain_id(&self) -> EthereumChainId {
 		self.replay_protection.chain_id
+	}
+
+	pub fn gas_limit(&self) -> Option<GasUnit> {
+		self.call.gas_limit()
 	}
 }
 

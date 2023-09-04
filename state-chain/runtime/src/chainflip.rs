@@ -39,13 +39,13 @@ use cf_chains::{
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, GasUnit,
+	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, ChannelId, EgressId, GasUnit,
 };
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
-	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	GasPriceProvider, Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -149,14 +149,13 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	fn build_transaction(
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
-		// TODO: This should take into account the ccm gas budget. (See PRO-161)
-		const CCM_GAS_LIMIT: GasUnit = 400_000;
 		const DEFAULT_GAS_LIMIT: GasUnit = 15_000_000;
 		let gas_limit = match signed_call {
-			EthereumApi::ExecutexSwapAndCall(_) => Some(CCM_GAS_LIMIT.into()),
+			EthereumApi::ExecutexSwapAndCall(call_builder) => call_builder.gas_limit(),
 			// None means there is no gas limit.
-			_ => Some(DEFAULT_GAS_LIMIT.into()),
-		};
+			_ => Some(DEFAULT_GAS_LIMIT),
+		}
+		.map(|gas_limit| gas_limit.into());
 		eth::Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
@@ -508,7 +507,7 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_message: Option<CcmDepositMetadata>,
+				maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
 			) -> EgressId {
 				match asset.into() {
 					$(
@@ -615,5 +614,16 @@ pub struct ValidatorRoleQualification;
 impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
 	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
 		AccountRoles::has_account_role(id, AccountRole::Validator)
+	}
+}
+
+pub struct ChainflipGasPriceProvider;
+impl GasPriceProvider for ChainflipGasPriceProvider {
+	fn gas_price_for_chain(chain: ForeignChain) -> Option<(AssetAmount, AssetAmount)> {
+		match chain {
+			ForeignChain::Ethereum => EthereumChainTracking::chain_state()
+				.map(|state| (state.tracked_data.base_fee, state.tracked_data.priority_fee)),
+			_ => None,
+		}
 	}
 }

@@ -23,7 +23,10 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
 
 use frame_support::traits::Hooks;
-use sp_arithmetic::{FixedU64, traits::{Zero, One}};
+use sp_arithmetic::{
+	traits::{One, Zero},
+	FixedU64,
+};
 use sp_runtime::traits::BlockNumberProvider;
 
 // Returns some test data
@@ -1807,15 +1810,15 @@ fn can_handle_swaps_with_zero_outputs() {
 fn can_calculate_ccm_gas_limit() {
 	new_test_ext().execute_with(|| {
 		let c = ForeignChain::Ethereum;
-		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 2_500), 100); 
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 2_500), 100);
 
 		// Calculate gas limit based on dynamic gas price
-		GasPrice::set((33, 4));
-		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 7000), 100); 
+		GasPrice::set(Some((33, 4)));
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 7000), 100);
 
-		GasPrice::set((100, 10));
+		GasPrice::set(Some((100, 10)));
 		CcmBaseGasFeeMultiplier::set(FixedU64::from_rational(3, 2));
-		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 16_000), 100); 
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 16_000), 100);
 	});
 }
 
@@ -1824,19 +1827,22 @@ fn failed_ccm_gas_limit_calculation_uses_fallback_default() {
 	new_test_ext().execute_with(|| {
 		let c = ForeignChain::Ethereum;
 		let default = DefaultCcmGasLimit::get();
-		// In the case gas price is not available.
-		GasPrice::set((0, 0));
+		// Case: the gas price is not set
+		GasPrice::set(None);
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default);
 
-		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default); 
+		// Case: gas price is zero (prevent divide by zero)
+		GasPrice::set(Some((0, 0)));
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default);
 
-		// In the case the base multiplier is 0
-		GasPrice::set((100, 0));
+		// Case: the base multiplier is 0
+		GasPrice::set(Some((100, 0)));
 		CcmBaseGasFeeMultiplier::set(FixedU64::zero());
-		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default); 
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, 1_000), default);
 
-		// In the case the final u128 -> u64 cast overflowed
-		GasPrice::set((1, 0));
+		// Case: the final u128 -> u64 cast overflowed
+		GasPrice::set(Some((1, 0)));
 		CcmBaseGasFeeMultiplier::set(FixedU64::one());
-		assert_eq!(Swapping::calculate_ccm_gas_limit(c, u128::MAX), default); 
+		assert_eq!(Swapping::calculate_ccm_gas_limit(c, u128::MAX), default);
 	});
 }

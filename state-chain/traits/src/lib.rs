@@ -828,5 +828,5 @@ pub trait AuthoritiesCfeVersions {
 /// For retreiving the current gas price of a target chain.
 pub trait GasPriceProvider {
 	// Returns the current `(base_price, priority_fee)`
-	fn gas_price_for_chain(chain: ForeignChain) -> (AssetAmount, AssetAmount);
+	fn gas_price_for_chain(chain: ForeignChain) -> Option<(AssetAmount, AssetAmount)>;
 }

@@ -87,6 +87,7 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 fn blacklisted_asset_will_not_egress_via_ccm() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
+		let gas_limit = 1000u64;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -101,8 +102,18 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 
 		// Eth should be blocked while Flip can be sent
-		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS, Some(ccm.clone()));
-		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS, Some(ccm.clone()));
+		IngressEgress::schedule_egress(
+			asset,
+			1_000,
+			ALICE_ETH_ADDRESS,
+			Some((ccm.clone(), gas_limit)),
+		);
+		IngressEgress::schedule_egress(
+			ETH_FLIP,
+			1_000,
+			ALICE_ETH_ADDRESS,
+			Some((ccm.clone(), gas_limit)),
+		);
 
 		IngressEgress::on_finalize(1);
 
@@ -118,6 +129,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: ccm.source_address.clone(),
 				cf_parameters: ccm.channel_metadata.cf_parameters,
+				gas_limit,
 			}]
 		);
 
@@ -511,6 +523,7 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
+		let gas_limit = 1_000u64;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -525,7 +538,7 @@ fn can_egress_ccm() {
 			destination_asset,
 			amount,
 			destination_address,
-			Some(ccm.clone())
+			Some((ccm.clone(), gas_limit))
 		);
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
@@ -539,6 +552,7 @@ fn can_egress_ccm() {
 				cf_parameters: vec![],
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+				gas_limit,
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -563,6 +577,7 @@ fn can_egress_ccm() {
 			},
 			ccm.source_chain,
 			ccm.source_address,
+			gas_limit,
 			ccm.channel_metadata.message,
 		).unwrap()]);
 

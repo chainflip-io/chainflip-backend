@@ -80,6 +80,10 @@ impl EthereumCall for ExecutexSwapAndCall {
 			self.message.clone().tokenize(),
 		]
 	}
+
+	fn gas_limit(&self) -> Option<GasUnit> {
+		Some(self.gas_limit)
+	}
 }
 
 #[cfg(test)]
