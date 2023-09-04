@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::EncodedAddress,
+	dot::PolkadotAccountId,
 	evm::{to_evm_address, Address as EthereumAddress},
 	CcmChannelMetadata, ForeignChain,
 };
@@ -337,7 +338,8 @@ pub trait BrokerApi: SignedExtrinsicApi {
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
 		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
-		ForeignChain::Polkadot => EncodedAddress::Dot(clean_hex_address(address)?),
+		ForeignChain::Polkadot =>
+			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
@@ -494,5 +496,30 @@ mod test_key_generation {
 		let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
 
 		assert_eq!(*original, restored);
+	}
+
+	#[test]
+	fn test_dot_address_decoding() {
+		assert_eq!(
+			clean_foreign_chain_address(
+				ForeignChain::Polkadot,
+				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARE"
+			)
+			.unwrap(),
+			clean_foreign_chain_address(
+				ForeignChain::Polkadot,
+				"0x305875a3025d8be7f7048a280aba2bd571126fc171986adc1af58d1f4e02f15e"
+			)
+			.unwrap(),
+		);
+		assert_eq!(
+			clean_foreign_chain_address(
+				ForeignChain::Polkadot,
+				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
+			)
+			.unwrap_err()
+			.to_string(),
+			anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+		);
 	}
 }
