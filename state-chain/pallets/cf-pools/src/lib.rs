@@ -604,6 +604,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Optionally move the order to a different range and then increase or decrease its amount
+		/// of liquidity. As different ranges may require different ratios of assets, when
+		/// optionally moving the order it may not be possible to allocate all the assets previously
+		/// associated with the order to the new range; If so the unused assets will be returned to
+		/// your balance. The appropiate assets will be debited or credited from your balance as
+		/// needed.
 		#[pallet::call_index(3)]
 		#[pallet::weight(Weight::zero())]
 		pub fn update_range_order(
@@ -684,6 +690,8 @@ pub mod pallet {
 			})
 		}
 
+		/// Optionally move the order to a different range and then set its amount of liquidity. The
+		/// appropiate assets will be debited or credited from your balance as needed.
 		#[pallet::call_index(4)]
 		#[pallet::weight(Weight::zero())]
 		pub fn set_range_order(
@@ -747,6 +755,9 @@ pub mod pallet {
 			})
 		}
 
+		/// Optionally move the order to a different tick and then increase or decrease its amount
+		/// of liquidity. The appropiate assets will be debited or credited from your balance as
+		/// needed.
 		#[pallet::call_index(5)]
 		#[pallet::weight(Weight::zero())]
 		pub fn update_limit_order(
@@ -815,6 +826,8 @@ pub mod pallet {
 			})
 		}
 
+		/// Optionally move the order to a different tick and then set its amount of liquidity. The
+		/// appropiate assets will be debited or credited from your balance as needed.
 		#[pallet::call_index(6)]
 		#[pallet::weight(Weight::zero())]
 		pub fn set_limit_order(

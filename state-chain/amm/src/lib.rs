@@ -82,7 +82,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		match (side, order) {
 			(Side::Zero, Order::Sell) => self.inner_swap::<ZeroToOne>(amount, None),
 			(Side::One, Order::Sell) => self.inner_swap::<OneToZero>(amount, None),
-			(_, Order::Buy) => unimplemented!(),
+			(_, Order::Buy) => unimplemented!(), // We don't support exact buy swaps at the moment
 		}
 	}
 
