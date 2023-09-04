@@ -825,8 +825,8 @@ pub trait AuthoritiesCfeVersions {
 	fn precent_authorities_at_version(version: SemVer) -> Percent;
 }
 
-/// For retreiving the current gas price of a target chain.
+/// For providing the current gas price of a target chain.
 pub trait GasPriceProvider {
-	// Returns the current `(base_price, priority_fee)`
+	// Returns in the format of `(base_price, priority_fee)`
 	fn gas_price_for_chain(chain: ForeignChain) -> Option<(AssetAmount, AssetAmount)>;
 }
