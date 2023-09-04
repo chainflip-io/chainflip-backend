@@ -2,11 +2,7 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
-	eth::{api::EthereumChainId, Address as EthereumAddress},
-};
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
 use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
 use core::ops::Range;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
@@ -89,7 +85,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 #[derive(Serialize, Deserialize)]
 pub struct RpcEnvironment {
 	bitcoin_network: BitcoinNetwork,
-	ethereum_chain_id: EthereumChainId,
+	ethereum_chain_id: cf_chains::evm::api::EvmChainId,
 	polkadot_genesis_hash: PolkadotHash,
 }
 

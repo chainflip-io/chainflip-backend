@@ -15,9 +15,6 @@ use tokio::sync::RwLock;
 
 use anyhow::{anyhow, Result};
 
-#[cfg(test)]
-use mockall::automock;
-
 use super::http_rpc::DotHttpRpcClient;
 
 pub type PolkadotHeader = <PolkadotConfig as Config>::Header;
@@ -66,7 +63,6 @@ impl DotRpcClient {
 }
 
 /// This trait defines any subscription interfaces to Polkadot.
-#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_best_heads(
@@ -79,7 +75,6 @@ pub trait DotSubscribeApi: Send + Sync {
 }
 
 /// The trait that defines the stateless / non-subscription requests to Polkadot.
-#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait DotRpcApi: Send + Sync {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;

@@ -366,7 +366,7 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							rotation_state.ban(offenders);
-							Self::try_start_keygen(rotation_state);
+							Self::try_restart_keygen(rotation_state);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -403,12 +403,12 @@ pub mod pallet {
 								log::warn!(
 									"{num_failed_candidates} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
 								);
-								Self::try_start_keygen(rotation_state);
+								Self::try_restart_keygen(rotation_state);
 							} else {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
-								Self::try_start_key_handover(rotation_state, block_number)
+								Self::try_restart_key_handover(rotation_state, block_number)
 							};
 						},
 						AsyncResult::Pending => {
@@ -967,7 +967,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
-		T::VaultRotator::abort_vault_rotation();
+		T::VaultRotator::reset_vault_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1043,6 +1043,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
+		T::VaultRotator::reset_vault_rotation();
+		Self::try_start_keygen(rotation_state);
+	}
+
 	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
@@ -1059,6 +1064,14 @@ impl<T: Config> Pallet<T> {
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
+	}
+
+	fn try_restart_key_handover(
+		rotation_state: RuntimeRotationState<T>,
+		block_number: BlockNumberFor<T>,
+	) {
+		T::VaultRotator::reset_vault_rotation();
+		Self::try_start_key_handover(rotation_state, block_number);
 	}
 
 	fn try_start_key_handover(

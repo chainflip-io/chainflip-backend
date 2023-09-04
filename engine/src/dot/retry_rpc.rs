@@ -1,5 +1,5 @@
 use crate::{
-	dot::PolkadotConfig,
+	retrier::Attempt,
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
@@ -8,13 +8,15 @@ use cf_chains::{
 };
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
-use futures_core::Stream;
+use futures_core::{Future, Stream};
 use sp_core::H256;
 use std::pin::Pin;
-use subxt::{config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic};
+use subxt::{
+	config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic, PolkadotConfig,
+};
 use utilities::task_scope::Scope;
 
-use crate::retrier::RetrierClient;
+use crate::retrier::{RequestLog, RetrierClient};
 
 use super::{
 	http_rpc::DotHttpRpcClient,
@@ -29,13 +31,15 @@ pub struct DotRetryRpcClient {
 	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
-const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(2000);
+const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
+const MAX_BROADCAST_RETRIES: Attempt = 5;
+
 impl DotRetryRpcClient {
-	pub fn new(
+	pub fn new<DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
-		dot_rpc_client: DotHttpRpcClient,
+		dot_rpc_client: DotHttpRpcClientFut,
 		dot_sub_client: DotSubClient,
 	) -> Self {
 		Self {
@@ -49,7 +53,7 @@ impl DotRetryRpcClient {
 			sub_retry_client: RetrierClient::new(
 				scope,
 				"dot_subscribe",
-				dot_sub_client,
+				async move { dot_sub_client },
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -58,7 +62,7 @@ impl DotRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-pub trait DotRetryRpcApi {
+pub trait DotRetryRpcApi: Clone {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
@@ -67,7 +71,10 @@ pub trait DotRetryRpcApi {
 
 	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
-	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash;
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash>;
 }
 
 #[async_trait::async_trait]
@@ -79,7 +86,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_hash(block_number).await })
 				}),
-				format!("block_hash({block_number})"),
+				RequestLog::new("block_hash".to_string(), Some(format!("{block_number}"))),
 			)
 			.await
 	}
@@ -95,7 +102,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					))
 					})
 				}),
-				format!("extrinsics({block_hash:?})"),
+				RequestLog::new("extrinsics".to_string(), Some(format!("{block_hash:?}"))),
 			)
 			.await
 	}
@@ -107,7 +114,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.events(block_hash).await })
 				}),
-				format!("events({block_hash:?})"),
+				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
 			)
 			.await
 	}
@@ -119,15 +126,21 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.runtime_version(block_hash).await })
 				}),
-				"runtime_version".to_string(),
+				RequestLog::new("runtime_version".to_string(), None),
 			)
 			.await
 	}
 
-	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash {
-		let log = format!("submit_raw_encoded_extrinsic({encoded_bytes:?})");
+	async fn submit_raw_encoded_extrinsic(
+		&self,
+		encoded_bytes: Vec<u8>,
+	) -> anyhow::Result<PolkadotHash> {
+		let log = RequestLog::new(
+			"submit_raw_encoded_extrinsic".to_string(),
+			Some(format!("{encoded_bytes:?}")),
+		);
 		self.rpc_retry_client
-			.request(
+			.request_with_limit(
 				Box::pin(move |client| {
 					let encoded_bytes = encoded_bytes.clone();
 					#[allow(clippy::redundant_async_block)]
@@ -136,6 +149,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					)
 				}),
 				log,
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}
@@ -165,7 +179,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_best_heads().await })
 				}),
-				"subscribe_best_heads".to_string(),
+				RequestLog::new("subscribe_best_head".to_string(), None),
 			)
 			.await
 	}
@@ -179,7 +193,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_finalized_heads().await })
 				}),
-				"subscribe_finalized_heads".to_string(),
+				RequestLog::new("subscribe_finalized_heads".to_string(), None),
 			)
 			.await
 	}
@@ -225,9 +239,40 @@ impl ChainClient for DotRetryRpcClient {
 						})
 					})
 				}),
-				format!("header_at_index({index})"),
+				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 			)
 			.await
+	}
+}
+
+#[cfg(test)]
+pub mod mocks {
+	use super::*;
+	use mockall::mock;
+
+	mock! {
+		pub DotHttpRpcClient {}
+
+		impl Clone for DotHttpRpcClient {
+			fn clone(&self) -> Self;
+		}
+
+		#[async_trait::async_trait]
+		impl DotRetryRpcApi for DotHttpRpcClient {
+			async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
+
+			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
+
+			async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
+
+			async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
+
+			async fn submit_raw_encoded_extrinsic(
+				&self,
+				encoded_bytes: Vec<u8>,
+			) -> anyhow::Result<PolkadotHash>;
+		}
+
 	}
 }
 
@@ -244,11 +289,11 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				let dot_http_rpc_client =
-					DotHttpRpcClient::new("http://127.0.0.1:9945").await.unwrap();
-				let dot_sub_client = DotSubClient::new("ws://127.0.0.1:9945");
-				let dot_retry_rpc_client =
-					DotRetryRpcClient::new(scope, dot_http_rpc_client, dot_sub_client);
+				let dot_retry_rpc_client = DotRetryRpcClient::new(
+					scope,
+					DotHttpRpcClient::new("http://127.0.0.1:9945".to_string()).unwrap(),
+					DotSubClient::new("ws://127.0.0.1:9945"),
+				);
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);
@@ -264,7 +309,8 @@ mod tests {
 
 				let hash = dot_retry_rpc_client
 					.submit_raw_encoded_extrinsic(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-					.await;
+					.await
+					.unwrap();
 				println!("Extrinsic hash: {}", hash);
 
 				Ok(())

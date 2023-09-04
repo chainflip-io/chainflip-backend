@@ -4,7 +4,7 @@ use crate::threshold_signing::{
 	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents,
 	EthThresholdSigner, KeyUtils, ThresholdSigner,
 };
-use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
+use cf_chains::{dot::PolkadotSignature, evm::SchnorrVerificationComponents, Chain, ChainCrypto};
 
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
@@ -318,7 +318,7 @@ impl Engine {
 			fn report_keygen_outcome_for_chain<
 				K: KeyUtils<
 						SigVerification = S,
-						AggKey = <<T as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey,
+						AggKey = <<<T as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 					> + Clone,
 				S,
 				T: pallet_cf_vaults::Config<I>,

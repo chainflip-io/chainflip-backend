@@ -6,37 +6,39 @@ use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct SetGovKeyWithAggKey {
-	/// The new gov key.
-	pub new_gov_key: Address,
+pub struct SetCommKeyWithAggKey {
+	/// The new community key.
+	pub new_comm_key: Address,
 }
 
-impl SetGovKeyWithAggKey {
-	pub fn new(new_gov_key: Address) -> Self {
-		Self { new_gov_key }
+impl SetCommKeyWithAggKey {
+	pub fn new(new_comm_key: Address) -> Self {
+		Self { new_comm_key }
 	}
 }
 
-impl EthereumCall for SetGovKeyWithAggKey {
-	const FUNCTION_NAME: &'static str = "setGovKeyWithAggKey";
+impl EvmCall for SetCommKeyWithAggKey {
+	const FUNCTION_NAME: &'static str = "setCommKeyWithAggKey";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
-		vec![("newGovKey", Address::param_type())]
+		vec![("newCommKey", Address::param_type())]
 	}
 
 	fn function_call_args(&self) -> Vec<Token> {
-		vec![self.new_gov_key.tokenize()]
+		vec![self.new_comm_key.tokenize()]
 	}
 }
 
 #[cfg(test)]
-mod test_set_gov_key_with_agg_key {
+mod test_set_comm_key_with_agg_key {
 	use super::*;
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumTransactionBuilder},
-		tests::asymmetrise,
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::api::abi::load_abi,
+		evm::{api::EvmTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
+		ApiCall,
 	};
+
+	use crate::evm::api::EvmReplayProtection;
 
 	#[test]
 	fn test_known_payload() {
@@ -49,14 +51,14 @@ mod test_set_gov_key_with_agg_key {
 
 		let key_manager = load_abi("IKeyManager");
 
-		let tx_builder = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+		let tx_builder = EvmTransactionBuilder::new_unsigned(
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_KEYMAN_ADDR.into(),
 			},
-			super::SetGovKeyWithAggKey::new(Address::from(TEST_ADDR)),
+			super::SetCommKeyWithAggKey::new(Address::from(TEST_ADDR)),
 		);
 
 		assert_eq!(
@@ -69,7 +71,7 @@ mod test_set_gov_key_with_agg_key {
 				.chain_encoded(),
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			key_manager
-				.function("setGovKeyWithAggKey")
+				.function("setCommKeyWithAggKey")
 				.unwrap()
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)

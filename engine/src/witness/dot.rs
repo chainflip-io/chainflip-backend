@@ -6,7 +6,6 @@ use cf_chains::{
 	Polkadot,
 };
 use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
-use codec::Encode;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -22,12 +21,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	dot::{
-		http_rpc::DotHttpRpcClient,
-		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
-		rpc::DotSubClient,
-	},
-	settings::{self},
+	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -38,6 +32,9 @@ use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
 use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 
+// To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
+// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment --url
+// wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.json.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
 
@@ -79,7 +76,7 @@ fn filter_map_events(
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &settings::Dot,
+	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -89,12 +86,6 @@ where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	let dot_client = DotRetryRpcClient::new(
-		scope,
-		DotHttpRpcClient::new(&settings.http_node_endpoint).await?,
-		DotSubClient::new(&settings.ws_node_endpoint),
-	);
-
 	DotUnfinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
@@ -188,8 +179,6 @@ where
 		.await
 		.then({
 			let state_chain_client = state_chain_client.clone();
-
-			// maybe don't need this clone
 			let dot_client = dot_client.clone();
 			move |epoch, header| {
 				let state_chain_client = state_chain_client.clone();
@@ -203,8 +192,8 @@ where
 
 					for (extrinsic_index, tx_fee) in transaction_fee_paids(&broadcast_indices, &events) {
 						let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-						let xt_encoded = xt.0.encode();
-						let mut xt_bytes = xt_encoded.as_slice();
+						let mut xt_bytes = xt.0.as_slice();
+
 						let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 						if let Ok(unchecked) = unchecked {
 							if let Some(signature) = unchecked.signature() {
@@ -353,6 +342,7 @@ fn proxy_addeds(
 
 #[cfg(test)]
 mod test {
+
 	use super::{polkadot::runtime_types::polkadot_runtime::ProxyType as PolkadotProxyType, *};
 
 	fn mock_transfer(

@@ -19,9 +19,10 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::{self, PolkadotHash},
+	btc::{BitcoinCrypto, BitcoinNetwork},
+	dot::{self, PolkadotCrypto, PolkadotHash},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
+	evm::EvmCrypto,
 	Bitcoin, Polkadot,
 };
 use core::ops::Range;
@@ -614,7 +615,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
-	type TargetChain = Ethereum;
+	type TargetChainCrypto = EvmCrypto;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = EthereumVault;
@@ -628,7 +629,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
-	type TargetChain = Polkadot;
+	type TargetChainCrypto = PolkadotCrypto;
 	type KeyProvider = PolkadotVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = PolkadotVault;
@@ -642,7 +643,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
-	type TargetChain = Bitcoin;
+	type TargetChainCrypto = BitcoinCrypto;
 	type KeyProvider = BitcoinVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = BitcoinVault;

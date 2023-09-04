@@ -14,9 +14,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
-	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelLifecycleHooks,
+	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -28,7 +28,7 @@ use cf_traits::{
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{DispatchError, TransactionOutcome},
+	sp_runtime::{DispatchError, Saturating, TransactionOutcome},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -41,6 +41,7 @@ pub enum FetchOrTransfer<C: Chain> {
 		asset: C::ChainAsset,
 		deposit_address: C::ChainAccount,
 		deposit_fetch_id: Option<C::DepositFetchId>,
+		amount: C::ChainAmount,
 	},
 	Transfer {
 		egress_id: EgressId,
@@ -96,6 +97,7 @@ pub mod pallet {
 	use frame_support::{
 		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
+		DefaultNoBound,
 	};
 	use sp_std::vec::Vec;
 
@@ -149,6 +151,52 @@ pub mod pallet {
 		},
 	}
 
+	#[derive(
+		CloneNoBound,
+		DefaultNoBound,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct DepositTracker<T: Config<I>, I: 'static> {
+		pub unfetched: TargetChainAmount<T, I>,
+		pub fetched: TargetChainAmount<T, I>,
+	}
+
+	// TODO: make this chain-specific. Something like:
+	// Replace Amount with an type representing a single deposit (ie. a single UTXO).
+	// Register transfer would store the change UTXO.
+	impl<T: Config<I>, I: 'static> DepositTracker<T, I> {
+		pub fn total(&self) -> TargetChainAmount<T, I> {
+			self.unfetched.saturating_add(self.fetched)
+		}
+
+		pub fn register_deposit(&mut self, amount: TargetChainAmount<T, I>) {
+			self.unfetched.saturating_accrue(amount);
+		}
+
+		pub fn register_transfer(&mut self, amount: TargetChainAmount<T, I>) {
+			if amount > self.fetched {
+				log::error!("Transfer amount is greater than available funds");
+			}
+			self.fetched.saturating_reduce(amount);
+		}
+
+		pub fn mark_as_fetched(&mut self, amount: TargetChainAmount<T, I>) {
+			debug_assert!(
+				self.unfetched >= amount,
+				"Accounting error: not enough unfetched funds."
+			);
+			self.unfetched.saturating_reduce(amount);
+			self.fetched.saturating_accrue(amount);
+		}
+	}
+
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -164,7 +212,7 @@ pub mod pallet {
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Marks which chain this pallet is interacting with.
-		type TargetChain: ChainAbi + Get<ForeignChain>;
+		type TargetChain: Chain + Get<ForeignChain>;
 
 		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -264,6 +312,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FailedVaultTransfers<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, DepositTracker<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -552,12 +604,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					deposit_address,
 					deposit_fetch_id,
+					amount,
 				} => {
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
 					});
 					addresses.push(deposit_address.clone());
+					DepositBalances::<T, I>::mutate(asset, |tracker| {
+						tracker.mark_as_fetched(amount);
+					});
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
@@ -570,6 +626,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						asset,
 						amount,
 						to: destination_address,
+					});
+					DepositBalances::<T, I>::mutate(asset, |tracker| {
+						tracker.register_transfer(amount);
 					});
 				},
 			}
@@ -666,6 +725,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			asset,
 			deposit_address: deposit_address.clone(),
 			deposit_fetch_id: None,
+			amount,
 		});
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
@@ -727,6 +787,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			amount,
 			deposit_channel_details.deposit_channel,
 		);
+		DepositBalances::<T, I>::mutate(asset, |deposits| deposits.register_deposit(amount));
 
 		Self::deposit_event(Event::DepositReceived {
 			deposit_address,
