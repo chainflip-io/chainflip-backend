@@ -272,6 +272,17 @@ mod tests {
 		assert_eq!(select_median::<u16>(values).unwrap(), 32);
 	}
 
+	#[test]
+	fn select_median_out_of_order() {
+		let values = vec![4, 1, 8, 7, 100];
+		assert_eq!(select_median::<u16>(values).unwrap(), 7);
+	}
+
+	#[test]
+	fn select_median_empty() {
+		assert_eq!(select_median::<u16>(vec![]), None);
+	}
+
 	// For BTC, we witness multiple values, and median should be
 	// selected for each value independently:
 	#[test]
@@ -302,5 +313,10 @@ mod tests {
 				min_fee_required_per_tx: 50
 			})
 		);
+	}
+
+	#[test]
+	fn select_median_btc_info_empty() {
+		assert_eq!(select_median_btc_info(vec![]), None);
 	}
 }
