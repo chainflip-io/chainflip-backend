@@ -350,7 +350,7 @@ pub enum LiquidityToAmountsError {
 	/// Invalid Tick range
 	InvalidTickRange,
 	/// `liquidity` is larger than the maximum
-	MaximumLiquidity,
+	LiquidityTooLarge,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -850,7 +850,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
 			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
 		if liquidity > MAX_TICK_GROSS_LIQUIDITY {
-			Err(LiquidityToAmountsError::MaximumLiquidity)
+			Err(LiquidityToAmountsError::LiquidityTooLarge)
 		} else {
 			Ok(self.inner_liquidity_to_amounts::<ROUND_UP>(liquidity, lower_tick, upper_tick).0)
 		}

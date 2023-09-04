@@ -1359,7 +1359,7 @@ impl<T: Config> Pallet<T> {
 					match error {
 						range_orders::LiquidityToAmountsError::InvalidTickRange =>
 							Error::<T>::InvalidTickRange,
-						range_orders::LiquidityToAmountsError::MaximumLiquidity =>
+						range_orders::LiquidityToAmountsError::LiquidityTooLarge =>
 							Error::<T>::MaximumGrossLiquidity,
 					}
 					.into()
