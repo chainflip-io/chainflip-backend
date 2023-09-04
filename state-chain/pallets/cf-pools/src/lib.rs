@@ -611,7 +611,7 @@ pub mod pallet {
 		/// your balance. The appropiate assets will be debited or credited from your balance as
 		/// needed.
 		#[pallet::call_index(3)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_range_order())]
 		pub fn update_range_order(
 			origin: OriginFor<T>,
 			base_asset: Asset,
@@ -693,7 +693,7 @@ pub mod pallet {
 		/// Optionally move the order to a different range and then set its amount of liquidity. The
 		/// appropiate assets will be debited or credited from your balance as needed.
 		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::set_range_order())]
 		pub fn set_range_order(
 			origin: OriginFor<T>,
 			base_asset: Asset,
@@ -759,7 +759,7 @@ pub mod pallet {
 		/// of liquidity. The appropiate assets will be debited or credited from your balance as
 		/// needed.
 		#[pallet::call_index(5)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::update_limit_order())]
 		pub fn update_limit_order(
 			origin: OriginFor<T>,
 			sell_asset: any::Asset,
@@ -829,7 +829,7 @@ pub mod pallet {
 		/// Optionally move the order to a different tick and then set its amount of liquidity. The
 		/// appropiate assets will be debited or credited from your balance as needed.
 		#[pallet::call_index(6)]
-		#[pallet::weight(Weight::zero())]
+		#[pallet::weight(T::WeightInfo::set_limit_order())]
 		pub fn set_limit_order(
 			origin: OriginFor<T>,
 			sell_asset: any::Asset,
