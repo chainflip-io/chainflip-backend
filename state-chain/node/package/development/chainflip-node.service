@@ -7,12 +7,12 @@ RestartSec=30
 Type=simple
 
 ExecStart=/usr/bin/chainflip-node \
-  --chain /etc/chainflip/development.chainspec.json \
-  --base-path /etc/chainflip/chaindata \
-  --node-key-file /etc/chainflip/keys/node_key_file \
+  --chain=/etc/chainflip/development.chainspec.json \
+  --base-path=/etc/chainflip/chaindata \
+  --node-key-file=/etc/chainflip/keys/node_key_file \
   --validator \
-  --trie-cache-size 0 \
-  --sync warp
+  --trie-cache-size=0 \
+  --sync=warp
 
 [Install]
 WantedBy=multi-user.target
