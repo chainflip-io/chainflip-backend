@@ -311,9 +311,13 @@ macro_rules! print_starting {
 /// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
+pub async fn init_json_logger(
+	log_span_lifecycle: bool,
+) -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
+
+	let format_span = if log_span_lifecycle { FmtSpan::FULL } else { FmtSpan::NONE };
 
 	let reload_handle = {
 		let builder = tracing_subscriber::fmt()
@@ -323,7 +327,7 @@ pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Er
 					.with_default_directive(LevelFilter::INFO.into())
 					.from_env_lossy(),
 			)
-			.with_span_events(FmtSpan::FULL)
+			.with_span_events(format_span)
 			.with_filter_reloading();
 
 		let reload_handle = builder.reload_handle();
