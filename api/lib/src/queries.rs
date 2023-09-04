@@ -140,11 +140,3 @@ impl QueryApi {
 			.await?)
 	}
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RangeOrderPosition {
-	pub lower_tick: i32,
-	pub upper_tick: i32,
-	#[serde(with = "utilities::serde_helpers::number_or_hex")]
-	pub liquidity: u128,
-}
