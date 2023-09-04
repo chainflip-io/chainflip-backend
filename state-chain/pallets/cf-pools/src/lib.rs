@@ -1254,20 +1254,7 @@ impl<T: Config> Pallet<T> {
 					})
 					.map(|(lp, _positions)| lp.clone())
 			}),
-			pool.range_orders
-				.iter()
-				.filter(|(lp, positions)| {
-					positions.iter().any(|(id, tick_range)| {
-						!pool
-							.pool_state
-							.range_order(&((*lp).clone(), *id), tick_range.clone())
-							.unwrap()
-							.1
-							.liquidity
-							.is_zero()
-					})
-				})
-				.map(|(lp, _positions)| lp.clone()),
+			pool.range_orders.keys().cloned(),
 		)
 		.collect::<Vec<_>>();
 
