@@ -305,9 +305,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 			// Register the vote
-			// `extract()` modifies the call, so we need to calculate the call hash *after* this.
-			let extra_data = call.extract();
-			let call_hash = CallHash(call.blake2_256());
+			let (extra_data, call_hash) = Self::split_calldata(&mut call);
 			let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 				&epoch_index,
 				&call_hash,
@@ -409,6 +407,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn split_calldata(call: &mut <T as Config>::RuntimeCall) -> (Option<Vec<u8>>, CallHash) {
 		let extra_data = call.extract();
+		// `extract()` modifies the call, so we need to calculate the call hash *after* this.
 		(extra_data, CallHash(call.blake2_256()))
 	}
 

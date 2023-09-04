@@ -1,7 +1,9 @@
 pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
-use super::{PolkadotAccountId, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
+use super::{
+	PolkadotAccountId, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion,
+};
 use crate::{dot::Polkadot, *};
 use frame_support::{traits::Get, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -72,7 +74,7 @@ where
 	}
 }
 
-impl<E> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
+impl<E> SetGovKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
@@ -91,7 +93,7 @@ where
 	}
 }
 
-impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
+impl<E> SetAggKeyWithAggKey<PolkadotCrypto> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
@@ -138,8 +140,8 @@ macro_rules! map_over_api_variants {
 	};
 }
 
-impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
-	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
+	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 		map_over_api_variants!(
 			self,
@@ -150,7 +152,7 @@ impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 
 	fn signed(
 		mut self,
-		threshold_signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
+		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		let proxy_account = E::proxy_account();
 		map_over_api_variants!(
@@ -175,12 +177,12 @@ impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 		map_over_api_variants!(self, call, call.is_signed())
 	}
 
-	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.signature().unwrap())
 	}
 }
 
-pub trait CreatePolkadotVault: ApiCall<Polkadot> {
+pub trait CreatePolkadotVault: ApiCall<PolkadotCrypto> {
 	fn new_unsigned() -> Self;
 }
 
@@ -207,14 +209,14 @@ impl WithEnvironment for PolkadotExtrinsicBuilder {
 	}
 }
 
-impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
-	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall<E> {
+	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 
 		self.builder.get_signature_payload(spec_version, transaction_version)
 	}
 
-	fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(mut self, signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature) -> Self {
 		self.builder.insert_signature(E::proxy_account(), signature.clone());
 		self
 	}
@@ -230,7 +232,7 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 		self.builder.is_signed()
 	}
 
-	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		self.builder.signature().unwrap()
 	}
 }

@@ -1,4 +1,3 @@
-pub mod broadcaster;
 pub mod event;
 pub mod redact_endpoint_secret;
 pub mod retry_rpc;
@@ -7,8 +6,6 @@ pub mod rpc;
 use anyhow::Result;
 
 use futures::FutureExt;
-
-use crate::eth::rpc::EthRpcApi;
 
 use std::pin::Pin;
 

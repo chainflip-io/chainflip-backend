@@ -4,7 +4,7 @@ use super::{
 };
 use crate::crypto::ECScalar;
 use anyhow::Context;
-use cf_chains::Bitcoin;
+use cf_chains::{Bitcoin, Chain, ChainCrypto};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -32,8 +32,10 @@ impl BtcSchnorrSignature {
 	}
 }
 
-impl SignatureToThresholdSignature<Bitcoin> for Vec<BtcSchnorrSignature> {
-	fn to_threshold_signature(&self) -> <Bitcoin as cf_chains::ChainCrypto>::ThresholdSignature {
+impl SignatureToThresholdSignature<<Bitcoin as Chain>::ChainCrypto> for Vec<BtcSchnorrSignature> {
+	fn to_threshold_signature(
+		&self,
+	) -> <<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature {
 		self.iter().map(|s| s.to_raw()).collect()
 	}
 }
@@ -62,7 +64,7 @@ pub struct BtcCryptoScheme;
 
 impl ChainSigning for BtcSigning {
 	type CryptoScheme = BtcCryptoScheme;
-	type Chain = cf_chains::Bitcoin;
+	type ChainCrypto = <Bitcoin as Chain>::ChainCrypto;
 	const NAME: &'static str = "Bitcoin";
 	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
 
