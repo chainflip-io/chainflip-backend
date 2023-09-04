@@ -11,6 +11,7 @@ use state_chain_runtime::PolkadotInstance;
 use subxt::{
 	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
+	utils::AccountId32,
 };
 
 use tracing::error;
@@ -38,11 +39,11 @@ use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EventWrapper {
-	ProxyAdded(ProxyAdded),
-	Transfer(Transfer),
-	TransactionFeePaid(TransactionFeePaid),
+	ProxyAdded { delegator: AccountId32, delegatee: AccountId32 },
+	Transfer { to: AccountId32, from: AccountId32, amount: PolkadotBalance },
+	TransactionFeePaid { actual_fee: PolkadotBalance, tip: PolkadotBalance },
 }
 
 use polkadot::{
@@ -55,15 +56,21 @@ fn filter_map_events(
 ) -> Option<(Phase, EventWrapper)> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {
-			(ProxyAdded::PALLET, ProxyAdded::EVENT) => Some(EventWrapper::ProxyAdded(
-				event_details.as_event::<ProxyAdded>().unwrap().unwrap(),
-			)),
-			(Transfer::PALLET, Transfer::EVENT) =>
-				Some(EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap())),
-			(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) =>
-				Some(EventWrapper::TransactionFeePaid(
-					event_details.as_event::<TransactionFeePaid>().unwrap().unwrap(),
-				)),
+			(ProxyAdded::PALLET, ProxyAdded::EVENT) => {
+				let ProxyAdded { delegator, delegatee, .. } =
+					event_details.as_event::<ProxyAdded>().unwrap().unwrap();
+				Some(EventWrapper::ProxyAdded { delegator, delegatee })
+			},
+			(Transfer::PALLET, Transfer::EVENT) => {
+				let Transfer { to, amount, from } =
+					event_details.as_event::<Transfer>().unwrap().unwrap();
+				Some(EventWrapper::Transfer { to, amount, from })
+			},
+			(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) => {
+				let TransactionFeePaid { actual_fee, tip, .. } =
+					event_details.as_event::<TransactionFeePaid>().unwrap().unwrap();
+				Some(EventWrapper::TransactionFeePaid { actual_fee, tip })
+			},
 			_ => None,
 		}
 		.map(|event| (event_details.phase(), event)),
@@ -89,6 +96,7 @@ where
 	DotUnfinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
+		.shared(scope)
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
 		.logging("chain tracking")
@@ -115,6 +123,7 @@ where
 		.then(|header| async move {
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
+		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -262,7 +271,7 @@ fn deposit_witnesses(
 	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			if let EventWrapper::Transfer(Transfer { to, amount, from }) = wrapped_event {
+			if let EventWrapper::Transfer { to, amount, from } = wrapped_event {
 				let deposit_address = PolkadotAccountId::from_aliased(to.0);
 				if monitored_addresses.contains(&deposit_address) {
 					deposit_witnesses.push(DepositWitness {
@@ -296,9 +305,7 @@ fn transaction_fee_paids(
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
 			if indices.contains(extrinsic_index) {
-				if let EventWrapper::TransactionFeePaid(TransactionFeePaid { actual_fee, .. }) =
-					wrapped_event
-				{
+				if let EventWrapper::TransactionFeePaid { actual_fee, .. } = wrapped_event {
 					indices_with_fees.insert((*extrinsic_index, *actual_fee));
 				}
 			}
@@ -317,8 +324,7 @@ fn proxy_addeds(
 	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
-			if let EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) = wrapped_event
-			{
+			if let EventWrapper::ProxyAdded { delegator, delegatee } = wrapped_event {
 				if &PolkadotAccountId::from_aliased(delegator.0) != our_vault {
 					continue
 				}
@@ -342,19 +348,18 @@ fn proxy_addeds(
 
 #[cfg(test)]
 mod test {
-
-	use super::{polkadot::runtime_types::polkadot_runtime::ProxyType as PolkadotProxyType, *};
+	use super::*;
 
 	fn mock_transfer(
 		from: &PolkadotAccountId,
 		to: &PolkadotAccountId,
 		amount: PolkadotBalance,
 	) -> EventWrapper {
-		EventWrapper::Transfer(Transfer {
+		EventWrapper::Transfer {
 			from: from.aliased_ref().to_owned().into(),
 			to: to.aliased_ref().to_owned().into(),
 			amount,
-		})
+		}
 	}
 
 	fn phase_and_events(
@@ -370,20 +375,14 @@ mod test {
 		delegator: &PolkadotAccountId,
 		delegatee: &PolkadotAccountId,
 	) -> EventWrapper {
-		EventWrapper::ProxyAdded(ProxyAdded {
+		EventWrapper::ProxyAdded {
 			delegator: delegator.aliased_ref().to_owned().into(),
 			delegatee: delegatee.aliased_ref().to_owned().into(),
-			proxy_type: PolkadotProxyType::Any,
-			delay: 0,
-		})
+		}
 	}
 
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
-		EventWrapper::TransactionFeePaid(TransactionFeePaid {
-			actual_fee,
-			who: [0xab; 32].into(),
-			tip: Default::default(),
-		})
+		EventWrapper::TransactionFeePaid { actual_fee, tip: Default::default() }
 	}
 
 	#[test]
