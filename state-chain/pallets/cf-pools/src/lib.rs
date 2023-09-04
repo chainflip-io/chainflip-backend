@@ -17,7 +17,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
 
@@ -1244,12 +1244,12 @@ impl<T: Config> Pallet<T> {
 	pub fn pool_liquidity_providers(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
-	) -> Result<Vec<T::AccountId>, Error<T>> {
+	) -> Result<BTreeSet<T::AccountId>, Error<T>> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
 		let pool =
 			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 
-		let mut lps = Iterator::chain(
+		Ok(Iterator::chain(
 			pool.limit_orders.as_ref().into_iter().flat_map(|(side, limit_orders)| {
 				let pool = &pool;
 				limit_orders
@@ -1269,12 +1269,7 @@ impl<T: Config> Pallet<T> {
 			}),
 			pool.range_orders.keys().cloned(),
 		)
-		.collect::<Vec<_>>();
-
-		lps.sort();
-		lps.dedup();
-
-		Ok(lps)
+		.collect())
 	}
 
 	pub fn pools() -> Vec<(Asset, Asset)> {
