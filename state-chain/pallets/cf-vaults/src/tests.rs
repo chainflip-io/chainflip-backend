@@ -442,128 +442,154 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 	});
 }
 
+fn do_full_key_rotation() {
+	assert_eq!(MockOptimisticActivation::get(), false, "Test expects non-optimistic activation");
+
+	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
+	<VaultsPallet as VaultRotator>::keygen(
+		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+		rotation_epoch,
+	);
+	let keygen_ceremony_id = current_ceremony_id();
+
+	assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 1);
+
+	assert_ok!(VaultsPallet::report_keygen_outcome(
+		RuntimeOrigin::signed(ALICE),
+		keygen_ceremony_id,
+		Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+	));
+
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+
+	VaultsPallet::on_initialize(1);
+	// After on initialise we obviously still don't have enough votes.
+	// So nothing should have changed.
+	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+
+	// Bob agrees.
+	assert_ok!(VaultsPallet::report_keygen_outcome(
+		RuntimeOrigin::signed(BOB),
+		keygen_ceremony_id,
+		Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+	));
+
+	// A resolution is still pending - we require 100% response rate.
+	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+	VaultsPallet::on_initialize(1);
+	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+
+	// Charlie agrees.
+	assert_ok!(VaultsPallet::report_keygen_outcome(
+		RuntimeOrigin::signed(CHARLIE),
+		keygen_ceremony_id,
+		Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
+	));
+
+	// This time we should have enough votes for consensus.
+	assert!(KeygenResolutionPendingSince::<Test, _>::exists());
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+	if let VaultRotationStatus::AwaitingKeygen {
+		ceremony_id: keygen_ceremony_id_from_status,
+		response_status,
+		keygen_participants,
+		new_epoch_index,
+	} = PendingVaultRotation::<Test, _>::get().unwrap()
+	{
+		assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
+		assert_eq!(
+			response_status
+				.success_votes()
+				.get(&NEW_AGG_PUB_KEY_PRE_HANDOVER)
+				.expect("new key should have votes"),
+			&3
+		);
+		assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		assert_eq!(new_epoch_index, rotation_epoch);
+	} else {
+		panic!("Expected to be in AwaitingKeygen state");
+	}
+	VaultsPallet::on_initialize(1);
+
+	assert!(matches!(
+		PendingVaultRotation::<Test, _>::get().unwrap(),
+		VaultRotationStatus::AwaitingKeygenVerification { .. }
+	));
+
+	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+	assert!(matches!(
+		PendingVaultRotation::<Test, _>::get().unwrap(),
+		VaultRotationStatus::KeygenVerificationComplete { .. }
+	));
+
+	const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+	VaultsPallet::key_handover(
+		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		rotation_epoch,
+	);
+
+	let handover_ceremony_id = current_ceremony_id();
+	for p in HANDOVER_PARTICIPANTS {
+		assert_ok!(VaultsPallet::report_key_handover_outcome(
+			RuntimeOrigin::signed(p),
+			handover_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
+		));
+	}
+
+	VaultsPallet::on_initialize(1);
+
+	assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
+
+	assert!(matches!(
+		PendingVaultRotation::<Test, _>::get().unwrap(),
+		VaultRotationStatus::AwaitingKeyHandoverVerification { .. }
+	));
+
+	BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![BTC_DUMMY_SIG]));
+
+	assert_last_event!(crate::Event::KeyHandoverVerificationSuccess { .. });
+
+	assert!(matches!(
+		PendingVaultRotation::<Test, _>::get().unwrap(),
+		VaultRotationStatus::KeyHandoverComplete { .. }
+	));
+
+	// Called by validator pallet
+	VaultsPallet::activate();
+
+	assert!(matches!(
+		PendingVaultRotation::<Test, _>::get().unwrap(),
+		VaultRotationStatus::AwaitingActivation { .. }
+	));
+
+	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+
+	assert!(matches!(
+		PendingVaultRotation::<Test, _>::get().unwrap(),
+		VaultRotationStatus::<Test, _>::AwaitingActivation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
+	));
+
+	// Voting has been cleared.
+	assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
+	assert!(!KeygenFailureVoters::<Test, _>::exists());
+
+	assert_ok!(VaultsPallet::vault_key_rotated(RuntimeOrigin::root(), 1, [0xab; 4],));
+
+	assert_last_event!(crate::Event::VaultRotationCompleted);
+	assert_eq!(PendingVaultRotation::<Test, _>::get(), Some(VaultRotationStatus::Complete));
+	assert_eq!(VaultsPallet::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+}
+
 #[test]
 fn keygen_report_success() {
-	new_test_ext().execute_with(|| {
-		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), rotation_epoch);
-		let keygen_ceremony_id = current_ceremony_id();
-
-		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 1);
-
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			RuntimeOrigin::signed(ALICE),
-			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
-		));
-
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::status(),
-			AsyncResult::Pending
-		);
-
-		VaultsPallet::on_initialize(1);
-		// After on initialise we obviously still don't have enough votes.
-		// So nothing should have changed.
-		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::status(),
-			AsyncResult::Pending
-		);
-
-		// Bob agrees.
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			RuntimeOrigin::signed(BOB),
-			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
-		));
-
-		// A resolution is still pending - we require 100% response rate.
-		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::status(),
-			AsyncResult::Pending
-		);
-		VaultsPallet::on_initialize(1);
-		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::status(),
-			AsyncResult::Pending
-		);
-
-		// Charlie agrees.
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			RuntimeOrigin::signed(CHARLIE),
-			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
-		));
-
-		// This time we should have enough votes for consensus.
-		assert!(KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::status(),
-			AsyncResult::Pending
-		);
-		if let VaultRotationStatus::AwaitingKeygen { ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, new_epoch_index } = PendingVaultRotation::<Test, _>::get().unwrap() {
-			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
-			assert_eq!(response_status.success_votes().get(&NEW_AGG_PUB_KEY_PRE_HANDOVER).expect("new key should have votes"), &3);
-			assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
-			assert_eq!(new_epoch_index, rotation_epoch);
-		} else {
-			panic!("Expected to be in AwaitingKeygen state");
-		}
-		VaultsPallet::on_initialize(1);
-
-		assert!(matches!(PendingVaultRotation::<Test, _>::get().unwrap(), VaultRotationStatus::AwaitingKeygenVerification { .. }));
-
-		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
-
-		assert!(matches!(PendingVaultRotation::<Test, _>::get().unwrap(), VaultRotationStatus::KeygenVerificationComplete { .. }));
-
-		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
-		VaultsPallet::key_handover(BTreeSet::from(HANDOVER_PARTICIPANTS), BTreeSet::from(HANDOVER_PARTICIPANTS), rotation_epoch);
-
-		let handover_ceremony_id = current_ceremony_id();
-		for p in HANDOVER_PARTICIPANTS {
-			assert_ok!(VaultsPallet::report_key_handover_outcome(
-				RuntimeOrigin::signed(p),
-				handover_ceremony_id,
-				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
-			));
-		}
-
-		VaultsPallet::on_initialize(1);
-
-		assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
-
-		assert!(matches!(PendingVaultRotation::<Test, _>::get().unwrap(), VaultRotationStatus::AwaitingKeyHandoverVerification { .. }));
-
-		BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![BTC_DUMMY_SIG]));
-
-		assert_last_event!(crate::Event::KeyHandoverVerificationSuccess { .. });
-
-		assert!(matches!(PendingVaultRotation::<Test, _>::get().unwrap(), VaultRotationStatus::KeyHandoverComplete { .. }));
-
-		// Called by validator pallet
-		VaultsPallet::activate();
-
-		assert!(matches!(PendingVaultRotation::<Test, _>::get().unwrap(), VaultRotationStatus::AwaitingActivation { .. }));
-
-		assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::status(),
-			AsyncResult::Pending
-		);
-
-		assert!(matches!(
-			PendingVaultRotation::<Test, _>::get().unwrap(),
-			VaultRotationStatus::<Test, _>::AwaitingActivation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
-		));
-
-		// Voting has been cleared.
-		assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
-		assert!(!KeygenFailureVoters::<Test, _>::exists());
-	});
+	new_test_ext().execute_with(|| do_full_key_rotation());
 }
 
 #[test]
@@ -906,8 +932,6 @@ mod vault_key_rotation {
 	#[test]
 	fn can_recover_after_key_handover_verification_failure() {
 		setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			MockOptimisticActivation::set(true);
-
 			let offenders = vec![ALICE];
 
 			BtcMockThresholdSigner::execute_signature_result_against_last_request(Err(
@@ -1025,81 +1049,9 @@ fn dont_slash_in_safe_mode() {
 	});
 }
 
-fn do_full_key_rotation() {
-	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-	// Start Key gen
-	<VaultsPallet as VaultRotator>::keygen(
-		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-		rotation_epoch,
-	);
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get(),
-		Some(VaultRotationStatus::AwaitingKeygen { .. })
-	));
-
-	let keygen_ceremony_id = current_ceremony_id();
-
-	for p in ALL_CANDIDATES {
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			RuntimeOrigin::signed(*p),
-			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
-		));
-	}
-
-	// Key verification
-	VaultsPallet::on_initialize(2);
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get(),
-		Some(VaultRotationStatus::AwaitingKeygenVerification { .. })
-	));
-
-	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
-
-	// Key handover
-	const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
-	VaultsPallet::key_handover(
-		BTreeSet::from(HANDOVER_PARTICIPANTS),
-		BTreeSet::from(HANDOVER_PARTICIPANTS),
-		rotation_epoch,
-	);
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get(),
-		Some(VaultRotationStatus::AwaitingKeyHandover { .. })
-	));
-
-	let handover_ceremony_id = current_ceremony_id();
-	for p in HANDOVER_PARTICIPANTS {
-		assert_ok!(VaultsPallet::report_key_handover_outcome(
-			RuntimeOrigin::signed(p),
-			handover_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
-		));
-	}
-	VaultsPallet::on_initialize(3);
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get(),
-		Some(VaultRotationStatus::AwaitingKeyHandoverVerification { .. })
-	));
-
-	BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![BTC_DUMMY_SIG]));
-
-	// Key activation
-	VaultsPallet::activate();
-
-	assert_last_event!(crate::Event::VaultRotationCompleted);
-	assert_eq!(PendingVaultRotation::<Test, _>::get(), Some(VaultRotationStatus::Complete));
-	assert_eq!(VaultsPallet::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
-}
-
 #[test]
 fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 	new_test_ext().execute_with(|| {
-		MockOptimisticActivation::set(true);
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 		<VaultsPallet as VaultRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
@@ -1143,7 +1095,6 @@ fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 #[test]
 fn can_recover_from_abort_vault_rotation_after_key_verification() {
 	new_test_ext().execute_with(|| {
-		MockOptimisticActivation::set(true);
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 		<VaultsPallet as VaultRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
@@ -1181,7 +1132,6 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 #[test]
 fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 	new_test_ext().execute_with(|| {
-		MockOptimisticActivation::set(true);
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 		<VaultsPallet as VaultRotator>::keygen(
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
