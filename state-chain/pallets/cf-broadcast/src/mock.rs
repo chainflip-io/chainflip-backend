@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
+use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMode};
 use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
@@ -12,7 +12,7 @@ use cf_chains::{
 	Chain, ChainCrypto,
 };
 use cf_traits::{
-	impl_mock_chainflip,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
 	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady,
 };
@@ -20,7 +20,7 @@ use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
-use sp_core::H256;
+use sp_core::{ConstU64, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -131,6 +131,8 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -147,7 +149,9 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
+	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
+	type SafeModeBlockMargin = ConstU64<10>;
 }
 
 impl_mock_chainflip!(Test);
