@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 CF_ROOT=/etc/chainflip
@@ -81,7 +81,6 @@ main() {
     remove_old_logs
     purge_chaindata
     reload_systemctl
-    #DEBHELPER#
 }
 
 # Only run the main function if the script is not being sourced
@@ -89,3 +88,7 @@ main() {
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     main "$@"
 fi
+
+#DEBHELPER#
+
+exit 0
