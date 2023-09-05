@@ -99,14 +99,14 @@ pub struct HealthCheck {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Prometheus {
-	pub hostname: String,
-	pub port: Port,
+pub struct Logging {
+	pub span_lifecycle: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Logging {
-	pub span_lifecycle: bool,
+pub struct Prometheus {
+	pub hostname: String,
+	pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]

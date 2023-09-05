@@ -85,9 +85,9 @@ lazy_static::lazy_static! {
 	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_manager_bad_msg", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id", &["reason", "senderId"]);
 	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = create_and_register_gauge_vec("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony beeing run", &["chain"]);
 	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_runner_bad_msg", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id", &["reason", "senderId"]);
-	pub static ref BROADCAST_BAD_MSG: IntCounterVec = create_and_register_counter_vec("broadcast_bad_msg", "Count all the bad msgs processed by the broadcast and labels them by the reason they got discarded and the sender Id", &["reason"]);
+	pub static ref BROADCAST_BAD_MSG: IntCounterVec = create_and_register_counter_vec("broadcast_bad_msg", "Count all the bad msgs processed by the broadcast and labels them by the reason they got discarded and the sender Id", &["reason", "stage"]);
 
-	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_msg", "Count all the messages for a give ceremony", &["ceremonyId"]);
+	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_msg", "Count all the processed messages for a given ceremony", &["ceremonyId"]);
 }
 
 fn create_and_register_counter_vec(name: &str, help: &str, labels: &[&str]) -> IntCounterVec {
