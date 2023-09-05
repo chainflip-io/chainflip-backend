@@ -1,7 +1,7 @@
 use cf_primitives::AssetAmount;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
+	try_parse_number_or_hex, AnyhowRpcError,
 };
 use chainflip_api::{
 	self,
@@ -15,11 +15,7 @@ use chainflip_api::{
 };
 use clap::Parser;
 use futures::FutureExt;
-use jsonrpsee::{
-	core::{async_trait, Error},
-	proc_macros::rpc,
-	server::ServerBuilder,
-};
+use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
@@ -60,7 +56,7 @@ pub mod rpc_types {
 		pub liquidity: u128,
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	pub struct OpenSwapChannels {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
@@ -71,17 +67,20 @@ pub mod rpc_types {
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<Hash, Error>;
+	async fn register_account(&self) -> Result<Hash, AnyhowRpcError>;
 
 	#[method(name = "liquidityDeposit")]
-	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+	) -> Result<String, AnyhowRpcError>;
 
 	#[method(name = "registerEmergencyWithdrawalAddress")]
 	async fn register_emergency_withdrawal_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<Hash, Error>;
+	) -> Result<Hash, AnyhowRpcError>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -89,7 +88,7 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), Error>;
+	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
 
 	#[method(name = "updateRangeOrder")]
 	async fn update_range_order(
@@ -100,7 +99,7 @@ pub trait Rpc {
 		tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
 		size: RangeOrderSize,
-	) -> Result<Vec<RangeOrderReturn>, Error>;
+	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "setRangeOrder")]
 	async fn set_range_order(
@@ -110,7 +109,7 @@ pub trait Rpc {
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<Vec<RangeOrderReturn>, Error>;
+	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "updateLimitOrder")]
 	async fn update_limit_order(
@@ -121,7 +120,7 @@ pub trait Rpc {
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: AssetAmount,
-	) -> Result<Vec<LimitOrderReturn>, Error>;
+	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "setLimitOrder")]
 	async fn set_limit_order(
@@ -131,13 +130,13 @@ pub trait Rpc {
 		id: OrderId,
 		tick: Option<Tick>,
 		amount: AssetAmount,
-	) -> Result<Vec<LimitOrderReturn>, Error>;
+	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "assetBalances")]
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError>;
 
 	#[method(name = "getOpenSwapChannels")]
-	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
 }
 
 pub struct RpcServerImpl {
@@ -159,22 +158,24 @@ impl RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
-	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
-		self.api
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+	) -> Result<String, AnyhowRpcError> {
+		Ok(self
+			.api
 			.lp_api()
 			.request_liquidity_deposit_address(asset)
 			.await
-			.map(|address| address.to_string())
-			.map_err(|e| Error::Custom(e.to_string()))
+			.map(|address| address.to_string())?)
 	}
 
 	async fn register_emergency_withdrawal_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<Hash, Error> {
-		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
-			.map_err(|e| Error::Custom(e.to_string()))?;
+	) -> Result<Hash, AnyhowRpcError> {
+		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)?;
 		Ok(self.api.lp_api().register_emergency_withdrawal_address(ewa_address).await?)
 	}
 
@@ -184,7 +185,7 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), Error> {
+	) -> Result<(ForeignChain, u64), AnyhowRpcError> {
 		let destination_address =
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
 
@@ -196,7 +197,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error> {
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError> {
 		Ok(self.api.query_api().get_balances(None).await?)
 	}
 
@@ -208,7 +209,7 @@ impl RpcServer for RpcServerImpl {
 		tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
 		size: RangeOrderSize,
-	) -> Result<Vec<RangeOrderReturn>, Error> {
+	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -223,7 +224,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderId,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<Vec<RangeOrderReturn>, Error> {
+	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -239,7 +240,7 @@ impl RpcServer for RpcServerImpl {
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
 		amount: AssetAmount,
-	) -> Result<Vec<LimitOrderReturn>, Error> {
+	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -254,7 +255,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderId,
 		tick: Option<Tick>,
 		sell_amount: AssetAmount,
-	) -> Result<Vec<LimitOrderReturn>, Error> {
+	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -263,7 +264,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns the tx hash that the account role was set
-	async fn register_account(&self) -> Result<Hash, Error> {
+	async fn register_account(&self) -> Result<Hash, AnyhowRpcError> {
 		Ok(self
 			.api
 			.operator_api()
@@ -271,7 +272,7 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError> {
 		let api = self.api.query_api();
 
 		let (ethereum, bitcoin, polkadot) = tokio::try_join!(
@@ -324,7 +325,7 @@ async fn main() -> anyhow::Result<()> {
 		async move {
 			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 
