@@ -3,7 +3,7 @@
 //! Returns the metrics encoded in a prometheus format
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 
-use super::task_scope;
+use super::{super::Port, task_scope};
 use async_channel::{unbounded, Receiver, Sender, TryRecvError};
 use lazy_static;
 use prometheus::{IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry};
@@ -17,7 +17,7 @@ type GaugePair = (IntGaugeVec, Vec<String>);
 #[derive(Clone)]
 pub struct Prometheus {
 	pub hostname: String,
-	pub port: u16,
+	pub port: Port,
 }
 
 #[derive(Clone)]
@@ -194,8 +194,9 @@ mod test {
 	#[tokio::test]
 	async fn prometheus_test() {
 		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
-		create_and_register_metric();
+		let metric = create_and_register_metric();
 
+		let _ = INT_COUNTER_CHANNEL.0.send((metric.clone(), ["A".to_string()].to_vec())).await;
 		task_scope::task_scope(|scope| {
 			async {
 				start(scope, &prometheus_settings).await.unwrap();
@@ -218,8 +219,11 @@ mod test {
 					}
 				};
 
-				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"A\"} 1\ntest{label=\"B\"} 10\n").await;
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"A\"} 1\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
 				request_test("invalid", reqwest::StatusCode::NOT_FOUND, "").await;
+				let _ = INT_COUNTER_CHANNEL.0.send((metric.clone(), ["C".to_string()].to_vec())).await;
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"B\"} 10\n").await;
 
 				Ok(())
 			}
@@ -229,12 +233,16 @@ mod test {
 		.unwrap();
 	}
 
-	fn create_and_register_metric() {
+	fn create_and_register_metric() -> IntCounterVec {
 		let metric = metrics::create_and_register_counter_vec("test", "test help", &["label"]);
 		metric.with_label_values(&["A"]).inc();
 		metric.with_label_values(&["B"]).inc_by(10);
+		metric.with_label_values(&["C"]).inc_by(100);
 
 		assert_eq!(metric.with_label_values(&["A"]).get(), 1);
 		assert_eq!(metric.with_label_values(&["B"]).get(), 10);
+		assert_eq!(metric.with_label_values(&["C"]).get(), 100);
+
+		metric
 	}
 }
