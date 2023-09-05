@@ -2139,6 +2139,7 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-rpc",
+ "sp-runtime",
  "state-chain-runtime",
  "utilities",
 ]
