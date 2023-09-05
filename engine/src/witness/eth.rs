@@ -96,6 +96,7 @@ where
 
 	eth_source
 		.clone()
+		.shared(scope)
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), eth_client.clone())
 		.logging("chain tracking")
