@@ -1,5 +1,8 @@
 use anyhow::anyhow;
-use cf_utilities::task_scope::{task_scope, Scope};
+use cf_utilities::{
+	task_scope::{task_scope, Scope},
+	RpcErrorExt,
+};
 use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
@@ -114,7 +117,7 @@ impl RpcServer for RpcServerImpl {
 			.register_account_role(AccountRole::Broker)
 			.await
 			.map(|tx_hash| format!("{tx_hash:#x}"))
-			.map_err(Into::into)
+			.map_err(RpcErrorExt::to_custom_error)
 	}
 
 	async fn request_swap_deposit_address(
@@ -138,7 +141,7 @@ impl RpcServer for RpcServerImpl {
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)
-			.map_err(Into::into)
+			.map_err(RpcErrorExt::to_custom_error)
 	}
 }
 

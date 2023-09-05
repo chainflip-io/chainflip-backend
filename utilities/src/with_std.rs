@@ -20,6 +20,27 @@ pub mod serde_helpers;
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
 
+use jsonrpsee::types::{
+	error::{CallError, CALL_EXECUTION_FAILED_CODE},
+	ErrorObject,
+};
+
+/// Custom extension trait for converting `anyhow::Error` to `jsonrpsee::types::error::CallError`,
+/// including context and source.
+pub trait RpcErrorExt {
+	fn to_custom_error(self) -> jsonrpsee::core::Error;
+}
+
+impl RpcErrorExt for anyhow::Error {
+	fn to_custom_error(self) -> jsonrpsee::core::Error {
+		jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+			CALL_EXECUTION_FAILED_CODE,
+			format!("{self:#}"),
+			None::<()>,
+		)))
+	}
+}
+
 pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,

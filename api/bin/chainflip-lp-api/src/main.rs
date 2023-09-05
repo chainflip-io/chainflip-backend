@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
+	try_parse_number_or_hex, RpcErrorExt,
 };
 use chainflip_api::{
 	self,
@@ -23,7 +23,6 @@ use jsonrpsee::{
 	core::{async_trait, Error},
 	proc_macros::rpc,
 	server::ServerBuilder,
-	types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObject},
 };
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
@@ -94,22 +93,6 @@ pub mod rpc_types {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
-	}
-}
-
-/// Custom extension trait for converting `anyhow::Error` to `jsonrpsee::types::error::CallError`,
-/// including context and source.
-pub trait LpErrorExt {
-	fn to_rpc_error(self) -> Error;
-}
-
-impl LpErrorExt for anyhow::Error {
-	fn to_rpc_error(self) -> Error {
-		Error::Call(jsonrpsee::types::error::CallError::Custom(ErrorObject::owned(
-			CALL_EXECUTION_FAILED_CODE,
-			format!("{:#}", self),
-			None::<()>,
-		)))
 	}
 }
 
@@ -216,7 +199,7 @@ impl RpcServer for RpcServerImpl {
 			.request_liquidity_deposit_address(asset)
 			.await
 			.map(|address| address.to_string())
-			.map_err(LpErrorExt::to_rpc_error)
+			.map_err(RpcErrorExt::to_custom_error)
 	}
 
 	async fn register_emergency_withdrawal_address(
@@ -225,13 +208,13 @@ impl RpcServer for RpcServerImpl {
 		address: &str,
 	) -> Result<Hash, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
-			.map_err(LpErrorExt::to_rpc_error)?;
+			.map_err(RpcErrorExt::to_custom_error)?;
 		Ok(self
 			.api
 			.lp_api()
 			.register_emergency_withdrawal_address(ewa_address)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Returns an egress id
@@ -243,14 +226,14 @@ impl RpcServer for RpcServerImpl {
 	) -> Result<(ForeignChain, u64), Error> {
 		let destination_address =
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
-				.map_err(LpErrorExt::to_rpc_error)?;
+				.map_err(RpcErrorExt::to_custom_error)?;
 
 		Ok(self
 			.api
 			.lp_api()
 			.withdraw_asset(try_parse_number_or_hex(amount)?, asset, destination_address)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Returns a list of all assets and their free balance in json format
@@ -260,7 +243,7 @@ impl RpcServer for RpcServerImpl {
 			.query_api()
 			.get_balances(None)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
@@ -273,7 +256,7 @@ impl RpcServer for RpcServerImpl {
 			.query_api()
 			.get_range_orders(None, account_id)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -295,10 +278,10 @@ impl RpcServer for RpcServerImpl {
 			.mint_range_order(
 				asset,
 				Range { start, end },
-				order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
+				order_size.try_into().map_err(|_| anyhow!("Invalid order size"))?,
 			)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Removes liquidity from a range order.
@@ -319,7 +302,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.burn_range_order(asset, Range { start, end }, try_parse_number_or_hex(amount)?)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Creates or adds liquidity to a limit order.
@@ -336,7 +319,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.mint_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Removes liquidity from a limit order.
@@ -353,7 +336,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.burn_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	/// Returns the tx hash that the account role was set
@@ -363,7 +346,7 @@ impl RpcServer for RpcServerImpl {
 			.operator_api()
 			.register_account_role(AccountRole::LiquidityProvider)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
@@ -374,7 +357,7 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Bitcoin>(None),
 			api.get_open_swap_channels::<Polkadot>(None),
 		)
-		.map_err(LpErrorExt::to_rpc_error)?;
+		.map_err(RpcErrorExt::to_custom_error)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
 	}
 
@@ -384,7 +367,7 @@ impl RpcServer for RpcServerImpl {
 			.query_api()
 			.get_pools(None, Some(asset))
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?
+			.map_err(RpcErrorExt::to_custom_error)?
 			.get(&asset)
 			.cloned())
 	}
@@ -395,7 +378,7 @@ impl RpcServer for RpcServerImpl {
 			.query_api()
 			.get_pools(None, None)
 			.await
-			.map_err(LpErrorExt::to_rpc_error)?)
+			.map_err(RpcErrorExt::to_custom_error)?)
 	}
 }
 

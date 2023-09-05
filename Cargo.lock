@@ -11923,6 +11923,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.11.0",
+ "jsonrpsee",
  "lazy_format",
  "mockall",
  "num-traits",
