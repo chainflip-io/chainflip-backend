@@ -238,7 +238,9 @@ export async function observeBadEvents(
     stopObserveEvent,
   );
   if (event) {
-    throw new Error(`Unexpected event emited ${event.name.section}:${event.name.method}`);
+    throw new Error(
+      `Unexpected event emited ${event.name.section}:${event.name.method} in block ${event.block}`,
+    );
   }
 }
 
