@@ -1,4 +1,4 @@
-use cf_chains::eth::{api::EthEnvironmentProvider, Address};
+use cf_chains::evm::{api::EthEnvironmentProvider, Address};
 
 /// A mock that just returns defaults for the KeyManager and Chain ID.
 pub struct MockEthEnvironment;
@@ -16,7 +16,7 @@ impl EthEnvironmentProvider for MockEthEnvironment {
 		Some(Default::default())
 	}
 
-	fn chain_id() -> cf_chains::eth::api::EthereumChainId {
+	fn chain_id() -> cf_chains::evm::api::EvmChainId {
 		Default::default()
 	}
 }

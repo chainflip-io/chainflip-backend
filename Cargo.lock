@@ -974,6 +974,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrayref",
  "base58",
  "bech32 0.9.1",
@@ -2139,6 +2140,7 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-rpc",
+ "sp-runtime",
  "state-chain-runtime",
  "utilities",
 ]

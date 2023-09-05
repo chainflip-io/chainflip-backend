@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
+use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_on_account_funded,
 	impl_mock_waived_fees, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
@@ -110,7 +110,8 @@ type MockBroadcasterStorage = StorageValue<Mock, MockBroadcasterBehaviour>;
 type GovKeyBroadcasted = StorageValue<Mock, (cf_chains::ForeignChain, Option<Vec<u8>>, Vec<u8>)>;
 
 #[frame_support::storage_alias]
-type CommKeyBroadcasted = StorageValue<Mock, <Ethereum as ChainCrypto>::GovKey>;
+type CommKeyBroadcasted =
+	StorageValue<Mock, <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey>;
 
 impl BroadcastAnyChainGovKey for MockBroadcaster {
 	fn broadcast_gov_key(
@@ -132,7 +133,7 @@ impl BroadcastAnyChainGovKey for MockBroadcaster {
 }
 
 impl CommKeyBroadcaster for MockBroadcaster {
-	fn broadcast(new_key: <Ethereum as cf_chains::ChainCrypto>::GovKey) {
+	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as cf_chains::ChainCrypto>::GovKey) {
 		CommKeyBroadcasted::put(new_key);
 	}
 }

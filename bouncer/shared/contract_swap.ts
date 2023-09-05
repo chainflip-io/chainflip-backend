@@ -93,7 +93,10 @@ export async function performSwapViaContract(
     const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('Vault' in event.data.origin) {
-        return event.data.origin.Vault.txHash === receipt.transactionHash;
+        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
+        const destAssetMatches = destAsset === (event.data.destinationAsset.toUpperCase() as Asset);
+        const txHashMatches = event.data.origin.Vault.txHash === receipt.transactionHash;
+        return sourceAssetMatches && destAssetMatches && txHashMatches;
       }
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;

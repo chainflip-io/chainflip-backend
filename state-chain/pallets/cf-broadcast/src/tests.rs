@@ -3,20 +3,20 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, ThresholdSignatureData, TransactionFeeDeficit,
+	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
 	TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
-	eth::SchnorrVerificationComponents,
+	evm::SchnorrVerificationComponents,
 	mocks::{
-		MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, MockTransactionBuilder,
-		ETH_TX_FEE,
+		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockThresholdSignature,
+		MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AsyncResult, Chainflip, EpochInfo, ThresholdSigner,
+	AsyncResult, Chainflip, EpochInfo, SetSafeMode, ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -120,13 +120,13 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 }
 
 fn start_mock_broadcast_tx_out_id(
-	tx_out_id: <MockEthereum as ChainCrypto>::TransactionOutId,
+	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
 ) -> BroadcastAttemptId {
 	Broadcaster::start_broadcast(
 		&MockThresholdSignature::default(),
 		MockTransaction,
-		MockApiCall { tx_out_id, ..Default::default() },
-		MockApiCall::<MockEthereum>::default().payload,
+		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
+		Default::default(),
 		1,
 	)
 }
@@ -440,7 +440,7 @@ fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
 	);
 	// Verify that we have a new signature request in the pipeline
 	assert_eq!(
-		MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
+		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
 		AsyncResult::Pending
 	);
 }
@@ -454,7 +454,7 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 		let broadcast_attempt_id = start_mock_broadcast();
 
 		assert_eq!(
-			MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
+			MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
 			AsyncResult::Void
 		);
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
@@ -511,5 +511,31 @@ fn threshold_sign_and_broadcast_with_callback() {
 				result: Ok(())
 			})
 		);
+	});
+}
+
+#[test]
+fn ensure_safe_mode_is_moving_timeouts() {
+	new_test_ext().execute_with(|| {
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		let _ = start_mock_broadcast();
+		assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 1);
+		Broadcaster::on_initialize(5);
+		assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
+		assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
+	});
+}
+
+#[test]
+fn ensure_retries_are_skipped_during_safe_mode() {
+	new_test_ext().execute_with(|| {
+		let _ = start_mock_broadcast();
+		MockCfe::respond(Scenario::SigningFailure);
+		let _ = start_mock_broadcast();
+		MockCfe::respond(Scenario::SigningFailure);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
 	});
 }
