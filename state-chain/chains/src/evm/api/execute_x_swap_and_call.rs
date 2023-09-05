@@ -107,7 +107,7 @@ mod test_execute_x_swap_and_execute {
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
-		const GAS_LIMIT: GasUnit = 100_000u64;
+		const GAS_LIMIT: GasUnit = 100_000u128;
 
 		let dummy_transfer_asset_param = EncodableTransferAssetParams {
 			asset: Address::from_slice(&[5; 20]),

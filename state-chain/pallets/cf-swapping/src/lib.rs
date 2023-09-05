@@ -207,10 +207,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type CcmBaseGasFeeMultiplier: Get<FixedU64>;
 
-		/// Default gas limit for Ccm messages. Used when Gas price is not available.
-		#[pallet::constant]
-		type DefaultCcmGasLimit: Get<GasUnit>;
-
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -882,21 +878,12 @@ pub mod pallet {
 
 		// Calculate the gas limit for CCM messages, using the current gas price.
 		// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-		// If calculation fails in anyway, the `DefaultCcmGasLimit` is used.
 		pub fn calculate_ccm_gas_limit(chain: ForeignChain, gas_budget: AssetAmount) -> GasUnit {
-			if let Some((base_price, priority_fee)) =
-				T::GasPriceProvider::gas_price_for_chain(chain)
-			{
-				let max_gas_price = T::CcmBaseGasFeeMultiplier::get()
-					.saturating_mul_int(base_price)
-					.saturating_add(priority_fee);
-				match gas_budget.checked_div(max_gas_price) {
-					Some(res) => res.try_into().unwrap_or(T::DefaultCcmGasLimit::get()),
-					None => T::DefaultCcmGasLimit::get(),
-				}
-			} else {
-				T::DefaultCcmGasLimit::get()
-			}
+			let (base_price, priority_fee) = T::GasPriceProvider::gas_price_for_chain(chain);
+			let max_gas_price = T::CcmBaseGasFeeMultiplier::get()
+				.saturating_mul_int(base_price)
+				.saturating_add(priority_fee);
+			gas_budget.checked_div(max_gas_price).unwrap_or_default()
 		}
 
 		/// Schedule the egress of a completed Cross chain message.

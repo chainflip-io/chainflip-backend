@@ -213,7 +213,6 @@ impl pallet_cf_environment::Config for Runtime {
 
 parameter_types! {
 	pub const CcmBaseGasFeeMultiplier: FixedU64 = FixedU64::from_rational(2, 1);
-	pub const DefaultCcmGasLimit: GasUnit = 400_000u64;
 }
 impl pallet_cf_swapping::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -224,7 +223,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type GasPriceProvider = ChainflipGasPriceProvider;
 	type CcmBaseGasFeeMultiplier = CcmBaseGasFeeMultiplier;
-	type DefaultCcmGasLimit = DefaultCcmGasLimit;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 

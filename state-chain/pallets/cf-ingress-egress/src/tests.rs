@@ -87,7 +87,7 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 fn blacklisted_asset_will_not_egress_via_ccm() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
-		let gas_limit = 1000u64;
+		let gas_limit = 1000u128;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -523,7 +523,7 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
-		let gas_limit = 1_000u64;
+		let gas_limit = 1_000u128;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),

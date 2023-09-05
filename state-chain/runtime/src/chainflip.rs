@@ -626,11 +626,20 @@ impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualifica
 
 pub struct ChainflipGasPriceProvider;
 impl GasPriceProvider for ChainflipGasPriceProvider {
-	fn gas_price_for_chain(chain: ForeignChain) -> Option<(AssetAmount, AssetAmount)> {
+	fn gas_price_for_chain(chain: ForeignChain) -> (AssetAmount, AssetAmount) {
 		match chain {
-			ForeignChain::Ethereum => EthereumChainTracking::chain_state()
-				.map(|state| (state.tracked_data.base_fee, state.tracked_data.priority_fee)),
-			_ => None,
+			// According to ChainTracking pallet it is safe to .expect() here.
+			ForeignChain::Ethereum => {
+				let state = EthereumChainTracking::chain_state()
+					.expect("Chain Tracking will always provide a state.");
+				(state.tracked_data.base_fee, state.tracked_data.priority_fee)
+			},
+			ForeignChain::Polkadot => {
+				let state = PolkadotChainTracking::chain_state()
+					.expect("Chain Tracking will always provide a state.");
+				(state.tracked_data.median_tip, 0u128)
+			},
+			ForeignChain::Bitcoin => (0u128, 0u128),
 		}
 	}
 }
