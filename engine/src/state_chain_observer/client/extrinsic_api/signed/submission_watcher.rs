@@ -52,7 +52,7 @@ pub type RequestID = u64;
 pub struct Request {
 	id: RequestID,
 	pending_submissions: usize,
-	pub allow_resubmits: bool,
+	allow_resubmits: bool,
 	lifetime: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
 	call: state_chain_runtime::RuntimeCall,
 	result_sender: oneshot::Sender<ExtrinsicResult>,

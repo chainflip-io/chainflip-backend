@@ -7,7 +7,7 @@ use futures::StreamExt;
 use sp_core::H256;
 use state_chain_runtime::AccountId;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
@@ -138,16 +138,17 @@ impl SignedExtrinsicClient {
 				let mut state_chain_stream = state_chain_stream.clone();
 
 				async move {
-					let (mut submission_watcher, mut requests) = submission_watcher::SubmissionWatcher::new(
-						signer,
-						account_nonce,
-						state_chain_stream.cache().block_hash,
-						state_chain_stream.cache().block_number,
-						base_rpc_client.runtime_version().await?,
-						genesis_hash,
-						SIGNED_EXTRINSIC_LIFETIME,
-						base_rpc_client.clone()
-					);
+					let (mut submission_watcher, mut requests) =
+						submission_watcher::SubmissionWatcher::new(
+							signer,
+							account_nonce,
+							state_chain_stream.cache().block_hash,
+							state_chain_stream.cache().block_number,
+							base_rpc_client.runtime_version().await?,
+							genesis_hash,
+							SIGNED_EXTRINSIC_LIFETIME,
+							base_rpc_client.clone(),
+						);
 
 					utilities::loop_select! {
 						if let Some((call, result_sender, strategy)) = request_receiver.recv() => {
@@ -160,6 +161,7 @@ impl SignedExtrinsicClient {
 								block_hash,
 							).await?;
 
+							/*
 							// TODO: Handle possibility of stuck nonce caused submissions being dropped from the mempool or broken submissions either submitted here or externally when only using submit_signed_extrinsics
 							// TODO: Improve handling only submit_signed_extrinsic requests (using pending_extrinsics rpc call)
 							// TODO: Use system_accountNextIndex
@@ -190,6 +192,7 @@ impl SignedExtrinsicClient {
 									}
 								}
 							}
+							*/
 						} else break Ok(()),
 					}
 				}
