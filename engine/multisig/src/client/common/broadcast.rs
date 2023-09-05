@@ -161,7 +161,12 @@ where
 		let m: Stage::Message = match m.try_into() {
 			Ok(m) => m,
 			Err(incorrect_type) => {
-				BROADCAST_BAD_MSG.with_label_values(&["incorrect_type", self.get_stage_name().to_string().as_str()]).inc();
+				BROADCAST_BAD_MSG
+					.with_label_values(&[
+						"incorrect_type",
+						self.get_stage_name().to_string().as_str(),
+					])
+					.inc();
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring unexpected message {incorrect_type} while in stage {self}",
@@ -171,7 +176,12 @@ where
 		};
 
 		if !self.common.all_idxs.contains(&signer_idx) {
-			BROADCAST_BAD_MSG.with_label_values(&["message_from_non_participant", self.get_stage_name().to_string().as_str()]).inc();
+			BROADCAST_BAD_MSG
+				.with_label_values(&[
+					"message_from_non_participant",
+					self.get_stage_name().to_string().as_str(),
+				])
+				.inc();
 			warn!(
 				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 				"Ignoring a message from non-participant for stage {self}",
@@ -181,7 +191,12 @@ where
 
 		match self.messages.entry(signer_idx) {
 			btree_map::Entry::Occupied(_) => {
-				BROADCAST_BAD_MSG.with_label_values(&["redundant_message", self.get_stage_name().to_string().as_str()]).inc();
+				BROADCAST_BAD_MSG
+					.with_label_values(&[
+						"redundant_message",
+						self.get_stage_name().to_string().as_str(),
+					])
+					.inc();
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring a redundant message for stage {self}",
