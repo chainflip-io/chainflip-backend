@@ -76,7 +76,8 @@ fn keygen_request_emitted() {
 
 #[test]
 fn keygen_handover_request_emitted() {
-	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+	let authorities = BTreeSet::from_iter(ALL_CANDIDATES.iter().take(2).cloned());
+	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().skip(1).take(2).cloned());
 
 	new_test_ext().execute_with(|| {
 		let current_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
@@ -88,7 +89,7 @@ fn keygen_handover_request_emitted() {
 		let ceremony_id = current_ceremony_id();
 
 		<VaultsPallet as VaultRotator>::key_handover(
-			candidates.clone(),
+			authorities.clone(),
 			candidates.clone(),
 			next_epoch,
 		);
@@ -101,7 +102,7 @@ fn keygen_handover_request_emitted() {
 				ceremony_id: ceremony_id + 1,
 				from_epoch: current_epoch,
 				key_to_share: VaultsPallet::active_epoch_key().unwrap().key,
-				sharing_participants: candidates.clone(),
+				sharing_participants: authorities,
 				receiving_participants: candidates,
 				new_key: Default::default(),
 				to_epoch: next_epoch,
@@ -168,7 +169,7 @@ fn test_keygen_failure() {
 }
 
 // This happens when the vault reports failure (through its status) to the validator pallet.
-// Once all vaults have reported some AsyncResul::Ready status (see all_vaults_rotator) then
+// Once all vaults have reported some AsyncResult::Ready status (see all_vaults_rotator) then
 // the validator pallet will call keygen() again
 #[test]
 fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
@@ -699,7 +700,8 @@ mod vault_key_rotation {
 	fn setup(key_handover_outcome: KeygenOutcomeFor<Test>) -> TestRunner<()> {
 		let ext = new_test_ext();
 		ext.execute_with(|| {
-			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+			let authorities = BTreeSet::from_iter(ALL_CANDIDATES.iter().take(2).cloned());
+			let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().skip(1).take(2).cloned());
 
 			let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 
@@ -712,12 +714,12 @@ mod vault_key_rotation {
 				Error::<Test, _>::NoActiveRotation
 			);
 
-			<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
+			<VaultsPallet as VaultRotator>::keygen(candidates.clone(), GENESIS_EPOCH);
 			let ceremony_id = current_ceremony_id();
 			VaultsPallet::trigger_keygen_verification(
 				ceremony_id,
 				NEW_AGG_PUB_KEY_PRE_HANDOVER,
-				btree_candidates.clone(),
+				candidates.clone(),
 				rotation_epoch_index,
 			);
 
@@ -726,14 +728,15 @@ mod vault_key_rotation {
 			));
 
 			VaultsPallet::key_handover(
-				btree_candidates.clone(),
-				btree_candidates.clone(),
+				authorities.clone(),
+				candidates.clone(),
 				rotation_epoch_index,
 			);
 
-			for candidate in btree_candidates {
+			// Note that we require all participants to respond
+			for candidate in authorities.union(&candidates) {
 				assert_ok!(VaultsPallet::report_key_handover_outcome(
-					RuntimeOrigin::signed(candidate),
+					RuntimeOrigin::signed(*candidate),
 					current_ceremony_id(),
 					key_handover_outcome.clone()
 				));
@@ -843,7 +846,7 @@ mod vault_key_rotation {
 	}
 
 	#[test]
-	fn handover_failure() {
+	fn can_recover_after_handover_failure() {
 		let ext = setup(Err(Default::default())).execute_with(|| {
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get().unwrap(),
