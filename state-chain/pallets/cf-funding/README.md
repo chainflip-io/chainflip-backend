@@ -54,7 +54,7 @@ Validators who are actively bidding in an auction cannot redeem funds. This is t
 
 #### Address Binding
 
-Any account may be explicitly *bound* to a single redemption address. Henceforth, an redemption request can *only redeem to this exact address*.
+Any account may be explicitly *bound* to a single redemption address. Henceforth, any redemption request from that account can *only redeem to this exact address*.
 
 Note, address binding is a one-off *irreversible* operation.
 
