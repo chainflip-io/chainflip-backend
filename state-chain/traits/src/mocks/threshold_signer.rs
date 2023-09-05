@@ -87,8 +87,11 @@ where
 		_participants: BTreeSet<Self::ValidatorId>,
 		_key: <C as ChainCrypto>::AggKey,
 		_epoch_index: EpochIndex,
+		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
 	) -> ThresholdSignatureRequestId {
-		Self::request_signature(payload)
+		let req_id = Self::request_signature(payload);
+		Self::register_callback(req_id, on_signature_ready(req_id)).unwrap();
+		req_id
 	}
 
 	fn register_callback(

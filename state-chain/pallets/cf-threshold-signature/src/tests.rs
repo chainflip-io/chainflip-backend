@@ -254,11 +254,8 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 				NOMINEES.into_iter().collect(),
 				key,
 				0,
+				|req_id| MockCallback::new(req_id),
 			);
-			assert_ok!(EthereumThresholdSigner::register_callback(
-				request_id,
-				MockCallback::new(request_id)
-			));
 
 			// Callback was just registered, so cannot have been called.
 			assert!(!MockCallback::has_executed(request_id));
@@ -498,6 +495,7 @@ mod unsigned_validation {
 				participants,
 				CUSTOM_AGG_KEY,
 				0,
+				|req_id| MockCallback::new(req_id),
 			);
 			let ceremony_id = MockCeremonyIdProvider::get();
 

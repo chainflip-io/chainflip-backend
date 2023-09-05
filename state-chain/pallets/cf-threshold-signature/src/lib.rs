@@ -823,11 +823,17 @@ where
 		participants: BTreeSet<Self::ValidatorId>,
 		key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		epoch_index: EpochIndex,
+		on_signature_ready: impl FnOnce(cf_primitives::ThresholdSignatureRequestId) -> Self::Callback,
 	) -> RequestId {
-		Self::inner_request_signature(
+		let request_id = Self::inner_request_signature(
 			payload,
 			RequestType::KeygenVerification { key, participants, epoch_index },
-		)
+		);
+
+		Self::register_callback(request_id, on_signature_ready(request_id))
+			.expect("Request id was just generated, so must be valid");
+
+		request_id
 	}
 
 	fn register_callback(
