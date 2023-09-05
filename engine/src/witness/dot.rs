@@ -94,7 +94,6 @@ where
 	StateChainStream: StateChainStreamApi + Clone,
 {
 	DotUnfinalisedSource::new(dot_client.clone())
-		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.shared(scope)
 		.chunk_by_time(epoch_source.clone())
@@ -117,7 +116,6 @@ where
 		.await;
 
 	DotFinalisedSource::new(dot_client.clone())
-		.shared(scope)
 		.strictly_monotonic()
 		.logging("finalised block produced")
 		.then(|header| async move {
