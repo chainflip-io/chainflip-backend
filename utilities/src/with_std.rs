@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context};
 use core::time::Duration;
 use futures::{stream, Stream};
+use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
@@ -20,6 +21,24 @@ pub mod serde_helpers;
 
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
+
+/// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
+/// including context and source.
+pub struct AnyhowRpcError {
+	pub error: anyhow::Error,
+}
+
+impl From<anyhow::Error> for AnyhowRpcError {
+	fn from(error: anyhow::Error) -> Self {
+		Self { error }
+	}
+}
+
+impl From<AnyhowRpcError> for ErrorObjectOwned {
+	fn from(e: AnyhowRpcError) -> Self {
+		ErrorObjectOwned::owned(CALL_EXECUTION_FAILED_CODE, format!("{:#}", e.error), None::<()>)
+	}
+}
 
 pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {

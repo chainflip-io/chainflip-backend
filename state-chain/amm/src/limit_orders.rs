@@ -7,35 +7,20 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price, Amount,
-	OneToZero, PostOperationPositionExistence, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
-	MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
+	tick_at_sqrt_price, Amount, OneToZero, Price, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
+	ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
 
-type Price = U256;
-const PRICE_FRACTIONAL_BITS: u32 = 128;
-
-fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
-	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
-
-	mul_div_floor(
-		sqrt_price,
-		sqrt_price,
-		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
-	)
-}
-
 /// Represents a number exclusively between 0 and 1.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize, Default))]
+#[cfg_attr(feature = "std", derive(Default))]
 struct FloatBetweenZeroAndOne {
 	normalised_mantissa: U256,
 	negative_exponent: U256,
@@ -154,7 +139,7 @@ impl FloatBetweenZeroAndOne {
 	}
 }
 
-pub trait SwapDirection: crate::common::SwapDirection {
+pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Calculates the swap input amount needed to produce an output amount at a price
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount;
 
@@ -253,66 +238,53 @@ pub enum BurnError {}
 pub enum CollectError {}
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
-pub struct CollectedAmounts {
+pub struct Collected {
 	pub fees: Amount,
-	pub swapped_liquidity: Amount,
+	pub bought_amount: Amount,
+}
+
+#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+pub struct PositionInfo {
+	pub amount: Amount,
+}
+impl PositionInfo {
+	pub fn new(amount: Amount) -> Self {
+		Self { amount }
+	}
+}
+impl<'a> From<&'a Position> for PositionInfo {
+	fn from(value: &'a Position) -> Self {
+		Self { amount: value.amount }
+	}
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
-	#[cfg_attr(feature = "std", serde(skip))]
 	pool_instance: u128,
 	amount: Amount,
-	#[cfg_attr(feature = "std", serde(skip))]
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-pub struct FixedPool {
-	#[cfg_attr(feature = "std", serde(skip))]
+pub(super) struct FixedPool {
 	pool_instance: u128,
 	available: Amount,
-	#[cfg_attr(feature = "std", serde(skip))]
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Deserialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
-)]
-pub struct PoolState<LiquidityProvider> {
-	fee_hundredth_pips: u32,
+pub(super) struct PoolState<LiquidityProvider> {
+	pub(super) fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
-}
-
-#[cfg(feature = "std")]
-impl<L: Serialize + Clone> Serialize for PoolState<L> {
-	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		use serde::ser::SerializeStruct;
-		let mut state = serializer.serialize_struct("PoolState", 4)?;
-		state.serialize_field("fee_hundredth_pips", &self.fee_hundredth_pips)?;
-		state.serialize_field(
-			"positions",
-			&self
-				.positions
-				.clone()
-				.map(|_side, positions| positions.into_iter().collect::<Vec<_>>()),
-		)?;
-		state.end()
-	}
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity.
 	///
 	/// This function never panics.
-	pub fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
+	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
 		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
@@ -330,16 +302,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
-	pub fn set_fees(
+	#[allow(dead_code)]
+	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
 	) -> Result<
-		SideMap<
-			BTreeMap<
-				(SqrtPriceQ64F96, LiquidityProvider),
-				(CollectedAmounts, PostOperationPositionExistence),
-			>,
-		>,
+		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), (Collected, PositionInfo)>>,
 		SetFeesError,
 	> {
 		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
@@ -383,7 +351,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns the current price of the pool, if some liquidity exists.
 	///
 	/// This function never panics.
-	pub fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
+	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
 		SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]).map(|entry| *entry.key())
 	}
 
@@ -393,7 +361,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// `OneToZero`. Note sqrt_price_limit is inclusive.
 	///
 	/// This function never panics
-	pub fn swap<SD: SwapDirection>(
+	pub(super) fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<SqrtPriceQ64F96>,
@@ -481,7 +449,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		fixed_pool: Option<&FixedPool>,
 		price: Price,
 		fee_hundredth_pips: u32,
-	) -> (CollectedAmounts, Option<Position>) {
+	) -> (Collected, Option<Position>) {
 		let (used_liquidity, option_position) = if let Some(fixed_pool) =
 			fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance)
 		{
@@ -494,7 +462,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			(
 				// We under-estimate used liquidity so that lp's don't receive more
-				// swapped_liquidity and fees than may exist in the pool
+				// bought_amount and fees than may exist in the pool
 				position.amount - remaining_amount_ceil,
 				// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
 				// than truely exists in the pool
@@ -510,15 +478,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			(position.amount, None)
 		};
 
-		let swapped_liquidity = SD::input_amount_floor(used_liquidity, price);
+		let bought_amount = SD::input_amount_floor(used_liquidity, price);
 		(
-			CollectedAmounts {
+			Collected {
 				fees: /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */ mul_div_floor(
-					swapped_liquidity,
+					bought_amount,
 					U256::from(fee_hundredth_pips),
 					U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
 				),
-				swapped_liquidity,
+				bought_amount,
 			},
 			option_position,
 		)
@@ -529,12 +497,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// will be for.
 	///
 	/// This function never panics.
-	pub fn collect_and_mint<SD: SwapDirection>(
+	pub(super) fn collect_and_mint<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<MintError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<MintError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> MintError { match e {} }))
@@ -600,11 +568,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			} else {
 				position.amount += amount;
 
+				let position_info = PositionInfo::from(&position);
+
 				self.next_pool_instance = next_pool_instance;
 				fixed_pools.insert(sqrt_price, fixed_pool);
 				positions.insert((sqrt_price, lp.clone()), position);
 
-				Ok((collected_amounts, PostOperationPositionExistence::Exists))
+				Ok((collected_amounts, position_info))
 			}
 		}
 	}
@@ -620,18 +590,17 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// liquidity/position you're burning was for.
 	///
 	/// This function never panics.
-	pub fn collect_and_burn<SD: SwapDirection>(
+	pub(super) fn collect_and_burn<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
-	) -> Result<(Amount, CollectedAmounts, PostOperationPositionExistence), PositionError<BurnError>>
-	{
+	) -> Result<(Amount, Collected, PositionInfo), PositionError<BurnError>> {
 		if amount.is_zero() {
 			self.collect::<SD>(lp, tick)
 				.map_err(|err| err.map_other(|e| -> BurnError { match e {} }))
-				.map(|(collected_amounts, post_operation_position_existence)| {
-					(Amount::zero(), collected_amounts, post_operation_position_existence)
+				.map(|(collected_amounts, position_info)| {
+					(Amount::zero(), collected_amounts, position_info)
 				})
 		} else {
 			let sqrt_price = Self::validate_tick(tick)?;
@@ -659,13 +628,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				position.amount -= amount;
 				fixed_pool.available -= amount;
 
-				let post_operation_position_existence = if position.amount.is_zero() {
+				let position_info = PositionInfo::from(&position);
+
+				if position.amount.is_zero() {
 					positions.remove(&(sqrt_price, lp.clone()));
-					PostOperationPositionExistence::DoesNotExist
 				} else {
 					assert!(!fixed_pool.available.is_zero());
 					positions.insert((sqrt_price, lp.clone()), position);
-					PostOperationPositionExistence::Exists
 				};
 				if fixed_pool.available.is_zero() {
 					fixed_pools.remove(&sqrt_price);
@@ -673,14 +642,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					fixed_pools.insert(sqrt_price, fixed_pool);
 				}
 
-				(amount, collected_amounts, post_operation_position_existence)
+				(amount, collected_amounts, position_info)
 			} else {
 				positions.remove(&(sqrt_price, lp.clone()));
-				(
-					Default::default(),
-					collected_amounts,
-					PostOperationPositionExistence::DoesNotExist,
-				)
+				(Default::default(), collected_amounts, PositionInfo::default())
 			})
 		}
 	}
@@ -689,11 +654,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// direction of swaps the liquidity/position you're refering to is for.
 	///
 	/// This function never panics.
-	pub fn collect<SD: SwapDirection>(
+	pub(super) fn collect<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<CollectError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		self.inner_collect::<SD>(lp, sqrt_price)
 	}
@@ -702,7 +667,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
-	) -> Result<(CollectedAmounts, PostOperationPositionExistence), PositionError<CollectError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		let price = sqrt_price_to_price(sqrt_price);
 
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
@@ -721,11 +686,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok((
 			collected_amounts,
 			if let Some(position) = option_position {
+				let position_info = PositionInfo::from(&position);
 				positions.insert((sqrt_price, lp.clone()), position);
-				PostOperationPositionExistence::Exists
+				position_info
 			} else {
 				positions.remove(&(sqrt_price, lp.clone()));
-				PostOperationPositionExistence::DoesNotExist
+				PositionInfo::default()
 			},
 		))
 	}
@@ -733,11 +699,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets associated with a position
 	///
 	/// This function never panics.
-	pub fn position<SD: SwapDirection>(
+	pub(super) fn position<SD: SwapDirection>(
 		&self,
 		lp: &LiquidityProvider,
 		tick: Tick,
-	) -> Result<(CollectedAmounts, Amount), PositionError<Infallible>> {
+	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
 		let sqrt_price = Self::validate_tick(tick)?;
 		let price = sqrt_price_to_price(sqrt_price);
 
@@ -756,14 +722,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		Ok((
 			collected_amounts,
-			option_position.map_or(Default::default(), |position| position.amount),
+			option_position.map_or(Default::default(), |position| PositionInfo::from(&position)),
 		))
 	}
 
 	/// Returns all the assets available for swaps in a given direction
 	///
 	/// This function never panics.
-	pub fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
+	#[allow(dead_code)]
+	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
 		self.fixed_pools[!SD::INPUT_SIDE]
 			.iter()
 			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
