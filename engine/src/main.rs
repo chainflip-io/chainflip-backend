@@ -119,9 +119,14 @@ async fn start(
 	if let Some(health_check_settings) = &settings.health_check {
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
 	}
-	// TODO remove hardcoded struct here and read from some settings
-	let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
-	metrics::start(scope, &prometheus_settings).await?;
+
+	if let Some(prometheus_config) = &settings.prometheus {
+		let prometheus_settings = Prometheus {
+			hostname: prometheus_config.hostname.clone(),
+			port: prometheus_config.port,
+		};
+		metrics::start(scope, &prometheus_settings).await?;
+	}
 
 	let (state_chain_stream, state_chain_client) =
 		state_chain_observer::client::StateChainClient::connect_with_account(
