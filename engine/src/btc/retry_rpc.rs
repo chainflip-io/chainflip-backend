@@ -1,5 +1,4 @@
 use bitcoin::{Block, BlockHash, Txid};
-use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -22,15 +21,12 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl BtcRetryRpcClient {
-	pub fn new<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>(
-		scope: &Scope<'_, anyhow::Error>,
-		btc_client: BtcRpcClientFut,
-	) -> Self {
+	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClient) -> Self {
 		Self {
 			retry_client: RetrierClient::new(
 				scope,
 				"btc_rpc",
-				btc_client,
+				async move { btc_client },
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),

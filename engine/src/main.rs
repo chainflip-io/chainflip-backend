@@ -237,7 +237,7 @@ async fn start(
 	);
 
 	let btc_rpc_client = BtcRpcClient::new(settings.btc.node)?;
-	let btc_client = BtcRetryRpcClient::new(scope, async move { btc_rpc_client });
+	let btc_client = BtcRetryRpcClient::new(scope, btc_rpc_client);
 
 	let dot_client = DotRetryRpcClient::new(
 		scope,
