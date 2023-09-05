@@ -44,15 +44,14 @@ impl StateChain {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Eth {
+pub struct WsHttpEndpoints {
 	pub ws_node_endpoint: String,
 	pub http_node_endpoint: String,
-	#[serde(deserialize_with = "deser_path")]
-	pub private_key_file: PathBuf,
 }
 
-impl Eth {
-	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+impl WsHttpEndpoints {
+	/// Ensure the endpoints are valid HTTP and WS endpoints.
+	pub fn validate(&self) -> Result<(), ConfigError> {
 		validate_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		validate_http_endpoint(&self.http_node_endpoint)
@@ -62,15 +61,39 @@ impl Eth {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Eth {
+	pub node: WsHttpEndpoints,
+	#[serde(deserialize_with = "deser_path")]
+	pub private_key_file: PathBuf,
+}
+
+impl Eth {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		self.node.validate()
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
-	pub ws_node_endpoint: String,
-	pub http_node_endpoint: String,
+	pub node: WsHttpEndpoints,
 }
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		self.node.validate()
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct HttpBasicAuthEndpoint {
+	pub http_node_endpoint: String,
+	pub rpc_user: String,
+	pub rpc_password: String,
+}
+
+impl HttpBasicAuthEndpoint {
+	/// Ensure the endpoint is a valid HTTP endpoint.
+	pub fn validate(&self) -> Result<(), ConfigError> {
 		validate_http_endpoint(&self.http_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
@@ -79,16 +102,12 @@ impl Dot {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Btc {
-	pub http_node_endpoint: String,
-	pub rpc_user: String,
-	pub rpc_password: String,
+	pub node: HttpBasicAuthEndpoint,
 }
 
 impl Btc {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_http_endpoint(&self.http_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
+		self.node.validate()
 	}
 }
 
@@ -604,8 +623,11 @@ mod tests {
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
-		assert_eq!(settings.dot.ws_node_endpoint, "wss://my_fake_polkadot_rpc:443/<secret_key>");
+		assert_eq!(settings.eth.node.http_node_endpoint, "http://localhost:8545");
+		assert_eq!(
+			settings.dot.node.ws_node_endpoint,
+			"wss://my_fake_polkadot_rpc:443/<secret_key>"
+		);
 	}
 
 	#[test]
@@ -742,16 +764,25 @@ mod tests {
 			settings.state_chain.signing_key_file
 		);
 
-		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
-		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
+		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.node.ws_node_endpoint);
+		assert_eq!(
+			opts.eth_opts.eth_http_node_endpoint.unwrap(),
+			settings.eth.node.http_node_endpoint
+		);
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
-		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
-		assert_eq!(opts.dot_opts.dot_http_node_endpoint.unwrap(), settings.dot.http_node_endpoint);
+		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.node.ws_node_endpoint);
+		assert_eq!(
+			opts.dot_opts.dot_http_node_endpoint.unwrap(),
+			settings.dot.node.http_node_endpoint
+		);
 
-		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), settings.btc.http_node_endpoint);
-		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.rpc_user);
-		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), settings.btc.rpc_password);
+		assert_eq!(
+			opts.btc_opts.btc_http_node_endpoint.unwrap(),
+			settings.btc.node.http_node_endpoint
+		);
+		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.node.rpc_user);
+		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), settings.btc.node.rpc_password);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),

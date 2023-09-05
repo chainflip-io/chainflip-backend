@@ -31,7 +31,7 @@ impl EthRpcClient {
 		expected_chain_id: u64,
 	) -> Result<impl Future<Output = Self>> {
 		let provider =
-			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
+			Arc::new(Provider::<Http>::try_from(eth_settings.node.http_node_endpoint.to_string())?);
 		let wallet = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
@@ -62,7 +62,7 @@ impl EthRpcClient {
 					Err(e) => tracing::error!(
 					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE
 					configuration file. Retrying...",
-					eth_settings.http_node_endpoint
+					eth_settings.node.http_node_endpoint
 				),
 				}
 			}

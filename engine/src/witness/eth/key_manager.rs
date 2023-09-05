@@ -203,6 +203,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
+
 	use std::{path::PathBuf, str::FromStr};
 
 	use cf_primitives::AccountRole;
@@ -217,7 +218,7 @@ mod tests {
 			retry_rpc::EthersRetryRpcClient,
 			rpc::{EthRpcClient, ReconnectSubscriptionClient},
 		},
-		settings::{self},
+		settings::{self, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
@@ -228,8 +229,10 @@ mod tests {
 		task_scope(|scope| {
 			async {
 				let eth_settings = settings::Eth {
-					ws_node_endpoint: "ws://localhost:8546".to_string(),
-					http_node_endpoint: "http://localhost:8545".to_string(),
+					node: WsHttpEndpoints {
+						ws_node_endpoint: "ws://localhost:8546".to_string(),
+						http_node_endpoint: "http://localhost:8545".to_string(),
+					},
 					private_key_file: PathBuf::from_str(
 						"/Users/kylezs/Documents/test-keys/eth-cf-metamask",
 					)
@@ -241,7 +244,7 @@ mod tests {
 					scope,
 					rpc_client,
 					ReconnectSubscriptionClient::new(
-						eth_settings.ws_node_endpoint,
+						eth_settings.node.ws_node_endpoint,
 						web3::types::U256::from(10997),
 					),
 				);

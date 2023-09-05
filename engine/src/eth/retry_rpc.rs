@@ -354,7 +354,7 @@ mod tests {
 					scope,
 					eth_rpc_client,
 					ReconnectSubscriptionClient::new(
-						settings.eth.ws_node_endpoint,
+						settings.eth.node.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
 				);

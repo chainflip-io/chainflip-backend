@@ -252,7 +252,7 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.ws_node_endpoint, "ws://localhost:8545");
+		assert_eq!(settings.eth.node.ws_node_endpoint, "ws://localhost:8545");
 	}
 
 	#[test]
@@ -290,8 +290,11 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
-		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
-		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
+		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.node.ws_node_endpoint);
+		assert_eq!(
+			opts.eth_opts.eth_http_node_endpoint.unwrap(),
+			settings.eth.node.http_node_endpoint
+		);
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 	}
 }

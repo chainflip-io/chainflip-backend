@@ -325,7 +325,7 @@ mod tests {
 					scope,
 					EthRpcClient::new(settings.eth.clone(), 1337u64).unwrap(),
 					ReconnectSubscriptionClient::new(
-						settings.eth.ws_node_endpoint,
+						settings.eth.node.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
 				);
