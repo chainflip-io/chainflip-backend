@@ -1,26 +1,24 @@
 use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
+	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
-	eth::{api::EthereumChainId, Address as EthereumAddress},
-};
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
 use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
+use core::ops::Range;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{Pool, PoolQueryError};
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders};
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
+use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -87,7 +85,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 #[derive(Serialize, Deserialize)]
 pub struct RpcEnvironment {
 	bitcoin_network: BitcoinNetwork,
-	ethereum_chain_id: EthereumChainId,
+	ethereum_chain_id: cf_chains::evm::api::EvmChainId,
 	polkadot_genesis_hash: PolkadotHash,
 }
 
@@ -125,12 +123,6 @@ pub trait CustomApi {
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[method(name = "eth_vault")]
 	fn cf_eth_vault(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<(String, u32)>;
-	#[method(name = "pools")]
-	fn cf_pools(
-		&self,
-		assert: Option<Asset>,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<HashMap<Asset, Option<Pool<state_chain_runtime::AccountId>>>>;
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -193,13 +185,13 @@ pub trait CustomApi {
 	#[method(name = "auction_state")]
 	fn cf_auction_state(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<RpcAuctionState>;
-	#[method(name = "pool_sqrt_price")]
-	fn cf_pool_sqrt_price(
+	#[method(name = "pool_price")]
+	fn cf_pool_price(
 		&self,
 		from: Asset,
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SqrtPriceQ64F96>>;
+	) -> RpcResult<Option<Price>>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
 		&self,
@@ -208,23 +200,51 @@ pub trait CustomApi {
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
+	#[method(name = "required_asset_ratio_for_range_order")]
+	fn cf_required_asset_ratio_for_range_order(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		tick_range: Range<cf_amm::common::Tick>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
+	#[method(name = "pool_info")]
+	fn cf_pool_info(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<PoolInfo>>;
+	#[method(name = "pool_liquidity")]
+	fn cf_pool_liquidity(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<PoolLiquidity>>;
+	#[method(name = "pool_orders")]
+	fn cf_pool_orders(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		lp: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<PoolOrders>>;
+	#[method(name = "pool_range_order_liquidity_value")]
+	fn cf_pool_range_order_liquidity_value(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		tick_range: Range<Tick>,
+		liquidity: Liquidity,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
-	/// Estimate maximum amount of liquidity that can be minted from the given Tick range and asset
-	/// amounts.
-	#[method(name = "estimate_liquidity_from_range_order")]
-	fn cf_estimate_liquidity_from_range_order(
-		&self,
-		asset: Asset,
-		lower: Tick,
-		upper: Tick,
-		unstable_amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> RpcResult<Liquidity>;
 }
 
 /// An RPC extension for the state chain node.
@@ -482,15 +502,15 @@ where
 		})
 	}
 
-	fn cf_pool_sqrt_price(
+	fn cf_pool_price(
 		&self,
 		from: Asset,
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SqrtPriceQ64F96>> {
+	) -> RpcResult<Option<Price>> {
 		self.client
 			.runtime_api()
-			.cf_pool_sqrt_price(self.unwrap_or_best(at), from, to)
+			.cf_pool_price(self.unwrap_or_best(at), from, to)
 			.map_err(to_rpc_error)
 	}
 
@@ -522,40 +542,87 @@ where
 			.map(RpcSwapOutput::from)
 	}
 
+	fn cf_pool_info(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<PoolInfo>> {
+		self.client
+			.runtime_api()
+			.cf_pool_info(self.unwrap_or_best(at), base_asset, pair_asset)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_liquidity(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<PoolLiquidity>> {
+		self.client
+			.runtime_api()
+			.cf_pool_liquidity(self.unwrap_or_best(at), base_asset, pair_asset)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_required_asset_ratio_for_range_order(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		tick_range: Range<cf_amm::common::Tick>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>> {
+		self.client
+			.runtime_api()
+			.cf_required_asset_ratio_for_range_order(
+				self.unwrap_or_best(at),
+				base_asset,
+				pair_asset,
+				tick_range,
+			)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_orders(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		lp: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<PoolOrders>> {
+		self.client
+			.runtime_api()
+			.cf_pool_orders(self.unwrap_or_best(at), base_asset, pair_asset, lp)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_range_order_liquidity_value(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		tick_range: Range<Tick>,
+		liquidity: Liquidity,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>> {
+		self.client
+			.runtime_api()
+			.cf_pool_range_order_liquidity_value(
+				self.unwrap_or_best(at),
+				base_asset,
+				pair_asset,
+				tick_range,
+				liquidity,
+			)
+			.map_err(to_rpc_error)
+	}
+
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
 		self.client
 			.runtime_api()
 			.cf_environment(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 			.map(RpcEnvironment::from)
-	}
-
-	fn cf_pools(
-		&self,
-		asset: Option<Asset>,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<HashMap<Asset, Option<Pool<state_chain_runtime::AccountId>>>> {
-		let mut pools = HashMap::<Asset, Option<Pool<state_chain_runtime::AccountId>>>::new();
-		if let Some(asset) = asset {
-			pools.insert(
-				asset,
-				self.client
-					.runtime_api()
-					.cf_get_pool(self.unwrap_or_best(at), asset)
-					.map_err(to_rpc_error)?,
-			);
-		} else {
-			for asset in Asset::all().iter() {
-				pools.insert(
-					*asset,
-					self.client
-						.runtime_api()
-						.cf_get_pool(self.unwrap_or_best(at), *asset)
-						.map_err(to_rpc_error)?,
-				);
-			}
-		}
-		Ok(pools)
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -570,33 +637,5 @@ where
 			.runtime_api()
 			.cf_min_swap_amount(self.unwrap_or_best(None), asset)
 			.map_err(to_rpc_error)
-	}
-
-	fn cf_estimate_liquidity_from_range_order(
-		&self,
-		asset: Asset,
-		lower: Tick,
-		upper: Tick,
-		unstable_amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> RpcResult<Liquidity> {
-		match self.client.runtime_api().cf_estimate_liquidity_from_range_order(
-			self.unwrap_or_best(None),
-			asset,
-			lower,
-			upper,
-			unstable_amount,
-			stable_amount,
-		) {
-			Ok(Ok(liquidity)) => Ok(liquidity),
-			Ok(Err(e)) => Err(match e {
-				PoolQueryError::PoolDoesNotExist => anyhow::anyhow!("Pool does not exist.").into(),
-				PoolQueryError::Inner(e) => match e {
-					cf_amm::range_orders::AmountsToLiquidityError::InvalidTickRange =>
-						anyhow::anyhow!("Invalid tick range.").into(),
-				},
-			}),
-			Err(e) => Err(to_rpc_error(e)),
-		}
 	}
 }

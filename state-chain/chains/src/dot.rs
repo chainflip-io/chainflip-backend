@@ -7,6 +7,7 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub mod serializable_address;
 
+use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;
 
@@ -104,6 +105,17 @@ impl PolkadotPair {
 )]
 pub struct PolkadotAccountId([u8; 32]);
 
+impl TryFrom<Vec<u8>> for PolkadotAccountId {
+	type Error = ();
+
+	fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+		if value.len() != 32 {
+			return Err(())
+		}
+		Ok(Self(value.as_array()))
+	}
+}
+
 impl PolkadotAccountId {
 	pub const fn from_aliased(account_id: [u8; 32]) -> Self {
 		Self(account_id)
@@ -138,10 +150,6 @@ pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
 }
-
-// Westend testnet
-pub const TEST_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
 pub type PolkadotChannelId = u64;
@@ -246,6 +254,7 @@ impl Default for PolkadotTrackedData {
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
+	type ChainCrypto = PolkadotCrypto;
 	type KeyHandoverIsRequired = ConstBool<false>;
 	type OptimisticActivation = ConstBool<false>;
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -258,6 +267,9 @@ impl Chain for Polkadot {
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
+	type Transaction = PolkadotTransactionData;
+	type ReplayProtectionParams = ();
+	type ReplayProtection = PolkadotReplayProtection;
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
@@ -270,7 +282,8 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 	}
 }
 
-impl ChainCrypto for Polkadot {
+pub struct PolkadotCrypto;
+impl ChainCrypto for PolkadotCrypto {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
@@ -304,12 +317,6 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 	) -> <Polkadot as Chain>::ChainAmount {
 		fee_paid
 	}
-}
-
-impl ChainAbi for Polkadot {
-	type Transaction = PolkadotTransactionData;
-	type ReplayProtectionParams = ();
-	type ReplayProtection = PolkadotReplayProtection;
 }
 
 pub struct CurrentVaultAndProxy {
@@ -357,7 +364,7 @@ impl PolkadotExtrinsicBuilder {
 		&self,
 		spec_version: u32,
 		transaction_version: u32,
-	) -> <Polkadot as ChainCrypto>::Payload {
+	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		EncodedPolkadotPayload(
 			PolkadotPayload::from_raw(
 				self.extrinsic_call.clone(),
@@ -910,6 +917,10 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 		Self::from(id)
 	}
 }
+
+#[cfg(test)]
+pub const TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 #[cfg(test)]
 mod test_polkadot_extrinsics {

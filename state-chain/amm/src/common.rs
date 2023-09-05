@@ -10,10 +10,22 @@ pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum PostOperationPositionExistence {
-	Exists,
-	DoesNotExist,
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+)]
+pub enum Order {
+	Buy,
+	Sell,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -48,8 +60,8 @@ impl core::ops::Not for Side {
 	Deserialize,
 )]
 pub struct SideMap<T> {
-	zero: T,
-	one: T,
+	pub zero: T,
+	pub one: T,
 }
 impl<T> SideMap<T> {
 	pub fn from_array(array: [T; 2]) -> Self {
@@ -66,6 +78,23 @@ impl<T> SideMap<T> {
 		mut f: impl FnMut(Side, T) -> Result<R, E>,
 	) -> Result<SideMap<R>, E> {
 		Ok(SideMap { zero: f(Side::Zero, self.zero)?, one: f(Side::One, self.one)? })
+	}
+
+	pub fn as_ref(&self) -> SideMap<&T> {
+		SideMap { zero: &self.zero, one: &self.one }
+	}
+
+	pub fn as_mut(&mut self) -> SideMap<&mut T> {
+		SideMap { zero: &mut self.zero, one: &mut self.one }
+	}
+}
+impl<T> IntoIterator for SideMap<T> {
+	type Item = (Side, T);
+
+	type IntoIter = core::array::IntoIter<(Side, T), 2>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		[(Side::Zero, self.zero), (Side::One, self.one)].into_iter()
 	}
 }
 impl<T> core::ops::Index<Side> for SideMap<T> {
@@ -102,7 +131,7 @@ pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	mul_div(a, b, c).1
 }
 
-pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
+pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	let c: U512 = c.into();
 
 	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
@@ -121,10 +150,10 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	)
 }
 
-pub struct ZeroToOne {}
-pub struct OneToZero {}
+pub(super) struct ZeroToOne {}
+pub(super) struct OneToZero {}
 
-pub trait SwapDirection {
+pub(super) trait SwapDirection {
 	const INPUT_SIDE: Side;
 
 	/// Determines if a given sqrt_price is more than another
@@ -132,6 +161,10 @@ pub trait SwapDirection {
 		sqrt_price: SqrtPriceQ64F96,
 		sqrt_price_other: SqrtPriceQ64F96,
 	) -> bool;
+
+	/// Returns the equivalent saturated amount in the output asset to a given amount of the input
+	/// asset at a specific tick, will return None iff the tick is invalid
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for ZeroToOne {
 	const INPUT_SIDE: Side = Side::Zero;
@@ -141,6 +174,19 @@ impl SwapDirection for ZeroToOne {
 		sqrt_price_other: SqrtPriceQ64F96,
 	) -> bool {
 		sqrt_price < sqrt_price_other
+	}
+
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
+		if is_tick_valid(tick) {
+			Some(
+				(U256::full_mul(amount, sqrt_price_to_price(sqrt_price_at_tick(tick))) /
+					(U256::one() << PRICE_FRACTIONAL_BITS))
+					.try_into()
+					.unwrap_or(U256::MAX),
+			)
+		} else {
+			None
+		}
 	}
 }
 impl SwapDirection for OneToZero {
@@ -152,6 +198,62 @@ impl SwapDirection for OneToZero {
 	) -> bool {
 		sqrt_price > sqrt_price_other
 	}
+
+	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
+		if is_tick_valid(tick) {
+			Some(
+				(U256::full_mul(amount, U256::one() << PRICE_FRACTIONAL_BITS) /
+					sqrt_price_to_price(sqrt_price_at_tick(tick)))
+				.try_into()
+				.unwrap_or(U256::MAX),
+			)
+		} else {
+			None
+		}
+	}
+}
+
+// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
+// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
+// cause any problems for the AMM code in terms of correctness
+pub type Price = U256;
+pub const PRICE_FRACTIONAL_BITS: u32 = 128;
+
+pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
+	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
+
+	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price
+	// will always include a bit pass the 64th bit that is set, so when we shift down below that set
+	// bit will not be removed.
+	mul_div_floor(
+		sqrt_price,
+		sqrt_price,
+		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
+	)
+}
+
+pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
+	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
+		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
+		.try_into()
+		.unwrap_or(SqrtPriceQ64F96::MAX)
+}
+
+pub fn price_at_tick(tick: Tick) -> Option<Price> {
+	if is_tick_valid(tick) {
+		Some(sqrt_price_to_price(sqrt_price_at_tick(tick)))
+	} else {
+		None
+	}
+}
+
+pub fn tick_at_price(price: Price) -> Option<Tick> {
+	let sqrt_price = price_to_sqrt_price(price);
+	if is_sqrt_price_valid(sqrt_price) {
+		Some(tick_at_sqrt_price(sqrt_price))
+	} else {
+		None
+	}
 }
 
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of
@@ -162,13 +264,13 @@ pub const MIN_TICK: Tick = -887272;
 pub const MAX_TICK: Tick = -MIN_TICK;
 /// The minimum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MIN_TICK)`
-pub const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]);
+pub(super) const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]);
 /// The maximum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MAX_TICK)`.
-pub const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
+pub(super) const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 	U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]);
 
-pub fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
+pub(super) fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
 	(MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price)
 }
 
@@ -176,7 +278,7 @@ pub fn is_tick_valid(tick: Tick) -> bool {
 	(MIN_TICK..=MAX_TICK).contains(&tick)
 }
 
-pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
+pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	assert!(is_tick_valid(tick));
 
 	let abs_tick = tick.unsigned_abs();
@@ -252,7 +354,7 @@ pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 }
 
 /// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
-pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
+pub(super) fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 	assert!(is_sqrt_price_valid(sqrt_price));
 
 	let sqrt_price_q64f128 = sqrt_price << 32u128;
