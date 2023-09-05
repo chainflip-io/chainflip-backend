@@ -76,4 +76,4 @@ This is used primarily to enforce vesting restrictions. Some of the FLIP tokens 
 >
 > *The address `0xabc` is marked as restricted because it is a smart contract holding FLIP for early investors.*
 >
-> *Imagine an account has 1,000 FLIP funded from address `0xabc` and earns a return of 10 FLIP after some period of time. Subject to other restrictions (bond etc.) those 10 FLIP can be withdrawn to any address. Any more than that can only redeemed from the restricted balance of 1,000 FLIP, and only to the originating address `0xabc`.*
+> *Imagine an account has 1,000 FLIP funded from address `0xabc` and earns a return of 10 FLIP after some period of time. Subject to other restrictions (bond etc.) those 10 FLIP can be redeemed to any address. Any more than that can only be redeemed from the restricted balance of 1,000 FLIP, and only to the originating address `0xabc`.*
