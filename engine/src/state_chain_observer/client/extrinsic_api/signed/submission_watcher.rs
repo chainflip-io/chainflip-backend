@@ -53,7 +53,7 @@ pub struct Request {
 	id: RequestID,
 	pending_submissions: usize,
 	allow_resubmits: bool,
-	lifetime: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
+	resubmit_window: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
 	call: state_chain_runtime::RuntimeCall,
 	result_sender: oneshot::Sender<ExtrinsicResult>,
 }
@@ -236,7 +236,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						RequestStrategy::Submit(_) => false,
 						RequestStrategy::Finalize => true,
 					},
-					lifetime: ..=(self.finalized_block_number + 1 + REQUEST_LIFETIME),
+					resubmit_window: ..=(self.finalized_block_number + 1 + REQUEST_LIFETIME),
 					call,
 					result_sender,
 				},
@@ -385,16 +385,12 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			});
 
 			for (_request_id, request) in requests.extract_if(|_request_id, request| {
-				!request.lifetime.contains(&(block.header.number + 1)) ||
-					!request.allow_resubmits && request.pending_submissions == 0
+				request.pending_submissions == 0 &&
+					!request.resubmit_window.contains(&(block.header.number + 1))
 			}) {
-				let _result = request.result_sender.send(Err(ExtrinsicError::Finalization(
-					if request.pending_submissions == 0 {
-						FinalizationError::NotFinalized
-					} else {
-						FinalizationError::Unknown
-					},
-				)));
+				let _result = request
+					.result_sender
+					.send(Err(ExtrinsicError::Finalization(FinalizationError::NotFinalized)));
 			}
 
 			// Has to be a separate loop from the above due to not being able to await inside

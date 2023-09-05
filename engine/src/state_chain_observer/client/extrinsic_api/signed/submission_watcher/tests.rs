@@ -172,7 +172,7 @@ async fn new_watcher_and_submit_test_extrinsic(
 		id: 0,
 		pending_submissions: 0,
 		allow_resubmits: false,
-		lifetime: ..=1,
+		resubmit_window: ..=1,
 		call,
 		result_sender: oneshot::channel().0,
 	};
