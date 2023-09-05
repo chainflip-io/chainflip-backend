@@ -16,26 +16,26 @@ use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MintRangeOrderReturn {
 	assets_debited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BurnRangeOrderReturn {
 	assets_credited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MintLimitOrderReturn {
 	assets_debited: AssetAmount,
 	collected_fees: AssetAmount,
 	swapped_liquidity: AssetAmount,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BurnLimitOrderReturn {
 	assets_credited: AssetAmount,
 	collected_fees: AssetAmount,
@@ -142,14 +142,6 @@ pub trait LpApi: SignedExtrinsicApi {
 		range: Range<Tick>,
 		amount: AssetAmount,
 	) -> Result<BurnRangeOrderReturn> {
-		// TODO: Re-enable this check after #3082 in implemented
-		// Find the current position and calculate new target amount
-		// if get_liquidity_at_position(&state_chain_client, asset, range,
-		// latest_block_hash) 	.await? < amount
-		// {
-		// 	bail!("Insufficient minted liquidity at position");
-		// }
-
 		// Submit the burn call
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex, RpcErrorExt,
+	try_parse_number_or_hex, AnyhowRpcError,
 };
 use chainflip_api::{
 	self,
@@ -19,11 +19,7 @@ use chainflip_api::{
 };
 use clap::Parser;
 use futures::FutureExt;
-use jsonrpsee::{
-	core::{async_trait, Error},
-	proc_macros::rpc,
-	server::ServerBuilder,
-};
+use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
@@ -88,7 +84,7 @@ pub mod rpc_types {
 		}
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	pub struct OpenSwapChannels {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
@@ -99,17 +95,20 @@ pub mod rpc_types {
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<Hash, Error>;
+	async fn register_account(&self) -> Result<Hash, AnyhowRpcError>;
 
 	#[method(name = "liquidityDeposit")]
-	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+	) -> Result<String, AnyhowRpcError>;
 
 	#[method(name = "registerEmergencyWithdrawalAddress")]
 	async fn register_emergency_withdrawal_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<Hash, Error>;
+	) -> Result<Hash, AnyhowRpcError>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -117,7 +116,7 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), Error>;
+	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
 
 	#[method(name = "mintRangeOrder")]
 	async fn mint_range_order(
@@ -126,7 +125,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		order_size: rpc_types::RangeOrderSize,
-	) -> Result<MintRangeOrderReturn, Error>;
+	) -> Result<MintRangeOrderReturn, AnyhowRpcError>;
 
 	#[method(name = "burnRangeOrder")]
 	async fn burn_range_order(
@@ -135,7 +134,7 @@ pub trait Rpc {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		amount: NumberOrHex,
-	) -> Result<BurnRangeOrderReturn, Error>;
+	) -> Result<BurnRangeOrderReturn, AnyhowRpcError>;
 
 	#[method(name = "mintLimitOrder")]
 	async fn mint_limit_order(
@@ -144,7 +143,7 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<MintLimitOrderReturn, Error>;
+	) -> Result<MintLimitOrderReturn, AnyhowRpcError>;
 
 	#[method(name = "burnLimitOrder")]
 	async fn burn_limit_order(
@@ -153,25 +152,25 @@ pub trait Rpc {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<BurnLimitOrderReturn, Error>;
+	) -> Result<BurnLimitOrderReturn, AnyhowRpcError>;
 
 	#[method(name = "assetBalances")]
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error>;
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError>;
 
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(
 		&self,
 		account_id: Option<AccountId32>,
-	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error>;
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, AnyhowRpcError>;
 
 	#[method(name = "getOpenSwapChannels")]
-	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
 
 	#[method(name = "getPools")]
-	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, AnyhowRpcError>;
 
 	#[method(name = "getPool")]
-	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error>;
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, AnyhowRpcError>;
 }
 
 pub struct RpcServerImpl {
@@ -193,28 +192,25 @@ impl RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
-	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
-		self.api
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+	) -> Result<String, AnyhowRpcError> {
+		Ok(self
+			.api
 			.lp_api()
 			.request_liquidity_deposit_address(asset)
 			.await
-			.map(|address| address.to_string())
-			.map_err(RpcErrorExt::to_custom_error)
+			.map(|address| address.to_string())?)
 	}
 
 	async fn register_emergency_withdrawal_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<Hash, Error> {
-		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
-			.map_err(RpcErrorExt::to_custom_error)?;
-		Ok(self
-			.api
-			.lp_api()
-			.register_emergency_withdrawal_address(ewa_address)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+	) -> Result<Hash, AnyhowRpcError> {
+		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)?;
+		Ok(self.api.lp_api().register_emergency_withdrawal_address(ewa_address).await?)
 	}
 
 	/// Returns an egress id
@@ -223,40 +219,28 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), Error> {
+	) -> Result<(ForeignChain, u64), AnyhowRpcError> {
 		let destination_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
-				.map_err(RpcErrorExt::to_custom_error)?;
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
 
 		Ok(self
 			.api
 			.lp_api()
 			.withdraw_asset(try_parse_number_or_hex(amount)?, asset, destination_address)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+			.await?)
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, Error> {
-		Ok(self
-			.api
-			.query_api()
-			.get_balances(None)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError> {
+		self.api.query_api().get_balances(None).await.map_err(|e| e.into())
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
 	async fn get_range_orders(
 		&self,
 		account_id: Option<AccountId32>,
-	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, Error> {
-		Ok(self
-			.api
-			.query_api()
-			.get_range_orders(None, account_id)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+	) -> Result<BTreeMap<Asset, Vec<RangeOrderPosition>>, AnyhowRpcError> {
+		Ok(self.api.query_api().get_range_orders(None, account_id).await?)
 	}
 
 	/// Creates or adds liquidity to a range order.
@@ -267,7 +251,7 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		order_size: rpc_types::RangeOrderSize,
-	) -> Result<MintRangeOrderReturn, Error> {
+	) -> Result<MintRangeOrderReturn, AnyhowRpcError> {
 		if start >= end {
 			return Err(anyhow!("Invalid tick range").into())
 		}
@@ -280,8 +264,7 @@ impl RpcServer for RpcServerImpl {
 				Range { start, end },
 				order_size.try_into().map_err(|_| anyhow!("Invalid order size"))?,
 			)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+			.await?)
 	}
 
 	/// Removes liquidity from a range order.
@@ -292,7 +275,7 @@ impl RpcServer for RpcServerImpl {
 		start: Tick,
 		end: Tick,
 		amount: NumberOrHex,
-	) -> Result<BurnRangeOrderReturn, Error> {
+	) -> Result<BurnRangeOrderReturn, AnyhowRpcError> {
 		if start >= end {
 			return Err(anyhow!("Invalid tick range").into())
 		}
@@ -301,8 +284,7 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.burn_range_order(asset, Range { start, end }, try_parse_number_or_hex(amount)?)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+			.await?)
 	}
 
 	/// Creates or adds liquidity to a limit order.
@@ -313,13 +295,12 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<MintLimitOrderReturn, Error> {
+	) -> Result<MintLimitOrderReturn, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
 			.mint_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+			.await?)
 	}
 
 	/// Removes liquidity from a limit order.
@@ -330,55 +311,40 @@ impl RpcServer for RpcServerImpl {
 		order: BuyOrSellOrder,
 		price: Tick,
 		amount: NumberOrHex,
-	) -> Result<BurnLimitOrderReturn, Error> {
+	) -> Result<BurnLimitOrderReturn, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
 			.burn_limit_order(asset, order, price, try_parse_number_or_hex(amount)?)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+			.await?)
 	}
 
 	/// Returns the tx hash that the account role was set
-	async fn register_account(&self) -> Result<Hash, Error> {
+	async fn register_account(&self) -> Result<Hash, AnyhowRpcError> {
 		Ok(self
 			.api
 			.operator_api()
 			.register_account_role(AccountRole::LiquidityProvider)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+			.await?)
 	}
 
-	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error> {
+	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError> {
 		let api = self.api.query_api();
 
 		let (ethereum, bitcoin, polkadot) = tokio::try_join!(
 			api.get_open_swap_channels::<Ethereum>(None),
 			api.get_open_swap_channels::<Bitcoin>(None),
 			api.get_open_swap_channels::<Polkadot>(None),
-		)
-		.map_err(RpcErrorExt::to_custom_error)?;
+		)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
 	}
 
-	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, Error> {
-		Ok(self
-			.api
-			.query_api()
-			.get_pools(None, Some(asset))
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?
-			.get(&asset)
-			.cloned())
+	async fn get_pool(&self, asset: Asset) -> Result<Option<Pool<AccountId32>>, AnyhowRpcError> {
+		Ok(self.api.query_api().get_pools(None, Some(asset)).await?.get(&asset).cloned())
 	}
 
-	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
-		Ok(self
-			.api
-			.query_api()
-			.get_pools(None, None)
-			.await
-			.map_err(RpcErrorExt::to_custom_error)?)
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, AnyhowRpcError> {
+		self.api.query_api().get_pools(None, None).await.map_err(|e| e.into())
 	}
 }
 
@@ -423,7 +389,7 @@ async fn main() -> anyhow::Result<()> {
 		async move {
 			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 

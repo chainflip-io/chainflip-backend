@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context};
 use core::time::Duration;
 use futures::{stream, Stream};
+use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
@@ -20,24 +21,21 @@ pub mod serde_helpers;
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
 
-use jsonrpsee::types::{
-	error::{CallError, CALL_EXECUTION_FAILED_CODE},
-	ErrorObject,
-};
-
-/// Custom extension trait for converting `anyhow::Error` to `jsonrpsee::types::error::CallError`,
+/// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
 /// including context and source.
-pub trait RpcErrorExt {
-	fn to_custom_error(self) -> jsonrpsee::core::Error;
+pub struct AnyhowRpcError {
+	pub error: anyhow::Error,
 }
 
-impl RpcErrorExt for anyhow::Error {
-	fn to_custom_error(self) -> jsonrpsee::core::Error {
-		jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-			CALL_EXECUTION_FAILED_CODE,
-			format!("{self:#}"),
-			None::<()>,
-		)))
+impl From<anyhow::Error> for AnyhowRpcError {
+	fn from(error: anyhow::Error) -> Self {
+		Self { error }
+	}
+}
+
+impl From<AnyhowRpcError> for ErrorObjectOwned {
+	fn from(e: AnyhowRpcError) -> Self {
+		ErrorObjectOwned::owned(CALL_EXECUTION_FAILED_CODE, format!("{:#}", e.error), None::<()>)
 	}
 }
 
