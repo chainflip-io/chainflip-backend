@@ -25,6 +25,7 @@ bech32 = { default-features = false, version = '0.9.1' }
 base58 = '0.2.0'
 
 # Other
+anyhow = { version = '1.0', default-features = false, optional = true }
 hex = { default-features = false, version = '0.4' }
 hex-literal = { version = '0.4.1', default-features = false }
 serde = { version = '1.0.126', default-features = false, features = [
@@ -73,6 +74,7 @@ std = [
   'sp-core/std',
   'sp-core/full_crypto',
   'dep:ss58-registry',
+  'dep:anyhow',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
