@@ -42,6 +42,27 @@ if [ -f "/var/log/chainflip-engine.log" ]; then
     rm -rf "/var/log/chainflip-engine*"
 fi
 
+echo "Updating pDOT endpoint ..."
+sed -i 's|wss://pdot.chainflip.xyz:443|wss://rpc-pdot.chainflip.io:443|g' /etc/chainflip/config/Settings.toml
+
+FILE=/etc/chainflip/config/Settings.toml
+
+# Check if [dot] section exists
+if grep -q "\[dot\]" "$FILE"; then
+    # [dot] section exists, use awk to check for http_node_endpoint after [dot]
+    if ! awk '/\[dot\]/ {flag=1; next} flag && /http_node_endpoint/ {print; exit} flag && /^\[/ {exit}' "$FILE" | grep -q "http_node_endpoint"; then
+        # http_node_endpoint does not exist under [dot], add it
+        sed -i '/\[dot\]/a http_node_endpoint = "https://rpc-pdot.chainflip.io:443"' "$FILE"
+        echo "http_node_endpoint key added under [dot]"
+    else
+        echo "http_node_endpoint key already exists under [dot]"
+    fi
+else
+    echo "[dot] section does not exist in the file"
+fi
+
+echo "Migration complete. Restarting chainflip-engine..."
+
 systemctl daemon-reload
 
 #DEBHELPER#

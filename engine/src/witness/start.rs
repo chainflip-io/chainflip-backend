@@ -3,8 +3,10 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
+	btc::retry_rpc::BtcRetryRpcClient,
 	db::PersistentKeyDB,
-	settings::Settings,
+	dot::retry_rpc::DotRetryRpcClient,
+	eth::retry_rpc::EthersRetryRpcClient,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -17,9 +19,15 @@ use super::common::epoch_source::EpochSource;
 use anyhow::Result;
 
 /// Starts all the witnessing tasks.
+// It's important that this function is not blocking, at any point, even if there is no connection
+// to any or all chains. This implies that the `start` function for each chain should not be
+// blocking. The chains must be able to witness independently, and if this blocks at any
+// point it means that on start up this will block, and the state chain observer will not start.
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &Settings,
+	eth_client: EthersRetryRpcClient,
+	btc_client: BtcRetryRpcClient,
+	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	db: Arc<PersistentKeyDB>,
@@ -34,35 +42,34 @@ where
 			.participating(state_chain_client.account_id())
 			.await;
 
-	super::eth::start(
+	let start_eth = super::eth::start(
 		scope,
-		&settings.eth,
+		eth_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
 		db.clone(),
-	)
-	.await?;
+	);
 
-	super::btc::start(
+	let start_btc = super::btc::start(
 		scope,
-		&settings.btc,
+		btc_client,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
 		db.clone(),
-	)
-	.await?;
+	);
 
-	super::dot::start(
+	let start_dot = super::dot::start(
 		scope,
-		&settings.dot,
+		dot_client,
 		state_chain_client,
 		state_chain_stream,
 		epoch_source,
 		db,
-	)
-	.await?;
+	);
+
+	futures::future::try_join3(start_eth, start_btc, start_dot).await?;
 
 	Ok(())
 }

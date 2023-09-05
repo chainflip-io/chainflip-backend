@@ -121,7 +121,7 @@ pub trait ECPoint:
 pub trait ChainSigning: 'static + Clone + Send + Sync + Debug + PartialEq {
 	type CryptoScheme: CryptoScheme;
 
-	type Chain: cf_chains::ChainCrypto;
+	type ChainCrypto: cf_chains::ChainCrypto;
 
 	/// Name of the Chain
 	const NAME: &'static str;

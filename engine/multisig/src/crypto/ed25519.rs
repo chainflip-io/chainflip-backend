@@ -2,6 +2,7 @@ use super::{
 	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
 	ECPoint,
 };
+use cf_chains::Chain;
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +50,7 @@ pub struct Ed25519CryptoScheme;
 impl ChainSigning for Ed25519Signing {
 	type CryptoScheme = Ed25519CryptoScheme;
 	// This scheme isn't implemented on the state chain.
-	type Chain = cf_chains::none::NoneChain;
+	type ChainCrypto = <cf_chains::none::NoneChain as Chain>::ChainCrypto;
 
 	const NAME: &'static str = "Ed25519";
 

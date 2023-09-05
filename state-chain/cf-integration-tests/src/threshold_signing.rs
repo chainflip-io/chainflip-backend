@@ -2,7 +2,7 @@ use arrayref::array_ref;
 use cf_chains::{
 	btc,
 	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
-	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
+	evm::{to_evm_address, AggKey, SchnorrVerificationComponents},
 };
 use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
@@ -49,8 +49,7 @@ impl KeyUtils for EthKeyComponents {
 		let k = SecretKey::parse(&k).unwrap();
 		let signature = self.agg_key.sign(message, &self.secret, &k);
 
-		let k_times_g_address =
-			to_ethereum_address(PublicKey::from_secret_key(&k)).to_fixed_bytes();
+		let k_times_g_address = to_evm_address(PublicKey::from_secret_key(&k)).to_fixed_bytes();
 		SchnorrVerificationComponents { s: signature, k_times_g_address }
 	}
 

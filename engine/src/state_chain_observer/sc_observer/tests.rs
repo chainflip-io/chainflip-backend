@@ -1,12 +1,14 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-	btc::rpc::MockBtcRpcApi,
+	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
+	dot::retry_rpc::mocks::MockDotHttpRpcClient,
+	eth::retry_rpc::mocks::MockEthRetryRpcClient,
 	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
 use cf_chains::{
-	eth::{SchnorrVerificationComponents, Transaction},
-	ChainCrypto,
+	evm::{SchnorrVerificationComponents, Transaction},
+	Chain, ChainCrypto,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
@@ -16,7 +18,6 @@ use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature
 use pallet_cf_broadcast::BroadcastAttemptId;
 use sp_runtime::{AccountId32, Digest};
 
-use crate::eth::rpc::MockEthRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
@@ -25,9 +26,6 @@ use state_chain_runtime::{
 use utilities::MakeCachedStream;
 
 use crate::{
-	btc::BtcBroadcaster,
-	dot::{rpc::MockDotRpcApi, DotBroadcaster},
-	eth::broadcaster::EthBroadcaster,
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 };
@@ -58,7 +56,7 @@ async fn start_sc_observer<
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
-	eth_rpc: MockEthRpcApi,
+	eth_rpc: MockEthRetryRpcClient,
 ) {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -66,9 +64,9 @@ async fn start_sc_observer<
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(eth_rpc),
-		DotBroadcaster::new(MockDotRpcApi::new()),
-		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		eth_rpc,
+		MockDotHttpRpcClient::new(),
+		MockBtcRetryRpcClient::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
@@ -136,20 +134,19 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let mut eth_rpc_mock = MockEthRpcApi::new();
-	// when we are selected to sign we must estimate gas and sign
-	// NB: We only do this once, since we are only selected to sign once
-	eth_rpc_mock
-		.expect_estimate_gas()
-		.once()
-		.returning(|_| Ok(ethers::types::U256::from(100_000)));
+	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();
 
-	eth_rpc_mock.expect_send_transaction().once().return_once(|tx| {
+	// This doesn't always get called since the test can finish without the scope that spwans the
+	// broadcast task finishing.
+	eth_rpc_mock_broadcast.expect_broadcast_transaction().return_once(|_| {
 		// return some hash
-		Ok(tx.sighash())
+		Ok(H256::from([1; 32]))
 	});
 
-	start_sc_observer(state_chain_client, sc_block_stream, eth_rpc_mock).await;
+	let mut eth_mock_clone = MockEthRetryRpcClient::new();
+	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
+
+	start_sc_observer(state_chain_client, sc_block_stream, eth_mock_clone).await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -164,10 +161,10 @@ where
 	Runtime: pallet_cf_threshold_signature::Config<I>,
 	RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
-	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
+	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto as
 ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
-		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto
 
 	>,
 {
@@ -310,8 +307,11 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: ChainSigning<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
-	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
+	C: ChainSigning<
+			ChainCrypto = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
+		> + Send
+		+ Sync,
+	I: CryptoCompat<C, C::ChainCrypto> + 'static + Send + Sync,
 	Runtime: pallet_cf_vaults::Config<I>,
 	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
 {
@@ -516,9 +516,9 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(MockEthRpcApi::new()),
-				DotBroadcaster::new(MockDotRpcApi::new()),
-				BtcBroadcaster::new(MockBtcRpcApi::new()),
+				MockEthRetryRpcClient::new(),
+				MockDotHttpRpcClient::new(),
+				MockBtcRetryRpcClient::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),

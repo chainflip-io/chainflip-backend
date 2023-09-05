@@ -1,6 +1,14 @@
 use super::*;
 
+<<<<<<< HEAD
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
+=======
+use crate::threshold_signing::{
+	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents,
+	EthThresholdSigner, KeyUtils, ThresholdSigner,
+};
+use cf_chains::{dot::PolkadotSignature, evm::SchnorrVerificationComponents, Chain, ChainCrypto};
+>>>>>>> origin/main
 
 use cf_primitives::{AccountRole, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
@@ -339,6 +347,38 @@ impl Engine {
 				);
 			}
 
+<<<<<<< HEAD
+=======
+			fn report_keygen_outcome_for_chain<
+				K: KeyUtils<
+						SigVerification = S,
+						AggKey = <<<T as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+					> + Clone,
+				S,
+				T: pallet_cf_vaults::Config<I>,
+				I: 'static,
+			>(
+				ceremony_id: CeremonyId,
+				authorities: &BTreeSet<NodeId>,
+				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
+				node_id: NodeId,
+			) where
+				<T as frame_system::Config>::RuntimeOrigin:
+					From<state_chain_runtime::RuntimeOrigin>,
+			{
+				if authorities.contains(&node_id) {
+					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
+						RuntimeOrigin::signed(node_id.clone()).into(),
+						ceremony_id,
+						Ok(threshold_signer.borrow_mut().propose_new_key()),
+					)
+					.unwrap_or_else(|_| {
+						panic!("should be able to report keygen outcome: {node_id}")
+					});
+				}
+			}
+
+>>>>>>> origin/main
 			// Being funded we would be required to respond to keygen requests
 			on_events!(
 				events,

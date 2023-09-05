@@ -10,7 +10,7 @@ pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 pub use weights::WeightInfo;
 
-use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
+use cf_chains::{ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
 	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, EpochKey,
 	OnBroadcastReady, SingleSignerNomination, ThresholdSigner,
@@ -72,20 +72,21 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
-	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::Transaction;
+	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::Transaction;
 
 	/// Type alias for the instance's configured SignerId.
 	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 
 	/// Type alias for the payload hash
 	pub type ThresholdSignatureFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 	pub type TransactionOutIdFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainCrypto>::TransactionOutId;
+		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 
 	/// Type alias for the instance's configured Payload.
-	pub type PayloadFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
+	pub type PayloadFor<T, I> =
+		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload;
 
 	pub type ChainBlockNumberFor<T, I> =
 		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainBlockNumber;
@@ -143,10 +144,13 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: ChainAbi;
+		type TargetChain: Chain;
 
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<Self::TargetChain> + BenchmarkValue + Send + Sync;
+		type ApiCall: ApiCall<<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto>
+			+ BenchmarkValue
+			+ Send
+			+ Sync;
 
 		/// Builds the transaction according to the chain's environment settings.
 		type TransactionBuilder: TransactionBuilder<Self::TargetChain, Self::ApiCall>;
@@ -154,7 +158,7 @@ pub mod pallet {
 		/// A threshold signer that can sign calls for this chain, and dispatch callbacks into this
 		/// pallet.
 		type ThresholdSigner: ThresholdSigner<
-			Self::TargetChain,
+			<Self::TargetChain as Chain>::ChainCrypto,
 			Callback = <Self as Config<I>>::RuntimeCall,
 		>;
 
@@ -177,7 +181,7 @@ pub mod pallet {
 		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
 
 		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChain>;
+		type KeyProvider: KeyProvider<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -472,7 +476,7 @@ pub mod pallet {
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin.clone())?;
+			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
 			let broadcast_id = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
@@ -613,7 +617,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &ThresholdSignatureFor<T, I>,
 		transaction_payload: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
-		threshold_signature_payload: <T::TargetChain as ChainCrypto>::Payload,
+		threshold_signature_payload: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		broadcast_id: BroadcastId,
 	) -> BroadcastAttemptId {
 		let transaction_out_id = api_call.transaction_out_id();
