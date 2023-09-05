@@ -144,7 +144,7 @@ async function testGasLimitSwap(
 export async function testGasLimitCcmSwaps() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
-  // As of now, these won't ne broadcasted regardless of the gasBudget provided because the gas consumed on the egress is > 400k.
+  // As of now, these won't be broadcasted regardless of the gasBudget provided because the gas consumed on the egress is > 400k.
   // However, with the final solution, in localnet this might be broadcasted (1% of the amount might be enough gas budget since
   // gasPrice is extremely low).
   // TODO: For final solution, make swaps that consume more gas than the gasBudget.

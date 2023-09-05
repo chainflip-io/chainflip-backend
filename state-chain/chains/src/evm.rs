@@ -415,7 +415,7 @@ impl Transaction {
 		Ok(())
 	}
 
-	/// Returns an error if any of the recovered transactoin parameters do not match those specified
+	/// Returns an error if any of the recovered transaction parameters do not match those specified
 	/// in the original [Transaction].
 	///
 	/// See [CheckedTransactionParameter].
