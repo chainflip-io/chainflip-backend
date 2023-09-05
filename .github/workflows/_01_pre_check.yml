@@ -155,6 +155,7 @@ jobs:
           sudo apt-get install -y bats
 
       - name: Test 🧪
+        shell: bash
         run: |
           bats tests/test_preinst.bats
         working-directory: ${{ matrix.tests_path }}
