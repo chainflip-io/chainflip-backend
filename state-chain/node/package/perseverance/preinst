@@ -81,6 +81,7 @@ main() {
     remove_old_logs
     purge_chaindata
     reload_systemctl
+    exit 0
 }
 
 # Only run the main function if the script is not being sourced
@@ -89,6 +90,4 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     main "$@"
 fi
 
-#DEBHELPER#
-
-exit 0
+# #DEBHELPER#
