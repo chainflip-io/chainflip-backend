@@ -198,7 +198,7 @@ impl RpcServer for RpcServerImpl {
 
 	/// Returns a list of all assets and their free balance in json format
 	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError> {
-		self.api.query_api().get_balances(None).await.map_err(|e| e.into())
+		Ok(self.api.query_api().get_balances(None).await?)
 	}
 
 	async fn update_range_order(
