@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RangeOrderReturn {
 	tick_range: Range<Tick>,
 	liquidity_total: Liquidity,
@@ -56,7 +56,7 @@ fn collect_range_order_returns(
 		.collect()
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct LimitOrderReturn {
 	tick: Tick,
 	amount_total: AssetAmount,
