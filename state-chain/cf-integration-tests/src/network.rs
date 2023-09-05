@@ -1,14 +1,6 @@
 use super::*;
 
-<<<<<<< HEAD
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
-=======
-use crate::threshold_signing::{
-	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents,
-	EthThresholdSigner, KeyUtils, ThresholdSigner,
-};
-use cf_chains::{dot::PolkadotSignature, evm::SchnorrVerificationComponents, Chain, ChainCrypto};
->>>>>>> origin/main
 
 use cf_primitives::{AccountRole, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
@@ -33,7 +25,6 @@ use std::{
 	collections::{HashMap, VecDeque},
 	rc::Rc,
 };
-
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
@@ -347,38 +338,6 @@ impl Engine {
 				);
 			}
 
-<<<<<<< HEAD
-=======
-			fn report_keygen_outcome_for_chain<
-				K: KeyUtils<
-						SigVerification = S,
-						AggKey = <<<T as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-					> + Clone,
-				S,
-				T: pallet_cf_vaults::Config<I>,
-				I: 'static,
-			>(
-				ceremony_id: CeremonyId,
-				authorities: &BTreeSet<NodeId>,
-				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
-				node_id: NodeId,
-			) where
-				<T as frame_system::Config>::RuntimeOrigin:
-					From<state_chain_runtime::RuntimeOrigin>,
-			{
-				if authorities.contains(&node_id) {
-					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
-						RuntimeOrigin::signed(node_id.clone()).into(),
-						ceremony_id,
-						Ok(threshold_signer.borrow_mut().propose_new_key()),
-					)
-					.unwrap_or_else(|_| {
-						panic!("should be able to report keygen outcome: {node_id}")
-					});
-				}
-			}
-
->>>>>>> origin/main
 			// Being funded we would be required to respond to keygen requests
 			on_events!(
 				events,
@@ -512,10 +471,22 @@ pub fn dispatch_all_pending_extrinsics() {
 			if expect_ok && res.is_err() {
 				// An extrinsic failed. Log as much info as needed to help debugging.
 				match call {
-					RuntimeCall::EthereumVault(..) => log::info!("Validator status: {:?}\nVault Status: {:?}", Validator::current_rotation_phase(), EthereumVault::pending_vault_rotations()),
-					RuntimeCall::PolkadotVault(..) => log::info!("Validator status: {:?}\nVault Status: {:?}", Validator::current_rotation_phase(), PolkadotVault::pending_vault_rotations()),
-					RuntimeCall::BitcoinVault(..) => log::info!("Validator status: {:?}\nVault Status: {:?}", Validator::current_rotation_phase(), BitcoinVault::pending_vault_rotations()),
-					_ => {}
+					RuntimeCall::EthereumVault(..) => log::info!(
+						"Validator status: {:?}\nVault Status: {:?}",
+						Validator::current_rotation_phase(),
+						EthereumVault::pending_vault_rotations()
+					),
+					RuntimeCall::PolkadotVault(..) => log::info!(
+						"Validator status: {:?}\nVault Status: {:?}",
+						Validator::current_rotation_phase(),
+						PolkadotVault::pending_vault_rotations()
+					),
+					RuntimeCall::BitcoinVault(..) => log::info!(
+						"Validator status: {:?}\nVault Status: {:?}",
+						Validator::current_rotation_phase(),
+						BitcoinVault::pending_vault_rotations()
+					),
+					_ => {},
 				}
 				panic!("Extrinsic Failed. Call: {:?} \n Result: {:?}", call, res);
 			}

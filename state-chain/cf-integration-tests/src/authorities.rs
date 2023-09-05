@@ -82,16 +82,11 @@ fn authority_rotates_with_correct_sequence() {
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			// assert_eq!( GENESIS_EPOCH + 1, Validator::epoch_index());
-			assert!(matches!(
-				Validator::current_rotation_phase(),
-				RotationPhase::Idle
-			));
+			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(AllVaults::status(), AsyncResult::Void);
 
 			testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS);
 			testnet.submit_heartbeat_all_engines();
-
-			
 
 			// Start the Authority and Vault rotation
 			// idle -> Keygen
