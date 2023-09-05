@@ -7,6 +7,7 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub mod serializable_address;
 
+use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;
 
@@ -103,6 +104,17 @@ impl PolkadotPair {
 	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
 )]
 pub struct PolkadotAccountId([u8; 32]);
+
+impl TryFrom<Vec<u8>> for PolkadotAccountId {
+	type Error = ();
+
+	fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+		if value.len() != 32 {
+			return Err(())
+		}
+		Ok(Self(value.as_array()))
+	}
+}
 
 impl PolkadotAccountId {
 	pub const fn from_aliased(account_id: [u8; 32]) -> Self {

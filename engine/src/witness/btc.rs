@@ -45,6 +45,7 @@ where
 
 	btc_source
 		.clone()
+		.shared(scope)
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
 		.logging("chain tracking")
@@ -62,6 +63,7 @@ where
 				(header.data, block.txdata)
 			}
 		})
+		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
