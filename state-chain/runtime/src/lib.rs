@@ -668,6 +668,8 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = EthereumVault;
 }
 
@@ -688,6 +690,8 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = PolkadotVault;
 }
 
@@ -708,6 +712,8 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = BitcoinVault;
 }
 
