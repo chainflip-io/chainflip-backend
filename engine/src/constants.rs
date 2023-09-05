@@ -15,18 +15,25 @@ pub const DOT_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(6);
 
 // ======= Settings environment variables =======
 
-/// A HTTP node endpoint for Ethereum
-pub const ETH_HTTP_NODE_ENDPOINT: &str = "ETH__HTTP_NODE_ENDPOINT";
+pub const ETH_HTTP_NODE_ENDPOINT: &str = "ETH__NODE__HTTP_NODE_ENDPOINT";
+pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__NODE__WS_NODE_ENDPOINT";
 
-/// A WebSocket node endpoint for Ethereum
-pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";
+pub const ETH_SECONDARY_HTTP_NODE_ENDPOINT: &str = "ETH__SECONDARY_NODE__HTTP_NODE_ENDPOINT";
+pub const ETH_SECONDARY_WS_NODE_ENDPOINT: &str = "ETH__SECONDARY_NODE__WS_NODE_ENDPOINT";
 
-pub const BTC_HTTP_NODE_ENDPOINT: &str = "BTC__HTTP_NODE_ENDPOINT";
-pub const BTC_RPC_USER: &str = "BTC__RPC_USER";
-pub const BTC_RPC_PASSWORD: &str = "BTC__RPC_PASSWORD";
+pub const BTC_HTTP_NODE_ENDPOINT: &str = "BTC__NODE__HTTP_NODE_ENDPOINT";
+pub const BTC_RPC_USER: &str = "BTC__NODE__RPC_USER";
+pub const BTC_RPC_PASSWORD: &str = "BTC__NODE__RPC_PASSWORD";
 
-pub const DOT_WS_NODE_ENDPOINT: &str = "DOT__WS_NODE_ENDPOINT";
-pub const DOT_HTTP_NODE_ENDPOINT: &str = "DOT__HTTP_NODE_ENDPOINT";
+pub const BTC_SECONDARY_HTTP_NODE_ENDPOINT: &str = "BTC__SECONDARY_NODE__HTTP_NODE_ENDPOINT";
+pub const BTC_SECONDARY_RPC_USER: &str = "BTC__SECONDARY_NODE__RPC_USER";
+pub const BTC_SECONDARY_RPC_PASSWORD: &str = "BTC__SECONDARY_NODE__RPC_PASSWORD";
+
+pub const DOT_WS_NODE_ENDPOINT: &str = "DOT__NODE__WS_NODE_ENDPOINT";
+pub const DOT_HTTP_NODE_ENDPOINT: &str = "DOT__NODE__HTTP_NODE_ENDPOINT";
+
+pub const DOT_SECONDARY_WS_NODE_ENDPOINT: &str = "DOT__SECONDARY_NODE__WS_NODE_ENDPOINT";
+pub const DOT_SECONDARY_HTTP_NODE_ENDPOINT: &str = "DOT__SECONDARY_NODE__HTTP_NODE_ENDPOINT";
 
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";

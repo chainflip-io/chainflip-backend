@@ -273,6 +273,8 @@ mod tests {
 				eth_ws_node_endpoint: Some("ws://endpoint2:1234".to_owned()),
 				eth_http_node_endpoint: Some("http://endpoint3:1234".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+				eth_secondary_ws_node_endpoint: Some("ws://endpoint4:1234".to_owned()),
+				eth_secondary_http_node_endpoint: Some("http://endpoint5:1234".to_owned()),
 			},
 
 			cmd: CliCommand::Rotate {}, // Not used in this test
@@ -295,6 +297,17 @@ mod tests {
 			opts.eth_opts.eth_http_node_endpoint.unwrap(),
 			settings.eth.node.http_node_endpoint
 		);
+
+		let eth_secondary_node = settings.eth.secondary_node.unwrap();
+		assert_eq!(
+			opts.eth_opts.eth_secondary_ws_node_endpoint.unwrap(),
+			eth_secondary_node.ws_node_endpoint
+		);
+		assert_eq!(
+			opts.eth_opts.eth_secondary_http_node_endpoint.unwrap(),
+			eth_secondary_node.http_node_endpoint
+		);
+
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 	}
 }

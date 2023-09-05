@@ -233,6 +233,7 @@ mod tests {
 						ws_node_endpoint: "ws://localhost:8546".to_string(),
 						http_node_endpoint: "http://localhost:8545".to_string(),
 					},
+					secondary_node: None,
 					private_key_file: PathBuf::from_str(
 						"/Users/kylezs/Documents/test-keys/eth-cf-metamask",
 					)

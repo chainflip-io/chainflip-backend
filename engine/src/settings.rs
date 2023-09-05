@@ -63,24 +63,34 @@ impl WsHttpEndpoints {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Eth {
 	pub node: WsHttpEndpoints,
+	pub secondary_node: Option<WsHttpEndpoints>,
 	#[serde(deserialize_with = "deser_path")]
 	pub private_key_file: PathBuf,
 }
 
 impl Eth {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.node.validate()
+		self.node.validate()?;
+		if let Some(secondary_node) = &self.secondary_node {
+			secondary_node.validate()?;
+		}
+		Ok(())
 	}
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
 	pub node: WsHttpEndpoints,
+	pub secondary_node: Option<WsHttpEndpoints>,
 }
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.node.validate()
+		self.node.validate()?;
+		if let Some(secondary_node) = &self.secondary_node {
+			secondary_node.validate()?;
+		}
+		Ok(())
 	}
 }
 
@@ -103,11 +113,16 @@ impl HttpBasicAuthEndpoint {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Btc {
 	pub node: HttpBasicAuthEndpoint,
+	pub secondary_node: Option<HttpBasicAuthEndpoint>,
 }
 
 impl Btc {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.node.validate()
+		self.node.validate()?;
+		if let Some(secondary_node) = &self.secondary_node {
+			secondary_node.validate()?;
+		}
+		Ok(())
 	}
 }
 
@@ -163,6 +178,12 @@ pub struct EthOptions {
 	pub eth_ws_node_endpoint: Option<String>,
 	#[clap(long = "eth.http_node_endpoint")]
 	pub eth_http_node_endpoint: Option<String>,
+
+	#[clap(long = "eth.secondary.ws_node_endpoint")]
+	pub eth_secondary_ws_node_endpoint: Option<String>,
+	#[clap(long = "eth.secondary.http_node_endpoint")]
+	pub eth_secondary_http_node_endpoint: Option<String>,
+
 	#[clap(long = "eth.private_key_file")]
 	pub eth_private_key_file: Option<PathBuf>,
 }
@@ -173,6 +194,11 @@ pub struct DotOptions {
 	pub dot_ws_node_endpoint: Option<String>,
 	#[clap(long = "dot.http_node_endpoint")]
 	pub dot_http_node_endpoint: Option<String>,
+
+	#[clap(long = "dot.secondary.ws_node_endpoint")]
+	pub dot_secondary_ws_node_endpoint: Option<String>,
+	#[clap(long = "dot.secondary.http_node_endpoint")]
+	pub dot_secondary_http_node_endpoint: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -183,6 +209,13 @@ pub struct BtcOptions {
 	pub btc_rpc_user: Option<String>,
 	#[clap(long = "btc.rpc_password")]
 	pub btc_rpc_password: Option<String>,
+
+	#[clap(long = "btc.secondary.http_node_endpoint")]
+	pub btc_secondary_http_node_endpoint: Option<String>,
+	#[clap(long = "btc.secondary.rpc_user")]
+	pub btc_secondary_rpc_user: Option<String>,
+	#[clap(long = "btc.secondary.rpc_password")]
+	pub btc_secondary_rpc_password: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -500,8 +533,24 @@ impl StateChainOptions {
 impl EthOptions {
 	/// Inserts all the Eth Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
-		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
+		insert_command_line_option(map, "eth.node.ws_node_endpoint", &self.eth_ws_node_endpoint);
+		insert_command_line_option(
+			map,
+			"eth.node.http_node_endpoint",
+			&self.eth_http_node_endpoint,
+		);
+
+		insert_command_line_option(
+			map,
+			"eth.secondary_node.ws_node_endpoint",
+			&self.eth_secondary_ws_node_endpoint,
+		);
+		insert_command_line_option(
+			map,
+			"eth.secondary_node.http_node_endpoint",
+			&self.eth_secondary_http_node_endpoint,
+		);
+
 		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.eth_private_key_file);
 	}
 }
@@ -522,16 +571,51 @@ impl P2POptions {
 
 impl BtcOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "btc.http_node_endpoint", &self.btc_http_node_endpoint);
-		insert_command_line_option(map, "btc.rpc_user", &self.btc_rpc_user);
-		insert_command_line_option(map, "btc.rpc_password", &self.btc_rpc_password);
+		insert_command_line_option(
+			map,
+			"btc.node.http_node_endpoint",
+			&self.btc_http_node_endpoint,
+		);
+		insert_command_line_option(map, "btc.node.rpc_user", &self.btc_rpc_user);
+		insert_command_line_option(map, "btc.node.rpc_password", &self.btc_rpc_password);
+
+		insert_command_line_option(
+			map,
+			"btc.secondary_node.http_node_endpoint",
+			&self.btc_secondary_http_node_endpoint,
+		);
+		insert_command_line_option(
+			map,
+			"btc.secondary_node.rpc_user",
+			&self.btc_secondary_rpc_user,
+		);
+		insert_command_line_option(
+			map,
+			"btc.secondary_node.rpc_password",
+			&self.btc_secondary_rpc_password,
+		);
 	}
 }
 
 impl DotOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "dot.ws_node_endpoint", &self.dot_ws_node_endpoint);
-		insert_command_line_option(map, "dot.http_node_endpoint", &self.dot_http_node_endpoint);
+		insert_command_line_option(map, "dot.node.ws_node_endpoint", &self.dot_ws_node_endpoint);
+		insert_command_line_option(
+			map,
+			"dot.node.http_node_endpoint",
+			&self.dot_http_node_endpoint,
+		);
+
+		insert_command_line_option(
+			map,
+			"dot.secondary_node.ws_node_endpoint",
+			&self.dot_secondary_ws_node_endpoint,
+		);
+		insert_command_line_option(
+			map,
+			"dot.secondary_node.http_node_endpoint",
+			&self.dot_secondary_http_node_endpoint,
+		);
 	}
 }
 
@@ -594,8 +678,10 @@ mod tests {
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_HTTP_NODE_ENDPOINT,
-		DOT_WS_NODE_ENDPOINT,
+		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, BTC_SECONDARY_HTTP_NODE_ENDPOINT,
+		BTC_SECONDARY_RPC_PASSWORD, BTC_SECONDARY_RPC_USER, DOT_HTTP_NODE_ENDPOINT,
+		DOT_SECONDARY_HTTP_NODE_ENDPOINT, DOT_SECONDARY_WS_NODE_ENDPOINT, DOT_WS_NODE_ENDPOINT,
+		ETH_SECONDARY_HTTP_NODE_ENDPOINT, ETH_SECONDARY_WS_NODE_ENDPOINT,
 	};
 
 	use super::*;
@@ -606,14 +692,31 @@ mod tests {
 
 		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
 		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+
+		env::set_var(ETH_SECONDARY_HTTP_NODE_ENDPOINT, "http://second.localhost:8545");
+		env::set_var(ETH_SECONDARY_WS_NODE_ENDPOINT, "ws://second.localhost:8545");
+
 		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
 
 		env::set_var(BTC_HTTP_NODE_ENDPOINT, "http://localhost:18443");
 		env::set_var(BTC_RPC_USER, "user");
 		env::set_var(BTC_RPC_PASSWORD, "password");
 
+		env::set_var(BTC_SECONDARY_HTTP_NODE_ENDPOINT, "http://second.localhost:18443");
+		env::set_var(BTC_SECONDARY_RPC_USER, "second.user");
+		env::set_var(BTC_SECONDARY_RPC_PASSWORD, "second.password");
+
 		env::set_var(DOT_WS_NODE_ENDPOINT, "wss://my_fake_polkadot_rpc:443/<secret_key>");
 		env::set_var(DOT_HTTP_NODE_ENDPOINT, "https://my_fake_polkadot_rpc:443/<secret_key>");
+
+		env::set_var(
+			DOT_SECONDARY_WS_NODE_ENDPOINT,
+			"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
+		);
+		env::set_var(
+			DOT_SECONDARY_HTTP_NODE_ENDPOINT,
+			"https://second.my_fake_polkadot_rpc:443/<secret_key>",
+		);
 	}
 
 	#[test]
@@ -627,6 +730,14 @@ mod tests {
 		assert_eq!(
 			settings.dot.node.ws_node_endpoint,
 			"wss://my_fake_polkadot_rpc:443/<secret_key>"
+		);
+		assert_eq!(
+			settings.eth.secondary_node.unwrap().http_node_endpoint,
+			"http://second.localhost:8545"
+		);
+		assert_eq!(
+			settings.dot.secondary_node.unwrap().ws_node_endpoint,
+			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
 		);
 	}
 
@@ -726,16 +837,27 @@ mod tests {
 			eth_opts: EthOptions {
 				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+				eth_secondary_ws_node_endpoint: Some("ws://second_endpoint:4321".to_owned()),
+				eth_secondary_http_node_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 			dot_opts: DotOptions {
 				dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
 				dot_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+
+				dot_secondary_ws_node_endpoint: Some("ws://second.endpoint:4321".to_owned()),
+				dot_secondary_http_node_endpoint: Some("http://second.endpoint:4321".to_owned()),
 			},
 			btc_opts: BtcOptions {
 				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
 				btc_rpc_user: Some("my_username".to_owned()),
 				btc_rpc_password: Some("my_password".to_owned()),
+
+				btc_secondary_http_node_endpoint: Some(
+					"http://second.btc-endpoint:4321".to_owned(),
+				),
+				btc_secondary_rpc_user: Some("second.my_username".to_owned()),
+				btc_secondary_rpc_password: Some("second.my_password".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -769,6 +891,17 @@ mod tests {
 			opts.eth_opts.eth_http_node_endpoint.unwrap(),
 			settings.eth.node.http_node_endpoint
 		);
+
+		let eth_secondary_node = settings.eth.secondary_node.unwrap();
+		assert_eq!(
+			opts.eth_opts.eth_secondary_ws_node_endpoint.unwrap(),
+			eth_secondary_node.ws_node_endpoint
+		);
+		assert_eq!(
+			opts.eth_opts.eth_secondary_http_node_endpoint.unwrap(),
+			eth_secondary_node.http_node_endpoint
+		);
+
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.node.ws_node_endpoint);
@@ -777,12 +910,29 @@ mod tests {
 			settings.dot.node.http_node_endpoint
 		);
 
+		let dot_secondary_node = settings.dot.secondary_node.unwrap();
+		assert_eq!(
+			opts.dot_opts.dot_secondary_ws_node_endpoint.unwrap(),
+			dot_secondary_node.ws_node_endpoint
+		);
+		assert_eq!(
+			opts.dot_opts.dot_secondary_http_node_endpoint.unwrap(),
+			dot_secondary_node.http_node_endpoint
+		);
+
 		assert_eq!(
 			opts.btc_opts.btc_http_node_endpoint.unwrap(),
 			settings.btc.node.http_node_endpoint
 		);
 		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.node.rpc_user);
 		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), settings.btc.node.rpc_password);
+
+		let btc_secondary_node = settings.btc.secondary_node.unwrap();
+		assert_eq!(opts.btc_opts.btc_secondary_rpc_user.unwrap(), btc_secondary_node.rpc_user);
+		assert_eq!(
+			opts.btc_opts.btc_secondary_rpc_password.unwrap(),
+			btc_secondary_node.rpc_password
+		);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),
