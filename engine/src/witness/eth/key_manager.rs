@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::eth::{AggKey, SchnorrVerificationComponents, TransactionFee};
+use cf_chains::evm::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
 use ethers::{
 	prelude::abigen,
 	types::{Bloom, TransactionReceipt},
@@ -56,11 +56,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		Inner::Chain: cf_chains::ChainCrypto<
-				TransactionInId = H256,
-				TransactionOutId = SchnorrVerificationComponents,
-				AggKey = AggKey,
-			> + cf_chains::Chain<ChainAccount = H160, TransactionFee = TransactionFee>,
+		Inner::Chain: cf_chains::Chain<
+			ChainCrypto = EvmCrypto,
+			ChainAccount = H160,
+			TransactionFee = TransactionFee,
+		>,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
@@ -108,7 +108,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 												<Inner::Chain as PalletInstanceAlias>::Instance,
 											>::vault_key_rotated_externally {
 												new_public_key:
-													cf_chains::eth::AggKey::from_pubkey_compressed(
+													cf_chains::evm::AggKey::from_pubkey_compressed(
 														new_agg_key.serialize(),
 													),
 												block_number: header.index,
@@ -215,7 +215,7 @@ mod tests {
 	use crate::{
 		eth::{
 			retry_rpc::EthersRetryRpcClient,
-			rpc::{EthRpcApi, EthRpcClient, ReconnectSubscriptionClient},
+			rpc::{EthRpcClient, ReconnectSubscriptionClient},
 		},
 		settings::{self},
 		state_chain_observer::client::StateChainClient,
@@ -236,14 +236,10 @@ mod tests {
 					.unwrap(),
 				};
 
-				let client = EthRpcClient::new(&eth_settings).await.unwrap();
-
-				let chain_id = client.chain_id().await.unwrap();
-				println!("Here's the chain_id: {chain_id}");
-
+				let rpc_client = EthRpcClient::new(eth_settings.clone(), 1337u64).unwrap();
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					client,
+					rpc_client,
 					ReconnectSubscriptionClient::new(
 						eth_settings.ws_node_endpoint,
 						web3::types::U256::from(10997),

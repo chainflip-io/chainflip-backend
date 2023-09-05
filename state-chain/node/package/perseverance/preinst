@@ -17,13 +17,12 @@ else
     echo "chainflip-node is already stopped."
 fi
 
-# TODO: Uncomment after we re-re-release 0.8
-#NODE_VERSION=$(chainflip-node -V)
-#
-#if echo "$NODE_VERSION" | grep 0.8; then
-#    echo "chainflip-node: Detected version 0.8, skipping migration"
-#    exit 0
-#fi
+NODE_VERSION=$(chainflip-node -V)
+
+if echo "$NODE_VERSION" | grep 0.9; then
+    echo "chainflip-node: Detected version 0.9, skipping migration"
+    exit 0
+fi
 
 # Backup and delete systemd overrides if they exist
 if [ -f /etc/systemd/system/chainflip-node.service.d/override.conf ]; then

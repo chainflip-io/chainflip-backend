@@ -5,8 +5,11 @@ use std::cell::RefCell;
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMode};
 use cf_chains::{
 	eth::Ethereum,
-	mocks::{MockAggKey, MockApiCall, MockEthereum, MockTransactionBuilder},
-	ChainCrypto,
+	evm::EvmCrypto,
+	mocks::{
+		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
+	},
+	Chain, ChainCrypto,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -78,16 +81,16 @@ pub const VALID_AGG_KEY: MockAggKey = MockAggKey([0, 0, 0, 0]);
 pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 
 thread_local! {
-	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
 }
 
-pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
+pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
 
 pub struct MockKeyProvider;
 
-impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	fn active_epoch_key() -> Option<EpochKey<<MockEthereum as ChainCrypto>::AggKey>> {
+impl cf_traits::KeyProvider<MockEthereumChainCrypto> for MockKeyProvider {
+	fn active_epoch_key() -> Option<EpochKey<<MockEthereumChainCrypto as ChainCrypto>::AggKey>> {
 		Some(EpochKey {
 			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
 			epoch_index: Default::default(),
@@ -125,7 +128,7 @@ impl MockKeyProvider {
 
 pub struct MockBroadcastReadyProvider;
 impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
-	type ApiCall = MockApiCall<MockEthereum>;
+	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
@@ -135,9 +138,9 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
 	type TargetChain = MockEthereum;
-	type ApiCall = MockApiCall<MockEthereum>;
+	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
-	type ThresholdSigner = MockThresholdSigner<MockEthereum, RuntimeCall>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
 	type BroadcastSignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;

@@ -16,7 +16,7 @@ use pallet_cf_validator::CurrentAuthorities;
 
 const SEED: u32 = 0;
 
-type SignatureFor<T, I> = <<T as Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature;
+type SignatureFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::ThresholdSignature;
 
 fn add_authorities<T, I>(authorities: I)
 where
@@ -94,7 +94,7 @@ benchmarks_instance_pallet! {
 		let a in 10..150;
 		// r: number of retries
 		let r in 0..50;
-		T::KeyProvider::set_key(<T::TargetChain as ChainCrypto>::AggKey::benchmark_value());
+		T::KeyProvider::set_key(<T::TargetChainCrypto as ChainCrypto>::AggKey::benchmark_value());
 		CurrentAuthorities::<T>::put(BTreeSet::<<T as Chainflip>::ValidatorId>::new());
 
 		// These attempts will fail because there are no authorities to do the signing.
