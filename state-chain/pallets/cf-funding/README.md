@@ -64,7 +64,7 @@ Note, address binding is a one-off *irreversible* operation.
 >
 > *Example:*
 >
-> *A liquid staking provider wants to allow users to pool their FLIP through a smart contract on Ethereum, to be deployed in a validator account. They bind their validator account to the smart contract address. This binding is permanent and irrevocable, so users can now rest assured that there is no way the pooled funds can be redeemed to any other address.*
+> *A liquid staking provider wants to allow users to pool their FLIP through a smart contract on Ethereum, to then fund a validator account. They bind their validator account to the smart contract address. This binding is permanent and irrevocable, so users can now rest assured that there is no way the pooled funds can be redeemed to any other address.*
 
 #### Restricted Balances
 
