@@ -59,3 +59,12 @@ source 'tests/setup.bats'
     echo $result
     [ "$result" = "chainflip-engine: skipping migration" ]
 }
+
+@test "Update Engine Config does what it is supposed to do" {
+    # TODO: Add real test once we add functionality to update engine config.
+    source ../perseverance/preinst
+
+    result=$(update_engine_config)
+
+    [ "$result" = "chainflip-engine: Updating engine config" ]
+}
