@@ -5,8 +5,9 @@ use std::cell::RefCell;
 use super::*;
 use crate as pallet_cf_vaults;
 use cf_chains::{
-	btc, eth,
-	mocks::{MockAggKey, MockEthereum},
+	btc,
+	evm::SchnorrVerificationComponents,
+	mocks::{MockAggKey, MockEthereum, MockEthereumChainCrypto},
 	ApiCall, SetAggKeyWithAggKeyError,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
@@ -41,8 +42,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 
@@ -77,8 +78,8 @@ impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
-	old_key: <MockEthereum as ChainCrypto>::AggKey,
-	new_key: <MockEthereum as ChainCrypto>::AggKey,
+	old_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+	new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 }
 
 impl MockSetAggKeyWithAggKey {
@@ -89,10 +90,10 @@ impl MockSetAggKeyWithAggKey {
 	}
 }
 
-impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
+impl SetAggKeyWithAggKey<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
-		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
-		new_key: <MockEthereum as ChainCrypto>::AggKey,
+		old_key: Option<<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
+		new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
 			return Err(SetAggKeyWithAggKeyError::NotRequired)
@@ -102,14 +103,16 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	}
 }
 
-impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
-	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
 	fn signed(
 		self,
-		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		unimplemented!()
 	}
@@ -122,7 +125,9 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <MockEthereum as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		todo!()
 	}
 }
@@ -215,7 +220,7 @@ impl pallet_cf_vaults::Config for Test {
 	type Chain = MockEthereum;
 	type RuntimeCall = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type ThresholdSigner = MockThresholdSigner<MockEthereum, RuntimeCall>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
 	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;

@@ -4,7 +4,7 @@ use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
 	Error, PalletOffence, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
 };
-use cf_chains::mocks::MockEthereum;
+use cf_chains::mocks::MockEthereumChainCrypto;
 use cf_traits::{
 	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
 	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
@@ -450,7 +450,7 @@ fn test_retries_for_locked_key() {
 				..
 			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
-			MockKeyProvider::<MockEthereum>::lock_key(request_id);
+			MockKeyProvider::<MockEthereumChainCrypto>::lock_key(request_id);
 
 			// Key is now locked and should be unavailable for new requests.
 			<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*b"SUP?");
@@ -488,8 +488,9 @@ mod unsigned_validation {
 	#[test]
 	fn start_custom_signing_ceremony() {
 		new_test_ext().execute_with_consistency_checks(|| {
-			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = MockAggKey(*b"AKEY");
+			const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
+			const CUSTOM_AGG_KEY: <MockEthereumChainCrypto as ChainCrypto>::AggKey =
+				MockAggKey(*b"AKEY");
 
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
 			EthereumThresholdSigner::request_verification_signature(
@@ -518,7 +519,7 @@ mod unsigned_validation {
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
 			.execute_with_consistency_checks(|| {
-				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let ceremony_id = MockCeremonyIdProvider::get();
@@ -547,7 +548,7 @@ mod unsigned_validation {
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
 			.execute_with_consistency_checks(|| {
-				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
@@ -648,7 +649,7 @@ mod failure_reporting {
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
-		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+		const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(validator_set.into_iter().collect());
 		CeremonyContext {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },

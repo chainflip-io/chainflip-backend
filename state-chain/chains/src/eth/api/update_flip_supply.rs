@@ -24,7 +24,7 @@ impl UpdateFlipSupply {
 	}
 }
 
-impl EthereumCall for UpdateFlipSupply {
+impl EvmCall for UpdateFlipSupply {
 	const FUNCTION_NAME: &'static str = "updateFlipSupply";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
@@ -38,16 +38,16 @@ impl EthereumCall for UpdateFlipSupply {
 
 #[cfg(test)]
 mod test_update_flip_supply {
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		eth::api::{abi::load_abi, ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+		evm::SchnorrVerificationComponents,
 	};
 
 	use super::*;
 
 	#[test]
 	fn test_update_flip_supply_payload() {
-		use crate::eth::tests::asymmetrise;
+		use crate::evm::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const FAKE_STATE_CHAIN_GATEWAY_ADDRESS: [u8; 20] = asymmetrise([0xcd; 20]);
@@ -62,8 +62,8 @@ mod test_update_flip_supply {
 
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
-		let update_flip_supply_runtime = EthereumTransactionBuilder::new_unsigned(
-			EthereumReplayProtection {
+		let update_flip_supply_runtime = EvmTransactionBuilder::new_unsigned(
+			EvmReplayProtection {
 				nonce: NONCE,
 				chain_id: CHAIN_ID,
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),

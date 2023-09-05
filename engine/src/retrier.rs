@@ -46,7 +46,7 @@ type FutureAnyGenerator<Client> = TypedFutureGenerator<BoxAny, Client>;
 // The id per *request* from the external caller. This is not tracking *submissions*.
 type RequestId = u64;
 
-type Attempt = u32;
+pub type Attempt = u32;
 
 #[derive(Debug, Clone)]
 pub struct RequestLog {
@@ -199,12 +199,15 @@ fn submission_future<Client: Clone>(
 /// Requests submitted to this client will be retried until success.
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
-impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
-	pub fn new(
+impl<Client> RetrierClient<Client>
+where
+	Client: Clone + Send + Sync + 'static,
+{
+	pub fn new<ClientFut: Future<Output = Client> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
 		// The name of the retrier that appears in the logs.
 		name: &'static str,
-		primary_client: Client,
+		primary_client: ClientFut,
 		initial_request_timeout: Duration,
 		maximum_concurrent_submissions: u32,
 	) -> Self {
@@ -218,6 +221,8 @@ impl<Client: Clone + Send + Sync + 'static> RetrierClient<Client> {
 		let mut submission_holder = SubmissionHolder::new(maximum_concurrent_submissions);
 
 		scope.spawn(async move {
+			let primary_client = primary_client.await;
+
 			utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
@@ -373,7 +378,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -422,7 +428,8 @@ mod tests {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -459,7 +466,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -497,7 +505,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -541,7 +550,8 @@ mod tests {
 
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 2);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 2);
 
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
@@ -618,7 +628,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request_with_limit(
@@ -644,7 +655,8 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RetrierClient::new(scope, "test", (), INITIAL_TIMEOUT, 100);
+				let retrier_client =
+					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request(

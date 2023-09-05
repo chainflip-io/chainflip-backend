@@ -1,7 +1,7 @@
 #![cfg(debug_assertions)]
 
 use crate::{
-	eth::{api::EthereumReplayProtection, TransactionFee},
+	evm::{api::EvmReplayProtection, TransactionFee},
 	*,
 };
 use cf_utilities::SliceToArray;
@@ -50,7 +50,7 @@ impl Get<bool> for MockOptimisticActivation {
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
-
+	type ChainCrypto = MockEthereumChainCrypto;
 	type KeyHandoverIsRequired = MockKeyHandoverIsRequired;
 	type OptimisticActivation = MockOptimisticActivation;
 
@@ -64,6 +64,9 @@ impl Chain for MockEthereum {
 	type EpochStartData = ();
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
+	type Transaction = MockTransaction;
+	type ReplayProtectionParams = ();
+	type ReplayProtection = EvmReplayProtection;
 }
 
 impl ToHumanreadableAddress for u64 {
@@ -185,7 +188,9 @@ pub struct MockAggKey(pub [u8; 4]);
 /// A key that should be not accepted as handover result
 pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 
-impl ChainCrypto for MockEthereum {
+#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockEthereumChainCrypto;
+impl ChainCrypto for MockEthereumChainCrypto {
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
@@ -223,37 +228,32 @@ pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
-impl ChainAbi for MockEthereum {
-	type Transaction = MockTransaction;
-	type ReplayProtectionParams = ();
-	type ReplayProtection = EthereumReplayProtection;
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockApiCall<C: ChainAbi> {
-	pub payload: C::Payload,
-	pub sig: Option<C::ThresholdSignature>,
-	pub tx_out_id: C::TransactionOutId,
+#[derive(Encode, Decode, TypeInfo, CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
+#[scale_info(skip_type_params(C))]
+pub struct MockApiCall<C: ChainCrypto> {
+	pub payload: <C as ChainCrypto>::Payload,
+	pub sig: Option<<C as ChainCrypto>::ThresholdSignature>,
+	pub tx_out_id: <C as ChainCrypto>::TransactionOutId,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<C: ChainCrypto + ChainAbi> BenchmarkValue for MockApiCall<C> {
+impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
 	fn benchmark_value() -> Self {
 		Self {
-			payload: C::Payload::benchmark_value(),
-			sig: Some(C::ThresholdSignature::benchmark_value()),
-			tx_out_id: C::TransactionOutId::benchmark_value(),
+			payload: <C as ChainCrypto>::Payload::benchmark_value(),
+			sig: Some(<C as ChainCrypto>::ThresholdSignature::benchmark_value()),
+			tx_out_id: <C as ChainCrypto>::TransactionOutId::benchmark_value(),
 		}
 	}
 }
 
-impl<C: ChainAbi> MaxEncodedLen for MockApiCall<C> {
+impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
 	fn max_encoded_len() -> usize {
 		<[u8; 32]>::max_encoded_len() * 3
 	}
 }
 
-impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
+impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload {
 		self.payload.clone()
 	}
@@ -279,30 +279,30 @@ thread_local! {
 	pub static IS_VALID_BROADCAST: std::cell::RefCell<bool> = RefCell::new(true);
 }
 
-pub struct MockTransactionBuilder<Abi, Call>(PhantomData<(Abi, Call)>);
+pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
 
-impl<Abi, Call> MockTransactionBuilder<Abi, Call> {
+impl<C, Call> MockTransactionBuilder<C, Call> {
 	pub fn set_invalid_for_rebroadcast() {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow_mut() = false)
 	}
 }
 
-impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
-	for MockTransactionBuilder<Abi, Call>
+impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
+	TransactionBuilder<C, Call> for MockTransactionBuilder<C, Call>
 {
-	fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::Transaction {
+	fn build_transaction(_signed_call: &Call) -> <C as Chain>::Transaction {
 		MockTransaction {}
 	}
 
-	fn refresh_unsigned_data(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <C as Chain>::Transaction) {
 		// refresh nothing
 	}
 
 	fn is_valid_for_rebroadcast(
 		_call: &Call,
-		_payload: &<Abi as ChainCrypto>::Payload,
-		_current_key: &<Abi as ChainCrypto>::AggKey,
-		_signature: &<Abi as ChainCrypto>::ThresholdSignature,
+		_payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		_signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}

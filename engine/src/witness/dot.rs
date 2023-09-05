@@ -21,12 +21,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	dot::{
-		http_rpc::DotHttpRpcClient,
-		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
-		rpc::DotSubClient,
-	},
-	settings::{self},
+	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
@@ -81,7 +76,7 @@ fn filter_map_events(
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &settings::Dot,
+	dot_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -91,12 +86,6 @@ where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	let dot_client = DotRetryRpcClient::new(
-		scope,
-		DotHttpRpcClient::new(&settings.http_node_endpoint).await?,
-		DotSubClient::new(&settings.ws_node_endpoint),
-	);
-
 	DotUnfinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
