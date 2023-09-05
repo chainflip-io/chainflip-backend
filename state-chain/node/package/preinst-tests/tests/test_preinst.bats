@@ -51,7 +51,7 @@ source 'tests/setup.bats'
     [ "$result" = "chainflip-node: Detected older version, migrating" ]
 }
 
-@test "Migration doesn't run if local patch version matchs target" {
+@test "Migration doesn't run if local minor version matchs target" {
     VERSION_OUTPUT="chainflip-node 0.9.1-7989b2cb5e4"
 
     source ../perseverance/preinst

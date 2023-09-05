@@ -6,6 +6,9 @@ on:
         required: false
         default: ${{ github.ref_name }}
 
+env:
+  FORCE_COLOR: 1
+
 jobs:
   check-version:
     runs-on: ubuntu-latest
