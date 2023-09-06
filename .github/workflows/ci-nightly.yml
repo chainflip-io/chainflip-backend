@@ -4,6 +4,7 @@ on:
     - cron: '0 0 * * *'
 
 env:
+  FORCE_COLOR: 1
   RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
