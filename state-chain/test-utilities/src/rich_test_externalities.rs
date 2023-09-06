@@ -235,6 +235,13 @@ where
 			}
 		}
 	}
+
+	/// Commits storage changes to the DB
+	#[track_caller]
+	pub fn commit_all(mut self) -> Self {
+		assert_ok!(self.ext.0.commit_all());
+		self
+	}
 }
 
 #[cfg(test)]

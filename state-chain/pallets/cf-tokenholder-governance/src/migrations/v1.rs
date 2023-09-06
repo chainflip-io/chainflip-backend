@@ -1,5 +1,5 @@
 use crate::*;
-use cf_chains::{ChainCrypto, Ethereum};
+use cf_chains::{Chain, ChainCrypto, Ethereum};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
@@ -11,8 +11,8 @@ mod v0 {
 
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 	pub enum Proposal {
-		SetGovernanceKey(<Ethereum as ChainCrypto>::GovKey),
-		SetCommunityKey(<Ethereum as ChainCrypto>::GovKey),
+		SetGovernanceKey(<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey),
+		SetCommunityKey(<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey),
 	}
 
 	#[frame_support::storage_alias]
@@ -51,7 +51,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			Backers::<T>::insert(proposal_v1, backers_set);
 		}
 		GovKeyUpdateAwaitingEnactment::<T>::translate::<
-			(BlockNumberFor<T>, <Ethereum as ChainCrypto>::GovKey),
+			(BlockNumberFor<T>, <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey),
 			_,
 		>(|maybe_update| {
 			maybe_update.map(|(block_number, eth_gov_key)| {
@@ -124,6 +124,6 @@ mod test_runtime_upgrade {
 				BTreeSet::<_>::from_iter(*BACKERS),
 				"Backers accounts are incorrect."
 			);
-		})
+		});
 	}
 }

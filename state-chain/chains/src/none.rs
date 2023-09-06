@@ -7,6 +7,7 @@ pub enum NoneChain {}
 
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
+	type ChainCrypto = NoneChainCrypto;
 	type KeyHandoverIsRequired = ConstBool<false>;
 	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = u64;
@@ -19,9 +20,21 @@ impl Chain for NoneChain {
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();
+	type Transaction = ();
+	type ReplayProtectionParams = ();
+	type ReplayProtection = ();
 }
 
-impl ChainCrypto for NoneChain {
+impl FeeRefundCalculator<NoneChain> for () {
+	fn return_fee_refund(
+		&self,
+		_fee_paid: <NoneChain as Chain>::TransactionFee,
+	) -> <NoneChain as Chain>::ChainAmount {
+		unimplemented!()
+	}
+}
+pub struct NoneChainCrypto;
+impl ChainCrypto for NoneChainCrypto {
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();

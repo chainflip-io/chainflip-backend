@@ -59,19 +59,12 @@ export async function requestNewSwap(
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
       // CF Parameters is always set to '' by the SDK for now
-      let ccmMetadataMatches = false;
-      if (messageMetadata) {
-        if (event.data.channelMetadata) {
-          ccmMetadataMatches =
-            event.data.channelMetadata.message === messageMetadata.message &&
-            Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-              messageMetadata.gasBudget;
-        } else {
-          ccmMetadataMatches = false;
-        }
-      } else {
-        ccmMetadataMatches = true;
-      }
+      const ccmMetadataMatches = messageMetadata
+        ? event.data.channelMetadata !== null &&
+          event.data.channelMetadata.message === messageMetadata.message &&
+          Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
+            messageMetadata.gasBudget
+        : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },

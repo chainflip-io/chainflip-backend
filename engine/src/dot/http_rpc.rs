@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
+use futures_core::Future;
 use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
 	http_client::{HttpClient, HttpClientBuilder},
@@ -20,6 +21,9 @@ use subxt::{
 };
 
 use anyhow::Result;
+use utilities::make_periodic_tick;
+
+use crate::constants::DOT_AVERAGE_BLOCK_TIME;
 
 use super::rpc::DotRpcApi;
 
@@ -76,12 +80,32 @@ pub struct DotHttpRpcClient {
 }
 
 impl DotHttpRpcClient {
-	pub async fn new(url: &str) -> Result<Self> {
-		let polkadot_http_client = PolkadotHttpClient::new(url)?;
-		let online_client =
-			OnlineClient::<PolkadotConfig>::from_rpc_client(Arc::new(polkadot_http_client)).await?;
+	pub fn new(url: String) -> Result<impl Future<Output = Self>> {
+		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
 
-		Ok(Self { online_client })
+		Ok(async move {
+			// We don't want to return an error here. Returning an error means that we'll exit the
+			// CFE. So on client creation we wait until we can be successfully connected to the
+			// Polkadot node. So the other chains are unaffected
+			let mut poll_interval = make_periodic_tick(DOT_AVERAGE_BLOCK_TIME, true);
+			let online_client = loop {
+				poll_interval.tick().await;
+
+				match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
+					.await
+				{
+					Ok(online_client) => break online_client,
+					Err(e) => {
+						tracing::error!(
+						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE
+						configuration file. Retrying in {:?}...",
+						poll_interval.period()
+					);
+					},
+				}
+			};
+			Self { online_client }
+		})
 	}
 
 	pub async fn metadata(&self, block_hash: H256) -> Result<subxt::Metadata> {
@@ -178,7 +202,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_http_rpc() {
 		let url = "http://localhost:9945";
-		let dot_http_rpc = DotHttpRpcClient::new(url).await.unwrap();
+		let dot_http_rpc = DotHttpRpcClient::new(url.to_string()).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

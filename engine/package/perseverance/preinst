@@ -6,13 +6,12 @@ if [ "$1" != "upgrade" ]; then
     exit 0
 fi
 
-# TODO: Uncomment after we re-re-release 0.8
-#ENGINE_VERSION=$(chainflip-engine -V)
-#
-#if echo "$ENGINE_VERSION" | grep 0.8; then
-#    echo "chainflip-engine: Detected version 0.8, skipping migration"
-#    exit 0
-#fi
+ENGINE_VERSION=$(chainflip-engine -V)
+
+if echo "$ENGINE_VERSION" | grep 0.9; then
+    echo "chainflip-engine: Detected version 0.9, skipping migration"
+    exit 0
+fi
 
 CF_ROOT=/etc/chainflip
 
@@ -43,23 +42,26 @@ if [ -f "/var/log/chainflip-engine.log" ]; then
     rm -rf "/var/log/chainflip-engine*"
 fi
 
-# Add the BTC settings to the config file if they don't exist
-if ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml; then
-    echo "chainflip-engine: No BTC config found ... Adding BTC RPC endpoint to config file"
-    cat <<EOF >>$CF_ROOT/config/Settings.toml
+echo "Updating pDOT endpoint ..."
+sed -i 's|wss://pdot.chainflip.xyz:443|wss://rpc-pdot.chainflip.io:443|g' /etc/chainflip/config/Settings.toml
 
-[btc]
-http_node_endpoint = "http://a108a82b574a640359e360cf66afd45d-424380952.eu-central-1.elb.amazonaws.com"
-rpc_user = "flip"
-rpc_password = "flip"
-EOF
+FILE=/etc/chainflip/config/Settings.toml
+
+# Check if [dot] section exists
+if grep -q "\[dot\]" "$FILE"; then
+    # [dot] section exists, use awk to check for http_node_endpoint after [dot]
+    if ! awk '/\[dot\]/ {flag=1; next} flag && /http_node_endpoint/ {print; exit} flag && /^\[/ {exit}' "$FILE" | grep -q "http_node_endpoint"; then
+        # http_node_endpoint does not exist under [dot], add it
+        sed -i '/\[dot\]/a http_node_endpoint = "https://rpc-pdot.chainflip.io:443"' "$FILE"
+        echo "http_node_endpoint key added under [dot]"
+    else
+        echo "http_node_endpoint key already exists under [dot]"
+    fi
+else
+    echo "[dot] section does not exist in the file"
 fi
 
-# Check if pdot endpoint is pdot.chainflip.io and change to pdot.chainflip.xyz
-if grep -q 'pdot.chainflip.io' /etc/chainflip/config/Settings.toml; then
-    echo "chainflip-engine: Found pdot.chainflip.io endpoint ... Changing to pdot.chainflip.xyz"
-    sed -i 's/pdot.chainflip.io/pdot.chainflip.xyz/g' /etc/chainflip/config/Settings.toml
-fi
+echo "Migration complete. Restarting chainflip-engine..."
 
 systemctl daemon-reload
 

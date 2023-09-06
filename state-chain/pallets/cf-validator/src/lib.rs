@@ -362,23 +362,11 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							Self::start_key_handover(rotation_state, block_number);
+							Self::try_start_key_handover(rotation_state, block_number);
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
-							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
-
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) <
-								Self::current_consensus_success_threshold() {
-								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-								);
-								Self::abort_rotation();
-							} else {
-								Self::start_vault_rotation(rotation_state);
-							}
+							Self::try_restart_keygen(rotation_state);
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -404,25 +392,23 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// NOTE: we distinguish between candidates (nodes currently selected to become next authorities)
+							// and non-candidates (current authorities *not* currently selected to become next authorities).
+							// The outcome of this failure depends on whether any of the candidates caused it:
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
-							if (rotation_state.unbanned_current_authorities::<T>().len() as u32) < Self::current_consensus_success_threshold() {
+							if num_failed_candidates > 0 {
 								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+									"{num_failed_candidates} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
 								);
-								Self::abort_rotation();
-							} else if num_failed_candidates > 0 {
-								log::warn!(
-									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
-									num_failed_candidates,
-								);
-								Self::start_vault_rotation(rotation_state);
+								Self::try_restart_keygen(rotation_state);
 							} else {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
-								Self::start_key_handover(rotation_state, block_number)
+								Self::try_restart_key_handover(rotation_state, block_number)
 							};
 						},
 						AsyncResult::Pending => {
@@ -981,6 +967,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
+		T::VaultRotator::reset_vault_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1040,9 +1027,7 @@ impl<T: Config> Pallet<T> {
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
-					auction_outcome,
-				));
+				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
 
 				weight
 			},
@@ -1058,7 +1043,12 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
+	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
+		T::VaultRotator::reset_vault_rotation();
+		Self::try_start_keygen(rotation_state);
+	}
+
+	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
 		if (candidates.len() as u32) < min_size {
@@ -1076,7 +1066,15 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn start_key_handover(
+	fn try_restart_key_handover(
+		rotation_state: RuntimeRotationState<T>,
+		block_number: BlockNumberFor<T>,
+	) {
+		T::VaultRotator::reset_vault_rotation();
+		Self::try_start_key_handover(rotation_state, block_number);
+	}
+
+	fn try_start_key_handover(
 		rotation_state: RuntimeRotationState<T>,
 		block_number: BlockNumberFor<T>,
 	) {
@@ -1085,7 +1083,6 @@ impl<T: Config> Pallet<T> {
 				target: "cf-validator",
 				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
-			T::VaultRotator::abort_vault_rotation();
 			Self::abort_rotation();
 			return
 		}

@@ -4,7 +4,7 @@ use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
 	Error, PalletOffence, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
 };
-use cf_chains::mocks::MockEthereum;
+use cf_chains::mocks::MockEthereumChainCrypto;
 use cf_traits::{
 	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
 	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
@@ -143,12 +143,11 @@ impl MockCfe {
 fn happy_path_no_callback() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> { request_context, .. } =
 				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
@@ -174,12 +173,11 @@ fn happy_path_no_callback() {
 fn happy_path_with_callback() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request_and_callback(b"OHAI", MockCallback::new)
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> { request_context, .. } =
 				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
@@ -210,12 +208,11 @@ fn signature_success_can_only_succeed_once_per_request() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
 	const PAYLOAD: &[u8; 4] = b"OHAI";
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request_and_callback(PAYLOAD, MockCallback::new)
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> { request_context, .. } =
 				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
@@ -245,11 +242,10 @@ fn signature_success_can_only_succeed_once_per_request() {
 fn keygen_verification_ceremony_calls_callback_on_failure() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let EpochKey { key, .. } =
 				<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap();
@@ -280,19 +276,18 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 
 			assert!(MockCallback::has_executed(request_id));
 			assert_eq!(MockCallback::times_called(), 1);
-		})
+		});
 }
 
 #[test]
 fn fail_path_with_timeout() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> {
 				request_context: RequestContext { request_id, attempt_count, .. },
@@ -352,12 +347,11 @@ fn fail_path_with_timeout() {
 fn fail_path_due_to_report_signature_failed() {
 	const NOMINEES: [u64; 5] = [1, 2, 3, 4, 5];
 	const AUTHORITIES: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			// progress by one block *after* the initial request is inserted (in the ExtBuilder)
 			System::set_block_number(frame_system::Pallet::<Test>::current_block_number() + 1);
 			let ceremony_id = current_ceremony_id();
@@ -430,12 +424,11 @@ fn fail_path_due_to_report_signature_failed() {
 fn test_not_enough_signers_for_threshold_schedules_retry() {
 	const NOMINEES: [u64; 0] = [];
 	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
 			assert_eq!(EthereumThresholdSigner::request_retry_queues(retry_block).len(), 1);
@@ -446,19 +439,18 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 fn test_retries_for_locked_key() {
 	const NOMINEES: [u64; 4] = [1, 2, 3, 4];
 	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-	ExtBuilder::new()
+	new_test_ext()
 		.with_authorities(AUTHORITIES)
 		.with_nominees(NOMINEES)
 		.with_request(b"OHAI")
-		.build()
-		.execute_with(|| {
+		.execute_with_consistency_checks(|| {
 			let ceremony_id = current_ceremony_id();
 			let CeremonyContext::<Test, Instance1> {
 				request_context: RequestContext { request_id, attempt_count: first_attempt, .. },
 				..
 			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
-			MockKeyProvider::<MockEthereum>::lock_key(request_id);
+			MockKeyProvider::<MockEthereumChainCrypto>::lock_key(request_id);
 
 			// Key is now locked and should be unavailable for new requests.
 			<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*b"SUP?");
@@ -495,9 +487,10 @@ mod unsigned_validation {
 
 	#[test]
 	fn start_custom_signing_ceremony() {
-		new_test_ext().execute_with(|| {
-			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = MockAggKey(*b"AKEY");
+		new_test_ext().execute_with_consistency_checks(|| {
+			const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
+			const CUSTOM_AGG_KEY: <MockEthereumChainCrypto as ChainCrypto>::AggKey =
+				MockAggKey(*b"AKEY");
 
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
 			EthereumThresholdSigner::request_verification_signature(
@@ -522,12 +515,11 @@ mod unsigned_validation {
 	fn valid_unsigned_extrinsic() {
 		const NOMINEES: [u64; 3] = [1, 2, 3];
 		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-		ExtBuilder::new()
+		new_test_ext()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
-			.build()
-			.execute_with(|| {
-				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+			.execute_with_consistency_checks(|| {
+				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let ceremony_id = MockCeremonyIdProvider::get();
@@ -552,12 +544,11 @@ mod unsigned_validation {
 	fn reject_invalid_ceremony() {
 		const NOMINEES: [u64; 3] = [1, 2, 3];
 		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-		ExtBuilder::new()
+		new_test_ext()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
-			.build()
-			.execute_with(|| {
-				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+			.execute_with_consistency_checks(|| {
+				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
@@ -579,12 +570,11 @@ mod unsigned_validation {
 	fn reject_invalid_signature() {
 		const NOMINEES: [u64; 3] = [1, 2, 3];
 		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-		ExtBuilder::new()
+		new_test_ext()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
 			.with_request(b"OHAI")
-			.build()
-			.execute_with(|| {
+			.execute_with_consistency_checks(|| {
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
@@ -602,7 +592,7 @@ mod unsigned_validation {
 
 	#[test]
 	fn reject_invalid_call() {
-		new_test_ext().execute_with(|| {
+		new_test_ext().execute_with_consistency_checks(|| {
 			assert_eq!(
 				EthereumThresholdSigner::validate_unsigned(
 					TransactionSource::External,
@@ -627,12 +617,11 @@ mod unsigned_validation {
 		// authority.
 		let invalid_blames = BTreeSet::from_iter([AUTHORITIES[4], u64::MAX]);
 
-		ExtBuilder::new()
+		new_test_ext()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
 			.with_request(b"OHAI")
-			.build()
-			.execute_with(|| {
+			.execute_with_consistency_checks(|| {
 				let ceremony_id = MockCeremonyIdProvider::get();
 				EthereumThresholdSigner::report_signature_failed(
 					RuntimeOrigin::signed(NOMINEES[0]),
@@ -660,7 +649,7 @@ mod failure_reporting {
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
-		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+		const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(validator_set.into_iter().collect());
 		CeremonyContext {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },

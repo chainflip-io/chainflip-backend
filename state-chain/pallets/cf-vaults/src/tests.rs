@@ -8,7 +8,8 @@ use crate::{
 	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::{
-	eth::Ethereum,
+	btc::BitcoinCrypto,
+	evm::EvmCrypto,
 	mocks::{MockAggKey, MockOptimisticActivation},
 };
 use cf_primitives::GENESIS_EPOCH;
@@ -24,8 +25,8 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 
-pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
-pub type BtcMockThresholdSigner = MockThresholdSigner<cf_chains::Bitcoin, crate::mock::RuntimeCall>;
+pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
+pub type BtcMockThresholdSigner = MockThresholdSigner<BitcoinCrypto, crate::mock::RuntimeCall>;
 
 macro_rules! assert_last_event {
 	($pat:pat) => {
@@ -136,7 +137,7 @@ fn keygen_success_triggers_keygen_verification() {
 			btree_candidates,
 			rotation_epoch_index,
 		);
-	})
+	});
 }
 
 fn keygen_failure(bad_candidates: &[<Test as Chainflip>::ValidatorId]) {
@@ -258,7 +259,7 @@ fn no_active_rotation() {
 			),
 			Error::<Test, _>::NoActiveRotation
 		);
-	})
+	});
 }
 
 #[test]
@@ -561,7 +562,7 @@ fn keygen_report_success() {
 		// Voting has been cleared.
 		assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
 		assert!(!KeygenFailureVoters::<Test, _>::exists());
-	})
+	});
 }
 
 #[test]
@@ -624,7 +625,7 @@ fn keygen_report_failure() {
 		// Voting has been cleared.
 		assert!(KeygenSuccessVoters::<Test, _>::iter_keys().next().is_none());
 		assert!(!KeygenFailureVoters::<Test, _>::exists());
-	})
+	});
 }
 
 fn test_key_ceremony_timeout_period<PendingSince, ReportFn>(report_fn: ReportFn)
@@ -695,8 +696,8 @@ mod vault_key_rotation {
 	const ACTIVATION_BLOCK_NUMBER: u64 = 42;
 	const TX_HASH: [u8; 4] = [0xab; 4];
 
-	fn setup(key_handover_outcome: KeygenOutcomeFor<Test>) -> sp_io::TestExternalities {
-		let mut ext = new_test_ext();
+	fn setup(key_handover_outcome: KeygenOutcomeFor<Test>) -> TestRunner<()> {
+		let ext = new_test_ext();
 		ext.execute_with(|| {
 			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
@@ -739,11 +740,10 @@ mod vault_key_rotation {
 			}
 
 			VaultsPallet::on_initialize(1);
-		});
-		ext
+		})
 	}
 
-	fn final_checks(ext: &mut sp_io::TestExternalities, expected_activation_block: u64) {
+	fn final_checks(ext: TestRunner<()>, expected_activation_block: u64) {
 		ext.execute_with(|| {
 			// Can't repeat.
 			assert_noop!(
@@ -791,8 +791,7 @@ mod vault_key_rotation {
 
 	#[test]
 	fn non_optimistic_activation() {
-		let mut ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER));
-		ext.execute_with(|| {
+		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
 			BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![
 				BTC_DUMMY_SIG,
 			]));
@@ -811,13 +810,13 @@ mod vault_key_rotation {
 				TX_HASH,
 			));
 		});
-		final_checks(&mut ext, ACTIVATION_BLOCK_NUMBER);
+
+		final_checks(ext, ACTIVATION_BLOCK_NUMBER);
 	}
 
 	#[test]
 	fn optimistic_activation() {
-		let mut ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER));
-		ext.execute_with(|| {
+		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
 			BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![
 				BTC_DUMMY_SIG,
 			]));
@@ -840,13 +839,12 @@ mod vault_key_rotation {
 				VaultRotationStatus::Complete,
 			));
 		});
-		final_checks(&mut ext, HANDOVER_ACTIVATION_BLOCK);
+		final_checks(ext, HANDOVER_ACTIVATION_BLOCK);
 	}
 
 	#[test]
 	fn handover_failure() {
-		let mut ext = setup(Err(Default::default()));
-		ext.execute_with(|| {
+		let ext = setup(Err(Default::default())).execute_with(|| {
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get().unwrap(),
 				VaultRotationStatus::KeyHandoverFailed { .. }
@@ -877,38 +875,34 @@ mod vault_key_rotation {
 			MockOptimisticActivation::set(true);
 			VaultsPallet::activate();
 		});
-		final_checks(&mut ext, HANDOVER_ACTIVATION_BLOCK);
+
+		final_checks(ext, HANDOVER_ACTIVATION_BLOCK);
 	}
 
 	#[test]
 	fn key_handover_success_triggers_key_handover_verification() {
-		let mut ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER));
-
-		ext.execute_with(|| {
+		setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get(),
 				Some(VaultRotationStatus::AwaitingKeyHandoverVerification { .. })
 			));
-		})
+		});
 	}
 
 	#[test]
 	fn key_handover_fails_on_key_mismatch() {
-		let mut ext = setup(Ok(BAD_AGG_KEY_POST_HANDOVER));
-
-		ext.execute_with(|| {
+		setup(Ok(BAD_AGG_KEY_POST_HANDOVER)).execute_with(|| {
 			assert_last_event!(crate::Event::KeyHandoverFailure { .. });
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get(),
 				Some(VaultRotationStatus::KeyHandoverFailed { .. })
 			));
-		})
+		});
 	}
 
 	#[test]
 	fn can_recover_after_key_handover_verification_failure() {
-		let mut ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER));
-		ext.execute_with(|| {
+		setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
 			MockOptimisticActivation::set(true);
 
 			let offenders = vec![ALICE];
@@ -970,7 +964,7 @@ fn key_unavailable_on_activate_returns_governance_event() {
 		// we're awaiting the governance action, so we are pending from
 		// perspective of an outside observer (e.g. the validator pallet)
 		assert_eq!(VaultsPallet::status(), AsyncResult::Pending);
-	})
+	});
 }
 
 #[test]
@@ -988,7 +982,7 @@ fn set_keygen_response_timeout_works() {
 
 		assert_last_event!(crate::Event::KeygenResponseTimeoutUpdated { .. });
 		assert_eq!(KeygenResponseTimeout::<Test, _>::get(), new_timeout)
-	})
+	});
 }
 
 #[test]
@@ -1006,7 +1000,7 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 			PendingVaultRotation::<Test, _>::get().unwrap(),
 			VaultRotationStatus::Complete
 		))
-	})
+	});
 }
 
 #[test]
@@ -1131,8 +1125,8 @@ fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 			Some(VaultRotationStatus::Failed { .. })
 		));
 
-		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		// Abort by resetting vault rotation state
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1140,7 +1134,7 @@ fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 
 		// Can restart the vault rotation and succeed.
 		do_full_key_rotation();
-	})
+	});
 }
 
 #[test]
@@ -1170,7 +1164,7 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 		));
 
 		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1178,7 +1172,7 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 
 		// Can restart the vault rotation and succeed.
 		do_full_key_rotation();
-	})
+	});
 }
 
 #[test]
@@ -1228,8 +1222,8 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 			Some(VaultRotationStatus::KeyHandoverFailed { .. })
 		));
 
-		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		// Abort by resetting vault rotation state
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1237,5 +1231,5 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 
 		// Can restart the vault rotation and succeed.
 		do_full_key_rotation();
-	})
+	});
 }

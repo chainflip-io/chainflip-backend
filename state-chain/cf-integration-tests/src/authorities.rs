@@ -268,6 +268,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 				                                                             * witnessing */
 				reputation: pallet_cf_reputation::PalletSafeMode::CODE_RED,
 				vault: pallet_cf_vaults::PalletSafeMode::CODE_RED,
+				broadcast: pallet_cf_broadcast::PalletSafeMode::CODE_RED,
 			};
 
 			assert_ok!(Environment::update_safe_mode(

@@ -5,8 +5,9 @@ use std::cell::RefCell;
 use super::*;
 use crate as pallet_cf_vaults;
 use cf_chains::{
-	btc, eth,
-	mocks::{MockAggKey, MockEthereum},
+	btc,
+	evm::SchnorrVerificationComponents,
+	mocks::{MockAggKey, MockEthereum, MockEthereumChainCrypto},
 	ApiCall, SetAggKeyWithAggKeyError,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
@@ -18,10 +19,7 @@ use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 pub type ValidatorId = u64;
 
@@ -44,8 +42,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 
@@ -80,8 +78,8 @@ impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
-	old_key: <MockEthereum as ChainCrypto>::AggKey,
-	new_key: <MockEthereum as ChainCrypto>::AggKey,
+	old_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+	new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 }
 
 impl MockSetAggKeyWithAggKey {
@@ -92,10 +90,10 @@ impl MockSetAggKeyWithAggKey {
 	}
 }
 
-impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
+impl SetAggKeyWithAggKey<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
-		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
-		new_key: <MockEthereum as ChainCrypto>::AggKey,
+		old_key: Option<<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
+		new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
 			return Err(SetAggKeyWithAggKeyError::NotRequired)
@@ -105,14 +103,16 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	}
 }
 
-impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
-	fn threshold_signature_payload(&self) -> <MockEthereum as ChainCrypto>::Payload {
+impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		unimplemented!()
 	}
 
 	fn signed(
 		self,
-		_threshold_signature: &<MockEthereum as ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		unimplemented!()
 	}
@@ -125,7 +125,9 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <MockEthereum as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		todo!()
 	}
 }
@@ -218,7 +220,7 @@ impl pallet_cf_vaults::Config for Test {
 	type Chain = MockEthereum;
 	type RuntimeCall = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type ThresholdSigner = MockThresholdSigner<MockEthereum, RuntimeCall>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
 	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;
@@ -238,20 +240,17 @@ pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
-fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
-	let config = RuntimeGenesisConfig {
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key,
+			vault_key: Some(GENESIS_AGG_PUB_KEY),
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
+	},
+	|| {
 		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
 		for id in &authorities {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
@@ -263,15 +262,9 @@ fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
 			authorities.len() as AuthorityCount,
 		);
 		MockEpochInfo::set_authorities(authorities);
-	});
-
-	ext
+	},
 }
 
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	test_ext_inner(Some(GENESIS_AGG_PUB_KEY))
-}
-
-pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {
-	test_ext_inner(None)
+pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {
+	TestRunner::<()>::new(RuntimeGenesisConfig::default())
 }

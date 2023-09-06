@@ -19,15 +19,16 @@ impl<InnerStream: ChainStream> Stream for StrictlyMonotonicStream<InnerStream> {
 		self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> Poll<Option<Self::Item>> {
-		let this = self.project();
-		match this.inner_stream.poll_next(cx) {
-			Poll::Ready(Some(header)) => Poll::Ready(if Some(header.index) > *this.last_output {
-				*this.last_output = Some(header.index);
-				Some(header)
-			} else {
-				None
-			}),
-			poll_next => poll_next,
+		let mut this = self.project();
+		loop {
+			match this.inner_stream.as_mut().poll_next(cx) {
+				Poll::Ready(Some(header)) =>
+					if Some(header.index) > *this.last_output {
+						*this.last_output = Some(header.index);
+						break Poll::Ready(Some(header))
+					},
+				poll_next => break poll_next,
+			}
 		}
 	}
 }
@@ -59,4 +60,37 @@ impl<InnerSource: ChainSource> ChainSource for StrictlyMonotonic<InnerSource> {
 
 impl<InnerSource: ExternalChainSource> ExternalChainSource for StrictlyMonotonic<InnerSource> {
 	type Chain = InnerSource::Chain;
+}
+
+#[cfg(test)]
+mod test {
+	use futures_util::StreamExt;
+
+	use super::*;
+	use crate::witness::common::chain_source::Header;
+
+	#[tokio::test]
+	async fn test_strictly_monotonic() {
+		assert!(Iterator::eq(
+			StrictlyMonotonicStream {
+				inner_stream: futures::stream::iter([
+					Header { index: 4, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 3, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 2, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 5, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 6, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 6, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 4, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 3, hash: (), parent_hash: Some(()), data: () },
+					Header { index: 2, hash: (), parent_hash: Some(()), data: () },
+				]),
+				last_output: None
+			}
+			.collect::<Vec<_>>()
+			.await
+			.into_iter()
+			.map(|header| header.index),
+			[4, 5, 6]
+		));
+	}
 }

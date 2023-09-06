@@ -56,6 +56,10 @@ jobs:
           sudo apt update
           sudo apt install -y bc xxd
 
+      - name: Install wscat
+        run: |
+          npm install -g wscat
+
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:

@@ -3,7 +3,7 @@
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},
-	dot::api::CreatePolkadotVault,
+	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
@@ -28,27 +28,6 @@ frame_support::construct_runtime!(
 		Environment: pallet_cf_environment,
 	}
 );
-
-cf_test_utilities::impl_test_helpers! {
-	Test,
-	RuntimeGenesisConfig {
-		system: Default::default(),
-		environment: EnvironmentConfig {
-			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
-			key_manager_address: KEY_MANAGER_ADDRESS,
-			ethereum_chain_id: ETH_CHAIN_ID,
-			eth_vault_address: VAULT_ADDRESS,
-			eth_address_checker_address: ADDRESS_CHECKER,
-			flip_token_address: [0u8; 20].into(),
-			eth_usdc_address: [0x2; 20].into(),
-			polkadot_genesis_hash: H256([0u8; 32]),
-			polkadot_vault_account_id: None,
-			network_environment: Default::default(),
-			..Default::default()
-		},
-	},
-	|| System::set_block_number(1)
-}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -91,8 +70,10 @@ impl CreatePolkadotVault for MockCreatePolkadotVault {
 		Self
 	}
 }
-impl ApiCall<Polkadot> for MockCreatePolkadotVault {
-	fn threshold_signature_payload(&self) -> <Polkadot as cf_chains::ChainCrypto>::Payload {
+impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
+	fn threshold_signature_payload(
+		&self,
+	) -> <<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::Payload {
 		unimplemented!()
 	}
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -100,7 +81,7 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 	}
 	fn signed(
 		self,
-		_threshold_signature: &<Polkadot as cf_chains::ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		unimplemented!()
 	}
@@ -108,7 +89,9 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 		unimplemented!()
 	}
 
-	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+	fn transaction_out_id(
+		&self,
+	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
 }
@@ -189,3 +172,23 @@ pub const KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
 pub const VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
 pub const ADDRESS_CHECKER: eth::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
+
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		environment: EnvironmentConfig {
+			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
+			key_manager_address: KEY_MANAGER_ADDRESS,
+			ethereum_chain_id: ETH_CHAIN_ID,
+			eth_vault_address: VAULT_ADDRESS,
+			eth_address_checker_address: ADDRESS_CHECKER,
+			flip_token_address: [0u8; 20].into(),
+			eth_usdc_address: [0x2; 20].into(),
+			polkadot_genesis_hash: H256([0u8; 32]),
+			polkadot_vault_account_id: None,
+			network_environment: Default::default(),
+			..Default::default()
+		},
+	}
+}

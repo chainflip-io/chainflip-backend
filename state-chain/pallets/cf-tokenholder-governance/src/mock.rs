@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
+use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_on_account_funded,
 	impl_mock_waived_fees, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
@@ -9,10 +9,7 @@ use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::HandleLifetime};
 use frame_system as system;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 use system::pallet_prelude::BlockNumberFor;
 
@@ -113,7 +110,8 @@ type MockBroadcasterStorage = StorageValue<Mock, MockBroadcasterBehaviour>;
 type GovKeyBroadcasted = StorageValue<Mock, (cf_chains::ForeignChain, Option<Vec<u8>>, Vec<u8>)>;
 
 #[frame_support::storage_alias]
-type CommKeyBroadcasted = StorageValue<Mock, <Ethereum as ChainCrypto>::GovKey>;
+type CommKeyBroadcasted =
+	StorageValue<Mock, <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey>;
 
 impl BroadcastAnyChainGovKey for MockBroadcaster {
 	fn broadcast_gov_key(
@@ -135,7 +133,7 @@ impl BroadcastAnyChainGovKey for MockBroadcaster {
 }
 
 impl CommKeyBroadcaster for MockBroadcaster {
-	fn broadcast(new_key: <Ethereum as cf_chains::ChainCrypto>::GovKey) {
+	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as cf_chains::ChainCrypto>::GovKey) {
 		CommKeyBroadcasted::put(new_key);
 	}
 }
@@ -158,27 +156,21 @@ pub const CHARLES: AccountId = 789u64;
 pub const EVE: AccountId = 987u64;
 pub const BROKE_PAUL: AccountId = 1987u64;
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let account_balances = [
-		(ALICE, 500),
-		(BOB, 200),
-		(CHARLES, 100),
-		(EVE, 200),
-		(BROKE_PAUL, ProposalFee::get() - 1),
-	];
-
-	let mut ext: sp_io::TestExternalities =
-		RuntimeGenesisConfig::default().build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
+cf_test_utilities::impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig::default(),
+	|| {
+		let account_balances = [
+			(ALICE, 500),
+			(BOB, 200),
+			(CHARLES, 100),
+			(EVE, 200),
+			(BROKE_PAUL, ProposalFee::get() - 1),
+		];
 		for (account, _) in account_balances {
 			frame_system::Provider::<Test>::created(&account).unwrap();
 			assert!(frame_system::Pallet::<Test>::account_exists(&account));
 		}
 		MockFundingInfo::<Test>::set_balances(account_balances);
-	});
-
-	ext
+	},
 }
