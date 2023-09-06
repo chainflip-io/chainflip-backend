@@ -112,9 +112,12 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 							max_fee_per_gas: tx.max_fee_per_gas,
 							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
 							// TODO: Decide if we put None or that Some(MAX_GAS_LIMIT.into()) here
-							gas: None,  // geth uses the block gas limit from the pending block as an upper bound. It can be that the estimate might not be enough to executed 
-							// the transaction when the amount of gas is higher than the pending block gas limit, but then it would timeout anyway if we send it as gasLimit changes very slowly.
-							// gas: Some(MAX_GAS_LIMIT.into()),
+							gas: None, /* geth uses the block gas limit from the pending block as
+							            * an upper bound. It can be that the estimate might not
+							            * be enough to executed */
+							// the transaction when the amount of gas is higher than the pending
+							// block gas limit, but then it would timeout anyway if we send it as
+							// gasLimit changes very slowly. gas: Some(MAX_GAS_LIMIT.into()),
 							access_list: AccessList::default(),
 							from: Some(client.address()),
 							nonce: None,
@@ -128,26 +131,32 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 						match tx.gas_limit {
 							Some(gas_limit) => {
 								if estimated_gas > gas_limit {
-									// TODO: We could consider having a small buffer here as most likely the gas price used will be < maxFeePerGas
-									// This could minimize the number of failed CCM transactions.
-									// If the estimated gas is greater than the gas limit throw the context error
+									// TODO: We could consider having a small buffer here as most
+									// likely the gas price used will be < maxFeePerGas This could
+									// minimize the number of failed CCM transactions.
+									// If the estimated gas is greater than the gas limit throw the
+									// context error
 									return Err(anyhow::anyhow!(
 										"Estimated gas is greater than the gas limit"
-									));
+									))
 								} else {
-									// If the estimated gas is less than the gas limit use the gas limit
-									transaction_request.gas = Some(gas_limit.min(MAX_GAS_LIMIT.into()));
+									// If the estimated gas is less than the gas limit use the gas
+									// limit
+									transaction_request.gas =
+										Some(gas_limit.min(MAX_GAS_LIMIT.into()));
 								}
-							}
+							},
 							None => {
-								// increase the estimate by 50% for normal transactions with "no gas limit"
+								// increase the estimate by 50% for normal transactions with "no gas
+								// limit"
 								transaction_request.gas = Some(
 									estimated_gas
 										.saturating_mul(U256::from(3u64))
 										.checked_div(U256::from(2u64))
-										.unwrap().min(MAX_GAS_LIMIT.into()),
+										.unwrap()
+										.min(MAX_GAS_LIMIT.into()),
 								);
-							}
+							},
 						}
 
 						client

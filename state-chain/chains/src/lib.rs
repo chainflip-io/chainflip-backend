@@ -18,6 +18,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -26,7 +27,6 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
-use sp_core::U256;
 
 pub use cf_primitives::chains::*;
 pub use frame_support::traits::Get;
