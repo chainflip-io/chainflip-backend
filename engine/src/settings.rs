@@ -99,6 +99,11 @@ pub struct HealthCheck {
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Logging {
+	pub span_lifecycle: bool,
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Prometheus {
 	pub hostname: String,
 	pub port: Port,
@@ -122,6 +127,7 @@ pub struct Settings {
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,
 	pub signing: Signing,
+	pub logging: Logging,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -209,6 +215,10 @@ pub struct CommandLineOptions {
 	// Signing Settings
 	#[clap(long = "signing.db_file", parse(from_os_str))]
 	signing_db_file: Option<PathBuf>,
+
+	// Logging settings
+	#[clap(long = "logging.span_lifecycle")]
+	logging_span_lifecycle: bool,
 }
 
 impl Default for CommandLineOptions {
@@ -225,6 +235,7 @@ impl Default for CommandLineOptions {
 			prometheus_hostname: None,
 			prometheus_port: None,
 			signing_db_file: None,
+			logging_span_lifecycle: false,
 		}
 	}
 }
@@ -239,6 +250,8 @@ const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
 const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
 
 const SIGNING_DB_FILE: &str = "signing.db_file";
+
+const LOGGING_SPAN_LIFECYCLE: &str = "logging.span_lifecycle";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
 fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
@@ -358,6 +371,7 @@ impl CfSettings for Settings {
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		config_builder
 			.set_default(NODE_P2P_ALLOW_LOCAL_IP, false)?
+			.set_default(LOGGING_SPAN_LIFECYCLE, false)?
 			.set_default(
 				NODE_P2P_KEY_FILE,
 				PathBuf::from(config_root)
@@ -416,6 +430,11 @@ impl Source for CommandLineOptions {
 		insert_command_line_option(&mut map, "prometheus.port", &self.prometheus_port);
 
 		insert_command_line_option_path(&mut map, SIGNING_DB_FILE, &self.signing_db_file);
+		insert_command_line_option(
+			&mut map,
+			LOGGING_SPAN_LIFECYCLE,
+			&Some(self.logging_span_lifecycle),
+		);
 
 		Ok(map)
 	}
@@ -701,12 +720,14 @@ mod tests {
 			prometheus_hostname: Some(("prometheus_hostname").to_owned()),
 			prometheus_port: Some(9999),
 			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
+			logging_span_lifecycle: true,
 		};
 
 		// Load the test opts into the settings
 		let settings = Settings::new(opts.clone()).unwrap();
 
 		// Compare the opts and the settings
+		assert_eq!(opts.logging_span_lifecycle, settings.logging.span_lifecycle);
 		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
 		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
 		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);

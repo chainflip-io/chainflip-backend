@@ -30,16 +30,50 @@ The user then needs to execute the redemption on the `StateChainGateway` contrac
 
 A validator can have at most one open redemption at any given time. They must either execute the redemption, or wait for expiry until initiating a new redemption.
 
-## Dependencies
+### Redemption Restrictions
 
-### Traits
+Redemptions can be subject to certain rules and restrictions. The following categories apply simulataneously, that is, all of the following restrictions are checked on every redemption request.
 
-This pallet depends on foreign implementations of the following [traits](../../traits):
+#### Bonded Funds
 
-- `Witnesser`. See the [Witness](../cf-witnesser) pallet for an implementation.
-- `Funding`. See the [Flip](../cf-flip) pallet for an implementation.
-- `EpochInfo`. See the [Validator](../cf-validator) pallet for an implementation.
+Funds are bonded when a validator wins an authority slot in the auction. A validator may redeem any FLIP they own in excess of the bond.
 
-### Pallets
+The size of the bond depends on the outcome of the auction: The bond is set to the minimum winning auction bid.
 
-This pallet does not depend on any other FRAME pallet or externally developed modules.
+> *Example:*
+>
+> *An auction resolves with 150 winners, and the lowest of the winning bids is 1,000 FLIP. An account with a balance of 1,200 FLIP would be able to redeem 200 FLIP, provided no further restrictions apply.*
+
+#### Bidding Funds
+
+Validators who are actively bidding in an auction cannot redeem funds. This is to prevent auction manipulation. In order to redeem any available funds, validators should redeem outside of the auction phase, or should explicitly `stop_bidding` before the auction starts.
+
+> *Example:*
+>
+> *The bond is 1,000 FLIP as before, and the account balance is 1,200 FLIP. When a new auction starts, all available funds are implicitly used for bidding, and so all 1,200 FLIP are restricted and cannot be redeemed until the conclusion of the auction.*
+
+#### Address Binding
+
+Any account may be explicitly *bound* to a single redemption address. Henceforth, any redemption request from that account can *only redeem to this exact address*.
+
+Note, address binding is a one-off *irreversible* operation.
+
+> *Example:*
+>
+> *The account `cFc00Ld00d` is bound to the redeem address `0xdeadbeef`. This was a bad idea since it's unlikely that `cFc00Ld00d` knows the private key for `0xdeadbeef`, so his or her funds are effectively permanently locked. Do not do this.*
+>
+> *Example:*
+>
+> *A liquid staking provider wants to allow users to pool their FLIP through a smart contract on Ethereum, to then fund a validator account. They bind their validator account to the smart contract address. This binding is permanent and irrevocable, so users can now rest assured that there is no way the pooled funds can be redeemed to any other address.*
+
+#### Restricted Balances
+
+Certain funding *sources* are considered restricted, such that funds originating from that source can only be redeemed back to whence they came. In order to enforce this, we track the amount of funds added from restricted addresses and ensure that the account always has enough funds to cover its obligations to these addresses.
+
+This is used primarily to enforce vesting restrictions. Some of the FLIP tokens in existence may be locked in a vesting contract that controls when the tokens can be freely accessed. In the meantime, we still would like the tokens to be used productively in the protocol. However this is not possible without restricting the funds, since otherwise the vesting restrictions can be trivially circumvented by funding an account and immediately redeeming to any other address.
+
+> *Example:*
+>
+> *The address `0xabc` is marked as restricted because it is a smart contract holding FLIP for early investors.*
+>
+> *Imagine an account has 1,000 FLIP funded from address `0xabc` and earns a return of 10 FLIP after some period of time. Subject to other restrictions (bond etc.) those 10 FLIP can be redeemed to any address. Any more than that can only be redeemed from the restricted balance of 1,000 FLIP, and only to the originating address `0xabc`.*

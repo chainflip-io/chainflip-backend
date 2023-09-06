@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context};
 use core::time::Duration;
 use futures::{stream, Stream};
+use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
@@ -19,6 +20,24 @@ pub mod serde_helpers;
 
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
+
+/// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
+/// including context and source.
+pub struct AnyhowRpcError {
+	pub error: anyhow::Error,
+}
+
+impl From<anyhow::Error> for AnyhowRpcError {
+	fn from(error: anyhow::Error) -> Self {
+		Self { error }
+	}
+}
+
+impl From<AnyhowRpcError> for ErrorObjectOwned {
+	fn from(e: AnyhowRpcError) -> Self {
+		ErrorObjectOwned::owned(CALL_EXECUTION_FAILED_CODE, format!("{:#}", e.error), None::<()>)
+	}
+}
 
 pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
@@ -311,9 +330,13 @@ macro_rules! print_starting {
 /// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
+pub async fn init_json_logger(
+	log_span_lifecycle: bool,
+) -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
+
+	let format_span = if log_span_lifecycle { FmtSpan::FULL } else { FmtSpan::NONE };
 
 	let reload_handle = {
 		let builder = tracing_subscriber::fmt()
@@ -323,7 +346,7 @@ pub async fn init_json_logger() -> impl FnOnce(&task_scope::Scope<'_, anyhow::Er
 					.with_default_directive(LevelFilter::INFO.into())
 					.from_env_lossy(),
 			)
-			.with_span_events(FmtSpan::FULL)
+			.with_span_events(format_span)
 			.with_filter_reloading();
 
 		let reload_handle = builder.reload_handle();

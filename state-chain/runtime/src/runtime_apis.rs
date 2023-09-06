@@ -1,17 +1,19 @@
 use crate::chainflip::Offence;
 use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
-	range_orders::{AmountsToLiquidityError, Liquidity},
+	common::{Amount, Price, Tick},
+	range_orders::Liquidity,
 };
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
 use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
 use codec::{Decode, Encode};
+use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::PoolQueryError;
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
+use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
@@ -108,19 +110,24 @@ decl_runtime_apis!(
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
-		fn cf_pool_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96>;
+		fn cf_pool_price(from: Asset, to: Asset) -> Option<Price>;
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
+		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo>;
+		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity>;
+		fn cf_required_asset_ratio_for_range_order(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
+		fn cf_pool_orders(base: Asset, pair: Asset, lp: AccountId32) -> Option<PoolOrders>;
+		fn cf_pool_range_order_liquidity_value(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<Tick>,
+			liquidity: Liquidity,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
 		fn cf_environment() -> Environment;
-		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>>;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
-		#[allow(clippy::too_many_arguments)]
-		fn cf_estimate_liquidity_from_range_order(
-			asset: Asset,
-			lower: Tick,
-			upper: Tick,
-			unstable_amount: AssetAmount,
-			stable_amount: AssetAmount,
-		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>>;
 	}
 );

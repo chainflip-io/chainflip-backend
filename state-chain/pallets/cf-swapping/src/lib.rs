@@ -776,8 +776,18 @@ pub mod pallet {
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
-			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)
-				.map_err(|_| bundle_input)?;
+			let bundle_output = T::SwappingApi::swap_single_leg(
+				match direction {
+					SwapLeg::FromStable => STABLE_ASSET,
+					SwapLeg::ToStable => asset,
+				},
+				match direction {
+					SwapLeg::FromStable => asset,
+					SwapLeg::ToStable => STABLE_ASSET,
+				},
+				bundle_input,
+			)
+			.map_err(|_| bundle_input)?;
 
 			for swap in swaps {
 				let swap_output = if bundle_input > 0 {
