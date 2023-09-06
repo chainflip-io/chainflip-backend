@@ -20,7 +20,7 @@ mod old_types {
 		/// The epoch in which the ceremony was started.
 		pub epoch: EpochIndex,
 		/// The key we want to sign with.
-		pub key: <T::TargetChain as ChainCrypto>::AggKey,
+		pub key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		/// Determines how/if we deal with ceremony failure.
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}

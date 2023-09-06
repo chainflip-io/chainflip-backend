@@ -14,7 +14,7 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
 	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
@@ -173,9 +173,9 @@ pub trait VaultRotator {
 	/// on the contract for a smart contract chain.
 	fn activate();
 
-	/// Terminate the current key rotation because of Safe Mode.
-	/// No validators are slashed.
-	fn abort_vault_rotation();
+	/// Reset the state associated with the current key rotation
+	/// in preparation for a new one.
+	fn reset_vault_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
@@ -471,9 +471,9 @@ where
 
 /// Something that is capable of encoding and broadcasting native blockchain api calls to external
 /// chains.
-pub trait Broadcaster<Api: ChainAbi> {
+pub trait Broadcaster<C: Chain> {
 	/// Supported api calls for this chain.
-	type ApiCall: ApiCall<Api>;
+	type ApiCall: ApiCall<C::ChainCrypto>;
 
 	/// The callback that gets executed when the signature is accepted.
 	type Callback: UnfilteredDispatchable;
@@ -551,7 +551,8 @@ where
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
 			C::is_qualified(validator_id) &&
-			D::is_qualified(validator_id)
+			D::is_qualified(validator_id) &&
+			E::is_qualified(validator_id)
 	}
 
 	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
@@ -711,7 +712,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_message: Option<CcmDepositMetadata>,
+		maybe_message: Option<(CcmDepositMetadata, C::ChainAmount)>,
 	) -> EgressId;
 }
 
@@ -720,7 +721,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
 		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
+		_maybe_message: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -731,16 +732,16 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
 		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
+		_maybe_message: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
 }
 
-pub trait VaultTransitionHandler<C: ChainCrypto> {
+pub trait VaultTransitionHandler<C: Chain> {
 	fn on_new_vault() {}
 }
-pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
+pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
@@ -756,7 +757,7 @@ pub trait BroadcastAnyChainGovKey {
 }
 
 pub trait CommKeyBroadcaster {
-	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey);
+	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey);
 }
 
 /// Provides an interface to access the amount of Flip that is ready to be burned.
@@ -800,8 +801,8 @@ impl CcmHandler for () {
 	}
 }
 
-pub trait OnBroadcastReady<C: ChainAbi> {
-	type ApiCall: ApiCall<C>;
+pub trait OnBroadcastReady<C: Chain> {
+	type ApiCall: ApiCall<C::ChainCrypto>;
 
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
 }

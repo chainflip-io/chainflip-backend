@@ -25,6 +25,7 @@ pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
+pub mod swap_deposit_handler;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod vault_rotator;

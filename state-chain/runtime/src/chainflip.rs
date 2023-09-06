@@ -22,19 +22,23 @@ use cf_chains::{
 	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
 	},
 	dot::{
-		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
+		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
 		PolkadotTransactionData, RuntimeVersion,
 	},
 	eth::{
 		self,
-		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
+		api::{EthereumApi, EthereumContract},
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	evm::{
+		api::{EthEnvironmentProvider, EvmReplayProtection},
+		EvmCrypto, Transaction,
+	},
+	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
@@ -48,7 +52,10 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
-	sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+	sp_runtime::{
+		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+		FixedPointNumber, FixedU64,
+	},
 	traits::Get,
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -82,6 +89,7 @@ impl_runtime_safe_mode! {
 	reputation: pallet_cf_reputation::PalletSafeMode,
 	vault: pallet_cf_vaults::PalletSafeMode,
 	witnesser: pallet_cf_witnesser::PalletSafeMode,
+	broadcast: pallet_cf_broadcast::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -146,25 +154,17 @@ pub struct EthTransactionBuilder;
 impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactionBuilder {
 	fn build_transaction(
 		signed_call: &EthereumApi<EthEnvironment>,
-	) -> <Ethereum as ChainAbi>::Transaction {
-		// TODO: This should take into account the ccm gas budget. (See PRO-161)
-		const CCM_GAS_LIMIT: u64 = 400_000;
-		const DEFAULT_GAS_LIMIT: u64 = 15_000_000;
-		let gas_limit = match signed_call {
-			EthereumApi::ExecutexSwapAndCall(_) => Some(CCM_GAS_LIMIT.into()),
-			// None means there is no gas limit.
-			_ => Some(DEFAULT_GAS_LIMIT.into()),
-		};
-		eth::Transaction {
+	) -> <Ethereum as Chain>::Transaction {
+		Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
-			gas_limit,
+			gas_limit: Some(Self::calculate_gas_limit(signed_call).into()),
 			..Default::default()
 		}
 	}
 
-	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as Chain>::Transaction) {
 		let tracked_data = EthereumChainTracking::chain_state().unwrap().tracked_data;
 		// double the last block's base fee. This way we know it'll be selectable for at least 6
 		// blocks (12.5% increase on each block)
@@ -178,16 +178,46 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 
 	fn is_valid_for_rebroadcast(
 		call: &EthereumApi<EthEnvironment>,
-		_payload: &<Ethereum as ChainCrypto>::Payload,
-		current_key: &<Ethereum as ChainCrypto>::AggKey,
-		signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
+		_payload: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		current_key: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		// Check if signature is valid
-		<Ethereum as ChainCrypto>::verify_threshold_signature(
+		<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
 			current_key,
 			&call.threshold_signature_payload(),
 			signature,
 		)
+	}
+
+	// Calculate the gas limit for a Ethereum call, using the current gas price.
+	// Currently for only CCM calls, the gas limit is calculated as:
+	// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+	// All other calls uses a default gas limit.
+	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> <Ethereum as Chain>::ChainAmount {
+		const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
+		const DEFAULT_GAS_LIMIT: <Ethereum as Chain>::ChainAmount = 15_000_000;
+		match call {
+			EthereumApi::ExecutexSwapAndCall(call_builder) => {
+				// For calls with dynamic gas limit, a gas budget must be provided.
+				let gas_budget = call_builder
+					.gas_budget()
+					.expect("Calls with gas_limit must provide a gas budget.");
+				// According to ChainTracking pallet, it is safe to `unwrap()` from `chain_state()`
+				let tracked_data = EthereumChainTracking::chain_state()
+					.expect("Chain tracking will always return a state.")
+					.tracked_data;
+				let max_gas_price = ETHEREUM_BASE_FEE_MULTIPLIER
+					.saturating_mul_int(tracked_data.base_fee)
+					.saturating_add(tracked_data.priority_fee);
+				gas_budget.checked_div(max_gas_price).unwrap_or_else(||{
+					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
+					Default::default()
+				})
+			},
+			// Use default gas limit for all other calls.
+			_ => DEFAULT_GAS_LIMIT,
+		}
 	}
 }
 
@@ -195,24 +225,24 @@ pub struct DotTransactionBuilder;
 impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactionBuilder {
 	fn build_transaction(
 		signed_call: &PolkadotApi<DotEnvironment>,
-	) -> <Polkadot as ChainAbi>::Transaction {
+	) -> <Polkadot as Chain>::Transaction {
 		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
 	}
 
-	fn refresh_unsigned_data(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Polkadot as Chain>::Transaction) {
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
-		payload: &<Polkadot as ChainCrypto>::Payload,
-		current_key: &<Polkadot as ChainCrypto>::AggKey,
-		signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
+		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		// First check if the payload is still valid. If it is, check if the signature is still
 		// valid
 		(&call.threshold_signature_payload() == payload) &&
-			<Polkadot as ChainCrypto>::verify_threshold_signature(
+			<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
 				current_key,
 				payload,
 				signature,
@@ -224,11 +254,11 @@ pub struct BtcTransactionBuilder;
 impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionBuilder {
 	fn build_transaction(
 		signed_call: &BitcoinApi<BtcEnvironment>,
-	) -> <Bitcoin as ChainAbi>::Transaction {
+	) -> <Bitcoin as Chain>::Transaction {
 		BitcoinTransactionData { encoded_transaction: signed_call.chain_encoded() }
 	}
 
-	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as Chain>::Transaction) {
 		// Since BTC txs are chained and the subsequent tx depends on the success of the previous
 		// one, changing the BTC tx fee will mean all subsequent txs are also invalid and so
 		// refreshing btc tx is not trivial. We leave it a no-op for now.
@@ -236,9 +266,9 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 
 	fn is_valid_for_rebroadcast(
 		_call: &BitcoinApi<BtcEnvironment>,
-		_payload: &<Bitcoin as ChainCrypto>::Payload,
-		_current_key: &<Bitcoin as ChainCrypto>::AggKey,
-		_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature,
+		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_current_key: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		_signature: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
 		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
 		// checked here. We also dont need to check for the signature here because even if we are in
@@ -277,8 +307,8 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	fn replay_protection(contract_address: eth::Address) -> EthereumReplayProtection {
-		EthereumReplayProtection {
+	fn replay_protection(contract_address: eth::Address) -> EvmReplayProtection {
+		EvmReplayProtection {
 			nonce: Self::next_nonce(),
 			chain_id: Self::chain_id(),
 			key_manager_address: Self::key_manager_address(),
@@ -303,7 +333,7 @@ impl EthEnvironmentProvider for EthEnvironment {
 		}
 	}
 
-	fn chain_id() -> eth::api::EthereumChainId {
+	fn chain_id() -> cf_chains::evm::api::EvmChainId {
 		Environment::ethereum_chain_id()
 	}
 
@@ -337,7 +367,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		use crate::PolkadotVault;
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				<PolkadotVault as KeyProvider<Polkadot>>::active_epoch_key()
+				<PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
 					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
@@ -359,7 +389,8 @@ impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEn
 
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		<BitcoinVault as KeyProvider<Bitcoin>>::active_epoch_key().map(|epoch_key| epoch_key.key)
+		<BitcoinVault as KeyProvider<BitcoinCrypto>>::active_epoch_key()
+			.map(|epoch_key| epoch_key.key)
 	}
 }
 
@@ -380,16 +411,16 @@ pub struct TokenholderGovernanceBroadcaster;
 impl TokenholderGovernanceBroadcaster {
 	fn broadcast_gov_key<C, B>(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<(), ()>
 	where
-		C: ChainAbi,
+		C: Chain,
 		B: Broadcaster<C>,
-		<B as Broadcaster<C>>::ApiCall: cf_chains::SetGovKeyWithAggKey<C>,
+		<B as Broadcaster<C>>::ApiCall: cf_chains::SetGovKeyWithAggKey<C::ChainCrypto>,
 	{
 		let maybe_old_key = if let Some(old_key) = maybe_old_key {
 			Some(Decode::decode(&mut &old_key[..]).or(Err(()))?)
 		} else {
 			None
 		};
-		let api_call = SetGovKeyWithAggKey::<C>::new_unsigned(
+		let api_call = SetGovKeyWithAggKey::<C::ChainCrypto>::new_unsigned(
 			maybe_old_key,
 			Decode::decode(&mut &new_key[..]).or(Err(()))?,
 		)?;
@@ -419,17 +450,19 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 
 	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool {
 		match chain {
-			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
-			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
+			ForeignChain::Ethereum =>
+				Self::is_govkey_compatible::<<Ethereum as Chain>::ChainCrypto>(key),
+			ForeignChain::Polkadot =>
+				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
 		}
 	}
 }
 
 impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
-	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey) {
+	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey) {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
-			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
+			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
 			None::<RuntimeCall>,
 		);
 	}
@@ -506,7 +539,7 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_message: Option<CcmDepositMetadata>,
+				maybe_message: Option<(CcmDepositMetadata, <AnyChain as Chain>::ChainAmount)>,
 			) -> EgressId {
 				match asset.into() {
 					$(
@@ -516,7 +549,7 @@ macro_rules! impl_egress_api_for_anychain {
 							destination_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
-							maybe_message,
+							maybe_message.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
 						),
 
 					)+

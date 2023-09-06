@@ -14,8 +14,8 @@ use state_chain_runtime::AccountId;
 pub fn start_client<C: ChainSigning>(
 	my_account_id: AccountId,
 	key_store: KeyStore<C>,
-	incoming_p2p_message_receiver: MultisigMessageReceiver<<C as ChainSigning>::Chain>,
-	outgoing_p2p_message_sender: MultisigMessageSender<<C as ChainSigning>::Chain>,
+	incoming_p2p_message_receiver: MultisigMessageReceiver<<C as ChainSigning>::ChainCrypto>,
+	outgoing_p2p_message_sender: MultisigMessageSender<<C as ChainSigning>::ChainCrypto>,
 	latest_ceremony_id: CeremonyId,
 ) -> (MultisigClient<C, KeyStore<C>>, impl futures::Future<Output = Result<()>> + Send) {
 	info!("Starting {} MultisigClient", C::NAME);

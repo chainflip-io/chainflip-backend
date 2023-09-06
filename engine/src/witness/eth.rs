@@ -15,11 +15,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::{
-		retry_rpc::EthersRetryRpcClient,
-		rpc::{EthRpcClient, ReconnectSubscriptionClient},
-	},
-	settings,
+	eth::retry_rpc::EthersRetryRpcClient,
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
@@ -39,7 +35,7 @@ const SAFETY_MARGIN: usize = 7;
 
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
-	settings: &settings::Eth,
+	eth_client: EthersRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -49,15 +45,6 @@ where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
 {
-	let expected_chain_id = web3::types::U256::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION),
-	);
-
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
             state_chain_client.latest_finalized_hash(),
@@ -105,16 +92,11 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_client = EthersRetryRpcClient::new(
-		scope,
-		EthRpcClient::new(settings).await?,
-		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
-	);
-
 	let eth_source = EthSource::new(eth_client.clone()).shared(scope);
 
 	eth_source
 		.clone()
+		.shared(scope)
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), eth_client.clone())
 		.logging("chain tracking")

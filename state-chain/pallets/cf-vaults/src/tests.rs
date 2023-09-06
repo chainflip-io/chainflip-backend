@@ -8,7 +8,8 @@ use crate::{
 	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::{
-	eth::Ethereum,
+	btc::BitcoinCrypto,
+	evm::EvmCrypto,
 	mocks::{MockAggKey, MockOptimisticActivation},
 };
 use cf_primitives::GENESIS_EPOCH;
@@ -24,8 +25,8 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 
-pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
-pub type BtcMockThresholdSigner = MockThresholdSigner<cf_chains::Bitcoin, crate::mock::RuntimeCall>;
+pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
+pub type BtcMockThresholdSigner = MockThresholdSigner<BitcoinCrypto, crate::mock::RuntimeCall>;
 
 macro_rules! assert_last_event {
 	($pat:pat) => {
@@ -1124,8 +1125,8 @@ fn can_recover_from_abort_vault_rotation_after_failed_key_gen() {
 			Some(VaultRotationStatus::Failed { .. })
 		));
 
-		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		// Abort by resetting vault rotation state
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1163,7 +1164,7 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 		));
 
 		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);
@@ -1221,8 +1222,8 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 			Some(VaultRotationStatus::KeyHandoverFailed { .. })
 		));
 
-		// Abort the vault rotation now
-		VaultsPallet::abort_vault_rotation();
+		// Abort by resetting vault rotation state
+		VaultsPallet::reset_vault_rotation();
 
 		assert!(PendingVaultRotation::<Test, _>::get().is_none());
 		assert_eq!(KeygenResolutionPendingSince::<Test, _>::get(), 0);

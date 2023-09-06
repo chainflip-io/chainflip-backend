@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::witness::common::chain_source::{ChainClient, ChainStream};
+use cf_chains::{Chain, ChainCrypto};
 use frame_support::CloneNoBound;
 use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
@@ -15,7 +16,7 @@ use crate::{
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
 
 pub type TxOutId<Inner> =
-	<<Inner as ChunkedByVault>::Chain as cf_chains::ChainCrypto>::TransactionOutId;
+	<<<Inner as ChunkedByVault>::Chain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 pub type TxOutIds<Inner> = Vec<TxOutId<Inner>>;
 
 /// This helps ensure the set of egress items witnessed at each block are consistent across

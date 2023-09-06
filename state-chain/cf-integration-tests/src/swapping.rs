@@ -1,12 +1,14 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
+	common::{price_at_tick, Price, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
-	SwapOrigin,
+	assets::eth::Asset as EthAsset,
+	eth::{api::EthereumApi, EthereumTrackedData},
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, Ethereum, ExecutexSwapAndCall,
+	ForeignChain, ForeignChainAddress, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -16,32 +18,36 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::{Order, RangeOrderSize};
+use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
-	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
-	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
+	chainflip::{
+		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
+		EthTransactionBuilder,
+	},
+	AccountRoles, EthereumChainTracking, EthereumInstance, LiquidityPools, LiquidityProvider,
+	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator,
+	Weight, Witnesser,
 };
-
-use state_chain_runtime::EthereumChainTracking;
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
 
-fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) {
+fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
 	assert_ok!(LiquidityPools::new_pool(
 		pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 		unstable_asset,
+		STABLE_ASSET,
 		fee_hundredth_pips,
-		initial_sqrt_price,
+		initial_price,
 	));
 	assert_events_eq!(
 		Runtime,
 		RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::NewPoolCreated {
-			unstable_asset,
+			base_asset: unstable_asset,
+			pair_asset: STABLE_ASSET,
 			fee_hundredth_pips,
-			initial_sqrt_price,
+			initial_price,
 		},)
 	);
 	System::reset_events();
@@ -79,33 +85,34 @@ fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	System::reset_events();
 }
 
-fn mint_range_order(
+fn set_range_order(
 	account_id: &AccountId,
-	unstable_asset: Asset,
-	range: core::ops::Range<Tick>,
+	base_asset: Asset,
+	pair_asset: Asset,
+	id: OrderId,
+	range: Option<core::ops::Range<Tick>>,
 	liquidity: Liquidity,
 ) {
-	let unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	assert_ok!(LiquidityPools::collect_and_mint_range_order(
+	let balances = [base_asset, pair_asset].map(|asset| {
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
+	});
+	assert_ok!(LiquidityPools::set_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		unstable_asset,
+		base_asset,
+		pair_asset,
+		id,
 		range,
-		RangeOrderSize::Liquidity(liquidity),
+		RangeOrderSize::Liquidity { liquidity },
 	));
-	let new_unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let new_stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
+	let new_balances = [base_asset, pair_asset].map(|asset| {
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
+	});
 
-	assert!(
-		new_unstable_balance < unstable_balance && new_stable_balance <= stable_balance ||
-			new_unstable_balance <= unstable_balance && new_stable_balance < stable_balance
-	);
+	assert!(new_balances.into_iter().zip(balances).all(|(new, old)| { new <= old }));
 
-	let check_balance = |asset, new_balance, old_balance| {
+	for ((new_balance, old_balance), asset) in
+		new_balances.into_iter().zip(balances).zip([base_asset, pair_asset])
+	{
 		if new_balance < old_balance {
 			assert_events_eq!(
 				Runtime,
@@ -116,60 +123,49 @@ fn mint_range_order(
 				},)
 			);
 		}
-	};
-
-	check_balance(unstable_asset, new_unstable_balance, unstable_balance);
-	check_balance(STABLE_ASSET, new_stable_balance, stable_balance);
+	}
 
 	System::reset_events();
 }
 
-fn mint_limit_order(
+fn set_limit_order(
 	account_id: &AccountId,
-	unstable_asset: Asset,
-	order: Order,
-	tick: Tick,
-	amount: AssetAmount,
+	sell_asset: Asset,
+	buy_asset: Asset,
+	id: OrderId,
+	tick: Option<Tick>,
+	sell_amount: AssetAmount,
 ) {
-	let unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
-	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
+	let sell_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+	let buy_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		unstable_asset,
-		order,
+		sell_asset,
+		buy_asset,
+		id,
 		tick,
-		amount,
+		sell_amount,
 	));
-	let new_unstable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
-	let new_stable_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, STABLE_ASSET).unwrap_or_default();
+	let new_sell_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+	let new_buy_balance =
+		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
 
-	if order == Order::Sell {
-		assert_eq!(new_unstable_balance, unstable_balance - amount);
-		assert_eq!(new_stable_balance, stable_balance);
-	} else {
-		assert_eq!(new_unstable_balance, unstable_balance);
-		assert_eq!(new_stable_balance, stable_balance - amount);
+	assert_eq!(new_sell_balance, sell_balance - sell_amount);
+	assert_eq!(new_buy_balance, buy_balance);
+
+	if new_sell_balance < sell_balance {
+		assert_events_eq!(
+			Runtime,
+			RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
+				account_id: account_id.clone(),
+				asset: sell_asset,
+				amount_debited: sell_balance - new_sell_balance,
+			},)
+		);
 	}
-
-	let check_balance = |asset, new_balance, old_balance| {
-		if new_balance < old_balance {
-			assert_events_eq!(
-				Runtime,
-				RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
-					account_id: account_id.clone(),
-					asset,
-					amount_debited: old_balance - new_balance,
-				},)
-			);
-		}
-	};
-
-	check_balance(unstable_asset, new_unstable_balance, unstable_balance);
-	check_balance(STABLE_ASSET, new_stable_balance, stable_balance);
 
 	System::reset_events();
 }
@@ -179,29 +175,29 @@ fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
-		new_pool(asset, 0u32, sqrt_price_at_tick(0));
+		new_pool(asset, 0u32, price_at_tick(0).unwrap());
 		credit_account(&DORIS, asset, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
-		mint_range_order(&DORIS, asset, -1_000..1_000, 1_000_000);
+		set_range_order(&DORIS, asset, Asset::Usdc, 0, Some(-1_000..1_000), 1_000_000);
 	}
 }
 
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::default().build().execute_with(|| {
-		new_pool(Asset::Eth, 0u32, sqrt_price_at_tick(0));
-		new_pool(Asset::Flip, 0u32, sqrt_price_at_tick(0));
+		new_pool(Asset::Eth, 0u32, price_at_tick(0).unwrap());
+		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
 
 		new_account(&DORIS, AccountRole::LiquidityProvider);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Eth, Order::Sell, 0, 500_000);
-		mint_range_order(&DORIS, Asset::Eth, -10..10, 1_000_000);
+		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 500_000);
+		set_range_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Flip, Order::Sell, 0, 500_000);
-		mint_range_order(&DORIS, Asset::Flip, -10..10, 1_000_000);
+		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 500_000);
+		set_range_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(-10..10), 1_000_000);
 
 		new_account(&ZION, AccountRole::Broker);
 
@@ -511,9 +507,9 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
 
 		// Get current pool's liquidity
-		let eth_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
 			.expect("Eth pool should be set up with liquidity.");
-		let btc_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		let btc_price = LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
 			.expect("Btc pool should be set up with liquidity.");
 
 		let witness_swap_ingress =
@@ -572,26 +568,14 @@ fn failed_swaps_are_rolled_back() {
 		);
 
 		// Repeatedly processing Failed swaps should not impact pool liquidity
-		assert_eq!(
-			Some(eth_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
-		);
-		assert_eq!(
-			Some(btc_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
-		);
+		assert_eq!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
+		assert_eq!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
 		Swapping::on_finalize(2);
-		assert_eq!(
-			Some(eth_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
-		);
-		assert_eq!(
-			Some(btc_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
-		);
+		assert_eq!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
+		assert_eq!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
 
 		// All swaps can continue once the problematic pool is fixed
 		setup_pool_and_accounts(vec![Asset::Flip]);
@@ -599,14 +583,8 @@ fn failed_swaps_are_rolled_back() {
 
 		Swapping::on_finalize(3);
 
-		assert_ne!(
-			Some(eth_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
-		);
-		assert_ne!(
-			Some(btc_sqrt_pice),
-			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
-		);
+		assert_ne!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
+		assert_ne!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
 
 		assert_events_match!(
 			Runtime,
@@ -658,6 +636,81 @@ fn failed_swaps_are_rolled_back() {
 					..
 				},
 			) => ()
+		);
+	});
+}
+
+#[test]
+fn ethereum_ccm_can_calculate_gas_limits() {
+	super::genesis::default().build().execute_with(|| {
+		let current_epoch = Validator::current_epoch();
+		let chain_state = ChainState::<Ethereum> {
+			block_height: 1,
+			tracked_data: EthereumTrackedData {
+				base_fee: 1_000_000u128,
+				priority_fee: 500_000u128,
+			},
+		};
+
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				Box::new(RuntimeCall::EthereumChainTracking(
+					pallet_cf_chain_tracking::Call::update_chain_state {
+						new_chain_state: chain_state.clone(),
+					}
+				)),
+				current_epoch
+			));
+		}
+		assert_eq!(EthereumChainTracking::chain_state(), Some(chain_state));
+
+		let make_ccm_call = |gas_budget: u128| {
+			<EthereumApi<EthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+				(ForeignChain::Ethereum, 1),
+				TransferAssetParams::<Ethereum> {
+					asset: EthAsset::Flip,
+					amount: 1_000,
+					to: Default::default(),
+				},
+				ForeignChain::Ethereum,
+				None,
+				gas_budget,
+				vec![],
+			)
+			.unwrap()
+		};
+
+		// Each unit of gas costs 2 * 1_000_000 + 500_000 = 2_500_000
+		assert_eq!(EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_499_999)), 0);
+		assert_eq!(EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_500_000)), 1);
+		// 1_000_000_000_000 / (2 * 1_000_000 + 500_000) = 400_000
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000_000u128)),
+			400_000
+		);
+
+		// Can handle divide by zero case. Practically this should never happen.
+		let chain_state = ChainState::<Ethereum> {
+			block_height: 2,
+			tracked_data: EthereumTrackedData { base_fee: 0u128, priority_fee: 0u128 },
+		};
+
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				Box::new(RuntimeCall::EthereumChainTracking(
+					pallet_cf_chain_tracking::Call::update_chain_state {
+						new_chain_state: chain_state.clone(),
+					}
+				)),
+				current_epoch
+			));
+		}
+
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000u128)),
+			0
 		);
 	});
 }

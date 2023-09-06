@@ -238,7 +238,9 @@ export async function observeBadEvents(
     stopObserveEvent,
   );
   if (event) {
-    throw new Error(`Unexpected event emited ${event.name.section}:${event.name.method}`);
+    throw new Error(
+      `Unexpected event emited ${event.name.section}:${event.name.method} in block ${event.block}`,
+    );
   }
 }
 
@@ -281,7 +283,7 @@ export async function observeBalanceIncrease(
   address: string,
   oldBalance: string,
 ): Promise<number> {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 1200; i++) {
     const newBalance = Number(await getBalance(dstCcy as Asset, address));
     if (newBalance > Number(oldBalance)) {
       return newBalance;
@@ -338,7 +340,7 @@ export async function observeEVMEvent(
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 1200; i++) {
     if (stopObserve()) return undefined;
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
