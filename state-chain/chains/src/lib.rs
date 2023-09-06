@@ -26,6 +26,7 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
+use sp_core::U256;
 
 pub use cf_primitives::chains::*;
 pub use frame_support::traits::Get;
@@ -227,7 +228,7 @@ where
 	) -> bool;
 
 	/// Calculate the Units of gas that is allowed to make this call.
-	fn calculate_gas_limit(_call: &Call) -> <Ethereum as Chain>::ChainAmount {
+	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
 		Default::default()
 	}
 }
