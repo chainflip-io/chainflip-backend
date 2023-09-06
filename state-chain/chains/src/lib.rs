@@ -5,7 +5,7 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, GasUnit, TransactionHash};
+use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -225,6 +225,11 @@ where
 		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
+
+	/// Calculate the Units of gas that is allowed to make this call.
+	fn calculate_gas_limit(_call: &Call) -> <Ethereum as Chain>::ChainAmount {
+		Default::default()
+	}
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -322,7 +327,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_limit: GasUnit,
+		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }

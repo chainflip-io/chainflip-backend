@@ -19,8 +19,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, GasUnit, SemVer,
-	ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -713,7 +712,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
+		maybe_message: Option<(CcmDepositMetadata, C::ChainAmount)>,
 	) -> EgressId;
 }
 
@@ -722,7 +721,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
 		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
+		_maybe_message: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -733,7 +732,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
 		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
+		_maybe_message: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
@@ -823,10 +822,4 @@ pub trait CompatibleCfeVersions {
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
 	fn precent_authorities_at_version(version: SemVer) -> Percent;
-}
-
-/// For providing the current gas price of a target chain.
-pub trait GasPriceProvider {
-	// Returns in the format of `(base_price, priority_fee)`
-	fn gas_price_for_chain(chain: ForeignChain) -> (AssetAmount, AssetAmount);
 }

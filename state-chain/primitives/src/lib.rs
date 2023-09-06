@@ -44,8 +44,6 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-pub type GasUnit = u128;
-
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;

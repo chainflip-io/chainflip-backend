@@ -1,6 +1,6 @@
 use super::*;
 use crate::address::ForeignChainAddress;
-use cf_primitives::{EgressId, ForeignChain, GasUnit};
+use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
@@ -19,8 +19,8 @@ pub struct ExecutexSwapAndCall {
 	source_chain: u32,
 	/// The source address of the transfer.
 	source_address: Vec<u8>,
-	/// Maximum gas units allowed to be used to execute this call on the target chain.
-	gas_limit: GasUnit,
+	/// Amount of funds that can be used as gas used to execute this call on the target chain.
+	gas_budget: <Ethereum as Chain>::ChainAmount,
 	/// Message that needs to be passed through.
 	message: Vec<u8>,
 }
@@ -32,12 +32,12 @@ impl ExecutexSwapAndCall {
 		transfer_param: EncodableTransferAssetParams,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_limit: GasUnit,
+		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 	) -> Self {
 		let (source_chain, source_address) =
 			Self::destructure_address(source_chain, source_address);
-		Self { egress_id, transfer_param, source_chain, source_address, gas_limit, message }
+		Self { egress_id, transfer_param, source_chain, source_address, gas_budget, message }
 	}
 
 	fn destructure_address(
@@ -81,8 +81,8 @@ impl EvmCall for ExecutexSwapAndCall {
 		]
 	}
 
-	fn gas_limit(&self) -> Option<GasUnit> {
-		Some(self.gas_limit)
+	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+		Some(self.gas_budget)
 	}
 }
 
@@ -107,7 +107,7 @@ mod test_execute_x_swap_and_execute {
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
-		const GAS_LIMIT: GasUnit = 100_000u128;
+		const GAS_BUDGET: <Ethereum as Chain>::ChainAmount = 100_000u128;
 
 		let dummy_transfer_asset_param = EncodableTransferAssetParams {
 			asset: Address::from_slice(&[5; 20]),
@@ -143,7 +143,7 @@ mod test_execute_x_swap_and_execute {
 				dummy_transfer_asset_param.clone(),
 				dummy_src_chain,
 				Some(dummy_src_address),
-				GAS_LIMIT,
+				GAS_BUDGET,
 				dummy_message.clone(),
 			),
 		);

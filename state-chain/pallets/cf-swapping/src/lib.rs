@@ -4,18 +4,13 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, ChannelId, ForeignChain, GasUnit, SwapLeg, TransactionHash, STABLE_ASSET,
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
 };
-use cf_traits::{
-	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, GasPriceProvider,
-};
+use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{pallet_prelude::*, storage::with_storage_layer};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, FixedPointNumber, FixedU64,
-	Rounding,
-};
+use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
 use sp_runtime::{
 	traits::{BlockNumberProvider, Get, Saturating},
 	DispatchError, Permill,
@@ -198,14 +193,6 @@ pub mod pallet {
 
 		/// Safe mode access.
 		type SafeMode: Get<PalletSafeMode>;
-
-		/// For getting the current Gas price for the target chain.
-		type GasPriceProvider: GasPriceProvider;
-
-		/// The multiplier to apply to the base_gas_fee to calculate gas_limit.
-		/// Must be well defined (denominator != 0).
-		#[pallet::constant]
-		type CcmBaseGasFeeMultiplier: Get<FixedU64>;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -876,16 +863,6 @@ pub mod pallet {
 			swap_id
 		}
 
-		// Calculate the gas limit for CCM messages, using the current gas price.
-		// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-		pub fn calculate_ccm_gas_limit(chain: ForeignChain, gas_budget: AssetAmount) -> GasUnit {
-			let (base_price, priority_fee) = T::GasPriceProvider::gas_price_for_chain(chain);
-			let max_gas_price = T::CcmBaseGasFeeMultiplier::get()
-				.saturating_mul_int(base_price)
-				.saturating_add(priority_fee);
-			gas_budget.checked_div(max_gas_price).unwrap_or_default()
-		}
-
 		/// Schedule the egress of a completed Cross chain message.
 		fn schedule_ccm_egress(
 			ccm_id: u64,
@@ -898,14 +875,12 @@ pub mod pallet {
 				CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
 			}
 
-			let gas_limit =
-				Self::calculate_ccm_gas_limit(ccm_swap.destination_address.chain(), ccm_output_gas);
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
 				ccm_swap.destination_asset,
 				ccm_output_principal,
 				ccm_swap.destination_address.clone(),
-				Some((ccm_swap.deposit_metadata, gas_limit)),
+				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
 			);
 			if let Some(swap_id) = ccm_swap.principal_swap_id {
 				Self::deposit_event(Event::<T>::SwapEgressScheduled {

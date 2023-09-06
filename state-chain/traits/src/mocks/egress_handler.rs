@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
 use cf_chains::{CcmDepositMetadata, Chain};
-use cf_primitives::{AssetAmount, EgressId, ForeignChain, GasUnit};
+use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
@@ -25,7 +25,7 @@ pub enum MockEgressParameter<C: Chain> {
 		destination_address: C::ChainAccount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
-		gas_limit: GasUnit,
+		gas_budget: C::ChainAmount,
 	},
 }
 
@@ -61,7 +61,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
-		maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
+		maybe_message: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
 	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {
@@ -69,13 +69,13 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 			}
 			storage.as_mut().map(|v| {
 				v.push(match maybe_message {
-					Some((message, gas_limit)) => MockEgressParameter::<C>::Ccm {
+					Some((message, gas_budget)) => MockEgressParameter::<C>::Ccm {
 						asset,
 						amount,
 						destination_address,
 						message: message.channel_metadata.message,
 						cf_parameters: message.channel_metadata.cf_parameters,
-						gas_limit,
+						gas_budget,
 					},
 					None => MockEgressParameter::<C>::Swap { asset, amount, destination_address },
 				});

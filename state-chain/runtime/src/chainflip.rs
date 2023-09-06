@@ -42,19 +42,20 @@ use cf_chains::{
 	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
 	SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, ChannelId, EgressId, GasUnit,
-};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
-	GasPriceProvider, Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
-	sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+	sp_runtime::{
+		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+		FixedPointNumber, FixedU64,
+	},
 	traits::Get,
 };
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -153,18 +154,11 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	fn build_transaction(
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as Chain>::Transaction {
-		const DEFAULT_GAS_LIMIT: GasUnit = 15_000_000;
-		let gas_limit = match signed_call {
-			EthereumApi::ExecutexSwapAndCall(call_builder) => call_builder.gas_limit(),
-			// None means there is no gas limit.
-			_ => Some(DEFAULT_GAS_LIMIT),
-		}
-		.map(|gas_limit| gas_limit.into());
 		Transaction {
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
-			gas_limit,
+			gas_limit: Some(Self::calculate_gas_limit(signed_call).into()),
 			..Default::default()
 		}
 	}
@@ -193,6 +187,36 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 			&call.threshold_signature_payload(),
 			signature,
 		)
+	}
+
+	// Calculate the gas limit for a Ethereum call, using the current gas price.
+	// Currently for only CCM calls, the gas limit is calculated as:
+	// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+	// All other calls uses a default gas limit.
+	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> <Ethereum as Chain>::ChainAmount {
+		const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
+		const DEFAULT_GAS_LIMIT: <Ethereum as Chain>::ChainAmount = 15_000_000;
+		match call {
+			EthereumApi::ExecutexSwapAndCall(call_builder) => {
+				// For calls with dynamic gas limit, a gas budget must be provided.
+				let gas_budget = call_builder
+					.gas_budget()
+					.expect("Calls with gas_limit must provide a gas budget.");
+				// According to ChainTracking pallet, it is safe to `unwrap()` from `chain_state()`
+				let tracked_data = EthereumChainTracking::chain_state()
+					.expect("Chain tracking will always return a state.")
+					.tracked_data;
+				let max_gas_price = ETHEREUM_BASE_FEE_MULTIPLIER
+					.saturating_mul_int(tracked_data.base_fee)
+					.saturating_add(tracked_data.priority_fee);
+				gas_budget.checked_div(max_gas_price).unwrap_or_else(||{
+					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
+					Default::default()
+				})
+			},
+			// Use default gas limit for all other calls.
+			_ => DEFAULT_GAS_LIMIT,
+		}
 	}
 }
 
@@ -514,7 +538,7 @@ macro_rules! impl_egress_api_for_anychain {
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
+				maybe_message: Option<(CcmDepositMetadata, <AnyChain as Chain>::ChainAmount)>,
 			) -> EgressId {
 				match asset.into() {
 					$(
@@ -524,7 +548,7 @@ macro_rules! impl_egress_api_for_anychain {
 							destination_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
-							maybe_message,
+							maybe_message.map(|(metadata, gas_budget)| (metadata, gas_budget.try_into().expect("Chain's Amount must be compatible with u128."))),
 						),
 
 					)+
@@ -621,25 +645,5 @@ pub struct ValidatorRoleQualification;
 impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
 	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
 		AccountRoles::has_account_role(id, AccountRole::Validator)
-	}
-}
-
-pub struct ChainflipGasPriceProvider;
-impl GasPriceProvider for ChainflipGasPriceProvider {
-	fn gas_price_for_chain(chain: ForeignChain) -> (AssetAmount, AssetAmount) {
-		match chain {
-			// According to ChainTracking pallet it is safe to .expect() here.
-			ForeignChain::Ethereum => {
-				let state = EthereumChainTracking::chain_state()
-					.expect("Chain Tracking will always provide a state.");
-				(state.tracked_data.base_fee, state.tracked_data.priority_fee)
-			},
-			ForeignChain::Polkadot => {
-				let state = PolkadotChainTracking::chain_state()
-					.expect("Chain Tracking will always provide a state.");
-				(state.tracked_data.median_tip, 0u128)
-			},
-			ForeignChain::Bitcoin => (0u128, 0u128),
-		}
 	}
 }

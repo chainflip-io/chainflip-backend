@@ -19,7 +19,7 @@ use cf_chains::{
 	TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain, GasUnit,
+	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -73,7 +73,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
-	pub gas_limit: GasUnit,
+	pub gas_budget: C::ChainAmount,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -678,7 +678,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 				ccm.source_chain,
 				ccm.source_address,
-				ccm.gas_limit,
+				ccm.gas_budget,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -870,7 +870,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_message: Option<(CcmDepositMetadata, GasUnit)>,
+		maybe_message: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
 			*id = id.saturating_add(1);
@@ -880,7 +880,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		match maybe_message {
 			Some((
 				CcmDepositMetadata { source_chain, source_address, channel_metadata },
-				gas_limit,
+				gas_budget,
 			)) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 				egress_id,
 				asset,
@@ -890,7 +890,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				cf_parameters: channel_metadata.cf_parameters,
 				source_chain,
 				source_address,
-				gas_limit,
+				gas_budget,
 			}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
