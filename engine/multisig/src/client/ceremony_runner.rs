@@ -17,7 +17,9 @@ use tokio::sync::{
 use tracing::{debug, warn, Instrument};
 use utilities::{
 	format_iterator,
-	metrics::{CEREMONY_PROCESSED_MSG, CEREMONY_RUNNER_BAD_MSG, INT_COUNTER_CHANNEL},
+	metrics::{
+		DeleteMetricCommand, CEREMONY_PROCESSED_MSG, CEREMONY_RUNNER_BAD_MSG, DELETE_METRIC_CHANNEL,
+	},
 };
 
 use crate::{
@@ -34,7 +36,7 @@ use super::{
 	common::PreProcessStageDataCheck,
 };
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
-const INCORRECT_NUMBER_ELEMENTS: &str = "incorrect_number_elements";
+const INCORRECT_NUMBER_ELEMENTS: &str = "incorrect_number_of_elements";
 
 type OptionalCeremonyReturn<C> = Option<
 	Result<
@@ -113,9 +115,12 @@ where
 		};
 
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
-		let _ = INT_COUNTER_CHANNEL
+		let _ = DELETE_METRIC_CHANNEL
 			.0
-			.send((CEREMONY_PROCESSED_MSG.clone(), vec![ceremony_id.to_string()]))
+			.send(DeleteMetricCommand::CounterPair(
+				CEREMONY_PROCESSED_MSG.clone(),
+				vec![ceremony_id.to_string()],
+			))
 			.await;
 		Ok(())
 	}
