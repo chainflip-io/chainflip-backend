@@ -235,42 +235,42 @@ pub struct P2POptions {
 pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
-	config_root: String,
+	pub config_root: String,
 
 	#[clap(flatten)]
-	p2p_opts: P2POptions,
+	pub p2p_opts: P2POptions,
 
 	#[clap(flatten)]
-	state_chain_opts: StateChainOptions,
+	pub state_chain_opts: StateChainOptions,
 
 	#[clap(flatten)]
-	eth_opts: EthOptions,
+	pub eth_opts: EthOptions,
 
 	#[clap(flatten)]
-	dot_opts: DotOptions,
+	pub dot_opts: DotOptions,
 
 	#[clap(flatten)]
-	btc_opts: BtcOptions,
+	pub btc_opts: BtcOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
-	health_check_hostname: Option<String>,
+	pub health_check_hostname: Option<String>,
 	#[clap(long = "health_check.port")]
-	health_check_port: Option<Port>,
+	pub health_check_port: Option<Port>,
 
 	// Prometheus Settings
 	#[clap(long = "prometheus.hostname")]
-	prometheus_hostname: Option<String>,
+	pub prometheus_hostname: Option<String>,
 	#[clap(long = "prometheus.port")]
-	prometheus_port: Option<Port>,
+	pub prometheus_port: Option<Port>,
 
 	// Signing Settings
 	#[clap(long = "signing.db_file", parse(from_os_str))]
-	signing_db_file: Option<PathBuf>,
+	pub signing_db_file: Option<PathBuf>,
 
 	// Logging settings
 	#[clap(long = "logging.span_lifecycle")]
-	logging_span_lifecycle: bool,
+	pub logging_span_lifecycle: bool,
 }
 
 impl Default for CommandLineOptions {
