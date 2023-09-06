@@ -282,7 +282,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				"🔑 Ethereum Public Key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum Address: 0x{:?}", self.ethereum_address)?;
+			writeln!(f, "👤 Ethereum Address: {:?}", self.ethereum_address)?;
 			writeln!(
 				f,
 				"🔑 Validator Public Key: 0x{}",
