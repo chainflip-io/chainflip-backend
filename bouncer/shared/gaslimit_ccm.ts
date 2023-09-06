@@ -26,19 +26,18 @@ import { signAndSendTxEthSilent } from './send_eth';
 const BASE_GAS_OVERHEAD = 120000;
 // 270k also works in almost some cases but in some scenarios it might be just above the threshold
 // TODO: This is an arbitrary value used because atm we have a 400k hardcoded limit. Can be modified when we confirm this is working.
-const DEFAULT_GAS_CONSUMPTION = 260000;
+let DEFAULT_GAS_CONSUMPTION = 260000;
 // The base overhead increases with message lenght => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 const GAS_PER_BYTE = 16;
 
 let stopObservingCcmReceived = false;
 
-function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume?: number, gasBudgetFraction?: number) {
+function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
-  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION;
 
   return newCcmMetadata(
     sourceAsset,
-    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
+    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
     gasBudgetFraction,
   );
 }
@@ -53,7 +52,8 @@ async function testGasLimitSwap(
 ) {
   const chainflipApi = await getChainflipApi();
 
-  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION;
+  // Increase the gas consumption to make sure all the messages are unique
+  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION++;
 
   const messageMetadata = gasTestCcmMetadata(sourceAsset, gasConsumption, gasBudgetFraction);
   const { destAddress, tag } = await prepareSwap(
@@ -62,15 +62,6 @@ async function testGasLimitSwap(
     addressType,
     messageMetadata,
     ` GasLimit${testTag || ''}`,
-  );
-
-  const ccmReceivedHandle = observeCcmReceived(
-    sourceAsset,
-    destAsset,
-    destAddress,
-    messageMetadata,
-    undefined,
-    () => stopObservingCcmReceived,
   );
 
   const { depositAddress, channelId } = await requestNewSwap(
@@ -94,8 +85,6 @@ async function testGasLimitSwap(
   } else {
     swapScheduledHandle = observeSwapScheduled(sourceAsset, Assets.ETH, channelId, SwapType.CcmGas);
   }
-
-  Promise.all([send(sourceAsset, depositAddress), swapScheduledHandle]);
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
   const swapIdToEgressAmount: { [key: string]: string } = {};
@@ -147,6 +136,10 @@ async function testGasLimitSwap(
   swapScheduledObserved = true;
   await Promise.all([swapExecutedHandle, swapEgressHandle, ccmBroadcastHandle]);
 
+  console.log(
+    `${tag} swapId: ${swapId} broadcastId: ${egressIdToBroadcastId[swapIdToEgressId[swapId]]}`,
+  );
+
   const egressBudgetAmount =
     sourceAsset !== Assets.ETH
       ? Number(swapIdToEgressAmount[swapId].replace(/,/g, ''))
@@ -170,17 +163,14 @@ async function testGasLimitSwap(
   console.log(
     `${tag} egressBudgetAmount: ${egressBudgetAmount}, baseFee: ${baseFee}, priorityFee: ${priorityFee}, gasLimitBudget: ${gasLimitBudget}`,
   );
-  console.log('extra gasLimitBudget', byteLength * GAS_PER_BYTE);
-  // This is a rough approximation, will be slightly different for each swap/egressToken/message
-  console.log(
-    'total gasLimitBudget limit needed: ',
-    gasConsumption +
-      BASE_GAS_OVERHEAD +
-      byteLength * GAS_PER_BYTE /* + probably some gasLimit margin */,
-  );
-
-  console.log(tag);
-  console.log(`${tag} gasLimitBudget     : ${gasLimitBudget}`);
+  // console.log('extra gasLimitBudget', byteLength * GAS_PER_BYTE);
+  // // This is a rough approximation, will be slightly different for each swap/egressToken/message
+  // console.log(
+  //   'total gasLimitBudget limit needed: ',
+  //   gasConsumption +
+  //     BASE_GAS_OVERHEAD +
+  //     byteLength * GAS_PER_BYTE /* + probably some gasLimit margin */,
+  // );
 
   // This is a very rough approximation as there might be extra overhead in the logic but it's probably good
   // enough for testing if we add some margins around the gasBudget cutoff.
@@ -190,19 +180,39 @@ async function testGasLimitSwap(
       byteLength * GAS_PER_BYTE /* + probably some gasLimit margin */ >=
     gasLimitBudget
   ) {
-    console.log(`${tag} Gas budget is too low. Expecting BroadcastAborted event.`);
+    observeCcmReceived(
+      sourceAsset,
+      destAsset,
+      destAddress,
+      messageMetadata,
+      undefined,
+      () => stopObservingCcmReceived,
+    ).then((event) => {
+      if (event !== undefined) {
+        console.log(`${tag} CCM event emitted in txHash ${event.txHash as string}`);
+        throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
+      }
+    });
     // Expect Broadcast Aborted
+    console.log(`${tag} Gas budget is too low. Expecting BroadcastAborted event.`);
     await observeEvent(
       'ethereumBroadcaster:BroadcastAborted',
       await getChainflipApi(),
       (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
     );
     stopObservingCcmReceived = true;
-    if ((await ccmReceivedHandle) !== undefined) {
-      throw new Error(`${tag} CCM event emitted. Transaction should not have been broadcasted!`);
-    }
+    console.log(
+      `${tag} Broadcast Aborted found! broadcastId: ${
+        egressIdToBroadcastId[swapIdToEgressId[swapId]]
+      }`,
+    );
   } else {
-    const ccmReceived = await ccmReceivedHandle;
+    const ccmReceived = await observeCcmReceived(
+      sourceAsset,
+      destAsset,
+      destAddress,
+      messageMetadata,
+    );
     if (ccmReceived?.returnValues.ccmTestGasUsed < gasConsumption) {
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
@@ -214,6 +224,10 @@ async function testGasLimitSwap(
     const totalFee = gasUsed * Number(gasPrice);
     const percBudgetUsed = (totalFee * 100) / egressBudgetAmount;
     const percGasUsed = (gasUsed * 100) / gasLimitBudget;
+    console.log(`-----------------${tag}-----------------`);
+    console.log('txHash             ', ccmReceived?.txHash);
+    console.log('TxgasLimit         ', tx.gas);
+    console.log('gasLimitBudget     ', gasLimitBudget);
     console.log('gasUsed            ', gasUsed);
     console.log('maxFeePerGas       ', maxFeePerGas);
     console.log('gasPrice           ', gasPrice);
@@ -255,10 +269,10 @@ export async function testGasLimitCcmSwaps() {
   ];
 
   const gasLimitSwapsSufBudget = [
-    // 7.5% (or 0.75%) of the input amount used for gas to achieve a gasLimitBudget ~= 660k, which is enough for the CCM broadcast.
+    // 7.5% (or 0.75%) of the input amount used for gas to achieve a gasLimitBudget ~= 4-500k, which is enough for the CCM broadcast.
     testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
     testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
-    testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 750),
+    testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 6000),
     testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
   ];
 
@@ -266,7 +280,7 @@ export async function testGasLimitCcmSwaps() {
     // None of this should be broadcasted as the gasLimitBudget is not enough - ~50k gasLimitBudget
     testGasLimitSwap('DOT', 'FLIP', ' insufBudget', undefined, 10 ** 4),
     testGasLimitSwap('ETH', 'USDC', ' insufBudget', undefined, 10 ** 5),
-    testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 4),
+    testGasLimitSwap('FLIP', 'ETH', ' insufBudget', undefined, 10 ** 5),
     testGasLimitSwap('BTC', 'ETH', ' insufBudget', undefined, 10 ** 4),
   ];
 
@@ -276,7 +290,7 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('DOT', 'FLIP', ' noBudget', undefined, 10 ** 6),
     testGasLimitSwap('ETH', 'USDC', ' noBudget', undefined, 10 ** 8),
     testGasLimitSwap('FLIP', 'ETH', ' noBudget', undefined, 10 ** 6),
-    testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 4),
+    testGasLimitSwap('BTC', 'ETH', ' noBudget', undefined, 10 ** 5),
   ];
 
   await Promise.all([
