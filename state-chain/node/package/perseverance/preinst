@@ -1,59 +1,94 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
-if [ "$1" != "upgrade" ]; then
-    echo "chainflip-node: Fresh install detected, skipping migration"
-    exit 0
-fi
-
 CF_ROOT=/etc/chainflip
+CF_NODE_TARGET_VERSION="0.9"
+SYSTEMD_PATH=/etc/systemd/system
 
-# Stop the service
-if systemctl is-active --quiet chainflip-node; then
-    echo "Stopping chainflip-node..."
-    sudo systemctl stop chainflip-node
-    echo "chainflip-node stopped."
-else
-    echo "chainflip-node is already stopped."
-fi
+check_upgrade() {
+    if [ "$1" != "upgrade" ]; then
+        echo "chainflip-node: Fresh install detected, skipping migration"
+        exit 0
+    else
+        echo "chainflip-node: Upgrade detected, migrating"
+    fi
+}
 
-NODE_VERSION=$(chainflip-node -V)
+stop_service() {
+    if systemctl is-active --quiet chainflip-node; then
+        if systemctl stop chainflip-node; then
+            echo "chainflip-node stopped"
+        else
+            echo "Error stopping chainflip-node"
+            exit 1
+        fi
+    else
+        echo "chainflip-node is already stopped"
+    fi
+}
 
-if echo "$NODE_VERSION" | grep 0.9; then
-    echo "chainflip-node: Detected version 0.9, skipping migration"
+
+check_version() {
+    CF_NODE_CURRENT_VERSION=$(chainflip-node -V)
+    if echo "$CF_NODE_CURRENT_VERSION" | grep $CF_NODE_TARGET_VERSION > /dev/null; then
+        echo "chainflip-node: skipping migration"
+        exit 0
+    else
+        echo "chainflip-node: Detected older version, migrating"
+    fi
+}
+
+backup_and_remove_systemd_overrides() {
+    if [ -f $SYSTEMD_PATH/chainflip-node.service.d/override.conf ]; then
+        echo "chainflip-node: systemd overrides found - backing up and removing"
+        mv $SYSTEMD_PATH/chainflip-node.service.d/override.conf $SYSTEMD_PATH/chainflip-node.service.d.bak/override.conf
+    fi
+}
+
+remove_old_logs() {
+    if [ -f "/var/log/chainflip-node.log" ]; then
+        echo "chainflip-node: Removing old log file"
+        rm -rf "/var/log/chainflip-node*"
+    fi
+}
+
+purge_chaindata() {
+    if [ -d $CF_ROOT/chaindata ]; then
+        echo "chainflip-node: chaindata found in $CF_ROOT/chaindata - removing"
+        rm -rf $CF_ROOT/chaindata
+    fi
+
+    if [ -d $CF_ROOT/data ]; then
+        echo "chainflip-node: chaindata found in $CF_ROOT/data - removing"
+        rm -rf $CF_ROOT/data
+    fi
+
+    if [ -d $CF_ROOT/chainspecs ]; then
+        echo "chainflip-node: chainspecs found in $CF_ROOT/chainspecs - removing"
+        rm -rf $CF_ROOT/chainspecs
+    fi
+}
+
+reload_systemctl() {
+    systemctl daemon-reload
+}
+
+# Main entry point
+main() {
+    check_upgrade "$1"
+    stop_service
+    check_version
+    backup_and_remove_systemd_overrides
+    remove_old_logs
+    purge_chaindata
+    reload_systemctl
     exit 0
+}
+
+# Only run the main function if the script is not being sourced
+# This allows you to source the script in your tests without running main
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@"
 fi
 
-# Backup and delete systemd overrides if they exist
-if [ -f /etc/systemd/system/chainflip-node.service.d/override.conf ]; then
-    echo "chainflip-node: systemd overrides found - backing up and removing"
-    rm -rf /etc/systemd/system/chainflip-node.service.d
-fi
-
-# Remove old log files to free space
-if [ -f "/var/log/chainflip-node.log" ]; then
-    echo "chainflip-node: Removing old log file"
-    rm -rf "/var/log/chainflip-node*"
-fi
-
-# Purge chaindata
-if [ -d $CF_ROOT/chaindata ]; then
-    echo "chainflip-node: chaindata found in $CF_ROOT/chaindata - removing"
-    rm -rf $CF_ROOT/chaindata
-fi
-
-if [ -d $CF_ROOT/data ]; then
-    echo "chainflip-node: chaindata found in $CF_ROOT/data - removing"
-    rm -rf $CF_ROOT/data
-fi
-
-if [ -d $CF_ROOT/chainspecs ]; then
-    echo "chainflip-node: chainspecs found in $CF_ROOT/chainspecs - removing"
-    rm -rf $CF_ROOT/chainspecs
-fi
-
-systemctl daemon-reload
-
-#DEBHELPER#
-
-exit 0
+# #DEBHELPER#

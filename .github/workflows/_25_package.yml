@@ -9,6 +9,10 @@ on:
         description: Environment
         required: true
         type: string
+
+env:
+  FORCE_COLOR: 1
+
 jobs:
   packages:
     runs-on: [hetzner]
