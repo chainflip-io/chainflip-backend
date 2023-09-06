@@ -58,7 +58,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							funder,
 						}) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_funding::Call::funded {
@@ -80,7 +80,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							RedemptionExecutedFilter { node_id: account_id, amount },
 						) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_funding::Call::redeemed {
@@ -101,7 +101,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							RedemptionExpiredFilter { node_id: account_id, amount: _ },
 						) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_funding::Call::redemption_expired {

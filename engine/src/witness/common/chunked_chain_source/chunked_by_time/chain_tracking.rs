@@ -51,7 +51,7 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 					.into(),
 				);
 				state_chain_client
-					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 						call,
 						epoch_index: epoch.index,
 					})

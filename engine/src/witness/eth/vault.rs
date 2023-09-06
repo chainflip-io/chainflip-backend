@@ -207,7 +207,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						Ok(option_call) =>
 							if let Some(call) = option_call {
 								state_chain_client
-									.submit_signed_extrinsic(
+									.finalize_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
 											call: Box::new(call),
 											epoch_index: epoch.index,

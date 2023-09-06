@@ -78,7 +78,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					match event.event_parameters {
 						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_vaults::Call::<
@@ -100,7 +100,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							..
 						}) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_vaults::Call::<
@@ -146,7 +146,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_broadcast::Call::<
@@ -176,7 +176,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							message,
 						}) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_governance::Call::set_whitelisted_call_hash {
