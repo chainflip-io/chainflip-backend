@@ -67,17 +67,17 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
 			state_chain_client
-                .submit_signed_extrinsic(pallet_cf_vaults::Call::<
-                    state_chain_runtime::Runtime,
-                    I,
-                >::report_keygen_outcome {
-                    ceremony_id,
-                    reported_outcome: keygen_result_future
-                        .await
-                        .map(I::pubkey_to_aggkey)
-                        .map_err(|(bad_account_ids, _reason)| bad_account_ids),
-                })
-                .await;
+				.finalize_signed_extrinsic(pallet_cf_vaults::Call::<
+					state_chain_runtime::Runtime,
+					I,
+				>::report_keygen_outcome {
+					ceremony_id,
+					reported_outcome: keygen_result_future
+						.await
+						.map(I::pubkey_to_aggkey)
+						.map_err(|(bad_account_ids, _reason)| bad_account_ids),
+				})
+				.await;
 			Ok(())
 		});
 	} else {
@@ -116,7 +116,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 		);
 		scope.spawn(async move {
 			let _result = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_vaults::Call::<
+				.finalize_signed_extrinsic(pallet_cf_vaults::Call::<
 					state_chain_runtime::Runtime,
 					BitcoinInstance,
 				>::report_key_handover_outcome {
@@ -165,7 +165,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 			match signing_result_future.await {
 				Ok(signatures) => {
 					state_chain_client
-						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
+						.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::signature_success {
@@ -176,7 +176,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 				},
 				Err((bad_account_ids, _reason)) => {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_threshold_signature::Call::<
+						.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::report_signature_failed {
@@ -264,7 +264,7 @@ where
             async move {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 state_chain_client
-                    .submit_signed_extrinsic(
+                    .finalize_signed_extrinsic(
                         pallet_cf_reputation::Call::heartbeat {},
                     )
                     .await
@@ -514,7 +514,7 @@ where
                                                         // a problem with the ethereum rpc node, or with the configured account. For example
                                                         // if the account balance is too low to pay for required gas.
                                                         error!("Error on Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                        state_chain_client.submit_signed_extrinsic(
+                                                        state_chain_client.finalize_signed_extrinsic(
                                                             state_chain_runtime::RuntimeCall::EthereumBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_signing_failure {
                                                                     broadcast_attempt_id,
@@ -544,7 +544,7 @@ where
                                                     Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
                                                         error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                        state_chain_client.submit_signed_extrinsic(
+                                                        state_chain_client.finalize_signed_extrinsic(
                                                             state_chain_runtime::RuntimeCall::PolkadotBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_signing_failure {
                                                                     broadcast_attempt_id,
@@ -574,7 +574,7 @@ where
                                                     Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
                                                         error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
-                                                        state_chain_client.submit_signed_extrinsic(
+                                                        state_chain_client.finalize_signed_extrinsic(
                                                             state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_signing_failure {
                                                                     broadcast_attempt_id,
@@ -602,7 +602,7 @@ where
                     {
                         info!("Sending heartbeat at block: {}", current_block_header.number);
                         state_chain_client
-                            .submit_signed_extrinsic(
+                            .finalize_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
                             )
                             .await;
