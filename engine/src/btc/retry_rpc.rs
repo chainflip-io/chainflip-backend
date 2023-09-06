@@ -27,6 +27,7 @@ impl BtcRetryRpcClient {
 				scope,
 				"btc_rpc",
 				async move { btc_client },
+				None,
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),

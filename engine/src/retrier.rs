@@ -13,7 +13,10 @@ use std::{
 	time::Duration,
 };
 
-use crate::metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS};
+use crate::{
+	common::Signal,
+	metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS},
+};
 use anyhow::Result;
 use core::cmp::min;
 use futures::Future;
@@ -35,7 +38,11 @@ enum RetryLimit {
 }
 
 type TypedFutureGenerator<T, Client> = Pin<
-	Box<dyn Fn(Client) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>> + Send>,
+	Box<
+		dyn Fn(Client) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>
+			+ Send
+			+ Sync,
+	>,
 >;
 
 type FutureAnyGenerator<Client> = TypedFutureGenerator<BoxAny, Client>;
@@ -67,13 +74,41 @@ impl fmt::Display for RequestLog {
 	}
 }
 
-type SubmissionFutureOutput =
-	(RequestId, RequestLog, RetryLimit, Result<BoxAny, (anyhow::Error, Attempt)>);
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum PrimaryOrSecondary {
+	Primary,
+	Secondary,
+}
+
+impl std::ops::Not for PrimaryOrSecondary {
+	type Output = Self;
+
+	fn not(self) -> Self::Output {
+		match self {
+			PrimaryOrSecondary::Primary => PrimaryOrSecondary::Secondary,
+			PrimaryOrSecondary::Secondary => PrimaryOrSecondary::Primary,
+		}
+	}
+}
+
+type SubmissionFutureOutput = (
+	RequestId,
+	RequestLog,
+	RetryLimit,
+	PrimaryOrSecondary,
+	Result<BoxAny, (anyhow::Error, Attempt)>,
+);
 type SubmissionFuture = Pin<Box<dyn Future<Output = SubmissionFutureOutput> + Send + 'static>>;
 type SubmissionFutures = FuturesUnordered<SubmissionFuture>;
 
 type RetryDelays = FuturesUnordered<
-	Pin<Box<dyn Future<Output = (RequestId, RequestLog, Attempt, RetryLimit)> + Send + 'static>>,
+	Pin<
+		Box<
+			dyn Future<Output = (RequestId, RequestLog, Attempt, RetryLimit, PrimaryOrSecondary)>
+				+ Send
+				+ 'static,
+		>,
+	>,
 >;
 
 type BoxAny = Box<dyn Any + Send>;
@@ -162,7 +197,7 @@ fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Durati
 }
 
 // Creates a future of a particular submission.
-fn submission_future<Client: Clone>(
+fn submission_future<Client: Clone + Send + Sync + 'static>(
 	client: Client,
 	request_log: RequestLog,
 	retry_limit: RetryLimit,
@@ -170,6 +205,7 @@ fn submission_future<Client: Clone>(
 	request_id: RequestId,
 	initial_request_timeout: Duration,
 	attempt: Attempt,
+	primary_or_secondary: PrimaryOrSecondary,
 ) -> SubmissionFuture {
 	let submission_fut = submission_fn(client);
 	// Apply exponential backoff to the request.
@@ -178,6 +214,7 @@ fn submission_future<Client: Clone>(
 			request_id,
 			request_log.clone(),
 			retry_limit,
+			primary_or_secondary,
 			match tokio::time::timeout(
 				max_sleep_duration(initial_request_timeout, attempt),
 				submission_fut,
@@ -193,6 +230,80 @@ fn submission_future<Client: Clone>(
 	})
 }
 
+// Pass in two clients, a primary and an optional secondary.
+// We can then select the client requested if it's ready, otherwise we return the client that's
+// ready first.
+#[derive(Clone)]
+struct ClientSelector<Client: Clone + Send + Sync + 'static> {
+	primary_signal: Signal<(Client, PrimaryOrSecondary)>,
+	secondary_signal: Option<Signal<(Client, PrimaryOrSecondary)>>,
+}
+
+impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
+	/// Create a new client selector. Note that the initation isn't blocking. We should wait for one
+	/// client.
+	pub fn new<ClientFut: Future<Output = Client> + Send + 'static>(
+		scope: &Scope<'_, anyhow::Error>,
+		primary_fut: ClientFut,
+		secondary_fut: Option<ClientFut>,
+	) -> Self {
+		let (primary_signaller, primary_signal) = Signal::new();
+
+		scope.spawn(async move {
+			let client = primary_fut.await;
+			primary_signaller.signal((client, PrimaryOrSecondary::Primary));
+			Ok(())
+		});
+
+		let secondary_signal = if let Some(secondary_fut) = secondary_fut {
+			let (secondary_signaller, secondary_signal) = Signal::new();
+
+			scope.spawn(async move {
+				let client = secondary_fut.await;
+				secondary_signaller.signal((client, PrimaryOrSecondary::Secondary));
+				Ok(())
+			});
+			Some(secondary_signal)
+		} else {
+			None
+		};
+
+		Self { primary_signal, secondary_signal }
+	}
+
+	// Returns a client, and the type of client selected.
+	pub async fn select_client(
+		&self,
+		primary_or_secondary: PrimaryOrSecondary,
+	) -> (Client, PrimaryOrSecondary) {
+		let primary_signal = self.primary_signal.clone();
+		let secondary_signal = self.secondary_signal.clone();
+
+		// If we have two clients, then we should bias the requested one, but if it's not ready,
+		// request from the other one.
+		match secondary_signal {
+			Some(secondary_signal) => match primary_or_secondary {
+				PrimaryOrSecondary::Secondary => {
+					tokio::select! {
+						biased;
+						client = secondary_signal.wait() => client,
+						client = primary_signal.wait() => client,
+					}
+				},
+				PrimaryOrSecondary::Primary => {
+					tokio::select! {
+						biased;
+						client = primary_signal.wait() => client,
+						client = secondary_signal.wait() => client,
+					}
+				},
+			},
+			// If we only have a primary, we have to wait for it to be ready.
+			None => primary_signal.wait().await,
+		}
+	}
+}
+
 /// Requests submitted to this client will be retried until success.
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
@@ -204,7 +315,8 @@ where
 		scope: &Scope<'_, anyhow::Error>,
 		// The name of the retrier that appears in the logs.
 		name: &'static str,
-		primary_client: ClientFut,
+		primary_client_fut: ClientFut,
+		secondary_client_fut: Option<ClientFut>,
 		initial_request_timeout: Duration,
 		maximum_concurrent_submissions: u32,
 	) -> Self {
@@ -217,17 +329,20 @@ where
 		// This holds any submissions that are waiting for a slot to open up.
 		let mut submission_holder = SubmissionHolder::new(maximum_concurrent_submissions);
 
-		scope.spawn(async move {
-			let primary_client = primary_client.await;
+		let client_selector: ClientSelector<Client> =
+			ClientSelector::new(scope, primary_client_fut, secondary_client_fut);
 
+		scope.spawn(async move {
 			utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}`");
-					submission_holder.push(submission_future(primary_client.clone(), request_log, retry_limit, &closure, request_id, initial_request_timeout, 0));
+					let (client, primary_or_secondary) = client_selector.select_client(PrimaryOrSecondary::Primary).await;
+
+					tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}` and requesting with `{primary_or_secondary:?}`");
+					submission_holder.push(submission_future(client, request_log, retry_limit, &closure, request_id, initial_request_timeout, 0, primary_or_secondary));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				let (request_id, request_log, retry_limit, result) = submission_holder.next_or_pending() => {
+				let (request_id, request_log, retry_limit, primary_or_secondary, result) = submission_holder.next_or_pending() => {
 					RPC_RETRIER_TOTAL_REQUESTS.with_label_values(&[name, request_log.rpc_method.as_str()]).inc();
 					match result {
 						Ok(value) => {
@@ -247,13 +362,14 @@ where
 							retry_delays.push(Box::pin(
 								async move {
 									tokio::time::sleep(sleep_duration).await;
-									(request_id, request_log, attempt, retry_limit)
+									// pass in primary or secondary so we know which client to use.
+									(request_id, request_log, attempt, retry_limit, primary_or_secondary)
 								}
 							));
 						},
 					}
 				},
-				let (request_id, request_log, attempt, retry_limit) = retry_delays.next_or_pending() => {
+				let (request_id, request_log, attempt, retry_limit, primary_or_secondary) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
 
 					let (response_sender, closure) = request_holder.get(&request_id).expect("We only remove these on success, and if it's in `retry_delays` then it must still be in `request_holder`");
@@ -268,8 +384,11 @@ where
 								request_holder.remove(&request_id);
 							}
 							_ => {
-								tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}`, attempt `{next_attempt}`");
-								submission_holder.push(submission_future(primary_client.clone(), request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt));
+								// We want to use a different client than the one we just tried if possible.
+								// This await should always return immediately since we must already have a client if we've already made a request.
+								let (next_client, next_primary_or_secondary) = client_selector.select_client(!primary_or_secondary).await;
+								tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}` and client `{next_primary_or_secondary:?}`, attempt `{next_attempt}`");
+								submission_holder.push(submission_future(next_client, request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt, next_primary_or_secondary));
 							}
 						}
 					}
@@ -376,7 +495,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -426,7 +545,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -464,7 +583,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -503,7 +622,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -548,7 +667,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 2);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 2);
 
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
@@ -626,7 +745,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request_with_limit(
@@ -645,6 +764,65 @@ mod tests {
 		.unwrap();
 	}
 
+	async fn get_client(ready: bool) {
+		if ready {
+			// ()
+		} else {
+			futures::future::pending().await
+		}
+	}
+
+	#[tokio::test]
+	async fn backup_rpc_succeeds_if_primary_not_ready() {
+		const SCOPE_CANCEL_TEST: &str = "Cancel running scopes for test";
+		let scope_error = task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					get_client(false),
+					Some(get_client(true)),
+					INITIAL_TIMEOUT,
+					100,
+				);
+
+				const REQUEST_1: u32 = 32;
+				assert_eq!(
+					REQUEST_1,
+					retrier_client
+						.request(
+							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
+							RequestLog::new("request 1".to_string(), None),
+						)
+						.await
+				);
+
+				const REQUEST_2: u64 = 64;
+				assert_eq!(
+					REQUEST_2,
+					retrier_client
+						.request(
+							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
+							RequestLog::new("request 2".to_string(), None),
+						)
+						.await
+				);
+
+				// We need to return error so the inner scope that is being used to create the
+				// client that will never create is cancelled.
+				Result::<()>::Err(anyhow::anyhow!(SCOPE_CANCEL_TEST))
+			}
+			.boxed()
+		})
+		.await
+		// We expect an error here since we deliberatey cancel the tasks.
+		.unwrap_err();
+		// Ensure it was cancelled for some other reason.
+		assert_eq!(scope_error.to_string(), SCOPE_CANCEL_TEST);
+	}
+
 	#[tokio::test]
 	#[ignore = "Test runs forever. Useful for manually testing the failing requests will never return (because they are retried until success)."]
 	async fn request_always_fails() {
@@ -653,7 +831,7 @@ mod tests {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
 				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, INITIAL_TIMEOUT, 100);
+					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
 
 				retrier_client
 					.request(
