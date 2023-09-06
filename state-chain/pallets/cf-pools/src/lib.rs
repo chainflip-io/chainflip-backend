@@ -44,6 +44,8 @@ enum Stability {
 #[scale_info(skip_type_params(T))]
 pub struct CanonicalAssetPair<T: Config> {
 	assets: cf_amm::common::SideMap<Asset>,
+	#[doc(hidden)]
+	#[codec(skip)]
 	_phantom: core::marker::PhantomData<T>,
 }
 impl<T: Config> Copy for CanonicalAssetPair<T> {}
