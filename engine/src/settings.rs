@@ -719,6 +719,32 @@ mod tests {
 		);
 	}
 
+	fn unset_test_env() {
+		use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS};
+
+		env::remove_var(ETH_HTTP_NODE_ENDPOINT);
+		env::remove_var(ETH_WS_NODE_ENDPOINT);
+
+		env::remove_var(ETH_SECONDARY_HTTP_NODE_ENDPOINT);
+		env::remove_var(ETH_SECONDARY_WS_NODE_ENDPOINT);
+
+		env::remove_var(NODE_P2P_IP_ADDRESS);
+
+		env::remove_var(BTC_HTTP_NODE_ENDPOINT);
+		env::remove_var(BTC_RPC_USER);
+		env::remove_var(BTC_RPC_PASSWORD);
+
+		env::remove_var(BTC_SECONDARY_HTTP_NODE_ENDPOINT);
+		env::remove_var(BTC_SECONDARY_RPC_USER);
+		env::remove_var(BTC_SECONDARY_RPC_PASSWORD);
+
+		env::remove_var(DOT_WS_NODE_ENDPOINT);
+		env::remove_var(DOT_HTTP_NODE_ENDPOINT);
+
+		env::remove_var(DOT_SECONDARY_WS_NODE_ENDPOINT);
+		env::remove_var(DOT_SECONDARY_HTTP_NODE_ENDPOINT);
+	}
+
 	#[test]
 	fn init_default_config() {
 		set_test_env();
@@ -739,6 +765,7 @@ mod tests {
 			settings.dot.secondary_node.unwrap().ws_node_endpoint,
 			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
 		);
+		unset_test_env();
 	}
 
 	#[test]
@@ -788,8 +815,6 @@ mod tests {
 
 	#[test]
 	fn test_base_config_path_command_line_option() {
-		set_test_env();
-
 		// Load the settings using a custom base config path.
 		let test_base_config_path = "config/testing/";
 		let custom_base_path_settings = Settings::new(CommandLineOptions {
@@ -799,11 +824,15 @@ mod tests {
 		.unwrap();
 
 		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
-		// by comparing it to the default settings. Note: This check will fail if the
-		// Settings.toml contains only default or no values.
+		// by comparing it another settings.
+		let different_settings_config_path = "config/testing2/";
 		assert_ne!(
 			custom_base_path_settings,
-			Settings::new(CommandLineOptions::default()).unwrap()
+			Settings::new(CommandLineOptions {
+				config_root: different_settings_config_path.to_owned(),
+				..Default::default()
+			})
+			.unwrap()
 		);
 
 		// Check that a key file is a child of the custom base path.
@@ -814,6 +843,9 @@ mod tests {
 			.node_key_file
 			.to_string_lossy()
 			.contains(test_base_config_path));
+
+		assert_eq!(custom_base_path_settings.btc.node.http_node_endpoint, "http://localhost:18443");
+		assert!(custom_base_path_settings.btc.secondary_node.is_none());
 	}
 
 	#[test]

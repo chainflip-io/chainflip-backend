@@ -18,6 +18,15 @@ private_key_file = "./localnet/init/keys/eth_private_key_file"
 ws_node_endpoint = "ws://localhost:8546"
 http_node_endpoint = "http://localhost:8545"
 
+[dot.node]
+ws_node_endpoint = "ws://localhost:9945"
+http_node_endpoint = "http://localhost:9945"
+
+[btc.node]
+http_node_endpoint = "http://localhost:8332"
+rpc_user = "flip"
+rpc_password = "flip"
+
 [health_check]
 hostname = "0.0.0.0"
 port = 5555
@@ -28,12 +37,3 @@ port = 5566
 
 [signing]
 db_file = "/tmp/chainflip/bashful.db"
-
-[dot.node]
-ws_node_endpoint = "ws://localhost:9945"
-http_node_endpoint = "http://localhost:9945"
-
-[btc.node]
-http_node_endpoint = "http://localhost:8332"
-rpc_user = "flip"
-rpc_password = "flip"
