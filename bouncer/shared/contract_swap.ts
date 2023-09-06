@@ -34,13 +34,15 @@ export async function executeContractSwap(
   const destChain = assetChains[destAsset];
 
   const nonce = await getNextEthNonce();
-  const options = {
+  const networkOptions = {
     signer: wallet,
-    nonce,
     network: 'localnet',
     vaultContractAddress: getEthContractAddress('VAULT'),
-    ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
-    gasLimit: 200000,
+    srcTokenContractAddress: getEthContractAddress(srcAsset),
+  } as const;
+  const txOptions = {
+    nonce: BigInt(nonce),
+    gasLimit: 200000n,
   } as const;
 
   const receipt = await executeSwap(
@@ -58,7 +60,8 @@ export async function executeContractSwap(
         message: messageMetadata.message,
       },
     } as ExecuteSwapParams,
-    options,
+    networkOptions,
+    txOptions,
   );
 
   return receipt;
@@ -146,10 +149,12 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
       },
       {
         signer: wallet,
-        nonce: nextNonce,
         network: 'localnet',
         vaultContractAddress: getEthContractAddress('VAULT'),
         srcTokenContractAddress: getEthContractAddress(srcAsset),
+      },
+      {
+        nonce: BigInt(nextNonce),
       },
     ),
   );

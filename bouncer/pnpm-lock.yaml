@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip-io/cli':
-    specifier: ^0.0.30
-    version: 0.0.30
+    specifier: ^0.0.40
+    version: 0.0.40
   '@polkadot/api':
     specifier: 10.7.2
     version: 10.7.2
@@ -91,13 +91,13 @@ devDependencies:
 
 packages:
 
-  /@chainflip-io/cli@0.0.30:
-    resolution: {integrity: sha512-GFoBXI8bvxl7SJiYmZ7ObqcUtE4Bxa42ZUxedk4mPED8aZ46AsN6Zs7Yo5B8IYFejCSdxVfNn8i/SxxaT0Fr2A==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.0.30/46d14d702126809fb028402184bb35c5e607d8eb}
+  /@chainflip-io/cli@0.0.40:
+    resolution: {integrity: sha512-H37dp7p3/jDpYtkf7BfD21HYqvMUd3pkzGa8utsI8/R3inNoycOE0qNu1pP/+ssrVars0bd7+3Pp2MTIAG2Hww==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.0.40/7ded677c5de7e4e26fb490eaf2dcde7d543106f3}
     hasBin: true
     dependencies:
       ethers: 5.7.2
       yargs: 17.7.2
-      zod: 3.21.4
+      zod: 3.22.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -1140,6 +1140,7 @@ packages:
 
   /@substrate/connect-extension-protocol@1.0.1:
     resolution: {integrity: sha512-161JhCC1csjH3GE5mPLEd7HbWtwNSPJBg3p1Ksz9SFlTzj/bgEwudiRN2y5i0MoLGCIJRYKyKGMxVnd29PzNjg==}
+    requiresBuild: true
     dev: false
     optional: true
 
@@ -2602,6 +2603,7 @@ packages:
 
   /eventemitter3@4.0.7:
     resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
+    requiresBuild: true
     dev: false
     optional: true
 
@@ -2830,8 +2832,8 @@ packages:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
     dev: true
 
-  /fsevents@2.3.2:
-    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+  /fsevents@2.3.3:
+    resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
     requiresBuild: true
@@ -2914,6 +2916,7 @@ packages:
 
   /glob@6.0.4:
     resolution: {integrity: sha512-MKZeRNyYZAVVVG1oZeLaWie1uweH40m9AZwIwxyPbTSX4hHrVYSzLg0Ro5Z5R7XKkIX+Cc6oD1rqeDJnwsB8/A==}
+    requiresBuild: true
     dependencies:
       inflight: 1.0.6
       inherits: 2.0.4
@@ -3685,6 +3688,7 @@ packages:
 
   /nan@2.17.0:
     resolution: {integrity: sha512-2ZTgtl0nJsO0KQCjEpxcIr5D+Yv90plTitZt9JBfQvVJDS5seMl3FOvsh3+9CoYWXf/1l5OaZzzF6nDm4cagaQ==}
+    requiresBuild: true
     dev: false
     optional: true
 
@@ -3703,6 +3707,7 @@ packages:
   /ncp@2.0.0:
     resolution: {integrity: sha512-zIdGUrPRFTUELUvr3Gmc7KZ2Sw/h1PiVM0Af/oHB6zgnV1ikqSfRk+TOufi79aHYCW3NiOXmr1BP5nWbzojLaA==}
     hasBin: true
+    requiresBuild: true
     dev: false
     optional: true
 
@@ -3876,6 +3881,7 @@ packages:
 
   /pako@2.1.0:
     resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+    requiresBuild: true
     dev: false
     optional: true
 
@@ -4138,6 +4144,7 @@ packages:
   /rimraf@2.4.5:
     resolution: {integrity: sha512-J5xnxTyqaiw06JjMftq7L9ouA448dw/E7dKghkP9WpKNuwmARNNg+Gk8/u5ryb9N/Yo2+z3MCwuqFK/+qPOPfQ==}
     hasBin: true
+    requiresBuild: true
     dependencies:
       glob: 6.0.4
     dev: false
@@ -4334,6 +4341,7 @@ packages:
 
   /smoldot@1.0.4:
     resolution: {integrity: sha512-N3TazI1C4GGrseFH/piWyZCCCRJTRx2QhDfrUKRT4SzILlW5m8ayZ3QTKICcz1C/536T9cbHHJyP7afxI6Mi1A==}
+    requiresBuild: true
     dependencies:
       pako: 2.1.0
       ws: 8.13.0
@@ -4568,7 +4576,7 @@ packages:
       '@esbuild-kit/core-utils': 3.1.0
       '@esbuild-kit/esm-loader': 2.5.5
     optionalDependencies:
-      fsevents: 2.3.2
+      fsevents: 2.3.3
     dev: true
 
   /tunnel-agent@0.6.0:
@@ -5205,6 +5213,6 @@ packages:
     engines: {node: '>=10'}
     dev: true
 
-  /zod@3.21.4:
-    resolution: {integrity: sha512-m46AKbrzKVzOzs/DZgVnG5H55N1sv1M8qZU3A8RIKbs3mrACDNeIOeilDymVb2HdmP8uwshOCF4uJ8uM9rCqJw==}
+  /zod@3.22.2:
+    resolution: {integrity: sha512-wvWkphh5WQsJbVk1tbx1l1Ly4yg+XecD+Mq280uBGt9wa5BKSWf4Mhp6GmrkPixhMxmabYY7RbzlwVP32pbGCg==}
     dev: false
