@@ -15,7 +15,7 @@ async function getGovernanceMembers(): Promise<string[]> {
 async function setGovernanceMembers(members: string[]) {
   const chainflip = await getChainflipApi();
 
-  await submitGovernanceExtrinsic(chainflip.tx.governance.newMembershipSet(members), true);
+  await submitGovernanceExtrinsic(chainflip.tx.governance.newMembershipSet(members));
 }
 
 await cryptoWaitReady();
