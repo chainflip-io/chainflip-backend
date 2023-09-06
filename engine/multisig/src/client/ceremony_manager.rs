@@ -415,7 +415,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 							match deserialize_for_version::<Chain::CryptoScheme>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
-									CEREMONY_MANAGER_BAD_MSG.with_label_values(&["deserialize_for_version", sender_id.to_string().as_str()]).inc();
+									CEREMONY_MANAGER_BAD_MSG.with_label_values(&["deserialize_for_version", sender_id.to_string().as_str(), Chain::NAME]).inc();
 									warn!("Failed to deserialize message from: {sender_id}");
 								},
 							}
@@ -701,13 +701,18 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 					.with_label_values(&[
 						"unexpected_future_ceremony_id",
 						sender_id.to_string().as_str(),
+						Chain::NAME,
 					])
 					.inc();
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {
 				CEREMONY_MANAGER_BAD_MSG
-					.with_label_values(&["old_ceremony_id", sender_id.to_string().as_str()])
+					.with_label_values(&[
+						"old_ceremony_id",
+						sender_id.to_string().as_str(),
+						Chain::NAME,
+					])
 					.inc();
 				trace!("Ignoring data: old ceremony id {ceremony_id_string}",);
 				return

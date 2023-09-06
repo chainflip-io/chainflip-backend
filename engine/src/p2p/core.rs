@@ -325,10 +325,10 @@ impl P2PContext {
 	}
 
 	fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
-		P2P_MSG_SENT.inc();
 		match self.active_connections.get(&account_id) {
 			Some(socket) => {
 				socket.send(payload);
+				P2P_MSG_SENT.inc();
 			},
 			None => {
 				warn!("Failed to send message. Peer not registered: {account_id}")
