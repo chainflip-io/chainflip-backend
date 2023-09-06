@@ -11,6 +11,9 @@ on:
         required: false
         default: 120
 
+env:
+  FORCE_COLOR: 1
+
 permissions:
   packages: read
   contents: read

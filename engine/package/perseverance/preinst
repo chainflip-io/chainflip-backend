@@ -1,70 +1,88 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
-if [ "$1" != "upgrade" ]; then
-    echo "chainflip-engine: Fresh install detected, skipping migration"
-    exit 0
-fi
-
-ENGINE_VERSION=$(chainflip-engine -V)
-
-if echo "$ENGINE_VERSION" | grep 0.9; then
-    echo "chainflip-engine: Detected version 0.9, skipping migration"
-    exit 0
-fi
-
 CF_ROOT=/etc/chainflip
+CF_ENGINE_TARGET_VERSION="0.9"
+SYSTEMD_PATH=/etc/systemd/system
+CF_ENGINE_CONFIG_FILE="$CF_ROOT/config/Settings.toml"
 
-# Stop the service
-if systemctl is-active --quiet chainflip-engine; then
-    echo "Stopping chainflip-engine..."
-    sudo systemctl stop chainflip-engine
-    echo "chainflip-engine stopped."
-else
-    echo "chainflip-engine is already stopped."
-fi
-
-# Delete the old engine data.db directory
-if [ -d "$CF_ROOT/data.db" ]; then
-    echo "chainflip-engine: Removing old data.db directory"
-    rm -rf "$CF_ROOT/data.db"
-fi
-
-# Backup and delete systemd overrides if they exist
-if [ -f /etc/systemd/system/chainflip-engine.service.d/override.conf ]; then
-    echo "chainflip-engine: systemd overrides found - backing up and removing"
-    rm -rf /etc/systemd/system/chainflip-engine.service.d
-fi
-
-# Remove old log files to free space
-if [ -f "/var/log/chainflip-engine.log" ]; then
-    echo "chainflip-engine: Removing old log file"
-    rm -rf "/var/log/chainflip-engine*"
-fi
-
-echo "Updating pDOT endpoint ..."
-sed -i 's|wss://pdot.chainflip.xyz:443|wss://rpc-pdot.chainflip.io:443|g' /etc/chainflip/config/Settings.toml
-
-FILE=/etc/chainflip/config/Settings.toml
-
-# Check if [dot] section exists
-if grep -q "\[dot\]" "$FILE"; then
-    # [dot] section exists, use awk to check for http_node_endpoint after [dot]
-    if ! awk '/\[dot\]/ {flag=1; next} flag && /http_node_endpoint/ {print; exit} flag && /^\[/ {exit}' "$FILE" | grep -q "http_node_endpoint"; then
-        # http_node_endpoint does not exist under [dot], add it
-        sed -i '/\[dot\]/a http_node_endpoint = "https://rpc-pdot.chainflip.io:443"' "$FILE"
-        echo "http_node_endpoint key added under [dot]"
+check_upgrade() {
+    if [ "$1" != "upgrade" ]; then
+        echo "chainflip-engine: Fresh install detected, skipping migration"
+        exit 0
     else
-        echo "http_node_endpoint key already exists under [dot]"
+        echo "chainflip-engine: Upgrade detected, migrating"
     fi
-else
-    echo "[dot] section does not exist in the file"
+}
+
+stop_service() {
+    if systemctl is-active --quiet chainflip-engine; then
+        if systemctl stop chainflip-engine; then
+            echo "chainflip-engine stopped"
+        else
+            echo "Error stopping chainflip-engine"
+            exit 1
+        fi
+    else
+        echo "chainflip-engine is already stopped"
+    fi
+}
+
+check_version() {
+    CF_NODE_CURRENT_VERSION=$(chainflip-engine -V)
+    if echo "$CF_NODE_CURRENT_VERSION" | grep $CF_ENGINE_TARGET_VERSION > /dev/null; then
+        echo "chainflip-engine: skipping migration"
+        exit 0
+    else
+        echo "chainflip-engine: Detected older version, migrating"
+    fi
+}
+
+backup_and_remove_systemd_overrides() {
+    if [ -f $SYSTEMD_PATH/chainflip-engine.service.d/override.conf ]; then
+        echo "chainflip-engine: systemd overrides found - backing up and removing"
+        mv $SYSTEMD_PATH/chainflip-engine.service.d/override.conf $SYSTEMD_PATH/chainflip-engine.service.d.bak/override.conf
+    fi
+}
+
+remove_old_keyshares() {
+    if [ -d "$CF_ROOT/data.db" ]; then
+        echo "chainflip-engine: Removing old data.db directory"
+        rm -rf "$CF_ROOT/data.db"
+    fi
+}
+
+remove_old_logs() {
+    if [ -f "/var/log/chainflip-engine.log" ]; then
+        echo "chainflip-engine: Removing old log file"
+        rm -rf "/var/log/chainflip-engine*"
+    fi
+}
+
+update_engine_config() {
+    echo "chainflip-engine: Updating engine config"
+}
+
+reload_systemctl() {
+    systemctl daemon-reload
+}
+
+# Main entry point
+main() {
+    check_upgrade "$1"
+    check_version
+    stop_service
+    remove_old_keyshares
+    backup_and_remove_systemd_overrides
+    remove_old_logs
+    update_engine_config
+    reload_systemctl
+}
+
+# Only run the main function if the script is not being sourced
+# This allows you to source the script in your tests without running main
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@"
 fi
 
-echo "Migration complete. Restarting chainflip-engine..."
-
-systemctl daemon-reload
-
-#DEBHELPER#
-
-exit 0
+# #DEBHELPER#
