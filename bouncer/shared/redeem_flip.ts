@@ -39,12 +39,12 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
     .signAndSend(flipWallet, { nonce: -1 }, handleSubstrateError(chainflip));
   await redemptionRequestHandle;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const options: any = {
+  const networkOptions = {
     signer: ethWallet,
     network: 'localnet',
     stateChainGatewayContractAddress: getEthContractAddress('GATEWAY'),
-  };
+    flipContractAddress: getEthContractAddress('FLIP'),
+  } as const;
   console.log('Waiting for redemption to be registered');
   await observeEVMEvent(gatewayAbi, getEthContractAddress('GATEWAY'), 'RedemptionRegistered', [
     accountIdHex,
@@ -54,7 +54,7 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
     '*',
   ]);
 
-  const delay = await getRedemptionDelay(options);
+  const delay = await getRedemptionDelay(networkOptions);
   console.log(`Waiting for ${delay}s before we can execute redemption`);
   await sleep(delay * 1000);
 
@@ -69,6 +69,6 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await executeRedemption(accountIdHex as any, { nonce, ...options });
+  await executeRedemption(accountIdHex as any, networkOptions, { nonce: BigInt(nonce) });
   await redemptionExecutedHandle;
 }
