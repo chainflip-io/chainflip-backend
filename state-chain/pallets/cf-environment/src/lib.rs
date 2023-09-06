@@ -188,6 +188,7 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
 			NextCompatibilityVersion::<T>::kill();
+			RuntimeSafeMode::<T>::put(SafeMode::CODE_GREEN);
 			weight
 		}
 
