@@ -165,7 +165,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 			match signing_result_future.await {
 				Ok(signatures) => {
 					state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
+						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::signature_success {
