@@ -33,7 +33,11 @@ fn genesis_config() {
 fn not_a_member() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Governance::propose_governance_extrinsic(RuntimeOrigin::signed(EVE), mock_extrinsic()),
+			Governance::propose_governance_extrinsic(
+				RuntimeOrigin::signed(EVE),
+				mock_extrinsic(),
+				false
+			),
 			<Error<Test>>::NotMember
 		);
 	});
@@ -46,7 +50,8 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			// Propose a governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				mock_extrinsic()
+				mock_extrinsic(),
+				false
 			));
 			assert_eq!(
 				last_event::<Test>(),
@@ -77,7 +82,8 @@ fn already_executed() {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic()
+			mock_extrinsic(),
+			false
 		));
 		// Assert the proposed event was fired
 		assert_eq!(
@@ -119,7 +125,8 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 			// Propose governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				mock_extrinsic()
+				mock_extrinsic(),
+				false
 			));
 		})
 		.then_execute_at_next_block(|_| {
@@ -142,7 +149,8 @@ fn can_not_vote_twice() {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic()
+			mock_extrinsic(),
+			false
 		));
 		// Try to approve it again. Proposing implies approving.
 		assert_noop!(
@@ -157,7 +165,8 @@ fn several_open_proposals() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic()
+			mock_extrinsic(),
+			false
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -165,7 +174,8 @@ fn several_open_proposals() {
 		);
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(BOB),
-			mock_extrinsic()
+			mock_extrinsic(),
+			false
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -190,7 +200,8 @@ fn sudo_extrinsic() {
 			// Propose the governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				governance_extrinsic
+				governance_extrinsic,
+				false
 			));
 			assert_eq!(
 				last_event::<Test>(),

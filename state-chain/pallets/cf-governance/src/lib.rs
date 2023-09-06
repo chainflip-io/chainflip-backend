@@ -65,11 +65,13 @@ pub mod pallet {
 		pub call: OpaqueCall,
 		/// Accounts who have already approved the proposal.
 		pub approved: BTreeSet<AccountId>,
+		/// Manual execution of the proposal.
+		pub manual: bool,
 	}
 
 	impl<T> Default for Proposal<T> {
 		fn default() -> Self {
-			Self { call: Default::default(), approved: Default::default() }
+			Self { call: Default::default(), approved: Default::default(), manual: false }
 		}
 	}
 
@@ -126,6 +128,9 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
+
+	#[pallet::storage]
+	pub(super) type WhitelistedCalls<T> = StorageMap<_, Twox64Concat, u32, OpaqueCall, OptionQuery>;
 
 	/// Any nonces before this have been consumed.
 	#[pallet::storage]
@@ -242,11 +247,12 @@ pub mod pallet {
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
+			manual: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
 
-			let id = Self::push_proposal(call);
+			let id = Self::push_proposal(call, manual);
 			Self::deposit_event(Event::Proposed(id));
 
 			Self::inner_approve(who, id)?;
@@ -425,6 +431,29 @@ pub mod pallet {
 				_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
 			}
 		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
+		pub fn dispatch_whitelisted_call(
+			origin: OriginFor<T>,
+			approved_id: ProposalId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			if let Some(call) = WhitelistedCalls::<T>::take(approved_id) {
+				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
+					Self::deposit_event(match Self::dispatch_governance_call(call) {
+						Ok(_) => Event::Executed(approved_id),
+						Err(err) => Event::FailedExecution(err.error),
+					});
+					Ok(())
+				} else {
+					Err(Error::<T>::DecodeOfCallFailed.into())
+				}
+			} else {
+				Err(Error::<T>::ProposalNotFound.into())
+			}
+		}
 	}
 
 	/// Genesis definition
@@ -502,7 +531,11 @@ impl<T: Config> Pallet<T> {
 		if proposal.approved.len() >
 			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
-			ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			if proposal.manual {
+				WhitelistedCalls::<T>::insert(approved_id, proposal.call);
+			} else {
+				ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			}
 			Proposals::<T>::remove(approved_id);
 			ActiveProposals::<T>::mutate(|proposals| {
 				proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
@@ -560,11 +593,11 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
-	fn push_proposal(call: Box<<T as Config>::RuntimeCall>) -> u32 {
+	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, manual: bool) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
 			proposal_id,
-			Proposal { call: call.encode(), approved: Default::default() },
+			Proposal { call: call.encode(), approved: Default::default(), manual },
 		);
 		ProposalIdCounter::<T>::put(proposal_id);
 		ActiveProposals::<T>::append(ActiveProposal {
