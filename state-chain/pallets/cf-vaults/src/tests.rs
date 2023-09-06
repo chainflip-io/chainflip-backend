@@ -132,11 +132,20 @@ fn keygen_success_triggers_keygen_verification() {
 		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), rotation_epoch_index);
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::trigger_keygen_verification(
-			ceremony_id,
-			NEW_AGG_PUB_KEY_PRE_HANDOVER,
-			btree_candidates,
-			rotation_epoch_index,
+		for candidate in &candidates {
+			assert_ok!(VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(*candidate),
+				ceremony_id,
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER),
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
+
+		assert!(matches!(
+			PendingVaultRotation::<Test, _>::get().unwrap(),
+			VaultRotationStatus::AwaitingKeygenVerification { .. }
+		));
 		);
 	});
 }
