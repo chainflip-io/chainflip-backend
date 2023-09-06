@@ -1,3 +1,4 @@
 /bouncer/ @martin-chainflip
 /state-chain/custom-rpc/ @chainflip-io/web
-/engine/config/CI/config/Settings.toml @tomjohnburton
+/engine/config/CI/config/Settings.toml @chainflip-io/platform
+/localnet/ @chainflip-io/platform
