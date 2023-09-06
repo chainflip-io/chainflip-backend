@@ -65,13 +65,13 @@ pub mod pallet {
 		pub call: OpaqueCall,
 		/// Accounts who have already approved the proposal.
 		pub approved: BTreeSet<AccountId>,
-		/// Manual execution of the proposal.
-		pub manual: bool,
+		/// Proposal is pre authorised.
+		pub pre_authorised: bool,
 	}
 
 	impl<T> Default for Proposal<T> {
 		fn default() -> Self {
-			Self { call: Default::default(), approved: Default::default(), manual: false }
+			Self { call: Default::default(), approved: Default::default(), pre_authorised: false }
 		}
 	}
 
@@ -247,12 +247,12 @@ pub mod pallet {
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
-			manual: bool,
+			pre_authorise: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
 
-			let id = Self::push_proposal(call, manual);
+			let id = Self::push_proposal(call, pre_authorise);
 			Self::deposit_event(Event::Proposed(id));
 
 			Self::inner_approve(who, id)?;
@@ -531,7 +531,7 @@ impl<T: Config> Pallet<T> {
 		if proposal.approved.len() >
 			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
-			if proposal.manual {
+			if proposal.pre_authorised {
 				WhitelistedCalls::<T>::insert(approved_id, proposal.call);
 			} else {
 				ExecutionPipeline::<T>::append((proposal.call, approved_id));
@@ -593,11 +593,15 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
-	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, manual: bool) -> u32 {
+	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, pre_authorise: bool) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
 			proposal_id,
-			Proposal { call: call.encode(), approved: Default::default(), manual },
+			Proposal {
+				call: call.encode(),
+				approved: Default::default(),
+				pre_authorised: pre_authorise,
+			},
 		);
 		ProposalIdCounter::<T>::put(proposal_id);
 		ActiveProposals::<T>::append(ActiveProposal {
