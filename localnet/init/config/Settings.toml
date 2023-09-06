@@ -18,22 +18,45 @@ private_key_file = "./localnet/init/keys/eth_private_key_file"
 ws_node_endpoint = "ws://localhost:8546"
 http_node_endpoint = "http://localhost:8545"
 
+# optional
+#[eth.secondary_node]
+#ws_node_endpoint = "ws://localhost:8555"
+#http_node_endpoint = "http://localhost:8555"
+
 [dot.node]
 ws_node_endpoint = "ws://localhost:9945"
 http_node_endpoint = "http://localhost:9945"
+
+# optional
+#[dot.secondary_node]
+#ws_node_endpoint = "ws://localhost:8000"
+#http_node_endpoint = "http://localhost:8000"
 
 [btc.node]
 http_node_endpoint = "http://localhost:8332"
 rpc_user = "flip"
 rpc_password = "flip"
 
+# optional
+#[btc.secondary_node]
+# http_node_endpoint = "http://localhost:8332"
+# rpc_user = "flip"
+# rpc_password = "flip"
+
+# optional
 [health_check]
 hostname = "0.0.0.0"
 port = 5555
 
+# optional
 [prometheus]
 hostname = "0.0.0.0"
 port = 5566
 
 [signing]
 db_file = "/tmp/chainflip/bashful.db"
+
+# Optional log filtering
+# [log]
+# blacklist = "fake_tag001, fake_tag002"
+# whitelist = ""
