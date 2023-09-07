@@ -45,20 +45,20 @@ impl Authenticator {
 			peer.account_id,
 			pk_to_string(&peer.pubkey)
 		);
-		self.allowed_pubkeys
-			.write()
-			.unwrap()
-			.insert(peer.pubkey, peer.account_id.clone());
-		P2P_ALLOWED_PUBKEYS.inc();
+
+		let mut allowed_pubkeys = self.allowed_pubkeys.write().unwrap();
+		allowed_pubkeys.insert(peer.pubkey, peer.account_id.clone());
+		P2P_ALLOWED_PUBKEYS.set(allowed_pubkeys.len().try_into().unwrap());
 	}
 
 	pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
-		if let Some(account_id) = self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
+		let mut allowed_pubkeys = self.allowed_pubkeys.write().unwrap();
+		if let Some(account_id) = allowed_pubkeys.remove(peer_pubkey) {
 			trace!(
 				"Removed from the list of allowed peers: {account_id} (public key: {})",
 				pk_to_string(peer_pubkey)
 			);
-			P2P_ALLOWED_PUBKEYS.dec();
+			P2P_ALLOWED_PUBKEYS.set(allowed_pubkeys.len().try_into().unwrap());
 		}
 	}
 
