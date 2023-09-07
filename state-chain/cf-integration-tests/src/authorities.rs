@@ -64,33 +64,25 @@ fn authority_rotates_with_correct_sequence() {
 		.build()
 		.execute_with(|| {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
 
 			// Skip the first authority rotation, as key handover is guaranteed to succeed
 			// when rotating for the first time.
 			testnet.move_forward_blocks(EPOCH_BLOCKS);
 			testnet.submit_heartbeat_all_engines();
-			use state_chain_runtime::{BitcoinVault, System};
-			for _ in 0..20 {
-				testnet.move_forward_blocks(1);
-				println!(
-					"Block {:?}: \nValidator: {:?} \nVault: {:?}",
-					System::block_number(),
-					Validator::current_rotation_phase(),
-					BitcoinVault::status()
-				);
-			}
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
-			// assert_eq!( GENESIS_EPOCH + 1, Validator::epoch_index());
-			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
-			assert_eq!(AllVaults::status(), AsyncResult::Void);
 
-			testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS);
+			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index());
+
+			testnet.move_forward_blocks(EPOCH_BLOCKS);
 			testnet.submit_heartbeat_all_engines();
 
 			// Start the Authority and Vault rotation
 			// idle -> Keygen
-			testnet.move_forward_blocks(1);
+			testnet.move_forward_blocks(4);
 			assert!(matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeygensInProgress(..)
@@ -100,7 +92,7 @@ fn authority_rotates_with_correct_sequence() {
 			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeygenComplete));
 
 			// Key Handover complete.
-			testnet.move_forward_blocks(1);
+			testnet.move_forward_blocks(4);
 			assert!(matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeyHandoversInProgress(..)
@@ -109,22 +101,20 @@ fn authority_rotates_with_correct_sequence() {
 			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
 
 			// Activate new key.
-			testnet.move_forward_blocks(1);
-			// NOTE: weirdly, none of this is required
-			// assert!(
-			// 	matches!(Validator::current_rotation_phase(), RotationPhase::ActivatingKeys(..)),
-			// 	"We should be in the ActivatingKeys phase but are in {:?}",
-			// 	Validator::current_rotation_phase()
-			// );
-			// assert_eq!(
-			// 	AllVaults::status(),
-			// 	AsyncResult::Ready(VaultStatus::RotationComplete),
-			// 	"Rotation should be complete but vault status is {:?}",
-			// 	AllVaults::status()
-			// );
+			testnet.move_forward_blocks(2);
+			assert!(matches!(
+				Validator::current_rotation_phase(),
+				RotationPhase::ActivatingKeys(..)
+			));
+			assert_eq!(
+				AllVaults::status(),
+				AsyncResult::Ready(VaultStatus::RotationComplete),
+				"Rotation should be complete but vault status is {:?}",
+				AllVaults::status()
+			);
 
-			// // Rotating session
-			// testnet.move_forward_blocks(1);
+			// Rotating session
+			testnet.move_forward_blocks(1);
 			assert!(matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::SessionRotating(..)

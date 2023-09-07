@@ -58,7 +58,7 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 }
 
 // The minimum number of blocks a vault rotation should last
-const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
+const VAULT_ROTATION_BLOCKS: BlockNumber = 12;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ChainflipAccountState {

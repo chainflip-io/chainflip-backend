@@ -3,7 +3,7 @@ use super::*;
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
 use cf_primitives::{AccountRole, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
-use cf_traits::{AccountRoleRegistry, EpochInfo};
+use cf_traits::{AccountRoleRegistry, EpochInfo, VaultRotator};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
 use frame_support::{
@@ -217,7 +217,7 @@ impl Engine {
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
 			if self.state() == ChainflipAccountState::CurrentAuthority {
-				on_events!(
+				on_events! {
 					events,
 					RuntimeEvent::Validator(
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
@@ -276,66 +276,61 @@ impl Engine {
 								), RuntimeOrigin::none()));
 							});
 					}
-					RuntimeEvent::Validator(
+					RuntimeEvent::Validator(pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
 						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
 						// This is a simpler way to represent this in the tests. Representing in this way in the tests also means
 						// that for dot, given we don't have a key to sign with initially, it will work without extra test boilerplate.
 
-						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
-							// If we rotating let's witness the keys being rotated on the contract
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::Witnesser(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-											block_number: 100,
-											tx_id: [1u8; 32].into(),
-										}.into()),
-										epoch_index: Validator::epoch_index(),
-									}
-								), RuntimeOrigin::signed(self.node_id.clone())));
-							});
+						// If we rotating let's witness the keys being rotated on the contract
+						PENDING_EXTRINSICS.with_borrow_mut(|v| {
+							v.push_back((RuntimeCall::Witnesser(
+								pallet_cf_witnesser::Call::witness_at_epoch {
+									call: Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
+										block_number: 100,
+										tx_id: [1u8; 32].into(),
+									}.into()),
+									epoch_index: Validator::epoch_index(),
+								}
+							), RuntimeOrigin::signed(self.node_id.clone())));
+
+							v.push_back((RuntimeCall::Witnesser(
+								pallet_cf_witnesser::Call::witness_at_epoch {
+									call: Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
+										block_number: 100,
+										tx_id: [2u8; 32],
+									}.into()),
+									epoch_index: Validator::epoch_index()
+								}
+							), RuntimeOrigin::signed(self.node_id.clone())));
 
 							if Validator::epoch_index() == GENESIS_EPOCH {
-								PENDING_EXTRINSICS.with_borrow_mut(|v| {
-									v.push_back((RuntimeCall::Environment(
-										pallet_cf_environment::Call::witness_polkadot_vault_creation {
-											dot_pure_proxy_vault_key: Default::default(),
+								v.push_back((RuntimeCall::Environment(
+									pallet_cf_environment::Call::witness_polkadot_vault_creation {
+										dot_pure_proxy_vault_key: Default::default(),
+										tx_id: TxId {
+											block_number: 1,
+											extrinsic_index: 0,
+										},
+									}
+								), pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+							} else {
+								v.push_back((RuntimeCall::Witnesser(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call: Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+											block_number: 100,
 											tx_id: TxId {
-												block_number: 1,
-												extrinsic_index: 0,
+												block_number: 2,
+												extrinsic_index: 1,
 											},
-										}
-									), pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
-								});
-							}else {
-								PENDING_EXTRINSICS.with_borrow_mut(|v| {
-									v.push_back((RuntimeCall::Witnesser(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-												block_number: 100,
-												tx_id: TxId {
-													block_number: 2,
-													extrinsic_index: 1,
-												},
-											}.into()),
-											epoch_index: Validator::epoch_index()
-										}
-									), RuntimeOrigin::signed(self.node_id.clone())));
-
-									v.push_back((RuntimeCall::Witnesser(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
-												block_number: 100,
-												tx_id: [2u8; 32],
-											}.into()),
-											epoch_index: Validator::epoch_index()
-										}
-									), RuntimeOrigin::signed(self.node_id.clone())));
-							});
-						}
+										}.into()),
+										epoch_index: Validator::epoch_index()
+									}
+								), RuntimeOrigin::signed(self.node_id.clone())))
+							}
+						});
 					}
-				);
+				};
 			}
 
 			// Being funded we would be required to respond to keygen requests
@@ -460,7 +455,8 @@ pub fn dispatch_all_pending_extrinsics() {
 			let expect_ok = match call {
 				RuntimeCall::EthereumThresholdSigner(..) |
 				RuntimeCall::PolkadotThresholdSigner(..) |
-				RuntimeCall::BitcoinThresholdSigner(..) => {
+				RuntimeCall::BitcoinThresholdSigner(..) |
+				RuntimeCall::Environment(..) => {
 					// These are allowed to fail, since it is possible to sign things
 					// that have already succeeded
 					false
@@ -485,6 +481,11 @@ pub fn dispatch_all_pending_extrinsics() {
 						"Validator status: {:?}\nVault Status: {:?}",
 						Validator::current_rotation_phase(),
 						BitcoinVault::pending_vault_rotations()
+					),
+					RuntimeCall::Validator(..) => log::info!(
+						"Validator status: {:?}\nAllVaults Status: {:?}",
+						Validator::current_rotation_phase(),
+						AllVaults::status()
 					),
 					_ => {},
 				}
