@@ -1,9 +1,6 @@
 # This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
 name: Release Chainflip Development
-on:
-  pull_request:
-    branches:
-      - '*'
+on: push
 
 concurrency:
   group: ${{ github.ref }}-release-development
