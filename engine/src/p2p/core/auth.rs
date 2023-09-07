@@ -20,6 +20,34 @@ use utilities::metrics::{P2P_ALLOWED_PUBKEYS, P2P_DECLINED_CONNECTIONS};
 const ZAP_AUTH_SUCCESS: &str = "200";
 const ZAP_AUTH_FAILURE: &str = "400";
 
+struct AllowedPubkeysWrapper {
+	metric: &'static P2P_ALLOWED_PUBKEYS,
+	map: HashMap<XPublicKey, AccountId>,
+}
+
+impl AllowedPubkeysWrapper {
+	fn new() -> AllowedPubkeysWrapper {
+		AllowedPubkeysWrapper { metric: &P2P_ALLOWED_PUBKEYS, map: Default::default() }
+	}
+	fn get(&self, x_pub_key: &XPublicKey) -> Option<&AccountId> {
+		self.map.get(x_pub_key)
+	}
+	fn insert(&mut self, key: XPublicKey, value: AccountId) -> Option<AccountId> {
+		let result = self.map.insert(key, value);
+		if result.is_none() {
+			self.metric.inc();
+		}
+		result
+	}
+	fn remove(&mut self, key: &XPublicKey) -> Option<AccountId> {
+		let result = self.map.remove(key);
+		if result.is_some() {
+			self.metric.dec();
+		}
+		result
+	}
+}
+
 pub struct Authenticator {
 	// NOTE: we might be able to remove this mutex
 	// (not trivially though), but this field is only
@@ -31,12 +59,12 @@ pub struct Authenticator {
 	// require a mutex)
 
 	// We don't use BTreeSet because XPublicKey doesn't implement Ord
-	allowed_pubkeys: RwLock<HashMap<XPublicKey, AccountId>>,
+	allowed_pubkeys: RwLock<AllowedPubkeysWrapper>,
 }
 
 impl Authenticator {
 	fn new() -> Self {
-		Authenticator { allowed_pubkeys: Default::default() }
+		Authenticator { allowed_pubkeys: RwLock::new(AllowedPubkeysWrapper::new()) }
 	}
 
 	pub fn add_peer(&self, peer: &PeerInfo) {
@@ -46,19 +74,18 @@ impl Authenticator {
 			pk_to_string(&peer.pubkey)
 		);
 
-		let mut allowed_pubkeys = self.allowed_pubkeys.write().unwrap();
-		allowed_pubkeys.insert(peer.pubkey, peer.account_id.clone());
-		P2P_ALLOWED_PUBKEYS.set(allowed_pubkeys.len().try_into().unwrap());
+		self.allowed_pubkeys
+			.write()
+			.unwrap()
+			.insert(peer.pubkey, peer.account_id.clone());
 	}
 
 	pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
-		let mut allowed_pubkeys = self.allowed_pubkeys.write().unwrap();
-		if let Some(account_id) = allowed_pubkeys.remove(peer_pubkey) {
+		if let Some(account_id) = self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
 			trace!(
 				"Removed from the list of allowed peers: {account_id} (public key: {})",
 				pk_to_string(peer_pubkey)
 			);
-			P2P_ALLOWED_PUBKEYS.set(allowed_pubkeys.len().try_into().unwrap());
 		}
 	}
 

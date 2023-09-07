@@ -651,6 +651,21 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				)
 			},
 		}
+		let total = self
+			.keygen_states
+			.ceremony_handles
+			.values()
+			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+			.count() + self
+			.signing_states
+			.ceremony_handles
+			.values()
+			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+			.count();
+
+		UNAUTHORIZED_CEREMONY
+			.with_label_values(&[Chain::NAME])
+			.set(total.try_into().unwrap());
 	}
 
 	/// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
@@ -730,9 +745,6 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 					})
 					.count() + 1;
 
-				UNAUTHORIZED_CEREMONY
-					.with_label_values(&[Chain::NAME])
-					.set(total.try_into().unwrap());
 				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
 				self.ceremony_handles.insert(
 					ceremony_id,
