@@ -15,8 +15,9 @@ use cf_chains::{
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
-	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
-	EpochInfo, KeyProvider, SafeMode, SetSafeMode, VaultRotator, VaultStatus,
+	mocks::threshold_signer::{MockThresholdSigner, VerificationParams},
+	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, KeyProvider, SafeMode, SetSafeMode,
+	VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
@@ -125,11 +126,11 @@ fn start_panics_if_called_while_vault_rotation_in_progress() {
 
 #[test]
 fn keygen_success_triggers_keygen_verification() {
-	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
 		let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), rotation_epoch_index);
+		<VaultsPallet as VaultRotator>::keygen(candidates.clone(), rotation_epoch_index);
 		let ceremony_id = current_ceremony_id();
 
 		for candidate in &candidates {
@@ -146,6 +147,70 @@ fn keygen_success_triggers_keygen_verification() {
 			PendingVaultRotation::<Test, _>::get().unwrap(),
 			VaultRotationStatus::AwaitingKeygenVerification { .. }
 		));
+
+		let verification_request =
+			<Test as crate::Config>::ThresholdSigner::last_key_verification_request()
+				.expect("request should have been created");
+
+		assert_eq!(
+			verification_request,
+			VerificationParams {
+				participants: candidates,
+				key: NEW_AGG_PUB_KEY_PRE_HANDOVER,
+				epoch_index: rotation_epoch_index
+			}
+		);
+	});
+}
+
+#[test]
+fn handover_success_triggers_handover_verification() {
+	let authorities = BTreeSet::from_iter(ALL_CANDIDATES.iter().take(2).cloned());
+	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().skip(1).take(2).cloned());
+	let all_participants: BTreeSet<_> = authorities.union(&candidates).copied().collect();
+
+	new_test_ext().execute_with(|| {
+		let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
+
+		PendingVaultRotation::<Test, _>::put(VaultRotationStatus::KeygenVerificationComplete {
+			new_public_key: NEW_AGG_PUB_KEY_PRE_HANDOVER,
+		});
+
+		<VaultsPallet as VaultRotator>::key_handover(
+			authorities.clone(),
+			candidates.clone(),
+			rotation_epoch_index,
+		);
+
+		for candidate in &all_participants {
+			assert_ok!(VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(*candidate),
+				current_ceremony_id(),
+				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER),
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
+
+		assert!(matches!(
+			PendingVaultRotation::<Test, _>::get().unwrap(),
+			VaultRotationStatus::AwaitingKeyHandoverVerification { .. }
+		));
+
+		let verification_request =
+			<Test as crate::Config>::ThresholdSigner::last_key_verification_request()
+				.expect("request should have been created");
+
+		// Check that only candidates (i.e. receiving parties) receive the request,
+		// and the key is for the new epoch index (if participants wouldn't be able
+		// to use any existing key shares by mistake):
+		assert_eq!(
+			verification_request,
+			VerificationParams {
+				participants: candidates,
+				key: NEW_AGG_PUB_KEY_POST_HANDOVER,
+				epoch_index: rotation_epoch_index
+			}
 		);
 	});
 }
