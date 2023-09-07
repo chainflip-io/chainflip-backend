@@ -106,5 +106,15 @@ benchmarks! {
 		assert!(GovKeyWhitelistedCallHash::<T>::get().is_none());
 	}
 
+	dispatch_whitelisted_call {
+		let caller: T::AccountId = whitelisted_caller();
+		<Members<T>>::put(BTreeSet::from([caller.clone()]));
+		let call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
+			accounts: vec![]
+		}.into();
+		Pallet::<T>::push_proposal(Box::new(call.clone().into()), true);
+		WhitelistedGovCalls::<T>::insert(1, call.encode());
+	}: _(RawOrigin::Signed(caller.clone()), 1)
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

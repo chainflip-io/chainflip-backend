@@ -129,8 +129,10 @@ pub mod pallet {
 	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
 
+	/// Whitelisted pre authorised calls.
 	#[pallet::storage]
-	pub(super) type WhitelistedCalls<T> = StorageMap<_, Twox64Concat, u32, OpaqueCall, OptionQuery>;
+	pub(super) type WhitelistedGovCalls<T> =
+		StorageMap<_, Twox64Concat, u32, OpaqueCall, OptionQuery>;
 
 	/// Any nonces before this have been consumed.
 	#[pallet::storage]
@@ -433,14 +435,14 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::set_whitelisted_call_hash())]
+		#[pallet::weight(T::WeightInfo::dispatch_whitelisted_call())]
 		pub fn dispatch_whitelisted_call(
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			if let Some(call) = WhitelistedCalls::<T>::take(approved_id) {
+			if let Some(call) = WhitelistedGovCalls::<T>::take(approved_id) {
 				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
 					Self::deposit_event(match Self::dispatch_governance_call(call) {
 						Ok(_) => Event::Executed(approved_id),
@@ -532,7 +534,7 @@ impl<T: Config> Pallet<T> {
 			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
 			if proposal.pre_authorised {
-				WhitelistedCalls::<T>::insert(approved_id, proposal.call);
+				WhitelistedGovCalls::<T>::insert(approved_id, proposal.call);
 			} else {
 				ExecutionPipeline::<T>::append((proposal.call, approved_id));
 			}

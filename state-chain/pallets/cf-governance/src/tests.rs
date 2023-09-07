@@ -1,5 +1,6 @@
 use crate::{
 	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalIdCounter,
+	WhitelistedGovCalls,
 };
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
@@ -318,5 +319,20 @@ fn runtime_upgrade_can_have_no_cfes_version_requirement() {
 			None,
 			DUMMY_WASM_BLOB,
 		));
+	});
+}
+
+#[test]
+fn whitelisted_gov_call() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ALICE),
+			mock_extrinsic(),
+			true
+		));
+		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
+		assert!(WhitelistedGovCalls::<Test>::contains_key(1));
+		assert_ok!(Governance::dispatch_whitelisted_call(RuntimeOrigin::signed(CHARLES), 1));
+		assert!(!WhitelistedGovCalls::<Test>::contains_key(1));
 	});
 }
