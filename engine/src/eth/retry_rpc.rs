@@ -104,22 +104,23 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					let tx = tx.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						let mut transaction_request = Eip1559TransactionRequest {
-							to: Some(NameOrAddress::Address(tx.contract)),
-							data: Some(tx.data.into()),
-							chain_id: Some(tx.chain_id.into()),
-							value: Some(tx.value),
-							max_fee_per_gas: tx.max_fee_per_gas,
-							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
-							// geth uses the latest block gas limit as an upper bound
-							gas: None,
-							access_list: AccessList::default(),
-							from: Some(client.address()),
-							nonce: None,
-						};
+						let mut transaction_request =
+							TypedTransaction::Eip1559(Eip1559TransactionRequest {
+								to: Some(NameOrAddress::Address(tx.contract)),
+								data: Some(tx.data.into()),
+								chain_id: Some(tx.chain_id.into()),
+								value: Some(tx.value),
+								max_fee_per_gas: tx.max_fee_per_gas,
+								max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+								// geth uses the latest block gas limit as an upper bound
+								gas: None,
+								access_list: AccessList::default(),
+								from: Some(client.address()),
+								nonce: None,
+							});
 
 						let estimated_gas = client
-							.estimate_gas(&TypedTransaction::Eip1559(transaction_request.clone()))
+							.estimate_gas(&transaction_request)
 							.await
 							.context("Failed to estimate gas")?;
 
@@ -130,12 +131,12 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 										"Estimated gas is greater than the gas limit"
 									))
 								} else {
-									transaction_request.gas =
-										Some(gas_limit.min(MAX_GAS_LIMIT.into()));
+									transaction_request
+										.set_gas(gas_limit.min(MAX_GAS_LIMIT.into()));
 								},
 							None => {
 								// increase the estimate by 33% for normal transactions
-								transaction_request.gas = Some(
+								transaction_request.set_gas(
 									estimated_gas
 										.saturating_mul(U256::from(4u64))
 										.checked_div(U256::from(3u64))
