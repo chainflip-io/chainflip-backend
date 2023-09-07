@@ -249,7 +249,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 	) -> Self {
 		let (primary_signaller, primary_signal) = Signal::new();
 
-		scope.spawn(async move {
+		scope.spawn_weak(async move {
 			let client = primary_fut.await;
 			primary_signaller.signal((client, PrimaryOrSecondary::Primary));
 			Ok(())
@@ -258,7 +258,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 		let secondary_signal = if let Some(secondary_fut) = secondary_fut {
 			let (secondary_signaller, secondary_signal) = Signal::new();
 
-			scope.spawn(async move {
+			scope.spawn_weak(async move {
 				let client = secondary_fut.await;
 				secondary_signaller.signal((client, PrimaryOrSecondary::Secondary));
 				Ok(())
@@ -772,8 +772,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn backup_rpc_succeeds_if_primary_not_ready() {
-		const SCOPE_CANCEL_TEST: &str = "Cancel running scopes for test";
-		let scope_error = task_scope(|scope| {
+		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -808,17 +807,12 @@ mod tests {
 						.await
 				);
 
-				// We need to return error so the inner scope that is being used to create the
-				// client (that we've told to never finish creating) is cancelled.
-				Result::<()>::Err(anyhow::anyhow!(SCOPE_CANCEL_TEST))
+				Ok(())
 			}
 			.boxed()
 		})
 		.await
-		// We expect an error here since we deliberatey cancel the tasks.
-		.unwrap_err();
-		// Ensure it was not cancelled for some other reason.
-		assert_eq!(scope_error.to_string(), SCOPE_CANCEL_TEST);
+		.unwrap();
 	}
 
 	#[tokio::test]
