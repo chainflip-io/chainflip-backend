@@ -134,7 +134,7 @@ async fn start(
 		.await?;
 
 	state_chain_client
-		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+		.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
 			new_version: *CFE_VERSION,
 		})
 		.await
