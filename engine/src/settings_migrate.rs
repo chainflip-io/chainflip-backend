@@ -33,7 +33,8 @@ pub fn migrate_settings0_9_1_to_0_9_2(config_root: String) -> Result<()> {
 	let settings_file = PathBuf::from(config_root).join("config/Settings.toml");
 
 	if !settings_file.is_file() {
-		bail!("Unable to migrate. Please check that the Settings.toml file exists at {settings_file:?}");
+		tracing::warn!("Please check that the Settings.toml file exists at {settings_file:?}");
+		return Ok(())
 	}
 
 	let old_settings_table = std::fs::read_to_string(&settings_file)
