@@ -28,7 +28,7 @@ use crate::{
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
 use utilities::{
-	metrics::{CEREMONY_MANAGER_BAD_MSG, UNAUTHORIZED_CEREMONY},
+	metrics::{CEREMONY_BAD_MSG, UNAUTHORIZED_CEREMONY},
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 
@@ -430,7 +430,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 							match deserialize_for_version::<Chain::CryptoScheme>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
-									CEREMONY_MANAGER_BAD_MSG.with_label_values(&["deserialize_for_version", sender_id.to_string().as_str(), Chain::NAME]).inc();
+									CEREMONY_BAD_MSG.with_label_values(&["deserialize_for_version", Chain::NAME]).inc();
 									warn!("Failed to deserialize message from: {sender_id}");
 								},
 							}
@@ -712,23 +712,13 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Chain>(ceremony_id);
 			if ceremony_id > latest_ceremony_id + Chain::CEREMONY_ID_WINDOW {
-				CEREMONY_MANAGER_BAD_MSG
-					.with_label_values(&[
-						"unexpected_future_ceremony_id",
-						sender_id.to_string().as_str(),
-						Chain::NAME,
-					])
+				CEREMONY_BAD_MSG
+					.with_label_values(&["unexpected_future_ceremony_id", Chain::NAME])
 					.inc();
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {
-				CEREMONY_MANAGER_BAD_MSG
-					.with_label_values(&[
-						"old_ceremony_id",
-						sender_id.to_string().as_str(),
-						Chain::NAME,
-					])
-					.inc();
+				CEREMONY_BAD_MSG.with_label_values(&["old_ceremony_id", Chain::NAME]).inc();
 				trace!("Ignoring data: old ceremony id {ceremony_id_string}",);
 				return
 			} else {

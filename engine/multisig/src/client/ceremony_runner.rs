@@ -18,7 +18,7 @@ use tracing::{debug, warn, Instrument};
 use utilities::{
 	format_iterator,
 	metrics::{
-		DeleteMetricCommand, CEREMONY_PROCESSED_MSG, CEREMONY_RUNNER_BAD_MSG, DELETE_METRIC_CHANNEL,
+		DeleteMetricCommand, CEREMONY_BAD_MSG, CEREMONY_PROCESSED_MSG, DELETE_METRIC_CHANNEL,
 	},
 };
 
@@ -226,9 +226,7 @@ where
 		match &mut self.stage {
 			None => {
 				if !data.should_delay_unauthorised() {
-					CEREMONY_RUNNER_BAD_MSG
-						.with_label_values(&["non_initial_stage", sender_id.to_string().as_str()])
-						.inc();
+					CEREMONY_BAD_MSG.with_label_values(&["non_initial_stage", Chain::NAME]).inc();
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: non-initial stage data"
@@ -237,11 +235,8 @@ where
 				}
 
 				if !data.is_initial_stage_data_size_valid::<Chain>() {
-					CEREMONY_RUNNER_BAD_MSG
-						.with_label_values(&[
-							INCORRECT_NUMBER_ELEMENTS,
-							sender_id.to_string().as_str(),
-						])
+					CEREMONY_BAD_MSG
+						.with_label_values(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME])
 						.inc();
 					debug!(
 						from_id = sender_id.to_string(),
@@ -258,11 +253,8 @@ where
 				{
 					Some(idx) => idx,
 					None => {
-						CEREMONY_RUNNER_BAD_MSG
-							.with_label_values(&[
-								"not_valid_participant",
-								sender_id.to_string().as_str(),
-							])
+						CEREMONY_BAD_MSG
+							.with_label_values(&["not_valid_participant", Chain::NAME])
 							.inc();
 						debug!("Ignoring data: sender {sender_id} is not a valid participant",);
 						return None
@@ -274,11 +266,8 @@ where
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
 					stage.ceremony_common().number_of_signing_payloads,
 				) {
-					CEREMONY_RUNNER_BAD_MSG
-						.with_label_values(&[
-							INCORRECT_NUMBER_ELEMENTS,
-							sender_id.to_string().as_str(),
-						])
+					CEREMONY_BAD_MSG
+						.with_label_values(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME])
 						.inc();
 					debug!(
 						from_id = sender_id.to_string(),
@@ -336,8 +325,8 @@ where
 
 		match self.delayed_messages.entry(id.clone()) {
 			btree_map::Entry::Occupied(_) => {
-				CEREMONY_RUNNER_BAD_MSG
-					.with_label_values(&["redundant_delayed_msg", id.to_string().as_str()])
+				CEREMONY_BAD_MSG
+					.with_label_values(&["redundant_delayed_msg", Chain::NAME])
 					.inc();
 				warn!("Ignoring a redundant delayed message from {party_and_stage}");
 			},

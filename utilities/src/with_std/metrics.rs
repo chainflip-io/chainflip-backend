@@ -47,13 +47,10 @@ lazy_static::lazy_static! {
 	pub static ref P2P_MONITOR_EVENT: IntCounterVec = create_and_register_counter_vec("p2p_monitor_event", "Count the number of events observed by the zmq connection monitor", &["event_type"]);
 	pub static ref P2P_ALLOWED_PUBKEYS: IntGauge = create_and_register_gauge("p2p_allowed_pubkeys", "Count the number of allowed pubkeys");
 	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = create_and_register_gauge("p2p_declined_connections", "Count the number times we decline a connection");
-
 	pub static ref P2P_BAD_MSG: IntCounterVec = create_and_register_counter_vec("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"]);
 
-	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_manager_bad_msg", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id", &["reason", "sender_id", "chain"]);
 	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = create_and_register_gauge_vec("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation", &["chain"]);
-	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_runner_bad_msg", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id", &["reason", "sender_id"]);
-	pub static ref BROADCAST_BAD_MSG: IntCounterVec = create_and_register_counter_vec("broadcast_bad_msg", "Count all the bad msgs processed by the broadcast and labels them by the reason they got discarded and the sender Id", &["reason", "stage"]);
+	pub static ref CEREMONY_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony", &["reason", "chain"]);
 
 	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_msg", "Count all the processed messages for a given ceremony", &["ceremony_id"]);
 }

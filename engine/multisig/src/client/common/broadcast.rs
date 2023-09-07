@@ -9,13 +9,14 @@ use tracing::warn;
 
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
+	crypto::CryptoScheme,
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
-use utilities::metrics::{BROADCAST_BAD_MSG, CEREMONY_PROCESSED_MSG};
+use utilities::metrics::{CEREMONY_BAD_MSG, CEREMONY_PROCESSED_MSG};
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone
@@ -161,10 +162,10 @@ where
 		let m: Stage::Message = match m.try_into() {
 			Ok(m) => m,
 			Err(incorrect_type) => {
-				BROADCAST_BAD_MSG
+				CEREMONY_BAD_MSG
 					.with_label_values(&[
-						"incorrect_type",
-						self.get_stage_name().to_string().as_str(),
+						(self.get_stage_name().to_string() + " incorrect_type").as_str(),
+						C::Crypto::NAME,
 					])
 					.inc();
 				warn!(
@@ -176,10 +177,10 @@ where
 		};
 
 		if !self.common.all_idxs.contains(&signer_idx) {
-			BROADCAST_BAD_MSG
+			CEREMONY_BAD_MSG
 				.with_label_values(&[
-					"message_from_non_participant",
-					self.get_stage_name().to_string().as_str(),
+					(self.get_stage_name().to_string() + " message_from_non_participant").as_str(),
+					C::Crypto::NAME,
 				])
 				.inc();
 			warn!(
@@ -191,10 +192,10 @@ where
 
 		match self.messages.entry(signer_idx) {
 			btree_map::Entry::Occupied(_) => {
-				BROADCAST_BAD_MSG
+				CEREMONY_BAD_MSG
 					.with_label_values(&[
-						"redundant_message",
-						self.get_stage_name().to_string().as_str(),
+						(self.get_stage_name().to_string() + " redundant_message").as_str(),
+						C::Crypto::NAME,
 					])
 					.inc();
 				warn!(
