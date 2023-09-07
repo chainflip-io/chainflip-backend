@@ -174,6 +174,38 @@ impl ReconnectContext {
 	}
 }
 
+struct ActiveConnectionWrapper {
+	metric: &'static P2P_ACTIVE_CONNECTIONS,
+	map: BTreeMap<AccountId, ConnectedOutgoingSocket>,
+}
+
+impl ActiveConnectionWrapper {
+	fn new() -> ActiveConnectionWrapper {
+		ActiveConnectionWrapper { metric: &P2P_ACTIVE_CONNECTIONS, map: Default::default() }
+	}
+	fn get(&self, account_id: &AccountId) -> Option<&ConnectedOutgoingSocket> {
+		self.map.get(account_id)
+	}
+	fn insert(
+		&mut self,
+		key: AccountId,
+		value: ConnectedOutgoingSocket,
+	) -> Option<ConnectedOutgoingSocket> {
+		let result = self.map.insert(key, value);
+		if result.is_none() {
+			self.metric.inc();
+		}
+		result
+	}
+	fn remove(&mut self, key: &AccountId) -> Option<ConnectedOutgoingSocket> {
+		let result = self.map.remove(key);
+		if result.is_some() {
+			self.metric.dec();
+		}
+		result
+	}
+}
+
 /// The state a nodes needs for p2p
 struct P2PContext {
 	/// Our own key, used for initiating and accepting secure connections
@@ -183,7 +215,7 @@ struct P2PContext {
 	authenticator: Arc<Authenticator>,
 	/// NOTE: The mapping is from AccountId because we want to optimise for message
 	/// sending, which uses AccountId
-	active_connections: BTreeMap<AccountId, ConnectedOutgoingSocket>,
+	active_connections: ActiveConnectionWrapper,
 	/// NOTE: this is used for incoming messages when we want to map them to account_id
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
@@ -242,7 +274,7 @@ pub(super) fn start(
 		key: p2p_key.encryption_key.clone(),
 		monitor_handle,
 		authenticator,
-		active_connections: Default::default(),
+		active_connections: ActiveConnectionWrapper::new(),
 		x25519_to_account_id: Default::default(),
 		peer_infos: Default::default(),
 		reconnect_context: ReconnectContext::new(reconnect_sender),
@@ -373,7 +405,6 @@ impl P2PContext {
 		// TODO: ensure that stale/inactive connections are terminated
 
 		if let Some(existing_socket) = self.active_connections.remove(&account_id) {
-			P2P_ACTIVE_CONNECTIONS.dec();
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
 			error!("Failed remove unknown peer: {account_id}");
@@ -392,9 +423,7 @@ impl P2PContext {
 	fn handle_monitor_event(&mut self, event: MonitorEvent) {
 		match event {
 			MonitorEvent::ConnectionFailure(account_id) => {
-				if let Some(_existing_socket) = self.active_connections.remove(&account_id) {
-					P2P_ACTIVE_CONNECTIONS.dec();
-				} else {
+				let Some(_existing_socket) = self.active_connections.remove(&account_id) else {
 					// NOTE: this should not happen, but this guards against any surprising ZMQ
 					// behaviour
 					error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
@@ -428,7 +457,6 @@ impl P2PContext {
 		let connected_socket = socket.connect(peer);
 
 		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
-		P2P_ACTIVE_CONNECTIONS.inc();
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
@@ -448,7 +476,6 @@ impl P2PContext {
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
-			P2P_ACTIVE_CONNECTIONS.dec();
 			debug!(
 				peer_info = peer.to_string(),
 				"Received info for known peer with account id {}, updating info and reconnecting",
