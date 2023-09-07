@@ -95,7 +95,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 		&self,
 		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
-		// We arbitrarily set the MAX_GAS_LIMIT we are willing to have on a transaction to 10M.
+		// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
 		const MAX_GAS_LIMIT: u128 = 10_000_000;
 		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
 		self.rpc_retry_client
