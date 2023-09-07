@@ -5,6 +5,9 @@ on:
         type: string
         required: true
 
+env:
+  FORCE_COLOR: 1
+
 jobs:
   release:
     runs-on: ubuntu-${{ matrix.ubuntu_version }}

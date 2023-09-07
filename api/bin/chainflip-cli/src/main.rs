@@ -276,21 +276,21 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	impl std::fmt::Display for Keys {
 		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			writeln!(f, "🔑 Node public key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(f, "🔑 Node Public Key: 0x{}", hex::encode(&self.node_key.public_key))?;
 			writeln!(
 				f,
-				"🔑 Ethereum public key: 0x{}",
+				"🔑 Ethereum Public Key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
+			writeln!(f, "👤 Ethereum Address: {:?}", self.ethereum_address)?;
 			writeln!(
 				f,
-				"🔑 Validator public key: 0x{}",
+				"🔑 Validator Public Key: 0x{}",
 				hex::encode(&self.signing_key.public_key)
 			)?;
-			writeln!(f, "👤 Validator account id: {}", self.signing_account_id)?;
+			writeln!(f, "👤 Validator Account ID: {}", self.signing_account_id)?;
 			writeln!(f)?;
-			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
+			writeln!(f, "🌱 Seed Phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
 	}
@@ -356,7 +356,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	} else if !json {
 		println!();
 		println!("💡 You can save the private key files to a directory using the --path argument:");
-		println!("💡 `chainflip-cli --seed $MY_SEED_PHRASE --file $PATH_TO_KEYS_DIR`");
+		println!("💡 `chainflip-cli --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())
