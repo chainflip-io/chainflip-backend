@@ -729,7 +729,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets available for swaps in a given direction
 	///
 	/// This function never panics.
-	#[allow(dead_code)]
 	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
 		self.fixed_pools[!SD::INPUT_SIDE]
 			.iter()
