@@ -27,8 +27,7 @@ use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
-	make_periodic_tick,
-	metrics::{self, Prometheus},
+	make_periodic_tick, metrics,
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };
@@ -120,12 +119,8 @@ async fn start(
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
 	}
 
-	if let Some(prometheus_config) = &settings.prometheus {
-		let prometheus_settings = Prometheus {
-			hostname: prometheus_config.hostname.clone(),
-			port: prometheus_config.port,
-		};
-		metrics::start(scope, &prometheus_settings).await?;
+	if let Some(prometheus_settings) = &settings.prometheus {
+		metrics::start(scope, prometheus_settings).await?;
 	}
 
 	let (state_chain_stream, state_chain_client) =

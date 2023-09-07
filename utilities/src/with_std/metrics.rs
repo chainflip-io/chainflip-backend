@@ -7,7 +7,8 @@ use super::{super::Port, task_scope};
 use async_channel::{unbounded, Receiver, Sender};
 use lazy_static;
 use prometheus::{IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry};
-use std::{net::IpAddr, sync::Mutex};
+use serde::Deserialize;
+use std::net::IpAddr;
 use tracing::info;
 use warp::Filter;
 
@@ -16,36 +17,25 @@ pub enum DeleteMetricCommand {
 	GaugePair(IntGaugeVec, Vec<String>),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Prometheus {
 	pub hostname: String,
 	pub port: Port,
 }
 
-#[derive(Clone)]
-struct LabelDeletionBuffer {
-	delete_metric_receiver: Receiver<DeleteMetricCommand>,
-}
-
-impl LabelDeletionBuffer {
-	fn prepare_metric_to_delete(&self) -> Vec<DeleteMetricCommand> {
-		let mut metric_pair = vec![];
-		while let Ok(msg) = self.delete_metric_receiver.try_recv() {
-			metric_pair.push(msg);
-		}
-
-		metric_pair
+fn collect_metric_to_delete() -> Vec<DeleteMetricCommand> {
+	let mut metric_pair = vec![];
+	while let Ok(msg) = DELETE_METRIC_CHANNEL.1.try_recv() {
+		metric_pair.push(msg);
 	}
+
+	metric_pair
 }
 
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
 
-	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Mutex<Option<Receiver<DeleteMetricCommand>>>) = {
-		let (sender, receiver) = unbounded::<DeleteMetricCommand>();
-		let mutex_receiver = Mutex::new(Some(receiver));
-		(sender, mutex_receiver)
-	};
+	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
 
 	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpc_method"]);
 	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = create_and_register_counter_vec("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpc_method"]);
@@ -60,7 +50,7 @@ lazy_static::lazy_static! {
 
 	pub static ref P2P_BAD_MSG: IntCounterVec = create_and_register_counter_vec("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"]);
 
-	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_manager_bad_msg", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id", &["reason", "sender_id"]);
+	pub static ref CEREMONY_MANAGER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_manager_bad_msg", "Count all the bad msgs received by the ceremony manager and labels them by the reason they got discarded and the sender Id", &["reason", "sender_id", "chain"]);
 	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = create_and_register_gauge_vec("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation", &["chain"]);
 	pub static ref CEREMONY_RUNNER_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_runner_bad_msg", "Count all the bad msgs received by the ceremony runner and labels them by the reason they got discarded and the sender Id", &["reason", "sender_id"]);
 	pub static ref BROADCAST_BAD_MSG: IntCounterVec = create_and_register_counter_vec("broadcast_bad_msg", "Count all the bad msgs processed by the broadcast and labels them by the reason they got discarded and the sender Id", &["reason", "stage"]);
@@ -102,16 +92,8 @@ pub async fn start<'a, 'env>(
 	const PATH: &str = "metrics";
 
 	let future = {
-		let delete_metrics: LabelDeletionBuffer = LabelDeletionBuffer {
-			delete_metric_receiver: (*DELETE_METRIC_CHANNEL.1.lock().unwrap()).take().unwrap(),
-		};
-		warp::serve(
-			warp::any()
-				.and(warp::path(PATH))
-				.and(warp::path::end())
-				.map(move || metrics_handler(&delete_metrics)),
-		)
-		.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
+		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(metrics_handler))
+			.bind((prometheus_settings.hostname.parse::<IpAddr>()?, prometheus_settings.port))
 	};
 
 	scope.spawn_weak(async move {
@@ -122,11 +104,11 @@ pub async fn start<'a, 'env>(
 	Ok(())
 }
 
-fn metrics_handler(delete_metrics: &LabelDeletionBuffer) -> String {
+fn metrics_handler() -> String {
 	use prometheus::Encoder;
 	let encoder = prometheus::TextEncoder::new();
 
-	let metric_pair = delete_metrics.prepare_metric_to_delete();
+	let metric_pairs = collect_metric_to_delete();
 	let mut buffer = Vec::new();
 	if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
 		tracing::error!("could not encode custom metrics: {}", e);
@@ -138,13 +120,13 @@ fn metrics_handler(delete_metrics: &LabelDeletionBuffer) -> String {
 			String::default()
 		},
 	};
-	delete_labels(metric_pair);
+	delete_labels(&metric_pairs);
 	res
 }
 
-fn delete_labels(mut metric_pair: Vec<DeleteMetricCommand>) {
-	while let Some(metric_command) = metric_pair.pop() {
-		match metric_command {
+fn delete_labels(metric_pairs: &Vec<DeleteMetricCommand>) {
+	for command in metric_pairs {
+		match command {
 			DeleteMetricCommand::CounterPair(metric, labels) => {
 				let labels = labels.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
 				let _ = metric.remove_label_values(&labels);
