@@ -270,7 +270,7 @@ export async function testGasLimitCcmSwaps() {
 
   const gasLimitSwapsSufBudget = [
     // 7.5% (or 0.75%) of the input amount used for gas to achieve a gasLimitBudget ~= 4-500k, which is enough for the CCM broadcast.
-    testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 750),
+    testGasLimitSwap('DOT', 'FLIP', ' sufBudget', undefined, 500),
     testGasLimitSwap('ETH', 'USDC', ' sufBudget', undefined, 7500),
     testGasLimitSwap('FLIP', 'ETH', ' sufBudget', undefined, 6000),
     testGasLimitSwap('BTC', 'ETH', ' sufBudget', undefined, 750),
