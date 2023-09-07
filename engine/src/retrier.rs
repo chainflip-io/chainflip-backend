@@ -286,15 +286,15 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 				PrimaryOrSecondary::Secondary => {
 					tokio::select! {
 						biased;
-						client = secondary_signal.wait() => client,
-						client = primary_signal.wait() => client,
+						client_and_type = secondary_signal.wait() => client_and_type,
+						client_and_type = primary_signal.wait() => client_and_type,
 					}
 				},
 				PrimaryOrSecondary::Primary => {
 					tokio::select! {
 						biased;
-						client = primary_signal.wait() => client,
-						client = secondary_signal.wait() => client,
+						client_and_type = primary_signal.wait() => client_and_type,
+						client_and_type = secondary_signal.wait() => client_and_type,
 					}
 				},
 			},
