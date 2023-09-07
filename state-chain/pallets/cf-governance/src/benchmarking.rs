@@ -112,7 +112,7 @@ benchmarks! {
 		let call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
 			accounts: vec![]
 		}.into();
-		Pallet::<T>::push_proposal(Box::new(call.clone().into()), true);
+		Pallet::<T>::push_proposal(Box::new(call.clone()), true);
 		WhitelistedGovCalls::<T>::insert(1, call.encode());
 	}: _(RawOrigin::Signed(caller.clone()), 1)
 
