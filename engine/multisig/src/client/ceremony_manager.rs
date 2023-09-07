@@ -394,6 +394,21 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				}
 			},
 		}
+		let total = self
+			.keygen_states
+			.ceremony_handles
+			.values()
+			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+			.count() + self
+			.signing_states
+			.ceremony_handles
+			.values()
+			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+			.count();
+
+		UNAUTHORIZED_CEREMONY
+			.with_label_values(&[Chain::NAME])
+			.set(total.try_into().unwrap());
 	}
 
 	pub async fn run(
