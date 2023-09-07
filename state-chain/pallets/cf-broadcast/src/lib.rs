@@ -559,6 +559,44 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Confirm a broadcast attempt.
+		///
+		/// This is required for chains that can't support native schnorr signatures. When this is
+		/// the case, validators are required to pay for the transaction fees and sign the
+		/// transaction. This call is used to confirm that the validator did indeed sign the
+		/// transaction without tampering with it.
+		///
+		/// By submitting this, the validator becomes eligible to be refunded when the transaction
+		/// suceeds.
+		#[pallet::weight(todo!())]
+		#[pallet::call_index(4)]
+		pub fn confirm_broadcast_attempt(
+			origin: OriginFor<T>,
+			broadcast_attempt_id: BroadcastAttemptId,
+			// TODO: Native signature is likely to be the same type as Threshold Signature. Maybe
+			// use one type?
+			transaction: TransactionFor<T, I>,
+			transaction_signature: <T::TargetChain as ChainCrypto>::NativeSignature,
+		) -> DispatchResult {
+			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?.into();
+
+			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+
+			// Only the nominated signer can say they failed to sign
+			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
+
+			// TODO:
+			// - Check if a confirmation is even required (ie. is this an evm chain?)
+			// - Check the signature is valid for the provided transaction
+			// - Ensure the signed transaction is compatible with the requested transaction (see
+			//   ev::match_against_recovered)
+			// - If the above checks pass, 'whitelist' the signer to be refunded up to the gas limit
+			//   for this transaction.
+
+			Ok(())
+		}
 	}
 }
 
