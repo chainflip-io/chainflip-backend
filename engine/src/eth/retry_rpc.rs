@@ -41,23 +41,25 @@ const MAX_BROADCAST_RETRIES: Attempt = 5;
 impl EthersRetryRpcClient {
 	pub fn new<EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
-		eth_rpc_client: EthRpcClientFut,
+		rpc_client: EthRpcClientFut,
+		backup_rpc_client: Option<EthRpcClientFut>,
 		sub_client: ReconnectSubscriptionClient,
+		backup_sub_client: Option<ReconnectSubscriptionClient>,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"eth_rpc",
-				eth_rpc_client,
-				None,
+				rpc_client,
+				backup_rpc_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
 				"eth_subscribe",
-				async move { sub_client },
-				None,
+				futures::future::ready(sub_client),
+				backup_sub_client.map(futures::future::ready),
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -351,14 +353,21 @@ mod tests {
 			async move {
 				let settings = Settings::new_test().unwrap();
 
-				let eth_rpc_client = EthRpcClient::new(settings.eth.clone(), 1337u64).unwrap();
+				let eth_rpc_client = EthRpcClient::new(
+					settings.eth.private_key_file,
+					settings.eth.node.http_node_endpoint,
+					1337u64,
+				)
+				.unwrap();
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
 					eth_rpc_client,
+					None,
 					ReconnectSubscriptionClient::new(
 						settings.eth.node.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
+					None,
 				);
 
 				let chain_id = retry_client.chain_id().await;

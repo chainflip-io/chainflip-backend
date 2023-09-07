@@ -234,29 +234,31 @@ mod tests {
 						http_node_endpoint: "http://localhost:8545".to_string(),
 					},
 					secondary_node: None,
-					private_key_file: PathBuf::from_str(
-						"/Users/kylezs/Documents/test-keys/eth-cf-metamask",
-					)
-					.unwrap(),
+					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
 				};
 
-				let rpc_client = EthRpcClient::new(eth_settings.clone(), 1337u64).unwrap();
+				let rpc_client = EthRpcClient::new(
+					eth_settings.private_key_file,
+					eth_settings.node.http_node_endpoint,
+					1337u64,
+				)
+				.unwrap();
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
 					rpc_client,
+					None,
 					ReconnectSubscriptionClient::new(
 						eth_settings.node.ws_node_endpoint,
 						web3::types::U256::from(10997),
 					),
+					None,
 				);
 
 				let (state_chain_stream, state_chain_client) =
 					StateChainClient::connect_with_account(
 						scope,
 						"ws://localhost:9944",
-						PathBuf::from_str("/Users/kylezs/Documents/test-keys/bashful-key")
-							.unwrap()
-							.as_path(),
+						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
 						AccountRole::None,
 						false,
 					)

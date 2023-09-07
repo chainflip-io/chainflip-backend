@@ -21,13 +21,17 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl BtcRetryRpcClient {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClient) -> Self {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		client: BtcRpcClient,
+		backup_client: Option<BtcRpcClient>,
+	) -> Self {
 		Self {
 			retry_client: RetrierClient::new(
 				scope,
 				"btc_rpc",
-				async move { btc_client },
-				None,
+				futures::future::ready(client),
+				backup_client.map(futures::future::ready),
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
