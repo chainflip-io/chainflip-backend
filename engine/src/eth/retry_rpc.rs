@@ -355,7 +355,7 @@ mod tests {
 
 				let eth_rpc_client = EthRpcClient::new(
 					settings.eth.private_key_file,
-					settings.eth.node.http_node_endpoint,
+					settings.eth.nodes.primary.http_node_endpoint,
 					1337u64,
 				)
 				.unwrap();
@@ -364,7 +364,7 @@ mod tests {
 					eth_rpc_client,
 					None,
 					ReconnectSubscriptionClient::new(
-						settings.eth.node.ws_node_endpoint,
+						settings.eth.nodes.primary.ws_node_endpoint,
 						web3::types::U256::from(1337),
 					),
 					None,

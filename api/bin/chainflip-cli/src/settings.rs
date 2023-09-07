@@ -252,7 +252,7 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.node.ws_node_endpoint, "ws://localhost:8545");
+		assert_eq!(settings.eth.nodes.primary.ws_node_endpoint, "ws://localhost:8545");
 	}
 
 	#[test]
@@ -273,8 +273,8 @@ mod tests {
 				eth_ws_node_endpoint: Some("ws://endpoint2:1234".to_owned()),
 				eth_http_node_endpoint: Some("http://endpoint3:1234".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
-				eth_secondary_ws_node_endpoint: Some("ws://endpoint4:1234".to_owned()),
-				eth_secondary_http_node_endpoint: Some("http://endpoint5:1234".to_owned()),
+				eth_backup_ws_node_endpoint: Some("ws://endpoint4:1234".to_owned()),
+				eth_backup_http_node_endpoint: Some("http://endpoint5:1234".to_owned()),
 			},
 
 			cmd: CliCommand::Rotate {}, // Not used in this test
@@ -292,20 +292,23 @@ mod tests {
 			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
 			settings.state_chain.signing_key_file
 		);
-		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.node.ws_node_endpoint);
+		assert_eq!(
+			opts.eth_opts.eth_ws_node_endpoint.unwrap(),
+			settings.eth.nodes.primary.ws_node_endpoint
+		);
 		assert_eq!(
 			opts.eth_opts.eth_http_node_endpoint.unwrap(),
-			settings.eth.node.http_node_endpoint
+			settings.eth.nodes.primary.http_node_endpoint
 		);
 
-		let eth_secondary_node = settings.eth.secondary_node.unwrap();
+		let eth_backup_node = settings.eth.nodes.backup.unwrap();
 		assert_eq!(
-			opts.eth_opts.eth_secondary_ws_node_endpoint.unwrap(),
-			eth_secondary_node.ws_node_endpoint
+			opts.eth_opts.eth_backup_ws_node_endpoint.unwrap(),
+			eth_backup_node.ws_node_endpoint
 		);
 		assert_eq!(
-			opts.eth_opts.eth_secondary_http_node_endpoint.unwrap(),
-			eth_secondary_node.http_node_endpoint
+			opts.eth_opts.eth_backup_http_node_endpoint.unwrap(),
+			eth_backup_node.http_node_endpoint
 		);
 
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);

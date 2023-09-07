@@ -259,7 +259,7 @@ mod tests {
 
 		let client = EthRpcClient::new(
 			settings.eth.private_key_file,
-			settings.eth.node.http_node_endpoint,
+			settings.eth.nodes.primary.http_node_endpoint,
 			2u64,
 		)
 		.unwrap()

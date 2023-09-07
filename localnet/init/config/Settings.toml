@@ -19,7 +19,7 @@ ws_node_endpoint = "ws://localhost:8546"
 http_node_endpoint = "http://localhost:8545"
 
 # optional
-#[eth.secondary_node]
+#[eth.backup_node]
 #ws_node_endpoint = "ws://localhost:8555"
 #http_node_endpoint = "http://localhost:8555"
 
@@ -28,7 +28,7 @@ ws_node_endpoint = "ws://localhost:9945"
 http_node_endpoint = "http://localhost:9945"
 
 # optional
-#[dot.secondary_node]
+#[dot.backup_node]
 #ws_node_endpoint = "ws://localhost:8000"
 #http_node_endpoint = "http://localhost:8000"
 
@@ -38,7 +38,7 @@ rpc_user = "flip"
 rpc_password = "flip"
 
 # optional
-#[btc.secondary_node]
+#[btc.backup_node]
 # http_node_endpoint = "http://localhost:8332"
 # rpc_user = "flip"
 # rpc_password = "flip"

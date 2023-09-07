@@ -237,7 +237,7 @@ async fn start(
 	);
 
 	let (eth_backup_rpc, eth_backup_sub) =
-		if let Some(backup_ws_http_endpoints) = settings.eth.secondary_node {
+		if let Some(backup_ws_http_endpoints) = settings.eth.nodes.backup {
 			(
 				Some(EthRpcClient::new(
 					settings.eth.private_key_file.clone(),
@@ -257,18 +257,21 @@ async fn start(
 		scope,
 		EthRpcClient::new(
 			settings.eth.private_key_file,
-			settings.eth.node.http_node_endpoint,
+			settings.eth.nodes.primary.http_node_endpoint,
 			expected_chain_id.as_u64(),
 		)?,
 		eth_backup_rpc,
-		ReconnectSubscriptionClient::new(settings.eth.node.ws_node_endpoint, expected_chain_id),
+		ReconnectSubscriptionClient::new(
+			settings.eth.nodes.primary.ws_node_endpoint,
+			expected_chain_id,
+		),
 		eth_backup_sub,
 	);
 
 	let btc_client = BtcRetryRpcClient::new(
 		scope,
-		BtcRpcClient::new(settings.btc.node)?,
-		if let Some(backup_node) = settings.btc.secondary_node {
+		BtcRpcClient::new(settings.btc.nodes.primary)?,
+		if let Some(backup_node) = settings.btc.nodes.backup {
 			Some(BtcRpcClient::new(backup_node)?)
 		} else {
 			None
@@ -276,7 +279,7 @@ async fn start(
 	);
 
 	let (dot_backup_rpc, dot_backup_sub) =
-		if let Some(backup_ws_http_endpoints) = { settings.dot.secondary_node } {
+		if let Some(backup_ws_http_endpoints) = settings.dot.nodes.backup {
 			(
 				Some(DotHttpRpcClient::new(backup_ws_http_endpoints.http_node_endpoint)?),
 				Some(DotSubClient::new(&backup_ws_http_endpoints.ws_node_endpoint)),
@@ -287,9 +290,9 @@ async fn start(
 
 	let dot_client = DotRetryRpcClient::new(
 		scope,
-		DotHttpRpcClient::new(settings.dot.node.http_node_endpoint)?,
+		DotHttpRpcClient::new(settings.dot.nodes.primary.http_node_endpoint)?,
 		dot_backup_rpc,
-		DotSubClient::new(&settings.dot.node.ws_node_endpoint),
+		DotSubClient::new(&settings.dot.nodes.primary.ws_node_endpoint),
 		dot_backup_sub,
 	);
 

@@ -218,7 +218,7 @@ mod tests {
 			retry_rpc::EthersRetryRpcClient,
 			rpc::{EthRpcClient, ReconnectSubscriptionClient},
 		},
-		settings::{self, WsHttpEndpoints},
+		settings::{self, NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
@@ -229,17 +229,19 @@ mod tests {
 		task_scope(|scope| {
 			async {
 				let eth_settings = settings::Eth {
-					node: WsHttpEndpoints {
-						ws_node_endpoint: "ws://localhost:8546".to_string(),
-						http_node_endpoint: "http://localhost:8545".to_string(),
+					nodes: NodeContainer {
+						primary: WsHttpEndpoints {
+							ws_node_endpoint: "ws://localhost:8546".to_string(),
+							http_node_endpoint: "http://localhost:8545".to_string(),
+						},
+						backup: None,
 					},
-					secondary_node: None,
 					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
 				};
 
 				let rpc_client = EthRpcClient::new(
 					eth_settings.private_key_file,
-					eth_settings.node.http_node_endpoint,
+					eth_settings.nodes.primary.http_node_endpoint,
 					1337u64,
 				)
 				.unwrap();
@@ -248,7 +250,7 @@ mod tests {
 					rpc_client,
 					None,
 					ReconnectSubscriptionClient::new(
-						eth_settings.node.ws_node_endpoint,
+						eth_settings.nodes.primary.ws_node_endpoint,
 						web3::types::U256::from(10997),
 					),
 					None,
