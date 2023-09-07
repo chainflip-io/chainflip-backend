@@ -5,7 +5,8 @@
 // Before:
 // [eth]
 // # Ethereum private key file path. Default is the docker secrets path. This file should contain a
-// hex-encoded private key. private_key_file = "./localnet/init/keys/eth_private_key_file"
+// hex-encoded private key.
+// private_key_file = "./localnet/init/keys/eth_private_key_file"
 // ws_node_endpoint = "ws://localhost:8546"
 // http_node_endpoint = "http://localhost:8545"
 //
@@ -13,8 +14,8 @@
 //
 // [eth]
 // # Ethereum private key file path. Default is the docker secrets path. This file should contain a
-// hex-encoded private key. private_key_file = "./localnet/init/keys/eth_private_key_file"
-
+// hex-encoded private key.
+// private_key_file = "./localnet/init/keys/eth_private_key_file"
 // [eth.node]
 // ws_node_endpoint = "ws://localhost:8546"
 // http_node_endpoint = "http://localhost:8545"
@@ -23,7 +24,7 @@ use std::{fs, path::PathBuf};
 
 use toml::Table;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 const PRIVATE_KEY_FILE: &str = "private_key_file";
 const WS_NODE_ENDPOINT: &str = "ws_node_endpoint";
@@ -62,8 +63,9 @@ pub fn migrate_settings0_9_1_to_0_9_2(config_root: String) -> Result<()> {
 		};
 
 	if !migrate {
-		tracing::info!("No settings migration required. Already up to date.");
 		return Ok(())
+	} else {
+		tracing::info!("Migrating settings to 0.9.2");
 	}
 
 	let mut new_settings_table = old_settings_table.clone();
@@ -108,9 +110,9 @@ pub fn migrate_settings0_9_1_to_0_9_2(config_root: String) -> Result<()> {
 
 	fs::write(
 		settings_file,
-		toml::to_string(&new_settings_table).context("Unable to new Settings to TOML")?,
+		toml::to_string(&new_settings_table).context("Unable to serialize new Settings to TOML")?,
 	)
-	.context("Unable to write Settings.toml for migration")?;
+	.context("Unable to write to {settings_file} for migration")?;
 
 	Ok(())
 }

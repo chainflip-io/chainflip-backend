@@ -55,8 +55,3 @@ port = 5566
 
 [signing]
 db_file = "/tmp/chainflip/bashful.db"
-
-# Optional log filtering
-# [log]
-# blacklist = "fake_tag001, fake_tag002"
-# whitelist = ""

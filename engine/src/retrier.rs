@@ -765,9 +765,7 @@ mod tests {
 	}
 
 	async fn get_client(ready: bool) {
-		if ready {
-			// ()
-		} else {
+		if !ready {
 			futures::future::pending().await
 		}
 	}
@@ -811,7 +809,7 @@ mod tests {
 				);
 
 				// We need to return error so the inner scope that is being used to create the
-				// client that will never create is cancelled.
+				// client (that we've told to never finish creating) is cancelled.
 				Result::<()>::Err(anyhow::anyhow!(SCOPE_CANCEL_TEST))
 			}
 			.boxed()
@@ -819,7 +817,7 @@ mod tests {
 		.await
 		// We expect an error here since we deliberatey cancel the tasks.
 		.unwrap_err();
-		// Ensure it was cancelled for some other reason.
+		// Ensure it was not cancelled for some other reason.
 		assert_eq!(scope_error.to_string(), SCOPE_CANCEL_TEST);
 	}
 

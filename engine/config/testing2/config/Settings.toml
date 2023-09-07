@@ -1,4 +1,4 @@
-# Is just some random different settings from Settings.toml.
+# Is just some random different settings from ../../testing/config/Settings.toml.
 # Isn't intended to be correct/real values!
 # It's also not ideal the paths have to specified with a /config prefix...
 [node_p2p]

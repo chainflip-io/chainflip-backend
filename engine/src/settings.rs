@@ -746,7 +746,7 @@ mod tests {
 	}
 
 	#[test]
-	fn init_default_config() {
+	fn settings_valid_if_only_all_the_environment_set() {
 		set_test_env();
 
 		let settings = Settings::new(CommandLineOptions::default())
@@ -824,7 +824,7 @@ mod tests {
 		.unwrap();
 
 		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
-		// by comparing it another settings.
+		// by comparing it to a different settings file.
 		let different_settings_config_path = "config/testing2/";
 		assert_ne!(
 			custom_base_path_settings,
