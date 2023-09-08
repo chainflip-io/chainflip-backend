@@ -10,6 +10,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
+use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -265,7 +266,7 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		println!("Submitting governance proposal for rotation.");
 		self.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
 			call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
-			pre_authorise: false,
+			execution: ExecutionMode::Scheduled,
 		})
 		.await
 		.until_finalized()

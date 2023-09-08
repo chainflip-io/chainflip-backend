@@ -52,6 +52,18 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
+	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub enum ExecutionMode {
+		Scheduled,
+		Manual,
+	}
+
+	impl Default for ExecutionMode {
+		fn default() -> Self {
+			Self::Scheduled
+		}
+	}
+
 	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 	pub struct ActiveProposal {
 		pub proposal_id: ProposalId,
@@ -66,12 +78,16 @@ pub mod pallet {
 		/// Accounts who have already approved the proposal.
 		pub approved: BTreeSet<AccountId>,
 		/// Proposal is pre authorised.
-		pub pre_authorised: bool,
+		pub execution: ExecutionMode,
 	}
 
 	impl<T> Default for Proposal<T> {
 		fn default() -> Self {
-			Self { call: Default::default(), approved: Default::default(), pre_authorised: false }
+			Self {
+				call: Default::default(),
+				approved: Default::default(),
+				execution: Default::default(),
+			}
 		}
 	}
 
@@ -129,9 +145,9 @@ pub mod pallet {
 	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
 
-	/// Whitelisted pre authorised calls.
+	/// Pre authorised governance calls.
 	#[pallet::storage]
-	pub(super) type WhitelistedGovCalls<T> =
+	pub(super) type PreAuthorisedGovCalls<T> =
 		StorageMap<_, Twox64Concat, u32, OpaqueCall, OptionQuery>;
 
 	/// Any nonces before this have been consumed.
@@ -249,12 +265,12 @@ pub mod pallet {
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
-			pre_authorise: bool,
+			execution: ExecutionMode,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
 
-			let id = Self::push_proposal(call, pre_authorise);
+			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
 			Self::inner_approve(who, id)?;
@@ -442,7 +458,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			if let Some(call) = WhitelistedGovCalls::<T>::take(approved_id) {
+			if let Some(call) = PreAuthorisedGovCalls::<T>::take(approved_id) {
 				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
 					Self::deposit_event(match Self::dispatch_governance_call(call) {
 						Ok(_) => Event::Executed(approved_id),
@@ -533,8 +549,8 @@ impl<T: Config> Pallet<T> {
 		if proposal.approved.len() >
 			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
-			if proposal.pre_authorised {
-				WhitelistedGovCalls::<T>::insert(approved_id, proposal.call);
+			if proposal.execution == ExecutionMode::Manual {
+				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);
 			} else {
 				ExecutionPipeline::<T>::append((proposal.call, approved_id));
 			}
@@ -595,15 +611,11 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
-	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, pre_authorise: bool) -> u32 {
+	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, execution: ExecutionMode) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
 			proposal_id,
-			Proposal {
-				call: call.encode(),
-				approved: Default::default(),
-				pre_authorised: pre_authorise,
-			},
+			Proposal { call: call.encode(), approved: Default::default(), execution },
 		);
 		ProposalIdCounter::<T>::put(proposal_id);
 		ActiveProposals::<T>::append(ActiveProposal {

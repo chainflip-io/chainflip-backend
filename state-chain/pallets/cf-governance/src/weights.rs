@@ -185,8 +185,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	/// Storage: `Governance::Members` (r:1 w:1)
 	/// Proof: `Governance::Members` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Governance::WhitelistedGovCalls` (r:1 w:1)
-	/// Proof: `Governance::WhitelistedGovCalls` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Governance::PreAuthorisedGovCalls` (r:1 w:1)
+	/// Proof: `Governance::PreAuthorisedGovCalls` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn dispatch_whitelisted_call() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `190`
@@ -338,8 +338,8 @@ impl WeightInfo for () {
 	}
 	/// Storage: `Governance::Members` (r:1 w:1)
 	/// Proof: `Governance::Members` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Governance::WhitelistedGovCalls` (r:1 w:1)
-	/// Proof: `Governance::WhitelistedGovCalls` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Governance::PreAuthorisedGovCalls` (r:1 w:1)
+	/// Proof: `Governance::PreAuthorisedGovCalls` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn dispatch_whitelisted_call() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `190`
