@@ -354,7 +354,7 @@ pub mod pallet {
 
 				let mut retries = BroadcastRetryQueue::<T, I>::take();
 
-				if retries.len() >= num_retries_that_fit {
+				if retries.len() > num_retries_that_fit {
 					BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
 				}
 

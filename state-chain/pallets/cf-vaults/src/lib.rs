@@ -891,15 +891,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			participants,
 			new_agg_key,
 			next_epoch,
+			signature_callback_fn,
 		);
-
-		T::ThresholdSigner::register_callback(request_id, signature_callback_fn(request_id))
-			.unwrap_or_else(|e| {
-				log::error!(
-				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
-				e.into()
-			);
-			});
 
 		PendingVaultRotation::<T, I>::put(status_to_set);
 
