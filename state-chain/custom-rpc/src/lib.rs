@@ -258,8 +258,8 @@ pub trait CustomApi {
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
-	#[subscription(name = "subscribe_price", item = Price)]
-	fn cf_subscribe_price(&self, from: Asset, to: Asset);
+	#[subscription(name = "subscribe_pool_price", item = Price)]
+	fn cf_subscribe_pool_price(&self, from: Asset, to: Asset);
 }
 
 /// An RPC extension for the state chain node.
@@ -678,7 +678,7 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_subscribe_price(
+	fn cf_subscribe_pool_price(
 		&self,
 		sink: SubscriptionSink,
 		from: Asset,
