@@ -744,7 +744,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.collect()
 	}
 
-	/// Returns all the assets available for swaps between (inclusively) two prices
+	/// Returns all the assets available for swaps between two prices (inclusive..exclusive)
 	///
 	/// This function never panics.
 	pub(super) fn depth<SD: SwapDirection>(
@@ -757,7 +757,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			Self::validate_tick::<Infallible>(range.end).map_err(|_| DepthError::InvalidTick)?;
 		if start <= end {
 			Ok(self.fixed_pools[!SD::INPUT_SIDE]
-				.range(start..=end)
+				.range(start..end)
 				.map(|(_, fixed_pool)| fixed_pool.available)
 				.fold(Default::default(), |acc, x| acc + x))
 		} else {
