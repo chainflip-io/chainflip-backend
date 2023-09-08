@@ -126,11 +126,15 @@ fn delete_labels(metric_pairs: &Vec<DeleteMetricCommand>) {
 		match command {
 			DeleteMetricCommand::CounterPair(metric, labels) => {
 				let labels = labels.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-				let _ = metric.remove_label_values(&labels);
+				if let Err(e) = metric.remove_label_values(&labels) {
+					tracing::error!("error removing label values: {}", e);
+				}
 			},
 			DeleteMetricCommand::GaugePair(metric, labels) => {
 				let labels = labels.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-				let _ = metric.remove_label_values(&labels);
+				if let Err(e) = metric.remove_label_values(&labels) {
+					tracing::error!("error removing label values: {}", e);
+				}
 			},
 		}
 	}
