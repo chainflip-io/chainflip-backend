@@ -517,7 +517,7 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 }
 
 fn do_full_key_rotation() {
-	assert_eq!(MockOptimisticActivation::get(), false, "Test expects non-optimistic activation");
+	assert!(!MockOptimisticActivation::get(), "Test expects non-optimistic activation");
 
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Void);
@@ -670,7 +670,7 @@ fn do_full_key_rotation() {
 
 #[test]
 fn keygen_report_success() {
-	new_test_ext().execute_with(|| do_full_key_rotation());
+	new_test_ext().execute_with(do_full_key_rotation);
 }
 
 #[test]

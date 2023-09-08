@@ -831,7 +831,7 @@ where
 			RequestType::KeygenVerification { key, participants, epoch_index },
 		);
 
-		if let Err(_) = Self::register_callback(request_id, on_signature_ready(request_id)) {
+		if Self::register_callback(request_id, on_signature_ready(request_id)).is_err() {
 			// We should never fail to register a callback for a request that we just created.
 			log_or_panic!("Failed to register callback for request {}", request_id);
 		}
