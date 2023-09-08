@@ -192,16 +192,12 @@ impl ActiveConnectionWrapper {
 		value: ConnectedOutgoingSocket,
 	) -> Option<ConnectedOutgoingSocket> {
 		let result = self.map.insert(key, value);
-		if result.is_none() {
-			self.metric.inc();
-		}
+		self.metric.set(self.map.len().try_into().unwrap());
 		result
 	}
 	fn remove(&mut self, key: &AccountId) -> Option<ConnectedOutgoingSocket> {
 		let result = self.map.remove(key);
-		if result.is_some() {
-			self.metric.dec();
-		}
+		self.metric.set(self.map.len().try_into().unwrap());
 		result
 	}
 }
