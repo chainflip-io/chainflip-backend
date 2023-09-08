@@ -35,7 +35,7 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
       await chainflip.tx.liquidityProvider
-        .registerliquidityRefundAddress({ [assetToChain(ccy)]: refundAddress })
+        .registerLiquidityRefundAddress({ [assetToChain(ccy)]: refundAddress })
         .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
     });
   }
