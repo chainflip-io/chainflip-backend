@@ -286,7 +286,7 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 
 pub struct PolkadotCrypto;
 impl ChainCrypto for PolkadotCrypto {
-	type ImmutableKeys = ConstBool<true>;
+	type ImmutableKeys = ConstBool<false>;
 
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
