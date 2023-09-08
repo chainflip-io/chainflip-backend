@@ -3,7 +3,8 @@
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
-INITIAL_CONTAINERS="bitcoin geth polkadot redis"
+INITIAL_CONTAINERS="init"
+CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 
 source ./localnet/helper.sh
@@ -52,7 +53,6 @@ get-workflow() {
 }
 build-localnet() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
-  cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
   echo
 
   if [ -z "${BINARIES_LOCATION}" ]; then
@@ -79,9 +79,11 @@ build-localnet() {
   else
       echo "wscat is already installed."
   fi
+  echo "🔮 Initializing Network"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
@@ -124,8 +126,7 @@ build-localnet() {
 
 build-localnet-in-ci() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
-  cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
-
+  echo
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
     exit 1
@@ -137,8 +138,11 @@ build-localnet-in-ci() {
     fi
   done
 
-  echo "🏗 Building network"
+  echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
+
+  echo "🏗 Building network"
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null

@@ -1,5 +1,13 @@
 version: "3.9"
 services:
+  init:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:perseverance-0.9-rc4-1-node-lisc
+    container_name: init
+    platform: linux/amd64
+    volumes:
+      - "/tmp/chainflip/data:/localnet-initial-state"
+    command: /bin/sh -c "cp -R /initial-state/* /localnet-initial-state"
+
   redis:
     image: redis:6.2.6
     ports:
@@ -8,7 +16,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc4-1-node-arb-test
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-0.9-rc4-1-node-lisc
     container_name: geth
     platform: linux/amd64
     ports:
