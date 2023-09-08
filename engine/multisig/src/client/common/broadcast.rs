@@ -164,7 +164,7 @@ where
 			Err(incorrect_type) => {
 				CEREMONY_BAD_MSG
 					.with_label_values(&[
-						(self.get_stage_name().to_string() + " incorrect_type").as_str(),
+						&format!("incorrect_type ({})", self.get_stage_name()),
 						C::Crypto::NAME,
 					])
 					.inc();
@@ -179,7 +179,7 @@ where
 		if !self.common.all_idxs.contains(&signer_idx) {
 			CEREMONY_BAD_MSG
 				.with_label_values(&[
-					(self.get_stage_name().to_string() + " message_from_non_participant").as_str(),
+					&format!("message_from_non_participant ({})", self.get_stage_name()),
 					C::Crypto::NAME,
 				])
 				.inc();
@@ -194,7 +194,7 @@ where
 			btree_map::Entry::Occupied(_) => {
 				CEREMONY_BAD_MSG
 					.with_label_values(&[
-						(self.get_stage_name().to_string() + " redundant_message").as_str(),
+						&format!("redundant_message ({})", self.get_stage_name()),
 						C::Crypto::NAME,
 					])
 					.inc();
