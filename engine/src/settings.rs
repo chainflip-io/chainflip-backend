@@ -634,7 +634,6 @@ impl Settings {
 
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
-		tests::TestEnvironment::default();
 		Settings::load_settings_from_all_sources(
 			"config/testing/".to_owned(),
 			CommandLineOptions::default(),
