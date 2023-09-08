@@ -66,7 +66,9 @@ impl ValidateSettings for WsHttpEndpoints {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NodeContainer<NodeConfig> {
+	#[serde(rename = "node")]
 	pub primary: NodeConfig,
+	#[serde(rename = "backup_node")]
 	pub backup: Option<NodeConfig>,
 }
 
@@ -762,7 +764,7 @@ pub mod tests {
 
 	#[test]
 	fn settings_valid_if_only_all_the_environment_set() {
-		TestEnvironment::default();
+		let _guard = TestEnvironment::default();
 
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
