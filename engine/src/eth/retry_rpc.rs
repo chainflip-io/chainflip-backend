@@ -129,7 +129,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 						);
 
 						client
-							.send_transaction(transaction_request.into())
+							.send_transaction(transaction_request)
 							.await
 							.context("Failed to send ETH transaction")
 					})
