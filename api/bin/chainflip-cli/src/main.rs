@@ -80,15 +80,12 @@ async fn run_cli() -> Result<()> {
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
-						chain,
-						address,
-					},
+					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress { chain, address },
 				) => {
-					let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
+					let lra_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
 					let tx_hash =
-						api.lp_api().register_emergency_withdrawal_address(ewa_address).await?;
-					println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
+						api.lp_api().register_liquidity_refund_address(lra_address).await?;
+					println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 				},
 				Redeem { amount, eth_address, executor } => {
 					request_redemption(api, amount, eth_address, executor).await?;

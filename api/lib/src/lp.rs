@@ -99,15 +99,15 @@ impl LpApi for StateChainClient {}
 
 #[async_trait]
 pub trait LpApi: SignedExtrinsicApi {
-	async fn register_emergency_withdrawal_address(&self, address: EncodedAddress) -> Result<H256> {
+	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
-				pallet_cf_lp::Call::register_emergency_withdrawal_address { address },
+				pallet_cf_lp::Call::register_liquidity_refund_address { address },
 			))
 			.await
 			.until_finalized()
 			.await
-			.context("Registration for Emergency Withdrawal address failed.")?;
+			.context("Registration for Liquidity Refund Address failed.")?;
 		Ok(tx_hash)
 	}
 
