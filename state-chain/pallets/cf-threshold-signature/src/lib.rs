@@ -25,6 +25,7 @@ use cf_traits::{
 	EpochKey, KeyProvider, ThresholdSignerNomination,
 };
 
+use cf_runtime_utilities::log_or_panic;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
@@ -830,8 +831,10 @@ where
 			RequestType::KeygenVerification { key, participants, epoch_index },
 		);
 
-		Self::register_callback(request_id, on_signature_ready(request_id))
-			.expect("Request id was just generated, so must be valid");
+		if let Err(_) = Self::register_callback(request_id, on_signature_ready(request_id)) {
+			// We should never fail to register a callback for a request that we just created.
+			log_or_panic!("Failed to register callback for request {}", request_id);
+		}
 
 		request_id
 	}
