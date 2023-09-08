@@ -17,7 +17,7 @@ export const snowWhite = keyring.createFromUri(snowWhiteUri);
 
 export async function submitGovernanceExtrinsic(
   extrinsic: SubmittableExtrinsic<'promise'>,
-  preAuthorise = false,
+  preAuthorise = 0,
 ) {
   return snowWhiteMutex.runExclusive(async () =>
     chainflip.tx.governance
