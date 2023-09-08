@@ -5,7 +5,7 @@ use cf_amm::{
 	common::{Amount, Order, Price, Side, SideMap, Tick},
 	limit_orders, range_orders,
 	range_orders::Liquidity,
-	NewError, PoolState,
+	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -193,6 +193,7 @@ pub mod pallet {
 		common::Tick,
 		limit_orders,
 		range_orders::{self, Liquidity},
+		NewError,
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -956,6 +957,12 @@ pub struct PoolLiquidity {
 	pub range_orders: Vec<(Tick, Liquidity)>,
 }
 
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolDepth {
+	pub limit_orders: AssetsMap<Amount>,
+	pub range_orders: AssetsMap<Amount>,
+}
+
 impl<T: Config> Pallet<T> {
 	#[allow(clippy::too_many_arguments)]
 	fn inner_update_limit_order(
@@ -1241,6 +1248,43 @@ impl<T: Config> Pallet<T> {
 				})
 				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
 		)
+	}
+
+	pub fn pool_depth(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+		tick_range: Range<cf_amm::common::Tick>,
+	) -> Option<Result<PoolDepth, DispatchError>> {
+		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
+		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
+
+		let limit_orders = pool
+			.pool_state
+			.limit_order_depth(tick_range.clone())
+			.map_err(|error| {
+				match error {
+					limit_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
+					limit_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
+				}
+				.into()
+			})
+			.map(|side_map| asset_pair.side_map_to_assets_map(side_map));
+
+		let range_orders = pool
+			.pool_state
+			.range_order_depth(tick_range)
+			.map_err(|error| {
+				match error {
+					range_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
+					range_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
+				}
+				.into()
+			})
+			.map(|side_map| asset_pair.side_map_to_assets_map(side_map));
+
+		Some(limit_orders.and_then(|limit_orders| {
+			range_orders.map(|range_orders| PoolDepth { limit_orders, range_orders })
+		}))
 	}
 
 	pub fn pool_liquidity_providers(

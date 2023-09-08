@@ -9,7 +9,7 @@ use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders};
+use pallet_cf_pools::{AssetsMap, PoolDepth, PoolInfo, PoolLiquidity, PoolOrders};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
@@ -114,6 +114,11 @@ decl_runtime_apis!(
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
 		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo>;
+		fn cf_pool_depth(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Option<Result<PoolDepth, DispatchError>>;
 		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity>;
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,

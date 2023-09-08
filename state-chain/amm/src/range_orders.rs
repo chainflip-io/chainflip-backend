@@ -28,9 +28,9 @@ use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 
 use crate::common::{
-	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
-	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
+	tick_at_sqrt_price, Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
+	MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -342,6 +342,14 @@ pub enum CollectError {}
 #[derive(Debug)]
 pub enum RequiredAssetRatioError {
 	/// Invalid Tick range
+	InvalidTickRange,
+}
+
+#[derive(Debug)]
+pub enum DepthError {
+	/// Invalid Price
+	InvalidTick,
+	/// Start tick must be less than or equal to the end tick
 	InvalidTickRange,
 }
 
@@ -1012,6 +1020,49 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				(*tick, liquidity)
 			})
 			.collect()
+	}
+
+	pub(super) fn depth(
+		&self,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> Result<SideMap<Amount>, DepthError> {
+		if !is_tick_valid(lower_tick) || !is_tick_valid(upper_tick) {
+			return Err(DepthError::InvalidTick)
+		}
+
+		if lower_tick <= upper_tick {
+			let liquidity_at_lower_tick: Liquidity =
+				self.liquidity_map.range(..lower_tick).fold(0, |liquidity, (_, tick_delta)| {
+					liquidity.checked_add_signed(tick_delta.liquidity_delta).unwrap()
+				});
+
+			let (_liquidity, _tick, assets) = self
+				.liquidity_map
+				.range(lower_tick..upper_tick)
+				.map(|(tick, tick_delta)| (tick, tick_delta.liquidity_delta))
+				.chain(core::iter::once((&upper_tick, 0 /* value doesn't matter */)))
+				.fold(
+					(liquidity_at_lower_tick, lower_tick, SideMap::<Amount>::default()),
+					|(liquidity, previous_tick, assets), (current_tick, liquidity_delta)| {
+						(
+							liquidity.checked_add_signed(liquidity_delta).unwrap(),
+							*current_tick,
+							assets +
+								self.inner_liquidity_to_amounts::<false>(
+									liquidity,
+									previous_tick,
+									*current_tick,
+								)
+								.0,
+						)
+					},
+				);
+
+			Ok(assets)
+		} else {
+			Err(DepthError::InvalidTickRange)
+		}
 	}
 }
 

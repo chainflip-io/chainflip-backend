@@ -308,4 +308,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order_liquidity(&self) -> Vec<(Tick, Liquidity)> {
 		self.range_orders.liquidity()
 	}
+
+	pub fn limit_order_depth(
+		&self,
+		range: core::ops::Range<Tick>,
+	) -> Result<SideMap<Amount>, limit_orders::DepthError> {
+		Ok(SideMap {
+			zero: self.limit_orders.depth::<OneToZero>(range.clone())?,
+			one: self.limit_orders.depth::<ZeroToOne>(range)?,
+		})
+	}
+
+	pub fn range_order_depth(
+		&self,
+		range: core::ops::Range<Tick>,
+	) -> Result<SideMap<Amount>, range_orders::DepthError> {
+		self.range_orders.depth(range.start, range.end)
+	}
 }

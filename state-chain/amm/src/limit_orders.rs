@@ -206,6 +206,14 @@ pub enum SetFeesError {
 }
 
 #[derive(Debug)]
+pub enum DepthError {
+	/// Invalid Price
+	InvalidTick,
+	/// Start tick must be less than or equal to the end tick
+	InvalidTickRange,
+}
+
+#[derive(Debug)]
 pub enum MintError {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumLiquidity,
@@ -734,5 +742,26 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.iter()
 			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
 			.collect()
+	}
+
+	/// Returns all the assets available for swaps between (inclusively) two prices
+	///
+	/// This function never panics.
+	pub(super) fn depth<SD: SwapDirection>(
+		&self,
+		range: core::ops::Range<Tick>,
+	) -> Result<Amount, DepthError> {
+		let start =
+			Self::validate_tick::<Infallible>(range.start).map_err(|_| DepthError::InvalidTick)?;
+		let end =
+			Self::validate_tick::<Infallible>(range.end).map_err(|_| DepthError::InvalidTick)?;
+		if start <= end {
+			Ok(self.fixed_pools[!SD::INPUT_SIDE]
+				.range(start..=end)
+				.map(|(_, fixed_pool)| fixed_pool.available)
+				.fold(Default::default(), |acc, x| acc + x))
+		} else {
+			Err(DepthError::InvalidTickRange)
+		}
 	}
 }
