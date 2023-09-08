@@ -5,7 +5,7 @@ use crate::{
 	*,
 };
 use cf_utilities::SliceToArray;
-use sp_core::{ConstBool, H160};
+use sp_core::H160;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
