@@ -8,15 +8,16 @@ use ethers::{
 	},
 };
 
-use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
+	common::option_inner,
 	eth::rpc::EthRpcApi,
 	retrier::{Attempt, RequestLog, RetrierClient},
+	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use super::{
 	rpc::{EthRpcClient, ReconnectSubscriptionClient},
@@ -25,7 +26,7 @@ use super::{
 use crate::eth::rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 
 #[derive(Clone)]
 pub struct EthersRetryRpcClient {
@@ -39,14 +40,28 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl EthersRetryRpcClient {
-	pub fn new<EthRpcClientFut: Future<Output = EthRpcClient> + Send + 'static>(
+	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		rpc_client: EthRpcClientFut,
-		backup_rpc_client: Option<EthRpcClientFut>,
-		sub_client: ReconnectSubscriptionClient,
-		backup_sub_client: Option<ReconnectSubscriptionClient>,
-	) -> Self {
-		Self {
+		private_key_file: PathBuf,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_chain_id: U256,
+	) -> Result<Self> {
+		let f_create_clients = |endpoints: WsHttpEndpoints| {
+			Result::<_, anyhow::Error>::Ok((
+				EthRpcClient::new(
+					private_key_file.clone(),
+					endpoints.http_node_endpoint,
+					expected_chain_id.as_u64(),
+				)?,
+				ReconnectSubscriptionClient::new(endpoints.ws_node_endpoint, expected_chain_id),
+			))
+		};
+
+		let (rpc_client, sub_client) = f_create_clients(nodes.primary)?;
+		let (backup_rpc_client, backup_sub_client) =
+			option_inner(nodes.backup.map(f_create_clients).transpose()?);
+
+		Ok(Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"eth_rpc",
@@ -63,7 +78,7 @@ impl EthersRetryRpcClient {
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-		}
+		})
 	}
 }
 
@@ -353,22 +368,13 @@ mod tests {
 			async move {
 				let settings = Settings::new_test().unwrap();
 
-				let eth_rpc_client = EthRpcClient::new(
-					settings.eth.private_key_file,
-					settings.eth.nodes.primary.http_node_endpoint,
-					1337u64,
-				)
-				.unwrap();
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					eth_rpc_client,
-					None,
-					ReconnectSubscriptionClient::new(
-						settings.eth.nodes.primary.ws_node_endpoint,
-						web3::types::U256::from(1337),
-					),
-					None,
-				);
+					settings.eth.private_key_file,
+					settings.eth.nodes,
+					U256::from(1337u64),
+				)
+				.unwrap();
 
 				let chain_id = retry_client.chain_id().await;
 				println!("chain_id: {}", chain_id);

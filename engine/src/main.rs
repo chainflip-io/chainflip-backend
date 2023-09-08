@@ -1,13 +1,10 @@
 use anyhow::Context;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
-	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
+	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
-	eth::{
-		retry_rpc::EthersRetryRpcClient,
-		rpc::{EthRpcClient, ReconnectSubscriptionClient},
-	},
+	dot::retry_rpc::DotRetryRpcClient,
+	eth::retry_rpc::EthersRetryRpcClient,
 	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	settings_migrate::migrate_settings0_9_1_to_0_9_2,
@@ -235,66 +232,14 @@ async fn start(
 			.await
 			.expect(STATE_CHAIN_CONNECTION),
 	);
-
-	let (eth_backup_rpc, eth_backup_sub) =
-		if let Some(backup_ws_http_endpoints) = settings.eth.nodes.backup {
-			(
-				Some(EthRpcClient::new(
-					settings.eth.private_key_file.clone(),
-					backup_ws_http_endpoints.http_node_endpoint,
-					expected_chain_id.as_u64(),
-				)?),
-				Some(ReconnectSubscriptionClient::new(
-					backup_ws_http_endpoints.ws_node_endpoint,
-					expected_chain_id,
-				)),
-			)
-		} else {
-			(None, None)
-		};
-
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
-		EthRpcClient::new(
-			settings.eth.private_key_file,
-			settings.eth.nodes.primary.http_node_endpoint,
-			expected_chain_id.as_u64(),
-		)?,
-		eth_backup_rpc,
-		ReconnectSubscriptionClient::new(
-			settings.eth.nodes.primary.ws_node_endpoint,
-			expected_chain_id,
-		),
-		eth_backup_sub,
-	);
-
-	let btc_client = BtcRetryRpcClient::new(
-		scope,
-		BtcRpcClient::new(settings.btc.nodes.primary)?,
-		if let Some(backup_node) = settings.btc.nodes.backup {
-			Some(BtcRpcClient::new(backup_node)?)
-		} else {
-			None
-		},
-	);
-
-	let (dot_backup_rpc, dot_backup_sub) =
-		if let Some(backup_ws_http_endpoints) = settings.dot.nodes.backup {
-			(
-				Some(DotHttpRpcClient::new(backup_ws_http_endpoints.http_node_endpoint)?),
-				Some(DotSubClient::new(&backup_ws_http_endpoints.ws_node_endpoint)),
-			)
-		} else {
-			(None, None)
-		};
-
-	let dot_client = DotRetryRpcClient::new(
-		scope,
-		DotHttpRpcClient::new(settings.dot.nodes.primary.http_node_endpoint)?,
-		dot_backup_rpc,
-		DotSubClient::new(&settings.dot.nodes.primary.ws_node_endpoint),
-		dot_backup_sub,
-	);
+		settings.eth.private_key_file,
+		settings.eth.nodes,
+		expected_chain_id,
+	)?;
+	let btc_client = BtcRetryRpcClient::new(scope, settings.btc.nodes)?;
+	let dot_client = DotRetryRpcClient::new(scope, settings.dot.nodes)?;
 
 	witness::start::start(
 		scope,

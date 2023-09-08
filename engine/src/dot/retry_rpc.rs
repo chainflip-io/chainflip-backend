@@ -1,5 +1,7 @@
 use crate::{
+	common::option_inner,
 	retrier::Attempt,
+	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
@@ -8,7 +10,7 @@ use cf_chains::{
 };
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
-use futures_core::{Future, Stream};
+use futures_core::Stream;
 use sp_core::H256;
 use std::pin::Pin;
 use subxt::{
@@ -17,6 +19,8 @@ use subxt::{
 use utilities::task_scope::Scope;
 
 use crate::retrier::{RequestLog, RetrierClient};
+
+use anyhow::Result;
 
 use super::{
 	http_rpc::DotHttpRpcClient,
@@ -37,14 +41,23 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl DotRetryRpcClient {
-	pub fn new<DotHttpRpcClientFut: Future<Output = DotHttpRpcClient> + Send + 'static>(
+	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		rpc_client: DotHttpRpcClientFut,
-		backup_rpc_client: Option<DotHttpRpcClientFut>,
-		sub_client: DotSubClient,
-		backup_sub_client: Option<DotSubClient>,
-	) -> Self {
-		Self {
+		nodes: NodeContainer<WsHttpEndpoints>,
+	) -> Result<Self> {
+		let f_create_clients = |endpoints: WsHttpEndpoints| {
+			Result::<_, anyhow::Error>::Ok((
+				DotHttpRpcClient::new(endpoints.http_node_endpoint)?,
+				DotSubClient::new(&endpoints.ws_node_endpoint),
+			))
+		};
+
+		let (rpc_client, sub_client) = f_create_clients(nodes.primary)?;
+
+		let (backup_rpc_client, backup_sub_client) =
+			option_inner(nodes.backup.map(f_create_clients).transpose()?);
+
+		Ok(Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"dot_rpc",
@@ -61,7 +74,7 @@ impl DotRetryRpcClient {
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-		}
+		})
 	}
 }
 
@@ -295,11 +308,15 @@ mod tests {
 			async move {
 				let dot_retry_rpc_client = DotRetryRpcClient::new(
 					scope,
-					DotHttpRpcClient::new("http://127.0.0.1:9945".to_string()).unwrap(),
-					None,
-					DotSubClient::new("ws://127.0.0.1:9945"),
-					None,
-				);
+					NodeContainer {
+						primary: WsHttpEndpoints {
+							http_node_endpoint: "http://127.0.0.1:9945".to_string(),
+							ws_node_endpoint: "ws://127.0.0.1:9945".to_string(),
+						},
+						backup: None,
+					},
+				)
+				.unwrap();
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);

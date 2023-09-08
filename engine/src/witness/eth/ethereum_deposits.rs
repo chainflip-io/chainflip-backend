@@ -229,10 +229,7 @@ pub fn eth_ingresses_at_block<
 #[cfg(test)]
 mod tests {
 	use crate::{
-		eth::{
-			retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
-			rpc::{EthRpcClient, ReconnectSubscriptionClient},
-		},
+		eth::retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
 		settings::Settings,
 		witness::common::chain_source::Header,
 	};
@@ -323,19 +320,11 @@ mod tests {
 				let settings = Settings::new_test().unwrap();
 				let client = EthersRetryRpcClient::new(
 					scope,
-					EthRpcClient::new(
-						settings.eth.private_key_file,
-						settings.eth.nodes.primary.http_node_endpoint,
-						1337u64,
-					)
-					.unwrap(),
-					None,
-					ReconnectSubscriptionClient::new(
-						settings.eth.nodes.primary.ws_node_endpoint,
-						web3::types::U256::from(1337),
-					),
-					None,
-				);
+					settings.eth.private_key_file,
+					settings.eth.nodes,
+					U256::from(1337u64),
+				)
+				.unwrap();
 
 				let addresses = vec![
 					"41aD2bc63A2059f9b623533d87fe99887D794847".parse().unwrap(),

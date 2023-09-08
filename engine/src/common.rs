@@ -142,3 +142,10 @@ impl<T: Clone + Send + 'static> Signal<T> {
 		}
 	}
 }
+
+pub fn option_inner<T, S>(option_tup: Option<(T, S)>) -> (Option<T>, Option<S>) {
+	match option_tup {
+		Some((t, s)) => (Some(t), Some(s)),
+		None => (None, None),
+	}
+}

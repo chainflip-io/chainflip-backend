@@ -208,16 +208,13 @@ mod tests {
 
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
-	use sp_core::H160;
+	use sp_core::{H160, U256};
 	use utilities::task_scope::task_scope;
 
 	use super::super::eth_source::EthSource;
 
 	use crate::{
-		eth::{
-			retry_rpc::EthersRetryRpcClient,
-			rpc::{EthRpcClient, ReconnectSubscriptionClient},
-		},
+		eth::retry_rpc::EthersRetryRpcClient,
 		settings::{self, NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
@@ -239,22 +236,13 @@ mod tests {
 					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
 				};
 
-				let rpc_client = EthRpcClient::new(
-					eth_settings.private_key_file,
-					eth_settings.nodes.primary.http_node_endpoint,
-					1337u64,
-				)
-				.unwrap();
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					rpc_client,
-					None,
-					ReconnectSubscriptionClient::new(
-						eth_settings.nodes.primary.ws_node_endpoint,
-						web3::types::U256::from(10997),
-					),
-					None,
-				);
+					eth_settings.private_key_file,
+					eth_settings.nodes,
+					U256::from(1337u64),
+				)
+				.unwrap();
 
 				let (state_chain_stream, state_chain_client) =
 					StateChainClient::connect_with_account(
