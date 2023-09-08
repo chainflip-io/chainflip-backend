@@ -7,7 +7,6 @@ use chainflip_engine::{
 	eth::retry_rpc::EthersRetryRpcClient,
 	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
-	settings_migrate::migrate_settings0_9_1_to_0_9_2,
 	state_chain_observer::{
 		self,
 		client::{
@@ -47,12 +46,7 @@ enum CfeStatus {
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 
-	let opts = CommandLineOptions::parse();
-
-	// This is only necessary for the 0.9.1 to 0.9.2 upgrade. It can be removed in the future.
-	migrate_settings0_9_1_to_0_9_2(opts.config_root.clone())?;
-
-	let settings = Settings::new(opts).context("Error reading settings")?;
+	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
