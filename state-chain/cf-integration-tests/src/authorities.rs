@@ -272,7 +272,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			testnet.submit_heartbeat_all_engines();
 
 			// Run until key gen is completed.
-			testnet.move_forward_blocks(1);
+			testnet.move_forward_blocks(4);
 			assert!(
 				matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeygenComplete)),
 				"Keygen should be complete but is {:?}",
@@ -325,7 +325,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 			testnet.submit_heartbeat_all_engines();
 
 			// Run until key handover starts
-			testnet.move_forward_blocks(2);
+			testnet.move_forward_blocks(5);
 			assert!(
 				matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete)),
 				"Key handover should be complete but is {:?}",
@@ -341,11 +341,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 
 			// Authority rotation is stalled while in Code Red because of disabling dispatching
 			// witness extrinsics and so witnessing vault rotation will be stalled.
-			assert!(
-				matches!(AllVaults::status(), AsyncResult::Pending),
-				"Key handover should be complete but is {:?}",
-				AllVaults::status()
-			);
+			assert!(matches!(AllVaults::status(), AsyncResult::Pending));
 
 			// We activate witnessing calls by setting safe mode to code green just for the
 			// witnesser pallet.
@@ -429,13 +425,13 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			// Rotate authority at least once to ensure epoch keys are set.
 			testnet.move_to_next_epoch();
 			testnet.submit_heartbeat_all_engines();
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
 			// Begin the second rotation.
 			testnet.move_forward_blocks(EPOCH_BLOCKS);
 			testnet.submit_heartbeat_all_engines();
-			testnet.move_forward_blocks(1);
+			testnet.move_forward_blocks(4);
 
 			// Make Key Handover fail. Only Bitcoin vault can fail during Key Handover.
 			// Ethereum and Polkadot do not need to wait for Key Handover.
@@ -450,7 +446,8 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 					Err(BTreeSet::default()),
 				));
 			});
-			testnet.move_forward_blocks(4);
+
+			testnet.move_forward_blocks(1);
 			assert!(matches!(
 				Validator::current_rotation_phase(),
 				RotationPhase::KeyHandoversInProgress(..)

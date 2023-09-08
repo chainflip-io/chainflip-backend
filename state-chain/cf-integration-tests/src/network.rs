@@ -59,7 +59,7 @@ pub fn create_testnet_with_new_funder() -> (Network, AccountId32) {
 		GENESIS_EPOCH,
 	);
 	// register the funds
-	testnet.move_forward_blocks(1);
+	testnet.move_forward_blocks(2);
 
 	(testnet, new_backup)
 }
@@ -128,6 +128,7 @@ impl Cli {
 	}
 
 	pub fn register_as_validator(account: &NodeId) {
+		System::inc_providers(account);
 		assert_ok!(<AccountRoles as AccountRoleRegistry<Runtime>>::register_account_role(
 			account,
 			AccountRole::Validator

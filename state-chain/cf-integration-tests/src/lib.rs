@@ -58,6 +58,7 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 }
 
 // The minimum number of blocks a vault rotation should last
+// 4 (keygen + key verification) + 4(key handover) + 2(activating_key) + 2(session rotating)
 const VAULT_ROTATION_BLOCKS: BlockNumber = 12;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]

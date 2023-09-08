@@ -4,11 +4,11 @@ use crate::network;
 use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
+use frame_support::traits::OnNewAccount;
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers, VanityNames};
-use state_chain_runtime::{Reputation, Runtime, Validator, AccountRoles};
-use frame_support::traits::OnNewAccount;
+use state_chain_runtime::{AccountRoles, Reputation, Runtime, Validator};
 
 #[test]
 fn account_deletion_removes_relevant_storage_items() {
@@ -29,7 +29,7 @@ fn account_deletion_removes_relevant_storage_items() {
 		);
 		testnet.move_forward_blocks(1);
 
-		AccountRoles::on_new_account(&backup_node.clone());
+		AccountRoles::on_new_account(&backup_node);
 		network::Cli::register_as_validator(&backup_node);
 
 		network::setup_peer_mapping(&backup_node);
