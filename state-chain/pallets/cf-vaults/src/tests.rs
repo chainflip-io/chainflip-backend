@@ -12,7 +12,7 @@ use cf_chains::{
 	evm::EvmCrypto,
 	mocks::{MockAggKey, MockOptimisticActivation},
 };
-use cf_primitives::GENESIS_EPOCH;
+use cf_primitives::{AuthorityCount, GENESIS_EPOCH};
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::threshold_signer::{MockThresholdSigner, VerificationParams},
@@ -579,7 +579,7 @@ fn do_full_key_rotation() {
 				.success_votes()
 				.get(&NEW_AGG_PUB_KEY_PRE_HANDOVER)
 				.expect("new key should have votes"),
-			&3
+			&(ALL_CANDIDATES.len() as AuthorityCount)
 		);
 		assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
 		assert_eq!(new_epoch_index, rotation_epoch);
@@ -600,17 +600,17 @@ fn do_full_key_rotation() {
 		VaultRotationStatus::KeygenVerificationComplete { .. }
 	));
 
-	const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+	const SHARING_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
 	VaultsPallet::key_handover(
-		BTreeSet::from(HANDOVER_PARTICIPANTS),
-		BTreeSet::from(HANDOVER_PARTICIPANTS),
+		BTreeSet::from(SHARING_PARTICIPANTS),
+		BTreeSet::from_iter(ALL_CANDIDATES.iter().copied()),
 		rotation_epoch,
 	);
 
 	let handover_ceremony_id = current_ceremony_id();
-	for p in HANDOVER_PARTICIPANTS {
+	for p in ALL_CANDIDATES {
 		assert_ok!(VaultsPallet::report_key_handover_outcome(
-			RuntimeOrigin::signed(p),
+			RuntimeOrigin::signed(*p),
 			handover_ceremony_id,
 			Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
 		));
@@ -1224,24 +1224,22 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		// Key handover
-		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+		const SHARING_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
 		VaultsPallet::key_handover(
-			BTreeSet::from(HANDOVER_PARTICIPANTS),
-			BTreeSet::from(HANDOVER_PARTICIPANTS),
+			BTreeSet::from(SHARING_PARTICIPANTS),
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			rotation_epoch,
 		);
 
 		let handover_ceremony_id = current_ceremony_id();
-		assert_ok!(VaultsPallet::report_key_handover_outcome(
-			RuntimeOrigin::signed(ALICE),
-			handover_ceremony_id,
-			Err(Default::default())
-		));
-		assert_ok!(VaultsPallet::report_key_handover_outcome(
-			RuntimeOrigin::signed(BOB),
-			handover_ceremony_id,
-			Err(Default::default())
-		));
+
+		for p in ALL_CANDIDATES {
+			assert_ok!(VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(*p),
+				handover_ceremony_id,
+				Err(Default::default())
+			));
+		}
 
 		VaultsPallet::on_initialize(2);
 		assert!(matches!(
