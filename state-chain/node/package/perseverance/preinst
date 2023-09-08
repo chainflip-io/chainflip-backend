@@ -76,8 +76,8 @@ reload_systemctl() {
 # Main entry point
 main() {
     check_upgrade "$1"
-    stop_service
     check_version
+    stop_service
     backup_and_remove_systemd_overrides
     remove_old_logs
     purge_chaindata
