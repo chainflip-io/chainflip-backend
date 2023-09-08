@@ -60,6 +60,9 @@ pub enum RequestType<Key, Participants> {
 	/// Will use the current key and current authority set.
 	/// This signing request will be retried until success.
 	Standard,
+	/// Uses the provided key and selects new participants from the provided epoch.
+	/// This signing request will be retried until success.
+	Immutable(Key, EpochIndex),
 	/// Uses the recently generated key and the participants used to generate that key.
 	/// This signing request will only be attemped once, as failing this ought to result
 	/// in another Keygen ceremony.
@@ -67,7 +70,7 @@ pub enum RequestType<Key, Participants> {
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum ThresholdCeremonyType {
 	Standard,
 	KeygenVerification,
@@ -399,9 +402,12 @@ pub mod pallet {
 					let offenders = failed_ceremony_context.offenders();
 					num_offenders += offenders.len();
 					num_retries += 1;
+
 					let CeremonyContext {
 						request_context: RequestContext { request_id, attempt_count, payload },
 						threshold_ceremony_type,
+						key,
+						epoch,
 						..
 					} = failed_ceremony_context;
 
@@ -416,7 +422,14 @@ pub mod pallet {
 								request_id,
 								attempt_count.wrapping_add(1),
 								payload,
-								RequestType::Standard,
+								if <<T::TargetChainCrypto as ChainCrypto>::ImmutableKeys as Get<
+									bool,
+								>>::get()
+								{
+									RequestType::Immutable(key, epoch)
+								} else {
+									RequestType::Standard
+								},
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
@@ -683,23 +696,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			} else {
 				(
-					if let Some(EpochKey { key, epoch_index, .. }) =
-						T::KeyProvider::active_epoch_key().filter(
-							|EpochKey { key_state, .. }| {
-								key_state.is_available_for_request(request_id)
-							},
-						) {
-						if let Some(nominees) =
-							T::ThresholdSignerNomination::threshold_nomination_with_seed(
-								(request_id, attempt_count),
-								epoch_index,
-							) {
-							Ok((epoch_index, key, nominees))
-						} else {
-							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
+					{
+						match request_instruction.request_type {
+							RequestType::Standard => T::KeyProvider::active_epoch_key()
+								.and_then(|EpochKey { key_state, key, epoch_index }| {
+									if key_state.is_available_for_request(request_id) {
+										Some((key, epoch_index))
+									} else {
+										None
+									}
+								})
+								.ok_or_else(|| Event::<T, I>::CurrentKeyUnavailable {
+									request_id,
+									attempt_count,
+								}),
+							RequestType::Immutable(key, epoch_index) => Ok((key, epoch_index)),
+							_ => unreachable!("RequestType::KeygenVerification is handled above"),
 						}
-					} else {
-						Err(Event::<T, I>::CurrentKeyUnavailable { request_id, attempt_count })
+						.and_then(|(key, epoch_index)| {
+							if let Some(nominees) =
+								T::ThresholdSignerNomination::threshold_nomination_with_seed(
+									(request_id, attempt_count),
+									epoch_index,
+								) {
+								Ok((epoch_index, key, nominees))
+							} else {
+								Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
+							}
+						})
 					},
 					ThresholdCeremonyType::Standard,
 				)

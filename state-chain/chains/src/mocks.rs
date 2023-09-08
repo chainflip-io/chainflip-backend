@@ -5,7 +5,7 @@ use crate::{
 	*,
 };
 use cf_utilities::SliceToArray;
-use sp_core::H160;
+use sp_core::{ConstBool, H160};
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -17,6 +17,7 @@ pub type MockEthereumChannelId = u128;
 thread_local! {
 	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
 	static MOCK_OPTIMISTICE_ACTIVATION: RefCell<bool> = RefCell::new(false);
+	static MOCK_IMMUTABLE_KEYS: RefCell<bool> = RefCell::new(false);
 }
 
 pub struct MockKeyHandoverIsRequired;
@@ -44,6 +45,20 @@ impl MockOptimisticActivation {
 impl Get<bool> for MockOptimisticActivation {
 	fn get() -> bool {
 		MOCK_OPTIMISTICE_ACTIVATION.with(|v| *v.borrow())
+	}
+}
+
+pub struct MockImmutableKeys;
+
+impl MockImmutableKeys {
+	pub fn set(value: bool) {
+		MOCK_IMMUTABLE_KEYS.with(|v| *v.borrow_mut() = value);
+	}
+}
+
+impl Get<bool> for MockImmutableKeys {
+	fn get() -> bool {
+		MOCK_IMMUTABLE_KEYS.with(|v| *v.borrow())
 	}
 }
 
@@ -191,6 +206,8 @@ pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereumChainCrypto;
 impl ChainCrypto for MockEthereumChainCrypto {
+	type ImmutableKeys = MockImmutableKeys;
+
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;

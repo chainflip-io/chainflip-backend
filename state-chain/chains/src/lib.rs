@@ -138,6 +138,8 @@ pub trait Chain: Member + Parameter {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto {
+	type ImmutableKeys: Get<bool>;
+
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	type AggKey: MaybeSerializeDeserialize
 		+ Member

@@ -175,8 +175,10 @@ pub struct EpochStartData {
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	type ChainCrypto = BitcoinCrypto;
+
 	type KeyHandoverIsRequired = ConstBool<true>;
 	type OptimisticActivation = ConstBool<true>;
+
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;
@@ -201,6 +203,8 @@ pub enum PreviousOrCurrent {
 
 pub struct BitcoinCrypto;
 impl ChainCrypto for BitcoinCrypto {
+	type ImmutableKeys = ConstBool<true>;
+
 	type AggKey = AggKey;
 
 	// A single transaction can sign over multiple UTXOs

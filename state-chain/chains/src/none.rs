@@ -35,6 +35,7 @@ impl FeeRefundCalculator<NoneChain> for () {
 }
 pub struct NoneChainCrypto;
 impl ChainCrypto for NoneChainCrypto {
+	type ImmutableKeys = ConstBool<false>;
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();

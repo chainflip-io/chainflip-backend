@@ -18,11 +18,14 @@ use frame_support::sp_runtime::{
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
+	type ImmutableKeys = ConstBool<false>;
+
 	type AggKey = evm::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
