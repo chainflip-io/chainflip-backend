@@ -49,7 +49,7 @@ lazy_static::lazy_static! {
 	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = create_and_register_gauge("p2p_declined_connections", "Count the number times we decline a connection");
 	pub static ref P2P_BAD_MSG: IntCounterVec = create_and_register_counter_vec("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"]);
 
-	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = create_and_register_gauge_vec("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation", &["chain"]);
+	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = create_and_register_gauge_vec("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation", &["chain", "type"]);
 	pub static ref CEREMONY_BAD_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony", &["reason", "chain"]);
 
 	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = create_and_register_counter_vec("ceremony_msg", "Count all the processed messages for a given ceremony", &["ceremony_id"]);

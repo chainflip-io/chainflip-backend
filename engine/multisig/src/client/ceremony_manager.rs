@@ -394,21 +394,14 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				}
 			},
 		}
-		let total = self
-			.keygen_states
-			.ceremony_handles
-			.values()
-			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
-			.count() + self
-			.signing_states
-			.ceremony_handles
-			.values()
-			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
-			.count();
 
 		UNAUTHORIZED_CEREMONY
-			.with_label_values(&[Chain::NAME])
-			.set(total.try_into().unwrap());
+			.with_label_values(&[Chain::NAME, "signing"])
+			.set(self.signing_states.count_unauthorised_ceremonies().try_into().unwrap());
+
+		UNAUTHORIZED_CEREMONY
+			.with_label_values(&[Chain::NAME, "keygen"])
+			.set(self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap());
 	}
 
 	pub async fn run(
@@ -651,21 +644,14 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				)
 			},
 		}
-		let total = self
-			.keygen_states
-			.ceremony_handles
-			.values()
-			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
-			.count() + self
-			.signing_states
-			.ceremony_handles
-			.values()
-			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
-			.count();
+		
+		UNAUTHORIZED_CEREMONY
+			.with_label_values(&[Chain::NAME, "signing"])
+			.set(self.signing_states.count_unauthorised_ceremonies().try_into().unwrap());
 
 		UNAUTHORIZED_CEREMONY
-			.with_label_values(&[Chain::NAME])
-			.set(total.try_into().unwrap());
+			.with_label_values(&[Chain::NAME, "keygen"])
+			.set(self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap());
 	}
 
 	/// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
@@ -737,13 +723,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 				trace!("Ignoring data: old ceremony id {ceremony_id_string}",);
 				return
 			} else {
-				let total = self
-					.ceremony_handles
-					.values()
-					.filter(|handle| {
-						matches!(handle.request_state, CeremonyRequestState::Unauthorised(_))
-					})
-					.count() + 1;
+				let total = self.count_unauthorised_ceremonies() + 1;
 
 				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
 				self.ceremony_handles.insert(
@@ -810,6 +790,13 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			false
 		}
 	}
+
+	fn count_unauthorised_ceremonies(&self) -> usize {
+		self.ceremony_handles.values()
+		.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+		.count()
+	}
+
 }
 
 // ==================
