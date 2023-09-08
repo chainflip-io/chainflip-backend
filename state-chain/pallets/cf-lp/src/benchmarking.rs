@@ -13,7 +13,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
-		let _ = Pallet::<T>::register_emergency_withdrawal_address(
+		let _ = Pallet::<T>::register_liquidity_refund_address(
 			RawOrigin::Signed(caller.clone()).into(),
 			EncodedAddress::Eth(Default::default()),
 		);
@@ -46,7 +46,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
-		let _ = Pallet::<T>::register_emergency_withdrawal_address(
+		let _ = Pallet::<T>::register_liquidity_refund_address(
 			RawOrigin::Signed(caller.clone()).into(),
 			EncodedAddress::Eth(Default::default()),
 		);
@@ -72,13 +72,13 @@ benchmarks! {
 		assert_eq!(crate::LpTTL::<T>::get(), ttl);
 	}
 
-	register_emergency_withdrawal_address {
+	register_liquidity_refund_address {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 	}: _(RawOrigin::Signed(caller.clone()), EncodedAddress::Eth([0x01; 20]))
 	verify {
-		assert_eq!(EmergencyWithdrawalAddress::<T>::get(caller, ForeignChain::Ethereum), Some(ForeignChainAddress::Eth([0x01; 20].into())));
+		assert_eq!(LiquidityRefundAddress::<T>::get(caller, ForeignChain::Ethereum), Some(ForeignChainAddress::Eth([0x01; 20].into())));
 	}
 
 	impl_benchmark_test_suite!(
