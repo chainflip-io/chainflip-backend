@@ -687,79 +687,57 @@ pub mod tests {
 		BTC_BACKUP_HTTP_NODE_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER,
 		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_NODE_ENDPOINT,
 		DOT_BACKUP_WS_NODE_ENDPOINT, DOT_HTTP_NODE_ENDPOINT, DOT_WS_NODE_ENDPOINT,
-		ETH_BACKUP_HTTP_NODE_ENDPOINT, ETH_BACKUP_WS_NODE_ENDPOINT,
+		ETH_BACKUP_HTTP_NODE_ENDPOINT, ETH_BACKUP_WS_NODE_ENDPOINT, ETH_HTTP_NODE_ENDPOINT,
+		ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS,
 	};
 
 	use super::*;
-	use std::env;
 
-	pub struct TestEnvironment {}
+	macro_rules! implement_test_environment {
+		($($const_name:ident => $const_value:expr),*) => {
+			pub struct TestEnvironment {}
 
-	impl Default for TestEnvironment {
-		fn default() -> TestEnvironment {
-			use crate::constants::{
-				ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS,
-			};
+			impl Default for TestEnvironment {
+				fn default() -> TestEnvironment {
+					$(
+						std::env::set_var($const_name, $const_value);
+					)*
+					TestEnvironment {}
+				}
+			}
 
-			env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
-			env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
-
-			env::set_var(ETH_BACKUP_HTTP_NODE_ENDPOINT, "http://second.localhost:8545");
-			env::set_var(ETH_BACKUP_WS_NODE_ENDPOINT, "ws://second.localhost:8545");
-
-			env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
-
-			env::set_var(BTC_HTTP_NODE_ENDPOINT, "http://localhost:18443");
-			env::set_var(BTC_RPC_USER, "user");
-			env::set_var(BTC_RPC_PASSWORD, "password");
-
-			env::set_var(BTC_BACKUP_HTTP_NODE_ENDPOINT, "http://second.localhost:18443");
-			env::set_var(BTC_BACKUP_RPC_USER, "second.user");
-			env::set_var(BTC_BACKUP_RPC_PASSWORD, "second.password");
-
-			env::set_var(DOT_WS_NODE_ENDPOINT, "wss://my_fake_polkadot_rpc:443/<secret_key>");
-			env::set_var(DOT_HTTP_NODE_ENDPOINT, "https://my_fake_polkadot_rpc:443/<secret_key>");
-
-			env::set_var(
-				DOT_BACKUP_WS_NODE_ENDPOINT,
-				"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
-			);
-			env::set_var(
-				DOT_BACKUP_HTTP_NODE_ENDPOINT,
-				"https://second.my_fake_polkadot_rpc:443/<secret_key>",
-			);
-			TestEnvironment {}
-		}
+			impl Drop for TestEnvironment {
+				fn drop(&mut self) {
+					$(
+						std::env::remove_var($const_name);
+					)*
+				}
+			}
+		};
 	}
 
-	impl Drop for TestEnvironment {
-		fn drop(&mut self) {
-			use crate::constants::{
-				ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS,
-			};
+	implement_test_environment! {
+		ETH_HTTP_NODE_ENDPOINT => "http://localhost:8545",
+		ETH_WS_NODE_ENDPOINT => "ws://localhost:8545",
+		ETH_BACKUP_HTTP_NODE_ENDPOINT => "http://second.localhost:8545",
+		ETH_BACKUP_WS_NODE_ENDPOINT => "ws://second.localhost:8545",
 
-			env::remove_var(ETH_HTTP_NODE_ENDPOINT);
-			env::remove_var(ETH_WS_NODE_ENDPOINT);
+		NODE_P2P_IP_ADDRESS => "1.1.1.1",
 
-			env::remove_var(ETH_BACKUP_HTTP_NODE_ENDPOINT);
-			env::remove_var(ETH_BACKUP_WS_NODE_ENDPOINT);
+		BTC_HTTP_NODE_ENDPOINT => "http://localhost:18443",
+		BTC_RPC_USER => "user",
+		BTC_RPC_PASSWORD => "password",
 
-			env::remove_var(NODE_P2P_IP_ADDRESS);
+		BTC_BACKUP_HTTP_NODE_ENDPOINT => "http://second.localhost:18443",
+		BTC_BACKUP_RPC_USER => "second.user",
+		BTC_BACKUP_RPC_PASSWORD => "second.password",
 
-			env::remove_var(BTC_HTTP_NODE_ENDPOINT);
-			env::remove_var(BTC_RPC_USER);
-			env::remove_var(BTC_RPC_PASSWORD);
-
-			env::remove_var(BTC_BACKUP_HTTP_NODE_ENDPOINT);
-			env::remove_var(BTC_BACKUP_RPC_USER);
-			env::remove_var(BTC_BACKUP_RPC_PASSWORD);
-
-			env::remove_var(DOT_WS_NODE_ENDPOINT);
-			env::remove_var(DOT_HTTP_NODE_ENDPOINT);
-
-			env::remove_var(DOT_BACKUP_WS_NODE_ENDPOINT);
-			env::remove_var(DOT_BACKUP_HTTP_NODE_ENDPOINT);
-		}
+		DOT_WS_NODE_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_HTTP_NODE_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_BACKUP_WS_NODE_ENDPOINT =>
+		"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_BACKUP_HTTP_NODE_ENDPOINT =>
+		"https://second.my_fake_polkadot_rpc:443/<secret_key>"
 	}
 
 	#[test]
