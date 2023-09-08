@@ -108,7 +108,7 @@ pub trait EthRpcApi: Send {
 
 	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;
 
-	async fn send_transaction(&self, tx: TransactionRequest) -> Result<TxHash>;
+	async fn send_transaction(&self, tx: Eip1559TransactionRequest) -> Result<TxHash>;
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
@@ -141,7 +141,7 @@ impl EthRpcApi for EthRpcClient {
 		Ok(self.signer.estimate_gas(req, None).await?)
 	}
 
-	async fn send_transaction(&self, mut tx: TransactionRequest) -> Result<TxHash> {
+	async fn send_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<TxHash> {
 		tx.nonce = Some(self.get_next_nonce().await?);
 
 		let res = self.signer.send_transaction(tx, None).await;
