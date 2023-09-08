@@ -412,6 +412,11 @@ pub mod pallet {
 					.checked_sub(1)
 					.expect("We must have at least one authority")
 			{
+				// We want to keep the broadcast details, but we don't need the list of failed
+				// broadcasters any more.
+				FailedBroadcasters::<T, I>::remove(
+					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				);
 				Self::deposit_event(Event::<T, I>::BroadcastAborted {
 					broadcast_id: signing_attempt
 						.broadcast_attempt
