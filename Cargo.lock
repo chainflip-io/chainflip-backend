@@ -1518,6 +1518,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "toml 0.7.6",
  "tracing",
  "url",
  "utilities",

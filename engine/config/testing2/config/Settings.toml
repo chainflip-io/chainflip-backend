@@ -1,0 +1,32 @@
+# Is just some random different settings from ../../testing/config/Settings.toml.
+# Isn't intended to be correct/real values!
+# It's also not ideal the paths have to specified with a /config prefix...
+[node_p2p]
+ip_address = "1.2.3.4"
+allow_local_ip = true
+
+[state_chain]
+# 32 byte hex secret key - associated with the node's public id (public key)
+signing_key_file = "./tests/test_keystore/alicia_keys"
+
+[eth.node]
+http_node_endpoint = "http://localhost:8545"
+ws_node_endpoint = "ws://localhost:8545"
+
+[dot.node]
+# NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
+ws_node_endpoint = "wss://my_polkadot_rpc:443/<secret_key>"
+http_node_endpoint = "http://my_polkadot_rpc:443/<secret_key>"
+
+[btc.node]
+http_node_endpoint = "http://localhost:18443"
+rpc_user = "doge"
+rpc_password = "coin"
+
+[health_check]
+hostname = "127.0.0.2"
+port = 5555
+
+[prometheus]
+hostname = "127.0.2.1"
+port = 5566

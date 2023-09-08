@@ -3,12 +3,9 @@ pub mod address_checker;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
 
-use crate::{
-	constants::{ETH_AVERAGE_BLOCK_TIME, SYNC_POLL_INTERVAL},
-	settings,
-};
+use crate::constants::{ETH_AVERAGE_BLOCK_TIME, SYNC_POLL_INTERVAL};
 use anyhow::{anyhow, Context, Result};
-use std::{str::FromStr, sync::Arc, time::Instant};
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use utilities::make_periodic_tick;
 
@@ -27,16 +24,15 @@ pub struct EthRpcClient {
 
 impl EthRpcClient {
 	pub fn new(
-		eth_settings: settings::Eth,
+		private_key_file: PathBuf,
+		http_node_endpoint: String,
 		expected_chain_id: u64,
 	) -> Result<impl Future<Output = Self>> {
-		let provider =
-			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
-		let wallet = read_clean_and_decode_hex_str_file(
-			&eth_settings.private_key_file,
-			"Ethereum Private Key",
-			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
-		)?;
+		let provider = Arc::new(Provider::<Http>::try_from(http_node_endpoint.clone())?);
+		let wallet =
+			read_clean_and_decode_hex_str_file(&private_key_file, "Ethereum Private Key", |key| {
+				ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new)
+			})?;
 
 		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(expected_chain_id));
 
@@ -62,7 +58,7 @@ impl EthRpcClient {
 					Err(e) => tracing::error!(
 					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE
 					configuration file. Retrying...",
-					eth_settings.http_node_endpoint
+					http_node_endpoint
 				),
 				}
 			}
@@ -261,7 +257,13 @@ mod tests {
 	async fn eth_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let client = EthRpcClient::new(settings.eth, 2u64).unwrap().await;
+		let client = EthRpcClient::new(
+			settings.eth.private_key_file,
+			settings.eth.nodes.primary.http_node_endpoint,
+			2u64,
+		)
+		.unwrap()
+		.await;
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 
