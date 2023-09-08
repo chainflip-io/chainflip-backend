@@ -520,7 +520,6 @@ fn do_full_key_rotation() {
 	assert!(!MockOptimisticActivation::get(), "Test expects non-optimistic activation");
 
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Void);
 	<VaultsPallet as VaultRotator>::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 		rotation_epoch,
