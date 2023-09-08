@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto, MockImmutableKeys};
 use cf_traits::{
-	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator, time_source::Mock},
+	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
 	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
 };
 

@@ -706,7 +706,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 										None
 									}
 								})
-								.ok_or_else(|| Event::<T, I>::CurrentKeyUnavailable {
+								.ok_or(Event::<T, I>::CurrentKeyUnavailable {
 									request_id,
 									attempt_count,
 								}),
