@@ -345,12 +345,13 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 
 			// We activate witnessing calls by setting safe mode to code green just for the
 			// witnesser pallet.
+			let mut runtime_safe_mode_with_witnessing = RuntimeSafeMode::CODE_RED;
+			runtime_safe_mode_with_witnessing.witnesser =
+				pallet_cf_witnesser::PalletSafeMode::CODE_GREEN;
+
 			assert_ok!(Environment::update_safe_mode(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				SafeModeUpdate::CodeAmber(RuntimeSafeMode {
-					witnesser: pallet_cf_witnesser::PalletSafeMode::CODE_GREEN,
-					..Default::default()
-				})
+				SafeModeUpdate::CodeAmber(runtime_safe_mode_with_witnessing)
 			));
 
 			// rotation should now complete since the witness calls are now dispatched.

@@ -21,30 +21,27 @@
 
 mod tests;
 
-use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, OneToZero, PostOperationPositionExistence, Side, SideMap, SqrtPriceQ64F96, Tick,
-	ZeroToOne, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
+	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
 type FeeGrowthQ128F128 = U256;
 
-const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
+pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
+	Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct Position {
 	liquidity: Liquidity,
-	#[cfg_attr(feature = "std", serde(skip))]
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
 
@@ -56,7 +53,7 @@ impl Position {
 		lower_delta: &TickDelta,
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
-	) -> CollectedFees {
+	) -> Collected {
 		let fee_growth_inside = SideMap::default().map(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
@@ -72,7 +69,7 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let collected_fees = CollectedFees {
+		let collected_fees = Collected {
 			fees: SideMap::default().map(|side, ()| {
 				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
 				// calculate fees, therefore it is not possible to overflow the fees here.
@@ -101,16 +98,15 @@ impl Position {
 		lower_delta: &TickDelta,
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
-	) -> CollectedFees {
+	) -> (Collected, PositionInfo) {
 		let collected_fees =
 			self.collect_fees(pool_state, lower_tick, lower_delta, upper_tick, upper_delta);
 		self.liquidity = new_liquidity;
-		collected_fees
+		(collected_fees, PositionInfo::from(&*self))
 	}
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
@@ -118,26 +114,18 @@ pub struct TickDelta {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(bound = "LiquidityProvider: Ord + Serialize + serde::de::DeserializeOwned")
-)]
 pub struct PoolState<LiquidityProvider> {
-	fee_hundredth_pips: u32,
+	pub(super) fee_hundredth_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
-	#[cfg_attr(feature = "std", serde(skip))]
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
-	#[cfg_attr(feature = "std", serde(skip))]
 	liquidity_map: BTreeMap<Tick, TickDelta>,
-	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::map_as_seq"))]
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
-pub trait SwapDirection: crate::common::SwapDirection {
+pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Given the current_tick determines if the current price can increase further i.e. that there
 	/// is possibly liquidity past the current price
 	fn further_liquidity(current_tick: Tick) -> bool;
@@ -323,6 +311,10 @@ pub enum SetFeesError {
 pub enum MintError<E> {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
+	/// The ratio of assets added to the position must match the required ratio of assets for the
+	/// given tick range and current price of the pool, but there are no amounts between the
+	/// specified maximum and minimum that could match that ratio
+	AssetRatioUnachieveable,
 	/// Callback failed
 	CallbackFailed(E),
 }
@@ -337,28 +329,54 @@ pub enum PositionError<T> {
 }
 
 #[derive(Debug)]
-pub enum BurnError {}
+pub enum BurnError {
+	/// The ratio of assets removed from the position must match the ratio of assets in the
+	/// position, so that the ratio of assets in the position is maintained, but there are no
+	/// amounts between the specified maximum and minimum that could match that ratio
+	AssetRatioUnachieveable,
+}
 
 #[derive(Debug)]
 pub enum CollectError {}
 
 #[derive(Debug)]
+pub enum RequiredAssetRatioError {
+	/// Invalid Tick range
+	InvalidTickRange,
+}
+
+#[derive(Debug)]
 pub enum LiquidityToAmountsError {
 	/// Invalid Tick range
 	InvalidTickRange,
-	/// The specified liquidity is greater than the maximum
-	InvalidLiquidityAmount,
-}
-
-#[derive(Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub enum AmountsToLiquidityError {
-	/// Invalid Tick range
-	InvalidTickRange,
+	/// `liquidity` is larger than the maximum
+	LiquidityTooLarge,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
-pub struct CollectedFees {
+pub struct Collected {
 	pub fees: SideMap<Amount>,
+}
+
+#[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+pub enum Size {
+	Liquidity { liquidity: Liquidity },
+	Amount { maximum: SideMap<Amount>, minimum: SideMap<Amount> },
+}
+
+#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+pub struct PositionInfo {
+	pub liquidity: Liquidity,
+}
+impl PositionInfo {
+	pub fn new(liquidity: Liquidity) -> Self {
+		Self { liquidity }
+	}
+}
+impl<'a> From<&'a Position> for PositionInfo {
+	fn from(value: &'a Position) -> Self {
+		Self { liquidity: value.liquidity }
+	}
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -366,7 +384,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
 	/// This function never panics
-	pub fn new(fee_hundredth_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
+	pub(super) fn new(fee_hundredth_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
@@ -410,7 +428,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// fee is greater than 50%.
 	///
 	/// This function never panics
-	pub fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
+	#[allow(dead_code)]
+	pub(super) fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
@@ -426,7 +445,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// price cannot get worse.
 	///
 	/// This function never panics
-	pub fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
+	pub(super) fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
 		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
 	}
 
@@ -442,56 +461,78 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
+	pub(super) fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		minted_liquidity: Liquidity,
+		size: Size,
 		try_debit: TryDebit,
-	) -> Result<(T, CollectedFees), PositionError<MintError<E>>> {
+	) -> Result<(T, Liquidity, Collected, PositionInfo), PositionError<MintError<E>>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		let option_position = self.positions.get(&(lp.clone(), lower_tick, upper_tick));
+
+		let [option_initial_lower_delta, option_initial_upper_delta] =
+			[lower_tick, upper_tick].map(|tick| self.liquidity_map.get(&tick));
+
+		let minted_liquidity = self
+			.size_as_liquidity(lower_tick, upper_tick, size)
+			.ok_or(PositionError::Other(MintError::AssetRatioUnachieveable))
+			.and_then(|liquidity| {
+				if liquidity >
+					MAX_TICK_GROSS_LIQUIDITY -
+						[option_initial_lower_delta, option_initial_upper_delta]
+							.into_iter()
+							.filter_map(|option_tick_delta| {
+								option_tick_delta.map(|tick_delta| tick_delta.liquidity_gross)
+							})
+							.max()
+							.unwrap_or(0)
+				{
+					Err(PositionError::Other(MintError::MaximumGrossLiquidity))
+				} else {
+					Ok(liquidity)
+				}
+			})?;
+
 		if option_position.is_some() || minted_liquidity != 0 {
 			let mut position = option_position.cloned().unwrap_or_else(|| Position {
 				liquidity: 0,
 				last_fee_growth_inside: Default::default(),
 			});
 
-			let tick_delta_with_updated_gross_liquidity = |tick| {
-				let mut tick_delta = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-					TickDelta {
-						liquidity_delta: 0,
-						liquidity_gross: 0,
-						fee_growth_outside: if tick <= self.current_tick {
-							// by convention, we assume that all growth before a tick was
-							// initialized happened _below_ the tick
-							self.global_fee_growth
-						} else {
-							Default::default()
-						},
-					}
-				});
+			let tick_delta_with_updated_gross_liquidity =
+				|tick, option_initial_tick_delta: Option<&TickDelta>| {
+					let mut tick_delta = option_initial_tick_delta.cloned().unwrap_or_else(|| {
+						TickDelta {
+							liquidity_delta: 0,
+							liquidity_gross: 0,
+							fee_growth_outside: if tick <= self.current_tick {
+								// by convention, we assume that all growth before a tick was
+								// initialized happened _below_ the tick
+								self.global_fee_growth
+							} else {
+								Default::default()
+							},
+						}
+					});
 
-				tick_delta.liquidity_gross =
-					u128::saturating_add(tick_delta.liquidity_gross, minted_liquidity);
-				if tick_delta.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
-					Err(PositionError::Other(MintError::MaximumGrossLiquidity))
-				} else {
-					Ok(tick_delta)
-				}
-			};
+					tick_delta.liquidity_gross += minted_liquidity;
+					tick_delta
+				};
 
-			let mut lower_delta = tick_delta_with_updated_gross_liquidity(lower_tick)?;
+			let mut lower_delta =
+				tick_delta_with_updated_gross_liquidity(lower_tick, option_initial_lower_delta);
 			// Cannot overflow as due to liquidity_gross's MAX_TICK_GROSS_LIQUIDITY bound
 			lower_delta.liquidity_delta =
 				lower_delta.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
-			let mut upper_delta = tick_delta_with_updated_gross_liquidity(upper_tick)?;
+			let mut upper_delta =
+				tick_delta_with_updated_gross_liquidity(upper_tick, option_initial_upper_delta);
 			// Cannot overflow as due to liquidity_gross's MAX_TICK_GROSS_LIQUIDITY bound
 			upper_delta.liquidity_delta =
 				upper_delta.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
-			let collected_fees = position.set_liquidity(
+			let (collected_fees, position_info) = position.set_liquidity(
 				self,
 				// Cannot overflow due to MAX_TICK_GROSS_LIQUIDITY
 				position.liquidity + minted_liquidity,
@@ -501,9 +542,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				&upper_delta,
 			);
 
-			let (amounts_required, current_liquidity_delta) = self
-				.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick)
-				.unwrap();
+			let (amounts_required, current_liquidity_delta) =
+				self.inner_liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
 			let t = try_debit(amounts_required)
 				.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
@@ -513,7 +553,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			self.liquidity_map.insert(lower_tick, lower_delta);
 			self.liquidity_map.insert(upper_tick, upper_delta);
 
-			Ok((t, collected_fees))
+			Ok((t, minted_liquidity, collected_fees, position_info))
 		} else {
 			Err(PositionError::NonExistent)
 		}
@@ -529,22 +569,23 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
 	#[allow(clippy::type_complexity)]
-	pub fn collect_and_burn(
+	pub(super) fn collect_and_burn(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		burnt_liquidity: Liquidity,
-	) -> Result<
-		(SideMap<Amount>, CollectedFees, PostOperationPositionExistence),
-		PositionError<BurnError>,
-	> {
+		size: Size,
+	) -> Result<(SideMap<Amount>, Liquidity, Collected, PositionInfo), PositionError<BurnError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
 			assert!(position.liquidity != 0);
-			let burnt_liquidity = core::cmp::min(position.liquidity, burnt_liquidity);
+
+			let burnt_liquidity = self
+				.size_as_liquidity(lower_tick, upper_tick, size)
+				.ok_or(PositionError::Other(BurnError::AssetRatioUnachieveable))
+				.map(|liquidity| core::cmp::min(position.liquidity, liquidity))?;
 
 			let mut lower_delta = self.liquidity_map.get(&lower_tick).unwrap().clone();
 			lower_delta.liquidity_gross -= burnt_liquidity;
@@ -555,7 +596,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			upper_delta.liquidity_delta =
 				upper_delta.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
-			let collected_fees = position.set_liquidity(
+			let (collected_fees, position_info) = position.set_liquidity(
 				self,
 				position.liquidity - burnt_liquidity,
 				lower_tick,
@@ -564,9 +605,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				&upper_delta,
 			);
 
-			let (amounts_owed, current_liquidity_delta) = self
-				.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick)
-				.unwrap();
+			let (amounts_owed, current_liquidity_delta) =
+				self.inner_liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
 			// Will not underflow as current_liquidity_delta must have previously been added to
 			// current_liquidity for it to need to be substrated now
 			self.current_liquidity -= current_liquidity_delta;
@@ -588,20 +628,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_delta;
 			}
 
-			let post_operation_position_existence = if position.liquidity == 0 {
+			if position.liquidity == 0 {
 				// DIFF: This behaviour is different than Uniswap's to ensure if a position
 				// exists its ticks also exist in the liquidity_map, by removing zero liquidity
 				// positions
 				self.positions.remove(&(lp.clone(), lower_tick, upper_tick));
-				PostOperationPositionExistence::DoesNotExist
 			} else {
 				*self.positions.get_mut(&(lp.clone(), lower_tick, upper_tick)).unwrap() = position;
-				PostOperationPositionExistence::Exists
 			};
 
 			// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
 			// owed in the position, instead it is returned here.
-			Ok((amounts_owed, collected_fees, post_operation_position_existence))
+			Ok((amounts_owed, burnt_liquidity, collected_fees, position_info))
 		} else {
 			Err(PositionError::NonExistent)
 		}
@@ -613,12 +651,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect(
+	#[allow(dead_code)]
+	pub(super) fn collect(
 		&mut self,
 		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<CollectedFees, PositionError<CollectError>> {
+	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
@@ -629,10 +668,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			let collected_fees =
 				position.collect_fees(self, lower_tick, lower_delta, upper_tick, upper_delta);
+			let position_info = PositionInfo::from(&position);
 
 			self.positions.insert((lp.clone(), lower_tick, upper_tick), position);
 
-			Ok(collected_fees)
+			Ok((collected_fees, position_info))
 		} else {
 			Err(PositionError::NonExistent)
 		}
@@ -644,7 +684,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// `OneToZero`.
 	///
 	/// This function never panics
-	pub fn swap<SD: SwapDirection>(
+	pub(super) fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<U256>,
@@ -782,23 +822,47 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.ok_or(PositionError::InvalidTickRange)
 	}
 
-	/// Returns the value of a range order, and the liquidity that would contribute to the current
-	/// liquidity level given the current price.
+	/// Returns the ratio of assets required to create a range order at the given tick range
 	///
 	/// This function never panics
-	pub fn liquidity_to_amounts<const ROUND_UP: bool>(
+	pub(super) fn required_asset_ratio<const ROUND_UP: bool>(
+		&self,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> Result<SideMap<Amount>, RequiredAssetRatioError> {
+		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
+			.map_err(|_err| RequiredAssetRatioError::InvalidTickRange)?;
+		Ok(self
+			.inner_liquidity_to_amounts::<ROUND_UP>(
+				MAX_TICK_GROSS_LIQUIDITY,
+				lower_tick,
+				upper_tick,
+			)
+			.0)
+	}
+
+	pub(super) fn liquidity_to_amounts<const ROUND_UP: bool>(
 		&self,
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<(SideMap<Amount>, Liquidity), LiquidityToAmountsError> {
-		(liquidity <= MAX_TICK_GROSS_LIQUIDITY)
-			.then_some(())
-			.ok_or(LiquidityToAmountsError::InvalidLiquidityAmount)?;
+	) -> Result<SideMap<Amount>, LiquidityToAmountsError> {
 		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
 			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
+		if liquidity > MAX_TICK_GROSS_LIQUIDITY {
+			Err(LiquidityToAmountsError::LiquidityTooLarge)
+		} else {
+			Ok(self.inner_liquidity_to_amounts::<ROUND_UP>(liquidity, lower_tick, upper_tick).0)
+		}
+	}
 
-		Ok(if self.current_tick < lower_tick {
+	fn inner_liquidity_to_amounts<const ROUND_UP: bool>(
+		&self,
+		liquidity: Liquidity,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> (SideMap<Amount>, Liquidity) {
+		if self.current_tick < lower_tick {
 			(
 				SideMap::from_array([
 					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
@@ -838,33 +902,51 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				]),
 				0,
 			)
-		})
+		}
 	}
 
-	/// Returns the maximum possible liquidity given an amount of assets, in a particular range,
-	/// given the current price, and considering the existing liquidity in the pool
-	///
-	/// This function never panics
-	pub fn desired_amounts_to_liquidity(
+	fn size_as_liquidity(
+		&self,
+		lower_tick: Tick,
+		upper_tick: Tick,
+		size: Size,
+	) -> Option<Liquidity> {
+		match size {
+			Size::Liquidity { liquidity } => Some(liquidity),
+			Size::Amount { maximum, minimum } => {
+				let liquidity = self.inner_amounts_to_liquidity(lower_tick, upper_tick, maximum);
+
+				let (possible, _) =
+					self.inner_liquidity_to_amounts::<false>(liquidity, lower_tick, upper_tick);
+
+				if possible[Side::Zero] < minimum[Side::Zero] ||
+					possible[Side::One] < minimum[Side::One]
+				{
+					None
+				} else {
+					Some(liquidity)
+				}
+			},
+		}
+	}
+
+	fn inner_amounts_to_liquidity(
 		&self,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		amounts: SideMap<Amount>,
-	) -> Result<Liquidity, AmountsToLiquidityError> {
+	) -> Liquidity {
 		// Inverse of `zero_amount_delta_ceil`
 		fn zero_amount_to_liquidity(
 			lower_sqrt_price: SqrtPriceQ64F96,
 			upper_sqrt_price: SqrtPriceQ64F96,
 			amounts: SideMap<Amount>,
-		) -> Liquidity {
-			((U512::saturating_mul(
+		) -> U512 {
+			(U512::saturating_mul(
 				amounts[Side::Zero].into(),
 				U256::full_mul(lower_sqrt_price, upper_sqrt_price),
 			) / U512::from(upper_sqrt_price - lower_sqrt_price)) >>
-				SQRT_PRICE_FRACTIONAL_BITS)
-				.try_into()
-				.map(|liquidity| core::cmp::min(liquidity, MAX_TICK_GROSS_LIQUIDITY))
-				.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
+				SQRT_PRICE_FRACTIONAL_BITS
 		}
 
 		// Inverse of `one_amount_delta_ceil`
@@ -872,44 +954,64 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			lower_sqrt_price: SqrtPriceQ64F96,
 			upper_sqrt_price: SqrtPriceQ64F96,
 			amounts: SideMap<Amount>,
-		) -> Liquidity {
-			(U256::full_mul(amounts[Side::One], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
-				(upper_sqrt_price - lower_sqrt_price))
-				.try_into()
-				.map(|liquidity| core::cmp::min(liquidity, MAX_TICK_GROSS_LIQUIDITY))
-				.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
+		) -> U512 {
+			U256::full_mul(amounts[Side::One], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
+				(upper_sqrt_price - lower_sqrt_price)
 		}
-
-		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
-			.map_err(|_err| AmountsToLiquidityError::InvalidTickRange)?;
 
 		let [lower_sqrt_price, upper_sqrt_price] = [lower_tick, upper_tick].map(sqrt_price_at_tick);
 
-		Ok(core::cmp::min(
-			MAX_TICK_GROSS_LIQUIDITY -
-				[lower_tick, upper_tick]
-					.into_iter()
-					.filter_map(|tick| {
-						self.liquidity_map.get(&tick).map(|tick_delta| tick_delta.liquidity_gross)
-					})
-					.max()
-					.unwrap_or(0),
-			if self.current_sqrt_price <= lower_sqrt_price {
-				zero_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
-			} else if self.current_sqrt_price < upper_sqrt_price {
-				core::cmp::min(
-					zero_amount_to_liquidity(self.current_sqrt_price, upper_sqrt_price, amounts),
-					one_amount_to_liquidity(lower_sqrt_price, self.current_sqrt_price, amounts),
-				)
-			} else {
-				one_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
-			},
+		if self.current_sqrt_price <= lower_sqrt_price {
+			zero_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
+		} else if self.current_sqrt_price < upper_sqrt_price {
+			core::cmp::min(
+				zero_amount_to_liquidity(self.current_sqrt_price, upper_sqrt_price, amounts),
+				one_amount_to_liquidity(lower_sqrt_price, self.current_sqrt_price, amounts),
+			)
+		} else {
+			one_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
+		}
+		.try_into()
+		.map(|liquidity| core::cmp::min(liquidity, MAX_TICK_GROSS_LIQUIDITY))
+		.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
+	}
+
+	pub(super) fn position(
+		&self,
+		lp: &LiquidityProvider,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
+		Self::validate_position_range(lower_tick, upper_tick)?;
+		let mut position = self
+			.positions
+			.get(&(lp.clone(), lower_tick, upper_tick))
+			.ok_or(PositionError::NonExistent)?
+			.clone();
+		Ok((
+			position.collect_fees(
+				self,
+				lower_tick,
+				self.liquidity_map.get(&lower_tick).unwrap(),
+				upper_tick,
+				self.liquidity_map.get(&upper_tick).unwrap(),
+			),
+			PositionInfo::from(&position),
 		))
 	}
 
-	#[cfg(feature = "std")]
-	pub fn positions(&self) -> BTreeMap<(LiquidityProvider, Tick, Tick), Liquidity> {
-		self.positions.iter().map(|(k, v)| (k.clone(), v.liquidity)).collect()
+	pub(super) fn liquidity(&self) -> Vec<(Tick, Liquidity)> {
+		let mut liquidity = 0u128;
+		self.liquidity_map
+			.iter()
+			.map(|(tick, tick_delta)| {
+				liquidity = liquidity
+					.checked_add_signed(OneToZero::liquidity_delta_on_crossing_tick(tick_delta))
+					.unwrap();
+
+				(*tick, liquidity)
+			})
+			.collect()
 	}
 }
 

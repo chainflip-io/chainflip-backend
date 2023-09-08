@@ -53,7 +53,7 @@ async fn update_registered_peer_id<StateChainClient>(
 	};
 
 	state_chain_client
-		.submit_signed_extrinsic(pallet_cf_validator::Call::register_peer_id {
+		.finalize_signed_extrinsic(pallet_cf_validator::Call::register_peer_id {
 			peer_id,
 			port: cfe_port,
 			ip_address: ip_address.into(),

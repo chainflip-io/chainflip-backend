@@ -209,13 +209,13 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			.boxed()
 		});
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
 		.with(eq(pallet_cf_threshold_signature::Call::<Runtime, I>::report_signature_failed {
 			ceremony_id: ceremony_id_2,
 			offenders: BTreeSet::default(),
 		}))
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+		.return_once(|_| extrinsic_api::signed::MockUntilFinalized::new());
 
 	// ceremony_id_3 is a success and should submit an unsigned extrinsic
 	let ceremony_id_3 = ceremony_id_2 + 1;
@@ -326,9 +326,9 @@ where
 		.times(2)
 		.return_const(our_account_id.clone());
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, I>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, I>>()
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+		.return_once(|_| extrinsic_api::signed::MockUntilFinalized::new());
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C::CryptoScheme>::new();
@@ -448,9 +448,9 @@ where
 				.boxed()
 		});
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>()
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+		.return_once(|_| extrinsic_api::signed::MockUntilFinalized::new());
 
 	let state_chain_client = Arc::new(state_chain_client);
 	task_scope(|scope| {

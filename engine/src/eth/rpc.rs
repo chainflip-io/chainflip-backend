@@ -54,7 +54,7 @@ impl EthRpcClient {
 					Ok(chain_id) => {
 						tracing::warn!(
 						"Connected to Ethereum node but with chain_id {}, expected {}. Please check your CFE
-						configuration file...", 				
+						configuration file...",
 						chain_id,
 						expected_chain_id
 					);
