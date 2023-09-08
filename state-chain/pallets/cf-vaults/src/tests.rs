@@ -520,6 +520,7 @@ fn do_full_key_rotation() {
 	assert_eq!(MockOptimisticActivation::get(), false, "Test expects non-optimistic activation");
 
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Void);
 	<VaultsPallet as VaultRotator>::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 		rotation_epoch,
@@ -594,6 +595,10 @@ fn do_full_key_rotation() {
 	));
 
 	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+	assert_eq!(
+		<VaultsPallet as VaultRotator>::status(),
+		AsyncResult::Ready(VaultStatus::KeygenComplete)
+	);
 
 	assert!(matches!(
 		PendingVaultRotation::<Test, _>::get().unwrap(),
@@ -606,6 +611,7 @@ fn do_full_key_rotation() {
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().copied()),
 		rotation_epoch,
 	);
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
 
 	let handover_ceremony_id = current_ceremony_id();
 	for p in ALL_CANDIDATES {
@@ -617,6 +623,7 @@ fn do_full_key_rotation() {
 	}
 
 	VaultsPallet::on_initialize(1);
+	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
 
 	assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
 
@@ -627,6 +634,11 @@ fn do_full_key_rotation() {
 
 	BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![BTC_DUMMY_SIG]));
 
+	assert_eq!(
+		<VaultsPallet as VaultRotator>::status(),
+		AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
+	);
+
 	assert_last_event!(crate::Event::KeyHandoverVerificationSuccess { .. });
 
 	assert!(matches!(
@@ -636,11 +648,6 @@ fn do_full_key_rotation() {
 
 	// Called by validator pallet
 	VaultsPallet::activate();
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get().unwrap(),
-		VaultRotationStatus::AwaitingActivation { .. }
-	));
 
 	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
 	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
