@@ -644,7 +644,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				)
 			},
 		}
-
+		
 		UNAUTHORIZED_CEREMONY
 			.with_label_values(&[Chain::NAME, "signing"])
 			.set(self.signing_states.count_unauthorised_ceremonies().try_into().unwrap());
@@ -792,11 +792,11 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	}
 
 	fn count_unauthorised_ceremonies(&self) -> usize {
-		self.ceremony_handles
-			.values()
-			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
-			.count()
+		self.ceremony_handles.values()
+		.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+		.count()
 	}
+
 }
 
 // ==================
