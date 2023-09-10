@@ -80,6 +80,7 @@ ed25519-dalek = "1.0"
 pin-project = "1.0.12"
 rand = "0.8.4"
 reqwest = { version = "0.11.4", features = ["rustls-tls"] }
+toml = "0.7.4"
 tracing = "0.1"
 x25519-dalek = { version = "1.1", features = ["serde"] }
 zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = [
@@ -116,14 +117,14 @@ codec = { package = "parity-scale-codec", version = "3.6.1", features = [
   "derive",
   "full",
 ] }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
 scale-info = { version = "2.5.0", features = ["derive"] }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
-sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
-sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
+sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
+sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
 
 [dependencies.rocksdb]
 version = "0.21.0"
@@ -145,7 +146,7 @@ utilities = { package = "utilities", path = "../utilities", features = [
 ] }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08" }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+1" }
 
 [features]
 integration-test = []

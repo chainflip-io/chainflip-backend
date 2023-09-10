@@ -8,7 +8,10 @@ mod tests;
 
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_traits::impl_pallet_safe_mode;
 pub use weights::WeightInfo;
+
+impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
 
 use cf_chains::{ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
@@ -183,6 +186,12 @@ pub mod pallet {
 		/// Something that provides the current key for signing.
 		type KeyProvider: KeyProvider<<Self::TargetChain as Chain>::ChainCrypto>;
 
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
+
+		/// The save mode block margin
+		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -314,40 +323,50 @@ pub mod pallet {
 			// eventually. For outlying, unknown unknowns, these can be something governance can
 			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
-			for attempt_id in expiries.iter() {
-				if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
-					Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
-						broadcast_attempt_id: *attempt_id,
-					});
-					Self::start_next_broadcast_attempt(attempt);
+			if T::SafeMode::get().retry_enabled {
+				for attempt_id in expiries.iter() {
+					if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
+						Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
+							broadcast_attempt_id: *attempt_id,
+						});
+						Self::start_next_broadcast_attempt(attempt);
+					}
 				}
+			} else {
+				Timeouts::<T, I>::insert(
+					block_number.saturating_add(T::SafeModeBlockMargin::get()),
+					expiries.clone(),
+				);
 			}
-
 			T::WeightInfo::on_initialize(expiries.len() as u32)
 		}
 
 		// We want to retry broadcasts when we have free block space.
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
+			if T::SafeMode::get().retry_enabled {
+				let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
 
-			let num_retries_that_fit = remaining_weight
-				.ref_time()
-				.checked_div(next_broadcast_weight.ref_time())
-				.expect("start_next_broadcast_attempt weight should not be 0")
-				as usize;
+				let num_retries_that_fit = remaining_weight
+					.ref_time()
+					.checked_div(next_broadcast_weight.ref_time())
+					.expect("start_next_broadcast_attempt weight should not be 0")
+					as usize;
 
-			let mut retries = BroadcastRetryQueue::<T, I>::take();
+				let mut retries = BroadcastRetryQueue::<T, I>::take();
 
-			if retries.len() >= num_retries_that_fit {
-				BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
+				if retries.len() > num_retries_that_fit {
+					BroadcastRetryQueue::<T, I>::put(retries.split_off(num_retries_that_fit));
+				}
+
+				let retries_len = retries.len();
+
+				for retry in retries {
+					Self::start_next_broadcast_attempt(retry);
+				}
+				next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
+			} else {
+				Weight::zero()
 			}
-
-			let retries_len = retries.len();
-
-			for retry in retries {
-				Self::start_next_broadcast_attempt(retry);
-			}
-			next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
 		}
 	}
 
@@ -393,6 +412,11 @@ pub mod pallet {
 					.checked_sub(1)
 					.expect("We must have at least one authority")
 			{
+				// We want to keep the broadcast details, but we don't need the list of failed
+				// broadcasters any more.
+				FailedBroadcasters::<T, I>::remove(
+					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				);
 				Self::deposit_event(Event::<T, I>::BroadcastAborted {
 					broadcast_id: signing_attempt
 						.broadcast_attempt

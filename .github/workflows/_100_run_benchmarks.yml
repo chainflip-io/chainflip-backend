@@ -29,6 +29,9 @@ on:
           - 4vCPU-8GB
           - 4vCPU-16GB
 
+env:
+  FORCE_COLOR: 1
+
 jobs:
   run_benchmarks:
     runs-on:

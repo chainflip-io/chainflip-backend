@@ -45,6 +45,7 @@ where
 
 	btc_source
 		.clone()
+		.shared(scope)
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
 		.logging("chain tracking")
@@ -62,6 +63,7 @@ where
 				(header.data, block.txdata)
 			}
 		})
+		.shared(scope)
 		.chunk_by_vault(epoch_source.vaults().await)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -80,7 +82,7 @@ where
 					// Submit all deposit witnesses for the block.
 					if !deposit_witnesses.is_empty() {
 						state_chain_client
-						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
 									deposit_witnesses,
@@ -105,7 +107,7 @@ where
 
 				for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 								pallet_cf_broadcast::Call::transaction_succeeded {
 									tx_out_id: tx_hash,

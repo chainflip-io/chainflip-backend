@@ -8,7 +8,7 @@ use serde_json::json;
 
 use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
 
-use crate::settings;
+use crate::settings::HttpBasicAuthEndpoint;
 
 use anyhow::{Context, Result};
 
@@ -65,12 +65,12 @@ pub struct BtcRpcClient {
 }
 
 impl BtcRpcClient {
-	pub fn new(btc_settings: settings::Btc) -> Result<Self> {
+	pub fn new(basic_auth_endpoint: HttpBasicAuthEndpoint) -> Result<Self> {
 		Ok(Self {
 			client: Client::builder().build()?,
-			url: btc_settings.http_node_endpoint,
-			user: btc_settings.rpc_user,
-			password: btc_settings.rpc_password,
+			url: basic_auth_endpoint.http_node_endpoint,
+			user: basic_auth_endpoint.rpc_user,
+			password: basic_auth_endpoint.rpc_password,
 		})
 	}
 
@@ -222,7 +222,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "requires local node, useful for manual testing"]
 	async fn test_btc_async() {
-		let client = BtcRpcClient::new(settings::Btc {
+		let client = BtcRpcClient::new(HttpBasicAuthEndpoint {
 			http_node_endpoint: "http://localhost:8332".to_string(),
 			rpc_user: "flip".to_string(),
 			rpc_password: "flip".to_string(),

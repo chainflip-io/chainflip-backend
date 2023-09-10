@@ -34,14 +34,15 @@ export async function fundFlip(address: string, flipAmount: string) {
     ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'),
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const options: any = {
+  const networkOptions = {
     signer: wallet,
     network: 'localnet',
     stateChainGatewayContractAddress: gatewayContractAddress,
     flipContractAddress,
-    nonce: await getNextEthNonce(),
-  };
+  } as const;
+  const txOptions = {
+    nonce: BigInt(await getNextEthNonce()),
+  } as const;
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + address);
   let pubkey = address;
@@ -53,7 +54,12 @@ export async function fundFlip(address: string, flipAmount: string) {
   if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
-  const receipt2 = await fundStateChainAccount(pubkey as HexString, flipperinoAmount, options);
+  const receipt2 = await fundStateChainAccount(
+    pubkey as HexString,
+    flipperinoAmount,
+    networkOptions,
+    txOptions,
+  );
 
   console.log(
     'Transaction complete, tx_hash: ' +
