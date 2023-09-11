@@ -266,7 +266,7 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		println!("Submitting governance proposal for rotation.");
 		self.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
 			call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
-			execution: ExecutionMode::Scheduled,
+			execution: ExecutionMode::Automatic,
 		})
 		.await
 		.until_finalized()

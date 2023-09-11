@@ -52,16 +52,11 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
-	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub enum ExecutionMode {
-		Scheduled,
+		#[default]
+		Automatic,
 		Manual,
-	}
-
-	impl Default for ExecutionMode {
-		fn default() -> Self {
-			Self::Scheduled
-		}
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
@@ -79,16 +74,6 @@ pub mod pallet {
 		pub approved: BTreeSet<AccountId>,
 		/// Proposal is pre authorised.
 		pub execution: ExecutionMode,
-	}
-
-	impl<T> Default for Proposal<T> {
-		fn default() -> Self {
-			Self {
-				call: Default::default(),
-				approved: Default::default(),
-				execution: Default::default(),
-			}
-		}
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -133,7 +118,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
-		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>>;
 
 	/// Active proposals.
 	#[pallet::storage]
@@ -538,7 +523,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
 
 		// Try to approve the proposal
-		let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
+		let proposal = Proposals::<T>::try_mutate(approved_id, |proposal| {
+			let proposal = proposal.as_mut().ok_or(Error::<T>::ProposalNotFound)?;
+
 			if !proposal.approved.insert(who) {
 				return Err(Error::<T>::AlreadyApproved)
 			}

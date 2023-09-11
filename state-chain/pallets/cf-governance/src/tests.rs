@@ -37,7 +37,7 @@ fn not_a_member() {
 			Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(EVE),
 				mock_extrinsic(),
-				ExecutionMode::Scheduled,
+				ExecutionMode::Automatic,
 			),
 			<Error<Test>>::NotMember
 		);
@@ -52,7 +52,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
 				mock_extrinsic(),
-				ExecutionMode::Scheduled,
+				ExecutionMode::Automatic,
 			));
 			assert_eq!(
 				last_event::<Test>(),
@@ -84,7 +84,7 @@ fn already_executed() {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic(),
-			ExecutionMode::Scheduled,
+			ExecutionMode::Automatic,
 		));
 		// Assert the proposed event was fired
 		assert_eq!(
@@ -127,7 +127,7 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
 				mock_extrinsic(),
-				ExecutionMode::Scheduled,
+				ExecutionMode::Automatic,
 			));
 		})
 		.then_execute_at_next_block(|_| {
@@ -151,7 +151,7 @@ fn can_not_vote_twice() {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic(),
-			ExecutionMode::Scheduled,
+			ExecutionMode::Automatic,
 		));
 		// Try to approve it again. Proposing implies approving.
 		assert_noop!(
@@ -167,7 +167,7 @@ fn several_open_proposals() {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic(),
-			ExecutionMode::Scheduled,
+			ExecutionMode::Automatic,
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -176,7 +176,7 @@ fn several_open_proposals() {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(BOB),
 			mock_extrinsic(),
-			ExecutionMode::Scheduled,
+			ExecutionMode::Automatic,
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -202,7 +202,7 @@ fn sudo_extrinsic() {
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
 				governance_extrinsic,
-				ExecutionMode::Scheduled,
+				ExecutionMode::Automatic,
 			));
 			assert_eq!(
 				last_event::<Test>(),
