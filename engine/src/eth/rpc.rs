@@ -102,7 +102,7 @@ impl EthRpcClient {
 pub trait EthRpcApi: Send {
 	fn address(&self) -> H160;
 
-	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256>;
 
 	async fn send_transaction(&self, tx: Eip1559TransactionRequest) -> Result<TxHash>;
 
@@ -133,8 +133,8 @@ impl EthRpcApi for EthRpcClient {
 		self.signer.address()
 	}
 
-	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256> {
-		Ok(self.signer.estimate_gas(req, None).await?)
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
+		Ok(self.signer.estimate_gas(&TypedTransaction::Eip1559(req.clone()), None).await?)
 	}
 
 	async fn send_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<TxHash> {

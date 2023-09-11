@@ -2,10 +2,7 @@ pub mod address_checker;
 
 use ethers::{
 	prelude::*,
-	types::{
-		transaction::{eip2718::TypedTransaction, eip2930::AccessList},
-		TransactionReceipt,
-	},
+	types::{transaction::eip2930::AccessList, TransactionReceipt},
 };
 
 use utilities::task_scope::Scope;
@@ -123,27 +120,26 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					let tx = tx.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						let mut transaction_request =
-							TypedTransaction::Eip1559(Eip1559TransactionRequest {
-								to: Some(NameOrAddress::Address(tx.contract)),
-								data: Some(tx.data.into()),
-								chain_id: Some(tx.chain_id.into()),
-								value: Some(tx.value),
-								max_fee_per_gas: tx.max_fee_per_gas,
-								max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
-								// geth uses the latest block gas limit as an upper bound
-								gas: None,
-								access_list: AccessList::default(),
-								from: Some(client.address()),
-								nonce: None,
-							});
+						let mut transaction_request = Eip1559TransactionRequest {
+							to: Some(NameOrAddress::Address(tx.contract)),
+							data: Some(tx.data.into()),
+							chain_id: Some(tx.chain_id.into()),
+							value: Some(tx.value),
+							max_fee_per_gas: tx.max_fee_per_gas,
+							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+							// geth uses the latest block gas limit as an upper bound
+							gas: None,
+							access_list: AccessList::default(),
+							from: Some(client.address()),
+							nonce: None,
+						};
 
 						let estimated_gas = client
 							.estimate_gas(&transaction_request)
 							.await
 							.context("Failed to estimate gas")?;
 
-						transaction_request.set_gas(match tx.gas_limit {
+						transaction_request.gas = Some(match tx.gas_limit {
 							Some(gas_limit) =>
 								if estimated_gas > gas_limit {
 									return Err(anyhow::anyhow!(
@@ -163,7 +159,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 						});
 
 						client
-							.send_transaction(transaction_request.into())
+							.send_transaction(transaction_request)
 							.await
 							.context("Failed to send ETH transaction")
 					})
