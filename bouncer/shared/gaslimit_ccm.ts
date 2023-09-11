@@ -22,8 +22,10 @@ const MIN_BASE_GAS_OVERHEAD = 100000;
 const BASE_GAS_OVERHEAD_BUFFER = 20000;
 const ETHEREUM_BASE_FEE_MULTIPLIER = 2;
 const CFE_GAS_LIMIT_CAP = 10000000;
-// Arbitrary gas consumption value for test. The total gas used is then ~360-380k depending on the destination asset and parameters.
+// Arbitrary gas consumption values for testing. The total default gas used is then ~360-380k depending on the parameters.
 let DEFAULT_GAS_CONSUMPTION = 260000;
+const MIN_TEST_GAS_CONSUMPTION = 200000;
+const MAX_TEST_GAS_CONSUMPTION = 4000000;
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 const GAS_PER_BYTE = 16;
 
@@ -220,8 +222,7 @@ async function testGasLimitSwap(
   }
 }
 
-// Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee. For some reason the base fee
-// is not going up but the priority fee goes from 0 to 10**9.
+// Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
 let spam = true;
 async function spamEthereum() {
   while (spam) {
@@ -230,18 +231,30 @@ async function spamEthereum() {
   }
 }
 
-// NOTE: In localnet the gasPrice is is extremely low (~7wei) so the gasBudget needed is very small.
+const usedNumbers = new Set<number>();
+
+function getRandomGasConsumption(): number {
+  const range = MAX_TEST_GAS_CONSUMPTION - MIN_TEST_GAS_CONSUMPTION + 1;
+  let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION;
+  while (usedNumbers.has(randomInt)) {
+    randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION;
+  }
+  usedNumbers.add(randomInt);
+  return randomInt;
+}
+
 export async function testGasLimitCcmSwaps() {
   console.log('=== Testing GasLimit CCM swaps ===');
 
   // Spam ethereum with transfers to increase the gasLimitBudget price
   const spamming = spamEthereum();
 
+  // The default gas budgets should allow for almost any reasonable gas consumption
   const gasLimitSwapsDefault = [
-    testGasLimitSwap('DOT', 'FLIP'),
-    testGasLimitSwap('ETH', 'USDC'),
-    testGasLimitSwap('FLIP', 'ETH'),
-    testGasLimitSwap('BTC', 'ETH'),
+    testGasLimitSwap('DOT', 'FLIP', undefined, getRandomGasConsumption()),
+    testGasLimitSwap('ETH', 'USDC', undefined, getRandomGasConsumption()),
+    testGasLimitSwap('FLIP', 'ETH', undefined, getRandomGasConsumption()),
+    testGasLimitSwap('BTC', 'ETH', undefined, getRandomGasConsumption()),
   ];
 
   // reducing gas budget input amount used for gas to achieve a gasLimitBudget ~= 4-500k, which is enough for the CCM broadcast.
