@@ -1,5 +1,6 @@
 use anyhow::Context;
 use regex::Regex;
+use url::Url;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;
@@ -25,7 +26,7 @@ pub fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String, anyhow:
 		Ok(endpoint_redacted)
 	} else {
 		// No secret was found, so just redact almost all of the url
-		let url = url::Url::parse(endpoint).context("Failed to parse node endpoint into a URL")?;
+		let url = Url::parse(endpoint).context("Failed to parse node endpoint into a URL")?;
 		Ok(format!(
 			"{}****",
 			endpoint
