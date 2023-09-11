@@ -35,7 +35,7 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
     (event) => event.data.accountId === flipWallet.address,
   );
   await chainflip.tx.funding
-    .redeem({ Exact: flipperinoAmount }, ethAddress)
+    .redeem({ Exact: flipperinoAmount }, ethAddress, null)
     .signAndSend(flipWallet, { nonce: -1 }, handleSubstrateError(chainflip));
   await redemptionRequestHandle;
 
@@ -50,6 +50,7 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
     accountIdHex,
     flipperinoAmount,
     ethAddress,
+    '*',
     '*',
     '*',
   ]);
