@@ -172,41 +172,37 @@ impl Engine {
 		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
 			match event {
 				ContractEvent::Funded { node_id: validator_id, amount, epoch, .. } => {
-					PENDING_EXTRINSICS.with_borrow_mut(|v| {
-						v.push_back((
-							RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_funding::Call::funded {
-										account_id: validator_id.clone(),
-										amount: *amount,
-										funder: ETH_ZERO_ADDRESS,
-										tx_hash: TX_HASH,
-									}
-									.into(),
-								),
-								epoch_index: *epoch,
-							}),
-							RuntimeOrigin::signed(self.node_id.clone()),
-						));
-					});
+					queue_dispatch_extrinsic(
+						RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_funding::Call::funded {
+									account_id: validator_id.clone(),
+									amount: *amount,
+									funder: ETH_ZERO_ADDRESS,
+									tx_hash: TX_HASH,
+								}
+								.into(),
+							),
+							epoch_index: *epoch,
+						}),
+						RuntimeOrigin::signed(self.node_id.clone()),
+					);
 				},
 				ContractEvent::Redeemed { node_id, amount, epoch } => {
-					PENDING_EXTRINSICS.with_borrow_mut(|v| {
-						v.push_back((
-							RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_funding::Call::redeemed {
-										account_id: node_id.clone(),
-										redeemed_amount: *amount,
-										tx_hash: TX_HASH,
-									}
-									.into(),
-								),
-								epoch_index: *epoch,
-							}),
-							RuntimeOrigin::signed(self.node_id.clone()),
-						));
-					});
+					queue_dispatch_extrinsic(
+						RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_funding::Call::redeemed {
+									account_id: node_id.clone(),
+									redeemed_amount: *amount,
+									tx_hash: TX_HASH,
+								}
+								.into(),
+							),
+							epoch_index: *epoch,
+						}),
+						RuntimeOrigin::signed(self.node_id.clone()),
+					);
 				},
 			}
 		}
@@ -234,14 +230,15 @@ impl Engine {
 							payload,
 							..
 						}) => {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::EthereumThresholdSigner(
+							queue_dispatch_extrinsic(
+								RuntimeCall::EthereumThresholdSigner(
 									pallet_cf_threshold_signature::Call::signature_success{
 										ceremony_id: *ceremony_id,
 										signature: self.eth_threshold_signer.borrow().sign_with_key(*key, payload.as_fixed_bytes()),
 									}
-								), RuntimeOrigin::none()));
-							});
+								),
+								RuntimeOrigin::none()
+							);
 					}
 
 					RuntimeEvent::PolkadotThresholdSigner(
@@ -251,14 +248,15 @@ impl Engine {
 							payload,
 							..
 						}) => {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::PolkadotThresholdSigner(
+							queue_dispatch_extrinsic(
+								RuntimeCall::PolkadotThresholdSigner(
 									pallet_cf_threshold_signature::Call::signature_success{
 										ceremony_id: *ceremony_id,
 										signature: self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
 									}
-								), RuntimeOrigin::none()));
-							});
+								),
+								RuntimeOrigin::none()
+							);
 					}
 
 					RuntimeEvent::BitcoinThresholdSigner(
@@ -268,14 +266,14 @@ impl Engine {
 							payload,
 							..
 						}) => {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::BitcoinThresholdSigner(
+							queue_dispatch_extrinsic(
+								RuntimeCall::BitcoinThresholdSigner(
 									pallet_cf_threshold_signature::Call::signature_success{
 										ceremony_id: *ceremony_id,
 										signature: vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].1.clone()))],
 									}
-								), RuntimeOrigin::none()));
-							});
+								), RuntimeOrigin::none()
+							);
 					}
 					RuntimeEvent::Validator(pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
@@ -284,52 +282,54 @@ impl Engine {
 						// that for dot, given we don't have a key to sign with initially, it will work without extra test boilerplate.
 
 						// If we rotating let's witness the keys being rotated on the contract
-						PENDING_EXTRINSICS.with_borrow_mut(|v| {
-							v.push_back((RuntimeCall::Witnesser(
+						queue_dispatch_extrinsic(
+							RuntimeCall::Witnesser(
 								pallet_cf_witnesser::Call::witness_at_epoch {
 									call: Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
 										block_number: 100,
 										tx_id: [1u8; 32].into(),
 									}.into()),
 									epoch_index: Validator::epoch_index(),
-								}
-							), RuntimeOrigin::signed(self.node_id.clone())));
+								}),
+							RuntimeOrigin::signed(self.node_id.clone())
+						);
 
-							v.push_back((RuntimeCall::Witnesser(
+						queue_dispatch_extrinsic(
+							RuntimeCall::Witnesser(
 								pallet_cf_witnesser::Call::witness_at_epoch {
 									call: Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
 										block_number: 100,
 										tx_id: [2u8; 32],
 									}.into()),
 									epoch_index: Validator::epoch_index()
-								}
-							), RuntimeOrigin::signed(self.node_id.clone())));
+								}),
+							RuntimeOrigin::signed(self.node_id.clone())
+						);
 
-							if Validator::epoch_index() == GENESIS_EPOCH {
-								v.push_back((RuntimeCall::Environment(
-									pallet_cf_environment::Call::witness_polkadot_vault_creation {
-										dot_pure_proxy_vault_key: Default::default(),
+						if Validator::epoch_index() == GENESIS_EPOCH {
+							queue_dispatch_extrinsic(
+								RuntimeCall::Environment(pallet_cf_environment::Call::witness_polkadot_vault_creation {
+									dot_pure_proxy_vault_key: Default::default(),
+									tx_id: TxId {
+										block_number: 1,
+										extrinsic_index: 0,
+									},
+								}
+							), pallet_cf_governance::RawOrigin::GovernanceApproval.into());
+						} else {
+							queue_dispatch_extrinsic(RuntimeCall::Witnesser(
+								pallet_cf_witnesser::Call::witness_at_epoch {
+									call: Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+										block_number: 100,
 										tx_id: TxId {
-											block_number: 1,
-											extrinsic_index: 0,
+											block_number: 2,
+											extrinsic_index: 1,
 										},
-									}
-								), pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
-							} else {
-								v.push_back((RuntimeCall::Witnesser(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-											block_number: 100,
-											tx_id: TxId {
-												block_number: 2,
-												extrinsic_index: 1,
-											},
-										}.into()),
-										epoch_index: Validator::epoch_index()
-									}
-								), RuntimeOrigin::signed(self.node_id.clone())))
-							}
-						});
+									}.into()),
+									epoch_index: Validator::epoch_index()
+								}
+							), RuntimeOrigin::signed(self.node_id.clone()));
+						}
 					}
 				};
 			}
@@ -340,57 +340,48 @@ impl Engine {
 				RuntimeEvent::EthereumVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						if participants.contains(&self.node_id) {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::EthereumVault(
+							queue_dispatch_extrinsic(RuntimeCall::EthereumVault(
 									pallet_cf_vaults::Call::report_keygen_outcome {
 										ceremony_id: *ceremony_id,
 										reported_outcome: Ok(self.eth_threshold_signer.borrow_mut().propose_new_key()),
 									}
-								), RuntimeOrigin::signed(self.node_id.clone())));
-							});
+								), RuntimeOrigin::signed(self.node_id.clone()));
 						}
 				}
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						if participants.contains(&self.node_id) {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::PolkadotVault(
+							queue_dispatch_extrinsic(RuntimeCall::PolkadotVault(
 									pallet_cf_vaults::Call::report_keygen_outcome {
 										ceremony_id: *ceremony_id,
 										reported_outcome: Ok(self.dot_threshold_signer.borrow_mut().propose_new_key()),
 									}
-								), RuntimeOrigin::signed(self.node_id.clone())));
-							});
+								), RuntimeOrigin::signed(self.node_id.clone()));
 						}
 				}
 
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						if participants.contains(&self.node_id) {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::BitcoinVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
-										ceremony_id: *ceremony_id,
-										reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
-									}
-								), RuntimeOrigin::signed(self.node_id.clone())));
-							});
+							queue_dispatch_extrinsic(RuntimeCall::BitcoinVault(
+								pallet_cf_vaults::Call::report_keygen_outcome {
+									ceremony_id: *ceremony_id,
+									reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
+								}
+							), RuntimeOrigin::signed(self.node_id.clone()));
 						}
 				}
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
 						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
-							PENDING_EXTRINSICS.with_borrow_mut(|v| {
-								v.push_back((RuntimeCall::BitcoinVault(
-									pallet_cf_vaults::Call::report_key_handover_outcome {
-										ceremony_id: *ceremony_id,
-										reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
-									}
-								), RuntimeOrigin::signed(self.node_id.clone())));
-							});
+							queue_dispatch_extrinsic(RuntimeCall::BitcoinVault(
+								pallet_cf_vaults::Call::report_key_handover_outcome {
+									ceremony_id: *ceremony_id,
+									reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
+								}
+							), RuntimeOrigin::signed(self.node_id.clone()));
 						}
-
 				}
 			);
 		}
@@ -446,6 +437,12 @@ thread_local! {
 	// TODO: USE THIS IN WHEN HANDLING EVENTS INSTEAD OF DISPATCHING CALLS DIRECTLY
 	static PENDING_EXTRINSICS: RefCell<VecDeque<(state_chain_runtime::RuntimeCall, RuntimeOrigin)>> = RefCell::default();
 	static TIMESTAMP: RefCell<u64> = RefCell::new(SLOT_DURATION);
+}
+
+fn queue_dispatch_extrinsic(call: impl Into<RuntimeCall>, origin: RuntimeOrigin) {
+	PENDING_EXTRINSICS.with_borrow_mut(|v| {
+		v.push_back((call.into(), origin));
+	});
 }
 
 /// Dispatch all pending extrinsics in the queue.
