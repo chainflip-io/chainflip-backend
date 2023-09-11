@@ -1,0 +1,49 @@
+on:
+  workflow_call:
+    inputs:
+      network:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: write
+  actions: write
+
+jobs:
+  create:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin-ubuntu-22.04
+
+      - name: Create chainspec
+        run: |
+          chmod +x ./chainflip-node
+          echo "Generating chainspec"
+          ./chainflip-node build-spec --chain ${{ inputs.network }}-new --disable-default-bootnode > chainspec.json
+          cat chainspec.json state-chain/node/bootnodes/${{ inputs.network }}.json | jq -s add > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json
+          
+          echo "Generating raw chainspec"
+          ./chainflip-node build-spec --chain state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json --raw > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json
+
+      - uses: EndBug/add-and-commit@v9
+        with:
+          default_author: github_actions
+          add: state-chain/node/chainspecs/*.json
+          message: "Create chainspec for ${{ inputs.network }}"
+
+      - name: Upload chainspec to s3
+        run: |
+          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json

@@ -1,0 +1,8 @@
+{
+    "bootNodes": [
+	  "/ip4/165.232.114.128/tcp/30333/p2p/12D3KooWPFZo5JzqiWASDSrAtbyKgW2kw4Rb5FruE29PAhJ1u4xL",
+	  "/ip4/95.217.229.18/tcp/30333/p2p/12D3KooWAEq6VLm7FWzgyTxFwf8irsd3uEYoa1ZNoHmZAWgpkdfi",
+	  "/ip4/178.128.36.211/tcp/30333/p2p/12D3KooWMDs3oyT2YpQw88V7TdmN1dJa73D1jrfQorLaBovh7Kim",
+	  "/ip4/167.172.41.253/tcp/30333/p2p/12D3KooWGjx7vu1wB4xJwPZFbYj3rsVE9gW5eyMFcxRnYWu4sgtX"
+    ]
+}
