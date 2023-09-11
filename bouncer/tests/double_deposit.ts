@@ -33,12 +33,12 @@ async function main(): Promise<void> {
     },
   });
 
-  // Register Emergency Withdrawal Address before requesting reposit address.
+  // Register Liquidity Refund Address before requesting reposit address.
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(await newAddress('ETH', 'LP_1')),
   });
   await chainflip.tx.liquidityProvider
-    .registerEmergencyWithdrawalAddress(encodedEthAddr)
+    .registerLiquidityRefundAddress(encodedEthAddr)
     .signAndSend(lp);
 
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);

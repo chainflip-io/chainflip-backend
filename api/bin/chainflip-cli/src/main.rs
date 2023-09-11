@@ -80,15 +80,12 @@ async fn run_cli() -> Result<()> {
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
-						chain,
-						address,
-					},
+					LiquidityProviderSubcommands::RegisterLiquidityRefundAddress { chain, address },
 				) => {
-					let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
+					let lra_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
 					let tx_hash =
-						api.lp_api().register_emergency_withdrawal_address(ewa_address).await?;
-					println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
+						api.lp_api().register_liquidity_refund_address(lra_address).await?;
+					println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 				},
 				Redeem { amount, eth_address, executor } => {
 					request_redemption(api, amount, eth_address, executor).await?;
@@ -276,21 +273,21 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	impl std::fmt::Display for Keys {
 		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			writeln!(f, "🔑 Node public key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(f, "🔑 Node Public Key: 0x{}", hex::encode(&self.node_key.public_key))?;
 			writeln!(
 				f,
-				"🔑 Ethereum public key: 0x{}",
+				"🔑 Ethereum Public Key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
+			writeln!(f, "👤 Ethereum Address: {:?}", self.ethereum_address)?;
 			writeln!(
 				f,
-				"🔑 Validator public key: 0x{}",
+				"🔑 Validator Public Key: 0x{}",
 				hex::encode(&self.signing_key.public_key)
 			)?;
-			writeln!(f, "👤 Validator account id: {}", self.signing_account_id)?;
+			writeln!(f, "👤 Validator Account ID: {}", self.signing_account_id)?;
 			writeln!(f)?;
-			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
+			writeln!(f, "🌱 Seed Phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
 	}
@@ -356,7 +353,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	} else if !json {
 		println!();
 		println!("💡 You can save the private key files to a directory using the --path argument:");
-		println!("💡 `chainflip-cli --seed $MY_SEED_PHRASE --file $PATH_TO_KEYS_DIR`");
+		println!("💡 `chainflip-cli --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())
