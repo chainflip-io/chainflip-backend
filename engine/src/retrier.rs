@@ -343,7 +343,7 @@ where
 					submission_holder.push(submission_future(client, request_log, retry_limit, &closure, request_id, initial_request_timeout, 0, primary_or_secondary));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				let (request_id, request_log, retry_limit, result) = submission_holder.next_or_pending() => {
+				let (request_id, request_log, retry_limit, primary_or_secondary, result) = submission_holder.next_or_pending() => {
 					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					match result {
 						Ok(value) => {

@@ -290,7 +290,12 @@ mod test {
 	}
 
 	fn create_and_register_metric() -> IntCounterVec {
-		let metric = register_int_counter_vec_with_registry!(Opts::new("test", "test help"), &["label"], REGISTRY).unwrap();
+		let metric = register_int_counter_vec_with_registry!(
+			Opts::new("test", "test help"),
+			&["label"],
+			REGISTRY
+		)
+		.unwrap();
 		metric.with_label_values(&["A"]).inc();
 		metric.with_label_values(&["B"]).inc_by(10);
 		metric.with_label_values(&["C"]).inc_by(100);
