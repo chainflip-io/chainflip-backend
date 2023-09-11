@@ -104,6 +104,7 @@ section = "rust"
 systemd-units = [
   { unit-name = "chainflip-node", enable = false },
   { unit-name = "chainflip-archive-node", enable = false },
+  { unit-name = "chainflip-genesis-node", enable = false },
 ]
 
 [package.metadata.deb.variants.development]
