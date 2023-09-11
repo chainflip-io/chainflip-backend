@@ -190,6 +190,7 @@ pub trait CreatePolkadotVault: ApiCall<PolkadotCrypto> {
 #[scale_info(skip_type_params(E))]
 pub struct OpaqueApiCall<E> {
 	builder: PolkadotExtrinsicBuilder,
+	#[codec(skip)]
 	_environment: PhantomData<E>,
 }
 

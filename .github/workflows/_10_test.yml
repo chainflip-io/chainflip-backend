@@ -6,6 +6,7 @@ on:
         default: true
 
 env:
+  FORCE_COLOR: 1
   RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
@@ -58,3 +59,25 @@ jobs:
           token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           files: lcov.info
           fail_ci_if_error: false
+
+  test-preinst-scripts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tests_path:
+          - state-chain/node/package/preinst-tests
+          - engine/package/preinst-tests
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Install bats 🦇
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Test 🧪
+        shell: bash
+        run: |
+          bats tests/test_preinst.bats
+        working-directory: ${{ matrix.tests_path }}

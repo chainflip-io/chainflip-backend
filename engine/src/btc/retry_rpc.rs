@@ -1,13 +1,15 @@
 use bitcoin::{Block, BlockHash, Txid};
-use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
 	retrier::{Attempt, RequestLog, RetrierClient},
+	settings::{HttpBasicAuthEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::Bitcoin;
 use core::time::Duration;
+
+use anyhow::Result;
 
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
 
@@ -22,19 +24,23 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl BtcRetryRpcClient {
-	pub fn new<BtcRpcClientFut: Future<Output = BtcRpcClient> + Send + 'static>(
+	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		btc_client: BtcRpcClientFut,
-	) -> Self {
-		Self {
+		nodes: NodeContainer<HttpBasicAuthEndpoint>,
+	) -> Result<Self> {
+		let primary = BtcRpcClient::new(nodes.primary)?;
+		let backup = nodes.backup.map(BtcRpcClient::new).transpose()?;
+
+		Ok(Self {
 			retry_client: RetrierClient::new(
 				scope,
 				"btc_rpc",
-				btc_client,
+				futures::future::ready(primary),
+				backup.map(futures::future::ready),
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-		}
+		})
 	}
 }
 

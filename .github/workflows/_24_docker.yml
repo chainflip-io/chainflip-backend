@@ -19,6 +19,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  FORCE_COLOR: 1
+
 jobs:
   get-date-time:
     runs-on: ubuntu-20.04

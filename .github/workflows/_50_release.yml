@@ -5,9 +5,12 @@ on:
         type: string
         required: true
 
+env:
+  FORCE_COLOR: 1
+
 jobs:
-  release:
-    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+  compress-binaries:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -16,10 +19,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Set release directory
+        run: |
+          echo "RELEASE_DIR=chainflip_${{ github.ref_name }}_ubuntu_${{ matrix.ubuntu_version }}_amd64" >> $GITHUB_ENV
+
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
+          path: ${{ env.RELEASE_DIR }}
+
+      - name: Compress release
+        run: tar -czf ${{ env.RELEASE_DIR }}.tar.gz ${{ env.RELEASE_DIR }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: ${{ env.RELEASE_DIR }}.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - compress-binaries
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
 
       - name: Substitute ENV
         env:
@@ -30,15 +60,10 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ inputs.network }}:${{ github.ref_name }}:ubuntu-${{ matrix.ubuntu_version }}
+          name: Chainflip ${{ inputs.network }}:${{ github.ref_name }}
           generate_release_notes: false
           body_path: RELEASE.md
           draft: true
           prerelease: false
           files: |
-            chainflip-node
-            chainflip-engine
-            chainflip-cli
-            chainflip-broker-api
-            chainflip-lp-api
-            wbuild/state-chain-runtime/state_chain_runtime*.wasm
+            *.tar.gz

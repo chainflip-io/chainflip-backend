@@ -1,5 +1,9 @@
 on:
   workflow_call:
+
+env:
+  FORCE_COLOR: 1
+
 jobs:
   fetch:
     strategy:

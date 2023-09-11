@@ -425,6 +425,7 @@ where
 		participants: BTreeSet<Self::ValidatorId>,
 		key: C::AggKey,
 		epoch_index: EpochIndex,
+		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
 	) -> ThresholdSignatureRequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
