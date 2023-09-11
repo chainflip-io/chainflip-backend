@@ -143,30 +143,27 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 							.await
 							.context("Failed to estimate gas")?;
 
-						match tx.gas_limit {
+						transaction_request.set_gas(match tx.gas_limit {
 							Some(gas_limit) =>
 								if estimated_gas > gas_limit {
 									return Err(anyhow::anyhow!(
 										"Estimated gas is greater than the gas limit"
 									))
 								} else {
-									transaction_request
-										.set_gas(gas_limit.min(MAX_GAS_LIMIT.into()));
+									gas_limit.min(MAX_GAS_LIMIT.into())
 								},
 							None => {
 								// increase the estimate by 33% for normal transactions
-								transaction_request.set_gas(
-									estimated_gas
-										.saturating_mul(U256::from(4u64))
-										.checked_div(U256::from(3u64))
-										.unwrap()
-										.min(MAX_GAS_LIMIT.into()),
-								);
+								estimated_gas
+									.saturating_mul(U256::from(4u64))
+									.checked_div(U256::from(3u64))
+									.unwrap()
+									.min(MAX_GAS_LIMIT.into())
 							},
-						}
+						});
 
 						client
-							.send_transaction(transaction_request)
+							.send_transaction(transaction_request.into())
 							.await
 							.context("Failed to send ETH transaction")
 					})
