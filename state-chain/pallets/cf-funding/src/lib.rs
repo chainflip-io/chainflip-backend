@@ -343,22 +343,13 @@ pub mod pallet {
 		/// An account can only have one pending redemption at a time, the funds wrapped up in the
 		/// pending redemption are inaccessible and are not counted towards a Validator's Auction
 		/// Bid.
-		///
-		/// ## Events
-		///
-		/// - None
-		///
-		/// ## Errors
-		///
-		/// - [PendingRedemption](Error::PendingRedemption)
-		/// - [AuctionPhase](Error::AuctionPhase)
-		/// - [WithdrawalAddressRestricted](Error::WithdrawalAddressRestricted)
 		#[pallet::call_index(1)]
 		#[pallet::weight({ if matches!(amount, RedemptionAmount::Exact(_)) { T::WeightInfo::redeem() } else { T::WeightInfo::redeem_all() }})]
 		pub fn redeem(
 			origin: OriginFor<T>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 			address: EthereumAddress,
+			// Only this address can execute the claim.
 			executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
