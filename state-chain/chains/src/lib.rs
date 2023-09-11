@@ -52,9 +52,6 @@ pub trait Chain: Member + Parameter {
 
 	type ChainCrypto: ChainCrypto;
 
-	type KeyHandoverIsRequired: Get<bool>;
-	type OptimisticActivation: Get<bool>;
-
 	type ChainBlockNumber: FullCodec
 		+ Default
 		+ Member
@@ -138,7 +135,7 @@ pub trait Chain: Member + Parameter {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto {
-	type ImmutableKeys: Get<bool>;
+	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	type AggKey: MaybeSerializeDeserialize
@@ -173,6 +170,28 @@ pub trait ChainCrypto {
 	/// to always trivially returning `true` for chains without handover.)
 	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
 		true
+	}
+
+	/// Determines whether threshold signatures are made with a specific fixed key, or whether the
+	/// key is refreshed if we need to retry the signature.
+	///
+	/// By default, this is true for Utxo-based chains, true otherwise.
+	fn sign_with_specific_key() -> bool {
+		Self::UtxoChain::get()
+	}
+
+	/// Determines whether the chain crypto allows for optimistic activation of new aggregate keys.
+	///
+	/// By default, this is true for Utxo-based chains, false otherwise.
+	fn optimistic_activation() -> bool {
+		Self::UtxoChain::get()
+	}
+
+	/// Determines whether the chain crypto supports key handover.
+	///
+	/// By default, this is true for Utxo-based chains, false otherwise.
+	fn key_handover_is_required() -> bool {
+		Self::UtxoChain::get()
 	}
 }
 

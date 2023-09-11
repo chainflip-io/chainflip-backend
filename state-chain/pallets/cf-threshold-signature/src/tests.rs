@@ -4,7 +4,7 @@ use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
 	Error, PalletOffence, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
 };
-use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto, MockImmutableKeys};
+use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto, MockFixedKeySigningRequests};
 use cf_traits::{
 	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
 	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
@@ -486,7 +486,7 @@ fn test_retries_for_immutable_key() {
 				..
 			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
-			MockImmutableKeys::set(true);
+			MockFixedKeySigningRequests::set(true);
 
 			// Pretend the key has been updated to the next one.
 			MockKeyProvider::<MockEthereumChainCrypto>::add_key(MockAggKey(*b"NEXT"));

@@ -422,10 +422,7 @@ pub mod pallet {
 								request_id,
 								attempt_count.wrapping_add(1),
 								payload,
-								if <<T::TargetChainCrypto as ChainCrypto>::ImmutableKeys as Get<
-									bool,
-								>>::get()
-								{
+								if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
 									RequestType::SpecificKey(key, epoch)
 								} else {
 									RequestType::CurrentKey

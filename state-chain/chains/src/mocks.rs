@@ -5,7 +5,7 @@ use crate::{
 	*,
 };
 use cf_utilities::SliceToArray;
-use sp_core::H160;
+use sp_core::{ConstBool, H160};
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -16,8 +16,8 @@ pub type MockEthereumChannelId = u128;
 
 thread_local! {
 	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
-	static MOCK_OPTIMISTICE_ACTIVATION: RefCell<bool> = RefCell::new(false);
-	static MOCK_IMMUTABLE_KEYS: RefCell<bool> = RefCell::new(false);
+	static MOCK_OPTIMISTIC_ACTIVATION: RefCell<bool> = RefCell::new(false);
+	static MOCK_SIGN_WITH_SPECIFIC_KEY: RefCell<bool> = RefCell::new(false);
 }
 
 pub struct MockKeyHandoverIsRequired;
@@ -38,27 +38,27 @@ pub struct MockOptimisticActivation;
 
 impl MockOptimisticActivation {
 	pub fn set(value: bool) {
-		MOCK_OPTIMISTICE_ACTIVATION.with(|v| *v.borrow_mut() = value);
+		MOCK_OPTIMISTIC_ACTIVATION.with(|v| *v.borrow_mut() = value);
 	}
 }
 
 impl Get<bool> for MockOptimisticActivation {
 	fn get() -> bool {
-		MOCK_OPTIMISTICE_ACTIVATION.with(|v| *v.borrow())
+		MOCK_OPTIMISTIC_ACTIVATION.with(|v| *v.borrow())
 	}
 }
 
-pub struct MockImmutableKeys;
+pub struct MockFixedKeySigningRequests;
 
-impl MockImmutableKeys {
+impl MockFixedKeySigningRequests {
 	pub fn set(value: bool) {
-		MOCK_IMMUTABLE_KEYS.with(|v| *v.borrow_mut() = value);
+		MOCK_SIGN_WITH_SPECIFIC_KEY.with(|v| *v.borrow_mut() = value);
 	}
 }
 
-impl Get<bool> for MockImmutableKeys {
+impl Get<bool> for MockFixedKeySigningRequests {
 	fn get() -> bool {
-		MOCK_IMMUTABLE_KEYS.with(|v| *v.borrow())
+		MOCK_SIGN_WITH_SPECIFIC_KEY.with(|v| *v.borrow())
 	}
 }
 
@@ -66,8 +66,6 @@ impl Get<bool> for MockImmutableKeys {
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
 	type ChainCrypto = MockEthereumChainCrypto;
-	type KeyHandoverIsRequired = MockKeyHandoverIsRequired;
-	type OptimisticActivation = MockOptimisticActivation;
 
 	type DepositFetchId = MockEthereumChannelId;
 	type ChainBlockNumber = u64;
@@ -206,7 +204,7 @@ pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereumChainCrypto;
 impl ChainCrypto for MockEthereumChainCrypto {
-	type ImmutableKeys = MockImmutableKeys;
+	type UtxoChain = ConstBool<false>;
 
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
@@ -232,6 +230,18 @@ impl ChainCrypto for MockEthereumChainCrypto {
 		// In tests we don't look to the current key, but instead
 		// compare to some "bad" value for simplicity
 		new_key != &BAD_AGG_KEY_POST_HANDOVER
+	}
+
+	fn sign_with_specific_key() -> bool {
+		MockFixedKeySigningRequests::get()
+	}
+
+	fn optimistic_activation() -> bool {
+		MockOptimisticActivation::get()
+	}
+
+	fn key_handover_is_required() -> bool {
+		MockKeyHandoverIsRequired::get()
 	}
 }
 

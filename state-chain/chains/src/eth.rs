@@ -20,7 +20,6 @@ use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::ConstBool;
 use sp_std::{cmp::min, convert::TryInto, str};
 
 // Reference constants for the chain spec
@@ -32,9 +31,6 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	type ChainCrypto = evm::EvmCrypto;
-
-	type KeyHandoverIsRequired = ConstBool<false>;
-	type OptimisticActivation = ConstBool<false>;
 
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;

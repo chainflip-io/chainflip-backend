@@ -24,7 +24,7 @@ use sp_std::{convert::TryFrom, str, vec};
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
-	type ImmutableKeys = ConstBool<false>;
+	type UtxoChain = ConstBool<false>;
 
 	type AggKey = evm::AggKey;
 	type Payload = H256;
