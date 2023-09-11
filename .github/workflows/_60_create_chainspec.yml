@@ -23,10 +23,18 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v3
+#      - name: Download binary artifacts
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: chainflip-backend-bin-ubuntu-22.04
+      - name: Fetch binaries
+        uses: dawidd6/action-download-artifact@v2
         with:
+          workflow: release-sisyphos.yml
           name: chainflip-backend-bin-ubuntu-22.04
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
 
       - name: Create chainspec
         run: |
@@ -36,7 +44,7 @@ jobs:
           cat chainspec.json state-chain/node/bootnodes/${{ inputs.network }}.json | jq -s add > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json
           
           echo "Generating raw chainspec"
-          ./chainflip-node build-spec --chain state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json --raw > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json
+          ./chainflip-node build-spec --chain state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json --disable-default-bootnode --raw > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json
 
       - uses: EndBug/add-and-commit@v9
         with:
@@ -46,4 +54,4 @@ jobs:
 
       - name: Upload chainspec to s3
         run: |
-          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
+          aws s3 cp state-chain/node/chainspecs/CHANGEME.chainspec.raw.json s3://repo.chainflip.io/chainspecs/CHANGEME.chainspec.json
