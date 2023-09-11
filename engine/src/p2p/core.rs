@@ -376,7 +376,7 @@ impl P2PContext {
 			trace!("Received a message from {acc_id}");
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
-			P2P_BAD_MSG.with_label_values(&["unknown_x25519_key"]).inc();
+			P2P_BAD_MSG.inc(&["unknown_x25519_key"]);
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
 		}
 	}
@@ -555,7 +555,7 @@ impl P2PContext {
 
 				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
 			} else {
-				P2P_BAD_MSG.with_label_values(&["bad_number_of_parts"]).inc();
+				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 				warn!(
 					"Ignoring a multipart message with unexpected number of parts ({})",
 					parts.len()

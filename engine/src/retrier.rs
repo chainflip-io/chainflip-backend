@@ -231,10 +231,10 @@ where
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				let (request_id, request_log, retry_limit, result) = submission_holder.next_or_pending() => {
-					RPC_RETRIER_TOTAL_REQUESTS.with_label_values(&[name, request_log.rpc_method.as_str()]).inc();
+					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					match result {
 						Ok(value) => {
-							RPC_RETRIER_REQUESTS.with_label_values(&[name, request_log.rpc_method.as_str()]).inc();
+							RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
 								let _result = response_sender.send(value);
 							}

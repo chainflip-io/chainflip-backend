@@ -395,13 +395,15 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			},
 		}
 
-		UNAUTHORIZED_CEREMONY
-			.with_label_values(&[Chain::NAME, "signing"])
-			.set(self.signing_states.count_unauthorised_ceremonies().try_into().unwrap());
+		UNAUTHORIZED_CEREMONY.set(
+			&[Chain::NAME, "signing"],
+			self.signing_states.count_unauthorised_ceremonies().try_into().unwrap(),
+		);
 
-		UNAUTHORIZED_CEREMONY
-			.with_label_values(&[Chain::NAME, "keygen"])
-			.set(self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap());
+		UNAUTHORIZED_CEREMONY.set(
+			&[Chain::NAME, "keygen"],
+			self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap(),
+		);
 	}
 
 	pub async fn run(
@@ -423,7 +425,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 							match deserialize_for_version::<Chain::CryptoScheme>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
-									CEREMONY_BAD_MSG.with_label_values(&["deserialize_for_version", Chain::NAME]).inc();
+									CEREMONY_BAD_MSG.inc(&["deserialize_for_version", Chain::NAME]);
 									warn!("Failed to deserialize message from: {sender_id}");
 								},
 							}
@@ -644,14 +646,16 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				)
 			},
 		}
-		
-		UNAUTHORIZED_CEREMONY
-			.with_label_values(&[Chain::NAME, "signing"])
-			.set(self.signing_states.count_unauthorised_ceremonies().try_into().unwrap());
 
-		UNAUTHORIZED_CEREMONY
-			.with_label_values(&[Chain::NAME, "keygen"])
-			.set(self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap());
+		UNAUTHORIZED_CEREMONY.set(
+			&[Chain::NAME, "signing"],
+			self.signing_states.count_unauthorised_ceremonies().try_into().unwrap(),
+		);
+
+		UNAUTHORIZED_CEREMONY.set(
+			&[Chain::NAME, "keygen"],
+			self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap(),
+		);
 	}
 
 	/// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
@@ -708,28 +712,29 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		debug!("Received data {data} from [{sender_id}]");
 
 		// If no ceremony exists, create an unauthorised one (with ceremony id tracking
-		if !self.ceremony_handles.contains_key(&ceremony_id) {
+		if let std::collections::hash_map::Entry::Vacant(e) =
+			self.ceremony_handles.entry(ceremony_id)
+		{
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Chain>(ceremony_id);
 			if ceremony_id > latest_ceremony_id + Chain::CEREMONY_ID_WINDOW {
-				CEREMONY_BAD_MSG
-					.with_label_values(&["unexpected_future_ceremony_id", Chain::NAME])
-					.inc();
+				CEREMONY_BAD_MSG.inc(&["unexpected_future_ceremony_id", Chain::NAME]);
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {
-				CEREMONY_BAD_MSG.with_label_values(&["old_ceremony_id", Chain::NAME]).inc();
+				CEREMONY_BAD_MSG.inc(&["old_ceremony_id", Chain::NAME]);
 				trace!("Ignoring data: old ceremony id {ceremony_id_string}",);
 				return
 			} else {
-				let total = self.count_unauthorised_ceremonies() + 1;
-
-				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
-				self.ceremony_handles.insert(
+				e.insert(CeremonyHandle::spawn::<Chain>(
 					ceremony_id,
-					CeremonyHandle::spawn::<Chain>(ceremony_id, self.outcome_sender.clone(), scope),
-				);
+					self.outcome_sender.clone(),
+					scope,
+				));
+
+				let total = self.count_unauthorised_ceremonies();
+				trace!("Unauthorised ceremony created {ceremony_id_string} (Total: {total})",);
 			}
 		}
 
@@ -792,11 +797,11 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	}
 
 	fn count_unauthorised_ceremonies(&self) -> usize {
-		self.ceremony_handles.values()
-		.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
-		.count()
+		self.ceremony_handles
+			.values()
+			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+			.count()
 	}
-
 }
 
 // ==================

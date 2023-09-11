@@ -153,22 +153,22 @@ impl P2PMuxer {
 									.expect("bitcoin receiver dropped");
 							},
 							ChainTag::Ed25519 => {
-								P2P_BAD_MSG.with_label_values(&["Ed25519_not_supported"]).inc();
+								P2P_BAD_MSG.inc(&["Ed25519_not_supported"]);
 								warn!("Ed25519 not yet supported")
 							},
 						}
 					},
 					Err(e) => {
-						P2P_BAD_MSG.with_label_values(&["deserialization_tagged_msg"]).inc();
+						P2P_BAD_MSG.inc(&["deserialization_tagged_msg"]);
 						trace!("Could not deserialize tagged p2p message: {e:?}",);
 					},
 				}
 			} else {
-				P2P_BAD_MSG.with_label_values(&["unexpected_version"]).inc();
+				P2P_BAD_MSG.inc(&["unexpected_version"]);
 				trace!("ignoring p2p message with unexpected version: {version}",);
 			}
 		} else {
-			P2P_BAD_MSG.with_label_values(&["deserialization_versioned_msg"]).inc();
+			P2P_BAD_MSG.inc(&["deserialization_versioned_msg"]);
 		}
 	}
 

@@ -2,20 +2,16 @@
 //! allowing prometheus server to query metrics from the CFE
 //! Returns the metrics encoded in a prometheus format
 //! Method returns a Sender, allowing graceful termination of the infinite loop
-
 use super::{super::Port, task_scope};
 use async_channel::{unbounded, Receiver, Sender};
-use itertools::Itertools;
 use lazy_static;
 use prometheus::{
-	core::MetricVecBuilder, register_int_counter_vec_with_registry,
-	register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-	register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts,
-	Registry,
+	register_int_counter_vec_with_registry, register_int_counter_with_registry,
+	register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntCounter,
+	IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
 };
 use serde::Deserialize;
 use std::net::IpAddr;
-use tokio::spawn;
 use tracing::info;
 use warp::Filter;
 
@@ -38,41 +34,125 @@ fn collect_metric_to_delete() -> Vec<DeleteMetricCommand> {
 
 	metric_pair
 }
-
-struct MetricCounter<'a> {
-	metric: &'a IntCounterVec,
-	labels: &'a [&'a str],
+/// wrapper around a Gauge which needs to be deleted later on
+/// labels are defined only at creation, allowing the code to be more clear and less error prone
+#[derive(Clone)]
+pub struct MetricGauge<const N: usize> {
+	metric: &'static IntGaugeVecWrapper<N>,
+	labels: [String; N],
 }
 
-impl<'a> MetricCounter<'a> {
-	fn new(metric: &'a IntCounterVec, labels: &'a [&'a str]) -> MetricCounter<'a> {
+impl<const N: usize> MetricGauge<N> {
+	pub fn new(metric: &'static IntGaugeVecWrapper<N>, labels: [String; N]) -> MetricGauge<N> {
+		MetricGauge { metric, labels }
+	}
+
+	pub fn inc(&self) {
+		let labels = self.labels.each_ref().map(|s| s.as_str());
+		self.metric.inc(&labels);
+	}
+
+	pub fn dec(&self) {
+		let labels = self.labels.each_ref().map(|s| s.as_str());
+		self.metric.dec(&labels);
+	}
+
+	pub fn set(&self, val: i64) {
+		let labels = self.labels.each_ref().map(|s| s.as_str());
+		self.metric.set(&labels, val);
+	}
+}
+
+impl<const N: usize> Drop for MetricGauge<N> {
+	fn drop(&mut self) {
+		let metric = self.metric.metric.clone();
+		let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
+
+		let _ = DELETE_METRIC_CHANNEL.0.try_send(DeleteMetricCommand::GaugePair(metric, labels));
+	}
+}
+
+/// wrapper used to enforce the correct number of labels when interacting with an IntGaugeVec
+pub struct IntGaugeVecWrapper<const N: usize> {
+	pub metric: IntGaugeVec,
+}
+
+impl<const N: usize> IntGaugeVecWrapper<N> {
+	fn new(metric: IntGaugeVec) -> IntGaugeVecWrapper<N> {
+		IntGaugeVecWrapper { metric }
+	}
+
+	pub fn inc(&self, labels: &[&str; N]) {
+		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
+			m.inc();
+		};
+	}
+
+	pub fn dec(&self, labels: &[&str; N]) {
+		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
+			m.dec();
+		};
+	}
+
+	pub fn set(&self, labels: &[&str; N], val: i64) {
+		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
+			m.set(val);
+		};
+	}
+}
+
+/// wrapper around a Counter which needs to be deleted later on
+/// labels are defined only at creation, allowing the code to be more clear and less error prone
+#[derive(Clone)]
+pub struct MetricCounter<const N: usize> {
+	metric: &'static IntCounterVecWrapper<N>,
+	labels: [String; N],
+}
+
+impl<const N: usize> MetricCounter<N> {
+	pub fn new(metric: &'static IntCounterVecWrapper<N>, labels: [String; N]) -> MetricCounter<N> {
 		MetricCounter { metric, labels }
 	}
 
-	fn inc(&self) {
-		if let Ok(m) = self.metric.get_metric_with_label_values(self.labels) {
-			m.inc();
-		}
-	}
-
-	fn inc_by(&self, val: u64) {
-		if let Ok(m) = self.metric.get_metric_with_label_values(self.labels) {
-			m.inc_by(val);
-		}
+	pub fn inc(&self) {
+		let labels = self.labels.each_ref().map(|s| s.as_str());
+		self.metric.inc(&labels);
 	}
 }
 
-impl<'a> Drop for MetricCounter<'a> {
+impl<const N: usize> Drop for MetricCounter<N> {
 	fn drop(&mut self) {
-		let metric = self.metric.clone();
+		let metric = self.metric.metric.clone();
 		let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
-		tokio::spawn(async move {
-			let _ = DELETE_METRIC_CHANNEL
-				.0
-				.send(DeleteMetricCommand::CounterPair(metric, labels))
-				.await;
-		});
+
+		let _ = DELETE_METRIC_CHANNEL
+			.0
+			.try_send(DeleteMetricCommand::CounterPair(metric, labels));
 	}
+}
+
+/// wrapper used to enforce the correct number of labels when interacting with an IntCounterVec
+pub struct IntCounterVecWrapper<const N: usize> {
+	pub metric: IntCounterVec,
+}
+
+impl<const N: usize> IntCounterVecWrapper<N> {
+	fn new(metric: IntCounterVec) -> IntCounterVecWrapper<N> {
+		IntCounterVecWrapper { metric }
+	}
+
+	pub fn inc(&self, labels: &[&str; N]) {
+		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
+			m.inc();
+		};
+	}
+}
+
+/// structure containing the metrics used during a ceremony
+/// TODO: expand it with the new metrics measuring ceremony duration
+#[derive(Clone)]
+pub struct CeremonyMetrics {
+	pub processed_messages: MetricCounter<1>,
 }
 
 lazy_static::lazy_static! {
@@ -80,22 +160,22 @@ lazy_static::lazy_static! {
 
 	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
 
-	pub static ref RPC_RETRIER_REQUESTS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials"), &["client","rpc_method"], REGISTRY).unwrap();
-	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times"), &["client", "rpc_method"], REGISTRY).unwrap();
+	pub static ref RPC_RETRIER_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials"), &["client","rpc_method"], REGISTRY).unwrap());
+	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times"), &["client", "rpc_method"], REGISTRY).unwrap());
 
 	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).unwrap();
 	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).unwrap();
 	pub static ref P2P_RECONNECT_PEERS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_reconnect_peers", "Count the number of peers we need to reconnect to"), REGISTRY).unwrap();
 	pub static ref P2P_ACTIVE_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_active_connections", "Count the number of active connections"), REGISTRY).unwrap();
-	pub static ref P2P_MONITOR_EVENT: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("p2p_monitor_event", "Count the number of events observed by the zmq connection monitor"), &["event_type"], REGISTRY).unwrap();
 	pub static ref P2P_ALLOWED_PUBKEYS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys"), REGISTRY).unwrap();
 	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), REGISTRY).unwrap();
-	pub static ref P2P_BAD_MSG: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded"), &["reason"], REGISTRY).unwrap();
+	pub static ref P2P_MONITOR_EVENT: IntCounterVecWrapper<1> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("p2p_monitor_event", "Count the number of events observed by the zmq connection monitor"), &["event_type"], REGISTRY).unwrap());
+	pub static ref P2P_BAD_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded"), &["reason"], REGISTRY).unwrap());
 
-	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVec = register_int_gauge_vec_with_registry!(Opts::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation"), &["chain", "type"], REGISTRY).unwrap();
-	pub static ref CEREMONY_BAD_MSG: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony"), &["reason", "chain"], REGISTRY).unwrap();
+	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVecWrapper<2> = IntGaugeVecWrapper::new(register_int_gauge_vec_with_registry!(Opts::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation"), &["chain", "type"], REGISTRY).unwrap());
+	pub static ref CEREMONY_BAD_MSG: IntCounterVecWrapper<2> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony"), &["reason", "chain"], REGISTRY).unwrap());
 
-	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVec = register_int_counter_vec_with_registry!(Opts::new("ceremony_msg", "Count all the processed messages for a given ceremony"), &["ceremony_id"], REGISTRY).unwrap();
+	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("ceremony_msg", "Count all the processed messages for a given ceremony"), &["ceremony_id"], REGISTRY).unwrap());
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
@@ -161,8 +241,6 @@ fn delete_labels(metric_pairs: &Vec<DeleteMetricCommand>) {
 
 #[cfg(test)]
 mod test {
-	use crate::metrics;
-
 	use super::*;
 	use futures::FutureExt;
 
@@ -212,7 +290,7 @@ mod test {
 	}
 
 	fn create_and_register_metric() -> IntCounterVec {
-		let metric = metrics::create_and_register_counter_vec("test", "test help", &["label"]);
+		let metric = register_int_counter_vec_with_registry!(Opts::new("test", "test help"), &["label"], REGISTRY).unwrap();
 		metric.with_label_values(&["A"]).inc();
 		metric.with_label_values(&["B"]).inc_by(10);
 		metric.with_label_values(&["C"]).inc_by(100);
