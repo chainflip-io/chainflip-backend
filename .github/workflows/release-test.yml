@@ -8,11 +8,32 @@ concurrency:
 
 jobs:
   build:
-    uses: ./.github/workflows/_20_build.yml
-    secrets: inherit
-    with:
-      network: sisyphos
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: release-sisyphos.yml
+          name: chainflip-backend-bin-ubuntu-22.04
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
+
+      - name: Reupload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin-ubuntu-22.04
+          path: |
+            chainflip-broker-api
+            chainflip-btc-deposit-tracker
+            chainflip-cli
+            chainflip-engine
+            chainflip-lp-api
+            chainflip-node
+            generate-genesis-keys
   chainspec:
+    needs:
+      - build
     uses: ./.github/workflows/_60_create_chainspec.yml
     secrets: inherit
     with:
