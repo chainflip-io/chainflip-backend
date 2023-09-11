@@ -27,10 +27,6 @@ const REQUEST_LIFETIME: u32 = 128;
 pub enum FinalizationError {
 	#[error("The requested transaction was not and will not be included in a finalized block")]
 	NotFinalized,
-	#[error(
-		"The requested transaction was not (but maybe in the future) included in a finalized block"
-	)]
-	Unknown,
 }
 
 #[derive(Error, Debug)]
@@ -52,7 +48,7 @@ pub type RequestID = u64;
 pub struct Request {
 	id: RequestID,
 	pending_submissions: usize,
-	allow_resubmits: bool,
+	strictly_one_submission: bool,
 	resubmit_window: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
 	call: state_chain_runtime::RuntimeCall,
 	result_sender: oneshot::Sender<ExtrinsicResult>,
@@ -60,8 +56,8 @@ pub struct Request {
 
 #[derive(Debug)]
 pub enum RequestStrategy {
-	Submit(oneshot::Sender<H256>),
-	Finalize,
+	StrictlyOneSubmission(oneshot::Sender<H256>),
+	AllowMultipleSubmissions,
 }
 
 pub struct Submission {
@@ -72,7 +68,6 @@ pub struct Submission {
 
 pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static> {
 	submissions_by_nonce: BTreeMap<state_chain_runtime::Nonce, Vec<Submission>>,
-	pub anticipated_nonce: state_chain_runtime::Nonce,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: state_chain_runtime::Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
@@ -104,7 +99,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		(
 			Self {
 				submissions_by_nonce: Default::default(),
-				anticipated_nonce: finalized_nonce,
 				signer,
 				finalized_nonce,
 				finalized_block_hash,
@@ -119,11 +113,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		)
 	}
 
-	pub fn finalized_nonce(&self) -> state_chain_runtime::Nonce {
-		self.finalized_nonce
-	}
-
-	pub async fn submit_extrinsic_at_nonce(
+	async fn submit_extrinsic_at_nonce(
 		&mut self,
 		request: &mut Request,
 		nonce: state_chain_runtime::Nonce,
@@ -206,14 +196,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 	pub async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		Ok(loop {
-			match self.submit_extrinsic_at_nonce(request, self.anticipated_nonce).await? {
-				Ok(tx_hash) => {
-					self.anticipated_nonce += 1;
-					break tx_hash
-				},
-				Err(SubmissionLogicError::NonceTooLow) => {
-					self.anticipated_nonce += 1;
-				},
+			let nonce =
+				self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
+			match self.submit_extrinsic_at_nonce(request, nonce).await? {
+				Ok(tx_hash) => break tx_hash,
+				Err(SubmissionLogicError::NonceTooLow) => {},
 			}
 		})
 	}
@@ -232,10 +219,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				Request {
 					id,
 					pending_submissions: 0,
-					allow_resubmits: match &strategy {
-						RequestStrategy::Submit(_) => false,
-						RequestStrategy::Finalize => true,
-					},
+					strictly_one_submission: matches!(
+						strategy,
+						RequestStrategy::StrictlyOneSubmission(_)
+					),
 					resubmit_window: ..=(self.finalized_block_number + 1 + REQUEST_LIFETIME),
 					call,
 					result_sender,
@@ -243,7 +230,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			)
 			.unwrap();
 		let tx_hash: H256 = self.submit_extrinsic(request).await?;
-		if let RequestStrategy::Submit(hash_sender) = strategy {
+		if let RequestStrategy::StrictlyOneSubmission(hash_sender) = strategy {
 			let _result = hash_sender.send(tx_hash);
 		};
 		Ok(())
@@ -280,7 +267,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			self.finalized_block_hash = block_hash;
 
 			self.finalized_nonce = nonce;
-			self.anticipated_nonce = state_chain_runtime::Nonce::max(self.anticipated_nonce, nonce);
 
 			for (extrinsic_index, extrinsic_events) in events
 				.into_iter()
@@ -386,7 +372,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			for (_request_id, request) in requests.extract_if(|_request_id, request| {
 				request.pending_submissions == 0 &&
-					!request.resubmit_window.contains(&(block.header.number + 1))
+					(!request.resubmit_window.contains(&(block.header.number + 1)) ||
+						request.strictly_one_submission)
 			}) {
 				let _result = request
 					.result_sender

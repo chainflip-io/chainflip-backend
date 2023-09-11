@@ -160,39 +160,6 @@ impl SignedExtrinsicClient {
 								&mut requests,
 								block_hash,
 							).await?;
-
-							/*
-							// TODO: Handle possibility of stuck nonce caused submissions being dropped from the mempool or broken submissions either submitted here or externally when only using submit_signed_extrinsics
-							// TODO: Improve handling only submit_signed_extrinsic requests (using pending_extrinsics rpc call)
-							// TODO: Use system_accountNextIndex
-							{
-								let mut shuffled_requests = {
-									use rand::prelude::SliceRandom;
-									let mut requests = requests.iter_mut().filter(|(_, request)| request.allow_resubmits).collect::<Vec<_>>();
-									requests.shuffle(&mut rand::thread_rng());
-									requests.into_iter()
-								};
-
-								if let Some((_, request)) = shuffled_requests.next() {
-									// TODO: Detect stuck state via getting all pending extrinsics, and checking for missing extrinsics above finalized nonce
-									match submission_watcher.submit_extrinsic_at_nonce(request, submission_watcher.finalized_nonce()).await? {
-										Ok(_) => {
-											debug!("Detected a gap in the account's submitted nonce values, pending extrinsics after this gap will not be including in blocks, unless the gap is filled. Attempting to resolve.");
-											submission_watcher.anticipated_nonce = submission_watcher.finalized_nonce() + 1;
-											for (_, request) in shuffled_requests {
-												match submission_watcher.submit_extrinsic_at_nonce(request, submission_watcher.anticipated_nonce).await? {
-													Ok(_) => {
-														submission_watcher.anticipated_nonce += 1;
-													},
-													Err(submission_watcher::SubmissionLogicError::NonceTooLow) => break
-												}
-											}
-										},
-										Err(submission_watcher::SubmissionLogicError::NonceTooLow) => {} // Expected case, so we ignore
-									}
-								}
-							}
-							*/
 						} else break Ok(()),
 					}
 				}
@@ -224,7 +191,7 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 				(
 					call.into(),
 					result_sender,
-					submission_watcher::RequestStrategy::Submit(hash_sender),
+					submission_watcher::RequestStrategy::StrictlyOneSubmission(hash_sender),
 				)
 			})
 			.await
@@ -245,7 +212,11 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 	{
 		UntilFinalizedFuture(
 			send_request(&self.request_sender, |result_sender| {
-				(call.into(), result_sender, submission_watcher::RequestStrategy::Finalize)
+				(
+					call.into(),
+					result_sender,
+					submission_watcher::RequestStrategy::AllowMultipleSubmissions,
+				)
 			})
 			.await,
 		)

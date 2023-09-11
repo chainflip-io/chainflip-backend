@@ -1,5 +1,4 @@
 use cf_chains::{dot, ChainState};
-use jsonrpsee::types::ErrorObject;
 
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,
@@ -9,71 +8,6 @@ use crate::{
 use super::*;
 
 const INITIAL_NONCE: state_chain_runtime::Nonce = 10;
-
-#[tokio::test]
-async fn should_increment_nonce_on_success() {
-	let mut mock_rpc_api = MockBaseRpcApi::new();
-
-	// Return a success, cause the nonce to increment
-	mock_rpc_api
-		.expect_submit_extrinsic()
-		.times(1)
-		.returning(move |_| Ok(H256::default()));
-
-	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
-
-	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 1);
-}
-
-/// If the tx fails due to the same nonce existing in the pool already, it should increment the
-/// nonce and try again.
-#[tokio::test]
-async fn should_increment_and_retry_if_nonce_in_pool() {
-	let mut mock_rpc_api = MockBaseRpcApi::new();
-
-	mock_rpc_api.expect_submit_extrinsic().times(1).returning(move |_| {
-		Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
-			ErrorObject::from(jsonrpsee::types::error::ErrorCode::ServerError(1014)),
-		)))
-	});
-
-	// On the retry, return a success.
-	mock_rpc_api
-		.expect_submit_extrinsic()
-		.times(1)
-		.returning(move |_| Ok(H256::default()));
-
-	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
-
-	// Nonce should be +2, once for the initial submission, and once for the retry
-	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 2);
-}
-
-#[tokio::test]
-async fn should_increment_and_retry_if_nonce_consumed_in_prev_blocks() {
-	let mut mock_rpc_api = MockBaseRpcApi::new();
-
-	mock_rpc_api.expect_submit_extrinsic().times(1).returning(move |_| {
-		Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
-			jsonrpsee::types::ErrorObject::owned(
-				1010,
-				"Invalid Transaction",
-				Some("Transaction is outdated"),
-			),
-		)))
-	});
-
-	// On the retry, return a success.
-	mock_rpc_api
-		.expect_submit_extrinsic()
-		.times(1)
-		.returning(move |_| Ok(H256::default()));
-
-	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
-
-	// Nonce should be +2, once for the initial submission, and once for the retry
-	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 2);
-}
 
 /// If the tx fails due to a bad proof, it should fetch the runtime version and retry.
 #[tokio::test]
@@ -116,25 +50,7 @@ async fn should_update_version_on_bad_proof() {
 		.times(1)
 		.returning(move |_| Ok(H256::default()));
 
-	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
-
-	// The bad proof should not have incremented the nonce, so it should only be +1 from the retry.
-	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 1);
-}
-
-/// If the tx fails due to an error that is unrelated to the nonce, it should not increment the
-/// nonce and not retry.
-#[tokio::test]
-async fn should_not_increment_nonce_on_unrelated_failure() {
-	let mut mock_rpc_api = MockBaseRpcApi::new();
-
-	mock_rpc_api.expect_submit_extrinsic().times(1).returning(move |_| {
-		Err(jsonrpsee::core::Error::Custom("some unrelated error".to_string()))
-	});
-
-	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
-
-	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE);
+	let _watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
 }
 
 /// Create a new watcher and submit a dummy extrinsic.
@@ -171,13 +87,12 @@ async fn new_watcher_and_submit_test_extrinsic(
 	let mut request = Request {
 		id: 0,
 		pending_submissions: 0,
-		allow_resubmits: false,
+		strictly_one_submission: false,
 		resubmit_window: ..=1,
 		call,
 		result_sender: oneshot::channel().0,
 	};
 
-	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE, "Nonce should start at INITIAL_NONCE");
 	let _result = watcher.submit_extrinsic(&mut request).await;
 
 	watcher
