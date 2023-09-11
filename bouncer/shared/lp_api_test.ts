@@ -12,18 +12,12 @@ import {
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 
-interface RangeOrder {
-  lower_tick: number;
-  upper_tick: number;
-  liquidity: string;
-}
-
 const testEthAmount = 0.1;
 const withdrawAssetAmount = parseInt(
   amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH),
 );
-const mintAssetAmount = withdrawAssetAmount;
-const totalEthNeeded = testEthAmount * 3;
+const testAssetAmount = withdrawAssetAmount;
+const totalEthNeeded = testEthAmount * 5;
 const chainflip = await getChainflipApi();
 const ethAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
@@ -32,22 +26,6 @@ async function lpApiRpc(method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `start_lp_api.sh`
   const port = 10589;
   return jsonRpc(method, params, port);
-}
-
-async function testGetPools() {
-  // Check that the pool is ready for the test and test the getPools commands
-  const pools = await lpApiRpc(`lp_getPools`, []);
-  if (!pools.Eth) {
-    throw new Error(`Eth pool does not exists, has the setup been run?`);
-  }
-  assert.strictEqual(pools.Eth.enabled, true, `Eth pool is not enabled`);
-
-  const ethPool = await lpApiRpc(`lp_getPool`, ['Eth']);
-  assert.strictEqual(
-    JSON.stringify(ethPool),
-    JSON.stringify(pools.Eth),
-    `Mismatch pool data returned`,
-  );
 }
 
 async function testAssetBalances() {
@@ -132,111 +110,145 @@ async function testRegisterWithExistingLpAccount() {
   }
 }
 
+/// Test lp_setRangeOrder and lp_updateRangeOrder by minting, updating, and burning a range order.
 async function testRangeOrder() {
-  const lowerTick = 1;
-  const upperTick = 2;
+  const range = { start: 1, end: 2 };
+  const orderId = 1;
+  const zeroAssetAmounts = {
+    AssetAmounts: {
+      maximum: { base: 0, pair: 0 },
+      minimum: { base: 0, pair: 0 },
+    },
+  };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  const existingRangeOrders = await lpApiRpc(`lp_getRangeOrders`, []);
-  const existingTestRangeOrder = existingRangeOrders.Eth.find(
-    (rangeOrder: RangeOrder) =>
-      rangeOrder.lower_tick === lowerTick && rangeOrder.upper_tick === upperTick,
-  );
-  if (existingTestRangeOrder) {
-    console.log('Found existing test range order, burning it');
-    await lpApiRpc(`lp_burnRangeOrder`, [
-      'Eth',
-      lowerTick,
-      upperTick,
-      existingTestRangeOrder.liquidity,
-    ]);
-  }
+  await lpApiRpc(`lp_setRangeOrder`, ['Usdc', 'Eth', orderId, range, zeroAssetAmounts]);
 
   // Mint a range order
-  const mintRangeOrder = await lpApiRpc(`lp_mintRangeOrder`, [
+  const mintRangeOrder = await lpApiRpc(`lp_setRangeOrder`, [
+    'Usdc',
     'Eth',
-    lowerTick,
-    upperTick,
+    orderId,
+    range,
     {
       AssetAmounts: {
-        desired: { unstable: mintAssetAmount, stable: 0 },
-        minimum: { unstable: 0, stable: 0 },
+        maximum: { base: 0, pair: testAssetAmount },
+        minimum: { base: 0, pair: 0 },
       },
     },
   ]);
 
+  assert(mintRangeOrder.length >= 1, `Empty mint range order result`);
   assert.strictEqual(
-    mintRangeOrder.assets_debited.zero,
-    mintAssetAmount,
+    mintRangeOrder[0].increase_or_decrease,
+    `Increase`,
     `Unexpected mint range order result`,
   );
+  assert(mintRangeOrder[0].liquidity_total > 0, `Unexpected mint range order result`);
 
-  // Check that the range order was minted
-  const rangeOrders = await lpApiRpc(`lp_getRangeOrders`, []);
-  const rangeOrder = rangeOrders.Eth.find(
-    (i: RangeOrder) => i.lower_tick === lowerTick && i.upper_tick === upperTick,
+  // Update the range order
+  const updateRangeOrder = await lpApiRpc(`lp_updateRangeOrder`, [
+    'Usdc',
+    'Eth',
+    orderId,
+    range,
+    `Increase`,
+    {
+      AssetAmounts: {
+        maximum: { base: 0, pair: testAssetAmount },
+        minimum: { base: 0, pair: 0 },
+      },
+    },
+  ]);
+
+  assert(updateRangeOrder.length >= 1, `Empty update range order result`);
+  assert.strictEqual(
+    updateRangeOrder[0].increase_or_decrease,
+    `Increase`,
+    `Unexpected update range order result`,
   );
-  if (!rangeOrder) {
-    throw new Error(`Did not find minted range order ${JSON.stringify(rangeOrders.Eth)}`);
-  }
+  assert(updateRangeOrder[0].liquidity_total > 0, `Unexpected update range order result`);
 
   // Burn the range order
-  const burnRangeOrder = await lpApiRpc(`lp_burnRangeOrder`, [
+  const burnRangeOrder = await lpApiRpc(`lp_setRangeOrder`, [
+    'Usdc',
     'Eth',
-    lowerTick,
-    upperTick,
-    rangeOrder.liquidity,
+    orderId,
+    range,
+    zeroAssetAmounts,
   ]);
+
+  assert(burnRangeOrder.length >= 1, `Empty burn range order result`);
   assert.strictEqual(
-    burnRangeOrder.assets_credited.zero,
-    mintAssetAmount,
+    burnRangeOrder[0].increase_or_decrease,
+    `Decrease`,
     `Unexpected burn range order result`,
   );
-
-  // Check that the range order is gone
-  const rangeOrdersAfterBurn = await lpApiRpc(`lp_getRangeOrders`, []);
-  if (
-    rangeOrdersAfterBurn.Eth.find(
-      (i: RangeOrder) => i.lower_tick === lowerTick && i.upper_tick === upperTick,
-    )
-  ) {
-    throw new Error(`Range order was not burnt ${JSON.stringify(rangeOrders.Eth)}`);
-  }
+  assert.strictEqual(burnRangeOrder[0].liquidity_total, 0, `Unexpected burn range order result`);
 }
 
+/// Test lp_setLimitOrder and lp_updateLimitOrder by minting, updating, and burning a limit order.
 async function testLimitOrder() {
-  const price = 2;
-  const mintLimitOrder = await lpApiRpc(`lp_mintLimitOrder`, [
-    'Eth',
-    'Sell',
-    price,
-    mintAssetAmount,
-  ]);
+  const orderId = 2;
+  const tick = 2;
 
+  // Cleanup after any unfinished previous test so it does not interfere with this test
+  await lpApiRpc(`lp_setLimitOrder`, ['Eth', 'Usdc', orderId, tick, 0]);
+
+  // Mint a limit order
+  const mintLimitOrder = await lpApiRpc(`lp_setLimitOrder`, [
+    'Eth',
+    'Usdc',
+    orderId,
+    tick,
+    testAssetAmount,
+  ]);
+  assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
   assert.strictEqual(
-    mintLimitOrder.assets_debited,
-    mintAssetAmount,
+    mintLimitOrder[0].increase_or_decrease,
+    `Increase`,
+    `Unexpected mint limit order result`,
+  );
+  assert.strictEqual(
+    mintLimitOrder[0].amount_total,
+    testAssetAmount,
     `Unexpected mint limit order result`,
   );
 
-  const burnLimitOrder = await lpApiRpc(`lp_burnLimitOrder`, [
+  // Update the limit order
+  const updateLimitOrder = await lpApiRpc(`lp_updateLimitOrder`, [
     'Eth',
-    'Sell',
-    price,
-    mintAssetAmount,
+    'Usdc',
+    orderId,
+    tick,
+    `Increase`,
+    testAssetAmount,
   ]);
+  assert(updateLimitOrder.length >= 1, `Empty update limit order result`);
   assert.strictEqual(
-    burnLimitOrder.assets_credited,
-    mintAssetAmount,
+    updateLimitOrder[0].increase_or_decrease,
+    `Increase`,
+    `Unexpected update limit order result`,
+  );
+  assert.strictEqual(
+    updateLimitOrder[0].amount_total,
+    testAssetAmount * 2,
+    `Unexpected update limit order result`,
+  );
+
+  // Burn the limit order
+  const burnLimitOrder = await lpApiRpc(`lp_setLimitOrder`, ['Eth', 'Usdc', orderId, tick, 0]);
+  assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
+  assert.strictEqual(
+    burnLimitOrder[0].increase_or_decrease,
+    `Decrease`,
     `Unexpected burn limit order result`,
   );
+  assert.strictEqual(burnLimitOrder[0].amount_total, 0, `Unexpected burn limit order result`);
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi() {
-  // Confirm that the pools are ready to be used by the other tests
-  await testGetPools();
-
   // We have to wait finalization here because the LP API server is using a finalized block stream
   await provideLiquidity('ETH', totalEthNeeded, true);
 
