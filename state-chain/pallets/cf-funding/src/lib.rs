@@ -134,6 +134,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	/// Registered addresses for an executor.
+	#[pallet::storage]
+	pub type ExecutorAddressBinding<T: Config> =
+		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
+
 	/// List of restricted addresses
 	#[pallet::storage]
 	pub type RestrictedAddresses<T: Config> =
@@ -233,6 +238,9 @@ pub mod pallet {
 
 		/// An account has been bound to an address.
 		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
+
+		/// An account has been bound to an executor address.
+		BoundExecutorAddress { account_id: AccountId<T>, address: EthereumAddress },
 	}
 
 	#[pallet::error]
@@ -288,6 +296,9 @@ pub mod pallet {
 
 		/// Stop Bidding is disabled due to Safe Mode.
 		StopBiddingDisabled,
+
+		/// Wrong executor address
+		InvalidExecutorAddress,
 	}
 
 	#[pallet::call]
@@ -362,6 +373,13 @@ pub mod pallet {
 			executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
+
+			if let Some(executor_addr) = ExecutorAddressBinding::<T>::get(&account_id) {
+				ensure!(
+					executor_addr == executor.unwrap_or_default(),
+					Error::<T>::InvalidExecutorAddress
+				);
+			}
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
@@ -621,7 +639,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32))]
+		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32, 10 as u32))]
 		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
 			addresses_to_add: Vec<EthereumAddress>,
@@ -681,6 +699,22 @@ pub mod pallet {
 			RedemptionTax::<T>::set(amount);
 			Self::deposit_event(Event::<T>::RedemptionTaxAmountUpdated { amount });
 			Ok(())
+		}
+
+		/// Bind executor address.
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::bind_executor_address())]
+		pub fn bind_executor_address(
+			origin: OriginFor<T>,
+			executor_address: EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			ExecutorAddressBinding::<T>::insert(account_id.clone(), executor_address);
+			Self::deposit_event(Event::BoundExecutorAddress {
+				account_id,
+				address: executor_address,
+			});
+			Ok(().into())
 		}
 	}
 

@@ -204,5 +204,12 @@ benchmarks! {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
 	}
 
+	bind_executor_address {
+		let caller: T::AccountId = whitelisted_caller();
+	}:_(RawOrigin::Signed(caller.clone()), Default::default())
+	verify {
+		assert!(ExecutorAddressBinding::<T>::contains_key(&caller));
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
