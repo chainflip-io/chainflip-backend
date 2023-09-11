@@ -52,6 +52,13 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
+	#[derive(Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	pub enum ExecutionMode {
+		#[default]
+		Automatic,
+		Manual,
+	}
+
 	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 	pub struct ActiveProposal {
 		pub proposal_id: ProposalId,
@@ -65,12 +72,8 @@ pub mod pallet {
 		pub call: OpaqueCall,
 		/// Accounts who have already approved the proposal.
 		pub approved: BTreeSet<AccountId>,
-	}
-
-	impl<T> Default for Proposal<T> {
-		fn default() -> Self {
-			Self { call: Default::default(), approved: Default::default() }
-		}
+		/// Proposal is pre authorised.
+		pub execution: ExecutionMode,
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -115,7 +118,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
-		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>>;
 
 	/// Active proposals.
 	#[pallet::storage]
@@ -126,6 +129,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn gov_key_whitelisted_call_hash)]
 	pub(super) type GovKeyWhitelistedCallHash<T> = StorageValue<_, GovCallHash, OptionQuery>;
+
+	/// Pre authorised governance calls.
+	#[pallet::storage]
+	pub(super) type PreAuthorisedGovCalls<T> =
+		StorageMap<_, Twox64Concat, u32, OpaqueCall, OptionQuery>;
 
 	/// Any nonces before this have been consumed.
 	#[pallet::storage]
@@ -242,11 +250,12 @@ pub mod pallet {
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
+			execution: ExecutionMode,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
 
-			let id = Self::push_proposal(call);
+			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
 			Self::inner_approve(who, id)?;
@@ -425,6 +434,29 @@ pub mod pallet {
 				_ => Err(Error::<T>::CallHashNotWhitelisted.into()),
 			}
 		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::dispatch_whitelisted_call())]
+		pub fn dispatch_whitelisted_call(
+			origin: OriginFor<T>,
+			approved_id: ProposalId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			if let Some(call) = PreAuthorisedGovCalls::<T>::take(approved_id) {
+				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
+					Self::deposit_event(match Self::dispatch_governance_call(call) {
+						Ok(_) => Event::Executed(approved_id),
+						Err(err) => Event::FailedExecution(err.error),
+					});
+					Ok(())
+				} else {
+					Err(Error::<T>::DecodeOfCallFailed.into())
+				}
+			} else {
+				Err(Error::<T>::ProposalNotFound.into())
+			}
+		}
 	}
 
 	/// Genesis definition
@@ -491,7 +523,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
 
 		// Try to approve the proposal
-		let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
+		let proposal = Proposals::<T>::try_mutate(approved_id, |proposal| {
+			let proposal = proposal.as_mut().ok_or(Error::<T>::ProposalNotFound)?;
+
 			if !proposal.approved.insert(who) {
 				return Err(Error::<T>::AlreadyApproved)
 			}
@@ -502,7 +536,11 @@ impl<T: Config> Pallet<T> {
 		if proposal.approved.len() >
 			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
 		{
-			ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			if proposal.execution == ExecutionMode::Manual {
+				PreAuthorisedGovCalls::<T>::insert(approved_id, proposal.call);
+			} else {
+				ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			}
 			Proposals::<T>::remove(approved_id);
 			ActiveProposals::<T>::mutate(|proposals| {
 				proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
@@ -560,11 +598,11 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
-	fn push_proposal(call: Box<<T as Config>::RuntimeCall>) -> u32 {
+	fn push_proposal(call: Box<<T as Config>::RuntimeCall>, execution: ExecutionMode) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
 			proposal_id,
-			Proposal { call: call.encode(), approved: Default::default() },
+			Proposal { call: call.encode(), approved: Default::default(), execution },
 		);
 		ProposalIdCounter::<T>::put(proposal_id);
 		ActiveProposals::<T>::append(ActiveProposal {

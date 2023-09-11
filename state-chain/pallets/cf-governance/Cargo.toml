@@ -50,7 +50,6 @@ std = [
   'frame-system/std',
   'scale-info/std',
   'sp-std/std',
-  'sp-version/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
