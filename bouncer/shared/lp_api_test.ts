@@ -184,6 +184,14 @@ async function testRangeOrder() {
   assert.strictEqual(burnRangeOrder[0].liquidity_total, 0, `Unexpected burn range order result`);
 }
 
+async function testGetOpenSwapChannels() {
+  // TODO: Test with some SwapChannelInfo data
+  const openSwapChannels = await lpApiRpc(`lp_getOpenSwapChannels`, []);
+  assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
+  assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
+  assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
+}
+
 /// Test lp_setLimitOrder and lp_updateLimitOrder by minting, updating, and burning a limit order.
 async function testLimitOrder() {
   const orderId = 2;
@@ -259,5 +267,6 @@ export async function testLpApi() {
     testRegisterWithExistingLpAccount(),
     testRangeOrder(),
     testLimitOrder(),
+    testGetOpenSwapChannels(),
   ]);
 }
