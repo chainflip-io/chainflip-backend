@@ -46,7 +46,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) |
 			Some(VaultRotationStatus::<T, I>::KeyHandoverFailed { new_public_key, .. }) =>
 				match Self::active_epoch_key() {
-					Some(epoch_key) if <T::Chain as Chain>::KeyHandoverIsRequired::get() => {
+					Some(epoch_key)
+						if <T::Chain as Chain>::ChainCrypto::key_handover_is_required() =>
+					{
 						assert!(
 							!sharing_participants.is_empty() && !receiving_participants.is_empty()
 						);
@@ -156,7 +158,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					Ok(activation_call) => {
 						let (_, threshold_request_id) =
 							T::Broadcaster::threshold_sign_and_broadcast(activation_call);
-						if <T::Chain as Chain>::OptimisticActivation::get() {
+						if <T::Chain as Chain>::ChainCrypto::optimistic_activation() {
 							// Optimistic activation means we don't need to wait for the activation
 							// transaction to succeed before using the new key.
 							Self::activate_new_key(

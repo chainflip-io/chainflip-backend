@@ -11,7 +11,7 @@ import {
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
 
-export async function fundFlip(address: string, flipAmount: string) {
+export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
@@ -44,10 +44,10 @@ export async function fundFlip(address: string, flipAmount: string) {
     nonce: BigInt(await getNextEthNonce()),
   } as const;
 
-  console.log('Funding ' + flipAmount + ' FLIP to ' + address);
-  let pubkey = address;
+  console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);
+  let pubkey = scAddress;
   try {
-    pubkey = decodeFlipAddressForContract(address);
+    pubkey = decodeFlipAddressForContract(scAddress);
   } catch {
     // ignore error
   }
