@@ -25,7 +25,7 @@ export async function redeemFlip(flipSeed: string, ethAddress: HexString, flipAm
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
   const ethWallet = new Wallet(
     process.env.ETH_USDC_WHALE ??
-    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
   ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
   console.log('Requesting redemption');

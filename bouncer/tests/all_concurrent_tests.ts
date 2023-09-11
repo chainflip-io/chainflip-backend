@@ -10,7 +10,13 @@ async function runAllConcurrentTests() {
   let stopObserving = false;
   const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
 
-  await Promise.all([testAllSwaps(), testLpDepositExpiry(), testEthereumDeposits(), testFundRedeem("redeem"), testMultipleMembersGovernance()]);
+  await Promise.all([
+    testAllSwaps(),
+    testLpDepositExpiry(),
+    testEthereumDeposits(),
+    testFundRedeem('redeem'),
+    testMultipleMembersGovernance(),
+  ]);
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
