@@ -639,7 +639,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32, 10 as u32))]
+		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32, 10_u32))]
 		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
 			addresses_to_add: Vec<EthereumAddress>,
