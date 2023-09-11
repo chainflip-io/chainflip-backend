@@ -16,7 +16,7 @@ use crate::{
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
-use utilities::metrics::{CEREMONY_BAD_MSG, CEREMONY_PROCESSED_MSG};
+use utilities::metrics::{CeremonyMetrics, CEREMONY_BAD_MSG};
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone
@@ -100,7 +100,7 @@ impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
 	Stage: BroadcastStageProcessor<C> + Send,
 {
-	fn init(&mut self) -> ProcessMessageResult {
+	fn init(&mut self, metrics: &CeremonyMetrics) -> ProcessMessageResult {
 		let common = &self.common;
 
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
@@ -152,22 +152,23 @@ where
 			.expect("Could not send p2p message.");
 
 		// Save our own share
-		self.process_message(common.own_idx, own_message.into())
+		self.process_message(common.own_idx, own_message.into(), metrics)
 	}
 
-	fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult {
-		CEREMONY_PROCESSED_MSG
-			.with_label_values(&[self.common.ceremony_id.to_string().as_str()])
-			.inc();
+	fn process_message(
+		&mut self,
+		signer_idx: AuthorityCount,
+		m: C::Data,
+		metrics: &CeremonyMetrics,
+	) -> ProcessMessageResult {
+		metrics.processed_messages.inc();
 		let m: Stage::Message = match m.try_into() {
 			Ok(m) => m,
 			Err(incorrect_type) => {
-				CEREMONY_BAD_MSG
-					.with_label_values(&[
-						&format!("incorrect_type ({})", self.get_stage_name()),
-						C::Crypto::NAME,
-					])
-					.inc();
+				CEREMONY_BAD_MSG.inc(&[
+					&format!("incorrect_type ({})", self.get_stage_name()),
+					C::Crypto::NAME,
+				]);
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring unexpected message {incorrect_type} while in stage {self}",
@@ -177,12 +178,10 @@ where
 		};
 
 		if !self.common.all_idxs.contains(&signer_idx) {
-			CEREMONY_BAD_MSG
-				.with_label_values(&[
-					&format!("message_from_non_participant ({})", self.get_stage_name()),
-					C::Crypto::NAME,
-				])
-				.inc();
+			CEREMONY_BAD_MSG.inc(&[
+				&format!("message_from_non_participant ({})", self.get_stage_name()),
+				C::Crypto::NAME,
+			]);
 			warn!(
 				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 				"Ignoring a message from non-participant for stage {self}",
@@ -192,12 +191,10 @@ where
 
 		match self.messages.entry(signer_idx) {
 			btree_map::Entry::Occupied(_) => {
-				CEREMONY_BAD_MSG
-					.with_label_values(&[
-						&format!("redundant_message ({})", self.get_stage_name()),
-						C::Crypto::NAME,
-					])
-					.inc();
+				CEREMONY_BAD_MSG.inc(&[
+					&format!("redundant_message ({})", self.get_stage_name()),
+					C::Crypto::NAME,
+				]);
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring a redundant message for stage {self}",

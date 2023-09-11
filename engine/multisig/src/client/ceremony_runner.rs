@@ -17,9 +17,7 @@ use tokio::sync::{
 use tracing::{debug, warn, Instrument};
 use utilities::{
 	format_iterator,
-	metrics::{
-		DeleteMetricCommand, CEREMONY_BAD_MSG, CEREMONY_PROCESSED_MSG, DELETE_METRIC_CHANNEL,
-	},
+	metrics::{CeremonyMetrics, MetricCounter, CEREMONY_BAD_MSG, CEREMONY_PROCESSED_MSG},
 };
 
 use crate::{
@@ -59,6 +57,7 @@ where
 	timeout_handle: Pin<Box<tokio::time::Sleep>>,
 	outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 	_phantom: std::marker::PhantomData<Chain>,
+	metrics: CeremonyMetrics,
 }
 
 impl<Ceremony, Chain> CeremonyRunner<Ceremony, Chain>
@@ -82,7 +81,7 @@ where
 
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
-		let mut runner = Self::new_unauthorised(outcome_sender);
+		let mut runner = Self::new_unauthorised(outcome_sender, ceremony_id);
 
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
@@ -115,13 +114,6 @@ where
 		};
 
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
-		let _ = DELETE_METRIC_CHANNEL
-			.0
-			.send(DeleteMetricCommand::CounterPair(
-				CEREMONY_PROCESSED_MSG.clone(),
-				vec![ceremony_id.to_string()],
-			))
-			.await;
 		Ok(())
 	}
 
@@ -130,6 +122,7 @@ where
 	/// cannot make any progress otherwise
 	fn new_unauthorised(
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
+		ceremony_id: CeremonyId,
 	) -> Self {
 		CeremonyRunner {
 			stage: None,
@@ -138,6 +131,12 @@ where
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
 			_phantom: Default::default(),
+			metrics: CeremonyMetrics {
+				processed_messages: MetricCounter::new(
+					&CEREMONY_PROCESSED_MSG,
+					[format!("{}", ceremony_id)],
+				),
+			},
 		}
 	}
 
@@ -147,7 +146,7 @@ where
 		&mut self,
 		mut initial_stage: DynStage<Ceremony>,
 	) -> OptionalCeremonyReturn<Ceremony> {
-		let single_party_result = initial_stage.init();
+		let single_party_result = initial_stage.init(&self.metrics);
 
 		// This function is only ever called from a oneshot channel,
 		// so it should never get called twice.
@@ -183,7 +182,7 @@ where
 				StageResult::NextStage(mut next_stage) => {
 					debug!("Ceremony transitions to {}", next_stage.get_stage_name());
 
-					let single_party_result = next_stage.init();
+					let single_party_result = next_stage.init(&self.metrics);
 
 					self.stage = Some(next_stage);
 
@@ -226,7 +225,7 @@ where
 		match &mut self.stage {
 			None => {
 				if !data.should_delay_unauthorised() {
-					CEREMONY_BAD_MSG.with_label_values(&["non_initial_stage", Chain::NAME]).inc();
+					CEREMONY_BAD_MSG.inc(&["non_initial_stage", Chain::NAME]);
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: non-initial stage data"
@@ -235,9 +234,7 @@ where
 				}
 
 				if !data.is_initial_stage_data_size_valid::<Chain>() {
-					CEREMONY_BAD_MSG
-						.with_label_values(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME])
-						.inc();
+					CEREMONY_BAD_MSG.inc(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME]);
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: incorrect number of elements"
@@ -253,9 +250,7 @@ where
 				{
 					Some(idx) => idx,
 					None => {
-						CEREMONY_BAD_MSG
-							.with_label_values(&["not_valid_participant", Chain::NAME])
-							.inc();
+						CEREMONY_BAD_MSG.inc(&["not_valid_participant", Chain::NAME]);
 						debug!("Ignoring data: sender {sender_id} is not a valid participant",);
 						return None
 					},
@@ -266,9 +261,7 @@ where
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
 					stage.ceremony_common().number_of_signing_payloads,
 				) {
-					CEREMONY_BAD_MSG
-						.with_label_values(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME])
-						.inc();
+					CEREMONY_BAD_MSG.inc(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME]);
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data: incorrect number of elements"
@@ -282,7 +275,9 @@ where
 					return None
 				}
 
-				if let ProcessMessageResult::Ready = stage.process_message(sender_idx, data) {
+				if let ProcessMessageResult::Ready =
+					stage.process_message(sender_idx, data, &self.metrics)
+				{
 					return self.finalize_current_stage().await
 				}
 			},
@@ -325,9 +320,7 @@ where
 
 		match self.delayed_messages.entry(id.clone()) {
 			btree_map::Entry::Occupied(_) => {
-				CEREMONY_BAD_MSG
-					.with_label_values(&["redundant_delayed_msg", Chain::NAME])
-					.inc();
+				CEREMONY_BAD_MSG.inc(&["redundant_delayed_msg", Chain::NAME]);
 				warn!("Ignoring a redundant delayed message from {party_and_stage}");
 			},
 			btree_map::Entry::Vacant(entry) => {
