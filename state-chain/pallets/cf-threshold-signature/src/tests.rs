@@ -4,7 +4,7 @@ use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
 	Error, PalletOffence, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
 };
-use cf_chains::mocks::MockEthereumChainCrypto;
+use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto, MockFixedKeySigningRequests};
 use cf_traits::{
 	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
 	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
@@ -471,6 +471,45 @@ fn test_retries_for_locked_key() {
 			assert_eq!(request_id, request_id_2);
 			assert_eq!(second_attempt, first_attempt + 1);
 			assert_eq!(retry_ceremony_id, ceremony_id + 1);
+		});
+}
+
+#[test]
+fn test_retries_for_immutable_key() {
+	const NOMINEES: [u64; 4] = [1, 2, 3, 4];
+	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
+	new_test_ext()
+		.with_authorities(AUTHORITIES)
+		.with_nominees(NOMINEES)
+		.with_request(b"OHAI")
+		.execute_with_consistency_checks(|| {
+			let ceremony_id = current_ceremony_id();
+			let CeremonyContext::<Test, Instance1> {
+				request_context: RequestContext { request_id, attempt_count: first_attempt, .. },
+				..
+			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+
+			MockFixedKeySigningRequests::set(true);
+
+			// Pretend the key has been updated to the next one.
+			MockKeyProvider::<MockEthereumChainCrypto>::add_key(MockAggKey(*b"NEXT"));
+
+			// Retry should re-use the original key.
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
+				ThresholdSignatureResponseTimeout::<Test, _>::get();
+			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+
+			let retry_ceremony_id = current_ceremony_id();
+			let CeremonyContext::<Test, Instance1> {
+				request_context:
+					RequestContext { request_id: request_id_2, attempt_count: second_attempt, .. },
+				key,
+				..
+			} = EthereumThresholdSigner::pending_ceremonies(retry_ceremony_id).unwrap();
+			assert_eq!(request_id, request_id_2);
+			assert_eq!(second_attempt, first_attempt + 1);
+			assert_eq!(retry_ceremony_id, ceremony_id + 1);
+			assert_eq!(key, MockAggKey(AGG_KEY));
 		});
 }
 
