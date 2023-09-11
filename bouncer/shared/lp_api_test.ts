@@ -49,19 +49,16 @@ async function testAssetBalances() {
   } while (ethBalance < fineAmountNeeded);
 }
 
-async function testRegisterEmergencyWithdrawalAddress() {
+async function testRegisterLiquidityRefundAddress() {
   const observeRegisterEwaEvent = observeEvent(
-    'liquidityProvider:EmergencyWithdrawalAddressRegistered',
+    'liquidityProvider:LiquidityRefundAddressRegistered',
     chainflip,
     (event) => event.data.address.Eth === ethAddress,
   );
 
-  const registerEwa = await lpApiRpc(`lp_registerEmergencyWithdrawalAddress`, [
-    'Ethereum',
-    ethAddress,
-  ]);
+  const registerEwa = await lpApiRpc(`lp_registerLiquidityRefundAddress`, ['Ethereum', ethAddress]);
   if (!isValidHexHash(await registerEwa)) {
-    throw new Error(`Unexpected lp_registerEmergencyWithdrawalAddress result`);
+    throw new Error(`Unexpected lp_registerLiquidityRefundAddress result`);
   }
   await observeRegisterEwaEvent;
 }
@@ -256,7 +253,7 @@ export async function testLpApi() {
   await testAssetBalances();
 
   await Promise.all([
-    testRegisterEmergencyWithdrawalAddress(),
+    testRegisterLiquidityRefundAddress(),
     testLiquidityDeposit(),
     testWithdrawAsset(),
     testRegisterWithExistingLpAccount(),
