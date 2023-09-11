@@ -20,6 +20,7 @@ use frame_support::{
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
+use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
@@ -682,12 +683,18 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 		};
 
 		// Each unit of gas costs 2 * 1_000_000 + 500_000 = 2_500_000
-		assert_eq!(EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_499_999)), 0);
-		assert_eq!(EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_500_000)), 1);
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_499_999)),
+			Some(U256::from(0))
+		);
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_500_000)),
+			Some(U256::from(1))
+		);
 		// 1_000_000_000_000 / (2 * 1_000_000 + 500_000) = 400_000
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000_000u128)),
-			400_000
+			Some(U256::from(400_000))
 		);
 
 		// Can handle divide by zero case. Practically this should never happen.
@@ -710,7 +717,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000u128)),
-			0
+			Some(U256::from(0))
 		);
 	});
 }

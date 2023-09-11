@@ -95,6 +95,8 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 		&self,
 		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
+		// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
+		const MAX_GAS_LIMIT: u128 = 10_000_000;
 		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
 		self.rpc_retry_client
 			.request_with_limit(
@@ -102,31 +104,47 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 					let tx = tx.clone();
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						let mut transaction_request = Eip1559TransactionRequest {
-							to: Some(NameOrAddress::Address(tx.contract)),
-							data: Some(tx.data.into()),
-							chain_id: Some(tx.chain_id.into()),
-							value: Some(tx.value),
-							max_fee_per_gas: tx.max_fee_per_gas,
-							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
-							gas: tx.gas_limit,
-							access_list: AccessList::default(),
-							from: Some(client.address()),
-							nonce: None,
-						};
+						let mut transaction_request =
+							TypedTransaction::Eip1559(Eip1559TransactionRequest {
+								to: Some(NameOrAddress::Address(tx.contract)),
+								data: Some(tx.data.into()),
+								chain_id: Some(tx.chain_id.into()),
+								value: Some(tx.value),
+								max_fee_per_gas: tx.max_fee_per_gas,
+								max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+								// geth uses the latest block gas limit as an upper bound
+								gas: None,
+								access_list: AccessList::default(),
+								from: Some(client.address()),
+								nonce: None,
+							});
 
 						let estimated_gas = client
-							.estimate_gas(&TypedTransaction::Eip1559(transaction_request.clone()))
+							.estimate_gas(&transaction_request)
 							.await
 							.context("Failed to estimate gas")?;
 
-						// increase the estimate by 50%
-						transaction_request.gas = Some(
-							estimated_gas
-								.saturating_mul(U256::from(3u64))
-								.checked_div(U256::from(2u64))
-								.unwrap(),
-						);
+						match tx.gas_limit {
+							Some(gas_limit) =>
+								if estimated_gas > gas_limit {
+									return Err(anyhow::anyhow!(
+										"Estimated gas is greater than the gas limit"
+									))
+								} else {
+									transaction_request
+										.set_gas(gas_limit.min(MAX_GAS_LIMIT.into()));
+								},
+							None => {
+								// increase the estimate by 33% for normal transactions
+								transaction_request.set_gas(
+									estimated_gas
+										.saturating_mul(U256::from(4u64))
+										.checked_div(U256::from(3u64))
+										.unwrap()
+										.min(MAX_GAS_LIMIT.into()),
+								);
+							},
+						}
 
 						client
 							.send_transaction(transaction_request.into())

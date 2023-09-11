@@ -159,7 +159,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
-			gas_limit: Some(Self::calculate_gas_limit(signed_call).into()),
+			gas_limit: Self::calculate_gas_limit(signed_call),
 			..Default::default()
 		}
 	}
@@ -194,9 +194,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	// Currently for only CCM calls, the gas limit is calculated as:
 	// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
 	// All other calls uses a default gas limit.
-	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> <Ethereum as Chain>::ChainAmount {
+	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> Option<U256> {
 		const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-		const DEFAULT_GAS_LIMIT: <Ethereum as Chain>::ChainAmount = 15_000_000;
 		match call {
 			EthereumApi::ExecutexSwapAndCall(call_builder) => {
 				// For calls with dynamic gas limit, a gas budget must be provided.
@@ -210,13 +209,13 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				let max_gas_price = ETHEREUM_BASE_FEE_MULTIPLIER
 					.saturating_mul_int(tracked_data.base_fee)
 					.saturating_add(tracked_data.priority_fee);
-				gas_budget.checked_div(max_gas_price).unwrap_or_else(||{
+				Some(U256::from(gas_budget.checked_div(max_gas_price).unwrap_or_else(||{
 					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
 					Default::default()
-				})
+				})))
 			},
 			// Use default gas limit for all other calls.
-			_ => DEFAULT_GAS_LIMIT,
+			_ => None,
 		}
 	}
 }
