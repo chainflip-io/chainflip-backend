@@ -1,5 +1,6 @@
 use crate::{
-	mock::*, ActiveProposals, Error, ExecutionPipeline, ExpiryTime, Members, ProposalIdCounter,
+	mock::*, ActiveProposals, Error, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
+	PreAuthorisedGovCalls, ProposalIdCounter,
 };
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
@@ -33,7 +34,11 @@ fn genesis_config() {
 fn not_a_member() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Governance::propose_governance_extrinsic(RuntimeOrigin::signed(EVE), mock_extrinsic()),
+			Governance::propose_governance_extrinsic(
+				RuntimeOrigin::signed(EVE),
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
+			),
 			<Error<Test>>::NotMember
 		);
 	});
@@ -46,7 +51,8 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			// Propose a governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				mock_extrinsic()
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
 			));
 			assert_eq!(
 				last_event::<Test>(),
@@ -77,7 +83,8 @@ fn already_executed() {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic()
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
 		));
 		// Assert the proposed event was fired
 		assert_eq!(
@@ -119,7 +126,8 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 			// Propose governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				mock_extrinsic()
+				mock_extrinsic(),
+				ExecutionMode::Automatic,
 			));
 		})
 		.then_execute_at_next_block(|_| {
@@ -142,7 +150,8 @@ fn can_not_vote_twice() {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic()
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
 		));
 		// Try to approve it again. Proposing implies approving.
 		assert_noop!(
@@ -157,7 +166,8 @@ fn several_open_proposals() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(ALICE),
-			mock_extrinsic()
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -165,7 +175,8 @@ fn several_open_proposals() {
 		);
 		assert_ok!(Governance::propose_governance_extrinsic(
 			RuntimeOrigin::signed(BOB),
-			mock_extrinsic()
+			mock_extrinsic(),
+			ExecutionMode::Automatic,
 		));
 		assert_eq!(
 			last_event::<Test>(),
@@ -190,7 +201,8 @@ fn sudo_extrinsic() {
 			// Propose the governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
-				governance_extrinsic
+				governance_extrinsic,
+				ExecutionMode::Automatic,
 			));
 			assert_eq!(
 				last_event::<Test>(),
@@ -307,5 +319,20 @@ fn runtime_upgrade_can_have_no_cfes_version_requirement() {
 			None,
 			DUMMY_WASM_BLOB,
 		));
+	});
+}
+
+#[test]
+fn whitelisted_gov_call() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(ALICE),
+			mock_extrinsic(),
+			ExecutionMode::Manual,
+		));
+		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
+		assert!(PreAuthorisedGovCalls::<Test>::contains_key(1));
+		assert_ok!(Governance::dispatch_whitelisted_call(RuntimeOrigin::signed(CHARLES), 1));
+		assert!(!PreAuthorisedGovCalls::<Test>::contains_key(1));
 	});
 }
