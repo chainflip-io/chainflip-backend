@@ -17,7 +17,7 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::RuntimeDebug;
+use frame_support::sp_runtime::{FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
@@ -65,6 +65,17 @@ impl Chain for Ethereum {
 pub struct EthereumTrackedData {
 	pub base_fee: <Ethereum as Chain>::ChainAmount,
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
+}
+
+impl EthereumTrackedData {
+	pub fn max_fee_per_gas(
+		&self,
+		base_fee_multiplier: FixedU64,
+	) -> <Ethereum as Chain>::ChainAmount {
+		base_fee_multiplier
+			.saturating_mul_int(self.base_fee)
+			.saturating_add(self.priority_fee)
+	}
 }
 
 impl Default for EthereumTrackedData {

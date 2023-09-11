@@ -39,8 +39,8 @@ use cf_chains::{
 		EvmCrypto, Transaction,
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, DepositChannel, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, TransactionBuilder,
+	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
@@ -54,7 +54,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	sp_runtime::{
 		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
-		FixedPointNumber, FixedU64,
+		FixedU64,
 	},
 	traits::Get,
 };
@@ -149,6 +149,10 @@ impl cf_traits::WaivedFees for WaivedFees {
 	}
 }
 
+/// We are willing to pay at most 2x the base fee. This is approximately the theoretical
+/// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
+const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
+
 pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactionBuilder {
@@ -165,15 +169,13 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as Chain>::Transaction) {
-		let tracked_data = EthereumChainTracking::chain_state().unwrap().tracked_data;
-		// double the last block's base fee. This way we know it'll be selectable for at least 6
-		// blocks (12.5% increase on each block)
-		let max_fee_per_gas = tracked_data
-			.base_fee
-			.saturating_mul(2)
-			.saturating_add(tracked_data.priority_fee);
-		unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-		unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
+		if let Some(ChainState { tracked_data, .. }) = EthereumChainTracking::chain_state() {
+			let max_fee_per_gas = tracked_data.max_fee_per_gas(ETHEREUM_BASE_FEE_MULTIPLIER);
+			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
+		} else {
+			log::warn!("No chain data for Ethereum. This should never happen. Please check Chain Tracking data.");
+		}
 	}
 
 	fn is_valid_for_rebroadcast(
@@ -190,32 +192,28 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		)
 	}
 
-	// Calculate the gas limit for a Ethereum call, using the current gas price.
-	// Currently for only CCM calls, the gas limit is calculated as:
-	// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-	// All other calls uses a default gas limit.
+	/// Calculate the gas limit for a Ethereum call, using the current gas price.
+	/// Currently for only CCM calls, the gas limit is calculated as:
+	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
+	/// All other calls uses a default gas limit.
 	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> Option<U256> {
-		const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
-		match call {
-			EthereumApi::ExecutexSwapAndCall(call_builder) => {
-				// For calls with dynamic gas limit, a gas budget must be provided.
-				let gas_budget = call_builder
-					.gas_budget()
-					.expect("Calls with gas_limit must provide a gas budget.");
-				// According to ChainTracking pallet, it is safe to `unwrap()` from `chain_state()`
-				let tracked_data = EthereumChainTracking::chain_state()
-					.expect("Chain tracking will always return a state.")
-					.tracked_data;
-				let max_gas_price = ETHEREUM_BASE_FEE_MULTIPLIER
-					.saturating_mul_int(tracked_data.base_fee)
-					.saturating_add(tracked_data.priority_fee);
-				Some(U256::from(gas_budget.checked_div(max_gas_price).unwrap_or_else(||{
+		if let Some(gas_budget) = call.gas_budget() {
+			let max_fee_per_gas = EthereumChainTracking::chain_state()
+				.or_else(||{
+					log::warn!("No chain data for Ethereum. This should never happen. Please check Chain Tracking data.");
+					None
+				})?
+				.tracked_data
+				.max_fee_per_gas(ETHEREUM_BASE_FEE_MULTIPLIER);
+			Some(gas_budget
+				.checked_div(max_fee_per_gas)
+				.unwrap_or_else(||{
 					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
 					Default::default()
-				})))
-			},
-			// Use default gas limit for all other calls.
-			_ => None,
+				})
+				.into())
+		} else {
+			None
 		}
 	}
 }

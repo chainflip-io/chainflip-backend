@@ -372,6 +372,12 @@ impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
 	}
 }
 
+impl<E> EthereumApi<E> {
+	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+		map_over_api_variants!(self, call, call.gas_budget())
+	}
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum EthereumContract {
 	StateChainGateway,
