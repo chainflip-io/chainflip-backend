@@ -87,11 +87,11 @@ Return:
 - Hex encoded deposit address.
 
 
-### `lp_registerEmergencyWithdrawalAddress`
+### `lp_registerLiquidityRefundAddress`
 
 Parameters:
 - Chain: the forein chain where the address belongs to
-- Address: Address to be used as Emergency Withdrawal Address.
+- Address: Address refunded liquidity will be send to.
 
 e.g. ["Ethereum", "1594300cbd587694AffD70c933B9eE9155B186d9"]
 
