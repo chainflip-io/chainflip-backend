@@ -61,14 +61,14 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
-		maybe_message: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
 	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {
 				*storage = Some(vec![]);
 			}
 			storage.as_mut().map(|v| {
-				v.push(match maybe_message {
+				v.push(match maybe_ccm_with_gas_budget {
 					Some((message, gas_budget)) => MockEgressParameter::<C>::Ccm {
 						asset,
 						amount,

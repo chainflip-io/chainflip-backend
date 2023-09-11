@@ -713,7 +713,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_message: Option<(CcmDepositMetadata, C::ChainAmount)>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
 	) -> EgressId;
 }
 
@@ -722,7 +722,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
 		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -733,7 +733,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
 		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}

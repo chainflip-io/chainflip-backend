@@ -870,14 +870,14 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_message: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
 			*id = id.saturating_add(1);
 			*id
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		match maybe_message {
+		match maybe_ccm_with_gas_budget {
 			Some((
 				CcmDepositMetadata { source_chain, source_address, channel_metadata },
 				gas_budget,
