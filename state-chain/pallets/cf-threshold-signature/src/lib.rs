@@ -57,12 +57,12 @@ pub enum PalletOffence {
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum RequestType<Key, Participants> {
-	/// Will use the current key and current authority set.
+	/// Will use the current key and current authority set (which might change between retries).
 	/// This signing request will be retried until success.
-	Standard,
+	CurrentKey,
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
-	Immutable(Key, EpochIndex),
+	SpecificKey(Key, EpochIndex),
 	/// Uses the recently generated key and the participants used to generate that key.
 	/// This signing request will only be attemped once, as failing this ought to result
 	/// in another Keygen ceremony.
@@ -426,9 +426,9 @@ pub mod pallet {
 									bool,
 								>>::get()
 								{
-									RequestType::Immutable(key, epoch)
+									RequestType::SpecificKey(key, epoch)
 								} else {
-									RequestType::Standard
+									RequestType::CurrentKey
 								},
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
@@ -696,35 +696,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			} else {
 				(
-					{
-						match request_instruction.request_type {
-							RequestType::Standard => T::KeyProvider::active_epoch_key()
-								.and_then(|EpochKey { key_state, key, epoch_index }| {
-									if key_state.is_available_for_request(request_id) {
-										Some((key, epoch_index))
-									} else {
-										None
-									}
-								})
-								.ok_or(Event::<T, I>::CurrentKeyUnavailable {
-									request_id,
-									attempt_count,
-								}),
-							RequestType::Immutable(key, epoch_index) => Ok((key, epoch_index)),
-							_ => unreachable!("RequestType::KeygenVerification is handled above"),
+					match request_instruction.request_type {
+						RequestType::CurrentKey => T::KeyProvider::active_epoch_key()
+							.and_then(|EpochKey { key_state, key, epoch_index }| {
+								if key_state.is_available_for_request(request_id) {
+									Some((key, epoch_index))
+								} else {
+									None
+								}
+							})
+							.ok_or(Event::<T, I>::CurrentKeyUnavailable {
+								request_id,
+								attempt_count,
+							}),
+						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
+						_ => unreachable!("RequestType::KeygenVerification is handled above"),
+					}
+					.and_then(|(key, epoch_index)| {
+						if let Some(nominees) =
+							T::ThresholdSignerNomination::threshold_nomination_with_seed(
+								(request_id, attempt_count),
+								epoch_index,
+							) {
+							Ok((epoch_index, key, nominees))
+						} else {
+							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
 						}
-						.and_then(|(key, epoch_index)| {
-							if let Some(nominees) =
-								T::ThresholdSignerNomination::threshold_nomination_with_seed(
-									(request_id, attempt_count),
-									epoch_index,
-								) {
-								Ok((epoch_index, key, nominees))
-							} else {
-								Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
-							}
-						})
-					},
+					}),
 					ThresholdCeremonyType::Standard,
 				)
 			};
@@ -840,7 +838,7 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		Self::inner_request_signature(payload, RequestType::Standard)
+		Self::inner_request_signature(payload, RequestType::CurrentKey)
 	}
 
 	fn request_verification_signature(
