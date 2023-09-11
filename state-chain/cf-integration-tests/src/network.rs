@@ -434,7 +434,6 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
 	pub state_chain_gateway_contract: ScGatewayContract,
-	last_event: usize,
 	node_counter: u32,
 
 	// Used to initialised the threshold signers of the engines added
@@ -590,6 +589,9 @@ impl Network {
 				slot.encode(),
 			));
 
+			// Reset events before on_initialise, same as in frame_executive.
+			System::reset_events();
+
 			// Initialize
 			System::initialize(&block_number, &System::block_hash(block_number), &digest);
 			AllPalletsWithSystem::on_initialize(block_number);
@@ -619,9 +621,7 @@ impl Network {
 			let events = frame_system::Pallet::<Runtime>::events()
 				.into_iter()
 				.map(|e| e.event)
-				.skip(self.last_event)
 				.collect::<Vec<RuntimeEvent>>();
-			self.last_event += events.len();
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
 			}
