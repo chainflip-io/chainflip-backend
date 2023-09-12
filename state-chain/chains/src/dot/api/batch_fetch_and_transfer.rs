@@ -6,6 +6,8 @@ use crate::{
 	},
 	FetchAssetParams, TransferAssetParams,
 };
+use cf_primitives::ChannelId;
+use cf_utilities::SliceToArray;
 use sp_std::{boxed::Box, vec::Vec};
 
 pub fn extrinsic_builder(
@@ -24,16 +26,7 @@ pub fn extrinsic_builder(
 					fetch_params
 						.into_iter()
 						.map(|fetch_param| {
-							PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
-								// TODO: refer to issue #2354
-								index: fetch_param.deposit_fetch_id as u16,
-								call: Box::new(PolkadotRuntimeCall::Balances(
-									BalancesCall::transfer_all {
-										dest: PolkadotAccountIdLookup::from(vault_account),
-										keep_alive: false,
-									},
-								)),
-							})
+							utility_fetch(fetch_param.deposit_fetch_id, vault_account)
 						})
 						.collect::<Vec<PolkadotRuntimeCall>>(),
 					transfer_params
@@ -49,6 +42,26 @@ pub fn extrinsic_builder(
 				.concat(),
 			})),
 		}),
+	)
+}
+
+fn utility_fetch(channel_id: ChannelId, vault_account: PolkadotAccountId) -> PolkadotRuntimeCall {
+	let mut layers = channel_id
+		.to_be_bytes()
+		.chunks(2)
+		.map(|chunk| u16::from_be_bytes(chunk.as_array::<2>()))
+		.skip_while(|layer| *layer == 0u16)
+		.collect::<Vec<u16>>();
+
+	layers.reverse();
+	layers.into_iter().fold(
+		PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
+			dest: PolkadotAccountIdLookup::from(vault_account),
+			keep_alive: false,
+		}),
+		|call, index| {
+			PolkadotRuntimeCall::Utility(UtilityCall::as_derivative { index, call: Box::new(call) })
+		},
 	)
 }
 
@@ -107,5 +120,49 @@ mod test_batch_fetch {
 		);
 		builder.insert_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
+	}
+
+	#[test]
+	fn nested_fetch() {
+		let channel_id = 0x0102_0304_0506_0708u64;
+		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
+		let call = utility_fetch(channel_id, vault_account);
+
+		assert_eq!(
+			call,
+			PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+				index: 0x0102,
+				call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+					index: 0x0304,
+					call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+						index: 0x0506,
+						call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+							index: 0x0708,
+							call: Box::new(PolkadotRuntimeCall::Balances(
+								BalancesCall::transfer_all {
+									dest: PolkadotAccountIdLookup::from(vault_account),
+									keep_alive: false,
+								}
+							)),
+						})),
+					})),
+				})),
+			})
+		);
+
+		let channel_id = 1;
+		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
+		let call = utility_fetch(channel_id, vault_account);
+
+		assert_eq!(
+			call,
+			PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+				index: 1,
+				call: Box::new(PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
+					dest: PolkadotAccountIdLookup::from(vault_account),
+					keep_alive: false,
+				})),
+			})
+		);
 	}
 }
