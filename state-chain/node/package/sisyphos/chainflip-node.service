@@ -6,13 +6,43 @@ Restart=always
 RestartSec=30
 Type=simple
 
+User=flip
+Group=flip
+
+WorkingDirectory=/etc/chainflip
+
 ExecStart=/usr/bin/chainflip-node \
-  --chain /etc/chainflip/sisyphos.chainspec.json \
-  --base-path /etc/chainflip/chaindata \
-  --node-key-file /etc/chainflip/keys/node_key_file \
+  --chain=/etc/chainflip/sisyphos.chainspec.json \
+  --base-path=/etc/chainflip/chaindata \
+  --node-key-file=/etc/chainflip/keys/node_key_file \
   --validator \
-  --trie-cache-size 0 \
-  --sync warp
+  --trie-cache-size=0 \
+  --sync=warp
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+PrivateDevices=yes
+PrivateUsers=yes
+PrivateTmp=yes
+
+ProtectClock=yes
+ProtectHome=true
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectHostname=yes
+ProtectControlGroups=yes
+
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
