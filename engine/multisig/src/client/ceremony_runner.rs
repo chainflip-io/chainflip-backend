@@ -371,7 +371,7 @@ where
 {
 	/// This is to allow calling a private method from tests
 	pub fn new_unauthorised_for_test() -> Self {
-		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)
+		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0, 0)
 	}
 
 	fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
