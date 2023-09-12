@@ -299,6 +299,9 @@ pub mod pallet {
 
 		/// Wrong executor address
 		InvalidExecutorAddress,
+
+		/// The account is already bound to an executor address.
+		ExecutorAddressAlreadyBound,
 	}
 
 	#[pallet::call]
@@ -701,7 +704,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Bind executor address.
+		/// Binds executor address to an account.
+		///
+		/// ## Events
+		///
+		/// - [BoundExecutorAddress](Event::BoundExecutorAddress)
+		///
+		/// ## Errors
+		///
+		/// - [ExecutorAddressAlreadyBound](Error::ExecutorAddressAlreadyBound)
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::bind_executor_address())]
 		pub fn bind_executor_address(
@@ -709,6 +721,10 @@ pub mod pallet {
 			executor_address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
+			ensure!(
+				!ExecutorAddressBinding::<T>::contains_key(&account_id),
+				Error::<T>::ExecutorAddressAlreadyBound,
+			);
 			ExecutorAddressBinding::<T>::insert(account_id.clone(), executor_address);
 			Self::deposit_event(Event::BoundExecutorAddress {
 				account_id,

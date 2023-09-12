@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	RedemptionTax, RestrictedAddresses, RestrictedBalances,
+	mock::*, pallet, ActiveBidder, Error, EthereumAddress, ExecutorAddressBinding,
+	PendingRedemptions, RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
@@ -1465,5 +1465,44 @@ fn check_restricted_balances_are_getting_removed() {
 			vec![RESTRICTED_ADDRESS],
 		));
 		assert!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).is_none());
+	});
+}
+
+#[test]
+fn bind_executor_address() {
+	new_test_ext().execute_with(|| {
+		const EXECUTOR_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), EXECUTOR_ADDRESS));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Funding(crate::Event::BoundExecutorAddress {
+				account_id: ALICE,
+				address,
+			}) if address == EXECUTOR_ADDRESS,
+		);
+		assert!(ExecutorAddressBinding::<Test>::contains_key(ALICE));
+		assert_eq!(ExecutorAddressBinding::<Test>::get(ALICE).unwrap(), EXECUTOR_ADDRESS);
+		assert_noop!(
+			Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), EXECUTOR_ADDRESS),
+			Error::<Test>::ExecutorAddressAlreadyBound
+		);
+	});
+}
+
+#[test]
+fn detect_wrong_executor_address() {
+	new_test_ext().execute_with(|| {
+		const EXECUTOR_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		const WRONG_EXECUTOR_ADDRESS: EthereumAddress = H160([0x02; 20]);
+		assert_ok!(Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), EXECUTOR_ADDRESS));
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				100.into(),
+				ETH_DUMMY_ADDR,
+				Some(WRONG_EXECUTOR_ADDRESS)
+			),
+			Error::<Test>::InvalidExecutorAddress
+		);
 	});
 }
