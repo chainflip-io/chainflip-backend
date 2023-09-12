@@ -135,7 +135,7 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 
 parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
-	pub CurrentCompatibilityVersion: SemVer = SemVer {
+	pub CurrentCompatibleVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
@@ -163,7 +163,7 @@ impl pallet_cf_environment::Config for Test {
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
-	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
+	type CurrentCompatibleVersion = CurrentCompatibleVersion;
 	type WeightInfo = ();
 }
 

@@ -310,7 +310,7 @@ pub mod pallet {
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
 
 			if let Some(percent) = required_up_to_date_cfes {
-				let next_version = T::CompatibleCfeVersions::next_compatibility_version()
+				let next_version = T::CompatibleCfeVersions::next_compatible_version()
 					.ok_or(Error::<T>::TargetCfeVersionNotSet)?;
 				ensure!(
 					T::AuthoritiesCfeVersions::precent_authorities_at_version(next_version) >=

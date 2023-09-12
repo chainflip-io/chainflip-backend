@@ -66,19 +66,19 @@ async fn main() -> anyhow::Result<()> {
 			loop {
 				poll_interval.tick().await;
 
-				let runtime_compatibility_version: SemVer = ws_rpc_client
-					.request("cf_current_compatibility_version", Vec::<()>::new())
+				let runtime_compatible_version: SemVer = ws_rpc_client
+					.request("cf_current_compatible_version", Vec::<()>::new())
 					.await
 					.unwrap();
 
 				let compatible =
-					CFE_VERSION.is_compatible_with(runtime_compatibility_version);
+					CFE_VERSION.is_compatible_with(runtime_compatible_version);
 
 				match cfe_status {
 					CfeStatus::Active(_) =>
 						if !compatible {
 							tracing::info!(
-								"Runtime version ({runtime_compatibility_version:?}) is no longer compatible, shutting down the engine!"
+								"Runtime version ({runtime_compatible_version:?}) is no longer compatible, shutting down the engine!"
 							);
 							// This will exit the scope, dropping the handle and thus terminating
 							// the main task
@@ -87,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
 					CfeStatus::Idle =>
 						if compatible {
 							start_logger_server_fn.take().expect("only called once")(scope);
-							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
+							tracing::info!("Runtime version ({runtime_compatible_version:?}) is compatible, starting the engine!");
 
 							let settings = settings.clone();
 							let handle = scope.spawn_with_handle(

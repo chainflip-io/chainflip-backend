@@ -241,8 +241,8 @@ pub trait CustomApi {
 	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
-	#[method(name = "current_compatibility_version")]
-	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
+	#[method(name = "current_compatible_version")]
+	fn cf_current_compatible_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 }
@@ -625,10 +625,10 @@ where
 			.map(RpcEnvironment::from)
 	}
 
-	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
+	fn cf_current_compatible_version(&self) -> RpcResult<SemVer> {
 		self.client
 			.runtime_api()
-			.cf_current_compatibility_version(self.unwrap_or_best(None))
+			.cf_current_compatible_version(self.unwrap_or_best(None))
 			.map_err(to_rpc_error)
 	}
 

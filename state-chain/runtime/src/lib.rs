@@ -193,7 +193,7 @@ parameter_types! {
 
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 
-	pub CurrentCompatibilityVersion: SemVer = SemVer {
+	pub CurrentCompatibleVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
@@ -207,7 +207,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = chainflip::RuntimeSafeMode;
-	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
+	type CurrentCompatibleVersion = CurrentCompatibleVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -888,9 +888,9 @@ impl_runtime_apis! {
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}
-		fn cf_current_compatibility_version() -> SemVer {
+		fn cf_current_compatible_version() -> SemVer {
 			use cf_traits::CompatibleCfeVersions;
-			Environment::current_compatibility_version()
+			Environment::current_compatible_version()
 		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()

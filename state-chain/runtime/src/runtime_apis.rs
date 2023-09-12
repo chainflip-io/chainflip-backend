@@ -96,7 +96,7 @@ decl_runtime_apis!(
 		fn cf_auction_parameters() -> (u32, u32);
 		fn cf_min_funding() -> u128;
 		fn cf_current_epoch() -> u32;
-		fn cf_current_compatibility_version() -> SemVer;
+		fn cf_current_compatible_version() -> SemVer;
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
 		fn cf_authority_emission_per_block() -> u128;
