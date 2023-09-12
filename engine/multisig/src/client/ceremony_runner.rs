@@ -17,7 +17,10 @@ use tokio::sync::{
 use tracing::{debug, warn, Instrument};
 use utilities::{
 	format_iterator,
-	metrics::{CeremonyMetrics, MetricCounter, CEREMONY_BAD_MSG, CEREMONY_PROCESSED_MSG},
+	metrics::{
+		CeremonyMetrics, MetricCounter, MetricCounterNotToDrop, CEREMONY_BAD_MSG,
+		CEREMONY_PROCESSED_MSG,
+	},
 };
 
 use crate::{
@@ -33,6 +36,7 @@ use super::{
 	ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
 	common::PreProcessStageDataCheck,
 };
+
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 const INCORRECT_NUMBER_ELEMENTS: &str = "incorrect_number_of_elements";
 
@@ -136,6 +140,7 @@ where
 					&CEREMONY_PROCESSED_MSG,
 					[format!("{}", ceremony_id)],
 				),
+				bad_message: MetricCounterNotToDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
 			},
 		}
 	}
@@ -225,7 +230,7 @@ where
 		match &mut self.stage {
 			None => {
 				if !data.should_delay_unauthorised() {
-					CEREMONY_BAD_MSG.inc(&["non_initial_stage", Chain::NAME]);
+					self.metrics.bad_message.inc(&["non_initial_stage"]);
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: non-initial stage data"
@@ -234,7 +239,7 @@ where
 				}
 
 				if !data.is_initial_stage_data_size_valid::<Chain>() {
-					CEREMONY_BAD_MSG.inc(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME]);
+					self.metrics.bad_message.inc(&[INCORRECT_NUMBER_ELEMENTS]);
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: incorrect number of elements"
@@ -250,7 +255,7 @@ where
 				{
 					Some(idx) => idx,
 					None => {
-						CEREMONY_BAD_MSG.inc(&["not_valid_participant", Chain::NAME]);
+						self.metrics.bad_message.inc(&["not_valid_participant"]);
 						debug!("Ignoring data: sender {sender_id} is not a valid participant",);
 						return None
 					},
@@ -261,7 +266,7 @@ where
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
 					stage.ceremony_common().number_of_signing_payloads,
 				) {
-					CEREMONY_BAD_MSG.inc(&[INCORRECT_NUMBER_ELEMENTS, Chain::NAME]);
+					self.metrics.bad_message.inc(&[INCORRECT_NUMBER_ELEMENTS]);
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data: incorrect number of elements"
@@ -318,9 +323,9 @@ where
 		};
 		let total_delayed = self.delayed_messages.len() + 1;
 
-		match self.delayed_messages.entry(id.clone()) {
+		match self.delayed_messages.entry(id) {
 			btree_map::Entry::Occupied(_) => {
-				CEREMONY_BAD_MSG.inc(&["redundant_delayed_msg", Chain::NAME]);
+				self.metrics.bad_message.inc(&["redundant_delayed_msg"]);
 				warn!("Ignoring a redundant delayed message from {party_and_stage}");
 			},
 			btree_map::Entry::Vacant(entry) => {

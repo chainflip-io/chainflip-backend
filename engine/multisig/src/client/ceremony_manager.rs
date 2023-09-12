@@ -58,6 +58,9 @@ pub type CeremonyOutcome<C> = Result<
 pub type CeremonyResultSender<Ceremony> = oneshot::Sender<CeremonyOutcome<Ceremony>>;
 pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ceremony>>;
 
+const KEYGEN: &str = "keygen";
+const SIGNING: &str = "signing";
+
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
 	// Determines which curve and signing method to use
@@ -396,12 +399,12 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		}
 
 		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, "signing"],
+			&[Chain::NAME, SIGNING],
 			self.signing_states.count_unauthorised_ceremonies().try_into().unwrap(),
 		);
 
 		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, "keygen"],
+			&[Chain::NAME, KEYGEN],
 			self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap(),
 		);
 	}
@@ -648,12 +651,12 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		}
 
 		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, "signing"],
+			&[Chain::NAME, SIGNING],
 			self.signing_states.count_unauthorised_ceremonies().try_into().unwrap(),
 		);
 
 		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, "keygen"],
+			&[Chain::NAME, KEYGEN],
 			self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap(),
 		);
 	}

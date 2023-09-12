@@ -28,3 +28,8 @@ port = 5555
 [prometheus]
 hostname = "127.0.0.1"
 port = 5566
+
+[btc]	
+http_node_endpoint = "http://localhost:18443"	
+rpc_user = "username"	
+rpc_password = "password"

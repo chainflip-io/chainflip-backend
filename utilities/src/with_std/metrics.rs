@@ -100,7 +100,35 @@ impl<const N: usize> IntGaugeVecWrapper<N> {
 		};
 	}
 }
+/// Wrapper around a counter which doesn't need to be deleted and have some labels that are always
+/// the same relative to where the wrapper is used and some that aren't and need to be specified
+/// when we interact with the metric
+#[derive(Clone)]
+pub struct MetricCounterNotToDrop<const N: usize, const C: usize, const T: usize> {
+	metric: &'static IntCounterVecWrapper<N>,
+	const_labels: [&'static str; C],
+}
+impl<const N: usize, const C: usize, const T: usize> MetricCounterNotToDrop<N, C, T> {
+	pub fn new(
+		metric: &'static IntCounterVecWrapper<N>,
+		const_labels: [&'static str; C],
+	) -> MetricCounterNotToDrop<N, C, T> {
+		MetricCounterNotToDrop { metric, const_labels }
+	}
 
+	pub fn inc(&self, non_const_labels: &[&str; T]) {
+		//TODO: Check best way to concatenate 2 array?
+		//Probably the following one is not the best
+		let labels: [&str; N] = {
+			let mut whole: [&str; N] = [""; N];
+			let (one, two) = whole.split_at_mut(self.const_labels.len());
+			one.copy_from_slice(&self.const_labels);
+			two.copy_from_slice(non_const_labels);
+			whole
+		};
+		self.metric.inc(&labels);
+	}
+}
 /// wrapper around a Counter which needs to be deleted later on
 /// labels are defined only at creation, allowing the code to be more clear and less error prone
 #[derive(Clone)]
@@ -153,6 +181,7 @@ impl<const N: usize> IntCounterVecWrapper<N> {
 #[derive(Clone)]
 pub struct CeremonyMetrics {
 	pub processed_messages: MetricCounter<1>,
+	pub bad_message: MetricCounterNotToDrop<2, 1, 1>,
 }
 
 lazy_static::lazy_static! {

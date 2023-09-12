@@ -9,14 +9,13 @@ use tracing::warn;
 
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
-	crypto::CryptoScheme,
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
-use utilities::metrics::{CeremonyMetrics, CEREMONY_BAD_MSG};
+use utilities::metrics::CeremonyMetrics;
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone
@@ -165,10 +164,9 @@ where
 		let m: Stage::Message = match m.try_into() {
 			Ok(m) => m,
 			Err(incorrect_type) => {
-				CEREMONY_BAD_MSG.inc(&[
-					&format!("incorrect_type ({})", self.get_stage_name()),
-					C::Crypto::NAME,
-				]);
+				metrics
+					.bad_message
+					.inc(&[&format!("incorrect_type ({})", self.get_stage_name())]);
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring unexpected message {incorrect_type} while in stage {self}",
@@ -178,10 +176,9 @@ where
 		};
 
 		if !self.common.all_idxs.contains(&signer_idx) {
-			CEREMONY_BAD_MSG.inc(&[
-				&format!("message_from_non_participant ({})", self.get_stage_name()),
-				C::Crypto::NAME,
-			]);
+			metrics
+				.bad_message
+				.inc(&[&format!("message_from_non_participant ({})", self.get_stage_name())]);
 			warn!(
 				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 				"Ignoring a message from non-participant for stage {self}",
@@ -191,10 +188,9 @@ where
 
 		match self.messages.entry(signer_idx) {
 			btree_map::Entry::Occupied(_) => {
-				CEREMONY_BAD_MSG.inc(&[
-					&format!("redundant_message ({})", self.get_stage_name()),
-					C::Crypto::NAME,
-				]);
+				metrics
+					.bad_message
+					.inc(&[&format!("redundant_message ({})", self.get_stage_name())]);
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring a redundant message for stage {self}",
