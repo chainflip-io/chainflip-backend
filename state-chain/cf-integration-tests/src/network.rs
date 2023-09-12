@@ -10,7 +10,7 @@ use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
-	traits::{OnFinalize, OnIdle},
+	traits::{IntegrityTest, OnFinalize, OnIdle},
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_validator::RotationPhase;
@@ -605,6 +605,7 @@ impl Network {
 
 			// We must finalise this to clear the previous author which is otherwise cached
 			AllPalletsWithSystem::on_finalize(block_number);
+			AllPalletsWithSystem::integrity_test();
 
 			// Process Engine responses. Store calls into a queue and dispatch these between
 			// `on_initialize` and `on_idle`
