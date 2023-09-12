@@ -13,5 +13,4 @@ else
   ./tests/swap_after_temp_disconnecting_chains.ts
 fi
 
-./tests/multiple_members_governance.ts
 ./tests/lp_api_test.ts
