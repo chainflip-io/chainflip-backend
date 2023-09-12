@@ -5,9 +5,6 @@ Description=Chainflip Genesis Node
 Restart=always
 RestartSec=30
 
-User=flip
-Group=flip
-
 WorkingDirectory=/etc/chainflip
 
 ExecStart=/usr/bin/chainflip-node \
@@ -17,31 +14,6 @@ ExecStart=/usr/bin/chainflip-node \
     --validator \
     --trie-cache-size=0 \
     --sync=full
-
-NoNewPrivileges=yes
-CapabilityBoundingSet=
-SystemCallArchitectures=native
-SystemCallFilter=@system-service
-
-PrivateDevices=yes
-PrivateUsers=yes
-PrivateTmp=yes
-
-ProtectClock=yes
-ProtectHome=true
-ProtectKernelLogs=yes
-ProtectKernelModules=yes
-ProtectKernelTunables=yes
-ProtectHostname=yes
-ProtectControlGroups=yes
-
-RestrictNamespaces=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
-
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

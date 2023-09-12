@@ -4,7 +4,6 @@ Description=Chainflip Validator Node
 [Service]
 Restart=always
 RestartSec=30
-Type=simple
 
 User=flip
 Group=flip
