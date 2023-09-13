@@ -15,6 +15,7 @@ import { send } from '../shared/send';
 export async function provideLiquidity(ccy: Asset, amount: number) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
+  const chain = assetToChain(ccy);
 
   const keyring = new Keyring({ type: 'sr25519' });
   const lpUri = process.env.LP_URI || '//LP_1';
@@ -29,39 +30,31 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
       )
     ).toJSON() === null
   ) {
-    let refundAddress = await newAddress(assetToChain(ccy).toUpperCase() as Asset, 'LP_1');
+    let refundAddress = await newAddress(chain.toUpperCase() as Asset, 'LP_1');
     refundAddress = ccy === 'DOT' ? decodeDotAddressForContract(refundAddress) : refundAddress;
 
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);
     await lpMutex.runExclusive(async () => {
       await chainflip.tx.liquidityProvider
-        .registerLiquidityRefundAddress({ [assetToChain(ccy)]: refundAddress })
+        .registerLiquidityRefundAddress({ [chain]: refundAddress })
         .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
     });
   }
 
+  let eventHandle = observeEvent(
+    'liquidityProvider:LiquidityDepositAddressReady',
+    chainflip,
+    (event) => event.data.asset.toUpperCase() === ccy,
+  );
+
   console.log('Requesting ' + ccy + ' deposit address');
-  let eventHandle =
-    assetToChain(ccy) === 'Eth'
-      ? observeEvent(
-          'ethereumIngressEgress:StartWitnessing',
-          chainflip,
-          (event) => event.data.sourceAsset.toUpperCase() === ccy,
-        )
-      : observeEvent(
-          'liquidityProvider:LiquidityDepositAddressReady',
-          chainflip,
-          (event) => event.data.depositAddress[assetToChain(ccy)] !== undefined,
-        );
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy.toLowerCase())
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-  const ingressAddress =
-    assetToChain(ccy) === 'Eth'
-      ? (await eventHandle).data.depositAddress
-      : (await eventHandle).data.depositAddress[assetToChain(ccy)];
+  
+  const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
@@ -71,5 +64,6 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
     (event) => event.data.asset.toUpperCase() === ccy,
   );
   send(ccy, ingressAddress, String(amount));
+
   await eventHandle;
 }

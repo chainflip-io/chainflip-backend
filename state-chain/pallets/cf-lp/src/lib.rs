@@ -113,6 +113,7 @@ pub mod pallet {
 		},
 		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
+			asset: Asset,
 			deposit_address: EncodedAddress,
 			expiry_block: BlockNumberFor<T>,
 		},
@@ -224,6 +225,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
+				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				expiry_block,
 			});

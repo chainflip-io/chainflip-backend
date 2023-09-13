@@ -105,8 +105,6 @@ pub mod pallet {
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
-	pub(crate) type TargetChainBlockNumber<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct DepositWitness<C: Chain> {
@@ -320,15 +318,6 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		StartWitnessing {
-			deposit_address: TargetChainAccount<T, I>,
-			source_asset: TargetChainAsset<T, I>,
-			opened_at: TargetChainBlockNumber<T, I>,
-		},
-		StopWitnessing {
-			deposit_address: TargetChainAccount<T, I>,
-			source_asset: TargetChainAsset<T, I>,
-		},
 		DepositReceived {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
@@ -799,7 +788,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Opens a channel for the given asset and registers it with the given action.
-	/// Emits the `StartWitnessing` event so CFEs can start watching for deposits to the address.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
 	fn open_channel(
@@ -830,18 +818,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_address = deposit_channel.address.clone();
 
 		ChannelActions::<T, I>::insert(&deposit_address, channel_action);
-
-		let opened_at = T::ChainTracking::get_block_height();
-
-		Self::deposit_event(Event::StartWitnessing {
-			deposit_address: deposit_address.clone(),
-			source_asset,
-			opened_at,
-		});
-
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
-			DepositChannelDetails { deposit_channel, opened_at, expires_at },
+			DepositChannelDetails {
+				deposit_channel,
+				opened_at: T::ChainTracking::get_block_height(),
+				expires_at,
+			},
 		);
 
 		Ok((channel_id, deposit_address))
@@ -947,10 +930,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	fn expire_channel(address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
-			Self::deposit_event(Event::<T, I>::StopWitnessing {
-				deposit_address: address,
-				source_asset: deposit_channel_details.deposit_channel.asset,
-			});
 			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
 				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
 			}
