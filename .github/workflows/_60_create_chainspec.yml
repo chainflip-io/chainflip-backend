@@ -32,7 +32,8 @@ jobs:
         run: |
           chmod +x ./chainflip-node
           echo "Generating chainspec"
-          ./chainflip-node build-spec --chain ${{ inputs.network }}-new --disable-default-bootnode > chainspec.json
+          ./chainflip-node build-spec --chain ${{ inputs.network }} --disable-default-bootnode > chainspec.json
+          # TODO: CHANGE BACK ./chainflip-node build-spec --chain ${{ inputs.network }}-new --disable-default-bootnode > chainspec.json
           cat chainspec.json state-chain/node/bootnodes/${{ inputs.network }}.json | jq -s add > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json
           
           echo "Generating raw chainspec"
