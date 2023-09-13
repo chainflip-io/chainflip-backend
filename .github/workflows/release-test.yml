@@ -7,8 +7,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: test
   chainspec:
+    needs:
+      - build
     uses: ./.github/workflows/_60_create_chainspec.yml
     secrets: inherit
     with:
-      network: sisyphos
+      network: test

@@ -23,18 +23,10 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-#      - name: Download binary artifacts
-#        uses: actions/download-artifact@v3
-#        with:
-#          name: chainflip-backend-bin-ubuntu-22.04
-      - name: Fetch binaries
-        uses: dawidd6/action-download-artifact@v2
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v3
         with:
-          workflow: release-sisyphos.yml
           name: chainflip-backend-bin-ubuntu-22.04
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          search_artifacts: true
-          check_artifacts: true
 
       - name: Create chainspec
         run: |
