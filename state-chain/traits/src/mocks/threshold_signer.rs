@@ -17,9 +17,17 @@ impl<C, Call> MockPallet for MockThresholdSigner<C, Call> {
 type MockValidatorId = u64;
 
 const REQUEST: &[u8] = b"REQ";
+const KEY_VERIFICATION_REQUEST: &[u8] = b"VERIFICATION_REQ";
 const LAST_REQ_ID: &[u8] = b"LAST_REQ_ID";
 const SIGNATURE: &[u8] = b"SIG";
 const CALLBACK: &[u8] = b"CALLBACK";
+
+#[derive(Encode, Decode, Debug, PartialEq, Eq)]
+pub struct VerificationParams<C: ChainCrypto> {
+	pub participants: BTreeSet<MockValidatorId>,
+	pub key: <C as ChainCrypto>::AggKey,
+	pub epoch_index: EpochIndex,
+}
 
 impl<C, O, Call> MockThresholdSigner<C, Call>
 where
@@ -29,6 +37,10 @@ where
 {
 	pub fn last_request_id() -> Option<u32> {
 		Self::get_value(LAST_REQ_ID)
+	}
+
+	pub fn last_key_verification_request() -> Option<VerificationParams<C>> {
+		Self::get_value(KEY_VERIFICATION_REQUEST)
 	}
 
 	pub fn execute_signature_result_against_last_request(
@@ -84,11 +96,18 @@ where
 
 	fn request_verification_signature(
 		payload: <C as ChainCrypto>::Payload,
-		_participants: BTreeSet<Self::ValidatorId>,
-		_key: <C as ChainCrypto>::AggKey,
-		_epoch_index: EpochIndex,
+		participants: BTreeSet<Self::ValidatorId>,
+		key: <C as ChainCrypto>::AggKey,
+		epoch_index: EpochIndex,
+		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
 	) -> ThresholdSignatureRequestId {
-		Self::request_signature(payload)
+		Self::put_value(
+			KEY_VERIFICATION_REQUEST,
+			VerificationParams::<C> { participants, key, epoch_index },
+		);
+		let req_id = Self::request_signature(payload);
+		Self::register_callback(req_id, on_signature_ready(req_id)).unwrap();
+		req_id
 	}
 
 	fn register_callback(

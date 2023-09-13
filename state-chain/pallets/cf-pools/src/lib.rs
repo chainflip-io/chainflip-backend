@@ -878,7 +878,7 @@ pub mod pallet {
 					tick,
 					IncreaseOrDecrease::Increase,
 					sell_amount.into(),
-					/* allow noop */ false,
+					/* allow noop */ true,
 				)?;
 
 				Ok(())

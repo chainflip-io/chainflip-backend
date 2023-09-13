@@ -75,8 +75,8 @@ pub trait Rpc {
 		asset: Asset,
 	) -> Result<String, AnyhowRpcError>;
 
-	#[method(name = "registerEmergencyWithdrawalAddress")]
-	async fn register_emergency_withdrawal_address(
+	#[method(name = "registerLiquidityRefundAddress")]
+	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
@@ -170,13 +170,13 @@ impl RpcServer for RpcServerImpl {
 			.map(|address| address.to_string())?)
 	}
 
-	async fn register_emergency_withdrawal_address(
+	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
 	) -> Result<Hash, AnyhowRpcError> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)?;
-		Ok(self.api.lp_api().register_emergency_withdrawal_address(ewa_address).await?)
+		Ok(self.api.lp_api().register_liquidity_refund_address(ewa_address).await?)
 	}
 
 	/// Returns an egress id
