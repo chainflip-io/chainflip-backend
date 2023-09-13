@@ -78,8 +78,16 @@ pub struct IntGaugeVecWrapper<const N: usize> {
 }
 
 impl<const N: usize> IntGaugeVecWrapper<N> {
-	fn new(name: &str, help: &str, labels: &[&str; N], registry: &REGISTRY) -> IntGaugeVecWrapper<N> {
-		IntGaugeVecWrapper { metric: register_int_gauge_vec_with_registry!(Opts::new(name, help), labels, registry).unwrap() }
+	fn new(
+		name: &str,
+		help: &str,
+		labels: &[&str; N],
+		registry: &REGISTRY,
+	) -> IntGaugeVecWrapper<N> {
+		IntGaugeVecWrapper {
+			metric: register_int_gauge_vec_with_registry!(Opts::new(name, help), labels, registry)
+				.unwrap(),
+		}
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
@@ -165,8 +173,20 @@ pub struct IntCounterVecWrapper<const N: usize> {
 }
 
 impl<const N: usize> IntCounterVecWrapper<N> {
-	fn new(name: &str, help: &str, labels: &[&str; N], registry: &REGISTRY) -> IntCounterVecWrapper<N> {
-		IntCounterVecWrapper { metric: register_int_counter_vec_with_registry!(Opts::new(name, help), labels, registry).unwrap() }
+	fn new(
+		name: &str,
+		help: &str,
+		labels: &[&str; N],
+		registry: &REGISTRY,
+	) -> IntCounterVecWrapper<N> {
+		IntCounterVecWrapper {
+			metric: register_int_counter_vec_with_registry!(
+				Opts::new(name, help),
+				labels,
+				registry
+			)
+			.unwrap(),
+		}
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
