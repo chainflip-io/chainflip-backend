@@ -17,17 +17,14 @@ impl Display for SecretUrl {
 	}
 }
 
-// Only debug print the secret in debug mode
-#[cfg(debug_assertions)]
 impl Debug for SecretUrl {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:?}", self.0)
-	}
-}
-#[cfg(not(debug_assertions))]
-impl Debug for SecretUrl {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:?}", redact_secret_node_endpoint(&self.0))
+		// Only debug print the secret without redaction in debug mode
+		if cfg!(debug_assertions) {
+			write!(f, "{:?}", self.0)
+		} else {
+			write!(f, "{:?}", redact_secret_node_endpoint(&self.0))
+		}
 	}
 }
 
@@ -49,12 +46,6 @@ impl From<SecretUrl> for String {
 	}
 }
 
-impl<'a> From<&'a SecretUrl> for &'a str {
-	fn from(s: &'a SecretUrl) -> Self {
-		&s.0
-	}
-}
-
 impl AsRef<str> for SecretUrl {
 	fn as_ref(&self) -> &str {
 		&self.0
@@ -64,13 +55,17 @@ impl AsRef<str> for SecretUrl {
 /// Partially redacts the secret in the url of the node endpoint.
 ///  eg: `wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/` ->
 /// `wss://cdc****.rinkeby.ws.rivet.cloud/`
-#[allow(unused)]
 pub fn redact_secret_node_endpoint(endpoint: &str) -> String {
-	let re = Regex::new(r"[0-9a-fA-F]{32}").unwrap();
+	const REGEX_ETH_SECRET: &str = "[0-9a-fA-F]{32}";
+	const REGEX_BTC_SECRET: &str =
+		r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+	let re = Regex::new(&format!("({})|({})", REGEX_ETH_SECRET, REGEX_BTC_SECRET)).unwrap();
 	if re.is_match(endpoint) {
 		// A 32 character hex string was found, redact it
 		let mut endpoint_redacted = endpoint.to_string();
-		for capture in re.captures_iter(endpoint) {
+		// Just redact the first match so we do not get stuck in a loop if there is a mistake in the
+		// regex
+		if let Some(capture) = re.captures_iter(endpoint).next() {
 			endpoint_redacted = endpoint_redacted.replace(
 				&capture[0],
 				&format!(
@@ -153,5 +148,15 @@ mod tests {
 
 		assert_eq!(format!("{}", SecretUrl("no.schema.com".to_string())), "no.****");
 		assert_eq!(format!("{:?}", SecretUrl("debug_print".to_string())), "\"debug_print\"");
+
+		assert_eq!(
+			format!(
+				"{}",
+				SecretUrl(
+					"btc.getblock.io/de76678e-a489-4503-2ba2-81156c471220/mainnet".to_string()
+				)
+			),
+			"btc.getblock.io/de7****/mainnet"
+		);
 	}
 }

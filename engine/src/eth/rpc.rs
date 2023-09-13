@@ -211,7 +211,7 @@ use crate::eth::ConscientiousEthWebsocketBlockHeaderStream;
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
 		let web3 = web3::Web3::new(
-			web3::transports::WebSocket::new((&self.ws_node_endpoint).into()).await?,
+			web3::transports::WebSocket::new(self.ws_node_endpoint.as_ref()).await?,
 		);
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
