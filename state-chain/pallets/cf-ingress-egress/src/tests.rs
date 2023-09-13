@@ -472,7 +472,7 @@ fn can_process_ccm_deposit() {
 		let deposit_address: TargetChainAccount<Test, _> = deposit_address.try_into().unwrap();
 
 		assert_eq!(
-			DepositChannelLookup::<Test>::get(&deposit_address).unwrap().opened_at,
+			DepositChannelLookup::<Test>::get(deposit_address).unwrap().opened_at,
 			BlockNumberProvider::get_block_height()
 		);
 
