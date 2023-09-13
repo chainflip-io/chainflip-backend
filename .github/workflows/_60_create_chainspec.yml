@@ -34,7 +34,6 @@ jobs:
           echo "Generating chainspec"
           ./chainflip-node build-spec --chain ${{ inputs.network }} --disable-default-bootnode > chainspec.json
           # TODO: CHANGE BACK ./chainflip-node build-spec --chain ${{ inputs.network }}-new --disable-default-bootnode > chainspec.json
-          cat chainspec.json state-chain/node/bootnodes/${{ inputs.network }}.json | jq -s add > state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json
           
           echo "Generating raw chainspec"
           ./chainflip-node build-spec --chain chainspec.json --disable-default-bootnode --raw > chainspec.raw.json
@@ -45,7 +44,9 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: chainspec
-          path: state-chain/node/chainspecs/${{ inputs.network }}.chainspec.json
+          path: |
+            chainspec.json
+            chainspec.raw.json
 
       - uses: EndBug/add-and-commit@v9
         with:
@@ -55,4 +56,4 @@ jobs:
 
       - name: Upload chainspec to s3
         run: |
-          aws s3 cp state-chain/node/chainspecs/CHANGEME.chainspec.raw.json s3://repo.chainflip.io/chainspecs/CHANGEME.chainspec.json
+          aws s3 cp state-chain/node/chainspecs/test.chainspec.raw.json s3://repo.chainflip.io/chainspecs/test.chainspec.json
