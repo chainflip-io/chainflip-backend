@@ -39,6 +39,12 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
+  chainspec:
+    needs: [build]
+    uses: ./.github/workflows/_60_create_chainspec.yml
+    secrets: inherit
+    with:
+      network: sisyphos
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

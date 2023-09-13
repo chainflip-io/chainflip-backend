@@ -17,39 +17,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Check if the chainspec file already exists
+        id: check-chainspec-exists
+        continue-on-error: true
+        run: |
+          if [ -f state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json ]; then
+            echo "Chainspec already exists, skipping"
+            exit 1
+          fi
+
       - name: Configure AWS credentials using OIDC
+        if: steps.check-chainspec-exists.outcome == 'failure'
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
       - name: Download binary artifacts
+        if: steps.check-chainspec-exists.outcome == 'failure'
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Setup python
+        if: steps.check-chainspec-exists.outcome == 'failure'
         uses: actions/setup-python@v3
 
       - name: Create chainspec
+        if: steps.check-chainspec-exists.outcome == 'failure'
         run: |
           python3 ./ci/scripts/create_chainspec.py ${{ inputs.network }} ./chainflip-node
 
-      - name: Upload artifact
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainspec
-          path: |
-            chainspec.json
-            chainspec.raw.json
-
       - uses: EndBug/add-and-commit@v9
+        if: steps.check-chainspec-exists.outcome == 'failure'
         with:
           default_author: github_actions
           add: state-chain/node/chainspecs/*.json
           message: "Create chainspec for ${{ inputs.network }}"
 
       - name: Upload chainspec to s3
+        if: steps.check-chainspec-exists.outcome == 'failure'
         run: |
-          aws s3 cp state-chain/node/chainspecs/test.chainspec.raw.json s3://repo.chainflip.io/chainspecs/test.chainspec.json
+          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json

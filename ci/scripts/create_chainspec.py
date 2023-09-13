@@ -23,7 +23,7 @@ with open(bootnodes_filename, "r") as bootnodes_data:
 
 chainspec_filename = chainspecs_base_path + network + ".chainspec.json"
 
-generate_chainspec_subprocess=[binary, "build-spec", "--chain", network, "--disable-default-bootnode"]
+generate_chainspec_subprocess=[binary, "build-spec", "--chain", network, "-new --disable-default-bootnode"]
 with open(chainspec_filename, "w") as chainspec:
     subprocess.call(generate_chainspec_subprocess, stdout=chainspec)
 

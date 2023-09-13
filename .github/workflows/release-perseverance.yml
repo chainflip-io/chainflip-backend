@@ -36,6 +36,12 @@ jobs:
       version: "perseverance/"
       environment: prod
     secrets: inherit
+  chainspec:
+    needs: [publish]
+    uses: ./.github/workflows/_60_create_chainspec.yml
+    secrets: inherit
+    with:
+      network: perseverance
   release:
     needs: [publish]
     uses: ./.github/workflows/_50_release.yml
