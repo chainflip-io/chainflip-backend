@@ -28,9 +28,12 @@ jobs:
         with:
           name: chainflip-backend-bin-ubuntu-22.04
 
+      - name: Setup python
+        uses: actions/setup-python@v3
+
       - name: Create chainspec
         run: |
-          ./ci/scripts/create_chainspec.sh ${{ inputs.network }}
+          python3 ./ci/scripts/create_chainspec.py ${{ inputs.network }} ./chainflip-node
 
       - name: Upload artifact
         if: always()
