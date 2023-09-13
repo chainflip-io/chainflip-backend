@@ -403,19 +403,13 @@ pub mod pallet {
 			addresses: Vec<TargetChainAccount<T, I>>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+
 			for deposit_address in addresses {
-				if let Some(mut deposit_details) =
-					DepositChannelLookup::<T, I>::get(&deposit_address)
-				{
-					if deposit_details.deposit_channel.state.on_fetch_completed() {
-						DepositChannelLookup::<T, I>::insert(&deposit_address, deposit_details);
-					}
-				} else {
-					log::error!(
-						"Deposit address {:?} not found in DepositChannelLookup",
-						deposit_address
-					);
-				}
+				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
+					deposit_channel_details
+						.as_mut()
+						.map(|details| details.deposit_channel.state.on_fetch_completed());
+				});
 			}
 			Ok(())
 		}
