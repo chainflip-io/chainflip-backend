@@ -27,35 +27,35 @@ jobs:
           fi
 
       - name: Configure AWS credentials using OIDC
-        if: steps.check-chainspec-exists.outcome == 'failure'
+        if: steps.check-chainspec-exists.outcome == 'success'
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
       - name: Download binary artifacts
-        if: steps.check-chainspec-exists.outcome == 'failure'
+        if: steps.check-chainspec-exists.outcome == 'success'
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Setup python
-        if: steps.check-chainspec-exists.outcome == 'failure'
+        if: steps.check-chainspec-exists.outcome == 'success'
         uses: actions/setup-python@v3
 
       - name: Create chainspec
-        if: steps.check-chainspec-exists.outcome == 'failure'
+        if: steps.check-chainspec-exists.outcome == 'success'
         run: |
           python3 ./ci/scripts/create_chainspec.py ${{ inputs.network }} ./chainflip-node
 
       - uses: EndBug/add-and-commit@v9
-        if: steps.check-chainspec-exists.outcome == 'failure'
+        if: steps.check-chainspec-exists.outcome == 'success'
         with:
           default_author: github_actions
           add: state-chain/node/chainspecs/*.json
           message: "Create chainspec for ${{ inputs.network }}"
 
       - name: Upload chainspec to s3
-        if: steps.check-chainspec-exists.outcome == 'failure'
+        if: steps.check-chainspec-exists.outcome == 'success'
         run: |
           aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
