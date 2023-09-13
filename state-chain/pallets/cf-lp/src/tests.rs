@@ -138,7 +138,8 @@ fn deposit_channel_expires() {
 			channel_id,
 			deposit_address,
 			expiry_block,
-		}) if expiry_block == expiry && event_asset == asset => (channel_id, deposit_address));
+			account_id,
+		}) if expiry_block == expiry && event_asset == asset && account_id == LP_ACCOUNT.into() => (channel_id, deposit_address));
 		let lp_channel = LpChannel {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap(),
 			source_asset: asset,

@@ -116,6 +116,8 @@ pub mod pallet {
 			asset: Asset,
 			deposit_address: EncodedAddress,
 			expiry_block: BlockNumberFor<T>,
+			// account the funds will be credited to upon deposit
+			account_id: T::AccountId,
 		},
 		LiquidityDepositAddressExpired {
 			address: EncodedAddress,
@@ -213,7 +215,7 @@ pub mod pallet {
 
 			let (channel_id, deposit_address) =
 				T::DepositHandler::request_liquidity_deposit_address(
-					account_id,
+					account_id.clone(),
 					asset,
 					expiry_block,
 				)?;
@@ -228,6 +230,7 @@ pub mod pallet {
 				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				expiry_block,
+				account_id,
 			});
 
 			Ok(())
