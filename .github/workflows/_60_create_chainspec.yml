@@ -59,3 +59,13 @@ jobs:
         if: steps.check-chainspec-exists.outcome == 'success'
         run: |
           aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
+
+      - name: Set summary output
+        if: steps.check-chainspec-exists.outcome == 'success'
+        run: |
+          echo "Chainspec created for ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set summary output
+        if: steps.check-chainspec-exists.outcome == 'failure'
+        run: |
+          echo "No chainspec created for ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
