@@ -78,8 +78,8 @@ pub struct IntGaugeVecWrapper<const N: usize> {
 }
 
 impl<const N: usize> IntGaugeVecWrapper<N> {
-	fn new(metric: IntGaugeVec) -> IntGaugeVecWrapper<N> {
-		IntGaugeVecWrapper { metric }
+	fn new(name: &str, help: &str, labels: &[&str; N], registry: &REGISTRY) -> IntGaugeVecWrapper<N> {
+		IntGaugeVecWrapper { metric: register_int_gauge_vec_with_registry!(Opts::new(name, help), labels, registry).unwrap() }
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
@@ -165,8 +165,8 @@ pub struct IntCounterVecWrapper<const N: usize> {
 }
 
 impl<const N: usize> IntCounterVecWrapper<N> {
-	fn new(metric: IntCounterVec) -> IntCounterVecWrapper<N> {
-		IntCounterVecWrapper { metric }
+	fn new(name: &str, help: &str, labels: &[&str; N], registry: &REGISTRY) -> IntCounterVecWrapper<N> {
+		IntCounterVecWrapper { metric: register_int_counter_vec_with_registry!(Opts::new(name, help), labels, registry).unwrap() }
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
@@ -189,8 +189,8 @@ lazy_static::lazy_static! {
 
 	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
 
-	pub static ref RPC_RETRIER_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials"), &["client","rpc_method"], REGISTRY).unwrap());
-	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times"), &["client", "rpc_method"], REGISTRY).unwrap());
+	pub static ref RPC_RETRIER_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpc_method"], &REGISTRY);
+	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpc_method"], &REGISTRY);
 
 	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).unwrap();
 	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).unwrap();
@@ -198,13 +198,13 @@ lazy_static::lazy_static! {
 	pub static ref P2P_ACTIVE_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_active_connections", "Count the number of active connections"), REGISTRY).unwrap();
 	pub static ref P2P_ALLOWED_PUBKEYS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys"), REGISTRY).unwrap();
 	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), REGISTRY).unwrap();
-	pub static ref P2P_MONITOR_EVENT: IntCounterVecWrapper<1> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("p2p_monitor_event", "Count the number of events observed by the zmq connection monitor"), &["event_type"], REGISTRY).unwrap());
-	pub static ref P2P_BAD_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded"), &["reason"], REGISTRY).unwrap());
+	pub static ref P2P_MONITOR_EVENT: IntCounterVecWrapper<1> = IntCounterVecWrapper::new("p2p_monitor_event", "Count the number of events observed by the zmq connection monitor", &["event_type"], &REGISTRY);
+	pub static ref P2P_BAD_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"], &REGISTRY);
 
-	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVecWrapper<2> = IntGaugeVecWrapper::new(register_int_gauge_vec_with_registry!(Opts::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation"), &["chain", "type"], REGISTRY).unwrap());
-	pub static ref CEREMONY_BAD_MSG: IntCounterVecWrapper<2> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony"), &["reason", "chain"], REGISTRY).unwrap());
+	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVecWrapper<2> = IntGaugeVecWrapper::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation", &["chain", "type"], &REGISTRY);
+	pub static ref CEREMONY_BAD_MSG: IntCounterVecWrapper<2> = IntCounterVecWrapper::new("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony", &["reason", "chain"], &REGISTRY);
 
-	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new(register_int_counter_vec_with_registry!(Opts::new("ceremony_msg", "Count all the processed messages for a given ceremony"), &["ceremony_id"], REGISTRY).unwrap());
+	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new("ceremony_msg", "Count all the processed messages for a given ceremony", &["ceremony_id"], &REGISTRY);
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
