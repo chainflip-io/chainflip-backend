@@ -403,7 +403,6 @@ pub mod pallet {
 			addresses: Vec<TargetChainAccount<T, I>>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-
 			for deposit_address in addresses {
 				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
 					deposit_channel_details
@@ -545,27 +544,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} =>
-									if let Some(mut details) =
-										DepositChannelLookup::<T, I>::get(&*deposit_address)
-									{
-										if details.deposit_channel.state.can_fetch() {
-											deposit_fetch_id
-												.replace(details.deposit_channel.fetch_id());
-											if details.deposit_channel.state.on_fetch_scheduled() {
-												DepositChannelLookup::<T, I>::insert(
-													deposit_address,
-													details,
-												);
-											}
-											true
-										} else {
-											false
-										}
-									} else {
-										log::error!("Deposit address {:?} not found in DepositChannelLookup", deposit_address);
-										false
+								} => DepositChannelLookup::<T, I>::mutate(
+									deposit_address,
+									|details| {
+										details
+											.as_mut()
+											.map(|details| {
+												let can_fetch =
+													details.deposit_channel.state.can_fetch();
+												if can_fetch {
+													deposit_fetch_id.replace(
+														details.deposit_channel.fetch_id(),
+													);
+													details
+														.deposit_channel
+														.state
+														.on_fetch_scheduled();
+												}
+												can_fetch
+											})
+											.unwrap_or(false)
 									},
+								),
 								FetchOrTransfer::Transfer { .. } => true,
 							}
 					})
@@ -927,7 +927,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
 	fn expire_channel(address: TargetChainAccount<T, I>) {
-        ChannelActions::<T, I>::remove(&address);
+		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
 			if let Some(state) = deposit_channel_details.deposit_channel.state.maybe_recycle() {
 				DepositChannelPool::<T, I>::insert(
