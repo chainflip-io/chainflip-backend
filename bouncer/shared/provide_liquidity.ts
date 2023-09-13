@@ -53,7 +53,7 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
       .requestLiquidityDepositAddress(ccy.toLowerCase())
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-  
+
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
