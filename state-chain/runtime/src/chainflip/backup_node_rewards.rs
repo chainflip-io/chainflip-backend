@@ -11,7 +11,7 @@ use sp_std::{cmp::min, prelude::*};
 pub fn calculate_backup_rewards<Id, Amount>(
 	backup_nodes: Vec<Bid<Id, u128>>,
 	current_epoch_bond: u128,
-	reward_interwal: u128,
+	reward_interval: u128,
 	backup_node_emission_per_block: u128,
 	current_authority_emission_per_block: u128,
 	current_authority_count: u128,
@@ -28,7 +28,7 @@ where
 	);
 
 	// Emissions for this heartbeat interval for the active set
-	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interwal);
+	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interval);
 
 	// The average authority emission
 	let average_authority_reward = authority_rewards
@@ -63,7 +63,7 @@ where
 		.collect();
 
 	// Our emission cap for this heartbeat interval
-	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
+	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interval);
 
 	// Cap if needed
 	if total_rewards > emissions_cap {
@@ -88,6 +88,94 @@ where
 			.into_iter()
 			.map(|(id, reward)| (id, (reward.saturating_mul(QUANTISATION_FACTOR)).into()))
 			.collect()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+
+	use super::*;
+	use crate::constants::common::FLIPPERINOS_PER_FLIP;
+
+	const AUTHORITY_COUNT: u128 = 100;
+	const ANNUAL_BACKUP_REWARDS_CAP: u128 = 100_000;
+	const BOND: u128 = 100_000;
+
+	fn annual_backup_rewards(
+		backup_amounts: &[u128],
+		annual_authority_emissions: u128,
+	) -> Vec<(usize, u128)> {
+		const BLOCKS_PER_YEAR: u128 = 14_400 * 365;
+
+		let backup_emissions_cap_per_block =
+			ANNUAL_BACKUP_REWARDS_CAP * FLIPPERINOS_PER_FLIP / BLOCKS_PER_YEAR;
+		let authority_emissions_per_block =
+			annual_authority_emissions * FLIPPERINOS_PER_FLIP / BLOCKS_PER_YEAR;
+
+		let backup_nodes = backup_amounts
+			.iter()
+			.enumerate()
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount: amount * FLIPPERINOS_PER_FLIP })
+			.collect::<Vec<_>>();
+
+		let bond = BOND * FLIPPERINOS_PER_FLIP;
+
+		calculate_backup_rewards::<_, u128>(
+			backup_nodes,
+			bond,
+			BLOCKS_PER_YEAR,
+			backup_emissions_cap_per_block,
+			authority_emissions_per_block,
+			AUTHORITY_COUNT,
+		)
+		.into_iter()
+		.map(|(id, reward)| (id, reward / FLIPPERINOS_PER_FLIP))
+		.collect()
+	}
+
+	#[test]
+	fn backup_rewards_global_cap() {
+		// Ensure that authority rewards are high enough that the backup rewards cap is hit:
+		const ANNUAL_AUTHORITY_EMISSIONS: u128 = ANNUAL_BACKUP_REWARDS_CAP * AUTHORITY_COUNT * 2;
+
+		// A single node with BOND amount
+		let backup_amounts_1 = vec![BOND];
+		// Large number of backup nodes with BOND amount
+		let backup_amounts_2: Vec<_> = (0..100).map(|_| BOND).collect();
+		// Large number of backup nodes with amounts larger than BOND
+		let backup_amounts_3: Vec<_> = (0..100).map(|idx| BOND + idx * 1000).collect();
+
+		for amounts in [backup_amounts_1, backup_amounts_2, backup_amounts_3] {
+			let backup_rewards = annual_backup_rewards(&amounts, ANNUAL_AUTHORITY_EMISSIONS);
+
+			let total_backup_rewards = backup_rewards.iter().map(|reward| reward.1).sum::<u128>();
+
+			assert!(
+				total_backup_rewards <= ANNUAL_BACKUP_REWARDS_CAP &&
+					total_backup_rewards > ANNUAL_BACKUP_REWARDS_CAP * 99 / 100
+			);
+		}
+	}
+
+	#[test]
+	fn backup_rewards_never_exceed_authority_rewards() {
+		// Authority rewards are low, so we should hit the 80% average authority reward limit:
+		const ANNUAL_AUTHORITY_EMISSIONS: u128 = ANNUAL_BACKUP_REWARDS_CAP;
+		const AUTHORITY_REWARD: u128 = ANNUAL_AUTHORITY_EMISSIONS / AUTHORITY_COUNT;
+
+		let backup_amounts = vec![BOND, BOND * 2, BOND * 3, BOND / 2];
+
+		let backup_rewards = annual_backup_rewards(&backup_amounts, ANNUAL_AUTHORITY_EMISSIONS);
+
+		const MAX_EXPECTED_REWARD: u128 = AUTHORITY_REWARD * 8 / 10;
+
+		// Sanity check that we are actually hitting the limit
+		assert!(MAX_EXPECTED_REWARD - backup_rewards[0].1 <= 1);
+
+		for (_, reward) in backup_rewards {
+			// Backup rewards are at most 80% of the average authority reward
+			assert!(reward <= AUTHORITY_REWARD * 8 / 10)
+		}
 	}
 }
 
