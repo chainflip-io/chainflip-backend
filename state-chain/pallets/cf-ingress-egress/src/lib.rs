@@ -407,7 +407,7 @@ pub mod pallet {
 				if let Some(mut deposit_details) =
 					DepositChannelLookup::<T, I>::get(&deposit_address)
 				{
-					if deposit_details.deposit_channel.on_fetch_completed() {
+					if deposit_details.deposit_channel.state.on_fetch_completed() {
 						DepositChannelLookup::<T, I>::insert(&deposit_address, deposit_details);
 					}
 				} else {
@@ -555,10 +555,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									if let Some(mut details) =
 										DepositChannelLookup::<T, I>::get(&*deposit_address)
 									{
-										if details.deposit_channel.can_fetch() {
+										if details.deposit_channel.state.can_fetch() {
 											deposit_fetch_id
 												.replace(details.deposit_channel.fetch_id());
-											if details.deposit_channel.on_fetch_scheduled() {
+											if details.deposit_channel.state.on_fetch_scheduled() {
 												DepositChannelLookup::<T, I>::insert(
 													deposit_address,
 													details,
@@ -933,10 +933,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
 	fn expire_channel(address: TargetChainAccount<T, I>) {
-		ChannelActions::<T, I>::remove(&address);
+        ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
-			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
+			if let Some(state) = deposit_channel_details.deposit_channel.state.maybe_recycle() {
+				DepositChannelPool::<T, I>::insert(
+					deposit_channel_details.deposit_channel.channel_id,
+					DepositChannel { state, ..deposit_channel_details.deposit_channel },
+				);
 			}
 		} else {
 			log_or_panic!("Tried to close an unknown channel.");
