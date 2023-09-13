@@ -63,9 +63,9 @@ jobs:
       - name: Set summary output
         if: steps.check-chainspec-exists.outcome == 'success'
         run: |
-          echo "Chainspec created for ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "Chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
 
       - name: Set summary output
         if: steps.check-chainspec-exists.outcome == 'failure'
         run: |
-          echo "No chainspec created for ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "No chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
