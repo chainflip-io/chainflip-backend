@@ -794,7 +794,7 @@ pub mod pallet {
 		/// Optionally move the order to a different tick and then increase or decrease its amount
 		/// of liquidity. The appropiate assets will be debited or credited from your balance as
 		/// needed. If the order_id isn't being used at the moment you must specify a tick,
-		/// otherwise it will not know what tick you want to order to be over. Note limit order
+		/// otherwise it will not know what tick you want the order to be over. Note limit order
 		/// order_id's are indepdent of range order order_id's. In addition to that, order_id's for
 		/// buy and sell limit orders i.e. those in different directions are independent. Therefore
 		/// you may have two limit orders with the same order_id in the same pool, one to buy Eth
