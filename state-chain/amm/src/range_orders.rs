@@ -33,7 +33,7 @@ use crate::common::{
 	MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
-/// This is the invariant wrt xy = k. It is represents / is proportional to the depth of the
+/// This is the invariant wrt xy = k. It represents / is proportional to the depth of the
 /// pool/position.
 pub type Liquidity = u128;
 type FeeGrowthQ128F128 = U256;
