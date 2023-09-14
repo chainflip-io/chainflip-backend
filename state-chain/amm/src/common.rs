@@ -5,7 +5,7 @@ use sp_core::{U256, U512};
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
 
-/// Represents an amount of an asset, in its small unit i.e. Ethereum has 10^-18 precision, and
+/// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
 /// Represents a price as log1.0001(price) rounded to the nearest integer, where price is measured
