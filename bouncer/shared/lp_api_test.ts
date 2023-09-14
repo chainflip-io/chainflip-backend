@@ -1,4 +1,3 @@
-#!/usr/bin/env -S pnpm tsx
 import { assetDecimals } from '@chainflip-io/cli';
 import assert from 'assert';
 import {
@@ -8,16 +7,16 @@ import {
   isValidEthAddress,
   amountToFineAmount,
   sleep,
+  observeBalanceIncrease,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
+import { sendEth } from './send_eth';
+import { getBalance } from './get_balance';
 
 const testEthAmount = 0.1;
-const withdrawAssetAmount = parseInt(
-  amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH),
-);
-const testAssetAmount = withdrawAssetAmount;
-const totalEthNeeded = testEthAmount * 5;
+const testAssetAmount = parseInt(amountToFineAmount(testEthAmount.toString(), assetDecimals.ETH));
+const ethToProvide = testEthAmount * 50; // Provide plenty of eth for the tests
 const chainflip = await getChainflipApi();
 const ethAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
@@ -28,70 +27,95 @@ async function lpApiRpc(method: string, params: any[]): Promise<any> {
   return jsonRpc(method, params, port);
 }
 
-async function testAssetBalances() {
-  const fineAmountNeeded = parseInt(
-    amountToFineAmount(totalEthNeeded.toString(), assetDecimals.ETH),
+async function provideLiquidityAndTestAssetBalances() {
+  const fineAmountToProvide = parseInt(
+    amountToFineAmount(ethToProvide.toString(), assetDecimals.ETH),
   );
 
-  // Wait for the balance to update
+  // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
+  await provideLiquidity('ETH', ethToProvide, true);
+
+  // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
   let ethBalance = 0;
   do {
     const balances = await lpApiRpc(`lp_assetBalances`, []);
     ethBalance = balances.Eth;
     retryCount++;
-    if (retryCount > 120) {
+    if (retryCount > 14) {
       throw new Error(
-        `Not enough Eth for test (${fineAmountNeeded}). balances: ${JSON.stringify(balances)}`,
+        `Failed to provide eth for tests (${fineAmountToProvide}). balances: ${JSON.stringify(
+          balances,
+        )}`,
       );
     }
     await sleep(1000);
-  } while (ethBalance < fineAmountNeeded);
+  } while (ethBalance < fineAmountToProvide);
 }
 
 async function testRegisterLiquidityRefundAddress() {
-  const observeRegisterEwaEvent = observeEvent(
+  const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
     chainflip,
     (event) => event.data.address.Eth === ethAddress,
   );
 
-  const registerEwa = await lpApiRpc(`lp_registerLiquidityRefundAddress`, ['Ethereum', ethAddress]);
-  if (!isValidHexHash(await registerEwa)) {
+  const registerRefundAddress = await lpApiRpc(`lp_registerLiquidityRefundAddress`, [
+    'Ethereum',
+    ethAddress,
+  ]);
+  if (!isValidHexHash(await registerRefundAddress)) {
     throw new Error(`Unexpected lp_registerLiquidityRefundAddress result`);
   }
-  await observeRegisterEwaEvent;
+  await observeRefundAddressRegisteredEvent;
+
+  // TODO: Check that the correct address is now set on the SC
 }
 
 async function testLiquidityDeposit() {
-  const observeLiquidityDepositEvent = observeEvent(
+  const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
     (event) => event.data.depositAddress.Eth,
   );
-  const liquidityDepositResult = await lpApiRpc(`lp_liquidityDeposit`, ['Eth']);
-  const liquidityDepositEvent = await observeLiquidityDepositEvent;
+  // TODO: This result will need to be updated after #3995 is merged
+  const liquidityDepositAddress = await lpApiRpc(`lp_liquidityDeposit`, ['Eth']);
+  const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
     liquidityDepositEvent.data.depositAddress.Eth,
-    liquidityDepositResult,
+    liquidityDepositAddress,
     `Incorrect deposit address`,
   );
   assert(
-    isValidEthAddress(liquidityDepositResult),
-    `Invalid deposit address: ${liquidityDepositResult}`,
+    isValidEthAddress(liquidityDepositAddress),
+    `Invalid deposit address: ${liquidityDepositAddress}`,
   );
+
+  // Send funds to the deposit address and watch for deposit event
+  const observeAccountCreditedEvent = observeEvent(
+    'liquidityProvider:AccountCredited',
+    chainflip,
+    (event) =>
+      event.data.asset.toUpperCase() === 'ETH' &&
+      Number(event.data.amountCredited.replace(/,/g, '')) === testAssetAmount,
+  );
+  await sendEth(liquidityDepositAddress, String(testEthAmount));
+  await observeAccountCreditedEvent;
 }
 
 async function testWithdrawAsset() {
-  const withdrawAsset = await lpApiRpc(`lp_withdrawAsset`, [
-    withdrawAssetAmount,
+  const oldBalance = await getBalance('ETH', ethAddress);
+
+  const [asset, egressId] = await lpApiRpc(`lp_withdrawAsset`, [
+    testAssetAmount,
     'Eth',
     ethAddress,
   ]);
-  assert.strictEqual(withdrawAsset[0], 'Ethereum', `Unexpected withdraw asset result`);
-  const egressId = withdrawAsset[1];
+  assert.strictEqual(asset, 'Ethereum', `Unexpected withdraw asset result`);
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
+
+  await observeBalanceIncrease('ETH', ethAddress, oldBalance);
 }
 
 async function testRegisterWithExistingLpAccount() {
@@ -110,7 +134,7 @@ async function testRegisterWithExistingLpAccount() {
 /// Test lp_setRangeOrder and lp_updateRangeOrder by minting, updating, and burning a range order.
 async function testRangeOrder() {
   const range = { start: 1, end: 2 };
-  const orderId = 1;
+  const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
     AssetAmounts: {
       maximum: { base: 0, pair: 0 },
@@ -139,9 +163,12 @@ async function testRangeOrder() {
   assert.strictEqual(
     mintRangeOrder[0].increase_or_decrease,
     `Increase`,
-    `Unexpected mint range order result`,
+    `Expected mint of range order to increase liquidity`,
   );
-  assert(mintRangeOrder[0].liquidity_total > 0, `Unexpected mint range order result`);
+  assert(
+    mintRangeOrder[0].liquidity_total > 0,
+    `Expected range order to have liquidity after mint`,
+  );
 
   // Update the range order
   const updateRangeOrder = await lpApiRpc(`lp_updateRangeOrder`, [
@@ -162,9 +189,12 @@ async function testRangeOrder() {
   assert.strictEqual(
     updateRangeOrder[0].increase_or_decrease,
     `Increase`,
-    `Unexpected update range order result`,
+    `Expected positive update of range order to increase liquidity`,
   );
-  assert(updateRangeOrder[0].liquidity_total > 0, `Unexpected update range order result`);
+  assert(
+    updateRangeOrder[0].liquidity_total > 0,
+    `Expected range order to have liquidity after update`,
+  );
 
   // Burn the range order
   const burnRangeOrder = await lpApiRpc(`lp_setRangeOrder`, [
@@ -179,9 +209,13 @@ async function testRangeOrder() {
   assert.strictEqual(
     burnRangeOrder[0].increase_or_decrease,
     `Decrease`,
-    `Unexpected burn range order result`,
+    `Expected burn range order to decrease liquidity`,
   );
-  assert.strictEqual(burnRangeOrder[0].liquidity_total, 0, `Unexpected burn range order result`);
+  assert.strictEqual(
+    burnRangeOrder[0].liquidity_total,
+    0,
+    `Expected burn range order to result in 0 liquidity total`,
+  );
 }
 
 async function testGetOpenSwapChannels() {
@@ -194,7 +228,7 @@ async function testGetOpenSwapChannels() {
 
 /// Test lp_setLimitOrder and lp_updateLimitOrder by minting, updating, and burning a limit order.
 async function testLimitOrder() {
-  const orderId = 2;
+  const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
@@ -212,12 +246,12 @@ async function testLimitOrder() {
   assert.strictEqual(
     mintLimitOrder[0].increase_or_decrease,
     `Increase`,
-    `Unexpected mint limit order result`,
+    `Expected mint of limit order to increase liquidity`,
   );
   assert.strictEqual(
     mintLimitOrder[0].amount_total,
     testAssetAmount,
-    `Unexpected mint limit order result`,
+    `Unexpected amount of asset was minted for limit order`,
   );
 
   // Update the limit order
@@ -233,12 +267,12 @@ async function testLimitOrder() {
   assert.strictEqual(
     updateLimitOrder[0].increase_or_decrease,
     `Increase`,
-    `Unexpected update limit order result`,
+    `Expected positive update of limit order to increase liquidity`,
   );
   assert.strictEqual(
     updateLimitOrder[0].amount_total,
     testAssetAmount * 2,
-    `Unexpected update limit order result`,
+    `Unexpected amount of asset was minted after updating limit order`,
   );
 
   // Burn the limit order
@@ -247,18 +281,19 @@ async function testLimitOrder() {
   assert.strictEqual(
     burnLimitOrder[0].increase_or_decrease,
     `Decrease`,
-    `Unexpected burn limit order result`,
+    `Expected burn limit order to decrease liquidity`,
   );
-  assert.strictEqual(burnLimitOrder[0].amount_total, 0, `Unexpected burn limit order result`);
+  assert.strictEqual(
+    burnLimitOrder[0].amount_total,
+    0,
+    `Expected burn limit order to result in 0 amount total`,
+  );
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi() {
-  // We have to wait finalization here because the LP API server is using a finalized block stream
-  await provideLiquidity('ETH', totalEthNeeded, true);
-
-  // Check that we have enough eth to do the rest of the tests
-  await testAssetBalances();
+  // Provide the amount of eth needed for the tests
+  await provideLiquidityAndTestAssetBalances();
 
   await Promise.all([
     testRegisterLiquidityRefundAddress(),

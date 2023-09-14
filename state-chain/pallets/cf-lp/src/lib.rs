@@ -173,7 +173,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Stores the registered energency withdrawal address for an Account
+	/// Stores the registered refund address for an Account
 	#[pallet::storage]
 	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
 		_,
