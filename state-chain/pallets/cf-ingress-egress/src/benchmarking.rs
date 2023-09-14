@@ -9,6 +9,9 @@ use cf_chains::{
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_system::pallet_prelude::BlockNumberFor;
 
+pub(crate) type TargetChainBlockNumber<T, I> =
+	<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
+
 benchmarks_instance_pallet! {
 	disable_asset_egress {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
