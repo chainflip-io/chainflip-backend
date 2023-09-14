@@ -727,7 +727,7 @@ pub mod pallet {
 		/// Optionally move the order to a different range and then set its amount of liquidity. The
 		/// appropriate assets will be debited or credited from your balance as needed. If the
 		/// order_id isn't being used at the moment you must specify a tick_range, otherwise it will
-		/// not know what range you want to order to be over.
+		/// not know what range you want the order to be over.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_range_order())]
 		pub fn set_range_order(
