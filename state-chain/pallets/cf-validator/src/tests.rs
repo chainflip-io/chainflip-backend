@@ -12,7 +12,7 @@ use cf_traits::{
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 use frame_system::RawOrigin;
 
 const ALICE: u64 = 100;
@@ -1040,5 +1040,78 @@ fn can_calculate_percentage_cfe_at_target_version() {
 			ValidatorPallet::precent_authorities_at_version(compatible_version),
 			Percent::from_percent(100)
 		);
+	});
+}
+
+#[test]
+fn qualification_by_cfe_version() {
+	new_test_ext().execute_with(|| {
+		const VALIDATOR: u64 = GENESIS_AUTHORITIES[0];
+		// No value reported, no value set:
+		assert!(!NodeCFEVersion::<Test>::contains_key(VALIDATOR));
+		assert!(!MinimumReportedCfeVersion::<Test>::exists());
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			OriginTrait::root(),
+			PalletConfigUpdate::MinimumReportedCfeVersion {
+				version: SemVer { major: 0, minor: 1, patch: 0 }
+			}
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version below the minimum:
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			SemVer { major: 0, minor: 0, patch: 1 }
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version equal to the minimum:
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			SemVer { major: 0, minor: 1, patch: 0 }
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version greater than the minimum:
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			SemVer { major: 0, minor: 1, patch: 1 }
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version bumping the minor version:
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			SemVer { major: 0, minor: 2, patch: 0 }
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version bumping the major version:
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			SemVer { major: 1, minor: 0, patch: 0 }
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Raise the minimum:
+
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			OriginTrait::root(),
+			PalletConfigUpdate::MinimumReportedCfeVersion {
+				version: SemVer { major: 1, minor: 0, patch: 0 }
+			}
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Raise the minimum again:
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			OriginTrait::root(),
+			PalletConfigUpdate::MinimumReportedCfeVersion {
+				version: SemVer { major: 1, minor: 0, patch: 1 }
+			}
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 	});
 }

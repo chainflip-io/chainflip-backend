@@ -168,10 +168,19 @@ impl pallet_cf_validator::Config for Runtime {
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
 		Reputation,
-		ExclusionList<Self, chainflip::KeygenExclusionOffences>,
-		pallet_cf_validator::PeerMapping<Self>,
-		SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
-		chainflip::ValidatorRoleQualification,
+		(
+			ExclusionList<Self, chainflip::KeygenExclusionOffences>,
+			(
+				pallet_cf_validator::PeerMapping<Self>,
+				(
+					SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
+					(
+						chainflip::ValidatorRoleQualification,
+						pallet_cf_validator::QualifyByCfeVersion<Self>,
+					),
+				),
+			),
+		),
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;
