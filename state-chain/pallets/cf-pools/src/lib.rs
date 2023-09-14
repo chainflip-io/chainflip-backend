@@ -294,8 +294,8 @@ pub mod pallet {
 	pub type AssetAmounts = AssetsMap<AssetAmount>;
 
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
-	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts, that is if
-	/// the appropiate asset ratio can be achieved while maintaining the max/min bounds.
+	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
+	/// that is if the appropiate asset ratio can be achieved while maintaining the max/min bounds.
 	#[derive(
 		Copy,
 		Clone,
@@ -795,10 +795,10 @@ pub mod pallet {
 		/// of liquidity. The appropiate assets will be debited or credited from your balance as
 		/// needed. If the order_id isn't being used at the moment you must specify a tick,
 		/// otherwise it will not know what tick you want the order to be over. Note limit order
-		/// order_id's are independent of range order order_id's. In addition to that, order_id's for
-		/// buy and sell limit orders i.e. those in different directions are independent. Therefore
-		/// you may have two limit orders with the same order_id in the same pool, one to buy Eth
-		/// and one to sell Eth for example.
+		/// order_id's are independent of range order order_id's. In addition to that, order_id's
+		/// for buy and sell limit orders i.e. those in different directions are independent.
+		/// Therefore you may have two limit orders with the same order_id in the same pool, one to
+		/// buy Eth and one to sell Eth for example.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::update_limit_order())]
 		pub fn update_limit_order(
@@ -870,11 +870,11 @@ pub mod pallet {
 		/// Optionally move the order to a different tick and then set its amount of liquidity. The
 		/// appropiate assets will be debited or credited from your balance as needed. If the
 		/// order_id isn't being used at the moment you must specify a tick, otherwise it will not
-		/// know what tick you want the order to be over. Note limit order order_id's are independent
-		/// of range order order_id's. In addition to that, order_id's for buy and sell limit orders
-		/// i.e. those in different directions are independent. Therefore you may have two limit
-		/// orders with the same order_id in the same pool, one to buy Eth and one to sell Eth for
-		/// example.
+		/// know what tick you want the order to be over. Note limit order order_id's are
+		/// independent of range order order_id's. In addition to that, order_id's for buy and sell
+		/// limit orders i.e. those in different directions are independent. Therefore you may have
+		/// two limit orders with the same order_id in the same pool, one to buy Eth and one to sell
+		/// Eth for example.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_limit_order())]
 		pub fn set_limit_order(

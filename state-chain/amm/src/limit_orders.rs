@@ -39,8 +39,8 @@ use crate::common::{
 // LP attempts to add more liquidity that would increase the total at the tick past this value, the
 // minting operation will error. Note this maximum is for all lps combined, and not a single lp,
 // therefore it is possible for an LP to "consume" a tick by filling it up to the maximum, and
-// thereby not allowing other LPs to mint at that price (But the maximum is high enough that this is not
-// feasible).
+// thereby not allowing other LPs to mint at that price (But the maximum is high enough that this is
+// not feasible).
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
 
 /// Represents a number exclusively between 0 and 1.
@@ -337,11 +337,11 @@ struct Position {
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub(super) struct FixedPool {
-	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is used,
-	/// a new value for pool_instance is used, and the previously used value will never be used again.
-	/// This is used to determine whether a position was created during the current FixedPool's
-	/// lifetime and therefore that FixedPool's `percent_remaining` is meaningful for the position,
-	/// or if the position was created before the current FixedPool's lifetime.
+	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
+	/// used, a new value for pool_instance is used, and the previously used value will never be
+	/// used again. This is used to determine whether a position was created during the current
+	/// FixedPool's lifetime and therefore that FixedPool's `percent_remaining` is meaningful for
+	/// the position, or if the position was created before the current FixedPool's lifetime.
 	pool_instance: u128,
 	/// This is the total liquidity/amount available for swaps at this price. This value is greater
 	/// than or equal to the amount provided currently by all positions at the same tick. It is not
