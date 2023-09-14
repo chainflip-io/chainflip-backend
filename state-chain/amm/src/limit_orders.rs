@@ -3,7 +3,7 @@
 //! is specified using `Tick`s.
 //!
 //! This type of pool doesn't do automated market making, as in the price of the pool is purely
-//! determined be the best priced position current in the pool.
+//! determined be the best priced position currently in the pool.
 //!
 //! Swaps in this pool will execute on the best priced positions first. Note if two positions
 //! have the same price, both positions will be partially executed, and neither will receive
