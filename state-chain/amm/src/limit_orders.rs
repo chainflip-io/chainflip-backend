@@ -5,7 +5,7 @@
 //! This type of pool doesn't do automated market making, as in the price of the pool is purely
 //! determined be the best priced position current in the pool.
 //!
-//! Swaps in this this pool will execute on the best priced positions first. Note if two positions
+//! Swaps in this pool will execute on the best priced positions first. Note if two positions
 //! have the same price, both positions will be partially executed, and neither will receive
 //! "priority" regardless of when they were created, i.e. an equal percentage of all positions at
 //! the same price will be executed. So a larger positions will earn more fees (and have more
