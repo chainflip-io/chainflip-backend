@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::{metrics::Prometheus, Port, redact_endpoint_secret::SecretUrl};
+use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
