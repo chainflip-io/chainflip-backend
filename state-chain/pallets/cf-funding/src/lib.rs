@@ -686,7 +686,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
-				genesis_accounts: vec![],
+				genesis_accounts: Default::default(),
 				redemption_tax: Default::default(),
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
