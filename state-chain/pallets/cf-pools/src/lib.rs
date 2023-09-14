@@ -294,7 +294,7 @@ pub mod pallet {
 	pub type AssetAmounts = AssetsMap<AssetAmount>;
 
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
-	/// amounts of both assets. Internally those max/min into exact liquidity amounts, that is if
+	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts, that is if
 	/// the appropiate asset ratio can be achieved while maintaining the max/min bounds.
 	#[derive(
 		Copy,
