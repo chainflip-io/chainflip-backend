@@ -1,6 +1,6 @@
 //! This code implements a single liquidity pool pair, that allows LPs to specify particular prices
 //! at with they want to sell one of the two assets in the pair. The price an LP wants to sell at
-//! specified using `Tick`s.
+//! is specified using `Tick`s.
 //!
 //! This type of pool doesn't do automated market making, as in the price of the pool is purely
 //! determined be the best priced position current in the pool.
