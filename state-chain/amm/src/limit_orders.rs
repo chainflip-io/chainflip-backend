@@ -102,7 +102,7 @@ impl FloatBetweenZeroAndOne {
 		assert!(numerator <= denominator);
 		self.assert_valid();
 
-		// We do the mul first, to avoid losing precision as in the division bits will possibly get
+		// We do the mul first to avoid losing precision as in the division bits will possibly get
 		// shifted off the "bottom" of the mantissa.
 		let (mul_normalised_mantissa, mul_normalise_shift) = {
 			let unnormalised_mantissa = U256::full_mul(self.normalised_mantissa, numerator);
