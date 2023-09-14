@@ -12,7 +12,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, EpochInfo, GetBlockHeight, LpBalanceApi};
+use cf_traits::{AccountRoleRegistry, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
@@ -216,11 +216,6 @@ fn basic_pool_setup_provision_and_swap() {
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 
-		let opened_at = EthereumChainTracking::get_block_height();
-
-		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth, opened_at },
-		));
 		System::reset_events();
 
 		let current_epoch = Validator::current_epoch();

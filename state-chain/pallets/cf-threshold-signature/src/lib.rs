@@ -57,9 +57,12 @@ pub enum PalletOffence {
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum RequestType<Key, Participants> {
-	/// Will use the current key and current authority set.
+	/// Will use the current key and current authority set (which might change between retries).
 	/// This signing request will be retried until success.
-	Standard,
+	CurrentKey,
+	/// Uses the provided key and selects new participants from the provided epoch.
+	/// This signing request will be retried until success.
+	SpecificKey(Key, EpochIndex),
 	/// Uses the recently generated key and the participants used to generate that key.
 	/// This signing request will only be attemped once, as failing this ought to result
 	/// in another Keygen ceremony.
@@ -67,7 +70,7 @@ pub enum RequestType<Key, Participants> {
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum ThresholdCeremonyType {
 	Standard,
 	KeygenVerification,
@@ -399,9 +402,12 @@ pub mod pallet {
 					let offenders = failed_ceremony_context.offenders();
 					num_offenders += offenders.len();
 					num_retries += 1;
+
 					let CeremonyContext {
 						request_context: RequestContext { request_id, attempt_count, payload },
 						threshold_ceremony_type,
+						key,
+						epoch,
 						..
 					} = failed_ceremony_context;
 
@@ -416,7 +422,11 @@ pub mod pallet {
 								request_id,
 								attempt_count.wrapping_add(1),
 								payload,
-								RequestType::Standard,
+								if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
+									RequestType::SpecificKey(key, epoch)
+								} else {
+									RequestType::CurrentKey
+								},
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
@@ -683,12 +693,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			} else {
 				(
-					if let Some(EpochKey { key, epoch_index, .. }) =
-						T::KeyProvider::active_epoch_key().filter(
-							|EpochKey { key_state, .. }| {
-								key_state.is_available_for_request(request_id)
-							},
-						) {
+					match request_instruction.request_type {
+						RequestType::CurrentKey => T::KeyProvider::active_epoch_key()
+							.and_then(|EpochKey { key_state, key, epoch_index }| {
+								if key_state.is_available_for_request(request_id) {
+									Some((key, epoch_index))
+								} else {
+									None
+								}
+							})
+							.ok_or(Event::<T, I>::CurrentKeyUnavailable {
+								request_id,
+								attempt_count,
+							}),
+						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
+						_ => unreachable!("RequestType::KeygenVerification is handled above"),
+					}
+					.and_then(|(key, epoch_index)| {
 						if let Some(nominees) =
 							T::ThresholdSignerNomination::threshold_nomination_with_seed(
 								(request_id, attempt_count),
@@ -698,9 +719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						} else {
 							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
 						}
-					} else {
-						Err(Event::<T, I>::CurrentKeyUnavailable { request_id, attempt_count })
-					},
+					}),
 					ThresholdCeremonyType::Standard,
 				)
 			};
@@ -816,7 +835,7 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		Self::inner_request_signature(payload, RequestType::Standard)
+		Self::inner_request_signature(payload, RequestType::CurrentKey)
 	}
 
 	fn request_verification_signature(

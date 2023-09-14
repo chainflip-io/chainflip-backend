@@ -255,8 +255,7 @@ impl Default for PolkadotTrackedData {
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
 	type ChainCrypto = PolkadotCrypto;
-	type KeyHandoverIsRequired = ConstBool<false>;
-	type OptimisticActivation = ConstBool<false>;
+
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;
@@ -284,6 +283,8 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 
 pub struct PolkadotCrypto;
 impl ChainCrypto for PolkadotCrypto {
+	type UtxoChain = ConstBool<false>;
+
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;

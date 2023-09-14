@@ -540,26 +540,17 @@ impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorI
 	}
 }
 
-impl<Id: Ord, A, B, C, D, E> QualifyNode<Id> for (A, B, C, D, E)
+impl<Id: Ord, A, B> QualifyNode<Id> for (A, B)
 where
 	A: QualifyNode<Id>,
 	B: QualifyNode<Id>,
-	C: QualifyNode<Id>,
-	D: QualifyNode<Id>,
-	E: QualifyNode<Id>,
 {
 	fn is_qualified(validator_id: &Id) -> bool {
-		A::is_qualified(validator_id) &&
-			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id) &&
-			D::is_qualified(validator_id) &&
-			E::is_qualified(validator_id)
+		A::is_qualified(validator_id) && B::is_qualified(validator_id)
 	}
 
 	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		E::filter_unqualified(D::filter_unqualified(C::filter_unqualified(B::filter_unqualified(
-			A::filter_unqualified(validators),
-		))))
+		B::filter_unqualified(A::filter_unqualified(validators))
 	}
 }
 
