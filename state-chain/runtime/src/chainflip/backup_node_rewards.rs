@@ -50,7 +50,7 @@ where
 					bond,
 					Rounding::Down,
 				)
-				.unwrap()
+				.unwrap_or(u128::MAX) // behaves like saturating mul
 				.checked_div(bond)
 				.unwrap(),
 			)
@@ -161,20 +161,23 @@ mod tests {
 	fn backup_rewards_never_exceed_authority_rewards() {
 		// Authority rewards are low, so we should hit the 80% average authority reward limit:
 		const ANNUAL_AUTHORITY_EMISSIONS: u128 = ANNUAL_BACKUP_REWARDS_CAP;
-		const AUTHORITY_REWARD: u128 = ANNUAL_AUTHORITY_EMISSIONS / AUTHORITY_COUNT;
+		const EXPECTED_AUTHORITY_REWARD: u128 = ANNUAL_AUTHORITY_EMISSIONS / AUTHORITY_COUNT;
 
-		let backup_amounts = vec![BOND, BOND * 2, BOND * 3, BOND / 2];
+		let backup_amounts =
+			vec![u128::MAX / FLIPPERINOS_PER_FLIP, BOND, BOND * 2, BOND * 3, BOND / 2];
 
 		let backup_rewards = annual_backup_rewards(&backup_amounts, ANNUAL_AUTHORITY_EMISSIONS);
 
-		const MAX_EXPECTED_REWARD: u128 = AUTHORITY_REWARD * 8 / 10;
+		const MAX_EXPECTED_REWARD: u128 = EXPECTED_AUTHORITY_REWARD * 8 / 10;
 
 		// Sanity check that we are actually hitting the limit
 		assert!(MAX_EXPECTED_REWARD - backup_rewards[0].1 <= 1);
 
 		for (_, reward) in backup_rewards {
 			// Backup rewards are at most 80% of the average authority reward
-			assert!(reward <= AUTHORITY_REWARD * 8 / 10)
+			assert!(reward <= EXPECTED_AUTHORITY_REWARD * 8 / 10);
+			// Sanity check:
+			assert!(reward > 0);
 		}
 	}
 }
