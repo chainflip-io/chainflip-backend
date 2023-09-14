@@ -364,7 +364,7 @@ pub(super) struct PoolState<LiquidityProvider> {
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
 	/// selling asset `Zero` and all those that are selling asset `one` used the SideMap.
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
-	/// All the Positions that either are provided liquidity currently, or where directly after the
+	/// All the Positions that either are providing liquidity currently, or where directly after the
 	/// last time they where updated. They are grouped into all those that are selling asset `Zero`
 	/// and all those that are selling asset `one` used the SideMap.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
