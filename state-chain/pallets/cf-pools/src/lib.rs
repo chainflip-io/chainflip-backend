@@ -643,7 +643,7 @@ pub mod pallet {
 		/// associated with the order to the new range; If so the unused assets will be returned to
 		/// your balance. The appropriate assets will be debited or credited from your balance as
 		/// needed. If the order_id isn't being used at the moment you must specify a tick_range,
-		/// otherwise it will not know what range you want to order to be over.
+		/// otherwise it will not know what range you want the order to be over.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_range_order())]
 		pub fn update_range_order(
