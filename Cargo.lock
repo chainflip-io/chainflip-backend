@@ -1497,7 +1497,6 @@ dependencies = [
  "pin-project",
  "prometheus",
  "rand 0.8.5",
- "regex",
  "reqwest",
  "rlp",
  "rocksdb",
@@ -12814,6 +12813,7 @@ dependencies = [
  "num-traits",
  "pin-project",
  "predicates 3.0.3",
+ "regex",
  "scopeguard",
  "serde",
  "sp-rpc",
@@ -12821,6 +12821,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
+ "url",
  "warp",
 ]
 
