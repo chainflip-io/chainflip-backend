@@ -183,7 +183,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 	}:_(RawOrigin::Signed(caller.clone()), Default::default())
 	verify {
-		assert!(BoundAddress::<T>::contains_key(&caller));
+		assert!(BoundRedeemAddress::<T>::contains_key(&caller));
 	}
 
 	update_restricted_addresses {
@@ -208,7 +208,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 	}:_(RawOrigin::Signed(caller.clone()), Default::default())
 	verify {
-		assert!(ExecutorAddressBinding::<T>::contains_key(&caller));
+		assert!(BoundExecutorAddress::<T>::contains_key(&caller));
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

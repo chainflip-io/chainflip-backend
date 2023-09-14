@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, ExecutorAddressBinding,
+	mock::*, pallet, ActiveBidder, BoundExecutorAddress, Error, EthereumAddress,
 	PendingRedemptions, RedemptionAmount, RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_primitives::FlipBalance;
@@ -10,7 +10,7 @@ use cf_traits::{
 };
 use sp_core::H160;
 
-use crate::BoundAddress;
+use crate::BoundRedeemAddress;
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
 use sp_runtime::{traits::BadOrigin, DispatchError};
@@ -862,7 +862,7 @@ fn can_only_redeem_funds_to_bound_address() {
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
-		BoundAddress::<Test>::insert(ALICE, BOUND_ADDRESS);
+		BoundRedeemAddress::<Test>::insert(ALICE, BOUND_ADDRESS);
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -903,7 +903,7 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 		const UNRESTRICTED_ADDRESS: EthereumAddress = H160([0x03; 20]);
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
-		BoundAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		BoundRedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -1277,8 +1277,8 @@ fn can_bind_redeem_address() {
 				address,
 			}) if address == REDEEM_ADDRESS,
 		);
-		assert!(BoundAddress::<Test>::contains_key(ALICE));
-		assert_eq!(BoundAddress::<Test>::get(ALICE).unwrap(), REDEEM_ADDRESS);
+		assert!(BoundRedeemAddress::<Test>::contains_key(ALICE));
+		assert_eq!(BoundRedeemAddress::<Test>::get(ALICE).unwrap(), REDEEM_ADDRESS);
 	});
 }
 
@@ -1480,8 +1480,8 @@ fn bind_executor_address() {
 				address,
 			}) if address == EXECUTOR_ADDRESS,
 		);
-		assert!(ExecutorAddressBinding::<Test>::contains_key(ALICE));
-		assert_eq!(ExecutorAddressBinding::<Test>::get(ALICE).unwrap(), EXECUTOR_ADDRESS);
+		assert!(BoundExecutorAddress::<Test>::contains_key(ALICE));
+		assert_eq!(BoundExecutorAddress::<Test>::get(ALICE).unwrap(), EXECUTOR_ADDRESS);
 		assert_noop!(
 			Funding::bind_executor_address(RuntimeOrigin::signed(ALICE), EXECUTOR_ADDRESS),
 			Error::<Test>::ExecutorAddressAlreadyBound
@@ -1502,7 +1502,7 @@ fn detect_wrong_executor_address() {
 				ETH_DUMMY_ADDR,
 				Some(WRONG_EXECUTOR_ADDRESS)
 			),
-			Error::<Test>::InvalidExecutorAddress
+			Error::<Test>::ExecutorBindingRestrictionViolated
 		);
 	});
 }

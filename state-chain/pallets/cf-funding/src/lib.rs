@@ -136,7 +136,7 @@ pub mod pallet {
 
 	/// Registered addresses for an executor.
 	#[pallet::storage]
-	pub type ExecutorAddressBinding<T: Config> =
+	pub type BoundExecutorAddress<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
 
 	/// List of restricted addresses
@@ -156,7 +156,7 @@ pub mod pallet {
 
 	/// Map of bound addresses for accounts.
 	#[pallet::storage]
-	pub type BoundAddress<T: Config> =
+	pub type BoundRedeemAddress<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress>;
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
@@ -298,7 +298,7 @@ pub mod pallet {
 		StopBiddingDisabled,
 
 		/// Wrong executor address
-		InvalidExecutorAddress,
+		ExecutorBindingRestrictionViolated,
 
 		/// The account is already bound to an executor address.
 		ExecutorAddressAlreadyBound,
@@ -377,10 +377,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			if let Some(executor_addr) = ExecutorAddressBinding::<T>::get(&account_id) {
+			if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
 				ensure!(
 					executor_addr == executor.unwrap_or_default(),
-					Error::<T>::InvalidExecutorAddress
+					Error::<T>::ExecutorBindingRestrictionViolated
 				);
 			}
 
@@ -400,7 +400,7 @@ pub mod pallet {
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
 			let redemption_fee = RedemptionTax::<T>::get();
 
-			if let Some(bound_address) = BoundAddress::<T>::get(&account_id) {
+			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
 					bound_address == address ||
 						restricted_balances.keys().any(|res_address| res_address == &address),
@@ -681,8 +681,11 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
-			BoundAddress::<T>::insert(&account_id, address);
+			ensure!(
+				!BoundRedeemAddress::<T>::contains_key(&account_id),
+				Error::<T>::AccountAlreadyBound
+			);
+			BoundRedeemAddress::<T>::insert(&account_id, address);
 			Self::deposit_event(Event::BoundRedeemAddress { account_id, address });
 			Ok(().into())
 		}
@@ -722,10 +725,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
-				!ExecutorAddressBinding::<T>::contains_key(&account_id),
+				!BoundExecutorAddress::<T>::contains_key(&account_id),
 				Error::<T>::ExecutorAddressAlreadyBound,
 			);
-			ExecutorAddressBinding::<T>::insert(account_id.clone(), executor_address);
+			BoundExecutorAddress::<T>::insert(account_id.clone(), executor_address);
 			Self::deposit_event(Event::BoundExecutorAddress {
 				account_id,
 				address: executor_address,
