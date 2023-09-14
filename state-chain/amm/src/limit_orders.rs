@@ -39,7 +39,7 @@ use crate::common::{
 // LP attempts to add more liquidity that would increase the total at the tick past this value, the
 // minting operation will error. Note this maximum is for all lps combined, and not a single lp,
 // therefore it is possible for an LP to "consume" a tick by filling it up to the maximum, and
-// thereby not allowing other LPs to mint at that price (But the maximum is high enough this is not
+// thereby not allowing other LPs to mint at that price (But the maximum is high enough that this is not
 // feasible).
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
 
