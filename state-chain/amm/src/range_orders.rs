@@ -123,7 +123,7 @@ impl Position {
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct TickDelta {
 	/// This is the change in the total amount of liquidity in the pool at this price, i.e. if the
-	/// price from a lower price to a higher one above this tick (higher/lower in literal integer
+	/// price moves from a lower price to a higher one above this tick (higher/lower in literal integer
 	/// value), the liquidity will increase by `liquidity_delta` and therefore swaps (In both
 	/// directions) will experience less slippage (Assuming liquidity_delta is positive).
 	liquidity_delta: i128,
