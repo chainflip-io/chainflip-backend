@@ -156,7 +156,7 @@ pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	)
 }
 
-/// A marker type to represent a swap that buys asset One, and seels asset Zero
+/// A marker type to represent a swap that buys asset One, and sells asset Zero
 pub(super) struct ZeroToOne {}
 /// A marker type to represent a swap that buys asset Zero, and sells asset One
 pub(super) struct OneToZero {}
