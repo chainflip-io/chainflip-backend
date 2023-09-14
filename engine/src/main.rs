@@ -13,6 +13,7 @@ use chainflip_engine::{
 			chain_api::ChainApi,
 			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 			storage_api::StorageApi,
+			StateChainClient, StateChainStreamApi,
 		},
 	},
 	witness::{self, common::STATE_CHAIN_CONNECTION},
@@ -23,10 +24,10 @@ use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
+use tracing::info;
 use utilities::{
 	make_periodic_tick,
 	task_scope::{self, task_scope, ScopedJoinHandle},
-	CachedStream,
 };
 
 lazy_static::lazy_static! {
@@ -40,6 +41,36 @@ lazy_static::lazy_static! {
 enum CfeStatus {
 	Active(ScopedJoinHandle<()>),
 	Idle,
+}
+
+async fn ensure_cfe_version_record_up_to_date(
+	state_chain_client: &Arc<StateChainClient>,
+	state_chain_stream: &impl StateChainStreamApi,
+) -> anyhow::Result<()> {
+	let recorded_version = state_chain_client
+		.storage_map_entry::<pallet_cf_validator::NodeCFEVersion<state_chain_runtime::Runtime>>(
+			state_chain_stream.cache().block_hash,
+			&state_chain_client.account_id(),
+		)
+		.await?;
+
+	// Note that around CFE upgrade period, the less recent version might still be running (and
+	// can even be *the* "active" instance), so it is important that it doesn't downgrade the
+	// version record:
+	if CFE_VERSION.is_more_recent_than(recorded_version) {
+		info!("Updating CFE version record from {:?} to {:?}", recorded_version, *CFE_VERSION);
+
+		state_chain_client
+			.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+				new_version: *CFE_VERSION,
+			})
+			.await
+			.until_finalized()
+			.await
+			.context("Failed to submit version to state chain")?;
+	}
+
+	Ok(())
 }
 
 #[tokio::main]
@@ -61,6 +92,18 @@ async fn main() -> anyhow::Result<()> {
 				.await?;
 
 			let mut cfe_status = CfeStatus::Idle;
+
+			let (state_chain_stream, state_chain_client) =
+				state_chain_observer::client::StateChainClient::connect_with_account(
+					scope,
+					&settings.state_chain.ws_endpoint,
+					&settings.state_chain.signing_key_file,
+					AccountRole::Validator,
+					true,
+				)
+				.await?;
+
+			ensure_cfe_version_record_up_to_date(&state_chain_client, &state_chain_stream).await?;
 
 			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
 			loop {
@@ -90,8 +133,10 @@ async fn main() -> anyhow::Result<()> {
 							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
 							let settings = settings.clone();
+							let state_chain_stream = state_chain_stream.clone();
+							let state_chain_client = state_chain_client.clone();
 							let handle = scope.spawn_with_handle(
-								task_scope(|scope| start(scope, settings).boxed())
+								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
 							);
 
 							cfe_status = CfeStatus::Active(handle);
@@ -109,6 +154,8 @@ async fn main() -> anyhow::Result<()> {
 async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: Settings,
+	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()> {
 	let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
@@ -119,25 +166,6 @@ async fn start(
 	if let Some(prometheus_settings) = &settings.prometheus {
 		metrics::start(scope, prometheus_settings).await?;
 	}
-
-	let (state_chain_stream, state_chain_client) =
-		state_chain_observer::client::StateChainClient::connect_with_account(
-			scope,
-			&settings.state_chain.ws_endpoint,
-			&settings.state_chain.signing_key_file,
-			AccountRole::Validator,
-			true,
-		)
-		.await?;
-
-	state_chain_client
-		.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
-			new_version: *CFE_VERSION,
-		})
-		.await
-		.until_finalized()
-		.await
-		.context("Failed to submit version to state chain")?;
 
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
