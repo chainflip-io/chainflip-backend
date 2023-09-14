@@ -98,8 +98,8 @@ mod tests {
 	use crate::constants::common::FLIPPERINOS_PER_FLIP;
 
 	const AUTHORITY_COUNT: u128 = 100;
-	const ANNUAL_BACKUP_REWARDS_CAP: u128 = 100_000;
-	const BOND: u128 = 100_000;
+	const ANNUAL_BACKUP_REWARDS_CAP: u128 = 100_000 * FLIPPERINOS_PER_FLIP;
+	const BOND: u128 = 100_000 * FLIPPERINOS_PER_FLIP;
 
 	fn annual_backup_rewards(
 		backup_amounts: &[u128],
@@ -107,30 +107,23 @@ mod tests {
 	) -> Vec<(usize, u128)> {
 		const BLOCKS_PER_YEAR: u128 = 14_400 * 365;
 
-		let backup_emissions_cap_per_block =
-			ANNUAL_BACKUP_REWARDS_CAP * FLIPPERINOS_PER_FLIP / BLOCKS_PER_YEAR;
-		let authority_emissions_per_block =
-			annual_authority_emissions * FLIPPERINOS_PER_FLIP / BLOCKS_PER_YEAR;
+		let backup_emissions_cap_per_block = ANNUAL_BACKUP_REWARDS_CAP / BLOCKS_PER_YEAR;
+		let authority_emissions_per_block = annual_authority_emissions / BLOCKS_PER_YEAR;
 
 		let backup_nodes = backup_amounts
 			.iter()
 			.enumerate()
-			.map(|(bidder_id, amount)| Bid { bidder_id, amount: amount * FLIPPERINOS_PER_FLIP })
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount: *amount })
 			.collect::<Vec<_>>();
-
-		let bond = BOND * FLIPPERINOS_PER_FLIP;
 
 		calculate_backup_rewards::<_, u128>(
 			backup_nodes,
-			bond,
+			BOND,
 			BLOCKS_PER_YEAR,
 			backup_emissions_cap_per_block,
 			authority_emissions_per_block,
 			AUTHORITY_COUNT,
 		)
-		.into_iter()
-		.map(|(id, reward)| (id, reward / FLIPPERINOS_PER_FLIP))
-		.collect()
 	}
 
 	#[test]
@@ -163,15 +156,14 @@ mod tests {
 		const ANNUAL_AUTHORITY_EMISSIONS: u128 = ANNUAL_BACKUP_REWARDS_CAP;
 		const EXPECTED_AUTHORITY_REWARD: u128 = ANNUAL_AUTHORITY_EMISSIONS / AUTHORITY_COUNT;
 
-		let backup_amounts =
-			vec![u128::MAX / FLIPPERINOS_PER_FLIP, BOND, BOND * 2, BOND * 3, BOND / 2];
+		let backup_amounts = vec![u128::MAX, BOND, BOND * 2, BOND * 3, BOND / 2];
 
 		let backup_rewards = annual_backup_rewards(&backup_amounts, ANNUAL_AUTHORITY_EMISSIONS);
 
 		const MAX_EXPECTED_REWARD: u128 = EXPECTED_AUTHORITY_REWARD * 8 / 10;
 
 		// Sanity check that we are actually hitting the limit
-		assert!(MAX_EXPECTED_REWARD - backup_rewards[0].1 <= 1);
+		assert!(MAX_EXPECTED_REWARD - backup_rewards[0].1 <= FLIPPERINOS_PER_FLIP);
 
 		for (_, reward) in backup_rewards {
 			// Backup rewards are at most 80% of the average authority reward
