@@ -34,43 +34,6 @@ fn collect_metric_to_delete() -> Vec<DeleteMetricCommand> {
 
 	metric_pair
 }
-/// wrapper around a Gauge which needs to be deleted later on
-/// labels are defined only at creation, allowing the code to be more clear and less error prone
-#[derive(Clone)]
-pub struct MetricGauge<const N: usize> {
-	metric: &'static IntGaugeVecWrapper<N>,
-	labels: [String; N],
-}
-
-impl<const N: usize> MetricGauge<N> {
-	pub fn new(metric: &'static IntGaugeVecWrapper<N>, labels: [String; N]) -> MetricGauge<N> {
-		MetricGauge { metric, labels }
-	}
-
-	pub fn inc(&self) {
-		let labels = self.labels.each_ref().map(|s| s.as_str());
-		self.metric.inc(&labels);
-	}
-
-	pub fn dec(&self) {
-		let labels = self.labels.each_ref().map(|s| s.as_str());
-		self.metric.dec(&labels);
-	}
-
-	pub fn set(&self, val: i64) {
-		let labels = self.labels.each_ref().map(|s| s.as_str());
-		self.metric.set(&labels, val);
-	}
-}
-
-impl<const N: usize> Drop for MetricGauge<N> {
-	fn drop(&mut self) {
-		let metric = self.metric.metric.clone();
-		let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
-
-		let _ = DELETE_METRIC_CHANNEL.0.try_send(DeleteMetricCommand::GaugePair(metric, labels));
-	}
-}
 
 /// wrapper used to enforce the correct number of labels when interacting with an IntGaugeVec
 pub struct IntGaugeVecWrapper<const N: usize> {
@@ -108,65 +71,8 @@ impl<const N: usize> IntGaugeVecWrapper<N> {
 		};
 	}
 }
-/// Wrapper around a counter which doesn't need to be deleted and have some labels that are always
-/// the same relative to where the wrapper is used and some that aren't and need to be specified
-/// when we interact with the metric
+
 #[derive(Clone)]
-pub struct MetricCounterNotToDrop<const N: usize, const C: usize, const T: usize> {
-	metric: &'static IntCounterVecWrapper<N>,
-	const_labels: [&'static str; C],
-}
-impl<const N: usize, const C: usize, const T: usize> MetricCounterNotToDrop<N, C, T> {
-	pub fn new(
-		metric: &'static IntCounterVecWrapper<N>,
-		const_labels: [&'static str; C],
-	) -> MetricCounterNotToDrop<N, C, T> {
-		MetricCounterNotToDrop { metric, const_labels }
-	}
-
-	pub fn inc(&self, non_const_labels: &[&str; T]) {
-		//TODO: Check best way to concatenate 2 array?
-		//Probably the following one is not the best
-		let labels: [&str; N] = {
-			let mut whole: [&str; N] = [""; N];
-			let (one, two) = whole.split_at_mut(self.const_labels.len());
-			one.copy_from_slice(&self.const_labels);
-			two.copy_from_slice(non_const_labels);
-			whole
-		};
-		self.metric.inc(&labels);
-	}
-}
-/// wrapper around a Counter which needs to be deleted later on
-/// labels are defined only at creation, allowing the code to be more clear and less error prone
-#[derive(Clone)]
-pub struct MetricCounter<const N: usize> {
-	metric: &'static IntCounterVecWrapper<N>,
-	labels: [String; N],
-}
-
-impl<const N: usize> MetricCounter<N> {
-	pub fn new(metric: &'static IntCounterVecWrapper<N>, labels: [String; N]) -> MetricCounter<N> {
-		MetricCounter { metric, labels }
-	}
-
-	pub fn inc(&self) {
-		let labels = self.labels.each_ref().map(|s| s.as_str());
-		self.metric.inc(&labels);
-	}
-}
-
-impl<const N: usize> Drop for MetricCounter<N> {
-	fn drop(&mut self) {
-		let metric = self.metric.metric.clone();
-		let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
-
-		let _ = DELETE_METRIC_CHANNEL
-			.0
-			.try_send(DeleteMetricCommand::CounterPair(metric, labels));
-	}
-}
-
 /// wrapper used to enforce the correct number of labels when interacting with an IntCounterVec
 pub struct IntCounterVecWrapper<const N: usize> {
 	pub metric: IntCounterVec,
@@ -195,22 +101,129 @@ impl<const N: usize> IntCounterVecWrapper<N> {
 		};
 	}
 }
+macro_rules! build_gauge_vec {
+	($NAME:ident, $name:literal, $help:literal, $labels:tt) => {
+		lazy_static::lazy_static!{
+			pub static ref $NAME: IntGaugeVecWrapper<{ $labels.len() }> = IntGaugeVecWrapper::new($name, $help, &$labels, &REGISTRY);
+		}
+	}
+}
+/// Keeping this here for the next metrics about ceremony duration etc..
+/// 
+// macro_rules! build_gauge_vec_struct {
+// 	($NAME:ident, $structDrop:ident, $name:literal, $help:literal, $labels:tt) => {
+// 		build_gauge_vec!($NAME, $name, $help, $labels);
 
-/// structure containing the metrics used during a ceremony
-/// TODO: expand it with the new metrics measuring ceremony duration
-#[derive(Clone)]
-pub struct CeremonyMetrics {
-	pub processed_messages: MetricCounter<1>,
-	pub bad_message: MetricCounterNotToDrop<2, 1, 1>,
+// 		#[derive(Clone)]
+// 		pub struct $structDrop {
+// 			metric: &'static $NAME,
+// 			labels: [String; { $labels.len() }],
+// 		}
+// 		impl $structDrop {
+// 			pub fn new(metric: &'static $NAME, labels: [String; { $labels.len() }]) -> $structDrop {
+// 				$structDrop { metric, labels }
+// 			}
+
+// 			pub fn inc(&self) {
+// 				let labels = self.labels.each_ref().map(|s| s.as_str());
+// 				self.metric.inc(&labels);
+// 			}
+
+// 			pub fn dec(&self) {
+// 				let labels = self.labels.each_ref().map(|s| s.as_str());
+// 				self.metric.dec(&labels);
+// 			}
+
+// 			pub fn set(&self, val: i64) {
+// 				let labels = self.labels.each_ref().map(|s| s.as_str());
+// 				self.metric.set(&labels, val);
+// 			}
+// 		}
+// 		impl Drop for $structDrop {
+// 			fn drop(&mut self) {
+// 				let metric = self.metric.metric.clone();
+// 				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
+
+// 				let _ = DELETE_METRIC_CHANNEL
+// 					.0
+// 					.try_send(DeleteMetricCommand::GaugePair(metric, labels));
+// 			}
+// 		}
+// 	};
+// }
+
+macro_rules! build_counter_vec {
+	($NAME:ident, $name:literal, $help:literal, $labels:tt) => {
+		lazy_static::lazy_static!{
+			pub static ref $NAME: IntCounterVecWrapper<{ $labels.len() }> = IntCounterVecWrapper::new($name, $help, &$labels, &REGISTRY);
+		}
+	}
+}
+macro_rules! build_counter_vec_struct {
+	($NAME:ident, $structDrop:ident, $name:literal, $help:literal, $labels:tt) => {
+		build_counter_vec!($NAME, $name, $help, $labels);
+
+		#[derive(Clone)]
+		pub struct $structDrop {
+			metric: &'static $NAME,
+			labels: [String; { $labels.len() }],
+		}
+		impl $structDrop {
+			pub fn new(metric: &'static $NAME, labels: [String; { $labels.len() }]) -> $structDrop {
+				$structDrop { metric, labels }
+			}
+
+			pub fn inc(&self) {
+				let labels = self.labels.each_ref().map(|s| s.as_str());
+				self.metric.inc(&labels);
+			}
+		}
+		impl Drop for $structDrop {
+			fn drop(&mut self) {
+				let metric = self.metric.metric.clone();
+				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
+
+				let _ = DELETE_METRIC_CHANNEL
+					.0
+					.try_send(DeleteMetricCommand::CounterPair(metric, labels));
+			}
+		}
+	};
+	($NAME:ident, $structNotDrop:ident, $name:literal, $help:literal, $labels:tt, $constLabelsNum:literal) => {
+		build_counter_vec!($NAME, $name, $help, $labels);
+
+		#[derive(Clone)]
+		pub struct $structNotDrop {
+			metric: &'static $NAME,
+			const_labels: [&'static str; $constLabelsNum],
+		}
+		impl $structNotDrop {
+			pub fn new(
+				metric: &'static $NAME,
+				const_labels: [&'static str; $constLabelsNum],
+			) -> $structNotDrop {
+				$structNotDrop { metric, const_labels }
+			}
+
+			pub fn inc(&self, non_const_labels: &[&str; { $labels.len() - $constLabelsNum }]) {
+				//TODO: Check best way to concatenate 2 array?
+				//Probably the following one is not the best
+				let labels: [&str; { $labels.len() }] = {
+					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
+					let (one, two) = whole.split_at_mut(self.const_labels.len());
+					one.copy_from_slice(&self.const_labels);
+					two.copy_from_slice(non_const_labels);
+					whole
+				};
+				self.metric.inc(&labels);
+			}
+		}
+	};
 }
 
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
-
 	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
-
-	pub static ref RPC_RETRIER_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new("rpc_requests", "Count the rpc calls made by the engine, it doesn't keep into account the number of retrials", &["client","rpc_method"], &REGISTRY);
-	pub static ref RPC_RETRIER_TOTAL_REQUESTS: IntCounterVecWrapper<2> = IntCounterVecWrapper::new("rpc_requests_total", "Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times", &["client", "rpc_method"], &REGISTRY);
 
 	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).unwrap();
 	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).unwrap();
@@ -218,13 +231,60 @@ lazy_static::lazy_static! {
 	pub static ref P2P_ACTIVE_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_active_connections", "Count the number of active connections"), REGISTRY).unwrap();
 	pub static ref P2P_ALLOWED_PUBKEYS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys"), REGISTRY).unwrap();
 	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), REGISTRY).unwrap();
-	pub static ref P2P_MONITOR_EVENT: IntCounterVecWrapper<1> = IntCounterVecWrapper::new("p2p_monitor_event", "Count the number of events observed by the zmq connection monitor", &["event_type"], &REGISTRY);
-	pub static ref P2P_BAD_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new("p2p_bad_msg", "Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded", &["reason"], &REGISTRY);
+}
 
-	pub static ref UNAUTHORIZED_CEREMONY: IntGaugeVecWrapper<2> = IntGaugeVecWrapper::new("unauthorized_ceremony", "Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation", &["chain", "type"], &REGISTRY);
-	pub static ref CEREMONY_BAD_MSG: IntCounterVecWrapper<2> = IntCounterVecWrapper::new("ceremony_bad_msg", "Count all the bad msgs processed during a ceremony", &["reason", "chain"], &REGISTRY);
+build_gauge_vec!(
+	UNAUTHORIZED_CEREMONY,
+	"unauthorized_ceremony",
+	"Gauge keeping track of the number of unauthorized ceremony currently awaiting authorisation",
+	["chain", "type"]
+);
+build_counter_vec!(
+	RPC_RETRIER_REQUESTS,
+	"rpc_requests",
+	"Count the rpc calls made by the engine, it doesn't keep into account the number of retrials",
+	["client", "rpc_method"]
+);
+build_counter_vec!(
+	RPC_RETRIER_TOTAL_REQUESTS,
+	"rpc_requests_total",
+	"Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times",
+	["client","rpc_method"]
+);
+build_counter_vec!(
+	P2P_MONITOR_EVENT,
+	"p2p_monitor_event",
+	"Count the number of events observed by the zmq connection monitor",
+	["event_type"]
+);
+build_counter_vec!(
+	P2P_BAD_MSG,
+	"p2p_bad_msg",
+	"Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded",
+	["reason"]
+);
+build_counter_vec_struct!(
+	CEREMONY_PROCESSED_MSG,
+	CeremonyProcessedMsgDrop,
+	"ceremony_msg",
+	"Count all the processed messages for a given ceremony",
+	["ceremony_id"]
+);
+build_counter_vec_struct!(
+	CEREMONY_BAD_MSG,
+	CeremonyBadMsgNotDrop,
+	"ceremony_bad_msg",
+	"Count all the bad msgs processed during a ceremony",
+	["reason", "chain"],
+	1 //number of const labels -> chain in this case
+);
 
-	pub static ref CEREMONY_PROCESSED_MSG: IntCounterVecWrapper<1> = IntCounterVecWrapper::new("ceremony_msg", "Count all the processed messages for a given ceremony", &["ceremony_id"], &REGISTRY);
+/// structure containing the metrics used during a ceremony
+/// TODO: expand it with the new metrics measuring ceremony duration
+#[derive(Clone)]
+pub struct CeremonyMetrics {
+	pub processed_messages: CeremonyProcessedMsgDrop,
+	pub bad_message: CeremonyBadMsgNotDrop,
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]

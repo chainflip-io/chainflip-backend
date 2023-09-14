@@ -18,7 +18,7 @@ use tracing::{debug, warn, Instrument};
 use utilities::{
 	format_iterator,
 	metrics::{
-		CeremonyMetrics, MetricCounter, MetricCounterNotToDrop, CEREMONY_BAD_MSG,
+		CeremonyBadMsgNotDrop, CeremonyMetrics, CeremonyProcessedMsgDrop, CEREMONY_BAD_MSG,
 		CEREMONY_PROCESSED_MSG,
 	},
 };
@@ -136,11 +136,11 @@ where
 			outcome_sender,
 			_phantom: Default::default(),
 			metrics: CeremonyMetrics {
-				processed_messages: MetricCounter::new(
+				processed_messages: CeremonyProcessedMsgDrop::new(
 					&CEREMONY_PROCESSED_MSG,
 					[format!("{}", ceremony_id)],
 				),
-				bad_message: MetricCounterNotToDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
+				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
 			},
 		}
 	}
