@@ -14,7 +14,7 @@
 //!
 //! To track fees earned and remaining liquidity in each position, the pool records the big product
 //! of the "percent_remaining" of each swap. Using two of these values you can calculate the
-//! percentage of liquidity swapped in a position between the two points in time, at which those
+//! percentage of liquidity swapped in a position between the two points in time at which those
 //! percent_remaining values where recorded.
 
 #[cfg(test)]
