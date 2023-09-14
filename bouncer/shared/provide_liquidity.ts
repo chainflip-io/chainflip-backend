@@ -1,6 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
+import { Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
 import {
   observeEvent,
   newAddress,
@@ -9,6 +9,7 @@ import {
   handleSubstrateError,
   lpMutex,
   assetToChain,
+  amountToFineAmount,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
@@ -68,7 +69,10 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
   eventHandle = observeEvent(
     'liquidityProvider:AccountCredited',
     chainflip,
-    (event) => event.data.asset.toUpperCase() === ccy,
+    (event) =>
+      event.data.asset.toUpperCase() === ccy &&
+      Number(event.data.amountCredited.replace(/,/g, '')) ===
+        Number(amountToFineAmount(String(amount), assetDecimals[ccy])),
     undefined,
     waitForFinalization,
   );

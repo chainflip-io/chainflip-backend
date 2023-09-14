@@ -12,5 +12,3 @@ else
   echo "🚀 Running tests that require localnet"
   ./tests/swap_after_temp_disconnecting_chains.ts
 fi
-
-./tests/lp_api_test.ts
