@@ -18,6 +18,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -246,6 +247,11 @@ where
 		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
+
+	/// Calculate the Units of gas that is allowed to make this call.
+	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
+		Default::default()
+	}
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -343,6 +349,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
