@@ -37,6 +37,8 @@ scopeguard = { version = "1.2.0" }
 jsonrpsee = { version = "0.20", features = [
   "jsonrpsee-types",
 ], optional = true }
+regex = { version = "1", optional = true }
+url = { version = "2.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3.7.0"
@@ -63,4 +65,6 @@ std = [
   'dep:sp-rpc',
   'dep:num-traits',
   'dep:jsonrpsee',
+  'dep:regex',
+  'dep:url',
 ]
