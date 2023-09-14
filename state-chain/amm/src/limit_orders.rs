@@ -320,7 +320,7 @@ struct Position {
 	/// Used to identify when the position was created and thereby determine if all the liquidity
 	/// in the position has been used or not. As once all the liquidity at a tick has been used,
 	/// the internal record of that tick is deleted, and if liquidity is added back later, the
-	/// record if have a different pool_instance. Therefore a position can tell if all its
+	/// record will have a different pool_instance. Therefore a position can tell if all its
 	/// liquidity has been used, by seeing if there is not a pool at the same tick, or if that pool
 	/// has a different pool_instance.
 	pool_instance: u128,
