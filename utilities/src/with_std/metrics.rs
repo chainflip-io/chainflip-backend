@@ -109,7 +109,6 @@ macro_rules! build_gauge_vec {
 	}
 }
 /// Keeping this here for the next metrics about ceremony duration etc..
-/// 
 // macro_rules! build_gauge_vec_struct {
 // 	($NAME:ident, $structDrop:ident, $name:literal, $help:literal, $labels:tt) => {
 // 		build_gauge_vec!($NAME, $name, $help, $labels);
