@@ -600,6 +600,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x01],
 				cf_parameters: vec![],
+				gas_budget,
 			},]
 		);
 
@@ -683,6 +684,7 @@ fn can_process_ccms_via_extrinsic() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x02],
 				cf_parameters: vec![],
+				gas_budget,
 			},]
 		);
 
@@ -772,6 +774,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				cf_parameters: vec![],
+				gas_budget,
 			},]
 		);
 
@@ -856,6 +859,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				cf_parameters: vec![],
+				gas_budget,
 			},]
 		);
 
@@ -925,6 +929,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				cf_parameters: vec![],
+				gas_budget,
 			},]
 		);
 

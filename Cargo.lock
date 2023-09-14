@@ -1169,6 +1169,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
+ "pallet-cf-chain-tracking",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
