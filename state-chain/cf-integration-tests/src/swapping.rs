@@ -10,7 +10,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, EpochInfo, GetBlockHeight, LpBalanceApi};
+use cf_traits::{AccountRoleRegistry, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
@@ -23,8 +23,6 @@ use state_chain_runtime::{
 	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
 	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
 };
-
-use state_chain_runtime::EthereumChainTracking;
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
@@ -211,11 +209,6 @@ fn basic_pool_setup_provision_and_swap() {
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 
-		let opened_at = EthereumChainTracking::get_block_height();
-
-		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth, opened_at },
-		));
 		System::reset_events();
 
 		let current_epoch = Validator::current_epoch();

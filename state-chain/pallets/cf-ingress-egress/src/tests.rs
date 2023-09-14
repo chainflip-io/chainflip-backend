@@ -2,7 +2,7 @@ use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
 	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, CcmChannelMetadata, DepositChannel,
@@ -351,10 +351,9 @@ fn addresses_are_getting_reused() {
 			}
 			channels
 		})
-		// Close the channels.
 		.then_execute_at_next_block(|channels| {
 			for (_request, _id, address) in &channels {
-				IngressEgress::close_channel(*address);
+				IngressEgress::expire_channel(*address);
 			}
 			channels[0].clone()
 		})
@@ -387,7 +386,7 @@ fn proof_address_pool_integrity() {
 		IngressEgress::on_finalize(1);
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::close_channel(address);
+			IngressEgress::expire_channel(address);
 		}
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
@@ -406,7 +405,7 @@ fn create_new_address_while_pool_is_empty() {
 		IngressEgress::on_finalize(1);
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::close_channel(address);
+			IngressEgress::expire_channel(address);
 		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
@@ -458,7 +457,8 @@ fn can_process_ccm_deposit() {
 		let amount = 5_000;
 
 		// Register swap deposit with CCM
-		assert_ok!(IngressEgress::request_swap_deposit_address(
+
+		let (_, deposit_address) = IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
 			destination_address.clone(),
@@ -466,16 +466,14 @@ fn can_process_ccm_deposit() {
 			1,
 			Some(channel_metadata),
 			1_000u64,
-		));
+		)
+		.unwrap();
 
-		// CCM action is stored.
-		let deposit_address = cf_test_utilities::assert_events_match!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test>::StartWitnessing {
-				deposit_address,
-				opened_at,
-				..
-			}) if opened_at == BlockNumberProvider::get_block_height() => deposit_address
+		let deposit_address: TargetChainAccount<Test, _> = deposit_address.try_into().unwrap();
+
+		assert_eq!(
+			DepositChannelLookup::<Test>::get(deposit_address).unwrap().opened_at,
+			BlockNumberProvider::get_block_height()
 		);
 
 		// Making a deposit should trigger CcmHandler.
@@ -591,7 +589,7 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		.then_execute_at_next_block(|(_, deposit_address)| {
 			// Closing the channel should invalidate the deposit address.
-			IngressEgress::close_channel(deposit_address);
+			IngressEgress::expire_channel(deposit_address);
 			assert_noop!(
 				IngressEgress::process_deposits(
 					RuntimeOrigin::root(),
@@ -881,8 +879,7 @@ fn channel_reuse_with_different_assets() {
 			);
 		})
 		.then_execute_at_next_block(|(_, channel_id, channel_address)| {
-			// Close the channel.
-			IngressEgress::close_channel(channel_address);
+			IngressEgress::expire_channel(channel_address);
 			channel_id
 		})
 		.inspect_storage(|channel_id| {
