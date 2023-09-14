@@ -388,7 +388,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
-	/// Sets the fee for the pool. This will apply to future swaps. The function fee may not be set
+	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
 	/// higher than 50%. Also runs collect for all positions in the pool.
 	///
 	/// This function never panics.
