@@ -45,9 +45,9 @@ use cf_chains::{
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
-	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
-	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	Broadcaster, CallDispatchFilter, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler,
+	EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -621,5 +621,31 @@ pub struct ValidatorRoleQualification;
 impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
 	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
 		AccountRoles::has_account_role(id, AccountRole::Validator)
+	}
+}
+
+pub struct ChainflipCallFilter;
+impl CallDispatchFilter<RuntimeCall> for ChainflipCallFilter {
+	fn should_dispatch(call: &RuntimeCall) -> bool {
+		match <RuntimeSafeMode as Get<pallet_cf_witnesser::PalletSafeMode>>::get() {
+			pallet_cf_witnesser::PalletSafeMode::CodeGreen => true,
+			pallet_cf_witnesser::PalletSafeMode::CodeRed => false,
+			pallet_cf_witnesser::PalletSafeMode::CodeAmber(permission) => match call {
+				RuntimeCall::System(..) | RuntimeCall::Timestamp(..) => permission.system,
+				RuntimeCall::Swapping(..) | RuntimeCall::LiquidityPools(..) => permission.swappings,
+				RuntimeCall::LiquidityProvider(..) => permission.liquidity,
+				RuntimeCall::Validator(..) |
+				RuntimeCall::EthereumVault(..) |
+				RuntimeCall::PolkadotVault(..) |
+				RuntimeCall::BitcoinVault(..) => permission.rotation,
+				RuntimeCall::EthereumIngressEgress(..) |
+				RuntimeCall::PolkadotIngressEgress(..) |
+				RuntimeCall::BitcoinIngressEgress(..) => permission.ingress_egress,
+				RuntimeCall::EthereumBroadcaster(..) |
+				RuntimeCall::PolkadotBroadcaster(..) |
+				RuntimeCall::BitcoinBroadcaster(..) => permission.broadcast,
+				_ => permission.others,
+			},
+		}
 	}
 }

@@ -85,8 +85,8 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipCallFilter, ChainflipHeartbeat,
+	EthEnvironment, EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -393,7 +393,6 @@ parameter_types! {
 }
 
 // Configure FRAME pallets to include in runtime.
-
 impl frame_system::Config for Runtime {
 	/// The basic call filter to use in dispatchable.
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -521,6 +520,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = chainflip::RuntimeSafeMode;
+	type CallDispatchFilter = ChainflipCallFilter;
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 

@@ -1,7 +1,9 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
-use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry};
+use cf_traits::{
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, CallDispatchFilter,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -55,11 +57,22 @@ impl system::Config for Test {
 
 impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode }
 
+pub struct MockCallFilter;
+impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
+	fn should_dispatch(_call: &RuntimeCall) -> bool {
+		match MockSafeModeStorage::get().witnesser {
+			pallet_cf_witness::PalletSafeMode::CodeGreen => true,
+			_ => false,
+		}
+	}
+}
+
 impl pallet_cf_witness::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
+	type CallDispatchFilter = MockCallFilter;
 	type WeightInfo = ();
 }
 

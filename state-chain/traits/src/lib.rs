@@ -824,3 +824,13 @@ pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
 	fn precent_authorities_at_version(version: SemVer) -> Percent;
 }
+
+pub trait CallDispatchFilter<RuntimeCall> {
+	fn should_dispatch(call: &RuntimeCall) -> bool;
+}
+
+impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
+	fn should_dispatch(_call: &RuntimeCall) -> bool {
+		true
+	}
+}

@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -14,7 +15,7 @@ mod tests;
 
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
-use cf_traits::{impl_pallet_safe_mode, AccountRoleRegistry, Chainflip, EpochInfo};
+use cf_traits::{AccountRoleRegistry, CallDispatchFilter, Chainflip, EpochInfo, SafeMode};
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
@@ -24,9 +25,58 @@ use frame_support::{
 	traits::{EnsureOrigin, Get},
 	Hashable,
 };
-use sp_std::{collections::vec_deque::VecDeque, prelude::*};
+use sp_std::prelude::*;
 
-impl_pallet_safe_mode!(PalletSafeMode; witness_calls_enabled);
+/// Contains permissions for different Runtime calls. Only calls allowed here can be dispatched
+/// with Witnesser origin.
+#[derive(
+	codec::Encode,
+	codec::Decode,
+	codec::MaxEncodedLen,
+	scale_info::TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	frame_support::RuntimeDebug,
+)]
+pub struct WitnesserCallPermission {
+	pub system: bool,         // system, sessions, timestamp etc.
+	pub swappings: bool,      // Swapping, pools, etc.
+	pub liquidity: bool,      // LP
+	pub rotation: bool,       // Validator, Vaults
+	pub ingress_egress: bool, // for transfering funds in and out of the chain.
+	pub broadcast: bool,      // for broadcasting messages to other chains.
+	pub others: bool,         // All other pallets
+}
+
+#[derive(
+	codec::Encode,
+	codec::Decode,
+	codec::MaxEncodedLen,
+	scale_info::TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	frame_support::RuntimeDebug,
+)]
+pub enum PalletSafeMode {
+	CodeGreen,
+	CodeRed,
+	CodeAmber(WitnesserCallPermission),
+}
+
+impl Default for PalletSafeMode {
+	fn default() -> Self {
+		<PalletSafeMode as SafeMode>::CODE_GREEN
+	}
+}
+
+impl SafeMode for PalletSafeMode {
+	const CODE_RED: Self = PalletSafeMode::CodeRed;
+	const CODE_GREEN: Self = PalletSafeMode::CodeGreen;
+}
 
 pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
@@ -64,6 +114,9 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
+
+		/// Filter for dispatching witnessed calls.
+		type CallDispatchFilter: CallDispatchFilter<<Self as Config>::RuntimeCall>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -115,41 +168,32 @@ pub mod pallet {
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
-			if T::SafeMode::get().witness_calls_enabled {
-				let _ = WitnessedCallsScheduledForDispatch::<T>::try_mutate(
-					|witnessed_calls_storage| {
-						used_weight.saturating_accrue(T::DbWeight::get().reads(1));
-						if !witnessed_calls_storage.is_empty() {
-							let mut witnessed_calls =
-								VecDeque::from(sp_std::mem::take(witnessed_calls_storage));
-							while let Some((_, call, _)) = witnessed_calls.front() {
-								let next_weight =
-									used_weight.saturating_add(call.get_dispatch_info().weight);
-								if remaining_weight.all_gte(next_weight) {
-									used_weight = next_weight;
-									let (witnessed_at_epoch, call, call_hash) =
-										witnessed_calls.pop_front().unwrap();
-									Self::dispatch_call(
-										witnessed_at_epoch,
-										T::EpochInfo::epoch_index(),
-										call,
-										call_hash,
-									);
-								} else {
-									break
-								}
+			if T::SafeMode::get() != SafeMode::CODE_RED {
+				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls_storage| {
+					witnessed_calls_storage
+						.extract_if(|(_, call, _)| {
+							let next_weight =
+								used_weight.saturating_add(call.get_dispatch_info().weight);
+							if remaining_weight.all_gte(next_weight) &&
+								T::CallDispatchFilter::should_dispatch(call)
+							{
+								used_weight = next_weight;
+								true
+							} else {
+								false
 							}
-							let _empty = sp_std::mem::replace(
-								witnessed_calls_storage,
-								witnessed_calls.make_contiguous().to_vec(),
+						})
+						.collect::<Vec<_>>()
+						.into_iter()
+						.for_each(|(witnessed_at_epoch, call, call_hash)| {
+							Self::dispatch_call(
+								witnessed_at_epoch,
+								T::EpochInfo::epoch_index(),
+								call,
+								call_hash,
 							);
-							used_weight.saturating_accrue(T::DbWeight::get().writes(1));
-							Ok(())
-						} else {
-							Err("no action needed when the scheduled witness calls list is empty")
-						}
-					},
-				);
+						});
+				});
 			}
 
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
@@ -352,7 +396,7 @@ pub mod pallet {
 				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
-				if T::SafeMode::get().witness_calls_enabled {
+				if T::CallDispatchFilter::should_dispatch(&call) {
 					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
 				} else {
 					WitnessedCallsScheduledForDispatch::<T>::append((
