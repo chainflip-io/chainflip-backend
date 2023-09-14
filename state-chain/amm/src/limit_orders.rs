@@ -338,7 +338,7 @@ struct Position {
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub(super) struct FixedPool {
 	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is used,
-	/// a new value for pool_instance is used, and a previously usd value will never be used again.
+	/// a new value for pool_instance is used, and the previously used value will never be used again.
 	/// This is used to determine whether a position was created during the current FixedPool's
 	/// lifetime and therefore that FixedPool's `percent_remaining` is meaningful for the position,
 	/// or if the position was created before the current FixedPool's lifetime.
