@@ -131,7 +131,7 @@ pub struct TickDelta {
 	/// this is the value that MAX_TICK_GROSS_LIQUIDITY applies to.
 	liquidity_gross: u128,
 	/// This is the fees per unit liquidity earned over all time while the current/swapping price
-	/// was on the opposite side of this tick then it is at the moment. This can be used to
+	/// was on the opposite side of this tick than it is at the moment. This can be used to
 	/// calculate the fees earned by an order. It is stored this way as this value will only change
 	/// when the price moves across this tick, thereby limiting the computation/state changes
 	/// needed during a swap.
