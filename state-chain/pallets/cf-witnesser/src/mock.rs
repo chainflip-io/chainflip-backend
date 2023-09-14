@@ -60,10 +60,7 @@ impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode }
 pub struct MockCallFilter;
 impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
 	fn should_dispatch(_call: &RuntimeCall) -> bool {
-		match MockSafeModeStorage::get().witnesser {
-			pallet_cf_witness::PalletSafeMode::CodeGreen => true,
-			_ => false,
-		}
+		matches!(MockSafeModeStorage::get().witnesser, pallet_cf_witness::PalletSafeMode::CodeGreen)
 	}
 }
 
