@@ -4,39 +4,55 @@ import os
 import stat
 import subprocess
 
-bootnodes_base_path = "state-chain/node/bootnodes/"
-chainspecs_base_path = "state-chain/node/chainspecs/"
+BOOTNODES_BASE_PATH = "state-chain/node/bootnodes/"
+CHAINSPECS_BASE_PATH = "state-chain/node/chainspecs/"
 
-# Set the first argument to variable network
-network = sys.argv[1]
+def set_executable_permission(file_path):
+    """Set executable permission for a file."""
+    os.chmod(file_path, stat.S_IXUSR)
 
-# Set the path of a binary file to variable binary
-binary = sys.argv[2]
+def get_file_content(file_path):
+    """Read and return file content."""
+    with open(file_path, "r") as file_data:
+        return file_data.read().splitlines()
 
-os.chmod(binary, stat.S_IXUSR)
+def update_chainspec_with_bootnodes(chainspec_path, bootnodes):
+    """Load chainspec, update with bootnodes, and write back."""
+    with open(chainspec_path, "r") as chainspec:
+        chainspec_data = json.load(chainspec)
 
-bootnodes_filename = bootnodes_base_path + network + ".txt"
+    chainspec_data["bootNodes"] = bootnodes
 
-# Save contents of bootnodes file to variable
-with open(bootnodes_filename, "r") as bootnodes_data:
-    bootnodes = bootnodes_data.read().splitlines()
+    with open(chainspec_path, "w") as chainspec:
+        json.dump(chainspec_data, chainspec, indent=4)
 
-chainspec_filename = chainspecs_base_path + network + ".chainspec.json"
+def main():
+    if len(sys.argv) != 3:
+        print("Usage: <script> <network> <binary>")
+        sys.exit(1)
 
-generate_chainspec_subprocess=[binary, "build-spec", "--chain", network, "-new --disable-default-bootnode"]
-with open(chainspec_filename, "w") as chainspec:
-    subprocess.call(generate_chainspec_subprocess, stdout=chainspec)
+    network = sys.argv[1]
+    binary = sys.argv[2]
 
-# Load the chainspec file
-with open(chainspec_filename, "r") as chainspec:
-    chainspec_data = json.load(chainspec)
+    # Ensure binary is executable
+    set_executable_permission(binary)
 
-chainspec_data["bootNodes"] = bootnodes
-with open(chainspec_filename, "w") as chainspec:
-    json.dump(chainspec_data, chainspec, indent=4)
+    bootnodes_filename = os.path.join(BOOTNODES_BASE_PATH, f"{network}.txt")
+    bootnodes = get_file_content(bootnodes_filename)
 
-chainspec_filename_raw = chainspecs_base_path + network + ".chainspec.raw.json"
+    chainspec_filename = os.path.join(CHAINSPECS_BASE_PATH, f"{network}.chainspec.json")
+    generate_chainspec_command = [binary, "build-spec", "--chain", network + "-new", "--disable-default-bootnode"]
 
-generate_chainspec_raw_subprocess=[binary, "build-spec", "--chain", chainspec_filename, "--raw", "--disable-default-bootnode"]
-with open(chainspec_filename_raw, "w") as chainspec_raw:
-    subprocess.call(generate_chainspec_raw_subprocess, stdout=chainspec_raw)
+    with open(chainspec_filename, "w") as chainspec:
+        subprocess.call(generate_chainspec_command, stdout=chainspec)
+
+    update_chainspec_with_bootnodes(chainspec_filename, bootnodes)
+
+    chainspec_filename_raw = os.path.join(CHAINSPECS_BASE_PATH, f"{network}.chainspec.raw.json")
+    generate_chainspec_raw_command = [binary, "build-spec", "--chain", chainspec_filename, "--raw", "--disable-default-bootnode"]
+
+    with open(chainspec_filename_raw, "w") as chainspec_raw:
+        subprocess.call(generate_chainspec_raw_command, stdout=chainspec_raw)
+
+if __name__ == "__main__":
+    main()
