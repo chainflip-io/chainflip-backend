@@ -1,4 +1,6 @@
 use cf_chains::{dot, ChainState};
+use futures_util::FutureExt;
+use utilities::task_scope::task_scope;
 
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,
@@ -12,52 +14,63 @@ const INITIAL_NONCE: state_chain_runtime::Nonce = 10;
 /// If the tx fails due to a bad proof, it should fetch the runtime version and retry.
 #[tokio::test]
 async fn should_update_version_on_bad_proof() {
-	let mut mock_rpc_api = MockBaseRpcApi::new();
+	task_scope(|scope| {
+		async {
+			let mut mock_rpc_api = MockBaseRpcApi::new();
 
-	mock_rpc_api.expect_submit_extrinsic().times(1).returning(move |_| {
-		Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
-			jsonrpsee::types::ErrorObject::owned(
-				1010,
-				"Invalid Transaction",
-				Some("Transaction has a bad signature"),
-			),
-		)))
-	});
+			mock_rpc_api.expect_submit_extrinsic().times(1).returning(move |_| {
+				Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+					jsonrpsee::types::ErrorObject::owned(
+						1010,
+						"Invalid Transaction",
+						Some("Transaction has a bad signature"),
+					),
+				)))
+			});
 
-	mock_rpc_api.expect_runtime_version().times(1).returning(move || {
-		let new_runtime_version = sp_version::RuntimeVersion {
-			spec_name: "test".into(),
-			impl_name: "test".into(),
-			authoring_version: 0,
-			spec_version: 0,
-			impl_version: 0,
-			apis: vec![].into(),
-			transaction_version: 0,
-			state_version: 0,
-		};
-		assert_ne!(
-			new_runtime_version,
-			Default::default(),
-			"The new runtime version must be different from the version that the watcher started with"
-		);
+			mock_rpc_api.expect_runtime_version().times(1).returning(move || {
+				let new_runtime_version = sp_version::RuntimeVersion {
+					spec_name: "test".into(),
+					impl_name: "test".into(),
+					authoring_version: 0,
+					spec_version: 0,
+					impl_version: 0,
+					apis: vec![].into(),
+					transaction_version: 0,
+					state_version: 0,
+				};
+				assert_ne!(
+				new_runtime_version,
+				Default::default(),
+				"The new runtime version must be different from the version that the watcher started with"
+			);
 
-		Ok(new_runtime_version)
-	});
+				Ok(new_runtime_version)
+			});
 
-	// On the retry, return a success.
-	mock_rpc_api
-		.expect_submit_extrinsic()
-		.times(1)
-		.returning(move |_| Ok(H256::default()));
+			// On the retry, return a success.
+			mock_rpc_api
+				.expect_submit_extrinsic()
+				.times(1)
+				.returning(move |_| Ok(H256::default()));
 
-	let _watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
+			let _watcher = new_watcher_and_submit_test_extrinsic(scope, mock_rpc_api).await;
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
 }
 
 /// Create a new watcher and submit a dummy extrinsic.
-async fn new_watcher_and_submit_test_extrinsic(
+async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
+	scope: &'a Scope<'env, anyhow::Error>,
 	mock_rpc_api: MockBaseRpcApi,
-) -> SubmissionWatcher<MockBaseRpcApi> {
+) -> SubmissionWatcher<'a, 'env, MockBaseRpcApi> {
 	let (mut watcher, _requests) = SubmissionWatcher::new(
+		scope,
 		signer::PairSigner::new(sp_core::Pair::generate().0),
 		INITIAL_NONCE,
 		H256::default(),

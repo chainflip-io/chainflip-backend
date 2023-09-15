@@ -8,6 +8,10 @@ use sp_runtime::{traits::Hash, MultiAddress};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
+use utilities::{
+	future_map::FutureMap,
+	task_scope::{self, Scope},
+};
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,
@@ -79,8 +83,21 @@ pub struct Submission {
 	request_id: RequestID,
 }
 
-pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static> {
+pub struct SubmissionWatcher<
+	'a,
+	'env,
+	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+> {
+	scope: &'a Scope<'env, anyhow::Error>,
 	submissions_by_nonce: BTreeMap<state_chain_runtime::Nonce, BTreeMap<SubmissionID, Submission>>,
+	submission_status_futures: FutureMap<
+		(RequestID, SubmissionID),
+		task_scope::ScopedJoinHandle<(
+			H256,
+			Vec<state_chain_runtime::RuntimeEvent>,
+			state_chain_runtime::Header,
+		)>,
+	>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: state_chain_runtime::Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
@@ -96,10 +113,11 @@ pub enum SubmissionLogicError {
 	NonceTooLow,
 }
 
-impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
-	SubmissionWatcher<BaseRpcClient>
+impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
+	SubmissionWatcher<'a, 'env, BaseRpcClient>
 {
 	pub fn new(
+		scope: &'a Scope<'env, anyhow::Error>,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
 		finalized_nonce: state_chain_runtime::Nonce,
 		finalized_block_hash: state_chain_runtime::Hash,
@@ -111,7 +129,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	) -> (Self, BTreeMap<RequestID, Request>) {
 		(
 			Self {
+				scope,
 				submissions_by_nonce: Default::default(),
+				submission_status_futures: Default::default(),
 				signer,
 				finalized_nonce,
 				finalized_block_hash,
@@ -143,12 +163,22 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			);
 			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
 
-			match self.base_rpc_client.submit_extrinsic(signed_extrinsic).await {
-				Ok(tx_hash) => {
+			let tx_hash: H256 = {
+				use sp_core::{blake2_256, Encode};
+				let encoded = signed_extrinsic.encode();
+				blake2_256(&encoded).into()
+			};
+
+			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
+				Ok(_transaction_status_stream) => {
 					request.pending_submissions.insert(request.next_submission_id, nonce);
 					self.submissions_by_nonce.entry(nonce).or_default().insert(
 						request.next_submission_id,
 						Submission { lifetime, tx_hash, request_id: request.id },
+					);
+					self.submission_status_futures.insert(
+						(request.id, request.next_submission_id),
+						self.scope.spawn_with_handle(async move { todo!() }),
 					);
 					request.next_submission_id += 1;
 					break Ok(Ok(tx_hash))

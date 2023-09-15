@@ -4,11 +4,12 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use cf_primitives::AccountRole;
 use futures::StreamExt;
+use futures_util::FutureExt;
 use sp_core::H256;
 use state_chain_runtime::AccountId;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{trace, warn};
-use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
+use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, OR_CANCEL};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
@@ -178,9 +179,10 @@ impl SignedExtrinsicClient {
 			_task_handle: scope.spawn_with_handle({
 				let mut state_chain_stream = state_chain_stream.clone();
 
-				async move {
+				task_scope(move |scope| async move {
 					let (mut submission_watcher, mut requests) =
 						submission_watcher::SubmissionWatcher::new(
+							scope,
 							signer,
 							account_nonce,
 							state_chain_stream.cache().block_hash,
@@ -203,7 +205,7 @@ impl SignedExtrinsicClient {
 							).await?;
 						} else break Ok(()),
 					}
-				}
+				}.boxed())
 			}),
 		})
 	}
