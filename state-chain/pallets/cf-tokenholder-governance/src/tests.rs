@@ -14,48 +14,46 @@ fn awaiting_gov_key() -> Vec<u8> {
 	awaiting_key
 }
 
+fn submit_and_pass_proposal(proposal: Proposal) {
+	assert_ok!(TokenholderGovernance::submit_proposal(
+		RuntimeOrigin::signed(ALICE),
+		proposal.clone()
+	));
+	assert_eq!(
+		last_event::<Test>(),
+		mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalSubmitted {
+			proposal: proposal.clone()
+		}),
+	);
+	assert!(Proposals::<Test>::contains_key(
+		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get()
+	));
+	// Back the proposal to ensure threshold
+	assert_ok!(TokenholderGovernance::back_proposal(RuntimeOrigin::signed(BOB), proposal.clone()));
+	assert_ok!(TokenholderGovernance::back_proposal(
+		RuntimeOrigin::signed(CHARLES),
+		proposal.clone()
+	));
+	// Jump to the block in which we expect the proposal
+	TokenholderGovernance::on_initialize(
+		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get(),
+	);
+	assert!(!Proposals::<Test>::contains_key(
+		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get()
+	));
+	assert_eq!(
+		last_event::<Test>(),
+		mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalPassed {
+			proposal: proposal.clone()
+		}),
+	);
+}
+
 #[test]
 fn update_gov_key_via_onchain_proposal() {
 	new_test_ext().execute_with(|| {
 		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
-		assert_ok!(TokenholderGovernance::submit_proposal(
-			RuntimeOrigin::signed(ALICE),
-			proposal.clone()
-		));
-		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalSubmitted {
-				proposal: proposal.clone()
-			}),
-		);
-		assert!(Proposals::<Test>::contains_key(
-			<frame_system::Pallet<Test>>::block_number() +
-				<mock::Test as Config>::VotingPeriod::get()
-		));
-		// Back the proposal to ensure threshold
-		assert_ok!(TokenholderGovernance::back_proposal(
-			RuntimeOrigin::signed(BOB),
-			proposal.clone()
-		));
-		assert_ok!(TokenholderGovernance::back_proposal(
-			RuntimeOrigin::signed(CHARLES),
-			proposal.clone()
-		));
-		// Jump to the block in which we expect the proposal
-		TokenholderGovernance::on_initialize(
-			<frame_system::Pallet<Test>>::block_number() +
-				<mock::Test as Config>::VotingPeriod::get(),
-		);
-		assert!(!Proposals::<Test>::contains_key(
-			<frame_system::Pallet<Test>>::block_number() +
-				<mock::Test as Config>::VotingPeriod::get()
-		));
-		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalPassed {
-				proposal: proposal.clone()
-			}),
-		);
+		submit_and_pass_proposal(proposal.clone());
 		// Expect the proposal to be moved to the enactment stage
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
 		TokenholderGovernance::on_initialize(
@@ -63,6 +61,25 @@ fn update_gov_key_via_onchain_proposal() {
 				<mock::Test as Config>::EnactmentDelay::get(),
 		);
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
+		assert_eq!(
+			last_event::<Test>(),
+			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
+		);
+	});
+}
+
+#[test]
+fn update_community_key_via_onchain_proposal() {
+	new_test_ext().execute_with(|| {
+		let proposal = Proposal::SetCommunityKey(sp_core::H160::from_slice(&[1; 20]));
+		submit_and_pass_proposal(proposal.clone());
+		// Expect the proposal to be moved to the enactment stage
+		assert!(CommKeyUpdateAwaitingEnactment::<Test>::get().is_some());
+		TokenholderGovernance::on_initialize(
+			<frame_system::Pallet<Test>>::block_number() +
+				<mock::Test as Config>::EnactmentDelay::get(),
+		);
+		assert!(CommKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
