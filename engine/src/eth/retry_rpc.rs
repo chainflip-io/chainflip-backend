@@ -128,10 +128,12 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 								.unwrap(),
 						);
 
-						client
-							.send_transaction(transaction_request.into())
+						let sig = client.sign_transaction(&transaction_request.into()).await?;
+						let raw_signed = transaction_request.rlp_signed(sig);
+						let tx_hash = client
+							.send_raw_transaction(raw_signed)
 							.await
-							.context("Failed to send ETH transaction")
+							.context("Failed to send ETH transaction")?;
 					})
 				}),
 				log,

@@ -508,7 +508,18 @@ where
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
                                                 match eth_rpc.broadcast_transaction(transaction_payload).await {
-                                                    Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Ok((raw_signed_payload, tx_hash)) => {
+                                                        info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}")
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+                                                                pallet_cf_broadcast::Call::confirm_broadcast_attempt {
+                                                                    broadcast_attempt_id,
+                                                                    raw_signed_payload
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    },
                                                     Err(error) => {
                                                         // Note: this error can indicate that we failed to estimate gas, or that there is
                                                         // a problem with the ethereum rpc node, or with the configured account. For example
