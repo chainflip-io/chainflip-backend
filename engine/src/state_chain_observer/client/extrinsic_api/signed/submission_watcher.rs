@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+	collections::{BTreeMap, VecDeque},
+	sync::Arc,
+};
 
 use anyhow::{anyhow, Result};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
@@ -6,6 +9,7 @@ use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
 use sp_runtime::{traits::Hash, MultiAddress};
+use state_chain_runtime::UncheckedExtrinsic;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
@@ -102,6 +106,13 @@ pub struct SubmissionWatcher<
 	runtime_version: sp_version::RuntimeVersion,
 	genesis_hash: state_chain_runtime::Hash,
 	extrinsic_lifetime: state_chain_runtime::BlockNumber,
+	#[allow(clippy::type_complexity)]
+	block_cache: VecDeque<(
+		state_chain_runtime::Hash,
+		state_chain_runtime::Header,
+		Vec<UncheckedExtrinsic>,
+		Vec<Box<frame_system::EventRecord<state_chain_runtime::RuntimeEvent, H256>>>,
+	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: ErrorDecoder,
 }
@@ -136,6 +147,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				runtime_version,
 				genesis_hash,
 				extrinsic_lifetime,
+				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
 			},
@@ -334,23 +346,46 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			usize,
 		),
 	) -> Result<(), anyhow::Error> {
-		if let Some(block) = self.base_rpc_client.block(block_hash).await? {
-			let extrinsic = block.block.extrinsics.get(extrinsic_index).expect(SUBSTRATE_BEHAVIOUR);
-
+		if let Some((header, extrinsics, events)) = {
+			if let Some((_, header, extrinsics, events)) = self
+				.block_cache
+				.iter()
+				.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
+			{
+				Some((header, extrinsics, events))
+			} else if let (Some(block), events) = (
+				self.base_rpc_client.block(block_hash).await?,
+				self.base_rpc_client
+					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
+					.await?,
+			) {
+				if self.block_cache.len() >= 4 {
+					self.block_cache.pop_front();
+				}
+				self.block_cache.push_back((
+					block_hash,
+					block.block.header,
+					block.block.extrinsics,
+					events,
+				));
+				let (_, header, extrinsics, events) = self.block_cache.back().unwrap();
+				Some((header, extrinsics, events))
+			} else {
+				None
+			}
+		} {
+			let extrinsic = extrinsics.get(extrinsic_index).expect(SUBSTRATE_BEHAVIOUR);
 			let tx_hash =
 				<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
 
-			let extrinsic_events = self
-				.base_rpc_client
-				.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-				.await?
-				.into_iter()
-				.filter_map(|event_record| match *event_record {
+			let extrinsic_events = events
+				.iter()
+				.filter_map(|event_record| match event_record.as_ref() {
 					frame_system::EventRecord {
 						phase: frame_system::Phase::ApplyExtrinsic(index),
 						event,
 						..
-					} if index as usize == extrinsic_index => Some(event),
+					} if *index as usize == extrinsic_index => Some(event.clone()),
 					_ => None,
 				})
 				.collect::<Vec<_>>();
@@ -360,7 +395,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					let _result = until_in_block_sender.send(self.decide_extrinsic_success(
 						tx_hash,
 						extrinsic_events,
-						block.block.header,
+						header.clone(),
 					));
 				}
 			}
