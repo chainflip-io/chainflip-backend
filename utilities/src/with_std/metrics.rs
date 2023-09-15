@@ -65,9 +65,15 @@ impl<const N: usize> IntGaugeVecWrapper<N> {
 		};
 	}
 
-	pub fn set(&self, labels: &[&str; N], val: i64) {
+	pub fn set<T: TryInto<i64>>(&self, labels: &[&str; N], val: T)
+	where
+		<T as TryInto<i64>>::Error: std::fmt::Debug,
+	{
 		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
-			m.set(val);
+			match val.try_into() {
+				Ok(val) => m.set(val),
+				Err(e) => tracing::error!("Conversion to i64 failed: {:?}", e),
+			}
 		};
 	}
 }
@@ -108,48 +114,6 @@ macro_rules! build_gauge_vec {
 		}
 	}
 }
-/// Keeping this here for the next metrics about ceremony duration etc..
-// macro_rules! build_gauge_vec_struct {
-// 	($NAME:ident, $structDrop:ident, $name:literal, $help:literal, $labels:tt) => {
-// 		build_gauge_vec!($NAME, $name, $help, $labels);
-
-// 		#[derive(Clone)]
-// 		pub struct $structDrop {
-// 			metric: &'static $NAME,
-// 			labels: [String; { $labels.len() }],
-// 		}
-// 		impl $structDrop {
-// 			pub fn new(metric: &'static $NAME, labels: [String; { $labels.len() }]) -> $structDrop {
-// 				$structDrop { metric, labels }
-// 			}
-
-// 			pub fn inc(&self) {
-// 				let labels = self.labels.each_ref().map(|s| s.as_str());
-// 				self.metric.inc(&labels);
-// 			}
-
-// 			pub fn dec(&self) {
-// 				let labels = self.labels.each_ref().map(|s| s.as_str());
-// 				self.metric.dec(&labels);
-// 			}
-
-// 			pub fn set(&self, val: i64) {
-// 				let labels = self.labels.each_ref().map(|s| s.as_str());
-// 				self.metric.set(&labels, val);
-// 			}
-// 		}
-// 		impl Drop for $structDrop {
-// 			fn drop(&mut self) {
-// 				let metric = self.metric.metric.clone();
-// 				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
-
-// 				let _ = DELETE_METRIC_CHANNEL
-// 					.0
-// 					.try_send(DeleteMetricCommand::GaugePair(metric, labels));
-// 			}
-// 		}
-// 	};
-// }
 
 macro_rules! build_counter_vec {
 	($NAME:ident, $name:literal, $help:literal, $labels:tt) => {
@@ -205,8 +169,6 @@ macro_rules! build_counter_vec_struct {
 			}
 
 			pub fn inc(&self, non_const_labels: &[&str; { $labels.len() - $constLabelsNum }]) {
-				//TODO: Check best way to concatenate 2 array?
-				//Probably the following one is not the best
 				let labels: [&str; { $labels.len() }] = {
 					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
 					let (one, two) = whole.split_at_mut(self.const_labels.len());
@@ -274,12 +236,11 @@ build_counter_vec_struct!(
 	CeremonyBadMsgNotDrop,
 	"ceremony_bad_msg",
 	"Count all the bad msgs processed during a ceremony",
-	["reason", "chain"],
+	["chain", "reason"],
 	1 //number of const labels -> chain in this case
 );
 
 /// structure containing the metrics used during a ceremony
-/// TODO: expand it with the new metrics measuring ceremony duration
 #[derive(Clone)]
 pub struct CeremonyMetrics {
 	pub processed_messages: CeremonyProcessedMsgDrop,
