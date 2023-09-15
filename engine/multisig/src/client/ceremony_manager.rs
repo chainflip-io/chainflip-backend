@@ -58,11 +58,12 @@ pub type CeremonyOutcome<C> = Result<
 pub type CeremonyResultSender<Ceremony> = oneshot::Sender<CeremonyOutcome<Ceremony>>;
 pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ceremony>>;
 
-const KEYGEN: &str = "keygen";
-const SIGNING: &str = "signing";
+const KEYGEN_LABEL: &str = "keygen";
+const SIGNING_LABEL: &str = "signing";
 
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
+	const CEREMONY_TYPE: &'static str;
 	// Determines which curve and signing method to use
 	type Crypto: CryptoScheme;
 	// The type of data that will be used in p2p for this ceremony type
@@ -89,6 +90,7 @@ pub struct KeygenCeremony<C> {
 }
 
 impl<C: CryptoScheme> CeremonyTrait for KeygenCeremony<C> {
+	const CEREMONY_TYPE: &'static str = KEYGEN_LABEL;
 	type Crypto = C;
 	type Data = KeygenData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
@@ -102,6 +104,7 @@ pub struct SigningCeremony<C> {
 }
 
 impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
+	const CEREMONY_TYPE: &'static str = SIGNING_LABEL;
 	type Crypto = C;
 	type Data = SigningData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
@@ -372,6 +375,10 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 						scope,
 					)
 				}
+				UNAUTHORIZED_CEREMONY.set(
+					&[Chain::NAME, KEYGEN_LABEL],
+					self.keygen_states.count_unauthorised_ceremonies(),
+				);
 			},
 			Some(CeremonyRequestDetails::Sign(details)) => {
 				self.on_request_to_sign(
@@ -382,6 +389,10 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 					details.result_sender,
 					scope,
 				);
+				UNAUTHORIZED_CEREMONY.set(
+					&[Chain::NAME, SIGNING_LABEL],
+					self.signing_states.count_unauthorised_ceremonies(),
+				);
 			},
 			None => {
 				// Because unauthorised ceremonies don't timeout, We must check the id of ceremonies
@@ -390,23 +401,21 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				if self.signing_states.cleanup_unauthorised_ceremony(&request.ceremony_id) {
 					SigningFailureReason::NotParticipatingInUnauthorisedCeremony
 						.log(&BTreeSet::default());
+					UNAUTHORIZED_CEREMONY.set(
+						&[Chain::NAME, SIGNING_LABEL],
+						self.signing_states.count_unauthorised_ceremonies(),
+					);
 				}
 				if self.keygen_states.cleanup_unauthorised_ceremony(&request.ceremony_id) {
 					KeygenFailureReason::NotParticipatingInUnauthorisedCeremony
 						.log(&BTreeSet::default());
+					UNAUTHORIZED_CEREMONY.set(
+						&[Chain::NAME, KEYGEN_LABEL],
+						self.keygen_states.count_unauthorised_ceremonies(),
+					);
 				}
 			},
 		}
-
-		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, SIGNING],
-			self.signing_states.count_unauthorised_ceremonies().try_into().unwrap(),
-		);
-
-		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, KEYGEN],
-			self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap(),
-		);
 	}
 
 	pub async fn run(
@@ -649,16 +658,6 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				)
 			},
 		}
-
-		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, SIGNING],
-			self.signing_states.count_unauthorised_ceremonies().try_into().unwrap(),
-		);
-
-		UNAUTHORIZED_CEREMONY.set(
-			&[Chain::NAME, KEYGEN],
-			self.keygen_states.count_unauthorised_ceremonies().try_into().unwrap(),
-		);
 	}
 
 	/// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
@@ -735,8 +734,8 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 					self.outcome_sender.clone(),
 					scope,
 				));
-
 				let total = self.count_unauthorised_ceremonies();
+				UNAUTHORIZED_CEREMONY.set(&[Chain::NAME, Ceremony::CEREMONY_TYPE], total);
 				trace!("Unauthorised ceremony created {ceremony_id_string} (Total: {total})",);
 			}
 		}
