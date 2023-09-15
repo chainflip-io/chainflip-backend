@@ -619,9 +619,9 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			// LIMIT USDC SWAP DEPOSITS TO 1000 USDC
 			let deposit_amount = if from == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
@@ -986,9 +986,9 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			// LIMIT USDC SWAP DEPOSITS TO 1000 USDC
 			let deposit_amount = if from == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
@@ -1028,9 +1028,9 @@ pub mod pallet {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
-			// LIMIT USDC SWAP DEPOSITS TO 10 USDC
+			// LIMIT USDC SWAP DEPOSITS TO 1000 USDC
 			let deposit_amount = if source_asset == Asset::Usdc {
-				sp_std::cmp::max(deposit_amount, 10 * 1_000_000)
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
 			} else {
 				deposit_amount
 			};
