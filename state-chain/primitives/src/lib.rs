@@ -172,9 +172,10 @@ impl SemVer {
 	}
 
 	pub fn is_more_recent_than(&self, other: SemVer) -> bool {
-		self.major > other.major ||
-			(self.major == other.major && self.minor > other.minor) ||
-			(self.major == other.major && self.minor == other.minor && self.patch > other.patch)
+		// This is wrapped into a function to guard against us
+		// accidentally reordering the fields, for example (which
+		// would be caught by tests).
+		self > &other
 	}
 }
 
