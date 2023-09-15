@@ -53,11 +53,13 @@ pub enum InBlockError {
 pub type InBlockResult = ExtrinsicResult<InBlockError>;
 
 pub type RequestID = u64;
+pub type SubmissionID = u64;
 
 #[derive(Debug)]
 pub struct Request {
 	id: RequestID,
-	pending_submissions: usize,
+	next_submission_id: SubmissionID,
+	pending_submissions: BTreeMap<SubmissionID, state_chain_runtime::Nonce>,
 	strictly_one_submission: bool,
 	resubmit_window: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
 	call: state_chain_runtime::RuntimeCall,
@@ -78,7 +80,7 @@ pub struct Submission {
 }
 
 pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static> {
-	submissions_by_nonce: BTreeMap<state_chain_runtime::Nonce, Vec<Submission>>,
+	submissions_by_nonce: BTreeMap<state_chain_runtime::Nonce, BTreeMap<SubmissionID, Submission>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: state_chain_runtime::Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
@@ -143,12 +145,12 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			match self.base_rpc_client.submit_extrinsic(signed_extrinsic).await {
 				Ok(tx_hash) => {
-					request.pending_submissions += 1;
-					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
-						lifetime,
-						tx_hash,
-						request_id: request.id,
-					});
+					request.pending_submissions.insert(request.next_submission_id, nonce);
+					self.submissions_by_nonce.entry(nonce).or_default().insert(
+						request.next_submission_id,
+						Submission { lifetime, tx_hash, request_id: request.id },
+					);
+					request.next_submission_id += 1;
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
@@ -230,7 +232,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				id,
 				Request {
 					id,
-					pending_submissions: 0,
+					next_submission_id: 0,
+					pending_submissions: Default::default(),
 					strictly_one_submission: matches!(
 						strategy,
 						RequestStrategy::StrictlyOneSubmission(_)
@@ -313,9 +316,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 					let mut not_found_matching_submission = Some(extrinsic_events);
 
-					for submission in submissions {
+					for (submission_id, submission) in submissions {
 						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions -= 1;
+							request.pending_submissions.remove(&submission_id);
 						}
 
 						// Note: It is technically possible for a hash collision to
@@ -368,12 +371,12 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			self.submissions_by_nonce.retain(|nonce, submissions| {
 				assert!(self.finalized_nonce <= *nonce, "{SUBSTRATE_BEHAVIOUR}");
 
-				submissions.retain(|submission| {
+				submissions.retain(|submission_id, submission| {
 					let alive = submission.lifetime.contains(&(block.header.number + 1));
 
 					if !alive {
 						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions -= 1;
+							request.pending_submissions.remove(submission_id);
 						}
 					}
 
@@ -384,7 +387,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			});
 
 			for (_request_id, request) in requests.extract_if(|_request_id, request| {
-				request.pending_submissions == 0 &&
+				request.pending_submissions.is_empty() &&
 					(!request.resubmit_window.contains(&(block.header.number + 1)) ||
 						request.strictly_one_submission)
 			}) {
@@ -396,7 +399,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			// Has to be a separate loop from the above due to not being able to await inside
 			// extract_if
 			for (_request_id, request) in requests.iter_mut() {
-				if request.pending_submissions == 0 {
+				if request.pending_submissions.is_empty() {
 					debug!("Resubmitting extrinsic as all existing submissions have expired.");
 					self.submit_extrinsic(request).await?;
 				}

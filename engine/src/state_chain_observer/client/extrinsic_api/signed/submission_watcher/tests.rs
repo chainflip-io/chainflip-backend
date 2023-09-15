@@ -86,7 +86,8 @@ async fn new_watcher_and_submit_test_extrinsic(
 		});
 	let mut request = Request {
 		id: 0,
-		pending_submissions: 0,
+		next_submission_id: 0,
+		pending_submissions: Default::default(),
 		strictly_one_submission: false,
 		resubmit_window: ..=1,
 		call,
