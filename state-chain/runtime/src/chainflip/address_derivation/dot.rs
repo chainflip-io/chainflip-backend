@@ -34,20 +34,18 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		layers.reverse();
 
 		let payload_hash =
-			layers
-				.into_iter()
-				.fold(master_account.aliased_ref().clone(), |sub_account, salt| {
-					let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
-					// Fill the first slots with the derivation prefix.
-					payload.extend(PREFIX);
-					// Then add the 32-byte public key.
-					payload.extend(sub_account);
-					// Finally, add the index to the end of the payload.
-					payload.extend(&salt.to_le_bytes());
+			layers.into_iter().fold(*master_account.aliased_ref(), |sub_account, salt| {
+				let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
+				// Fill the first slots with the derivation prefix.
+				payload.extend(PREFIX);
+				// Then add the 32-byte public key.
+				payload.extend(sub_account);
+				// Finally, add the index to the end of the payload.
+				payload.extend(&salt.to_le_bytes());
 
-					// Hash the whole thing
-					BlakeTwo256::hash(&payload).to_fixed_bytes()
-				});
+				// Hash the whole thing
+				BlakeTwo256::hash(&payload).to_fixed_bytes()
+			});
 
 		Ok(PolkadotAccountId::from_aliased(payload_hash))
 	}
