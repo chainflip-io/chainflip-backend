@@ -297,7 +297,7 @@ pub mod pallet {
 		/// Stop Bidding is disabled due to Safe Mode.
 		StopBiddingDisabled,
 
-		/// Wrong executor address
+		/// The executor for this account is bound to another address.
 		ExecutorBindingRestrictionViolated,
 
 		/// The account is already bound to an executor address.
