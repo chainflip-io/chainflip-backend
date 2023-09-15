@@ -3,7 +3,7 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, ThresholdSignatureData, TransactionFeeDeficit,
+	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
 	TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
@@ -16,7 +16,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AsyncResult, Chainflip, EpochInfo, ThresholdSigner,
+	AsyncResult, Chainflip, EpochInfo, SetSafeMode, ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -511,5 +511,31 @@ fn threshold_sign_and_broadcast_with_callback() {
 				result: Ok(())
 			})
 		);
+	});
+}
+
+#[test]
+fn ensure_safe_mode_is_moving_timeouts() {
+	new_test_ext().execute_with(|| {
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		let _ = start_mock_broadcast();
+		assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 1);
+		Broadcaster::on_initialize(5);
+		assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
+		assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
+	});
+}
+
+#[test]
+fn ensure_retries_are_skipped_during_safe_mode() {
+	new_test_ext().execute_with(|| {
+		let _ = start_mock_broadcast();
+		MockCfe::respond(Scenario::SigningFailure);
+		let _ = start_mock_broadcast();
+		MockCfe::respond(Scenario::SigningFailure);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
 	});
 }

@@ -22,6 +22,7 @@ permissions:
   contents: read
 
 env:
+  FORCE_COLOR: 1
   CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
 
 jobs:

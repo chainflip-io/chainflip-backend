@@ -12,6 +12,7 @@ use subxt::{
 	Config, OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
+use utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, Result};
 
@@ -134,12 +135,12 @@ impl DotRpcApi for DotRpcClient {
 
 #[derive(Clone)]
 pub struct DotSubClient {
-	pub ws_endpoint: String,
+	pub ws_endpoint: SecretUrl,
 }
 
 impl DotSubClient {
-	pub fn new(ws_endpoint: &str) -> Self {
-		Self { ws_endpoint: ws_endpoint.to_string() }
+	pub fn new(ws_endpoint: SecretUrl) -> Self {
+		Self { ws_endpoint }
 	}
 }
 
@@ -148,7 +149,7 @@ impl DotSubscribeApi for DotSubClient {
 	async fn subscribe_best_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		let client = OnlineClient::<PolkadotConfig>::from_url(self.ws_endpoint.clone()).await?;
+		let client = OnlineClient::<PolkadotConfig>::from_url(&self.ws_endpoint).await?;
 		Ok(Box::pin(
 			client
 				.blocks()
@@ -162,7 +163,7 @@ impl DotSubscribeApi for DotSubClient {
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		let client = OnlineClient::<PolkadotConfig>::from_url(self.ws_endpoint.clone()).await?;
+		let client = OnlineClient::<PolkadotConfig>::from_url(&self.ws_endpoint).await?;
 		Ok(Box::pin(
 			client
 				.blocks()

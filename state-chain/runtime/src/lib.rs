@@ -15,8 +15,8 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{SqrtPriceQ64F96, Tick},
-	range_orders::{AmountsToLiquidityError, Liquidity},
+	common::{Amount, Price, Tick},
+	range_orders::Liquidity,
 };
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinNetwork},
@@ -25,12 +25,13 @@ use cf_chains::{
 	evm::EvmCrypto,
 	Bitcoin, Polkadot,
 };
+use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::PoolQueryError;
+use pallet_cf_pools::{AssetsMap, PoolLiquidity};
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use sp_runtime::AccountId32;
+use sp_runtime::DispatchError;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -53,6 +54,7 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 use pallet_cf_funding::MinimumFunding;
+use pallet_cf_pools::{PoolInfo, PoolOrders};
 use pallet_grandpa::AuthorityId as GrandpaId;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -166,10 +168,19 @@ impl pallet_cf_validator::Config for Runtime {
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
 		Reputation,
-		ExclusionList<Self, chainflip::KeygenExclusionOffences>,
-		pallet_cf_validator::PeerMapping<Self>,
-		SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
-		chainflip::ValidatorRoleQualification,
+		(
+			ExclusionList<Self, chainflip::KeygenExclusionOffences>,
+			(
+				pallet_cf_validator::PeerMapping<Self>,
+				(
+					SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
+					(
+						chainflip::ValidatorRoleQualification,
+						pallet_cf_validator::QualifyByCfeVersion<Self>,
+					),
+				),
+			),
+		),
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;
@@ -666,6 +677,8 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = EthereumVault;
 }
 
@@ -686,6 +699,8 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = PolkadotVault;
 }
 
@@ -706,6 +721,8 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = BitcoinVault;
 }
 
@@ -994,11 +1011,11 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_pool_sqrt_price(
+		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<SqrtPriceQ64F96> {
-			LiquidityPools::current_sqrt_price(from, to)
+		) -> Option<Price> {
+			LiquidityPools::current_price(from, to)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
@@ -1013,6 +1030,39 @@ impl_runtime_apis! {
 			LiquidityPools::swap_with_network_fee(from, to, amount).ok()
 		}
 
+		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo> {
+			LiquidityPools::pool_info(base_asset, pair_asset)
+		}
+
+		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity> {
+			LiquidityPools::pool_liquidity(base_asset, pair_asset)
+		}
+
+		fn cf_required_asset_ratio_for_range_order(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<cf_amm::common::Tick>,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
+			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		}
+
+		fn cf_pool_orders(
+			base_asset: Asset,
+			pair_asset: Asset,
+			lp: AccountId,
+		) -> Option<PoolOrders> {
+			LiquidityPools::pool_orders(base_asset, pair_asset, &lp)
+		}
+
+		fn cf_pool_range_order_liquidity_value(
+			base_asset: Asset,
+			pair_asset: Asset,
+			tick_range: Range<Tick>,
+			liquidity: Liquidity,
+		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
+			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
+		}
+
 		fn cf_environment() -> runtime_apis::Environment {
 			runtime_apis::Environment {
 				bitcoin_network: Environment::network_environment().into(),
@@ -1021,22 +1071,8 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_get_pool(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
-			LiquidityPools::get_pool(asset)
-		}
-
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
-		}
-
-		fn cf_estimate_liquidity_from_range_order(
-			asset: Asset,
-			lower: Tick,
-			upper: Tick,
-			unstable_amount: AssetAmount,
-			stable_amount: AssetAmount,
-		) -> Result<Liquidity, PoolQueryError<AmountsToLiquidityError>> {
-			LiquidityPools::estimate_liquidity_from_range_order(asset, lower, upper, unstable_amount, stable_amount)
 		}
 	}
 

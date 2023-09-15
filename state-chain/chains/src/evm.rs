@@ -18,11 +18,14 @@ use frame_support::sp_runtime::{
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
+	type UtxoChain = ConstBool<false>;
+
 	type AggKey = evm::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
@@ -415,7 +418,7 @@ impl Transaction {
 		Ok(())
 	}
 
-	/// Returns an error if any of the recovered transactoin parameters do not match those specified
+	/// Returns an error if any of the recovered transaction parameters do not match those specified
 	/// in the original [Transaction].
 	///
 	/// See [CheckedTransactionParameter].

@@ -21,7 +21,7 @@ use subxt::{
 };
 
 use anyhow::Result;
-use utilities::make_periodic_tick;
+use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
 use crate::constants::DOT_AVERAGE_BLOCK_TIME;
 
@@ -30,7 +30,7 @@ use super::rpc::DotRpcApi;
 pub struct PolkadotHttpClient(HttpClient);
 
 impl PolkadotHttpClient {
-	pub fn new(url: &str) -> Result<Self> {
+	pub fn new(url: &SecretUrl) -> Result<Self> {
 		let token = format!("Bearer {}", "TOKEN");
 		let mut headers = HeaderMap::new();
 		headers.insert(AUTHORIZATION, token.parse().unwrap());
@@ -80,7 +80,7 @@ pub struct DotHttpRpcClient {
 }
 
 impl DotHttpRpcClient {
-	pub fn new(url: String) -> Result<impl Future<Output = Self>> {
+	pub fn new(url: SecretUrl) -> Result<impl Future<Output = Self>> {
 		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
 
 		Ok(async move {
@@ -98,7 +98,7 @@ impl DotHttpRpcClient {
 					Err(e) => {
 						tracing::error!(
 						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE
-						configuration file. Retrying in {:?}...", 			
+						configuration file. Retrying in {:?}...",
 						poll_interval.period()
 					);
 					},
@@ -201,8 +201,7 @@ mod tests {
 	#[ignore = "requires local node"]
 	#[tokio::test]
 	async fn test_http_rpc() {
-		let url = "http://localhost:9945";
-		let dot_http_rpc = DotHttpRpcClient::new(url.to_string()).unwrap().await;
+		let dot_http_rpc = DotHttpRpcClient::new("http://localhost:9945".into()).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

@@ -11,7 +11,7 @@ import {
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 import { approveErc20 } from './approve_erc20';
 
-export async function fundFlip(address: string, flipAmount: string) {
+export async function fundFlip(scAddress: string, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
@@ -34,26 +34,32 @@ export async function fundFlip(address: string, flipAmount: string) {
     ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'),
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const options: any = {
+  const networkOptions = {
     signer: wallet,
     network: 'localnet',
     stateChainGatewayContractAddress: gatewayContractAddress,
     flipContractAddress,
-    nonce: await getNextEthNonce(),
-  };
+  } as const;
+  const txOptions = {
+    nonce: BigInt(await getNextEthNonce()),
+  } as const;
 
-  console.log('Funding ' + flipAmount + ' FLIP to ' + address);
-  let pubkey = address;
+  console.log('Funding ' + flipAmount + ' FLIP to ' + scAddress);
+  let pubkey = scAddress;
   try {
-    pubkey = decodeFlipAddressForContract(address);
+    pubkey = decodeFlipAddressForContract(scAddress);
   } catch {
     // ignore error
   }
   if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
-  const receipt2 = await fundStateChainAccount(pubkey as HexString, flipperinoAmount, options);
+  const receipt2 = await fundStateChainAccount(
+    pubkey as HexString,
+    flipperinoAmount,
+    networkOptions,
+    txOptions,
+  );
 
   console.log(
     'Transaction complete, tx_hash: ' +

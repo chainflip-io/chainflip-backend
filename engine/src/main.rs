@@ -1,13 +1,10 @@
 use anyhow::Context;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
-	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
+	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
-	eth::{
-		retry_rpc::EthersRetryRpcClient,
-		rpc::{EthRpcClient, ReconnectSubscriptionClient},
-	},
+	dot::retry_rpc::DotRetryRpcClient,
+	eth::retry_rpc::EthersRetryRpcClient,
 	health, metrics, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -57,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			let mut start_logger_server_fn = Some(utilities::init_json_logger().await);
+			let mut start_logger_server_fn = Some(utilities::init_json_logger(settings.logging.span_lifecycle).await);
 
 			let ws_rpc_client = jsonrpsee::ws_client::WsClientBuilder::default()
 				.build(&settings.state_chain.ws_endpoint)
@@ -134,7 +131,7 @@ async fn start(
 		.await?;
 
 	state_chain_client
-		.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+		.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
 			new_version: *CFE_VERSION,
 		})
 		.await
@@ -229,21 +226,14 @@ async fn start(
 			.await
 			.expect(STATE_CHAIN_CONNECTION),
 	);
-
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
-		EthRpcClient::new(settings.eth.clone(), expected_chain_id.as_u64())?,
-		ReconnectSubscriptionClient::new(settings.eth.ws_node_endpoint, expected_chain_id),
-	);
-
-	let btc_rpc_client = BtcRpcClient::new(settings.btc)?;
-	let btc_client = BtcRetryRpcClient::new(scope, async move { btc_rpc_client });
-
-	let dot_client = DotRetryRpcClient::new(
-		scope,
-		DotHttpRpcClient::new(settings.dot.http_node_endpoint)?,
-		DotSubClient::new(&settings.dot.ws_node_endpoint),
-	);
+		settings.eth.private_key_file,
+		settings.eth.nodes,
+		expected_chain_id,
+	)?;
+	let btc_client = BtcRetryRpcClient::new(scope, settings.btc.nodes)?;
+	let dot_client = DotRetryRpcClient::new(scope, settings.dot.nodes)?;
 
 	witness::start::start(
 		scope,

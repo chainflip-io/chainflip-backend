@@ -78,7 +78,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					match event.event_parameters {
 						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_vaults::Call::<
@@ -100,7 +100,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							..
 						}) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_vaults::Call::<
@@ -146,7 +146,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_broadcast::Call::<
@@ -176,7 +176,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							message,
 						}) => {
 							state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call: Box::new(
 											pallet_cf_governance::Call::set_whitelisted_call_hash {
@@ -203,21 +203,19 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
+
 	use std::{path::PathBuf, str::FromStr};
 
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
-	use sp_core::H160;
+	use sp_core::{H160, U256};
 	use utilities::task_scope::task_scope;
 
 	use super::super::eth_source::EthSource;
 
 	use crate::{
-		eth::{
-			retry_rpc::EthersRetryRpcClient,
-			rpc::{EthRpcClient, ReconnectSubscriptionClient},
-		},
-		settings::{self},
+		eth::retry_rpc::EthersRetryRpcClient,
+		settings::{self, NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
@@ -228,31 +226,29 @@ mod tests {
 		task_scope(|scope| {
 			async {
 				let eth_settings = settings::Eth {
-					ws_node_endpoint: "ws://localhost:8546".to_string(),
-					http_node_endpoint: "http://localhost:8545".to_string(),
-					private_key_file: PathBuf::from_str(
-						"/Users/kylezs/Documents/test-keys/eth-cf-metamask",
-					)
-					.unwrap(),
+					nodes: NodeContainer {
+						primary: WsHttpEndpoints {
+							ws_node_endpoint: "ws://localhost:8546".into(),
+							http_node_endpoint: "http://localhost:8545".into(),
+						},
+						backup: None,
+					},
+					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
 				};
 
-				let rpc_client = EthRpcClient::new(eth_settings.clone(), 1337u64).unwrap();
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					rpc_client,
-					ReconnectSubscriptionClient::new(
-						eth_settings.ws_node_endpoint,
-						web3::types::U256::from(10997),
-					),
-				);
+					eth_settings.private_key_file,
+					eth_settings.nodes,
+					U256::from(1337u64),
+				)
+				.unwrap();
 
 				let (state_chain_stream, state_chain_client) =
 					StateChainClient::connect_with_account(
 						scope,
 						"ws://localhost:9944",
-						PathBuf::from_str("/Users/kylezs/Documents/test-keys/bashful-key")
-							.unwrap()
-							.as_path(),
+						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
 						AccountRole::None,
 						false,
 					)

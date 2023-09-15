@@ -256,6 +256,7 @@ where
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
@@ -271,6 +272,7 @@ where
 				transfer_param,
 				source_chain,
 				source_address,
+				gas_budget,
 				message,
 			),
 		)))
@@ -367,6 +369,12 @@ impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
 
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
+	}
+}
+
+impl<E> EthereumApi<E> {
+	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+		map_over_api_variants!(self, call, call.gas_budget())
 	}
 }
 

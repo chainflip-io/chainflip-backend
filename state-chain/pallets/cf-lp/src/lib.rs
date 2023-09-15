@@ -74,9 +74,9 @@ pub mod pallet {
 		InvalidEgressAddress,
 		// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		// An emergency withdrawal address must be set by the user for the chain before
+		// An liquidity refund address must be set by the user for the chain before
 		// deposit address can be requested.
-		NoEmergencyWithdrawalAddressRegistered,
+		NoLiquidityRefundAddressRegistered,
 		// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
 		// Withdrawals are disabled due to Safe Mode.
@@ -113,8 +113,11 @@ pub mod pallet {
 		},
 		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
+			asset: Asset,
 			deposit_address: EncodedAddress,
 			expiry_block: BlockNumberFor<T>,
+			// account the funds will be credited to upon deposit
+			account_id: T::AccountId,
 		},
 		LiquidityDepositAddressExpired {
 			address: EncodedAddress,
@@ -128,7 +131,7 @@ pub mod pallet {
 		LpTtlSet {
 			ttl: BlockNumberFor<T>,
 		},
-		EmergencyWithdrawalAddressRegistered {
+		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
 			chain: ForeignChain,
 			address: ForeignChainAddress,
@@ -175,7 +178,7 @@ pub mod pallet {
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
-	pub type EmergencyWithdrawalAddress<T: Config> = StorageDoubleMap<
+	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
 		_,
 		Identity,
 		T::AccountId,
@@ -203,11 +206,8 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(
-				EmergencyWithdrawalAddress::<T>::contains_key(
-					&account_id,
-					ForeignChain::from(asset)
-				),
-				Error::<T>::NoEmergencyWithdrawalAddressRegistered
+				LiquidityRefundAddress::<T>::contains_key(&account_id, ForeignChain::from(asset)),
+				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
 			let expiry_block =
@@ -215,7 +215,7 @@ pub mod pallet {
 
 			let (channel_id, deposit_address) =
 				T::DepositHandler::request_liquidity_deposit_address(
-					account_id,
+					account_id.clone(),
 					asset,
 					expiry_block,
 				)?;
@@ -227,8 +227,10 @@ pub mod pallet {
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
+				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				expiry_block,
+				account_id,
 			});
 
 			Ok(())
@@ -311,15 +313,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Registers an Emergency Withdrawal Address (EWA) for an account.
-		/// To request deposit address for a chain, an EWA must be registered for that chain.
+		/// Registers an Liquidity Refund Address(LRA) for an account.
+		/// To request deposit address for a chain, an LRA must be registered for that chain.
 		///
 		/// ## Events
 		///
-		/// - [On Success](Event::EmergencyWithdrawalAddressRegistered)
+		/// - [On Success](Event::LiquidityRefundAddressRegistered)
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::register_emergency_withdrawal_address())]
-		pub fn register_emergency_withdrawal_address(
+		#[pallet::weight(T::WeightInfo::register_liquidity_refund_address())]
+		pub fn register_liquidity_refund_address(
 			origin: OriginFor<T>,
 			address: EncodedAddress,
 		) -> DispatchResult {
@@ -328,13 +330,13 @@ pub mod pallet {
 			let decoded_address = T::AddressConverter::try_from_encoded_address(address)
 				.map_err(|()| Error::<T>::InvalidEncodedAddress)?;
 
-			EmergencyWithdrawalAddress::<T>::insert(
+			LiquidityRefundAddress::<T>::insert(
 				&account_id,
 				decoded_address.chain(),
 				decoded_address.clone(),
 			);
 
-			Self::deposit_event(Event::<T>::EmergencyWithdrawalAddressRegistered {
+			Self::deposit_event(Event::<T>::LiquidityRefundAddressRegistered {
 				account_id,
 				chain: decoded_address.chain(),
 				address: decoded_address,

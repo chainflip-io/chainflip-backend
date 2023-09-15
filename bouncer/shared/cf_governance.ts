@@ -15,10 +15,13 @@ const keyring = new Keyring({ type: 'sr25519' });
 
 export const snowWhite = keyring.createFromUri(snowWhiteUri);
 
-export async function submitGovernanceExtrinsic(extrinsic: SubmittableExtrinsic<'promise'>) {
+export async function submitGovernanceExtrinsic(
+  extrinsic: SubmittableExtrinsic<'promise'>,
+  preAuthorise = 0,
+) {
   return snowWhiteMutex.runExclusive(async () =>
     chainflip.tx.governance
-      .proposeGovernanceExtrinsic(extrinsic)
+      .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
       .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }

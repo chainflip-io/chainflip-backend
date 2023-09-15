@@ -7,17 +7,14 @@ use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::{
-		traits::{BlockNumberProvider, Get, Saturating},
-		DispatchError, Permill,
-	},
-	storage::with_storage_layer,
-};
+use frame_support::{pallet_prelude::*, storage::with_storage_layer};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
+use sp_runtime::{
+	traits::{BlockNumberProvider, Get, Saturating},
+	DispatchError, Permill,
+};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 #[cfg(test)]
@@ -779,8 +776,18 @@ pub mod pallet {
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
-			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)
-				.map_err(|_| bundle_input)?;
+			let bundle_output = T::SwappingApi::swap_single_leg(
+				match direction {
+					SwapLeg::FromStable => STABLE_ASSET,
+					SwapLeg::ToStable => asset,
+				},
+				match direction {
+					SwapLeg::FromStable => asset,
+					SwapLeg::ToStable => STABLE_ASSET,
+				},
+				bundle_input,
+			)
+			.map_err(|_| bundle_input)?;
 
 			for swap in swaps {
 				let swap_output = if bundle_input > 0 {
@@ -883,7 +890,7 @@ pub mod pallet {
 				ccm_swap.destination_asset,
 				ccm_output_principal,
 				ccm_swap.destination_address.clone(),
-				Some(ccm_swap.deposit_metadata),
+				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
 			);
 			if let Some(swap_id) = ccm_swap.principal_swap_id {
 				Self::deposit_event(Event::<T>::SwapEgressScheduled {

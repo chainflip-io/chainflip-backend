@@ -121,6 +121,7 @@ where
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
+		_gas_budget: <Polkadot as Chain>::ChainAmount,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Not implemented"))
@@ -189,6 +190,7 @@ pub trait CreatePolkadotVault: ApiCall<PolkadotCrypto> {
 #[scale_info(skip_type_params(E))]
 pub struct OpaqueApiCall<E> {
 	builder: PolkadotExtrinsicBuilder,
+	#[codec(skip)]
 	_environment: PhantomData<E>,
 }
 
