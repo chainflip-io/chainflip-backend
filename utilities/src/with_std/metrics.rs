@@ -155,11 +155,11 @@ macro_rules! build_counter_vec {
 /// metric there are 2 possibilities here:
 /// - a metric with some const labels value -> these metrics get created specifying the const label
 ///   values and when used we need to specify the value for the other labels
-/// 	these metrics are kept around even after being dropped, these type of metrics are used because
+///   these metrics are kept around even after being dropped, these type of metrics are used because
 /// it simplify referring some values at runtime which wouldn't be available otherwise
 /// - a metric with no const values -> these metrics are created with all the necessary labels
 ///   supplied, when interacting with them we don't have to specify any labels anymore
-/// 	when these metrics go out of scope and get dropped the label combination is also deleted (we
+///   when these metrics go out of scope and get dropped the label combination is also deleted (we
 /// won't refer to that specific combination ever again)
 macro_rules! build_counter_vec_struct {
 	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
