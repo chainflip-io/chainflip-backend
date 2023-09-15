@@ -56,20 +56,27 @@ fn call_on_threshold() {
 	});
 }
 
+/// This test is very important! It supports the assumption that the CFE witnessing may occur twice.
+/// and that if it does, we handle that correctly, by not executing the call twice.
 #[test]
 fn no_double_call_on_epoch_boundary() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
+		assert_eq!(MockEpochInfo::epoch_index(), 1);
+
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 		MockEpochInfo::next_epoch(BTreeSet::from([ALISSA, BOBSON, CHARLEMAGNE]));
-		// Vote for the same call, this time in another epoch.
+		assert_eq!(MockEpochInfo::epoch_index(), 2);
+
+		// Vote for the same call, this time in the next epoch.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
-		// Vote again, we should reach the threshold and dispatch the call.
+		// Vote again with different signer on epoch 1, we should reach the threshold and dispatch
+		// the call from epoch 1.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(BOBSON), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 

@@ -82,9 +82,9 @@ pub enum LiquidityProviderSubcommands {
 		/// Asset to deposit.
 		asset: Asset,
 	},
-	/// Register an Emergency Withdrawal Address for the given chain. An address must be
+	/// Register an Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
-	RegisterEmergencyWithdrawalAddress { chain: ForeignChain, address: String },
+	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -252,7 +252,7 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.nodes.primary.ws_node_endpoint, "ws://localhost:8545");
+		assert_eq!(settings.eth.nodes.primary.ws_node_endpoint.as_ref(), "ws://localhost:8545");
 	}
 
 	#[test]
@@ -294,21 +294,21 @@ mod tests {
 		);
 		assert_eq!(
 			opts.eth_opts.eth_ws_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.ws_node_endpoint
+			settings.eth.nodes.primary.ws_node_endpoint.as_ref()
 		);
 		assert_eq!(
 			opts.eth_opts.eth_http_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.http_node_endpoint
+			settings.eth.nodes.primary.http_node_endpoint.as_ref()
 		);
 
 		let eth_backup_node = settings.eth.nodes.backup.unwrap();
 		assert_eq!(
 			opts.eth_opts.eth_backup_ws_node_endpoint.unwrap(),
-			eth_backup_node.ws_node_endpoint
+			eth_backup_node.ws_node_endpoint.as_ref()
 		);
 		assert_eq!(
 			opts.eth_opts.eth_backup_http_node_endpoint.unwrap(),
-			eth_backup_node.http_node_endpoint
+			eth_backup_node.http_node_endpoint.as_ref()
 		);
 
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);

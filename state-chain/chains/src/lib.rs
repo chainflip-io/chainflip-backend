@@ -18,6 +18,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -51,9 +52,6 @@ pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
 	type ChainCrypto: ChainCrypto;
-
-	type KeyHandoverIsRequired: Get<bool>;
-	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
 		+ Default
@@ -138,6 +136,8 @@ pub trait Chain: Member + Parameter {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto {
+	type UtxoChain: Get<bool>;
+
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	type AggKey: MaybeSerializeDeserialize
 		+ Member
@@ -171,6 +171,28 @@ pub trait ChainCrypto {
 	/// to always trivially returning `true` for chains without handover.)
 	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
 		true
+	}
+
+	/// Determines whether threshold signatures are made with a specific fixed key, or whether the
+	/// key is refreshed if we need to retry the signature.
+	///
+	/// By default, this is true for Utxo-based chains, true otherwise.
+	fn sign_with_specific_key() -> bool {
+		Self::UtxoChain::get()
+	}
+
+	/// Determines whether the chain crypto allows for optimistic activation of new aggregate keys.
+	///
+	/// By default, this is true for Utxo-based chains, false otherwise.
+	fn optimistic_activation() -> bool {
+		Self::UtxoChain::get()
+	}
+
+	/// Determines whether the chain crypto supports key handover.
+	///
+	/// By default, this is true for Utxo-based chains, false otherwise.
+	fn key_handover_is_required() -> bool {
+		Self::UtxoChain::get()
 	}
 }
 
@@ -225,6 +247,11 @@ where
 		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
+
+	/// Calculate the Units of gas that is allowed to make this call.
+	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
+		Default::default()
+	}
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -322,6 +349,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
