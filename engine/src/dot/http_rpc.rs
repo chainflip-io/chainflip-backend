@@ -80,7 +80,10 @@ pub struct DotHttpRpcClient {
 }
 
 impl DotHttpRpcClient {
-	pub fn new(url: SecretUrl) -> Result<impl Future<Output = Self>> {
+	pub fn new(
+		url: SecretUrl,
+		expected_genesis_hash: PolkadotHash,
+	) -> Result<impl Future<Output = Self>> {
 		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
 
 		Ok(async move {
@@ -94,7 +97,16 @@ impl DotHttpRpcClient {
 				match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
 					.await
 				{
-					Ok(online_client) => break online_client,
+					Ok(online_client) => {
+						let genesis_hash = online_client.genesis_hash();
+						if genesis_hash == expected_genesis_hash {
+							break online_client
+						} else {
+							tracing::warn!(
+								"Connected to Polkadot node but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
+							)
+						}
+					},
 					Err(e) => {
 						tracing::error!(
 						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE
@@ -201,7 +213,11 @@ mod tests {
 	#[ignore = "requires local node"]
 	#[tokio::test]
 	async fn test_http_rpc() {
-		let dot_http_rpc = DotHttpRpcClient::new("http://localhost:9945".into()).unwrap().await;
+		// This will no longer work because we need to know the genesis hash
+		let dot_http_rpc =
+			DotHttpRpcClient::new("http://localhost:9945".into(), PolkadotHash::default())
+				.unwrap()
+				.await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

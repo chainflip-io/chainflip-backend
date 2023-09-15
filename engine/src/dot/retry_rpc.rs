@@ -44,11 +44,12 @@ impl DotRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_genesis_hash: PolkadotHash,
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClient::new(endpoints.http_node_endpoint)?,
-				DotSubClient::new(endpoints.ws_node_endpoint),
+				DotHttpRpcClient::new(endpoints.http_node_endpoint, expected_genesis_hash)?,
+				DotSubClient::new(endpoints.ws_node_endpoint, expected_genesis_hash),
 			))
 		};
 
@@ -306,6 +307,7 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
+				// This will no longer work because we need to know the genesis hash
 				let dot_retry_rpc_client = DotRetryRpcClient::new(
 					scope,
 					NodeContainer {
@@ -315,6 +317,7 @@ mod tests {
 						},
 						backup: None,
 					},
+					PolkadotHash::default(),
 				)
 				.unwrap();
 

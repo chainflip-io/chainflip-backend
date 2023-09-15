@@ -1,4 +1,5 @@
 use anyhow::Context;
+use cf_chains::dot::PolkadotHash;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
@@ -218,7 +219,7 @@ async fn start(
 	scope.spawn(btc_multisig_client_backend_future);
 
 	// Create all the clients
-	let expected_chain_id = web3::types::U256::from(
+	let expected_eth_chain_id = web3::types::U256::from(
 		state_chain_client
 			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
 				state_chain_client.latest_finalized_hash(),
@@ -230,10 +231,18 @@ async fn start(
 		scope,
 		settings.eth.private_key_file,
 		settings.eth.nodes,
-		expected_chain_id,
+		expected_eth_chain_id,
 	)?;
 	let btc_client = BtcRetryRpcClient::new(scope, settings.btc.nodes)?;
-	let dot_client = DotRetryRpcClient::new(scope, settings.dot.nodes)?;
+	let expected_dot_genesis_hash = PolkadotHash::from(
+		state_chain_client
+			.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
+				state_chain_client.latest_finalized_hash(),
+			)
+			.await
+			.expect(STATE_CHAIN_CONNECTION),
+	);
+	let dot_client = DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?;
 
 	witness::start::start(
 		scope,

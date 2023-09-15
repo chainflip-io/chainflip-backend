@@ -1,5 +1,6 @@
 pub mod address_checker;
 
+use anyhow::bail;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
 use utilities::redact_endpoint_secret::SecretUrl;
@@ -228,20 +229,17 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 
 		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
 		if self.chain_id != client_chain_id {
-			Err(anyhow!(
-				"Expected chain id {}, eth ws client returned {client_chain_id}.",
-				self.chain_id
-			))
-		} else {
-			Ok(ConscientiousEthWebsocketBlockHeaderStream {
-				stream: Some(
-					web3.eth_subscribe()
-						.subscribe_new_heads()
-						.await
-						.context("Failed to subscribe to new heads with WS Client")?,
-				),
-			})
+			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
+
+		Ok(ConscientiousEthWebsocketBlockHeaderStream {
+			stream: Some(
+				web3.eth_subscribe()
+					.subscribe_new_heads()
+					.await
+					.context("Failed to subscribe to new heads with WS Client")?,
+			),
+		})
 	}
 }
 
