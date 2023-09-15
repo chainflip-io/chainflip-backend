@@ -24,23 +24,33 @@ mod tests;
 const REQUEST_LIFETIME: u32 = 128;
 
 #[derive(Error, Debug)]
+pub enum ExtrinsicError<OtherError> {
+	#[error(transparent)]
+	Other(OtherError),
+	#[error(transparent)]
+	Dispatch(DispatchError),
+}
+
+pub type ExtrinsicResult<OtherError> = Result<
+	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo),
+	ExtrinsicError<OtherError>,
+>;
+
+#[derive(Error, Debug)]
 pub enum FinalizationError {
 	#[error("The requested transaction was not and will not be included in a finalized block")]
 	NotFinalized,
 }
 
+pub type FinalizationResult = ExtrinsicResult<FinalizationError>;
+
 #[derive(Error, Debug)]
-pub enum ExtrinsicError {
-	#[error(transparent)]
-	Finalization(FinalizationError),
-	#[error(transparent)]
-	Dispatch(DispatchError),
+pub enum InBlockError {
+	#[error("The requested transaction was not and will not be included in a block")]
+	NotInBlock,
 }
 
-pub type ExtrinsicResult = Result<
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo),
-	ExtrinsicError,
->;
+pub type InBlockResult = ExtrinsicResult<InBlockError>;
 
 pub type RequestID = u64;
 
@@ -51,7 +61,8 @@ pub struct Request {
 	strictly_one_submission: bool,
 	resubmit_window: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
 	call: state_chain_runtime::RuntimeCall,
-	result_sender: oneshot::Sender<ExtrinsicResult>,
+	_until_in_block_sender: Option<oneshot::Sender<InBlockResult>>,
+	until_finalized_sender: oneshot::Sender<FinalizationResult>,
 }
 
 #[derive(Debug)]
@@ -194,7 +205,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		}
 	}
 
-	pub async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
+	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		Ok(loop {
 			let nonce =
 				self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
@@ -209,7 +220,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
 		call: state_chain_runtime::RuntimeCall,
-		result_sender: oneshot::Sender<ExtrinsicResult>,
+		until_in_block_sender: oneshot::Sender<InBlockResult>,
+		until_finalized_sender: oneshot::Sender<FinalizationResult>,
 		strategy: RequestStrategy,
 	) -> Result<(), anyhow::Error> {
 		let id = requests.keys().next_back().map(|id| id + 1).unwrap_or(0);
@@ -225,7 +237,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					),
 					resubmit_window: ..=(self.finalized_block_number + 1 + REQUEST_LIFETIME),
 					call,
-					result_sender,
+					_until_in_block_sender: Some(until_in_block_sender),
+					until_finalized_sender,
 				},
 			)
 			.unwrap();
@@ -319,7 +332,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 									(not_found_matching_submission.take().unwrap(), request)
 								}) {
 							let extrinsic_events = extrinsic_events.collect::<Vec<_>>();
-							let _result = matching_request.result_sender.send({
+							let _result = matching_request.until_finalized_sender.send({
 								extrinsic_events
 									.iter()
 									.find_map(|event| match event {
@@ -376,8 +389,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						request.strictly_one_submission)
 			}) {
 				let _result = request
-					.result_sender
-					.send(Err(ExtrinsicError::Finalization(FinalizationError::NotFinalized)));
+					.until_finalized_sender
+					.send(Err(ExtrinsicError::Other(FinalizationError::NotFinalized)));
 			}
 
 			// Has to be a separate loop from the above due to not being able to await inside

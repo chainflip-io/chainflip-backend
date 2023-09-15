@@ -24,18 +24,51 @@ mod submission_watcher;
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait UntilFinalized {
-	async fn until_finalized(self) -> submission_watcher::ExtrinsicResult;
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult;
 }
 #[async_trait]
 impl<W: UntilFinalized + Send> UntilFinalized for (state_chain_runtime::Hash, W) {
-	async fn until_finalized(self) -> submission_watcher::ExtrinsicResult {
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
 		self.1.until_finalized().await
 	}
 }
-pub struct UntilFinalizedFuture(oneshot::Receiver<submission_watcher::ExtrinsicResult>);
+#[async_trait]
+impl<T: UntilInBlock + Send, W: UntilFinalized + Send> UntilFinalized for (T, W) {
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
+		self.1.until_finalized().await
+	}
+}
+
+pub struct UntilFinalizedFuture(oneshot::Receiver<submission_watcher::FinalizationResult>);
 #[async_trait]
 impl UntilFinalized for UntilFinalizedFuture {
-	async fn until_finalized(self) -> submission_watcher::ExtrinsicResult {
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
+		self.0.await.expect(OR_CANCEL)
+	}
+}
+
+// Wrapper type to avoid await.await on submits/finalize calls being possible
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait UntilInBlock {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult;
+}
+#[async_trait]
+impl<W: UntilInBlock + Send> UntilInBlock for (state_chain_runtime::Hash, W) {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult {
+		self.1.until_in_block().await
+	}
+}
+#[async_trait]
+impl<T: UntilFinalized + Send, W: UntilInBlock + Send> UntilInBlock for (W, T) {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult {
+		self.0.until_in_block().await
+	}
+}
+pub struct UntilInBlockFuture(oneshot::Receiver<submission_watcher::InBlockResult>);
+#[async_trait]
+impl UntilInBlock for UntilInBlockFuture {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult {
 		self.0.await.expect(OR_CANCEL)
 	}
 }
@@ -44,10 +77,14 @@ impl UntilFinalized for UntilFinalizedFuture {
 #[async_trait]
 pub trait SignedExtrinsicApi {
 	type UntilFinalizedFuture: UntilFinalized + Send;
+	type UntilInBlockFuture: UntilInBlock + Send;
 
 	fn account_id(&self) -> AccountId;
 
-	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, Self::UntilFinalizedFuture)
+	async fn submit_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -56,7 +93,10 @@ pub trait SignedExtrinsicApi {
 			+ Sync
 			+ 'static;
 
-	async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> Self::UntilFinalizedFuture
+	async fn finalize_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (Self::UntilInBlockFuture, Self::UntilFinalizedFuture)
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -70,7 +110,8 @@ pub struct SignedExtrinsicClient {
 	account_id: AccountId,
 	request_sender: mpsc::Sender<(
 		state_chain_runtime::RuntimeCall,
-		oneshot::Sender<submission_watcher::ExtrinsicResult>,
+		oneshot::Sender<submission_watcher::InBlockResult>,
+		oneshot::Sender<submission_watcher::FinalizationResult>,
 		submission_watcher::RequestStrategy,
 	)>,
 	_task_handle: ScopedJoinHandle<()>,
@@ -151,8 +192,8 @@ impl SignedExtrinsicClient {
 						);
 
 					utilities::loop_select! {
-						if let Some((call, result_sender, strategy)) = request_receiver.recv() => {
-							submission_watcher.new_request(&mut requests, call, result_sender, strategy).await?;
+						if let Some((call, until_in_block_sender, until_finalized_sender, strategy)) = request_receiver.recv() => {
+							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
 						} else break Ok(()),
 						if let Some((block_hash, block_header)) = state_chain_stream.next() => {
 							trace!("Received state chain block: {number} ({block_hash:x?})", number = block_header.number);
@@ -171,12 +212,16 @@ impl SignedExtrinsicClient {
 #[async_trait]
 impl SignedExtrinsicApi for SignedExtrinsicClient {
 	type UntilFinalizedFuture = UntilFinalizedFuture;
+	type UntilInBlockFuture = UntilInBlockFuture;
 
 	fn account_id(&self) -> AccountId {
 		self.account_id.clone()
 	}
 
-	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, Self::UntilFinalizedFuture)
+	async fn submit_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -185,23 +230,31 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 			+ Sync
 			+ 'static,
 	{
-		let (result_sender, result_receiver) = oneshot::channel();
+		let (until_in_block_sender, until_in_block_receiver) = oneshot::channel();
+		let (until_finalized_sender, until_finalized_receiver) = oneshot::channel();
 		(
 			send_request(&self.request_sender, |hash_sender| {
 				(
 					call.into(),
-					result_sender,
+					until_in_block_sender,
+					until_finalized_sender,
 					submission_watcher::RequestStrategy::StrictlyOneSubmission(hash_sender),
 				)
 			})
 			.await
 			.await
 			.expect(OR_CANCEL),
-			UntilFinalizedFuture(result_receiver),
+			(
+				UntilInBlockFuture(until_in_block_receiver),
+				UntilFinalizedFuture(until_finalized_receiver),
+			),
 		)
 	}
 
-	async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> Self::UntilFinalizedFuture
+	async fn finalize_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (Self::UntilInBlockFuture, Self::UntilFinalizedFuture)
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -210,15 +263,21 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 			+ Sync
 			+ 'static,
 	{
-		UntilFinalizedFuture(
-			send_request(&self.request_sender, |result_sender| {
-				(
-					call.into(),
-					result_sender,
-					submission_watcher::RequestStrategy::AllowMultipleSubmissions,
-				)
-			})
-			.await,
+		let (until_finalized_sender, until_finalized_receiver) = oneshot::channel();
+
+		(
+			UntilInBlockFuture(
+				send_request(&self.request_sender, |until_in_block_sender| {
+					(
+						call.into(),
+						until_in_block_sender,
+						until_finalized_sender,
+						submission_watcher::RequestStrategy::AllowMultipleSubmissions,
+					)
+				})
+				.await,
+			),
+			UntilFinalizedFuture(until_finalized_receiver),
 		)
 	}
 }
