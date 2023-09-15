@@ -84,12 +84,12 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipCallFilter, ChainflipHeartbeat,
+	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
+	BroadcastReadyProvider, BtcEnvironment, BtcVaultTransitionHandler, ChainAddressConverter,
+	ChainflipCallFilter, ChainflipHeartbeat, DotEnvironment, DotVaultTransitionHandler,
 	EthEnvironment, EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
-use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_vaults::Vault;
@@ -520,6 +520,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = chainflip::RuntimeSafeMode;
+	type CallPermission = chainflip::WitnesserCallPermission;
 	type CallDispatchFilter = ChainflipCallFilter;
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }

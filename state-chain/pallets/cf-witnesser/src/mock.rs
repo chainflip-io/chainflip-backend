@@ -55,12 +55,19 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode }
+impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode<()> }
 
+parameter_types! {
+	pub static AllowCall: bool = true;
+}
 pub struct MockCallFilter;
 impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
 	fn should_dispatch(_call: &RuntimeCall) -> bool {
-		matches!(MockSafeModeStorage::get().witnesser, pallet_cf_witness::PalletSafeMode::CodeGreen)
+		match MockSafeModeStorage::get().witnesser {
+			pallet_cf_witness::PalletSafeMode::CodeGreen => true,
+			pallet_cf_witness::PalletSafeMode::CodeRed => false,
+			pallet_cf_witness::PalletSafeMode::CodeAmber(()) => AllowCall::get(),
+		}
 	}
 }
 
@@ -69,6 +76,7 @@ impl pallet_cf_witness::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
+	type CallPermission = ();
 	type CallDispatchFilter = MockCallFilter;
 	type WeightInfo = ();
 }

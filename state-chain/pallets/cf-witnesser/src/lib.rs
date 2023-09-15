@@ -27,8 +27,6 @@ use frame_support::{
 };
 use sp_std::prelude::*;
 
-/// Contains permissions for different Runtime calls. Only calls allowed here can be dispatched
-/// with Witnesser origin.
 #[derive(
 	codec::Encode,
 	codec::Decode,
@@ -40,40 +38,19 @@ use sp_std::prelude::*;
 	Eq,
 	frame_support::RuntimeDebug,
 )]
-pub struct WitnesserCallPermission {
-	pub system: bool,         // system, sessions, timestamp etc.
-	pub swappings: bool,      // Swapping, pools, etc.
-	pub liquidity: bool,      // LP
-	pub rotation: bool,       // Validator, Vaults
-	pub ingress_egress: bool, // for transfering funds in and out of the chain.
-	pub broadcast: bool,      // for broadcasting messages to other chains.
-	pub others: bool,         // All other pallets
-}
-
-#[derive(
-	codec::Encode,
-	codec::Decode,
-	codec::MaxEncodedLen,
-	scale_info::TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::RuntimeDebug,
-)]
-pub enum PalletSafeMode {
+pub enum PalletSafeMode<CallPermission> {
 	CodeGreen,
 	CodeRed,
-	CodeAmber(WitnesserCallPermission),
+	CodeAmber(CallPermission),
 }
 
-impl Default for PalletSafeMode {
+impl<CallPermission> Default for PalletSafeMode<CallPermission> {
 	fn default() -> Self {
-		<PalletSafeMode as SafeMode>::CODE_GREEN
+		<PalletSafeMode<CallPermission> as SafeMode>::CODE_GREEN
 	}
 }
 
-impl SafeMode for PalletSafeMode {
+impl<CallPermission> SafeMode for PalletSafeMode<CallPermission> {
 	const CODE_RED: Self = PalletSafeMode::CodeRed;
 	const CODE_GREEN: Self = PalletSafeMode::CodeGreen;
 }
@@ -112,8 +89,11 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
 
+		/// A struct that contains permissions for different calls.
+		type CallPermission: Parameter;
+
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode<Self::CallPermission>>;
 
 		/// Filter for dispatching witnessed calls.
 		type CallDispatchFilter: CallDispatchFilter<<Self as Config>::RuntimeCall>;
