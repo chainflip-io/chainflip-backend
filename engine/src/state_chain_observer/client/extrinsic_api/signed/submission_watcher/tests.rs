@@ -104,7 +104,7 @@ async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 		strictly_one_submission: false,
 		resubmit_window: ..=1,
 		call,
-		_until_in_block_sender: Some(oneshot::channel().0),
+		until_in_block_sender: Some(oneshot::channel().0),
 		until_finalized_sender: oneshot::channel().0,
 	};
 

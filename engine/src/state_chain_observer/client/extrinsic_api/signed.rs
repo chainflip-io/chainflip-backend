@@ -197,6 +197,9 @@ impl SignedExtrinsicClient {
 						if let Some((call, until_in_block_sender, until_finalized_sender, strategy)) = request_receiver.recv() => {
 							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
 						} else break Ok(()),
+						let submission_details = submission_watcher.watch_for_submission_in_block() => {
+							submission_watcher.on_submission_in_block(&mut requests, submission_details).await?;
+						},
 						if let Some((block_hash, block_header)) = state_chain_stream.next() => {
 							trace!("Received state chain block: {number} ({block_hash:x?})", number = block_header.number);
 							submission_watcher.on_block_finalized(

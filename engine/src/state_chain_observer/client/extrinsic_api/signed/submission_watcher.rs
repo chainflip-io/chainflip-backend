@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::{anyhow, Result};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
+use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
 use sp_runtime::{traits::Hash, MultiAddress};
 use thiserror::Error;
@@ -11,6 +12,7 @@ use tracing::{debug, warn};
 use utilities::{
 	future_map::FutureMap,
 	task_scope::{self, Scope},
+	UnendingStream,
 };
 
 use crate::state_chain_observer::client::{
@@ -67,7 +69,7 @@ pub struct Request {
 	strictly_one_submission: bool,
 	resubmit_window: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
 	call: state_chain_runtime::RuntimeCall,
-	_until_in_block_sender: Option<oneshot::Sender<InBlockResult>>,
+	until_in_block_sender: Option<oneshot::Sender<InBlockResult>>,
 	until_finalized_sender: oneshot::Sender<FinalizationResult>,
 }
 
@@ -90,14 +92,9 @@ pub struct SubmissionWatcher<
 > {
 	scope: &'a Scope<'env, anyhow::Error>,
 	submissions_by_nonce: BTreeMap<state_chain_runtime::Nonce, BTreeMap<SubmissionID, Submission>>,
-	submission_status_futures: FutureMap<
-		(RequestID, SubmissionID),
-		task_scope::ScopedJoinHandle<(
-			H256,
-			Vec<state_chain_runtime::RuntimeEvent>,
-			state_chain_runtime::Header,
-		)>,
-	>,
+	#[allow(clippy::type_complexity)]
+	submission_status_futures:
+		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, usize)>>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: state_chain_runtime::Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
@@ -170,7 +167,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			};
 
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
-				Ok(_transaction_status_stream) => {
+				Ok(mut transaction_status_stream) => {
 					request.pending_submissions.insert(request.next_submission_id, nonce);
 					self.submissions_by_nonce.entry(nonce).or_default().insert(
 						request.next_submission_id,
@@ -178,7 +175,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					);
 					self.submission_status_futures.insert(
 						(request.id, request.next_submission_id),
-						self.scope.spawn_with_handle(async move { todo!() }),
+						self.scope.spawn_with_handle(async move {
+							while let Some(status) = transaction_status_stream.next().await {
+								if let TransactionStatus::InBlock((block_hash, extrinsic_index)) =
+									status?
+								{
+									return Ok(Some((block_hash, extrinsic_index)))
+								}
+							}
+
+							Ok(None)
+						}),
 					);
 					request.next_submission_id += 1;
 					break Ok(Ok(tx_hash))
@@ -270,7 +277,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					),
 					resubmit_window: ..=(self.finalized_block_number + 1 + REQUEST_LIFETIME),
 					call,
-					_until_in_block_sender: Some(until_in_block_sender),
+					until_in_block_sender: Some(until_in_block_sender),
 					until_finalized_sender,
 				},
 			)
@@ -279,6 +286,86 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		if let RequestStrategy::StrictlyOneSubmission(hash_sender) = strategy {
 			let _result = hash_sender.send(tx_hash);
 		};
+		Ok(())
+	}
+
+	fn decide_extrinsic_success<OtherError>(
+		&self,
+		tx_hash: H256,
+		extrinsic_events: Vec<state_chain_runtime::RuntimeEvent>,
+		header: state_chain_runtime::Header,
+	) -> ExtrinsicResult<OtherError> {
+		extrinsic_events
+			.iter()
+			.find_map(|event| match event {
+				state_chain_runtime::RuntimeEvent::System(
+					frame_system::Event::ExtrinsicSuccess { dispatch_info },
+				) => Some(Ok(*dispatch_info)),
+				state_chain_runtime::RuntimeEvent::System(
+					frame_system::Event::ExtrinsicFailed { dispatch_error, dispatch_info: _ },
+				) => Some(Err(ExtrinsicError::Dispatch(
+					self.error_decoder.decode_dispatch_error(*dispatch_error),
+				))),
+				_ => None,
+			})
+			.expect(SUBSTRATE_BEHAVIOUR)
+			.map(|dispatch_info| (tx_hash, extrinsic_events, header, dispatch_info))
+	}
+
+	pub async fn watch_for_submission_in_block(
+		&mut self,
+	) -> (RequestID, SubmissionID, H256, usize) {
+		loop {
+			if let ((request_id, submission_id), Some((tx_hash, extrinsic_index))) =
+				self.submission_status_futures.next_or_pending().await
+			{
+				return (request_id, submission_id, tx_hash, extrinsic_index)
+			}
+		}
+	}
+
+	pub async fn on_submission_in_block(
+		&mut self,
+		requests: &mut BTreeMap<RequestID, Request>,
+		(request_id, _submission_id, block_hash, extrinsic_index): (
+			RequestID,
+			SubmissionID,
+			H256,
+			usize,
+		),
+	) -> Result<(), anyhow::Error> {
+		if let Some(block) = self.base_rpc_client.block(block_hash).await? {
+			let extrinsic = block.block.extrinsics.get(extrinsic_index).expect(SUBSTRATE_BEHAVIOUR);
+
+			let tx_hash =
+				<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
+
+			let extrinsic_events = self
+				.base_rpc_client
+				.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
+				.await?
+				.into_iter()
+				.filter_map(|event_record| match *event_record {
+					frame_system::EventRecord {
+						phase: frame_system::Phase::ApplyExtrinsic(index),
+						event,
+						..
+					} if index as usize == extrinsic_index => Some(event),
+					_ => None,
+				})
+				.collect::<Vec<_>>();
+
+			if let Some(request) = requests.get_mut(&request_id) {
+				if let Some(until_in_block_sender) = request.until_in_block_sender.take() {
+					let _result = until_in_block_sender.send(self.decide_extrinsic_success(
+						tx_hash,
+						extrinsic_events,
+						block.block.header,
+					));
+				}
+			}
+		}
+
 		Ok(())
 	}
 
@@ -348,7 +435,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 					for (submission_id, submission) in submissions {
 						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions.remove(&submission_id);
+							request.pending_submissions.remove(&submission_id).unwrap();
+							self.submission_status_futures.remove((request.id, submission_id));
 						}
 
 						// Note: It is technically possible for a hash collision to
@@ -365,34 +453,27 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 									(not_found_matching_submission.take().unwrap(), request)
 								}) {
 							let extrinsic_events = extrinsic_events.collect::<Vec<_>>();
-							let _result = matching_request.until_finalized_sender.send({
-								extrinsic_events
-									.iter()
-									.find_map(|event| match event {
-										state_chain_runtime::RuntimeEvent::System(
-											frame_system::Event::ExtrinsicSuccess { dispatch_info },
-										) => Some(Ok(*dispatch_info)),
-										state_chain_runtime::RuntimeEvent::System(
-											frame_system::Event::ExtrinsicFailed {
-												dispatch_error,
-												dispatch_info: _,
-											},
-										) => Some(Err(ExtrinsicError::Dispatch(
-											self.error_decoder
-												.decode_dispatch_error(*dispatch_error),
-										))),
-										_ => None,
-									})
-									.expect(SUBSTRATE_BEHAVIOUR)
-									.map(|dispatch_info| {
-										(
-											tx_hash,
-											extrinsic_events,
-											block.header.clone(),
-											dispatch_info,
-										)
-									})
-							});
+							let result = self.decide_extrinsic_success(
+								tx_hash,
+								extrinsic_events,
+								block.header.clone(),
+							);
+							if let Some(until_in_block_sender) =
+								matching_request.until_in_block_sender
+							{
+								let _result = until_in_block_sender.send(
+									result.as_ref().map(Clone::clone).map_err(
+										|error| match error {
+											ExtrinsicError::Dispatch(dispatch_error) =>
+												ExtrinsicError::Dispatch(dispatch_error.clone()),
+											ExtrinsicError::Other(
+												FinalizationError::NotFinalized,
+											) => ExtrinsicError::Other(InBlockError::NotInBlock),
+										},
+									),
+								);
+							}
+							let _result = matching_request.until_finalized_sender.send(result);
 						}
 					}
 				}
@@ -406,7 +487,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 					if !alive {
 						if let Some(request) = requests.get_mut(&submission.request_id) {
-							request.pending_submissions.remove(submission_id);
+							request.pending_submissions.remove(submission_id).unwrap();
+							self.submission_status_futures.remove((request.id, *submission_id));
 						}
 					}
 
