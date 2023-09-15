@@ -326,7 +326,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 }
 
 parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_percent(0);
+	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 }
 
 impl pallet_cf_pools::Config for Runtime {
