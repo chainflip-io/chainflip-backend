@@ -5,12 +5,14 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
-	SwapOrigin,
+	assets::eth::Asset as EthAsset,
+	eth::{api::EthereumApi, EthereumTrackedData},
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, Ethereum, ExecutexSwapAndCall,
+	ForeignChain, ForeignChainAddress, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, EpochInfo, GetBlockHeight, LpBalanceApi};
+use cf_traits::{AccountRoleRegistry, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
@@ -18,13 +20,16 @@ use frame_support::{
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
+use sp_core::U256;
 use state_chain_runtime::{
-	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
-	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
+	chainflip::{
+		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
+		EthTransactionBuilder,
+	},
+	AccountRoles, EthereumChainTracking, EthereumInstance, LiquidityPools, LiquidityProvider,
+	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator,
+	Weight, Witnesser,
 };
-
-use state_chain_runtime::EthereumChainTracking;
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
@@ -211,11 +216,6 @@ fn basic_pool_setup_provision_and_swap() {
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 
-		let opened_at = EthereumChainTracking::get_block_height();
-
-		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth, opened_at },
-		));
 		System::reset_events();
 
 		let current_epoch = Validator::current_epoch();
@@ -632,6 +632,87 @@ fn failed_swaps_are_rolled_back() {
 					..
 				},
 			) => ()
+		);
+	});
+}
+
+#[test]
+fn ethereum_ccm_can_calculate_gas_limits() {
+	super::genesis::default().build().execute_with(|| {
+		let current_epoch = Validator::current_epoch();
+		let chain_state = ChainState::<Ethereum> {
+			block_height: 1,
+			tracked_data: EthereumTrackedData {
+				base_fee: 1_000_000u128,
+				priority_fee: 500_000u128,
+			},
+		};
+
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				Box::new(RuntimeCall::EthereumChainTracking(
+					pallet_cf_chain_tracking::Call::update_chain_state {
+						new_chain_state: chain_state.clone(),
+					}
+				)),
+				current_epoch
+			));
+		}
+		assert_eq!(EthereumChainTracking::chain_state(), Some(chain_state));
+
+		let make_ccm_call = |gas_budget: u128| {
+			<EthereumApi<EthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+				(ForeignChain::Ethereum, 1),
+				TransferAssetParams::<Ethereum> {
+					asset: EthAsset::Flip,
+					amount: 1_000,
+					to: Default::default(),
+				},
+				ForeignChain::Ethereum,
+				None,
+				gas_budget,
+				vec![],
+			)
+			.unwrap()
+		};
+
+		// Each unit of gas costs 2 * 1_000_000 + 500_000 = 2_500_000
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_499_999)),
+			Some(U256::from(0))
+		);
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_500_000)),
+			Some(U256::from(1))
+		);
+		// 1_000_000_000_000 / (2 * 1_000_000 + 500_000) = 400_000
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000_000u128)),
+			Some(U256::from(400_000))
+		);
+
+		// Can handle divide by zero case. Practically this should never happen.
+		let chain_state = ChainState::<Ethereum> {
+			block_height: 2,
+			tracked_data: EthereumTrackedData { base_fee: 0u128, priority_fee: 0u128 },
+		};
+
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				Box::new(RuntimeCall::EthereumChainTracking(
+					pallet_cf_chain_tracking::Call::update_chain_state {
+						new_chain_state: chain_state.clone(),
+					}
+				)),
+				current_epoch
+			));
+		}
+
+		assert_eq!(
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000u128)),
+			Some(U256::from(0))
 		);
 	});
 }
