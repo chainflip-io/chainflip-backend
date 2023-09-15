@@ -34,16 +34,12 @@ impl AllowedPubkeysWrapper {
 	}
 	fn insert(&mut self, key: XPublicKey, value: AccountId) -> Option<AccountId> {
 		let result = self.map.insert(key, value);
-		if result.is_none() {
-			self.metric.inc();
-		}
+		self.metric.set(self.map.len());
 		result
 	}
 	fn remove(&mut self, key: &XPublicKey) -> Option<AccountId> {
 		let result = self.map.remove(key);
-		if result.is_some() {
-			self.metric.dec();
-		}
+		self.metric.set(self.map.len());
 		result
 	}
 }

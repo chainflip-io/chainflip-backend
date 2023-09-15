@@ -156,7 +156,7 @@ impl ReconnectContext {
 		let delay = self.get_delay_for(&account_id);
 
 		tracing::debug!("Will reconnect to {} in {:?}", account_id, delay);
-		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len().try_into().unwrap());
+		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len());
 		tokio::spawn({
 			let sender = self.reconnect_sender.clone();
 			async move {
@@ -170,7 +170,7 @@ impl ReconnectContext {
 		if self.reconnect_delays.remove(account_id).is_some() {
 			tracing::debug!("Reconnection delay for {} is reset", account_id);
 		}
-		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len().try_into().unwrap());
+		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len());
 	}
 }
 
@@ -192,12 +192,12 @@ impl ActiveConnectionWrapper {
 		value: ConnectedOutgoingSocket,
 	) -> Option<ConnectedOutgoingSocket> {
 		let result = self.map.insert(key, value);
-		self.metric.set(self.map.len().try_into().unwrap());
+		self.metric.set(self.map.len());
 		result
 	}
 	fn remove(&mut self, key: &AccountId) -> Option<ConnectedOutgoingSocket> {
 		let result = self.map.remove(key);
-		self.metric.set(self.map.len().try_into().unwrap());
+		self.metric.set(self.map.len());
 		result
 	}
 }

@@ -35,9 +35,41 @@ fn collect_metric_to_delete() -> Vec<DeleteMetricCommand> {
 	metric_pair
 }
 
+/// wrapper used to enforce the correct conversion to i64 when setting a specific value for a gauge
+pub struct IntGaugeWrapper {
+	pub prom_metric: IntGauge,
+}
+
+impl IntGaugeWrapper {
+	fn new(name: &str, help: &str, registry: &REGISTRY) -> IntGaugeWrapper {
+		IntGaugeWrapper {
+			prom_metric: register_int_gauge_with_registry!(Opts::new(name, help), registry)
+				.expect("A duplicate metric collector has already been registered."),
+		}
+	}
+
+	pub fn inc(&self) {
+		self.prom_metric.inc();
+	}
+
+	pub fn dec(&self) {
+		self.prom_metric.dec();
+	}
+
+	pub fn set<T: TryInto<i64>>(&self, val: T)
+	where
+		<T as TryInto<i64>>::Error: std::fmt::Debug,
+	{
+		match val.try_into() {
+			Ok(val) => self.prom_metric.set(val),
+			Err(e) => tracing::error!("Conversion to i64 failed: {:?}", e),
+		}
+	}
+}
+
 /// wrapper used to enforce the correct number of labels when interacting with an IntGaugeVec
 pub struct IntGaugeVecWrapper<const N: usize> {
-	pub metric: IntGaugeVec,
+	pub prom_metric: IntGaugeVec,
 }
 
 impl<const N: usize> IntGaugeVecWrapper<N> {
@@ -48,40 +80,38 @@ impl<const N: usize> IntGaugeVecWrapper<N> {
 		registry: &REGISTRY,
 	) -> IntGaugeVecWrapper<N> {
 		IntGaugeVecWrapper {
-			metric: register_int_gauge_vec_with_registry!(Opts::new(name, help), labels, registry)
-				.unwrap(),
+			prom_metric: register_int_gauge_vec_with_registry!(
+				Opts::new(name, help),
+				labels,
+				registry
+			)
+			.expect("A duplicate metric collector has already been registered."),
 		}
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
-		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
-			m.inc();
-		};
+		self.prom_metric.get_metric_with_label_values(labels).unwrap().inc();
 	}
 
 	pub fn dec(&self, labels: &[&str; N]) {
-		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
-			m.dec();
-		};
+		self.prom_metric.get_metric_with_label_values(labels).unwrap().dec();
 	}
 
 	pub fn set<T: TryInto<i64>>(&self, labels: &[&str; N], val: T)
 	where
 		<T as TryInto<i64>>::Error: std::fmt::Debug,
 	{
-		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
-			match val.try_into() {
-				Ok(val) => m.set(val),
-				Err(e) => tracing::error!("Conversion to i64 failed: {:?}", e),
-			}
-		};
+		match val.try_into() {
+			Ok(val) => self.prom_metric.get_metric_with_label_values(labels).unwrap().set(val),
+			Err(e) => tracing::error!("Conversion to i64 failed: {:?}", e),
+		}
 	}
 }
 
 #[derive(Clone)]
 /// wrapper used to enforce the correct number of labels when interacting with an IntCounterVec
 pub struct IntCounterVecWrapper<const N: usize> {
-	pub metric: IntCounterVec,
+	pub prom_metric: IntCounterVec,
 }
 
 impl<const N: usize> IntCounterVecWrapper<N> {
@@ -92,48 +122,60 @@ impl<const N: usize> IntCounterVecWrapper<N> {
 		registry: &REGISTRY,
 	) -> IntCounterVecWrapper<N> {
 		IntCounterVecWrapper {
-			metric: register_int_counter_vec_with_registry!(
+			prom_metric: register_int_counter_vec_with_registry!(
 				Opts::new(name, help),
 				labels,
 				registry
 			)
-			.unwrap(),
+			.expect("A duplicate metric collector has already been registered."),
 		}
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
-		if let Ok(m) = self.metric.get_metric_with_label_values(labels) {
-			m.inc();
-		};
+		self.prom_metric.get_metric_with_label_values(labels).unwrap().inc();
 	}
 }
 macro_rules! build_gauge_vec {
-	($NAME:ident, $name:literal, $help:literal, $labels:tt) => {
+	($metric_ident:ident, $name:literal, $help:literal, $labels:tt) => {
 		lazy_static::lazy_static!{
-			pub static ref $NAME: IntGaugeVecWrapper<{ $labels.len() }> = IntGaugeVecWrapper::new($name, $help, &$labels, &REGISTRY);
+			pub static ref $metric_ident: IntGaugeVecWrapper<{ $labels.len() }> = IntGaugeVecWrapper::new($name, $help, &$labels, &REGISTRY);
 		}
 	}
 }
 
 macro_rules! build_counter_vec {
-	($NAME:ident, $name:literal, $help:literal, $labels:tt) => {
+	($metric_ident:ident, $name:literal, $help:literal, $labels:tt) => {
 		lazy_static::lazy_static!{
-			pub static ref $NAME: IntCounterVecWrapper<{ $labels.len() }> = IntCounterVecWrapper::new($name, $help, &$labels, &REGISTRY);
+			pub static ref $metric_ident: IntCounterVecWrapper<{ $labels.len() }> = IntCounterVecWrapper::new($name, $help, &$labels, &REGISTRY);
 		}
 	}
 }
+/// The idea behind this macro is to help to create the wrapper for the metrics at compile time,
+/// without having to specify number of labels etc, but still enforcing the correct use of the
+/// metric there are 2 possibilities here:
+/// - a metric with some const labels value -> these metrics get created specifying the const label
+///   values and when used we need to specify the value for the other labels
+/// 	these metrics are kept around even after being dropped, these type of metrics are used because
+/// it simplify referring some values at runtime which wouldn't be available otherwise
+/// - a metric with no const values -> these metrics are created with all the necessary labels
+///   supplied, when interacting with them we don't have to specify any labels anymore
+/// 	when these metrics go out of scope and get dropped the label combination is also deleted (we
+/// won't refer to that specific combination ever again)
 macro_rules! build_counter_vec_struct {
-	($NAME:ident, $structDrop:ident, $name:literal, $help:literal, $labels:tt) => {
-		build_counter_vec!($NAME, $name, $help, $labels);
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
+		build_counter_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
-		pub struct $structDrop {
-			metric: &'static $NAME,
+		pub struct $struct_ident {
+			metric: &'static $metric_ident,
 			labels: [String; { $labels.len() }],
 		}
-		impl $structDrop {
-			pub fn new(metric: &'static $NAME, labels: [String; { $labels.len() }]) -> $structDrop {
-				$structDrop { metric, labels }
+		impl $struct_ident {
+			pub fn new(
+				metric: &'static $metric_ident,
+				labels: [String; { $labels.len() }],
+			) -> $struct_ident {
+				$struct_ident { metric, labels }
 			}
 
 			pub fn inc(&self) {
@@ -141,34 +183,35 @@ macro_rules! build_counter_vec_struct {
 				self.metric.inc(&labels);
 			}
 		}
-		impl Drop for $structDrop {
+		impl Drop for $struct_ident {
 			fn drop(&mut self) {
-				let metric = self.metric.metric.clone();
+				let metric = self.metric.prom_metric.clone();
 				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
 
-				let _ = DELETE_METRIC_CHANNEL
+				DELETE_METRIC_CHANNEL
 					.0
-					.try_send(DeleteMetricCommand::CounterPair(metric, labels));
+					.try_send(DeleteMetricCommand::CounterPair(metric, labels))
+					.expect("DELETE_METRIC_CHANNEL should never be closed!");
 			}
 		}
 	};
-	($NAME:ident, $structNotDrop:ident, $name:literal, $help:literal, $labels:tt, $constLabelsNum:literal) => {
-		build_counter_vec!($NAME, $name, $help, $labels);
+	($metric_ident:ident, $structNotDrop:ident, $name:literal, $help:literal, $labels:tt, $const_labels:tt) => {
+		build_counter_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $structNotDrop {
-			metric: &'static $NAME,
-			const_labels: [&'static str; $constLabelsNum],
+			metric: &'static $metric_ident,
+			const_labels: [&'static str; { $const_labels.len() }],
 		}
 		impl $structNotDrop {
 			pub fn new(
-				metric: &'static $NAME,
-				const_labels: [&'static str; $constLabelsNum],
+				metric: &'static $metric_ident,
+				const_labels: [&'static str; { $const_labels.len() }],
 			) -> $structNotDrop {
 				$structNotDrop { metric, const_labels }
 			}
 
-			pub fn inc(&self, non_const_labels: &[&str; { $labels.len() - $constLabelsNum }]) {
+			pub fn inc(&self, non_const_labels: &[&str; { $labels.len() - $const_labels.len() }]) {
 				let labels: [&str; { $labels.len() }] = {
 					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
 					let (one, two) = whole.split_at_mut(self.const_labels.len());
@@ -186,12 +229,12 @@ lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
 	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
 
-	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).unwrap();
-	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).unwrap();
-	pub static ref P2P_RECONNECT_PEERS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_reconnect_peers", "Count the number of peers we need to reconnect to"), REGISTRY).unwrap();
-	pub static ref P2P_ACTIVE_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_active_connections", "Count the number of active connections"), REGISTRY).unwrap();
-	pub static ref P2P_ALLOWED_PUBKEYS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys"), REGISTRY).unwrap();
-	pub static ref P2P_DECLINED_CONNECTIONS: IntGauge = register_int_gauge_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), REGISTRY).unwrap();
+	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).expect("A duplicate metric collector has already been registered.");
+	pub static ref P2P_RECONNECT_PEERS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_reconnect_peers", "Count the number of peers we need to reconnect to", &REGISTRY);
+	pub static ref P2P_ACTIVE_CONNECTIONS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_active_connections", "Count the number of active connections", &REGISTRY);
+	pub static ref P2P_ALLOWED_PUBKEYS: IntGaugeWrapper = IntGaugeWrapper::new("p2p_allowed_pubkeys", "Count the number of allowed pubkeys", &REGISTRY);
+	pub static ref P2P_DECLINED_CONNECTIONS: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_declined_connections", "Count the number times we decline a connection"), &REGISTRY).expect("A duplicate metric collector has already been registered.");
 }
 
 build_gauge_vec!(
@@ -237,7 +280,7 @@ build_counter_vec_struct!(
 	"ceremony_bad_msg",
 	"Count all the bad msgs processed during a ceremony",
 	["chain", "reason"],
-	1 //number of const labels -> chain in this case
+	["chain"] //const labels
 );
 
 /// structure containing the metrics used during a ceremony
