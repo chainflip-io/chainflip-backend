@@ -44,10 +44,10 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
-	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
-	Broadcaster, CallDispatchFilter, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
+	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
+	KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -72,21 +72,6 @@ impl Chainflip for Runtime {
 	type EpochInfo = Validator;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
-}
-
-impl_runtime_safe_mode! {
-	RuntimeSafeMode,
-	pallet_cf_environment::RuntimeSafeMode<Runtime>,
-	emissions: pallet_cf_emissions::PalletSafeMode,
-	funding: pallet_cf_funding::PalletSafeMode,
-	swapping: pallet_cf_swapping::PalletSafeMode,
-	liquidity_provider: pallet_cf_lp::PalletSafeMode,
-	validator: pallet_cf_validator::PalletSafeMode,
-	pools: pallet_cf_pools::PalletSafeMode,
-	reputation: pallet_cf_reputation::PalletSafeMode,
-	vault: pallet_cf_vaults::PalletSafeMode,
-	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
-	broadcast: pallet_cf_broadcast::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -621,105 +606,5 @@ pub struct ValidatorRoleQualification;
 impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
 	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
 		AccountRoles::has_account_role(id, AccountRole::Validator)
-	}
-}
-
-/// Contains permissions for different Runtime calls.
-/// This is done through the SafeMode::CodeAmber of the Witnesser pallet.
-/// Only calls allowed here can be dispatched with Witnesser origin.
-#[derive(
-	codec::Encode,
-	codec::Decode,
-	codec::MaxEncodedLen,
-	scale_info::TypeInfo,
-	Default,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::RuntimeDebug,
-)]
-pub struct WitnesserCallPermission {
-	// Non-instantiable pallets
-	pub governance: bool,
-	pub funding: bool,
-	pub swapping: bool,
-
-	// Ethereum pallets
-	pub ethereum_broadcast: bool,
-	pub ethereum_chain_tracking: bool,
-	pub ethereum_ingress_egress: bool,
-	pub ethereum_vault: bool,
-
-	// Polkadot pallets
-	pub polkadot_broadcast: bool,
-	pub polkadot_chain_tracking: bool,
-	pub polkadot_ingress_egress: bool,
-	pub polkadot_vault: bool,
-
-	// Bitcoin pallets
-	pub bitcoin_broadcast: bool,
-	pub bitcoin_chain_tracking: bool,
-	pub bitcoin_ingress_egress: bool,
-	pub bitcoin_vault: bool,
-}
-
-impl WitnesserCallPermission {
-	pub fn allow_all() -> Self {
-		WitnesserCallPermission {
-			governance: true,
-			funding: true,
-			swapping: true,
-			ethereum_broadcast: true,
-			ethereum_chain_tracking: true,
-			ethereum_ingress_egress: true,
-			ethereum_vault: true,
-			polkadot_broadcast: true,
-			polkadot_chain_tracking: true,
-			polkadot_ingress_egress: true,
-			polkadot_vault: true,
-			bitcoin_broadcast: true,
-			bitcoin_chain_tracking: true,
-			bitcoin_ingress_egress: true,
-			bitcoin_vault: true,
-		}
-	}
-}
-
-pub struct ChainflipCallFilter;
-impl CallDispatchFilter<RuntimeCall> for ChainflipCallFilter {
-	fn should_dispatch(call: &RuntimeCall) -> bool {
-		match <RuntimeSafeMode as Get<
-			pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
-		>>::get()
-		{
-			pallet_cf_witnesser::PalletSafeMode::CodeGreen => true,
-			pallet_cf_witnesser::PalletSafeMode::CodeRed => false,
-			pallet_cf_witnesser::PalletSafeMode::CodeAmber(permission) => match call {
-				RuntimeCall::Governance(..) => permission.governance,
-				RuntimeCall::Funding(..) => permission.funding,
-				RuntimeCall::Swapping(..) => permission.swapping,
-
-				RuntimeCall::EthereumBroadcaster(..) => permission.ethereum_broadcast,
-				RuntimeCall::EthereumChainTracking(..) => permission.ethereum_chain_tracking,
-				RuntimeCall::EthereumIngressEgress(..) => permission.ethereum_ingress_egress,
-				RuntimeCall::EthereumVault(..) => permission.ethereum_vault,
-
-				RuntimeCall::PolkadotBroadcaster(..) => permission.polkadot_broadcast,
-				RuntimeCall::PolkadotChainTracking(..) => permission.polkadot_chain_tracking,
-				RuntimeCall::PolkadotIngressEgress(..) => permission.polkadot_ingress_egress,
-				RuntimeCall::PolkadotVault(..) => permission.polkadot_vault,
-
-				RuntimeCall::BitcoinBroadcaster(..) => permission.bitcoin_broadcast,
-				RuntimeCall::BitcoinChainTracking(..) => permission.bitcoin_chain_tracking,
-				RuntimeCall::BitcoinIngressEgress(..) => permission.bitcoin_ingress_egress,
-				RuntimeCall::BitcoinVault(..) => permission.bitcoin_vault,
-
-				_ => {
-					log::warn!("All witnesser calls must be controllable through `WitnesserCallPermission` during SafeMode: CodeAmber. Call: {:?}", call);
-					false
-				},
-			},
-		}
 	}
 }

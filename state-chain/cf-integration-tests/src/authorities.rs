@@ -12,7 +12,7 @@ use cf_traits::{AsyncResult, EpochInfo, SafeMode, VaultRotator, VaultStatus};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	chainflip::RuntimeSafeMode, Environment, EthereumVault, Flip, Runtime, Validator,
+	safe_mode::RuntimeSafeMode, Environment, EthereumVault, Flip, Runtime, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
