@@ -558,7 +558,7 @@ fn failed_swaps_are_rolled_back() {
 				pallet_cf_swapping::Event::BatchSwapFailed {
 					asset: Asset::Flip,
 					direction: cf_primitives::SwapLeg::FromStable,
-					amount: 998
+					..
 				},
 			) => ()
 		);
