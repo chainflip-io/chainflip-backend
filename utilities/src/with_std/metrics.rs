@@ -162,6 +162,49 @@ macro_rules! build_counter_vec {
 		}
 	}
 }
+
+macro_rules! build_gauge_vec_struct {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
+		build_gauge_vec!($metric_ident, $name, $help, $labels);
+   
+		#[derive(Clone)]
+		pub struct $struct_ident {
+			metric: &'static $metric_ident,
+			labels: [String; { $labels.len() }],
+		}
+		impl $struct_ident {
+			pub fn new(metric: &'static $metric_ident, labels: [String; { $labels.len() }]) -> $struct_ident {
+				$struct_ident { metric, labels }
+			}
+   
+			pub fn inc(&self) {
+				let labels = self.labels.each_ref().map(|s| s.as_str());
+				self.metric.inc(&labels);
+			}
+   
+			pub fn dec(&self) {
+				let labels = self.labels.each_ref().map(|s| s.as_str());
+				self.metric.dec(&labels);
+			}
+   
+			pub fn set(&self, val: i64) {
+				let labels = self.labels.each_ref().map(|s| s.as_str());
+				self.metric.set(&labels, val);
+			}
+		}
+		impl Drop for $struct_ident {
+			fn drop(&mut self) {
+				let metric = self.metric.metric.clone();
+				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
+   
+				DELETE_METRIC_CHANNEL
+					.0
+					.try_send(DeleteMetricCommand::GaugePair(metric, labels))
+					.expect("DELETE_METRIC_CHANNEL should never be closed!");
+			}
+		}
+	};
+}	
 /// The idea behind this macro is to help to create the wrapper for the metrics at compile time,
 /// without having to specify number of labels etc, but still enforcing the correct use of the
 /// metric there are 2 possibilities here:
@@ -370,7 +413,7 @@ mod test {
 
 	#[tokio::test]
 	async fn prometheus_test() {
-		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5567 };
+		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
 		let metric = create_and_register_metric();
 
 		let _ = DELETE_METRIC_CHANNEL
