@@ -90,11 +90,17 @@ impl<const N: usize> IntGaugeVecWrapper<N> {
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
-		self.prom_metric.get_metric_with_label_values(labels).unwrap().inc();
+		match self.prom_metric.get_metric_with_label_values(labels) {
+			Ok(m) => m.inc(),
+			Err(e) => tracing::error!("Failed to get the metric: {}", e),
+		}
 	}
 
 	pub fn dec(&self, labels: &[&str; N]) {
-		self.prom_metric.get_metric_with_label_values(labels).unwrap().dec();
+		match self.prom_metric.get_metric_with_label_values(labels) {
+			Ok(m) => m.dec(),
+			Err(e) => tracing::error!("Failed to get the metric: {}", e),
+		}
 	}
 
 	pub fn set<T: TryInto<i64>>(&self, labels: &[&str; N], val: T)
@@ -102,7 +108,10 @@ impl<const N: usize> IntGaugeVecWrapper<N> {
 		<T as TryInto<i64>>::Error: std::fmt::Debug,
 	{
 		match val.try_into() {
-			Ok(val) => self.prom_metric.get_metric_with_label_values(labels).unwrap().set(val),
+			Ok(val) => match self.prom_metric.get_metric_with_label_values(labels) {
+				Ok(m) => m.set(val),
+				Err(e) => tracing::error!("Failed to get the metric: {}", e),
+			},
 			Err(e) => tracing::error!("Conversion to i64 failed: {:?}", e),
 		}
 	}
@@ -132,7 +141,10 @@ impl<const N: usize> IntCounterVecWrapper<N> {
 	}
 
 	pub fn inc(&self, labels: &[&str; N]) {
-		self.prom_metric.get_metric_with_label_values(labels).unwrap().inc();
+		match self.prom_metric.get_metric_with_label_values(labels) {
+			Ok(m) => m.inc(),
+			Err(e) => tracing::error!("Failed to get the metric: {}", e),
+		}
 	}
 }
 macro_rules! build_gauge_vec {
