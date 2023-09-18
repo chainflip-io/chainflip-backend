@@ -350,6 +350,13 @@ build_gauge_vec_struct!(
 	"Measure the duration of a ceremony",
 	["ceremony_id"]
 );
+build_gauge_vec_struct!(
+	CEREMONY_TIMEOUT_MISSING_MSG,
+	CeremonyTimeoutMissingMsgDrop,
+	"ceremony_timeout_missing_msg",
+	"Measure the number of missing messages when reaching timeout",
+	["ceremony_id"]
+);
 
 /// structure containing the metrics used during a ceremony
 #[derive(Clone)]
@@ -357,6 +364,7 @@ pub struct CeremonyMetrics {
 	pub processed_messages: CeremonyProcessedMsgDrop,
 	pub bad_message: CeremonyBadMsgNotDrop,
 	pub ceremony_duration: CeremonyDurationDrop,
+	pub missing_messages: CeremonyTimeoutMissingMsgDrop,
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]

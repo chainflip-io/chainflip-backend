@@ -19,7 +19,8 @@ use utilities::{
 	format_iterator,
 	metrics::{
 		CeremonyBadMsgNotDrop, CeremonyDurationDrop, CeremonyMetrics, CeremonyProcessedMsgDrop,
-		CEREMONY_BAD_MSG, CEREMONY_DURATION, CEREMONY_PROCESSED_MSG,
+		CeremonyTimeoutMissingMsgDrop, CEREMONY_BAD_MSG, CEREMONY_DURATION, CEREMONY_PROCESSED_MSG,
+		CEREMONY_TIMEOUT_MISSING_MSG,
 	},
 };
 
@@ -143,6 +144,10 @@ where
 				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
 				ceremony_duration: CeremonyDurationDrop::new(
 					&CEREMONY_DURATION,
+					[format!("{}", ceremony_id)],
+				),
+				missing_messages: CeremonyTimeoutMissingMsgDrop::new(
+					&CEREMONY_TIMEOUT_MISSING_MSG,
 					[format!("{}", ceremony_id)],
 				),
 			},
@@ -358,13 +363,13 @@ where
 					missing_messages_from_accounts.len()
 				);
 
-			warn!(
-				missing_ids = format_iterator(missing_messages_from_accounts).to_string(),
-				"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",
-				stage.get_stage_name(),
-				missing_messages_from_accounts.len()
-			);
-
+			// warn!(
+			// 	missing_ids = format_iterator(missing_messages_from_accounts).to_string(),
+			// 	"Ceremony stage {} timed out before all messages collected ({} missing), trying to
+			// finalize current stage anyway.", 	stage.get_stage_name(),
+			// 	missing_messages_from_accounts.len()
+			// );
+			self.metrics.missing_messages.set(missing_messages_from_accounts.len());
 			self.finalize_current_stage().await
 		} else {
 			panic!("Unauthorised ceremonies cannot timeout");
