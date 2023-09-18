@@ -76,7 +76,7 @@ where
 						reward,
 						emissions_cap,
 						total_rewards,
-						sp_runtime::Rounding::Up,
+						sp_runtime::Rounding::Down,
 					)
 					.unwrap_or_default(),
 				)
