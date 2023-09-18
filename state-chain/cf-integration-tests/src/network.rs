@@ -567,6 +567,14 @@ impl Network {
 	pub fn move_forward_blocks(&mut self, n: u32) {
 		let start_block = System::block_number() + 1;
 		for block_number in start_block..(start_block + n) {
+			// Process any external events that have occurred.
+			for event in self.state_chain_gateway_contract.events() {
+				for engine in self.engines.values() {
+					engine.on_contract_event(&event);
+				}
+			}
+			self.state_chain_gateway_contract.clear();
+
 			// Inherent data.
 			let timestamp = TIMESTAMP.with_borrow_mut(|t| std::mem::replace(t, *t + SLOT_DURATION));
 			let slot = sp_consensus_aura::Slot::from_timestamp(
@@ -607,15 +615,7 @@ impl Network {
 			AllPalletsWithSystem::on_finalize(block_number);
 			AllPalletsWithSystem::integrity_test();
 
-			// Process Engine responses. Store calls into a queue and dispatch these between
-			// `on_initialize` and `on_idle`
-			for event in self.state_chain_gateway_contract.events() {
-				for engine in self.engines.values() {
-					engine.on_contract_event(&event);
-				}
-			}
-			self.state_chain_gateway_contract.clear();
-
+			// Engine reacts to events from the State Chain.
 			let events = frame_system::Pallet::<Runtime>::events()
 				.into_iter()
 				.map(|e| e.event)

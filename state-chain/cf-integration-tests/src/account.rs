@@ -4,11 +4,10 @@ use crate::network;
 use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
-use frame_support::traits::OnNewAccount;
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers, VanityNames};
-use state_chain_runtime::{AccountRoles, Reputation, Runtime, Validator};
+use state_chain_runtime::{Reputation, Runtime, Validator};
 
 #[test]
 fn account_deletion_removes_relevant_storage_items() {
@@ -29,7 +28,6 @@ fn account_deletion_removes_relevant_storage_items() {
 		);
 		testnet.move_forward_blocks(1);
 
-		AccountRoles::on_new_account(&backup_node);
 		network::Cli::register_as_validator(&backup_node);
 
 		network::setup_peer_mapping(&backup_node);
@@ -45,14 +43,6 @@ fn account_deletion_removes_relevant_storage_items() {
 		network::Cli::set_vanity_name(&backup_node, elon_vanity_name);
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert_eq!(*vanity_names.get(&backup_node).unwrap(), elon_vanity_name.as_bytes().to_vec());
-
-		// Fund the account
-		testnet.state_chain_gateway_contract.fund_account(
-			backup_node.clone(),
-			crate::genesis::GENESIS_BALANCE,
-			GENESIS_EPOCH,
-		);
-		testnet.move_forward_blocks(2);
 
 		// Redeem all
 		network::Cli::redeem(
