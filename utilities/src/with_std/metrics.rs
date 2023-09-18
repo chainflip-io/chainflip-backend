@@ -337,12 +337,20 @@ build_counter_vec_struct!(
 	["chain", "reason"],
 	["chain"] //const labels
 );
+build_gauge_vec_struct!(
+	CEREMONY_DURATION,
+	CeremonyDurationDrop,
+	"ceremony_duration",
+	"Measure the duration of a ceremony",
+	["ceremony_id"]
+);
 
 /// structure containing the metrics used during a ceremony
 #[derive(Clone)]
 pub struct CeremonyMetrics {
 	pub processed_messages: CeremonyProcessedMsgDrop,
 	pub bad_message: CeremonyBadMsgNotDrop,
+	pub ceremony_duration: CeremonyDurationDrop,
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]

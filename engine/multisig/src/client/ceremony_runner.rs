@@ -4,7 +4,7 @@ mod tests;
 use std::{
 	collections::{btree_map, BTreeMap, BTreeSet},
 	pin::Pin,
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use anyhow::Result;
@@ -19,7 +19,7 @@ use utilities::{
 	format_iterator,
 	metrics::{
 		CeremonyBadMsgNotDrop, CeremonyMetrics, CeremonyProcessedMsgDrop, CEREMONY_BAD_MSG,
-		CEREMONY_PROCESSED_MSG,
+		CEREMONY_PROCESSED_MSG, CeremonyDurationDrop, CEREMONY_DURATION, self,
 	},
 };
 
@@ -86,7 +86,7 @@ where
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
 		let mut runner = Self::new_unauthorised(outcome_sender, ceremony_id);
-
+		let ceremony_duration = Instant::now();
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
 
@@ -116,7 +116,7 @@ where
 				}
 			}
 		};
-
+		runner.metrics.ceremony_duration.set(ceremony_duration.elapsed());
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
 	}
@@ -141,6 +141,7 @@ where
 					[format!("{}", ceremony_id)],
 				),
 				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
+				ceremony_duration: CeremonyDurationDrop::new(&CEREMONY_DURATION, [format!("{}", ceremony_id)]),
 			},
 		}
 	}
