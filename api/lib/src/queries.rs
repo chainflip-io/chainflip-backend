@@ -133,7 +133,7 @@ impl QueryApi {
 
 		Ok(self
 			.state_chain_client
-			.storage_map_entry::<pallet_cf_funding::BoundAddress<state_chain_runtime::Runtime>>(
+			.storage_map_entry::<pallet_cf_funding::BoundRedeemAddress<state_chain_runtime::Runtime>>(
 				block_hash,
 				&account_id,
 			)
