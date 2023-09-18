@@ -333,7 +333,7 @@ build_counter_vec_struct!(
 	CeremonyProcessedMsgDrop,
 	"ceremony_msg",
 	"Count all the processed messages for a given ceremony",
-	["ceremony_id"]
+	["chain", "ceremony_id"]
 );
 build_counter_vec_struct!(
 	CEREMONY_BAD_MSG,
@@ -348,14 +348,14 @@ build_gauge_vec_struct!(
 	CeremonyDurationDrop,
 	"ceremony_duration",
 	"Measure the duration of a ceremony",
-	["ceremony_id"]
+	["chain", "ceremony_id"]
 );
 build_gauge_vec_struct!(
 	CEREMONY_TIMEOUT_MISSING_MSG,
 	CeremonyTimeoutMissingMsgDrop,
 	"ceremony_timeout_missing_msg",
 	"Measure the number of missing messages when reaching timeout",
-	["ceremony_id"]
+	["chain", "ceremony_id"]
 );
 
 /// structure containing the metrics used during a ceremony

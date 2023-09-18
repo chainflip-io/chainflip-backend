@@ -139,16 +139,16 @@ where
 			metrics: CeremonyMetrics {
 				processed_messages: CeremonyProcessedMsgDrop::new(
 					&CEREMONY_PROCESSED_MSG,
-					[format!("{}", ceremony_id)],
+					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
 				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
 				ceremony_duration: CeremonyDurationDrop::new(
 					&CEREMONY_DURATION,
-					[format!("{}", ceremony_id)],
+					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
 				missing_messages: CeremonyTimeoutMissingMsgDrop::new(
 					&CEREMONY_TIMEOUT_MISSING_MSG,
-					[format!("{}", ceremony_id)],
+					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
 			},
 		}
