@@ -1046,6 +1046,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					(liquidity_at_lower_tick, lower_tick, SideMap::<Amount>::default()),
 					|(liquidity, previous_tick, assets), (current_tick, liquidity_delta)| {
 						(
+							// Addition is guaranteed to never overflow, see test `max_liquidity`
 							liquidity.checked_add_signed(liquidity_delta).unwrap(),
 							*current_tick,
 							assets +
