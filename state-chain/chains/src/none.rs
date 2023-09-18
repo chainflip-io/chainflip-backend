@@ -41,6 +41,7 @@ impl ChainCrypto for NoneChainCrypto {
 	type TransactionInId = ();
 	type TransactionOutId = ();
 	type GovKey = ();
+	type Chains = ();
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,

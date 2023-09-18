@@ -163,7 +163,9 @@ impl pallet_cf_validator::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault, BitcoinVault>;
+	type KeyRotator =
+		AllKeyRotator<EthereumThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
+	type VaultActivator = AllVaultActivator<EthereumVault, PolkadotVault, BitcoinVault>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (

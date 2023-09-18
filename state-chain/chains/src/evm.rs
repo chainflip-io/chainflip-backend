@@ -31,6 +31,7 @@ impl ChainCrypto for EvmCrypto {
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
+	type Chains = EvmChains;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -46,6 +47,10 @@ impl ChainCrypto for EvmCrypto {
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
 	}
+}
+
+pub enum EvmChains {
+	Ethereum,
 }
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]

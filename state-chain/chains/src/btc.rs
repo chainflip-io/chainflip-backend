@@ -214,6 +214,8 @@ impl ChainCrypto for BitcoinCrypto {
 
 	type GovKey = Self::AggKey;
 
+	type Chains = BitcoinCryptoChains;
+
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
 		payloads: &Self::Payload,
@@ -246,6 +248,10 @@ impl ChainCrypto for BitcoinCrypto {
 	fn handover_key_matches(current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
 		new_key.previous.is_some_and(|previous| current_key.current == previous)
 	}
+}
+
+pub enum BitcoinCryptoChains {
+	Bitcoin,
 }
 
 fn verify_single_threshold_signature(

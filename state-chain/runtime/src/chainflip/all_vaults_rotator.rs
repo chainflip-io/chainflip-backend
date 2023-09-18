@@ -3,14 +3,14 @@
 use core::marker::PhantomData;
 
 use cf_primitives::EpochIndex;
-use cf_traits::{AsyncResult, VaultRotator, VaultStatus};
+use cf_traits::{AsyncResult, KeyRotator, VaultRotator, VaultStatus};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-pub struct AllVaultRotator<A, B, C> {
+pub struct AllKeyRotator<A, B, C> {
 	_phantom: PhantomData<(A, B, C)>,
 }
 
-impl<A, B, C> VaultRotator for AllVaultRotator<A, B, C>
+impl<A, B, C> KeyRotator for AllKeyRotator<A, B, C>
 where
 	A: VaultRotator,
 	B: VaultRotator<ValidatorId = A::ValidatorId>,
@@ -52,8 +52,6 @@ where
 				AsyncResult::Ready(VaultStatus::KeygenComplete)
 			} else if statuses.iter().all(|x| matches!(x, VaultStatus::KeyHandoverComplete)) {
 				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
-			} else if statuses.iter().all(|x| matches!(x, VaultStatus::RotationComplete)) {
-				AsyncResult::Ready(VaultStatus::RotationComplete)
 			} else {
 				// We currently treat an offence in one vault rotation as bad as in all rotations.
 				// We may want to change it, but this is simplest for now.
@@ -77,16 +75,52 @@ where
 		}
 	}
 
+	fn reset_vault_rotation() {
+		A::reset_vault_rotation();
+		B::reset_vault_rotation();
+		C::reset_vault_rotation();
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+		A::set_status(outcome.clone());
+		B::set_status(outcome.clone());
+		C::set_status(outcome);
+	}
+}
+
+pub struct AllVaultActivator<A, B, C> {
+	_phantom: PhantomData<(A, B, C)>,
+}
+
+impl<A, B, C> VaultActivator for AllVaultActivator<A, B, C>
+where
+	A: VaultRotator,
+	B: VaultRotator<ValidatorId = A::ValidatorId>,
+	C: VaultRotator<ValidatorId = A::ValidatorId>,
+{
+	type ValidatorId = A::ValidatorId;
+
 	fn activate() {
 		A::activate();
 		B::activate();
 		C::activate();
 	}
 
-	fn reset_vault_rotation() {
-		A::reset_vault_rotation();
-		B::reset_vault_rotation();
-		C::reset_vault_rotation();
+	fn status() -> AsyncResult<()> {
+		let async_results = [A::status(), B::status(), C::status()];
+
+		// if any of the inner rotations are void, then the overall vault rotation result is void.
+		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
+			return AsyncResult::Void
+		}
+
+		// We must wait for all chains to be activated
+		if async_results.iter().all(|item| matches!(item, AsyncResult::Ready(..))) {
+			AsyncResult::Ready(())
+		} else {
+			AsyncResult::Pending
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

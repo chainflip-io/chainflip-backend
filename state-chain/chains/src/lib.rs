@@ -157,6 +157,9 @@ pub trait ChainCrypto {
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
+	/// The list of chains that use this ChainCrypto type
+	type Chains;
+
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
 		payload: &Self::Payload,

@@ -291,6 +291,7 @@ impl ChainCrypto for PolkadotCrypto {
 	type TransactionOutId = PolkadotSignature;
 
 	type GovKey = PolkadotPublicKey;
+	type Chains = PolkadotCryptoChains;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -303,6 +304,10 @@ impl ChainCrypto for PolkadotCrypto {
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
 	}
+}
+
+pub enum PolkadotCryptoChains {
+	Polkadot,
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]

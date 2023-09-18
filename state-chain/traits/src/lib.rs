@@ -10,12 +10,13 @@ pub mod mocks;
 pub mod offence_reporting;
 
 use core::fmt::Debug;
+use std::collections::HashMap;
 
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
+	address::ForeignChainAddress, evm::EvmCrypto, ApiCall, CcmChannelMetadata, CcmDepositMetadata,
+	Chain, ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -144,14 +145,13 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
-pub enum VaultStatus<ValidatorId> {
+pub enum KeyRotationStatus<ValidatorId> {
 	KeygenComplete,
 	KeyHandoverComplete,
-	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
 
-pub trait VaultRotator {
+pub trait KeyRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
@@ -169,16 +169,26 @@ pub trait VaultRotator {
 	/// Get the current rotation status.
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
-	/// Activate key/s on particular chain/s. For example, setting the new key
-	/// on the contract for a smart contract chain.
-	fn activate();
-
 	/// Reset the state associated with the current key rotation
 	/// in preparation for a new one.
 	fn reset_vault_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
+}
+
+pub trait VaultActivator {
+	type ValidatorId: Ord + Clone;
+
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<()>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate();
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_status(_outcome: AsyncResult<()>);
 }
 
 /// Handler for Epoch life cycle events.
