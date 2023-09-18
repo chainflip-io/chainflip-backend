@@ -12,7 +12,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolDepth, PoolInfo, PoolLiquidity, PoolOrders};
+use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -227,7 +227,7 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<PoolDepth, DispatchError>>>;
+	) -> RpcResult<Option<Result<AssetsMap<Depth>, DispatchError>>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
@@ -586,7 +586,7 @@ where
 		pair_asset: Asset,
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<PoolDepth, DispatchError>>> {
+	) -> RpcResult<Option<Result<AssetsMap<Depth>, DispatchError>>> {
 		self.client
 			.runtime_api()
 			.cf_pool_depth(self.unwrap_or_best(at), base_asset, pair_asset, tick_range)

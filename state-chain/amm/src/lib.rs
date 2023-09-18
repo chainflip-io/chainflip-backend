@@ -310,19 +310,34 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	pub fn limit_order_depth(
-		&self,
+		&mut self,
 		range: core::ops::Range<Tick>,
-	) -> Result<SideMap<Amount>, limit_orders::DepthError> {
+	) -> Result<SideMap<(Option<Price>, Amount)>, limit_orders::DepthError> {
 		Ok(SideMap {
-			zero: self.limit_orders.depth::<OneToZero>(range.clone())?,
-			one: self.limit_orders.depth::<ZeroToOne>(range)?,
+			zero: (
+				self.limit_orders.current_sqrt_price::<OneToZero>(),
+				self.limit_orders.depth::<OneToZero>(range.clone())?,
+			),
+			one: (
+				self.limit_orders.current_sqrt_price::<ZeroToOne>(),
+				self.limit_orders.depth::<ZeroToOne>(range)?,
+			),
 		})
 	}
 
 	pub fn range_order_depth(
 		&self,
 		range: core::ops::Range<Tick>,
-	) -> Result<SideMap<Amount>, range_orders::DepthError> {
-		self.range_orders.depth(range.start, range.end)
+	) -> Result<SideMap<(Option<Price>, Amount)>, range_orders::DepthError> {
+		self.range_orders.depth(range.start, range.end).map(|assets| SideMap {
+			zero: (
+				self.range_orders.current_sqrt_price::<OneToZero>().map(sqrt_price_to_price),
+				assets[Side::Zero],
+			),
+			one: (
+				self.range_orders.current_sqrt_price::<ZeroToOne>().map(sqrt_price_to_price),
+				assets[Side::One],
+			),
+		})
 	}
 }

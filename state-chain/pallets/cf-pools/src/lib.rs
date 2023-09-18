@@ -958,9 +958,15 @@ pub struct PoolLiquidity {
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PoolDepth {
-	pub limit_orders: AssetsMap<Amount>,
-	pub range_orders: AssetsMap<Amount>,
+pub struct SingleDepth {
+	pub price: Option<Price>,
+	pub depth: Amount,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Depth {
+	pub limit_orders: SingleDepth,
+	pub range_orders: SingleDepth,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1254,36 +1260,36 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
-	) -> Option<Result<PoolDepth, DispatchError>> {
+	) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
-		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
+		let mut pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 
-		let limit_orders = pool
-			.pool_state
-			.limit_order_depth(tick_range.clone())
-			.map_err(|error| {
-				match error {
-					limit_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
-					limit_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
-				}
-				.into()
-			})
-			.map(|side_map| asset_pair.side_map_to_assets_map(side_map));
+		let limit_orders = pool.pool_state.limit_order_depth(tick_range.clone()).map_err(|error| {
+			match error {
+				limit_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
+				limit_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
+			}
+			.into()
+		});
 
-		let range_orders = pool
-			.pool_state
-			.range_order_depth(tick_range)
-			.map_err(|error| {
-				match error {
-					range_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
-					range_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
-				}
-				.into()
-			})
-			.map(|side_map| asset_pair.side_map_to_assets_map(side_map));
+		let range_orders = pool.pool_state.range_order_depth(tick_range).map_err(|error| {
+			match error {
+				range_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
+				range_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
+			}
+			.into()
+		});
 
 		Some(limit_orders.and_then(|limit_orders| {
-			range_orders.map(|range_orders| PoolDepth { limit_orders, range_orders })
+			range_orders.map(|range_orders| {
+				asset_pair.side_map_to_assets_map(SideMap::<()>::default().map(|side, ()| {
+					let to_single_depth = |(price, depth)| SingleDepth { price, depth };
+					Depth {
+						limit_orders: to_single_depth(limit_orders[side]),
+						range_orders: to_single_depth(range_orders[side]),
+					}
+				}))
+			})
 		}))
 	}
 
