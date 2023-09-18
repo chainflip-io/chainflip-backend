@@ -149,11 +149,11 @@ impl<
 		call: RuntimeCall,
 		at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
-		self.base_rpc_client
+		Ok(self
+			.base_rpc_client
 			.raw_rpc_client
 			.dry_run(Encode::encode(&call).into(), at)
-			.await
-			.context("Error RPC query: dry_run")
+			.await?)
 	}
 }
 
