@@ -18,8 +18,8 @@ use tracing::{debug, warn, Instrument};
 use utilities::{
 	format_iterator,
 	metrics::{
-		CeremonyBadMsgNotDrop, CeremonyMetrics, CeremonyProcessedMsgDrop, CEREMONY_BAD_MSG,
-		CEREMONY_PROCESSED_MSG, CeremonyDurationDrop, CEREMONY_DURATION, self,
+		CeremonyBadMsgNotDrop, CeremonyDurationDrop, CeremonyMetrics, CeremonyProcessedMsgDrop,
+		CEREMONY_BAD_MSG, CEREMONY_DURATION, CEREMONY_PROCESSED_MSG,
 	},
 };
 
@@ -116,7 +116,7 @@ where
 				}
 			}
 		};
-		runner.metrics.ceremony_duration.set(ceremony_duration.elapsed());
+		runner.metrics.ceremony_duration.set(ceremony_duration.elapsed().as_millis());
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
 	}
@@ -141,7 +141,10 @@ where
 					[format!("{}", ceremony_id)],
 				),
 				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
-				ceremony_duration: CeremonyDurationDrop::new(&CEREMONY_DURATION, [format!("{}", ceremony_id)]),
+				ceremony_duration: CeremonyDurationDrop::new(
+					&CEREMONY_DURATION,
+					[format!("{}", ceremony_id)],
+				),
 			},
 		}
 	}
