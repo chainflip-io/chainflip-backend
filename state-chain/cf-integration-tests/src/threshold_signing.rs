@@ -98,10 +98,6 @@ where
 		}
 	}
 
-	pub fn current_agg_key(&self) -> AggKey {
-		self.key_components.agg_key()
-	}
-
 	pub fn propose_new_key(&mut self) -> AggKey {
 		let new_key = KeyComponents::generate_next(&self.key_components);
 		let agg_key = new_key.agg_key();
@@ -205,7 +201,10 @@ impl KeyUtils for BtcKeyComponents {
 	}
 
 	fn generate_next(&self) -> Self {
-		Self::generate(self.seed + 1, self.epoch_index + 1)
+		let prev_agg_key = self.agg_key.current;
+		let mut generated = Self::generate(self.seed + 1, self.epoch_index + 1);
+		generated.agg_key.previous = Some(prev_agg_key);
+		generated
 	}
 
 	fn agg_key(&self) -> Self::AggKey {

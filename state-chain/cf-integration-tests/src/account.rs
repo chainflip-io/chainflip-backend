@@ -44,6 +44,7 @@ fn account_deletion_removes_relevant_storage_items() {
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert_eq!(*vanity_names.get(&backup_node).unwrap(), elon_vanity_name.as_bytes().to_vec());
 
+		// Redeem all
 		network::Cli::redeem(
 			&backup_node,
 			RedemptionAmount::Max,
