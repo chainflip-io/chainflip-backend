@@ -3,7 +3,7 @@ use crate::{
 	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
 
-use frame_support::assert_ok;
+use frame_support::{assert_err, assert_ok};
 use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
@@ -12,8 +12,8 @@ use cf_traits::{AsyncResult, EpochInfo, SafeMode, VaultRotator, VaultStatus};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	chainflip::RuntimeSafeMode, BitcoinVault, Environment, EthereumVault, Flip, PolkadotVault,
-	Runtime, RuntimeOrigin, Validator,
+	chainflip::RuntimeSafeMode, BitcoinVault, Environment, EthereumInstance, EthereumVault, Flip,
+	PolkadotInstance, PolkadotVault, Runtime, RuntimeOrigin, Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -446,6 +446,22 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 					BitcoinVault::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
+				assert_err!(
+					EthereumVault::report_key_handover_outcome(
+						RuntimeOrigin::signed(validator.clone()),
+						EthereumVault::ceremony_id_counter(),
+						Err(BTreeSet::default()),
+					),
+					pallet_cf_vaults::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
+				);
+				assert_err!(
+					PolkadotVault::report_key_handover_outcome(
+						RuntimeOrigin::signed(validator.clone()),
+						EthereumVault::ceremony_id_counter(),
+						Err(BTreeSet::default()),
+					),
+					pallet_cf_vaults::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
+				);
 			});
 
 			testnet.move_forward_blocks(1);

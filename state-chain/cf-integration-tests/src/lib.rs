@@ -26,9 +26,9 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
 use state_chain_runtime::{
-	chainflip::all_vaults_rotator::AllVaultRotator, constants::common::*, opaque::SessionKeys,
-	AccountId, BitcoinVault, Emissions, EthereumVault, Flip, Funding, Governance, PolkadotVault,
-	Reputation, Runtime, RuntimeOrigin, System, Validator,
+	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
+	Flip, Funding, Governance, PolkadotVault, Reputation, Runtime, RuntimeOrigin, System,
+	Validator,
 };
 
 type NodeId = AccountId32;
@@ -67,4 +67,4 @@ pub enum ChainflipAccountState {
 	Backup,
 }
 
-pub type AllVaults = AllVaultRotator<EthereumVault, PolkadotVault, BitcoinVault>;
+pub type AllVaults = <Runtime as pallet_cf_validator::Config>::VaultRotator;
