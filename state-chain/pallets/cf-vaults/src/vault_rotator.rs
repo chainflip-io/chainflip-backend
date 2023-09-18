@@ -98,10 +98,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						Self::deposit_event(Event::<T, I>::NoKeyHandover);
 					},
 				},
-			_ => {
-				// We can fall into here if other vault's key handover failed,
-				// and we need to restart the key handover.
-				log::info!("Key handover initiated but current vault rotation is not after `KeygenVerificationComplete` or `KeyHandoverFailed`");
+			Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { .. }) => {
+				log::info!(
+					target: Pallet::<T, I>::name(),
+					"Key handover already complete."
+				);
+			},
+			other => {
+				log_or_panic!("Key handover initiated during invalid state {:?}.", other);
 			},
 		}
 	}
