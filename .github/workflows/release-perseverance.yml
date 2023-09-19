@@ -42,6 +42,7 @@ jobs:
     secrets: inherit
     with:
       network: perseverance
+      discord_url: ${{ secrets.CF_DISCORD_WH_NETWORK_PERSEVERANCE }}
   release:
     needs: [publish]
     uses: ./.github/workflows/_50_release.yml

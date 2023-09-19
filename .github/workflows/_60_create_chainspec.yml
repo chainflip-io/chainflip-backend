@@ -4,11 +4,15 @@ on:
       network:
         required: true
         type: string
+      discord_url:
+        required: true
+        type: string
 
 permissions:
   id-token: write
   contents: write
   actions: write
+  pull-requests: write
 
 jobs:
   create:
@@ -54,11 +58,12 @@ jobs:
         id: create-pr
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           commit-message: "Create chainspec for ${{ inputs.network }}"
           title: "Create chainspec for ${{ inputs.network }}"
           body: "This PR was automatically created by the `create-chainspec` workflow."
           branch: chainspec/${{ inputs.network }}-${{ env.DATE }}
+          committer: cf-bot <dev@chainflip.io>
           add-paths: |
             state-chain/node/chainspecs/*.json
 
@@ -77,3 +82,14 @@ jobs:
         if: steps.check-chainspec-exists.outcome == 'failure'
         run: |
           echo "No chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failed bouncer
+        env:
+          DISCORD_WEBHOOK: ${{ inputs.discord_url }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
+            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            #️⃣ Tagging: <@&939151218708709416>
+            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif

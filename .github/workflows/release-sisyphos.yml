@@ -45,6 +45,7 @@ jobs:
     secrets: inherit
     with:
       network: sisyphos
+      discord_url: ${{ secrets.CF_DISCORD_WH_NETWORK_SISYPHOS }}
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
