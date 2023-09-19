@@ -429,9 +429,14 @@ impl<T: Config> Pallet<T> {
 				(!available_utxos.is_empty()).then_some(available_utxos).map(|available_utxos| {
 					(
 						available_utxos.clone(),
-						available_utxos.iter().map(|Utxo { amount, .. }| *amount).sum::<u64>() -
-							(available_utxos.len() as u64) * fee_per_input_utxo -
-							fee_per_output_utxo - min_fee_required_per_tx,
+						available_utxos
+							.iter()
+							.map(|Utxo { amount, .. }| *amount)
+							.sum::<u64>()
+							.saturating_sub(
+								((available_utxos.len() as u64) * fee_per_input_utxo) +
+									fee_per_output_utxo + min_fee_required_per_tx,
+							),
 					)
 				})
 			},

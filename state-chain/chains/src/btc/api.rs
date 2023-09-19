@@ -87,6 +87,10 @@ where
 		let (all_input_utxos, change_amount) = E::lookup(UtxoSelectionType::SelectAllForRotation)
 			.ok_or(SetAggKeyWithAggKeyError::NotRequired)?;
 
+		if change_amount == 0 {
+			return Err(SetAggKeyWithAggKeyError::NotRequired)
+		}
+
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			&maybe_old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?,
 			new_key.current,
