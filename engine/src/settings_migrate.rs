@@ -7,8 +7,8 @@
 // # Ethereum private key file path. Default is the docker secrets path. This file should contain a
 // hex-encoded private key.
 // private_key_file = "./localnet/init/keys/eth_private_key_file"
-// ws_node_endpoint = "ws://localhost:8546"
-// http_node_endpoint = "http://localhost:8545"
+// ws_endpoint = "ws://localhost:8546"
+// http_endpoint = "http://localhost:8545"
 //
 // After:
 //
@@ -17,18 +17,19 @@
 // hex-encoded private key.
 // private_key_file = "./localnet/init/keys/eth_private_key_file"
 // [eth.node]
-// ws_node_endpoint = "ws://localhost:8546"
-// http_node_endpoint = "http://localhost:8545"
+// ws_endpoint = "ws://localhost:8546"
+// http_endpoint = "http://localhost:8545"
 
 use std::{fs, path::PathBuf};
 
-use toml::Table;
+use toml::{map::Map, Table, Value};
 
 use anyhow::{Context, Result};
 
 const PRIVATE_KEY_FILE: &str = "private_key_file";
-const WS_NODE_ENDPOINT: &str = "ws_node_endpoint";
-const HTTP_NODE_ENDPOINT: &str = "http_node_endpoint";
+const WS_ENDPOINT: &str = "ws_endpoint";
+const HTTP_ENDPOINT: &str = "http_endpoint";
+const RPC: &str = "rpc";
 
 pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	let settings_file = PathBuf::from(config_root).join("config/Settings.toml");
@@ -49,8 +50,7 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	// These have the same "node" configs
 	for chain in ["eth", "dot"] {
 		let chain_should_migrate = if let Some(chain_settings) = old_settings_table.get(chain) {
-			chain_settings.get(WS_NODE_ENDPOINT).is_some() ||
-				chain_settings.get(HTTP_NODE_ENDPOINT).is_some()
+			chain_settings.get(WS_ENDPOINT).is_some() || chain_settings.get(HTTP_ENDPOINT).is_some()
 		} else {
 			false
 		};
@@ -58,7 +58,7 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	}
 	migrate = migrate ||
 		if let Some(btc_settings) = old_settings_table.get("btc") {
-			btc_settings.get(HTTP_NODE_ENDPOINT).is_some() ||
+			btc_settings.get(HTTP_ENDPOINT).is_some() ||
 				btc_settings.get("rpc_user").is_some() ||
 				btc_settings.get("rpc_password").is_some()
 		} else {
@@ -85,17 +85,17 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 		// nested by "node"
 		let mut node_map_has_value = false;
 		let mut node_map = Table::new();
-		if let Some(ws_node_endpoint) = old_eth_map.get(WS_NODE_ENDPOINT) {
-			node_map.insert(WS_NODE_ENDPOINT.to_string(), ws_node_endpoint.clone());
+		if let Some(ws_endpoint) = old_eth_map.get(WS_ENDPOINT) {
+			node_map.insert(WS_ENDPOINT.to_string(), ws_endpoint.clone());
 			node_map_has_value = true;
 		}
-		if let Some(http_node_endpoint) = old_eth_map.get(HTTP_NODE_ENDPOINT) {
-			node_map.insert(HTTP_NODE_ENDPOINT.to_string(), http_node_endpoint.clone());
+		if let Some(http_endpoint) = old_eth_map.get(HTTP_ENDPOINT) {
+			node_map.insert(HTTP_ENDPOINT.to_string(), http_endpoint.clone());
 			node_map_has_value = true;
 		}
 
 		if node_map_has_value {
-			eth_map.insert("node".to_string(), toml::Value::Table(node_map));
+			eth_map.insert(RPC.to_string(), toml::Value::Table(node_map));
 		}
 
 		new_settings_table.insert("eth".to_string(), toml::Value::Table(eth_map));
@@ -105,11 +105,13 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	for chain in ["btc", "dot"] {
 		if let Some(old_chain_map) = old_settings_table.get(chain).cloned() {
 			let mut new_node_map = Table::new();
-			new_node_map.insert("node".to_string(), old_chain_map.clone());
+			new_node_map.insert(RPC.to_string(), old_chain_map.clone());
 
 			new_settings_table.insert(chain.to_string(), toml::Value::Table(new_node_map));
 		}
 	}
+
+	remove_node_from_endpoint_names(&mut new_settings_table);
 
 	fs::write(
 		settings_file,
@@ -118,4 +120,29 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	.context("Unable to write to {settings_file} for migration")?;
 
 	Ok(())
+}
+
+fn remove_node_from_endpoint_names(settings_table: &mut Map<String, Value>) {
+	for chain in ["eth", "dot", "btc"] {
+		if let Some(chain_settings) = settings_table.get_mut(chain) {
+			if let Some(rpc_settings) = chain_settings.get_mut(RPC) {
+				if let Some(rpc_settings_table) = rpc_settings.as_table_mut() {
+					if let Some(ws_endpoint) = rpc_settings_table.remove(WS_ENDPOINT) {
+						rpc_settings_table.insert("ws_endpoint".to_string(), ws_endpoint);
+					}
+					if let Some(http_endpoint) = rpc_settings_table.remove(HTTP_ENDPOINT) {
+						rpc_settings_table.insert("http_endpoint".to_string(), http_endpoint);
+					}
+				}
+			}
+		}
+	}
+}
+
+#[test]
+fn take_backup() {
+	migrate_settings0_9_2_to_0_9_3(
+		"/Users/kylezs/Documents/cf-repos/chainflip-backend/engine/config/testing2/".to_string(),
+	)
+	.unwrap();
 }

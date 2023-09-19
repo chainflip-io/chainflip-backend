@@ -21,8 +21,10 @@ data:
     [eth]
     # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
     private_key_file = "{{ .Values.engine.settings.eth.private_key_file }}"
-    ws_node_endpoint = "{{ .Values.engine.settings.eth.ws_node_endpoint | default "ws://geth-node-service:8546" }}"
-    http_node_endpoint = "{{ .Values.engine.settings.eth.http_node_endpoint | default "http://geth-node-service:8545" }}"
+
+    [eth.rpc]
+    ws_endpoint = "{{ .Values.engine.settings.eth.ws_endpoint | default "ws://geth-node-service:8546" }}"
+    http_endpoint = "{{ .Values.engine.settings.eth.http_endpoint | default "http://geth-node-service:8545" }}"
 
     [health_check]
     hostname = "{{ .Values.engine.settings.health_check.hostname }}"
@@ -32,11 +34,11 @@ data:
     db_file = "{{ .Values.engine.settings.signing.db_file | default (printf "%s/%s" .Values.basePath "data.db" )}}"
 
     [dot]
-    ws_node_endpoint = "{{ .Values.engine.settings.dot.ws_node_endpoint | default "ws://polkadot-validator-0-node:9944" }}"
-    http_node_endpoint = "{{ .Values.engine.settings.dot.http_node_endpoint | default "http://polkadot-validator-0-node:9933" }}"
+    ws_endpoint = "{{ .Values.engine.settings.dot.ws_endpoint | default "ws://polkadot-validator-0-node:9944" }}"
+    http_endpoint = "{{ .Values.engine.settings.dot.http_endpoint | default "http://polkadot-validator-0-node:9933" }}"
 
     [btc]
-    http_node_endpoint = "{{ .Values.engine.settings.btc.http_node_endpoint | default "http://bitcoin-node:80" }}"
+    http_endpoint = "{{ .Values.engine.settings.btc.http_endpoint | default "http://bitcoin-node:80" }}"
     rpc_user = "{{ .Values.engine.settings.btc.rpc_user }}"
     rpc_password = "{{ .Values.engine.settings.btc.rpc_password }}"
 {{- end }}

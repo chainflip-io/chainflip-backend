@@ -69,7 +69,7 @@ impl BtcRpcClient {
 	pub fn new(basic_auth_endpoint: HttpBasicAuthEndpoint) -> Result<Self> {
 		Ok(Self {
 			client: Client::builder().build()?,
-			url: basic_auth_endpoint.http_node_endpoint,
+			url: basic_auth_endpoint.http_endpoint,
 			user: basic_auth_endpoint.rpc_user,
 			password: basic_auth_endpoint.rpc_password,
 		})
@@ -224,7 +224,7 @@ mod tests {
 	#[ignore = "requires local node, useful for manual testing"]
 	async fn test_btc_async() {
 		let client = BtcRpcClient::new(HttpBasicAuthEndpoint {
-			http_node_endpoint: "http://localhost:8332".into(),
+			http_endpoint: "http://localhost:8332".into(),
 			rpc_user: "flip".to_string(),
 			rpc_password: "flip".to_string(),
 		})
