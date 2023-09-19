@@ -320,11 +320,11 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	if json {
 		println!("{}", serde_json::to_string_pretty(&keys)?);
 	} else {
-		println!();
-		println!("Generated fresh Validator keys for your Chainflip Node!");
-		println!();
-		println!("{}", keys);
-		println!("{}", DISCLAIMER);
+		eprintln!();
+		eprintln!("Generated fresh Validator keys for your Chainflip Node!");
+		eprintln!();
+		eprintln!("{}", keys);
+		eprintln!("{}", DISCLAIMER);
 	}
 
 	if let Some(path) = path {
@@ -351,12 +351,14 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 			.context("Error while writing to file.")?;
 		}
 
-		println!();
-		println!("💾 Saved all secret keys to '{}'.", path.display());
-	} else if !json {
-		println!();
-		println!("💡 You can save the private key files to a directory using the --path argument:");
-		println!("💡 `chainflip-cli --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
+		eprintln!();
+		eprintln!(" 💾 Saved all secret keys to '{}'.", path.display());
+	} else {
+		eprintln!();
+		eprintln!(
+			"💡 You can save the private key files to a directory using the --path argument:"
+		);
+		eprintln!("💡 `chainflip-cli --seed-phrase $MY_SEED_PHRASE --path $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())
