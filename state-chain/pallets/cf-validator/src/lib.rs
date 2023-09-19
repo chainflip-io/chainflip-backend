@@ -415,7 +415,7 @@ pub mod pallet {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
-								Self::try_restart_key_handover(rotation_state, block_number)
+								Self::try_start_key_handover(rotation_state, block_number)
 							};
 						},
 						AsyncResult::Pending => {
@@ -1074,14 +1074,6 @@ impl<T: Config> Pallet<T> {
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
-	}
-
-	fn try_restart_key_handover(
-		rotation_state: RuntimeRotationState<T>,
-		block_number: BlockNumberFor<T>,
-	) {
-		T::VaultRotator::reset_vault_rotation();
-		Self::try_start_key_handover(rotation_state, block_number);
 	}
 
 	fn try_start_key_handover(

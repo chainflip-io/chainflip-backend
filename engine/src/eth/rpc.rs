@@ -26,10 +26,10 @@ pub struct EthRpcClient {
 impl EthRpcClient {
 	pub fn new(
 		private_key_file: PathBuf,
-		http_node_endpoint: SecretUrl,
+		http_endpoint: SecretUrl,
 		expected_chain_id: u64,
 	) -> Result<impl Future<Output = Self>> {
-		let provider = Arc::new(Provider::<Http>::try_from(http_node_endpoint.as_ref())?);
+		let provider = Arc::new(Provider::<Http>::try_from(http_endpoint.as_ref())?);
 		let wallet =
 			read_clean_and_decode_hex_str_file(&private_key_file, "Ethereum Private Key", |key| {
 				ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new)
@@ -55,7 +55,7 @@ impl EthRpcClient {
 							);
 					},
 					Err(e) => tracing::error!(
-							"Cannot connect to an Ethereum node at {http_node_endpoint} with error: {e}. Please check your CFE
+							"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. Please check your CFE
 							configuration file. Retrying...",
 						),
 				}
@@ -189,14 +189,14 @@ impl EthRpcApi for EthRpcClient {
 /// On each subscription this will create a new WS connection.
 #[derive(Clone)]
 pub struct ReconnectSubscriptionClient {
-	ws_node_endpoint: SecretUrl,
+	ws_endpoint: SecretUrl,
 	// This value comes from the SC.
 	chain_id: web3::types::U256,
 }
 
 impl ReconnectSubscriptionClient {
-	pub fn new(ws_node_endpoint: SecretUrl, chain_id: web3::types::U256) -> Self {
-		Self { ws_node_endpoint, chain_id }
+	pub fn new(ws_endpoint: SecretUrl, chain_id: web3::types::U256) -> Self {
+		Self { ws_endpoint, chain_id }
 	}
 }
 
@@ -210,9 +210,8 @@ use crate::eth::ConscientiousEthWebsocketBlockHeaderStream;
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
-		let web3 = web3::Web3::new(
-			web3::transports::WebSocket::new(self.ws_node_endpoint.as_ref()).await?,
-		);
+		let web3 =
+			web3::Web3::new(web3::transports::WebSocket::new(self.ws_endpoint.as_ref()).await?);
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
@@ -259,7 +258,7 @@ mod tests {
 
 		let client = EthRpcClient::new(
 			settings.eth.private_key_file,
-			settings.eth.nodes.primary.http_node_endpoint,
+			settings.eth.nodes.primary.http_endpoint,
 			2u64,
 		)
 		.unwrap()

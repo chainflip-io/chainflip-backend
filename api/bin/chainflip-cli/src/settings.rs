@@ -232,13 +232,13 @@ mod tests {
 
 	use super::*;
 
-	use chainflip_engine::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
+	use chainflip_engine::constants::{ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT};
 
 	pub fn set_test_env() {
 		use std::env;
 
-		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
-		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+		env::set_var(ETH_HTTP_ENDPOINT, "http://localhost:8545");
+		env::set_var(ETH_WS_ENDPOINT, "ws://localhost:8545");
 	}
 
 	#[test]
@@ -252,7 +252,7 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.nodes.primary.ws_node_endpoint.as_ref(), "ws://localhost:8545");
+		assert_eq!(settings.eth.nodes.primary.ws_endpoint.as_ref(), "ws://localhost:8545");
 	}
 
 	#[test]
@@ -270,11 +270,11 @@ mod tests {
 			},
 
 			eth_opts: EthOptions {
-				eth_ws_node_endpoint: Some("ws://endpoint2:1234".to_owned()),
-				eth_http_node_endpoint: Some("http://endpoint3:1234".to_owned()),
+				eth_ws_endpoint: Some("ws://endpoint2:1234".to_owned()),
+				eth_http_endpoint: Some("http://endpoint3:1234".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
-				eth_backup_ws_node_endpoint: Some("ws://endpoint4:1234".to_owned()),
-				eth_backup_http_node_endpoint: Some("http://endpoint5:1234".to_owned()),
+				eth_backup_ws_endpoint: Some("ws://endpoint4:1234".to_owned()),
+				eth_backup_http_endpoint: Some("http://endpoint5:1234".to_owned()),
 			},
 
 			cmd: CliCommand::Rotate {}, // Not used in this test
@@ -293,22 +293,22 @@ mod tests {
 			settings.state_chain.signing_key_file
 		);
 		assert_eq!(
-			opts.eth_opts.eth_ws_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.ws_node_endpoint.as_ref()
+			opts.eth_opts.eth_ws_endpoint.unwrap(),
+			settings.eth.nodes.primary.ws_endpoint.as_ref()
 		);
 		assert_eq!(
-			opts.eth_opts.eth_http_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.http_node_endpoint.as_ref()
+			opts.eth_opts.eth_http_endpoint.unwrap(),
+			settings.eth.nodes.primary.http_endpoint.as_ref()
 		);
 
 		let eth_backup_node = settings.eth.nodes.backup.unwrap();
 		assert_eq!(
-			opts.eth_opts.eth_backup_ws_node_endpoint.unwrap(),
-			eth_backup_node.ws_node_endpoint.as_ref()
+			opts.eth_opts.eth_backup_ws_endpoint.unwrap(),
+			eth_backup_node.ws_endpoint.as_ref()
 		);
 		assert_eq!(
-			opts.eth_opts.eth_backup_http_node_endpoint.unwrap(),
-			eth_backup_node.http_node_endpoint.as_ref()
+			opts.eth_opts.eth_backup_http_endpoint.unwrap(),
+			eth_backup_node.http_endpoint.as_ref()
 		);
 
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);

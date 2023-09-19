@@ -98,12 +98,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						Self::deposit_event(Event::<T, I>::NoKeyHandover);
 					},
 				},
-			_ => {
-				debug_assert!(
-					false,
-					"We should have completed keygen verification before starting key handover."
+			Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { .. }) => {
+				log::info!(
+					target: Pallet::<T, I>::name(),
+					"Key handover already complete."
 				);
-				log::error!("Key handover called during wrong wrong state.");
+			},
+			other => {
+				log_or_panic!("Key handover initiated during invalid state {:?}.", other);
 			},
 		}
 	}
