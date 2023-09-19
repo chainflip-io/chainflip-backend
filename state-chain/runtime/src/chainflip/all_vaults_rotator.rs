@@ -3,14 +3,14 @@
 use core::marker::PhantomData;
 
 use cf_primitives::EpochIndex;
-use cf_traits::{AsyncResult, KeyRotator, VaultRotator, VaultStatus};
+use cf_traits::{AsyncResult, VaultActivator, VaultRotator, VaultStatus};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-pub struct AllKeyRotator<A, B, C> {
+pub struct AllVaultRotator<A, B, C> {
 	_phantom: PhantomData<(A, B, C)>,
 }
 
-impl<A, B, C> KeyRotator for AllKeyRotator<A, B, C>
+impl<A, B, C> VaultRotator for AllVaultRotator<A, B, C>
 where
 	A: VaultRotator,
 	B: VaultRotator<ValidatorId = A::ValidatorId>,
@@ -81,46 +81,10 @@ where
 		C::reset_vault_rotation();
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		A::set_status(outcome.clone());
-		B::set_status(outcome.clone());
-		C::set_status(outcome);
-	}
-}
-
-pub struct AllVaultActivator<A, B, C> {
-	_phantom: PhantomData<(A, B, C)>,
-}
-
-impl<A, B, C> VaultActivator for AllVaultActivator<A, B, C>
-where
-	A: VaultRotator,
-	B: VaultRotator<ValidatorId = A::ValidatorId>,
-	C: VaultRotator<ValidatorId = A::ValidatorId>,
-{
-	type ValidatorId = A::ValidatorId;
-
-	fn activate() {
-		A::activate();
-		B::activate();
-		C::activate();
-	}
-
-	fn status() -> AsyncResult<()> {
-		let async_results = [A::status(), B::status(), C::status()];
-
-		// if any of the inner rotations are void, then the overall vault rotation result is void.
-		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
-			return AsyncResult::Void
-		}
-
-		// We must wait for all chains to be activated
-		if async_results.iter().all(|item| matches!(item, AsyncResult::Ready(..))) {
-			AsyncResult::Ready(())
-		} else {
-			AsyncResult::Pending
-		}
+	fn activate_vaults() {
+		A::activate_vaults();
+		B::activate_vaults();
+		C::activate_vaults();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -130,6 +94,48 @@ where
 		C::set_status(outcome);
 	}
 }
+
+// pub struct AllVaultActivator<A, B, C> {
+// 	_phantom: PhantomData<(A, B, C)>,
+// }
+
+// impl<A, B, C> VaultActivator for AllVaultActivator<A, B, C>
+// where
+// 	A: VaultActivator,
+// 	B: VaultActivator<ValidatorId = A::ValidatorId>,
+// 	C: VaultActivator<ValidatorId = A::ValidatorId>,
+// {
+// 	type ValidatorId = A::ValidatorId;
+
+// 	fn activate() {
+// 		A::activate();
+// 		B::activate();
+// 		C::activate();
+// 	}
+
+// 	fn status() -> AsyncResult<()> {
+// 		let async_results = [A::status(), B::status(), C::status()];
+
+// 		// if any of the inner rotations are void, then the overall vault rotation result is void.
+// 		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
+// 			return AsyncResult::Void
+// 		}
+
+// 		// We must wait for all chains to be activated
+// 		if async_results.iter().all(|item| matches!(item, AsyncResult::Ready(..))) {
+// 			AsyncResult::Ready(())
+// 		} else {
+// 			AsyncResult::Pending
+// 		}
+// 	}
+
+// 	#[cfg(feature = "runtime-benchmarks")]
+// 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+// 		A::set_status(outcome.clone());
+// 		B::set_status(outcome.clone());
+// 		C::set_status(outcome);
+// 	}
+// }
 
 #[cfg(test)]
 mod tests {

@@ -114,21 +114,29 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 				// It's at this point we want the vault to be considered ready to commit to. We
 				// don't want to commit until the other vaults are ready
 				KeyRotationStatusVariant::KeygenVerificationComplete =>
-					AsyncResult::Ready(KeyRotationStatus::KeygenComplete),
+					AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete),
 				KeyRotationStatusVariant::AwaitingKeyHandover => AsyncResult::Pending,
 				KeyRotationStatusVariant::KeyHandoverComplete =>
-					AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete),
+					AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete),
 				KeyRotationStatusVariant::KeyHandoverFailed =>
 					match PendingKeyRotation::<T, I>::get() {
 						Some(KeyRotationStatus::KeyHandoverFailed { offenders, .. }) =>
-							AsyncResult::Ready(KeyRotationStatus::Failed(offenders)),
+							AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)),
 						_ => unreachable!(
 							"Unreachable because we are in the branch for the Failed variant."
 						),
 					},
+				VaultRotationStatusVariant::AwaitingActivation => {
+					let status = T::VaultActivator::status()
+						.map_to(VaultRotationStatusOuter::RotationComplete);
+					if status.is_ready() {
+						PendingKeyRotation::<T, I>::put(KeyRotationStatus::Complete);
+					}
+					status
+				},
 				KeyRotationStatusVariant::Failed => match PendingKeyRotation::<T, I>::get() {
 					Some(KeyRotationStatus::Failed { offenders }) =>
-						AsyncResult::Ready(KeyRotationStatus::Failed(offenders)),
+						AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)),
 					_ => unreachable!(
 						"Unreachable because we are in the branch for the Failed variant."
 					),
@@ -143,6 +151,16 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 		PendingKeyRotation::<T, I>::kill();
 		KeyHandoverResolutionPendingSince::<T, I>::kill();
 		KeygenResolutionPendingSince::<T, I>::kill();
+	}
+
+	fn activate_vaults() {
+		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
+			PendingVaultRotation::<T, I>::get()
+		{
+			T::VaultActivator::activate(new_public_key);
+		} else {
+			log::error!("Vault activation called during wrong state.");
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

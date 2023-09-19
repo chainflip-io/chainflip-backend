@@ -4,7 +4,7 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{CeremonyIdProvider, GetBlockHeight, VaultActivator};
 use frame_support::sp_runtime::traits::BlockNumberProvider;
 
-impl<T: Config<I>, I: 'static> VaultActivator for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
 	/// Get the status of the current key generation
@@ -21,7 +21,7 @@ impl<T: Config<I>, I: 'static> VaultActivator for Pallet<T, I> {
 		}
 	}
 
-	fn activate() {
+	fn activate(new_public_key: AggKeyFor<T,I>) {
 			if let Some(EpochKey { key, key_state, .. }) = Self::active_epoch_key() {
 				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 					Some(key),

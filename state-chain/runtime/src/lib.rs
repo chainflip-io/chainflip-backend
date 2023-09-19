@@ -163,9 +163,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type KeyRotator =
-		AllKeyRotator<EthereumThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
-	type VaultActivator = AllVaultActivator<EthereumVault, PolkadotVault, BitcoinVault>;
+	type VaultRotator =
+		AllVaultRotator<EthereumThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
@@ -618,6 +617,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = EvmCrypto;
+	type VaultActivator = EthereumVault;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = EthereumVault;
@@ -632,6 +632,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = PolkadotCrypto;
+	type VaultActivator = PolkadotVault;
 	type KeyProvider = PolkadotVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = PolkadotVault;
@@ -646,6 +647,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = BitcoinCrypto;
+	type VaultActivator = BitcoinVault;
 	type KeyProvider = BitcoinVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = BitcoinVault;

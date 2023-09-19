@@ -121,6 +121,13 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	KeyHandoverComplete {
 		new_public_key: AggKeyFor<T, I>,
 	},
+	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
+	AwaitingActivation {
+		new_public_key: AggKeyFor<T, I>,
+	},
+	/// The key has been successfully updated on the external chain, and/or funds rotated to new
+	/// key.
+	Complete,
 	/// The rotation has failed at one of the above stages.
 	Failed {
 		offenders: BTreeSet<T::ValidatorId>,
@@ -190,7 +197,7 @@ macro_rules! handle_key_ceremony_report {
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination,
+		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination, VaultActivator,
 	};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
@@ -328,6 +335,9 @@ pub mod pallet {
 
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChainCrypto: ChainCrypto;
+
+		///
+		type VaultActivator: VaultActivator<Self::TargetChainCrypto>;
 
 		/// Signer nomination.
 		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;

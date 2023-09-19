@@ -145,13 +145,14 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
-pub enum KeyRotationStatus<ValidatorId> {
+pub enum VaultRotationStatusOuter<ValidatorId> {
 	KeygenComplete,
 	KeyHandoverComplete,
+	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
 
-pub trait KeyRotator {
+pub trait VaultRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
@@ -167,17 +168,20 @@ pub trait KeyRotator {
 	);
 
 	/// Get the current rotation status.
-	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+	fn status() -> AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>;
+
+	/// Activate key on for vaults on all chains that use this Key.
+	fn activate_vaults();
 
 	/// Reset the state associated with the current key rotation
 	/// in preparation for a new one.
 	fn reset_vault_rotation();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
+	fn set_status(_outcome: AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>);
 }
 
-pub trait VaultActivator {
+pub trait VaultActivator<C: ChainCrypto> {
 	type ValidatorId: Ord + Clone;
 
 	/// Get the current rotation status.
@@ -185,7 +189,7 @@ pub trait VaultActivator {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate();
+	fn activate(key: C::AggKey);
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);

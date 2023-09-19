@@ -94,8 +94,9 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, KeyRotationStatus, KeyRotator, VaultActivator};
+	use cf_traits::{AccountRoleRegistry, KeyRotationStatus, VaultRotator};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
+	use frame_system::Key;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
@@ -115,9 +116,7 @@ pub mod pallet {
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
-		type KeyRotator: KeyRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		type VaultActivator: VaultActivator<ValidatorId = ValidatorIdOf<Self>>;
+		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -362,7 +361,7 @@ pub mod pallet {
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::KeyRotator::status() {
+					match T::VaultRotator::status() {
 						AsyncResult::Ready(KeyRotationStatus::KeygenComplete) => {
 							Self::try_start_key_handover(rotation_state, block_number);
 						},
@@ -386,11 +385,11 @@ pub mod pallet {
 				},
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::KeyRotator::status() {
+					match T::VaultRotator::status() {
 						AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultActivator::activate();
+							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(KeyRotationStatus::Failed(offenders)) => {
@@ -430,8 +429,8 @@ pub mod pallet {
 				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultActivator::status() {
-						AsyncResult::Ready => {
+					match T::VaultRotator::status() {
+						AsyncResult::Ready(KeyRotationStatus::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
 							));
@@ -969,7 +968,7 @@ impl<T: Config> Pallet<T> {
 			target: "cf-validator",
 			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
 		);
-		T::KeyRotator::reset_vault_rotation();
+		T::VaultRotator::reset_vault_rotation();
 		Self::set_rotation_phase(RotationPhase::Idle);
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
@@ -1046,7 +1045,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
-		T::KeyRotator::reset_vault_rotation();
+		T::VaultRotator::reset_vault_rotation();
 		Self::try_start_keygen(rotation_state);
 	}
 
@@ -1062,7 +1061,7 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::abort_rotation();
 		} else {
-			T::KeyRotator::keygen(candidates, rotation_state.new_epoch_index);
+			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
@@ -1072,7 +1071,7 @@ impl<T: Config> Pallet<T> {
 		rotation_state: RuntimeRotationState<T>,
 		block_number: BlockNumberFor<T>,
 	) {
-		T::KeyRotator::reset_vault_rotation();
+		T::VaultRotator::reset_vault_rotation();
 		Self::try_start_key_handover(rotation_state, block_number);
 	}
 
@@ -1096,7 +1095,7 @@ impl<T: Config> Pallet<T> {
 			&authority_candidates,
 			block_number.unique_saturated_into(),
 		) {
-			T::KeyRotator::key_handover(
+			T::VaultRotator::key_handover(
 				sharing_participants,
 				authority_candidates,
 				rotation_state.new_epoch_index,
