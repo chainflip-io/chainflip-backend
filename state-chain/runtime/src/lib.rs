@@ -335,7 +335,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 }
 
 parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_percent(0);
+	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -932,7 +932,7 @@ impl_runtime_apis! {
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
 			let account_info_v1 = Self::cf_account_info(account_id.clone());
-			let bound_redeem_address = pallet_cf_funding::BoundAddress::<Runtime>::get(&account_id);
+			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
