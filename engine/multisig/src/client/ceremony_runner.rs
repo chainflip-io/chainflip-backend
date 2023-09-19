@@ -370,12 +370,6 @@ where
 					missing_messages_from_accounts.len()
 				);
 
-			// warn!(
-			// 	missing_ids = format_iterator(missing_messages_from_accounts).to_string(),
-			// 	"Ceremony stage {} timed out before all messages collected ({} missing), trying to
-			// finalize current stage anyway.", 	stage.get_stage_name(),
-			// 	missing_messages_from_accounts.len()
-			// );
 			self.metrics.missing_messages.set(missing_messages_from_accounts.len());
 			self.finalize_current_stage().await
 		} else {

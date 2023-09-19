@@ -3,6 +3,7 @@
 //! Returns the metrics encoded in a prometheus format
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 use super::{super::Port, task_scope};
+use crate::ArrayCollect;
 use async_channel::{unbounded, Receiver, Sender};
 use lazy_static;
 use prometheus::{
@@ -236,15 +237,12 @@ macro_rules! build_gauge_vec_struct {
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
 				self.labels.insert(non_const_labels.map(|s| s.to_string()));
-				let labels: [&str; { $labels.len() }] = {
-					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
-					let (one, two) = whole.split_at_mut(self.const_labels.len());
-					let arr_const_labels: [&str; { $const_labels.len() }] =
-						self.const_labels.each_ref().map(|s| s.as_str());
-					one.copy_from_slice(&arr_const_labels);
-					two.copy_from_slice(non_const_labels);
-					whole
-				};
+				let labels: [&str; { $labels.len() }] = self
+					.const_labels
+					.iter()
+					.map(|s| s.as_str())
+					.chain(*non_const_labels)
+					.collect_array();
 				self.metric.inc(&labels);
 			}
 
@@ -253,15 +251,12 @@ macro_rules! build_gauge_vec_struct {
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
 				self.labels.insert(non_const_labels.map(|s| s.to_string()));
-				let labels: [&str; { $labels.len() }] = {
-					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
-					let (one, two) = whole.split_at_mut(self.const_labels.len());
-					let arr_const_labels: [&str; { $const_labels.len() }] =
-						self.const_labels.each_ref().map(|s| s.as_str());
-					one.copy_from_slice(&arr_const_labels);
-					two.copy_from_slice(non_const_labels);
-					whole
-				};
+				let labels: [&str; { $labels.len() }] = self
+					.const_labels
+					.iter()
+					.map(|s| s.as_str())
+					.chain(*non_const_labels)
+					.collect_array();
 				self.metric.dec(&labels);
 			}
 
@@ -273,15 +268,12 @@ macro_rules! build_gauge_vec_struct {
 				<T as TryInto<i64>>::Error: std::fmt::Debug,
 			{
 				self.labels.insert(non_const_labels.map(|s| s.to_string()));
-				let labels: [&str; { $labels.len() }] = {
-					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
-					let (one, two) = whole.split_at_mut(self.const_labels.len());
-					let arr_const_labels: [&str; { $const_labels.len() }] =
-						self.const_labels.each_ref().map(|s| s.as_str());
-					one.copy_from_slice(&arr_const_labels);
-					two.copy_from_slice(non_const_labels);
-					whole
-				};
+				let labels: [&str; { $labels.len() }] = self
+					.const_labels
+					.iter()
+					.map(|s| s.as_str())
+					.chain(*non_const_labels)
+					.collect_array();
 				self.metric.set(&labels, val);
 			}
 		}
@@ -374,15 +366,12 @@ macro_rules! build_counter_vec_struct {
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
 				self.labels.insert(non_const_labels.map(|s| s.to_string()));
-				let labels: [&str; { $labels.len() }] = {
-					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
-					let (one, two) = whole.split_at_mut(self.const_labels.len());
-					let arr_const_labels: [&str; { $const_labels.len() }] =
-						self.const_labels.each_ref().map(|s| s.as_str());
-					one.copy_from_slice(&arr_const_labels);
-					two.copy_from_slice(non_const_labels);
-					whole
-				};
+				let labels: [&str; { $labels.len() }] = self
+					.const_labels
+					.iter()
+					.map(|s| s.as_str())
+					.chain(*non_const_labels)
+					.collect_array();
 				self.metric.inc(&labels);
 			}
 		}
