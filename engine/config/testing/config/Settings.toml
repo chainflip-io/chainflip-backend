@@ -18,8 +18,8 @@ http_endpoint = "http://my_fake_polkadot_rpc:443/<secret_key>"
 
 [btc.rpc]
 http_endpoint = "http://localhost:18443"
-rpc_user = "username"
-rpc_password = "password"
+basic_auth_user = "username"
+basic_auth_password = "password"
 
 [health_check]
 hostname = "127.0.0.1"

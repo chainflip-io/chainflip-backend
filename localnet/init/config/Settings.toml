@@ -34,14 +34,14 @@ http_endpoint = "http://localhost:9945"
 
 [btc.rpc]
 http_endpoint = "http://localhost:8332"
-rpc_user = "flip"
-rpc_password = "flip"
+basic_auth_user = "flip"
+basic_auth_password = "flip"
 
 # optional
 #[btc.backup_rpc]
 # http_endpoint = "http://localhost:8332"
-# rpc_user = "flip"
-# rpc_password = "flip"
+# basic_auth_user = "flip"
+# basic_auth_password = "flip"
 
 # optional
 [health_check]

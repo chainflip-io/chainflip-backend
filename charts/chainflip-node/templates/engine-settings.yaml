@@ -39,6 +39,6 @@ data:
 
     [btc]
     http_endpoint = "{{ .Values.engine.settings.btc.http_endpoint | default "http://bitcoin-node:80" }}"
-    rpc_user = "{{ .Values.engine.settings.btc.rpc_user }}"
-    rpc_password = "{{ .Values.engine.settings.btc.rpc_password }}"
+    basic_auth_user = "{{ .Values.engine.settings.btc.basic_auth_user }}"
+    basic_auth_password = "{{ .Values.engine.settings.btc.basic_auth_password }}"
 {{- end }}

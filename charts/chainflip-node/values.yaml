@@ -54,8 +54,8 @@ engine:
     btc:
       rpc:
         http_endpoint: ""
-        rpc_user: "flip"
-        rpc_password: "flip"
+        basic_auth_user: "flip"
+        basic_auth_password: "flip"
 
 brokerApi:
   enabled: false

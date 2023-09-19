@@ -111,8 +111,8 @@ impl Dot {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HttpBasicAuthEndpoint {
 	pub http_endpoint: SecretUrl,
-	pub rpc_user: String,
-	pub rpc_password: String,
+	pub basic_auth_user: String,
+	pub basic_auth_password: String,
 }
 
 impl ValidateSettings for HttpBasicAuthEndpoint {
@@ -215,17 +215,17 @@ pub struct DotOptions {
 pub struct BtcOptions {
 	#[clap(long = "btc.http_endpoint")]
 	pub btc_http_endpoint: Option<String>,
-	#[clap(long = "btc.rpc_user")]
-	pub btc_rpc_user: Option<String>,
-	#[clap(long = "btc.rpc_password")]
-	pub btc_rpc_password: Option<String>,
+	#[clap(long = "btc.basic_auth_user")]
+	pub btc_basic_auth_user: Option<String>,
+	#[clap(long = "btc.basic_auth_password")]
+	pub btc_basic_auth_password: Option<String>,
 
 	#[clap(long = "btc.backup.http_endpoint")]
 	pub btc_backup_http_endpoint: Option<String>,
-	#[clap(long = "btc.backup.rpc_user")]
-	pub btc_backup_rpc_user: Option<String>,
-	#[clap(long = "btc.backup.rpc_password")]
-	pub btc_backup_rpc_password: Option<String>,
+	#[clap(long = "btc.backup.basic_auth_user")]
+	pub btc_backup_basic_auth_user: Option<String>,
+	#[clap(long = "btc.backup.basic_auth_password")]
+	pub btc_backup_basic_auth_password: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -574,19 +574,27 @@ impl P2POptions {
 impl BtcOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
 		insert_command_line_option(map, "btc.rpc.http_endpoint", &self.btc_http_endpoint);
-		insert_command_line_option(map, "btc.rpc.rpc_user", &self.btc_rpc_user);
-		insert_command_line_option(map, "btc.rpc.rpc_password", &self.btc_rpc_password);
+		insert_command_line_option(map, "btc.rpc.basic_auth_user", &self.btc_basic_auth_user);
+		insert_command_line_option(
+			map,
+			"btc.rpc.basic_auth_password",
+			&self.btc_basic_auth_password,
+		);
 
 		insert_command_line_option(
 			map,
 			"btc.backup_rpc.http_endpoint",
 			&self.btc_backup_http_endpoint,
 		);
-		insert_command_line_option(map, "btc.backup_rpc.rpc_user", &self.btc_backup_rpc_user);
 		insert_command_line_option(
 			map,
-			"btc.backup_rpc.rpc_password",
-			&self.btc_backup_rpc_password,
+			"btc.backup_rpc.basic_auth_user",
+			&self.btc_backup_basic_auth_user,
+		);
+		insert_command_line_option(
+			map,
+			"btc.backup_rpc.basic_auth_password",
+			&self.btc_backup_basic_auth_password,
 		);
 	}
 }
@@ -860,12 +868,12 @@ pub mod tests {
 			},
 			btc_opts: BtcOptions {
 				btc_http_endpoint: Some("http://btc-endpoint:4321".to_owned()),
-				btc_rpc_user: Some("my_username".to_owned()),
-				btc_rpc_password: Some("my_password".to_owned()),
+				btc_basic_auth_user: Some("my_username".to_owned()),
+				btc_basic_auth_password: Some("my_password".to_owned()),
 
 				btc_backup_http_endpoint: Some("http://second.btc-endpoint:4321".to_owned()),
-				btc_backup_rpc_user: Some("second.my_username".to_owned()),
-				btc_backup_rpc_password: Some("second.my_password".to_owned()),
+				btc_backup_basic_auth_user: Some("second.my_username".to_owned()),
+				btc_backup_basic_auth_password: Some("second.my_password".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -938,15 +946,24 @@ pub mod tests {
 			opts.btc_opts.btc_http_endpoint.unwrap(),
 			settings.btc.nodes.primary.http_endpoint.as_ref()
 		);
-		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.nodes.primary.rpc_user);
 		assert_eq!(
-			opts.btc_opts.btc_rpc_password.unwrap(),
-			settings.btc.nodes.primary.rpc_password
+			opts.btc_opts.btc_basic_auth_user.unwrap(),
+			settings.btc.nodes.primary.basic_auth_user
+		);
+		assert_eq!(
+			opts.btc_opts.btc_basic_auth_password.unwrap(),
+			settings.btc.nodes.primary.basic_auth_password
 		);
 
 		let btc_backup_node = settings.btc.nodes.backup.unwrap();
-		assert_eq!(opts.btc_opts.btc_backup_rpc_user.unwrap(), btc_backup_node.rpc_user);
-		assert_eq!(opts.btc_opts.btc_backup_rpc_password.unwrap(), btc_backup_node.rpc_password);
+		assert_eq!(
+			opts.btc_opts.btc_backup_basic_auth_user.unwrap(),
+			btc_backup_node.basic_auth_user
+		);
+		assert_eq!(
+			opts.btc_opts.btc_backup_basic_auth_password.unwrap(),
+			btc_backup_node.basic_auth_password
+		);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),
