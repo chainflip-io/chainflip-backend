@@ -6,7 +6,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use config::{Config, ConfigBuilder, ConfigError, Environment, File, Map, Source, Value};
 use serde::{de, Deserialize, Deserializer};
 
@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::Port;
+use utilities::{redact_endpoint_secret::SecretUrl, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -37,7 +37,7 @@ pub struct StateChain {
 
 impl StateChain {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_endpoint)
+		validate_websocket_endpoint(self.ws_endpoint.clone().into())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -45,8 +45,8 @@ impl StateChain {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct WsHttpEndpoints {
-	pub ws_node_endpoint: String,
-	pub http_node_endpoint: String,
+	pub ws_node_endpoint: SecretUrl,
+	pub http_node_endpoint: SecretUrl,
 }
 
 pub trait ValidateSettings {
@@ -56,9 +56,9 @@ pub trait ValidateSettings {
 impl ValidateSettings for WsHttpEndpoints {
 	/// Ensure the endpoints are valid HTTP and WS endpoints.
 	fn validate(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_node_endpoint)
+		validate_websocket_endpoint(self.ws_node_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		validate_http_endpoint(&self.http_node_endpoint)
+		validate_http_endpoint(self.http_node_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -110,7 +110,7 @@ impl Dot {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HttpBasicAuthEndpoint {
-	pub http_node_endpoint: String,
+	pub http_node_endpoint: SecretUrl,
 	pub rpc_user: String,
 	pub rpc_password: String,
 }
@@ -118,7 +118,7 @@ pub struct HttpBasicAuthEndpoint {
 impl ValidateSettings for HttpBasicAuthEndpoint {
 	/// Ensure the endpoint is a valid HTTP endpoint.
 	fn validate(&self) -> Result<(), ConfigError> {
-		validate_http_endpoint(&self.http_node_endpoint)
+		validate_http_endpoint(self.http_node_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -642,21 +642,21 @@ impl Settings {
 }
 
 /// Validate a websocket endpoint URL
-pub fn validate_websocket_endpoint(url: &str) -> Result<()> {
+pub fn validate_websocket_endpoint(url: SecretUrl) -> Result<()> {
 	validate_endpoint(vec!["ws", "wss"], url)
 }
 
 /// Validate a http endpoint URL
-pub fn validate_http_endpoint(url: &str) -> Result<()> {
+pub fn validate_http_endpoint(url: SecretUrl) -> Result<()> {
 	validate_endpoint(vec!["http", "https"], url)
 }
 
 /// Parse the URL to check that it is the correct scheme and a valid endpoint URL
-fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
-	let parsed_url = Url::parse(url)?;
+fn validate_endpoint(valid_schemes: Vec<&str>, url: SecretUrl) -> Result<()> {
+	let parsed_url = Url::parse(url.as_ref()).context(format!("Error parsing url: {url}"))?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
-		bail!("Invalid scheme: `{scheme}`");
+		bail!("Invalid scheme: `{scheme}` in endpoint: {url}");
 	}
 	if parsed_url.host().is_none() ||
 		parsed_url.username() != "" ||
@@ -664,7 +664,7 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 		parsed_url.fragment().is_some() ||
 		parsed_url.cannot_be_a_base()
 	{
-		bail!("Invalid URL data.");
+		bail!("Invalid URL data in endpoint: {url}");
 	}
 
 	Ok(())
@@ -746,17 +746,17 @@ pub mod tests {
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.nodes.primary.http_node_endpoint, "http://localhost:8545");
+		assert_eq!(settings.eth.nodes.primary.http_node_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(
-			settings.dot.nodes.primary.ws_node_endpoint,
+			settings.dot.nodes.primary.ws_node_endpoint.as_ref(),
 			"wss://my_fake_polkadot_rpc:443/<secret_key>"
 		);
 		assert_eq!(
-			settings.eth.nodes.backup.unwrap().http_node_endpoint,
+			settings.eth.nodes.backup.unwrap().http_node_endpoint.as_ref(),
 			"http://second.localhost:8545"
 		);
 		assert_eq!(
-			settings.dot.nodes.backup.unwrap().ws_node_endpoint,
+			settings.dot.nodes.backup.unwrap().ws_node_endpoint.as_ref(),
 			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
 		);
 	}
@@ -774,28 +774,31 @@ pub mod tests {
 	#[test]
 	fn test_websocket_endpoint_url_parsing() {
 		assert_ok!(validate_websocket_endpoint(
-			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
+			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
 		));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node"));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node".into()));
 		assert_ok!(validate_websocket_endpoint(
 			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
+				.into()
 		));
-		assert!(validate_websocket_endpoint("https://wrong_scheme.com").is_err());
-		assert!(validate_websocket_endpoint("").is_err());
+		assert!(validate_websocket_endpoint("https://wrong_scheme.com".into()).is_err());
+		assert!(validate_websocket_endpoint("".into()).is_err());
 	}
 
 	#[test]
 	fn test_http_endpoint_url_parsing() {
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node"));
-		assert!(validate_http_endpoint("wss://wrong_scheme.com").is_err());
-		assert!(validate_http_endpoint("").is_err());
+		assert_ok!(validate_http_endpoint(
+			"http://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
+		));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node".into()));
+		assert!(validate_http_endpoint("wss://wrong_scheme.com".into()).is_err());
+		assert!(validate_http_endpoint("".into()).is_err());
 	}
 
 	#[test]
@@ -839,7 +842,7 @@ pub mod tests {
 
 		assert_eq!(
 			custom_base_path_settings.btc.nodes.primary.http_node_endpoint,
-			"http://localhost:18443"
+			"http://localhost:18443".into()
 		);
 		assert!(custom_base_path_settings.btc.nodes.backup.is_none());
 	}
@@ -914,47 +917,47 @@ pub mod tests {
 
 		assert_eq!(
 			opts.eth_opts.eth_ws_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.ws_node_endpoint
+			settings.eth.nodes.primary.ws_node_endpoint.as_ref()
 		);
 		assert_eq!(
 			opts.eth_opts.eth_http_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.http_node_endpoint
+			settings.eth.nodes.primary.http_node_endpoint.as_ref()
 		);
 
 		let eth_backup_node = settings.eth.nodes.backup.unwrap();
 		assert_eq!(
 			opts.eth_opts.eth_backup_ws_node_endpoint.unwrap(),
-			eth_backup_node.ws_node_endpoint
+			eth_backup_node.ws_node_endpoint.as_ref()
 		);
 		assert_eq!(
 			opts.eth_opts.eth_backup_http_node_endpoint.unwrap(),
-			eth_backup_node.http_node_endpoint
+			eth_backup_node.http_node_endpoint.as_ref()
 		);
 
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
 		assert_eq!(
 			opts.dot_opts.dot_ws_node_endpoint.unwrap(),
-			settings.dot.nodes.primary.ws_node_endpoint
+			settings.dot.nodes.primary.ws_node_endpoint.as_ref()
 		);
 		assert_eq!(
 			opts.dot_opts.dot_http_node_endpoint.unwrap(),
-			settings.dot.nodes.primary.http_node_endpoint
+			settings.dot.nodes.primary.http_node_endpoint.as_ref()
 		);
 
 		let dot_backup_node = settings.dot.nodes.backup.unwrap();
 		assert_eq!(
 			opts.dot_opts.dot_backup_ws_node_endpoint.unwrap(),
-			dot_backup_node.ws_node_endpoint
+			dot_backup_node.ws_node_endpoint.as_ref()
 		);
 		assert_eq!(
 			opts.dot_opts.dot_backup_http_node_endpoint.unwrap(),
-			dot_backup_node.http_node_endpoint
+			dot_backup_node.http_node_endpoint.as_ref()
 		);
 
 		assert_eq!(
 			opts.btc_opts.btc_http_node_endpoint.unwrap(),
-			settings.btc.nodes.primary.http_node_endpoint
+			settings.btc.nodes.primary.http_node_endpoint.as_ref()
 		);
 		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.nodes.primary.rpc_user);
 		assert_eq!(

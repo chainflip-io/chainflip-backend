@@ -128,14 +128,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn current_authority_emission_inflation)]
-	/// Annual inflation set aside for current authorities, expressed as basis points ie. hundredths
-	/// of a percent.
+	/// Inflation per `COMPOUNDING_INTERVAL` set aside for current authorities in parts per billion.
 	pub(super) type CurrentAuthorityEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_inflation)]
-	/// Annual inflation set aside for *backup* nodes, expressed as basis points ie. hundredths
-	/// of a percent.
+	/// Inflation per `COMPOUNDING_INTERVAL` set aside for *backup* nodes, in parts per billion.
 	pub(super) type BackupNodeEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]

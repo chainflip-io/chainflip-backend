@@ -88,8 +88,7 @@ fn auction_repeats_after_failure_because_of_liveness() {
 }
 
 #[test]
-// An epoch has completed.  We have a genesis where the blocks per epoch are
-// set to 100
+// An epoch has completed.  We have a genesis where the blocks per epoch are set to 100
 // - When the epoch is reached an auction is started and completed
 // - All nodes add funds above the MAB
 // - We have two nodes that haven't registered their session keys

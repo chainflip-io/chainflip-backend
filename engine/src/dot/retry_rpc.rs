@@ -48,7 +48,7 @@ impl DotRetryRpcClient {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
 				DotHttpRpcClient::new(endpoints.http_node_endpoint)?,
-				DotSubClient::new(&endpoints.ws_node_endpoint),
+				DotSubClient::new(endpoints.ws_node_endpoint),
 			))
 		};
 
@@ -310,8 +310,8 @@ mod tests {
 					scope,
 					NodeContainer {
 						primary: WsHttpEndpoints {
-							http_node_endpoint: "http://127.0.0.1:9945".to_string(),
-							ws_node_endpoint: "ws://127.0.0.1:9945".to_string(),
+							http_node_endpoint: "http://127.0.0.1:9945".into(),
+							ws_node_endpoint: "ws://127.0.0.1:9945".into(),
 						},
 						backup: None,
 					},

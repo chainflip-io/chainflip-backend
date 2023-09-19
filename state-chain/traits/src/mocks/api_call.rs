@@ -99,6 +99,7 @@ pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
+	gas_budget: <Ethereum as Chain>::ChainAmount,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockEthEnvironment>,
 }
@@ -109,6 +110,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
@@ -120,6 +122,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 				transfer_param,
 				source_chain,
 				source_address,
+				gas_budget,
 				message,
 				_phantom: PhantomData,
 			}))
