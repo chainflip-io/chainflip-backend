@@ -23,8 +23,8 @@ data:
     private_key_file = "{{ .Values.engine.settings.eth.private_key_file }}"
 
     [eth.rpc]
-    ws_endpoint = "{{ .Values.engine.settings.eth.ws_endpoint | default "ws://geth-node-service:8546" }}"
-    http_endpoint = "{{ .Values.engine.settings.eth.http_endpoint | default "http://geth-node-service:8545" }}"
+    ws_endpoint = "{{ .Values.engine.settings.eth.rpc.ws_endpoint | default "ws://geth-node-service:8546" }}"
+    http_endpoint = "{{ .Values.engine.settings.eth.rpc.http_endpoint | default "http://geth-node-service:8545" }}"
 
     [health_check]
     hostname = "{{ .Values.engine.settings.health_check.hostname }}"
@@ -34,11 +34,11 @@ data:
     db_file = "{{ .Values.engine.settings.signing.db_file | default (printf "%s/%s" .Values.basePath "data.db" )}}"
 
     [dot.rpc]
-    ws_endpoint = "{{ .Values.engine.settings.dot.ws_endpoint | default "ws://polkadot-validator-0-node:9944" }}"
-    http_endpoint = "{{ .Values.engine.settings.dot.http_endpoint | default "http://polkadot-validator-0-node:9933" }}"
+    ws_endpoint = "{{ .Values.engine.settings.dot.rpc.ws_endpoint | default "ws://polkadot-validator-0-node:9944" }}"
+    http_endpoint = "{{ .Values.engine.settings.dot.rpc.http_endpoint | default "http://polkadot-validator-0-node:9933" }}"
 
     [btc.rpc]
-    http_endpoint = "{{ .Values.engine.settings.btc.http_endpoint | default "http://bitcoin-node:80" }}"
-    basic_auth_user = "{{ .Values.engine.settings.btc.basic_auth_user }}"
-    basic_auth_password = "{{ .Values.engine.settings.btc.basic_auth_password }}"
+    http_endpoint = "{{ .Values.engine.settings.btc.rpc.http_endpoint | default "http://bitcoin-node:80" }}"
+    basic_auth_user = "{{ .Values.engine.settings.btc.rpc.basic_auth_user }}"
+    basic_auth_password = "{{ .Values.engine.settings.btc.rpc.basic_auth_password }}"
 {{- end }}
