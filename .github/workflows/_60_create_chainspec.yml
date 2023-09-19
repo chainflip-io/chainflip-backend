@@ -50,6 +50,12 @@ jobs:
           echo "DATE=$(date '+%d-%m-%Y')" >> $GITHUB_ENV
           python3 ./ci/scripts/create_chainspec.py ${{ inputs.network }} ./chainflip-node
 
+
+      - name: Upload chainspec to s3
+        if: steps.check-chainspec-exists.outcome == 'success'
+        run: |
+          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
+
       - name: Create a pull request against current branch
         if: steps.check-chainspec-exists.outcome == 'success'
         id: create-pr
@@ -58,16 +64,16 @@ jobs:
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           commit-message: "Create chainspec for ${{ inputs.network }}"
           title: "Create chainspec for ${{ inputs.network }}"
-          body: "This PR was automatically created by the `create-chainspec` workflow."
+          body: "[skip ci] - This PR was automatically created by the `create-chainspec` workflow."
           branch: chainspec/${{ inputs.network }}-${{ env.DATE }}
           committer: cf-bot <dev@chainflip.io>
+          reviewers: |
+            dandanlen
+            tomjohnburton
+            ahasna
+            martin-chainflip
           add-paths: |
             state-chain/node/chainspecs/*.json
-
-      - name: Upload chainspec to s3
-        if: steps.check-chainspec-exists.outcome == 'success'
-        run: |
-          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
 
       - name: Set summary output
         if: steps.check-chainspec-exists.outcome == 'success'
@@ -88,7 +94,7 @@ jobs:
             echo "DISCORD_URL=${{ secrets.CF_DISCORD_WH_NETWORK_SISYPHOS }}" >> $GITHUB_ENV
           fi 
 
-      - name: Notify on failed bouncer
+      - name: Notify that chainspec was created
         env:
           DISCORD_WEBHOOK: ${{ env.DISCORD_URL }}
         uses: Ilshidur/action-discord@0.3.2
