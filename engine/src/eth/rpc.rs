@@ -51,7 +51,7 @@ impl EthRpcClient {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
 						tracing::warn!(
-								"Connected to Ethereum node but with chain_id {chain_id}, expected {expected_chain_id}. Please check your CFE
+								"Connected to Ethereum node but with chain_id {chain_id}, expected {expected_chain_id} from {http_node_endpoint}. Please check your CFE
 								configuration file...",
 							);
 					},

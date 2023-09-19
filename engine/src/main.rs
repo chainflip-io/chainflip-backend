@@ -219,30 +219,44 @@ async fn start(
 	scope.spawn(btc_multisig_client_backend_future);
 
 	// Create all the clients
-	let expected_eth_chain_id = web3::types::U256::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION),
-	);
-	let eth_client = EthersRetryRpcClient::new(
-		scope,
-		settings.eth.private_key_file,
-		settings.eth.nodes,
-		expected_eth_chain_id,
-	)?;
-	let btc_client = BtcRetryRpcClient::new(scope, settings.btc.nodes)?;
-	let expected_dot_genesis_hash = PolkadotHash::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION),
-	);
-	let dot_client = DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?;
+	let eth_client = {
+		let expected_eth_chain_id = web3::types::U256::from(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+					state_chain_client.latest_finalized_hash(),
+				)
+				.await
+				.expect(STATE_CHAIN_CONNECTION),
+		);
+		EthersRetryRpcClient::new(
+			scope,
+			settings.eth.private_key_file,
+			settings.eth.nodes,
+			expected_eth_chain_id,
+		)?
+	};
+	let btc_client = {
+		let expected_btc_network = cf_chains::btc::BitcoinNetwork::from(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+					state_chain_client.latest_finalized_hash(),
+				)
+				.await
+				.expect(STATE_CHAIN_CONNECTION),
+		);
+		BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
+	};
+	let dot_client = {
+		let expected_dot_genesis_hash = PolkadotHash::from(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
+					state_chain_client.latest_finalized_hash(),
+				)
+				.await
+				.expect(STATE_CHAIN_CONNECTION),
+		);
+		DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
+	};
 
 	witness::start::start(
 		scope,

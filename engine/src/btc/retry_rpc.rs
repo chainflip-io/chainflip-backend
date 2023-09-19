@@ -6,7 +6,7 @@ use crate::{
 	settings::{HttpBasicAuthEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use cf_chains::Bitcoin;
+use cf_chains::{btc::BitcoinNetwork, Bitcoin};
 use core::time::Duration;
 
 use anyhow::Result;
@@ -24,19 +24,24 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 const MAX_BROADCAST_RETRIES: Attempt = 5;
 
 impl BtcRetryRpcClient {
-	pub fn new(
+	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<HttpBasicAuthEndpoint>,
+		expected_btc_network: BitcoinNetwork,
 	) -> Result<Self> {
-		let primary = BtcRpcClient::new(nodes.primary)?;
-		let backup = nodes.backup.map(BtcRpcClient::new).transpose()?;
+		let rpc_client = BtcRpcClient::new(nodes.primary, expected_btc_network)?;
+		let backup_rpc_client = match nodes.backup {
+			Some(backup_endpoint) =>
+				Some(BtcRpcClient::new(backup_endpoint, expected_btc_network)?),
+			None => None,
+		};
 
 		Ok(Self {
 			retry_client: RetrierClient::new(
 				scope,
 				"btc_rpc",
-				futures::future::ready(primary),
-				backup.map(futures::future::ready),
+				rpc_client,
+				backup_rpc_client,
 				BITCOIN_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),

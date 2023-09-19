@@ -103,7 +103,7 @@ impl DotHttpRpcClient {
 							break online_client
 						} else {
 							tracing::warn!(
-								"Connected to Polkadot node but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
+								"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
 							)
 						}
 					},
