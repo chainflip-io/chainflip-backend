@@ -46,6 +46,7 @@ jobs:
       - name: Create chainspec
         if: steps.check-chainspec-exists.outcome == 'success'
         run: |
+          echo "DATE=$(date '+%d-%m-%Y')" >> $GITHUB_ENV
           python3 ./ci/scripts/create_chainspec.py ${{ inputs.network }} ./chainflip-node
 
       - uses: EndBug/add-and-commit@v9
@@ -54,6 +55,7 @@ jobs:
           default_author: github_actions
           add: state-chain/node/chainspecs/*.json
           message: "Create chainspec for ${{ inputs.network }}"
+          new_branch: chainspec/${{ inputs.network }}-${{ env.DATE }}
 
       - name: Upload chainspec to s3
         if: steps.check-chainspec-exists.outcome == 'success'
