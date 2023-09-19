@@ -1034,7 +1034,6 @@ pub mod pallet {
 			} else {
 				deposit_amount
 			};
-			// PARTNERNET ONLY
 
 			let principal_swap_amount =
 				deposit_amount.saturating_sub(deposit_metadata.channel_metadata.gas_budget);
