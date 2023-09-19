@@ -51,12 +51,13 @@ jobs:
 
       - name: Create a pull request against current branch
         if: steps.check-chainspec-exists.outcome == 'success'
+        id: create-pr
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Create chainspec for ${{ inputs.network }}"
           title: "Create chainspec for ${{ inputs.network }}"
-          body: "This PR was automatically created by the \`create-chainspec\` workflow."
+          body: "This PR was automatically created by the `create-chainspec` workflow."
           branch: chainspec/${{ inputs.network }}-${{ env.DATE }}
           add-paths: |
             state-chain/node/chainspecs/*.json
@@ -70,6 +71,7 @@ jobs:
         if: steps.check-chainspec-exists.outcome == 'success'
         run: |
           echo "Chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
+          echo "[Pull requests created](${{ steps.create-pr.outputs.pull-request-url }})" >> $GITHUB_STEP_SUMMARY
 
       - name: Set summary output
         if: steps.check-chainspec-exists.outcome == 'failure'
