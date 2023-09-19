@@ -33,11 +33,11 @@ data:
     [signing]
     db_file = "{{ .Values.engine.settings.signing.db_file | default (printf "%s/%s" .Values.basePath "data.db" )}}"
 
-    [dot]
+    [dot.rpc]
     ws_endpoint = "{{ .Values.engine.settings.dot.ws_endpoint | default "ws://polkadot-validator-0-node:9944" }}"
     http_endpoint = "{{ .Values.engine.settings.dot.http_endpoint | default "http://polkadot-validator-0-node:9933" }}"
 
-    [btc]
+    [btc.rpc]
     http_endpoint = "{{ .Values.engine.settings.btc.http_endpoint | default "http://bitcoin-node:80" }}"
     basic_auth_user = "{{ .Values.engine.settings.btc.basic_auth_user }}"
     basic_auth_password = "{{ .Values.engine.settings.btc.basic_auth_password }}"
