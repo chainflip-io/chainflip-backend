@@ -13,7 +13,7 @@ pub struct SecretUrl(String);
 
 impl Display for SecretUrl {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", redact_secret_node_endpoint(&self.0))
+		write!(f, "{}", redact_secret_endpoint(&self.0))
 	}
 }
 
@@ -23,7 +23,7 @@ impl Debug for SecretUrl {
 		if cfg!(debug_assertions) {
 			write!(f, "{:?}", self.0)
 		} else {
-			write!(f, "{:?}", redact_secret_node_endpoint(&self.0))
+			write!(f, "{:?}", redact_secret_endpoint(&self.0))
 		}
 	}
 }
@@ -55,7 +55,7 @@ impl AsRef<str> for SecretUrl {
 /// Partially redacts the secret in the url of the node endpoint.
 ///  eg: `wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/` ->
 /// `wss://cdc****.rinkeby.ws.rivet.cloud/`
-pub fn redact_secret_node_endpoint(endpoint: &str) -> String {
+pub fn redact_secret_endpoint(endpoint: &str) -> String {
 	const REGEX_ETH_SECRET: &str = "[0-9a-fA-F]{32}";
 	const REGEX_BTC_SECRET: &str =
 		r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
