@@ -184,14 +184,14 @@ pub struct StateChainOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct EthOptions {
-	#[clap(long = "eth.ws_endpoint")]
+	#[clap(long = "eth.rpc.ws_endpoint")]
 	pub eth_ws_endpoint: Option<String>,
-	#[clap(long = "eth.http_endpoint")]
+	#[clap(long = "eth.rpc.http_endpoint")]
 	pub eth_http_endpoint: Option<String>,
 
-	#[clap(long = "eth.backup.ws_endpoint")]
+	#[clap(long = "eth.backup_rpc.ws_endpoint")]
 	pub eth_backup_ws_endpoint: Option<String>,
-	#[clap(long = "eth.backup.http_endpoint")]
+	#[clap(long = "eth.backup_rpc.http_endpoint")]
 	pub eth_backup_http_endpoint: Option<String>,
 
 	#[clap(long = "eth.private_key_file")]
@@ -200,31 +200,31 @@ pub struct EthOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct DotOptions {
-	#[clap(long = "dot.ws_endpoint")]
+	#[clap(long = "dot.rpc.ws_endpoint")]
 	pub dot_ws_endpoint: Option<String>,
-	#[clap(long = "dot.http_endpoint")]
+	#[clap(long = "dot.rpc.http_endpoint")]
 	pub dot_http_endpoint: Option<String>,
 
-	#[clap(long = "dot.backup.ws_endpoint")]
+	#[clap(long = "dot.backup_rpc.ws_endpoint")]
 	pub dot_backup_ws_endpoint: Option<String>,
-	#[clap(long = "dot.backup.http_endpoint")]
+	#[clap(long = "dot.backup_rpc.http_endpoint")]
 	pub dot_backup_http_endpoint: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BtcOptions {
-	#[clap(long = "btc.http_endpoint")]
+	#[clap(long = "btc.rpc.http_endpoint")]
 	pub btc_http_endpoint: Option<String>,
 	#[clap(long = "btc.basic_auth_user")]
 	pub btc_basic_auth_user: Option<String>,
 	#[clap(long = "btc.basic_auth_password")]
 	pub btc_basic_auth_password: Option<String>,
 
-	#[clap(long = "btc.backup.http_endpoint")]
+	#[clap(long = "btc.backup_rpc.http_endpoint")]
 	pub btc_backup_http_endpoint: Option<String>,
-	#[clap(long = "btc.backup.basic_auth_user")]
+	#[clap(long = "btc.backup_rpc.basic_auth_user")]
 	pub btc_backup_basic_auth_user: Option<String>,
-	#[clap(long = "btc.backup.basic_auth_password")]
+	#[clap(long = "btc.backup_rpc.basic_auth_password")]
 	pub btc_backup_basic_auth_password: Option<String>,
 }
 
