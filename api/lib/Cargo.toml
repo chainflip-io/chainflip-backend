@@ -47,3 +47,4 @@ cf-amm = { path = "../../state-chain/amm" }
 sp-consensus-aura = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+2' }
 sp-core = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+2' }
 sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+2' }
+codec = { package = "parity-scale-codec", version = "3.6.1" }
