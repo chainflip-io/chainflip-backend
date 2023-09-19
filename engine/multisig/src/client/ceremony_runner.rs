@@ -19,8 +19,8 @@ use utilities::{
 	format_iterator,
 	metrics::{
 		CeremonyBadMsgNotDrop, CeremonyDurationDrop, CeremonyMetrics, CeremonyProcessedMsgDrop,
-		CeremonyTimeoutMissingMsgDrop, CEREMONY_BAD_MSG, CEREMONY_DURATION, CEREMONY_PROCESSED_MSG,
-		CEREMONY_TIMEOUT_MISSING_MSG,
+		CeremonyTimeoutMissingMsgDrop, StageDurationDrop, CEREMONY_BAD_MSG, CEREMONY_DURATION,
+		CEREMONY_PROCESSED_MSG, CEREMONY_TIMEOUT_MISSING_MSG, STAGE_DURATION,
 	},
 };
 
@@ -141,13 +141,20 @@ where
 					&CEREMONY_PROCESSED_MSG,
 					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
-				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [Chain::NAME]),
+				bad_message: CeremonyBadMsgNotDrop::new(
+					&CEREMONY_BAD_MSG,
+					[Chain::NAME.to_string()],
+				),
 				ceremony_duration: CeremonyDurationDrop::new(
 					&CEREMONY_DURATION,
 					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
 				missing_messages: CeremonyTimeoutMissingMsgDrop::new(
 					&CEREMONY_TIMEOUT_MISSING_MSG,
+					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
+				),
+				stage_duration: StageDurationDrop::new(
+					&STAGE_DURATION,
 					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
 			},
@@ -160,7 +167,7 @@ where
 		&mut self,
 		mut initial_stage: DynStage<Ceremony>,
 	) -> OptionalCeremonyReturn<Ceremony> {
-		let single_party_result = initial_stage.init(&self.metrics);
+		let single_party_result = initial_stage.init(&mut self.metrics);
 
 		// This function is only ever called from a oneshot channel,
 		// so it should never get called twice.
@@ -192,11 +199,11 @@ where
 
 			let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
-			match stage.finalize().await {
+			match stage.finalize(&mut self.metrics).await {
 				StageResult::NextStage(mut next_stage) => {
 					debug!("Ceremony transitions to {}", next_stage.get_stage_name());
 
-					let single_party_result = next_stage.init(&self.metrics);
+					let single_party_result = next_stage.init(&mut self.metrics);
 
 					self.stage = Some(next_stage);
 
@@ -290,7 +297,7 @@ where
 				}
 
 				if let ProcessMessageResult::Ready =
-					stage.process_message(sender_idx, data, &self.metrics)
+					stage.process_message(sender_idx, data, &mut self.metrics)
 				{
 					return self.finalize_current_stage().await
 				}

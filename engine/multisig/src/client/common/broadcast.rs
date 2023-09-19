@@ -1,6 +1,7 @@
 use std::{
 	collections::{btree_map, BTreeMap},
 	fmt::Display,
+	time::Instant,
 };
 
 use async_trait::async_trait;
@@ -61,6 +62,7 @@ where
 	/// Determines the actual computations before/after
 	/// the data is collected
 	processor: Stage,
+	duration: Instant,
 }
 
 impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
@@ -68,7 +70,7 @@ where
 	Stage: BroadcastStageProcessor<C>,
 {
 	pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
-		BroadcastStage { common, messages: BTreeMap::new(), processor }
+		BroadcastStage { common, messages: BTreeMap::new(), processor, duration: Instant::now() }
 	}
 }
 
@@ -99,9 +101,9 @@ impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
 	Stage: BroadcastStageProcessor<C> + Send,
 {
-	fn init(&mut self, metrics: &CeremonyMetrics) -> ProcessMessageResult {
+	fn init(&mut self, metrics: &mut CeremonyMetrics) -> ProcessMessageResult {
 		let common = &self.common;
-
+		self.duration = Instant::now();
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
 
 		let (own_message, outgoing_messages) = match self.processor.init() {
@@ -158,7 +160,7 @@ where
 		&mut self,
 		signer_idx: AuthorityCount,
 		m: C::Data,
-		metrics: &CeremonyMetrics,
+		metrics: &mut CeremonyMetrics,
 	) -> ProcessMessageResult {
 		metrics.processed_messages.inc();
 		let m: Stage::Message = match m.try_into() {
@@ -209,10 +211,14 @@ where
 		}
 	}
 
-	async fn finalize(mut self: Box<Self>) -> StageResult<C> {
+	async fn finalize(mut self: Box<Self>, metrics: &mut CeremonyMetrics) -> StageResult<C> {
 		// Because we might want to finalize the stage before
 		// all data has been received (e.g. due to a timeout),
 		// we insert None for any missing data
+		let stage_name: &str = &format!("{}", self.get_stage_name());
+		metrics
+			.stage_duration
+			.set(&[stage_name, "receiving"], self.get_stage_duration());
 
 		let mut received_messages = std::mem::take(&mut self.messages);
 
@@ -225,7 +231,12 @@ where
 			.map(|idx| (*idx, received_messages.remove(idx)))
 			.collect();
 
-		self.processor.process(messages).await
+		let process_msg_dutration = Instant::now();
+		let result = self.processor.process(messages).await;
+		metrics
+			.stage_duration
+			.set(&[stage_name, "processing"], process_msg_dutration.elapsed().as_millis());
+		result
 	}
 
 	fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {
@@ -246,6 +257,10 @@ where
 
 	fn ceremony_common(&self) -> &CeremonyCommon {
 		&self.common
+	}
+
+	fn get_stage_duration(&self) -> u128 {
+		self.duration.elapsed().as_millis()
 	}
 }
 
