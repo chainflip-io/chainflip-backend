@@ -549,6 +549,10 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					(!request.resubmit_window.contains(&(block.header.number + 1)) ||
 						request.strictly_one_submission)
 			}) {
+				if let Some(until_in_block_sender) = request.until_in_block_sender {
+					let _result = until_in_block_sender
+						.send(Err(ExtrinsicError::Other(InBlockError::NotInBlock)));
+				}
 				let _result = request
 					.until_finalized_sender
 					.send(Err(ExtrinsicError::Other(FinalizationError::NotFinalized)));
