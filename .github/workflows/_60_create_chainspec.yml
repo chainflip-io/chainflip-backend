@@ -62,9 +62,9 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          commit-message: "Create chainspec for ${{ inputs.network }}"
+          commit-message: "[skip ci] - Create chainspec for ${{ inputs.network }}"
           title: "Create chainspec for ${{ inputs.network }}"
-          body: "[skip ci] - This PR was automatically created by the `create-chainspec` workflow."
+          body: "This PR was automatically created by the `create-chainspec` workflow."
           branch: chainspec/${{ inputs.network }}-${{ env.DATE }}
           committer: cf-bot <dev@chainflip.io>
           reviewers: |
