@@ -7,6 +7,9 @@ concurrency:
   group: ${{ github.ref }}-release-perseverance
   cancel-in-progress: true
 
+env:
+  DISCORD_URL: ${{ secrets.CF_DISCORD_WH_NETWORK_PERSEVERANCE }}
+
 jobs:
   check-versions:
     uses: ./.github/workflows/_03_check_versions.yml
@@ -42,7 +45,6 @@ jobs:
     secrets: inherit
     with:
       network: perseverance
-      discord_url: ${{ secrets.CF_DISCORD_WH_NETWORK_PERSEVERANCE }}
   release:
     needs: [publish]
     uses: ./.github/workflows/_50_release.yml
