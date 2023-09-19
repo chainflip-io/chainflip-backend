@@ -11,7 +11,7 @@ use prometheus::{
 	IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
 };
 use serde::Deserialize;
-use std::net::IpAddr;
+use std::{collections::HashSet, net::IpAddr};
 use tracing::info;
 use warp::Filter;
 
@@ -164,20 +164,21 @@ macro_rules! build_counter_vec {
 }
 
 macro_rules! build_gauge_vec_struct {
-	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt) => {
 		build_gauge_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			labels: [String; { $labels.len() }],
+			drop: bool,
 		}
 		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
 				labels: [String; { $labels.len() }],
 			) -> $struct_ident {
-				$struct_ident { metric, labels }
+				$struct_ident { metric, labels, drop: $drop }
 			}
 
 			pub fn inc(&self) {
@@ -200,13 +201,104 @@ macro_rules! build_gauge_vec_struct {
 		}
 		impl Drop for $struct_ident {
 			fn drop(&mut self) {
-				let metric = self.metric.prom_metric.clone();
-				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
+				if self.drop {
+					let metric = self.metric.prom_metric.clone();
+					let labels: Vec<String> = self.labels.to_vec();
 
-				DELETE_METRIC_CHANNEL
-					.0
-					.try_send(DeleteMetricCommand::GaugePair(metric, labels))
-					.expect("DELETE_METRIC_CHANNEL should never be closed!");
+					DELETE_METRIC_CHANNEL
+						.0
+						.try_send(DeleteMetricCommand::GaugePair(metric, labels))
+						.expect("DELETE_METRIC_CHANNEL should never be closed!");
+				}
+			}
+		}
+	};
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt, $const_labels:tt) => {
+		build_gauge_vec!($metric_ident, $name, $help, $labels);
+
+		#[derive(Clone)]
+		pub struct $struct_ident {
+			metric: &'static $metric_ident,
+			const_labels: [String; { $const_labels.len() }],
+			labels: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
+			drop: bool,
+		}
+		impl $struct_ident {
+			pub fn new(
+				metric: &'static $metric_ident,
+				const_labels: [String; { $const_labels.len() }],
+			) -> $struct_ident {
+				$struct_ident { metric, const_labels, labels: HashSet::new(), drop: $drop }
+			}
+
+			pub fn inc(
+				&mut self,
+				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
+			) {
+				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				let labels: [&str; { $labels.len() }] = {
+					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
+					let (one, two) = whole.split_at_mut(self.const_labels.len());
+					let arr_const_labels: [&str; { $const_labels.len() }] =
+						self.const_labels.each_ref().map(|s| s.as_str());
+					one.copy_from_slice(&arr_const_labels);
+					two.copy_from_slice(non_const_labels);
+					whole
+				};
+				self.metric.inc(&labels);
+			}
+
+			pub fn dec(
+				&mut self,
+				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
+			) {
+				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				let labels: [&str; { $labels.len() }] = {
+					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
+					let (one, two) = whole.split_at_mut(self.const_labels.len());
+					let arr_const_labels: [&str; { $const_labels.len() }] =
+						self.const_labels.each_ref().map(|s| s.as_str());
+					one.copy_from_slice(&arr_const_labels);
+					two.copy_from_slice(non_const_labels);
+					whole
+				};
+				self.metric.dec(&labels);
+			}
+
+			pub fn set<T: TryInto<i64>>(
+				&mut self,
+				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
+				val: T,
+			) where
+				<T as TryInto<i64>>::Error: std::fmt::Debug,
+			{
+				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				let labels: [&str; { $labels.len() }] = {
+					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
+					let (one, two) = whole.split_at_mut(self.const_labels.len());
+					let arr_const_labels: [&str; { $const_labels.len() }] =
+						self.const_labels.each_ref().map(|s| s.as_str());
+					one.copy_from_slice(&arr_const_labels);
+					two.copy_from_slice(non_const_labels);
+					whole
+				};
+				self.metric.set(&labels, val);
+			}
+		}
+		impl Drop for $struct_ident {
+			fn drop(&mut self) {
+				if self.drop {
+					let metric = self.metric.prom_metric.clone();
+					let labels: Vec<String> = self.const_labels.to_vec();
+					for non_const_labels in self.labels.drain() {
+						let mut final_labels = labels.clone();
+						final_labels.append(&mut non_const_labels.to_vec());
+						DELETE_METRIC_CHANNEL
+							.0
+							.try_send(DeleteMetricCommand::GaugePair(metric.clone(), final_labels))
+							.expect("DELETE_METRIC_CHANNEL should never be closed!");
+					}
+				}
 			}
 		}
 	};
@@ -223,20 +315,21 @@ macro_rules! build_gauge_vec_struct {
 ///   metrics go out of scope and get dropped the label combination is also deleted (we
 /// won't refer to that specific combination ever again)
 macro_rules! build_counter_vec_struct {
-	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt) => {
 		build_counter_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			labels: [String; { $labels.len() }],
+			drop: bool,
 		}
 		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
 				labels: [String; { $labels.len() }],
 			) -> $struct_ident {
-				$struct_ident { metric, labels }
+				$struct_ident { metric, labels, drop: $drop }
 			}
 
 			pub fn inc(&self) {
@@ -246,41 +339,70 @@ macro_rules! build_counter_vec_struct {
 		}
 		impl Drop for $struct_ident {
 			fn drop(&mut self) {
-				let metric = self.metric.prom_metric.clone();
-				let labels: Vec<String> = self.labels.iter().map(|s| s.to_string()).collect();
+				if self.drop {
+					let metric = self.metric.prom_metric.clone();
+					let labels: Vec<String> = self.labels.to_vec();
 
-				DELETE_METRIC_CHANNEL
-					.0
-					.try_send(DeleteMetricCommand::CounterPair(metric, labels))
-					.expect("DELETE_METRIC_CHANNEL should never be closed!");
+					DELETE_METRIC_CHANNEL
+						.0
+						.try_send(DeleteMetricCommand::CounterPair(metric, labels))
+						.expect("DELETE_METRIC_CHANNEL should never be closed!");
+				}
 			}
 		}
 	};
-	($metric_ident:ident, $structNotDrop:ident, $name:literal, $help:literal, $labels:tt, $const_labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt, $const_labels:tt) => {
 		build_counter_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
-		pub struct $structNotDrop {
+		pub struct $struct_ident {
 			metric: &'static $metric_ident,
-			const_labels: [&'static str; { $const_labels.len() }],
+			const_labels: [String; { $const_labels.len() }],
+			labels: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
+			drop: bool,
 		}
-		impl $structNotDrop {
+		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
-				const_labels: [&'static str; { $const_labels.len() }],
-			) -> $structNotDrop {
-				$structNotDrop { metric, const_labels }
+				const_labels: [String; { $const_labels.len() }],
+			) -> $struct_ident {
+				$struct_ident { metric, const_labels, drop: $drop, labels: HashSet::new() }
 			}
 
-			pub fn inc(&self, non_const_labels: &[&str; { $labels.len() - $const_labels.len() }]) {
+			pub fn inc(
+				&mut self,
+				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
+			) {
+				self.labels.insert(non_const_labels.map(|s| s.to_string()));
 				let labels: [&str; { $labels.len() }] = {
 					let mut whole: [&str; { $labels.len() }] = [""; { $labels.len() }];
 					let (one, two) = whole.split_at_mut(self.const_labels.len());
-					one.copy_from_slice(&self.const_labels);
+					let arr_const_labels: [&str; { $const_labels.len() }] =
+						self.const_labels.each_ref().map(|s| s.as_str());
+					one.copy_from_slice(&arr_const_labels);
 					two.copy_from_slice(non_const_labels);
 					whole
 				};
 				self.metric.inc(&labels);
+			}
+		}
+		impl Drop for $struct_ident {
+			fn drop(&mut self) {
+				if self.drop {
+					let metric = self.metric.prom_metric.clone();
+					let labels: Vec<String> = self.const_labels.to_vec();
+					for non_const_labels in self.labels.drain() {
+						let mut final_labels = labels.clone();
+						final_labels.append(&mut non_const_labels.to_vec());
+						DELETE_METRIC_CHANNEL
+							.0
+							.try_send(DeleteMetricCommand::CounterPair(
+								metric.clone(),
+								final_labels,
+							))
+							.expect("DELETE_METRIC_CHANNEL should never be closed!");
+					}
+				}
 			}
 		}
 	};
@@ -333,6 +455,7 @@ build_counter_vec_struct!(
 	CeremonyProcessedMsgDrop,
 	"ceremony_msg",
 	"Count all the processed messages for a given ceremony",
+	true,
 	["chain", "ceremony_id"]
 );
 build_counter_vec_struct!(
@@ -340,6 +463,7 @@ build_counter_vec_struct!(
 	CeremonyBadMsgNotDrop,
 	"ceremony_bad_msg",
 	"Count all the bad msgs processed during a ceremony",
+	false,
 	["chain", "reason"],
 	["chain"] //const labels
 );
@@ -347,7 +471,8 @@ build_gauge_vec_struct!(
 	CEREMONY_DURATION,
 	CeremonyDurationDrop,
 	"ceremony_duration",
-	"Measure the duration of a ceremony",
+	"Measure the duration of a ceremony in ms",
+	true,
 	["chain", "ceremony_id"]
 );
 build_gauge_vec_struct!(
@@ -355,6 +480,16 @@ build_gauge_vec_struct!(
 	CeremonyTimeoutMissingMsgDrop,
 	"ceremony_timeout_missing_msg",
 	"Measure the number of missing messages when reaching timeout",
+	true,
+	["chain", "ceremony_id"]
+);
+build_gauge_vec_struct!(
+	STAGE_DURATION,
+	StageDurationDrop,
+	"stage_duration",
+	"Measure the duration of a stage in ms",
+	true,
+	["chain", "ceremony_id", "stage", "phase"], //phase can be either receiving or processing
 	["chain", "ceremony_id"]
 );
 
@@ -365,6 +500,7 @@ pub struct CeremonyMetrics {
 	pub bad_message: CeremonyBadMsgNotDrop,
 	pub ceremony_duration: CeremonyDurationDrop,
 	pub missing_messages: CeremonyTimeoutMissingMsgDrop,
+	pub stage_duration: StageDurationDrop,
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
