@@ -30,13 +30,16 @@ const PRIVATE_KEY_FILE: &str = "private_key_file";
 const WS_NODE_ENDPOINT: &str = "ws_node_endpoint";
 const HTTP_NODE_ENDPOINT: &str = "http_node_endpoint";
 
-pub fn migrate_settings0_9_1_to_0_9_2(config_root: String) -> Result<()> {
+pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	let settings_file = PathBuf::from(config_root).join("config/Settings.toml");
 
 	if !settings_file.is_file() {
 		tracing::warn!("Please check that the Settings.toml file exists at {settings_file:?}");
 		return Ok(())
 	}
+
+	std::fs::copy(settings_file.clone(), settings_file.with_extension("toml.0_9_2.backup"))
+		.context("Unable to create backup of Settings.toml")?;
 
 	let old_settings_table = std::fs::read_to_string(&settings_file)
 		.context("Unable to read Settings.toml for migration")?
