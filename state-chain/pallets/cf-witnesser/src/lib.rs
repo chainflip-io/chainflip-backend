@@ -250,6 +250,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A witness call has failed.
 		WitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
+		/// A an external event has been pre-witnessed.
+		PreWitnessed { call: <T as Config>::RuntimeCall },
 	}
 
 	#[pallet::error]
@@ -414,6 +416,19 @@ pub mod pallet {
 			ensure!(Votes::<T>::contains_key(epoch_index, call_hash), Error::<T>::InvalidEpoch);
 
 			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
+			Ok(())
+		}
+
+		/// Simply emits an event to notify that this call has been witnessed. Implicitly signals
+		/// that we expect the same call to be witnessed at a later block.
+		#[pallet::call_index(2)]
+		#[pallet::weight(call.get_dispatch_info().weight)]
+		pub fn pre_witness(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			Self::deposit_event(Event::<T>::PreWitnessed { call: *call });
 			Ok(())
 		}
 	}
