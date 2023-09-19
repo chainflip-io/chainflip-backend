@@ -1801,3 +1801,44 @@ fn can_handle_swaps_with_zero_outputs() {
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 0);
 		});
 }
+
+#[test]
+fn ccm_can_reject_large_ccm() {
+	new_test_ext().execute_with(|| {
+		let ccm_channel = CcmChannelMetadata {
+			message: [0x00; 101].to_vec(),
+			gas_budget: 1_000,
+			cf_parameters: vec![],
+		};
+		let ccm = CcmDepositMetadata {
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+			channel_metadata: ccm_channel.clone(),
+		};
+
+		assert_noop!(
+			Swapping::request_swap_deposit_address(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				Asset::Eth,
+				EncodedAddress::Eth(Default::default()),
+				Default::default(),
+				Some(ccm_channel),
+			),
+			Error::<Test>::CcmMessageTooLong
+		);
+
+		assert_noop!(
+			Swapping::ccm_deposit(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				1_000_000u128,
+				Asset::Eth,
+				EncodedAddress::Eth(Default::default()),
+				ccm,
+				Default::default(),
+			),
+			Error::<Test>::CcmMessageTooLong
+		);
+	});
+}

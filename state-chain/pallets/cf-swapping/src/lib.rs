@@ -194,6 +194,10 @@ pub mod pallet {
 		/// Safe mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
+		/// Maximum size of a CCM message
+		#[pallet::constant]
+		type MaxCcmLength: Get<u32>;
+
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -366,6 +370,8 @@ pub mod pallet {
 		DepositsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
 		BrokerRegistrationDisabled,
+		/// Ccm message is too long.
+		CcmMessageTooLong,
 	}
 
 	#[pallet::genesis_config]
@@ -520,11 +526,15 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if channel_metadata.is_some() {
+			if let Some(ref ccm) = channel_metadata {
 				// Currently only Ethereum supports CCM.
 				ensure!(
 					ForeignChain::Ethereum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
+				);
+				ensure!(
+					ccm.message.len() <= T::MaxCcmLength::get() as usize,
+					Error::<T>::CcmMessageTooLong
 				);
 			}
 
@@ -650,6 +660,11 @@ pub mod pallet {
 			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			ensure!(
+				deposit_metadata.channel_metadata.message.len() <= T::MaxCcmLength::get() as usize,
+				Error::<T>::CcmMessageTooLong
+			);
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;

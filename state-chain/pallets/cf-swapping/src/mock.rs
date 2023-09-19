@@ -128,6 +128,7 @@ impl pallet_cf_swapping::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type SwappingApi = MockSwappingApi;
 	type SafeMode = MockRuntimeSafeMode;
+	type MaxCcmLength = frame_support::traits::ConstU32<100u32>;
 	type WeightInfo = MockWeightInfo;
 }
 

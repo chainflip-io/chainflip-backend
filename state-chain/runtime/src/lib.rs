@@ -227,6 +227,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = chainflip::RuntimeSafeMode;
+	type MaxCcmLength = ConstU32<10_000u32>;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
