@@ -228,8 +228,8 @@ mod tests {
 				let eth_settings = settings::Eth {
 					nodes: NodeContainer {
 						primary: WsHttpEndpoints {
-							ws_node_endpoint: "ws://localhost:8546".into(),
-							http_node_endpoint: "http://localhost:8545".into(),
+							ws_endpoint: "ws://localhost:8546".into(),
+							http_endpoint: "http://localhost:8545".into(),
 						},
 						backup: None,
 					},

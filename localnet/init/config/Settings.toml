@@ -14,34 +14,34 @@ ws_endpoint = "ws://localhost:9944"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "./localnet/init/keys/eth_private_key_file"
 
-[eth.node]
-ws_node_endpoint = "ws://localhost:8546"
-http_node_endpoint = "http://localhost:8545"
+[eth.rpc]
+ws_endpoint = "ws://localhost:8546"
+http_endpoint = "http://localhost:8545"
 
 # optional
-#[eth.backup_node]
-#ws_node_endpoint = "ws://localhost:8555"
-#http_node_endpoint = "http://localhost:8555"
+#[eth.backup_rpc]
+#ws_endpoint = "ws://localhost:8555"
+#http_endpoint = "http://localhost:8555"
 
-[dot.node]
-ws_node_endpoint = "ws://localhost:9945"
-http_node_endpoint = "http://localhost:9945"
-
-# optional
-#[dot.backup_node]
-#ws_node_endpoint = "ws://localhost:8000"
-#http_node_endpoint = "http://localhost:8000"
-
-[btc.node]
-http_node_endpoint = "http://localhost:8332"
-rpc_user = "flip"
-rpc_password = "flip"
+[dot.rpc]
+ws_endpoint = "ws://localhost:9945"
+http_endpoint = "http://localhost:9945"
 
 # optional
-#[btc.backup_node]
-# http_node_endpoint = "http://localhost:8332"
-# rpc_user = "flip"
-# rpc_password = "flip"
+#[dot.backup_rpc]
+#ws_endpoint = "ws://localhost:8000"
+#http_endpoint = "http://localhost:8000"
+
+[btc.rpc]
+http_endpoint = "http://localhost:8332"
+basic_auth_user = "flip"
+basic_auth_password = "flip"
+
+# optional
+#[btc.backup_rpc]
+# http_endpoint = "http://localhost:8332"
+# basic_auth_user = "flip"
+# basic_auth_password = "flip"
 
 # optional
 [health_check]
