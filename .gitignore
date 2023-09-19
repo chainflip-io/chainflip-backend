@@ -44,3 +44,6 @@ graph
 *terraform.tfstate*
 tfplan
 .tfvars
+
+# created when importing binaries in CI
+chainflip-*
