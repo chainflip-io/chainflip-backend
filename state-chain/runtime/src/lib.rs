@@ -90,7 +90,7 @@ use chainflip::{
 	ChainflipHeartbeat, DotEnvironment, DotVaultTransitionHandler, EthEnvironment,
 	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
-use safe_mode::{ChainflipCallFilter, RuntimeSafeMode, WitnesserCallPermission};
+use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
@@ -531,8 +531,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = RuntimeSafeMode;
-	type CallPermission = WitnesserCallPermission;
-	type CallDispatchFilter = ChainflipCallFilter;
+	type CallDispatchPermission = WitnesserCallPermission;
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 

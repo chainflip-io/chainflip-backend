@@ -83,8 +83,7 @@ impl WitnesserCallPermission {
 	}
 }
 
-pub struct ChainflipCallFilter;
-impl CallDispatchFilter<RuntimeCall> for ChainflipCallFilter {
+impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 	fn should_dispatch(call: &RuntimeCall) -> bool {
 		match <RuntimeSafeMode as Get<
 			pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,

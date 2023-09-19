@@ -17,27 +17,19 @@ use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
 use cf_traits::{AccountRoleRegistry, CallDispatchFilter, Chainflip, EpochInfo, SafeMode};
 use cf_utilities::success_threshold_from_share_count;
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
 	pallet_prelude::Member,
 	storage::with_storage_layer,
 	traits::{EnsureOrigin, Get},
-	Hashable,
+	Hashable, RuntimeDebug,
 };
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
-#[derive(
-	codec::Encode,
-	codec::Decode,
-	codec::MaxEncodedLen,
-	scale_info::TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	frame_support::RuntimeDebug,
-)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum PalletSafeMode<CallPermission> {
 	CodeGreen,
 	CodeRed,
@@ -89,14 +81,11 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
 
-		/// A struct that contains permissions for different calls.
-		type CallPermission: Parameter;
-
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode<Self::CallPermission>>;
+		type SafeMode: Get<PalletSafeMode<Self::CallDispatchPermission>>;
 
 		/// Filter for dispatching witnessed calls.
-		type CallDispatchFilter: CallDispatchFilter<<Self as Config>::RuntimeCall>;
+		type CallDispatchPermission: Parameter + CallDispatchFilter<<Self as Config>::RuntimeCall>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -155,7 +144,7 @@ pub mod pallet {
 							let next_weight =
 								used_weight.saturating_add(call.get_dispatch_info().weight);
 							if remaining_weight.all_gte(next_weight) &&
-								T::CallDispatchFilter::should_dispatch(call)
+								T::CallDispatchPermission::should_dispatch(call)
 							{
 								used_weight = next_weight;
 								true
@@ -376,7 +365,7 @@ pub mod pallet {
 				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
-				if T::CallDispatchFilter::should_dispatch(&call) {
+				if T::CallDispatchPermission::should_dispatch(&call) {
 					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
 				} else {
 					WitnessedCallsScheduledForDispatch::<T>::append((

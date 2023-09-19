@@ -395,7 +395,7 @@ fn safe_mode_code_amber_can_filter_calls() {
 	new_test_ext().execute_with(|| {
 		// Block calls via SafeMode::CodeAmber
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			witnesser: PalletSafeMode::CodeAmber(()),
+			witnesser: PalletSafeMode::CodeAmber(MockCallFilter {}),
 		});
 		AllowCall::set(false);
 
