@@ -236,7 +236,9 @@ macro_rules! build_gauge_vec_struct {
 				&mut self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
-				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				if self.drop {
+					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -250,7 +252,9 @@ macro_rules! build_gauge_vec_struct {
 				&mut self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
-				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				if self.drop {
+					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -267,7 +271,9 @@ macro_rules! build_gauge_vec_struct {
 			) where
 				<T as TryInto<i64>>::Error: std::fmt::Debug,
 			{
-				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				if self.drop {
+					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -365,7 +371,9 @@ macro_rules! build_counter_vec_struct {
 				&mut self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
-				self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				if self.drop {
+					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
