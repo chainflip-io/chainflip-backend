@@ -105,6 +105,9 @@ async fn main() -> anyhow::Result<()> {
 
 			ensure_cfe_version_record_up_to_date(&state_chain_client, &state_chain_stream).await?;
 
+			// Use Option so we can take it out later without cloning (while inside a loop)
+			let mut stream_container = Some(state_chain_stream);
+
 			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
 			loop {
 				poll_interval.tick().await;
@@ -133,7 +136,8 @@ async fn main() -> anyhow::Result<()> {
 							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
 							let settings = settings.clone();
-							let state_chain_stream = state_chain_stream.clone();
+
+							let state_chain_stream = stream_container.take().expect("only called once");
 							let state_chain_client = state_chain_client.clone();
 							let handle = scope.spawn_with_handle(
 								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
