@@ -81,7 +81,7 @@ impl BtcRpcClient {
 					Ok(network) if network == expected_btc_network => break,
 					Ok(network) => {
 						warn!(
-								"Connected to Bitcoin node but with incorrect network name {network:?}, expected {expected_btc_network:?} on endpoint {}. Please check your CFE
+								"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
 								configuration file...",
 								endpoint.http_endpoint
 							);
@@ -159,7 +159,7 @@ async fn get_bitcoin_network(
 		"regtest" => BitcoinNetwork::Regtest,
 		unknown_network =>
 			return Err(anyhow!(
-				"Unknown btc network `{unknown_network}` in getblockchaininfo response",
+				"Unknown Bitcoin network `{unknown_network}` in getblockchaininfo response",
 			)),
 	})
 }

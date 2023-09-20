@@ -428,6 +428,16 @@ impl BitcoinNetwork {
 	}
 }
 
+impl core::fmt::Display for BitcoinNetwork {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			BitcoinNetwork::Mainnet => write!(f, "main"),
+			BitcoinNetwork::Testnet => write!(f, "test"),
+			BitcoinNetwork::Regtest => write!(f, "regtest"),
+		}
+	}
+}
+
 const SEGWIT_VERSION_ZERO: u8 = 0;
 const SEGWIT_VERSION_TAPROOT: u8 = 1;
 const SEGWIT_VERSION_MAX: u8 = 16;
