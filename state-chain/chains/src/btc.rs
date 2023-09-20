@@ -7,7 +7,7 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator};
+use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator, TransactionValidator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -215,6 +215,8 @@ impl ChainCrypto for BitcoinCrypto {
 
 	type GovKey = Self::AggKey;
 
+	type NativeSignature = Signature;
+
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
 		payloads: &Self::Payload,
@@ -290,6 +292,17 @@ fn verify_single_threshold_signature(
 	}
 	recovered_r.x.normalize();
 	recovered_r.x.eq_var(&rx)
+}
+
+pub struct BitcoinTransactionValidator;
+
+impl TransactionValidator for BitcoinTransactionValidator {
+	type Transaction = BitcoinTransactionData;
+	type Signature = Signature;
+
+	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
+		true
+	}
 }
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId

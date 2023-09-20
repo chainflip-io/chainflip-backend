@@ -65,6 +65,17 @@ pub struct EthereumTrackedData {
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
 }
 
+pub struct EthereumTransactionValidator;
+
+impl TransactionValidator for EthereumTransactionValidator {
+	type Transaction = Transaction;
+	type Signature = H256;
+
+	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
+		true
+	}
+}
+
 impl EthereumTrackedData {
 	pub fn max_fee_per_gas(
 		&self,

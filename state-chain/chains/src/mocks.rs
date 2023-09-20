@@ -5,6 +5,7 @@ use crate::{
 	*,
 };
 use cf_utilities::SliceToArray;
+use ethereum_types::H256;
 use sp_core::{ConstBool, H160};
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
@@ -213,6 +214,8 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	// TODO: Use a different type here? So we can get better coverage
 	type TransactionOutId = [u8; 4];
 	type GovKey = [u8; 32];
+
+	type NativeSignature = H256;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

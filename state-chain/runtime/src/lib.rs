@@ -20,8 +20,10 @@ use cf_amm::{
 };
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinNetwork},
-	dot::{self, PolkadotCrypto, PolkadotHash},
-	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
+	dot::{self, PolkadotCrypto, PolkadotHash, PolkadotTransactionValidator},
+	eth::{
+		self, api::EthereumApi, Address as EthereumAddress, Ethereum, EthereumTransactionValidator,
+	},
 	evm::EvmCrypto,
 	Bitcoin, Polkadot,
 };
@@ -34,6 +36,8 @@ use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
+
+use cf_chains::btc::BitcoinTransactionValidator;
 
 pub use frame_support::{
 	construct_runtime, debug,
@@ -679,6 +683,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type TransactionValidator = EthereumTransactionValidator;
 	type KeyProvider = EthereumVault;
 }
 
@@ -701,6 +706,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type TransactionValidator = PolkadotTransactionValidator;
 	type KeyProvider = PolkadotVault;
 }
 
@@ -723,6 +729,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type TransactionValidator = BitcoinTransactionValidator;
 	type KeyProvider = BitcoinVault;
 }
 

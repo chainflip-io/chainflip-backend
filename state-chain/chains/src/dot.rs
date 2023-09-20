@@ -293,6 +293,8 @@ impl ChainCrypto for PolkadotCrypto {
 
 	type GovKey = PolkadotPublicKey;
 
+	type NativeSignature = ();
+
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
 		payload: &Self::Payload,
@@ -303,6 +305,17 @@ impl ChainCrypto for PolkadotCrypto {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
+	}
+}
+
+pub struct PolkadotTransactionValidator;
+
+impl TransactionValidator for PolkadotTransactionValidator {
+	type Transaction = PolkadotTransactionData;
+	type Signature = ();
+
+	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
+		true
 	}
 }
 

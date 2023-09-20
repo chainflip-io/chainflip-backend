@@ -157,6 +157,8 @@ pub trait ChainCrypto {
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
+	type NativeSignature: Member + Parameter + BenchmarkValue;
+
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
 		payload: &Self::Payload,
@@ -411,4 +413,12 @@ pub struct CcmDepositMetadata {
 pub struct ChainState<C: Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub tracked_data: C::TrackedData,
+}
+
+/// Trait for validating transactions and signatures.
+pub trait TransactionValidator {
+	type Transaction;
+	type Signature;
+	/// Fit the transaction and signature together and check if the signature is valid.
+	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool;
 }

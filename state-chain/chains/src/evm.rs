@@ -35,6 +35,8 @@ impl ChainCrypto for EvmCrypto {
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
 
+	type NativeSignature = H256;
+
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
 		payload: &Self::Payload,

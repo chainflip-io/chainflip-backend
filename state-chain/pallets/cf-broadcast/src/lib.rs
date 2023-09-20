@@ -27,6 +27,8 @@ use frame_support::{
 	Twox64Concat,
 };
 
+use cf_chains::TransactionValidator;
+
 use cf_traits::KeyProvider;
 
 use frame_system::pallet_prelude::OriginFor;
@@ -104,6 +106,10 @@ pub mod pallet {
 
 	/// Type alias for the instance's configured ApiCall.
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
+
+	/// Type alias for the instance's configured Signature.
+	pub type SignatureFor<T, I> =
+		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::NativeSignature;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
@@ -192,6 +198,12 @@ pub mod pallet {
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
 
+		/// The thing thats validates the transaction
+		type TransactionValidator: TransactionValidator<
+			Transaction = <<Self as Config<I>>::TargetChain as Chain>::Transaction,
+			Signature = <<<Self as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::NativeSignature,
+		>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -260,6 +272,15 @@ pub mod pallet {
 		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
 		OptionQuery,
 	>;
+
+	/// Tracks whether a transaction has been validated by the target chain.
+	#[pallet::storage]
+	pub type BroadcastValidated<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, bool, ValueQuery>;
+
+	#[pallet::storage]
+	pub type Transaction<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, TransactionFor<T, I>, OptionQuery>;
 
 	/// Tracks how much a signer id is owed for paying transaction fees.
 	#[pallet::storage]
@@ -468,9 +489,11 @@ pub mod pallet {
 
 			let signed_api_call = api_call.signed(&signature);
 
+			let transaction = T::TransactionBuilder::build_transaction(&signed_api_call);
+
 			Self::start_broadcast(
 				&signature,
-				T::TransactionBuilder::build_transaction(&signed_api_call),
+				transaction,
 				signed_api_call,
 				threshold_signature_payload,
 				broadcast_id,
@@ -514,9 +537,11 @@ pub mod pallet {
 			.transaction_payload
 			.return_fee_refund(tx_fee);
 
-			TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
-				*fee_deficit = fee_deficit.saturating_add(to_refund);
-			});
+			if BroadcastValidated::<T, I>::take(broadcast_id) {
+				TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
+					*fee_deficit = fee_deficit.saturating_add(to_refund);
+				});
+			}
 
 			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
@@ -563,6 +588,34 @@ pub mod pallet {
 			}
 
 			Ok(())
+		}
+
+		#[pallet::weight(Weight::zero())]
+		#[pallet::call_index(4)]
+		pub fn confirm_broadcast_attempt(
+			origin: OriginFor<T>,
+			broadcast_attempt_id: BroadcastAttemptId,
+			transaction: TransactionFor<T, I>,
+			transaction_signature: SignatureFor<T, I>,
+		) -> DispatchResult {
+			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?.into();
+			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
+			let expected_transaction = Transaction::<T, I>::get(broadcast_attempt_id.broadcast_id)
+				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
+			// Check the payload is the same
+			ensure!(transaction == expected_transaction, Error::<T, I>::InvalidPayload);
+			// Ensure the signature
+			if T::TransactionValidator::is_valid(transaction, transaction_signature) {
+				// If the signature is valid, we can remove the transaction from storage
+				Transaction::<T, I>::remove(broadcast_attempt_id.broadcast_id);
+				// And mark the broadcast as validated
+				BroadcastValidated::<T, I>::insert(broadcast_attempt_id.broadcast_id, true);
+				Ok(())
+			} else {
+				Err(Error::<T, I>::InvalidPayload.into())
+			}
 		}
 	}
 }
