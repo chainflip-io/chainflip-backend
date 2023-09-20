@@ -99,6 +99,7 @@ export async function doPerformSwap(
   tag = '',
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
+  amount?: string
 ) {
   const oldBalance = await getBalance(destAsset, destAddress);
 
@@ -111,7 +112,7 @@ export async function doPerformSwap(
     : Promise.resolve();
 
   await (senderType === SenderType.Address
-    ? send(sourceAsset, depositAddress)
+    ? send(sourceAsset, depositAddress, amount)
     : sendViaCfTester(sourceAsset, depositAddress));
 
   console.log(`${tag} Funded the address`);
@@ -139,6 +140,7 @@ export async function performSwap(
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
+  amount?: string,
 ) {
   const tag = swapTag ?? '';
 
@@ -155,7 +157,7 @@ export async function performSwap(
     tag,
     messageMetadata,
   );
-  await doPerformSwap(swapParams, tag, messageMetadata, senderType);
+  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount);
 
   return swapParams;
 }

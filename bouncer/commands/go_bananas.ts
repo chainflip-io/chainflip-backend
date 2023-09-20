@@ -17,7 +17,7 @@ import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function call(method: string, data: any, id: string) {
+async function call(method: string, params: any, id: string) {
   return axios({
     method: 'post',
     baseURL: 'http://localhost:10589',
@@ -26,7 +26,7 @@ async function call(method: string, data: any, id: string) {
       jsonrpc: '2.0',
       id,
       method,
-      params: data,
+      params,
     },
   });
 }
@@ -84,23 +84,23 @@ async function playLp(asset: string, price: number, liquidity: number) {
     const newSellTick = price2tick(price + newOffset - spread);
     const result = await Promise.all([
       call(
-        'lp_burnLimitOrder',
-        [asset, 'Buy', buyTick, liquidityFine.toString(16)],
+        'lp_setLimitOrder',
+        ['Usdc', asset, 1, buyTick, 0],
         `Burn Buy ${asset}`,
       ),
       call(
-        'lp_burnLimitOrder',
-        [asset, 'Sell', sellTick, (liquidityFine / price).toString(16)],
+        'lp_setLimitOrder',
+        [asset, 'Usdc', 1, sellTick, 0],
         `Burn Sell ${asset}`,
       ),
       call(
-        'lp_mintLimitOrder',
-        [asset, 'Buy', newBuyTick, liquidityFine.toString(16)],
+        'lp_setLimitOrder',
+        ['Usdc', asset, 1, newBuyTick, liquidityFine],
         `Mint Buy ${asset}`,
       ),
       call(
-        'lp_mintLimitOrder',
-        [asset, 'Sell', newSellTick, (liquidityFine / price).toString(16)],
+        'lp_setLimitOrder',
+        [asset, 'Usdc', 1, newSellTick, (liquidityFine / price)],
         `Mint Sell ${asset}`,
       ),
     ]);
@@ -144,6 +144,14 @@ async function launchTornado() {
   console.log(btcAddress);
 }
 
+const swapAmount = new Map<Asset, string>([
+  ['DOT', '3'],
+  ['ETH', '0.03'],
+  ['BTC', '0.003'],
+  ['USDC', '30'],
+  ['FLIP', '3'],
+]);
+
 async function playSwapper() {
   const assets: Asset[] = ['ETH', 'BTC', 'USDC', 'FLIP', 'DOT'];
   for (;;) {
@@ -151,7 +159,7 @@ async function playSwapper() {
     const dest = assets
       .filter((x) => x !== src)
       .at(Math.floor(Math.random() * (assets.length - 1)))!;
-    testSwap(src, dest);
+    testSwap(src, dest, undefined, undefined, undefined, swapAmount.get(src));
     await sleep(5000);
   }
 }
