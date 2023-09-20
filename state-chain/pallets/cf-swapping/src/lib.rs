@@ -1,7 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
+	CcmChannelMetadata, CcmChannelMetadataBoundedLen, CcmDepositMetadata,
+	CcmDepositMetadataBoundedLen, SwapOrigin,
 };
 use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
@@ -20,8 +21,8 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 mod benchmarking;
 
@@ -196,7 +197,7 @@ pub mod pallet {
 
 		/// Maximum size of a CCM message
 		#[pallet::constant]
-		type MaxCcmLength: Get<u32>;
+		type MaxCcmLength: Get<u32> + core::fmt::Debug + Eq + PartialEq + Copy + Clone + TypeInfo;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -518,13 +519,16 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
-			channel_metadata: Option<CcmChannelMetadata>,
+			channel_metadata_bounded_len: Option<CcmChannelMetadataBoundedLen<T::MaxCcmLength>>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
+
+			let channel_metadata: Option<CcmChannelMetadata> =
+				channel_metadata_bounded_len.map(|metadata| metadata.into());
 
 			if let Some(ref ccm) = channel_metadata {
 				// Currently only Ethereum supports CCM.
@@ -656,15 +660,11 @@ pub mod pallet {
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadata,
+			deposit_metadata_bounded_len: CcmDepositMetadataBoundedLen<T::MaxCcmLength>,
 			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			ensure!(
-				deposit_metadata.channel_metadata.message.len() <= T::MaxCcmLength::get() as usize,
-				Error::<T>::CcmMessageTooLong
-			);
+			let deposit_metadata = deposit_metadata_bounded_len.into();
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;

@@ -1,13 +1,14 @@
 use anyhow::anyhow;
+use cf_chains::CcmChannelMetadataBoundedLen;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	AnyhowRpcError,
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, ChannelId},
 	settings::StateChain,
-	BrokerApi, OperatorApi, StateChainApi,
+	BrokerApi, MaxCcmLength, OperatorApi, StateChainApi,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -51,25 +52,29 @@ fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
 	hex::decode(string.strip_prefix("0x").unwrap_or(string))
 }
 
-impl TryInto<CcmChannelMetadata> for BrokerCcmChannelMetadata {
+impl TryInto<CcmChannelMetadataBoundedLen<MaxCcmLength>> for BrokerCcmChannelMetadata {
 	type Error = anyhow::Error;
 
-	fn try_into(self) -> Result<CcmChannelMetadata, Self::Error> {
+	fn try_into(self) -> Result<CcmChannelMetadataBoundedLen<MaxCcmLength>, Self::Error> {
 		let gas_budget = self
 			.gas_budget
 			.try_into()
 			.map_err(|_| anyhow!("Failed to parse {:?} as gas budget", self.gas_budget))?;
-		let message =
-			parse_hex_bytes(&self.message).map_err(|e| anyhow!("Failed to parse message: {e}"))?;
+		let message = parse_hex_bytes(&self.message)
+			.map_err(|e| anyhow!("Failed to parse message: {e}"))?
+			.try_into()
+			.map_err(|_| anyhow!("CCM message too long."))?;
 
 		let cf_parameters = self
 			.cf_parameters
 			.map(|parameters| parse_hex_bytes(&parameters))
 			.transpose()
 			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
-			.unwrap_or_default();
+			.unwrap_or_default()
+			.try_into()
+			.map_err(|_| anyhow!("CCM cf_parameter too long."))?;
 
-		Ok(CcmChannelMetadata { gas_budget, message, cf_parameters })
+		Ok(CcmChannelMetadataBoundedLen { gas_budget, message, cf_parameters })
 	}
 }
 
