@@ -1,0 +1,22 @@
+[Unit]
+Description=Chainflip Validator Node
+
+[Service]
+Restart=always
+RestartSec=30
+
+WorkingDirectory=/etc/chainflip
+
+ExecStart=/usr/bin/chainflip-node \
+  --chain=/etc/chainflip/perseverance.chainspec.json \
+  --base-path=/etc/chainflip/chaindata \
+  --node-key-file=/etc/chainflip/keys/node_key_file \
+  --validator \
+  --trie-cache-size=0 \
+  --sync=warp
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
