@@ -25,22 +25,20 @@ fn submit_and_pass_proposal(proposal: Proposal) {
 			proposal: proposal.clone()
 		}),
 	);
-	assert!(Proposals::<Test>::contains_key(
-		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get()
-	));
+
+	let proposal_decision_block =
+		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get();
+
+	assert_eq!(Proposals::<Test>::get(proposal_decision_block), Some(proposal.clone()));
 	// Back the proposal to ensure threshold
 	assert_ok!(TokenholderGovernance::back_proposal(RuntimeOrigin::signed(BOB), proposal.clone()));
 	assert_ok!(TokenholderGovernance::back_proposal(
 		RuntimeOrigin::signed(CHARLES),
 		proposal.clone()
 	));
-	// Jump to the block in which we expect the proposal
-	TokenholderGovernance::on_initialize(
-		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get(),
-	);
-	assert!(!Proposals::<Test>::contains_key(
-		<frame_system::Pallet<Test>>::block_number() + <mock::Test as Config>::VotingPeriod::get()
-	));
+	// Jump to the block in which we expect the proposal to pass
+	TokenholderGovernance::on_initialize(proposal_decision_block);
+	assert!(!Proposals::<Test>::contains_key(proposal_decision_block));
 	assert_eq!(
 		last_event::<Test>(),
 		mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalPassed {
@@ -52,7 +50,12 @@ fn submit_and_pass_proposal(proposal: Proposal) {
 #[test]
 fn update_gov_key_via_onchain_proposal() {
 	new_test_ext().execute_with(|| {
-		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
+		let new_key = vec![1; 32];
+
+		// Initially no key is set
+		assert_eq!(GovKeys::<Test>::get(ForeignChain::Ethereum), None);
+
+		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, new_key.clone());
 		submit_and_pass_proposal(proposal.clone());
 		// Expect the proposal to be moved to the enactment stage
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
@@ -65,6 +68,9 @@ fn update_gov_key_via_onchain_proposal() {
 			last_event::<Test>(),
 			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
 		);
+
+		// The key should now be set
+		assert_eq!(GovKeys::<Test>::get(ForeignChain::Ethereum), Some(new_key));
 	});
 }
 
