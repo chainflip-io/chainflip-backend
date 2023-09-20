@@ -130,6 +130,8 @@ where
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		ceremony_id: CeremonyId,
 	) -> Self {
+		let ceremony_id = format!("{}", ceremony_id);
+		let chain_name = Chain::NAME.to_string();
 		CeremonyRunner {
 			stage: None,
 			delayed_messages: Default::default(),
@@ -140,29 +142,23 @@ where
 			metrics: CeremonyMetrics {
 				processed_messages: CeremonyProcessedMsgDrop::new(
 					&CEREMONY_PROCESSED_MSG,
-					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
+					[chain_name.clone(), ceremony_id.clone()],
 				),
-				bad_message: CeremonyBadMsgNotDrop::new(
-					&CEREMONY_BAD_MSG,
-					[Chain::NAME.to_string()],
-				),
+				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [chain_name.clone()]),
 				ceremony_duration: CeremonyDurationDrop::new(
 					&CEREMONY_DURATION,
-					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
+					[chain_name.clone(), ceremony_id.clone()],
 				),
 				missing_messages: CeremonyTimeoutMissingMsgDrop::new(
 					&CEREMONY_TIMEOUT_MISSING_MSG,
-					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
+					[chain_name.clone(), ceremony_id.clone()],
 				),
 				stage_duration: StageDurationDrop::new(
 					&STAGE_DURATION,
-					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
+					[chain_name.clone(), ceremony_id],
 				),
-				stage_failing: StageFailingNotDrop::new(&STAGE_FAILING, [Chain::NAME.to_string()]),
-				stage_completing: StageCompletingNotDrop::new(
-					&STAGE_COMPLETING,
-					[Chain::NAME.to_string()],
-				),
+				stage_failing: StageFailingNotDrop::new(&STAGE_FAILING, [chain_name.clone()]),
+				stage_completing: StageCompletingNotDrop::new(&STAGE_COMPLETING, [chain_name]),
 			},
 		}
 	}
