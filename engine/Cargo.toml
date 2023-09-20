@@ -48,7 +48,6 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.11"
-prometheus = { version = "0.13.0", default-features = false }
 
 # Same version of jsonrpsee as the substrate version our StateChain is on.
 jsonrpsee = { version = "0.16.2", features = ["full"] }
@@ -124,6 +123,7 @@ sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainf
 sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
 sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
 
 [dependencies.rocksdb]
 version = "0.21.0"

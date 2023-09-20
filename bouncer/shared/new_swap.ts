@@ -26,6 +26,9 @@ export async function newSwap(
     srcChain: chainFromAsset(sourceAsset),
     destAddress: destinationAddress,
     destChain: chainFromAsset(destAsset),
-    ccmMetadata: messageMetadata,
+    ccmMetadata: messageMetadata && {
+      message: messageMetadata.message as `0x${string}`,
+      gasBudget: messageMetadata.gasBudget.toString(),
+    },
   });
 }

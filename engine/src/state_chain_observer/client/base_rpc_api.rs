@@ -40,6 +40,10 @@ pub trait RawRpcApi:
 		state_chain_runtime::Hash,
 		state_chain_runtime::Header,
 		state_chain_runtime::SignedBlock,
+	> + substrate_frame_rpc_system::SystemApiClient<
+		state_chain_runtime::Hash,
+		state_chain_runtime::AccountId,
+		state_chain_runtime::Nonce,
 	>
 {
 }
@@ -119,6 +123,12 @@ pub trait BaseRpcApi {
 		asset: Asset,
 		at: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
+
+	async fn dry_run(
+		&self,
+		extrinsic: Bytes,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Bytes>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -214,5 +224,13 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		// TODO: Add function that gets minted range and limit orders #3082
 		//self.raw_rpc_client.cf_pool_minted_positions(lp, asset, Some(at)).await
 		Err(jsonrpsee::core::Error::Custom("Not implemented".to_string()))
+	}
+
+	async fn dry_run(
+		&self,
+		extrinsic: Bytes,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Bytes> {
+		self.raw_rpc_client.dry_run(extrinsic, at).await
 	}
 }

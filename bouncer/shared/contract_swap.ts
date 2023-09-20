@@ -26,7 +26,7 @@ export async function executeContractSwap(
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
 ): ReturnType<typeof executeSwap> {
-  const wallet = Wallet.fromMnemonic(
+  const wallet = Wallet.fromPhrase(
     process.env.ETH_USDC_WHALE_MNEMONIC ??
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
@@ -41,7 +41,7 @@ export async function executeContractSwap(
     srcTokenContractAddress: getEthContractAddress(srcAsset),
   } as const;
   const txOptions = {
-    nonce: BigInt(nonce),
+    nonce,
     gasLimit: 200000n,
   } as const;
 
@@ -51,7 +51,7 @@ export async function executeContractSwap(
       destAsset,
       // It is important that this is large enough to result in
       // an amount larger than existential (e.g. on Polkadot):
-      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
+      amount: BigInt(amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset])),
       destAddress,
       srcAsset,
       srcChain: assetChains[srcAsset],
@@ -98,7 +98,7 @@ export async function performSwapViaContract(
       if ('Vault' in event.data.origin) {
         const sourceAssetMatches = sourceAsset === (event.data.sourceAsset.toUpperCase() as Asset);
         const destAssetMatches = destAsset === (event.data.destinationAsset.toUpperCase() as Asset);
-        const txHashMatches = event.data.origin.Vault.txHash === receipt.transactionHash;
+        const txHashMatches = event.data.origin.Vault.txHash === receipt.hash;
         return sourceAssetMatches && destAssetMatches && txHashMatches;
       }
       // Otherwise it was a swap scheduled by requesting a deposit address
@@ -112,7 +112,7 @@ export async function performSwapViaContract(
           destAsset,
           destAddress,
           messageMetadata,
-          Wallet.fromMnemonic(
+          Wallet.fromPhrase(
             process.env.ETH_USDC_WHALE_MNEMONIC ??
               'test test test test test test test test test test test junk',
           ).address.toLowerCase(),
@@ -128,7 +128,7 @@ export async function performSwapViaContract(
       sourceAsset,
       destAsset,
       destAddress,
-      txHash: receipt.transactionHash,
+      txHash: receipt.hash,
     };
   } catch (err) {
     throw new Error(`${tag} ${err}`);
@@ -136,7 +136,7 @@ export async function performSwapViaContract(
 }
 
 export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: string) {
-  const wallet = Wallet.fromMnemonic(
+  const wallet = Wallet.fromPhrase(
     process.env.ETH_USDC_WHALE_MNEMONIC ??
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
@@ -144,7 +144,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
   await getNextEthNonce((nextNonce) =>
     approveVault(
       {
-        amount,
+        amount: BigInt(amount),
         srcAsset,
       },
       {
@@ -154,7 +154,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
         srcTokenContractAddress: getEthContractAddress(srcAsset),
       },
       {
-        nonce: BigInt(nextNonce),
+        nonce: nextNonce,
       },
     ),
   );
