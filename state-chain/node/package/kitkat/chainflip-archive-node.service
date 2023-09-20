@@ -8,7 +8,7 @@ RestartSec=30
 WorkingDirectory=/etc/chainflip
 
 ExecStart=/usr/bin/chainflip-node \
-    --chain=/etc/chainflip/perseverance.chainspec.json \
+    --chain=/etc/chainflip/kitkat.chainspec.json \
     --base-path=/etc/chainflip/chaindata \
     --node-key-file=/etc/chainflip/keys/node_key_file \
     --trie-cache-size=0 \
