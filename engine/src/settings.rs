@@ -720,7 +720,19 @@ pub mod tests {
 		"https://second.my_fake_polkadot_rpc:443/<secret_key>"
 	}
 
+	// We do them like this so they run sequentially, which is necessary so the environment doesn't
+	// interfere with tests running in parallel.
 	#[test]
+	fn all_settings_tests() {
+		settings_valid_if_only_all_the_environment_set();
+
+		test_init_config_with_testing_config();
+
+		test_base_config_path_command_line_option();
+
+		test_all_command_line_options();
+	}
+
 	fn settings_valid_if_only_all_the_environment_set() {
 		let _guard = TestEnvironment::default();
 
@@ -742,7 +754,6 @@ pub mod tests {
 		);
 	}
 
-	#[test]
 	fn test_init_config_with_testing_config() {
 		let test_settings = Settings::new_test().unwrap();
 
@@ -752,45 +763,6 @@ pub mod tests {
 		);
 	}
 
-	#[test]
-	fn test_websocket_endpoint_url_parsing() {
-		assert_ok!(validate_websocket_endpoint(
-			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
-		));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>".into()));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>".into()));
-		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>".into()));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node".into()));
-		assert_ok!(validate_websocket_endpoint(
-			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
-				.into()
-		));
-		assert!(validate_websocket_endpoint("https://wrong_scheme.com".into()).is_err());
-		assert!(validate_websocket_endpoint("".into()).is_err());
-	}
-
-	#[test]
-	fn test_http_endpoint_url_parsing() {
-		assert_ok!(validate_http_endpoint(
-			"http://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
-		));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>".into()));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>".into()));
-		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>".into()));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node".into()));
-		assert!(validate_http_endpoint("wss://wrong_scheme.com".into()).is_err());
-		assert!(validate_http_endpoint("".into()).is_err());
-	}
-
-	#[test]
-	fn test_db_file_path_parsing() {
-		assert_ok!(is_valid_db_path(Path::new("data.db")));
-		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
-		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
-		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
-	}
-
-	#[test]
 	fn test_base_config_path_command_line_option() {
 		// Load the settings using a custom base config path.
 		let test_base_config_path = "config/testing/";
@@ -828,7 +800,6 @@ pub mod tests {
 		assert!(custom_base_path_settings.btc.nodes.backup.is_none());
 	}
 
-	#[test]
 	fn test_all_command_line_options() {
 		use std::str::FromStr;
 		// Fill the options with test values that will pass the parsing/validation.
@@ -972,5 +943,43 @@ pub mod tests {
 		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
 
 		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
+	}
+
+	#[test]
+	fn test_websocket_endpoint_url_parsing() {
+		assert_ok!(validate_websocket_endpoint(
+			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
+		));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node".into()));
+		assert_ok!(validate_websocket_endpoint(
+			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
+				.into()
+		));
+		assert!(validate_websocket_endpoint("https://wrong_scheme.com".into()).is_err());
+		assert!(validate_websocket_endpoint("".into()).is_err());
+	}
+
+	#[test]
+	fn test_http_endpoint_url_parsing() {
+		assert_ok!(validate_http_endpoint(
+			"http://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
+		));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node".into()));
+		assert!(validate_http_endpoint("wss://wrong_scheme.com".into()).is_err());
+		assert!(validate_http_endpoint("".into()).is_err());
+	}
+
+	#[test]
+	fn test_db_file_path_parsing() {
+		assert_ok!(is_valid_db_path(Path::new("data.db")));
+		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
+		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
+		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
 	}
 }
