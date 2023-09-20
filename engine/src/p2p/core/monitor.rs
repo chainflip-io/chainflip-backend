@@ -17,6 +17,7 @@ use super::socket::DO_NOT_LINGER;
 
 use super::{socket::OutgoingSocket, PeerInfo};
 
+use utilities::metrics::P2P_MONITOR_EVENT;
 /// Describes peer connection to start monitoring
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SocketToMonitor {
@@ -170,6 +171,7 @@ pub fn start_monitoring_thread(
 							zmq::SocketEvent::HANDSHAKE_FAILED_AUTH |
 							zmq::SocketEvent::HANDSHAKE_FAILED_NO_DETAIL |
 							zmq::SocketEvent::HANDSHAKE_FAILED_PROTOCOL => {
+								P2P_MONITOR_EVENT.inc(&["handshake_failed"]);
 								warn!(
 									"Socket event: handshake failed with {account_id} ({event:?})"
 								);
@@ -201,6 +203,7 @@ pub fn start_monitoring_thread(
 									.unwrap();
 							},
 							zmq::SocketEvent::CONNECT_RETRIED => {
+								P2P_MONITOR_EVENT.inc(&["connect_retried"]);
 								let interval = u32::from_le_bytes(data);
 								trace!("Socket event: retried connecting to {account_id} after {interval}ms");
 							},
@@ -208,6 +211,7 @@ pub fn start_monitoring_thread(
 								trace!("Socket event: connected to {account_id}");
 							},
 							zmq::SocketEvent::DISCONNECTED => {
+								P2P_MONITOR_EVENT.inc(&["disconnected"]);
 								trace!("Socket event: disconnected from {account_id}");
 							},
 							unknown_event => {

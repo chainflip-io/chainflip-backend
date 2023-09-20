@@ -5,7 +5,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::retry_rpc::DotRetryRpcClient,
 	eth::retry_rpc::EthersRetryRpcClient,
-	health, metrics, p2p,
+	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	settings_migrate::migrate_settings0_9_2_to_0_9_3,
 	state_chain_observer::{
@@ -25,7 +25,7 @@ use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
-	make_periodic_tick,
+	make_periodic_tick, metrics,
 	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };

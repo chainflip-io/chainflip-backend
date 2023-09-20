@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::{redact_endpoint_secret::SecretUrl, Port};
+use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -145,12 +145,6 @@ pub struct HealthCheck {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Logging {
 	pub span_lifecycle: bool,
-}
-
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Prometheus {
-	pub hostname: String,
-	pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
