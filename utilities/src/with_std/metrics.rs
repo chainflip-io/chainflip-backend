@@ -481,6 +481,24 @@ build_gauge_vec_struct!(
 	["chain", "ceremony_id", "stage", "phase"], //phase can be either receiving or processing
 	["chain", "ceremony_id"]
 );
+build_counter_vec_struct!(
+	STAGE_FAILING,
+	StageFailingNotDrop,
+	"stage_failing",
+	"Count the number of stages which are failing and reaching timeout",
+	false,
+	["chain", "stage"],
+	["chain"]
+);
+build_counter_vec_struct!(
+	STAGE_COMPLETING,
+	StageCompletingNotDrop,
+	"stage_completing",
+	"Count the number of stages which are completing succesfully by receiving all the messages",
+	false,
+	["chain", "stage"],
+	["chain"]
+);
 
 /// structure containing the metrics used during a ceremony
 #[derive(Clone)]
@@ -490,6 +508,8 @@ pub struct CeremonyMetrics {
 	pub ceremony_duration: CeremonyDurationDrop,
 	pub missing_messages: CeremonyTimeoutMissingMsgDrop,
 	pub stage_duration: StageDurationDrop,
+	pub stage_failing: StageFailingNotDrop,
+	pub stage_completing: StageCompletingNotDrop,
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]

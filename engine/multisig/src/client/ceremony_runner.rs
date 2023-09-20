@@ -19,8 +19,9 @@ use utilities::{
 	format_iterator,
 	metrics::{
 		CeremonyBadMsgNotDrop, CeremonyDurationDrop, CeremonyMetrics, CeremonyProcessedMsgDrop,
-		CeremonyTimeoutMissingMsgDrop, StageDurationDrop, CEREMONY_BAD_MSG, CEREMONY_DURATION,
-		CEREMONY_PROCESSED_MSG, CEREMONY_TIMEOUT_MISSING_MSG, STAGE_DURATION,
+		CeremonyTimeoutMissingMsgDrop, StageCompletingNotDrop, StageDurationDrop,
+		StageFailingNotDrop, CEREMONY_BAD_MSG, CEREMONY_DURATION, CEREMONY_PROCESSED_MSG,
+		CEREMONY_TIMEOUT_MISSING_MSG, STAGE_COMPLETING, STAGE_DURATION, STAGE_FAILING,
 	},
 };
 
@@ -157,6 +158,11 @@ where
 					&STAGE_DURATION,
 					[Chain::NAME.to_string(), format!("{}", ceremony_id)],
 				),
+				stage_failing: StageFailingNotDrop::new(&STAGE_FAILING, [Chain::NAME.to_string()]),
+				stage_completing: StageCompletingNotDrop::new(
+					&STAGE_COMPLETING,
+					[Chain::NAME.to_string()],
+				),
 			},
 		}
 	}
@@ -196,12 +202,13 @@ where
 				.stage
 				.take()
 				.expect("Ceremony must be authorised to finalize any of its stages");
-
+			let stage_name: &str = &format!("{}", stage.get_stage_name());
 			let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
 			match stage.finalize(&mut self.metrics).await {
 				StageResult::NextStage(mut next_stage) => {
 					debug!("Ceremony transitions to {}", next_stage.get_stage_name());
+					self.metrics.stage_completing.inc(&[stage_name]);
 
 					let single_party_result = next_stage.init(&mut self.metrics);
 
@@ -228,6 +235,7 @@ where
 					Some(Err((validator_mapping.get_ids(bad_validators), reason))),
 				StageResult::Done(result) => {
 					debug!("Ceremony reached the final stage!");
+					self.metrics.stage_completing.inc(&[stage_name]);
 
 					Some(Ok(result))
 				},
@@ -370,6 +378,7 @@ where
 					missing_messages_from_accounts.len()
 				);
 
+			self.metrics.stage_failing.inc(&[&format!("{}", stage.get_stage_name())]);
 			self.metrics.missing_messages.set(missing_messages_from_accounts.len());
 			self.finalize_current_stage().await
 		} else {
