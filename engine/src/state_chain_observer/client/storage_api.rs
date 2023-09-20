@@ -186,6 +186,7 @@ pub trait StorageApi {
 impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
 	for BaseRpcApi
 {
+	#[track_caller]
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,
@@ -202,6 +203,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		))
 	}
 
+	#[track_caller]
 	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -213,6 +215,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		.await
 	}
 
+	#[track_caller]
 	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -230,6 +233,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		.await
 	}
 
+	#[track_caller]
 	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -251,6 +255,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 	/// Gets all the storage pairs (key, value) of a StorageMap.
 	/// NB: Because this is an unbounded operation, it requires the node to have
 	/// the `--rpc-methods=unsafe` enabled.
+	#[track_caller]
 	async fn storage_map<
 		StorageMap: StorageMapAssociatedTypes + 'static,
 		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>,
@@ -279,6 +284,7 @@ impl<
 		SignedExtrinsicClient: Send + Sync + 'static,
 	> StorageApi for super::StateChainClient<SignedExtrinsicClient, BaseRpcApi>
 {
+	#[track_caller]
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,
@@ -293,6 +299,7 @@ impl<
 			.await
 	}
 
+	#[track_caller]
 	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -300,6 +307,7 @@ impl<
 		self.base_rpc_client.storage_value::<StorageValue>(block_hash).await
 	}
 
+	#[track_caller]
 	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -313,6 +321,7 @@ impl<
 		self.base_rpc_client.storage_map_entry::<StorageMap>(block_hash, key).await
 	}
 
+	#[track_caller]
 	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -333,6 +342,7 @@ impl<
 			.await
 	}
 
+	#[track_caller]
 	async fn storage_map<
 		StorageMap: StorageMapAssociatedTypes + 'static,
 		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static,
