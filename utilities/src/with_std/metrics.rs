@@ -370,7 +370,7 @@ mod test {
 
 	#[tokio::test]
 	async fn prometheus_test() {
-		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
+		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5567 };
 		let metric = create_and_register_metric();
 
 		let _ = DELETE_METRIC_CHANNEL
