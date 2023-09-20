@@ -1,8 +1,9 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
-	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
+	DepositChannelLifetime, DepositChannelLookup, DepositChannelPool, DepositWitness,
+	DisabledEgressAssets, Error, Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer,
+	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	VaultTransfer,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -22,6 +23,7 @@ use cf_traits::{
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
+	weights::Weight,
 };
 use sp_core::H160;
 
@@ -29,7 +31,6 @@ const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
-const EXPIRY_BLOCK: u64 = 6;
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
@@ -200,10 +201,8 @@ fn can_schedule_swap_egress_to_batch() {
 fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
-	expiry: u64,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address) =
-		IngressEgress::request_liquidity_deposit_address(who, asset, expiry).unwrap();
+	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
@@ -220,9 +219,9 @@ fn can_schedule_deposit_fetch() {
 	new_test_ext().execute_with(|| {
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
 
-		request_address_and_deposit(1u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(2u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(3u64, eth::Asset::Flip, 1_000u64);
+		request_address_and_deposit(1u64, eth::Asset::Eth);
+		request_address_and_deposit(2u64, eth::Asset::Eth);
+		request_address_and_deposit(3u64, eth::Asset::Flip);
 
 		assert!(matches!(
 			&ScheduledEgressFetchOrTransfer::<Test>::get()[..],
@@ -237,7 +236,7 @@ fn can_schedule_deposit_fetch() {
 			crate::Event::DepositFetchesScheduled { channel_id: 1, asset: eth::Asset::Eth },
 		));
 
-		request_address_and_deposit(4u64, eth::Asset::Eth, 1_000u64);
+		request_address_and_deposit(4u64, eth::Asset::Eth);
 
 		assert!(matches!(
 			&ScheduledEgressFetchOrTransfer::<Test>::get()[..],
@@ -258,16 +257,16 @@ fn on_finalize_can_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS, None);
-		request_address_and_deposit(1u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(2u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(3u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(4u64, eth::Asset::Eth, 1_000u64);
+		request_address_and_deposit(1u64, eth::Asset::Eth);
+		request_address_and_deposit(2u64, eth::Asset::Eth);
+		request_address_and_deposit(3u64, eth::Asset::Eth);
+		request_address_and_deposit(4u64, eth::Asset::Eth);
 
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None);
-		request_address_and_deposit(5u64, eth::Asset::Flip, 1_000u64);
+		request_address_and_deposit(5u64, eth::Asset::Flip);
 
 		// Take all scheduled Egress and Broadcast as batch
 		IngressEgress::on_finalize(1);
@@ -299,19 +298,19 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS, None);
-		request_address_and_deposit(1u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(2u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(3u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(4u64, eth::Asset::Eth, 1_000u64);
+		request_address_and_deposit(1u64, eth::Asset::Eth);
+		request_address_and_deposit(2u64, eth::Asset::Eth);
+		request_address_and_deposit(3u64, eth::Asset::Eth);
+		request_address_and_deposit(4u64, eth::Asset::Eth);
 
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS, None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS, None);
-		request_address_and_deposit(5u64, eth::Asset::Flip, 1_000u64);
+		request_address_and_deposit(5u64, eth::Asset::Flip);
 
 		MockAllBatch::<MockEthEnvironment>::set_success(false);
-		request_address_and_deposit(4u64, eth::Asset::Usdc, 1_000u64);
+		request_address_and_deposit(4u64, eth::Asset::Usdc);
 
 		let scheduled_requests = ScheduledEgressFetchOrTransfer::<Test>::get();
 
@@ -329,21 +328,10 @@ fn addresses_are_getting_reused() {
 		// Request 2 deposit addresses and deposit to one of them.
 		.request_address_and_deposit(&[
 			(
-				DepositRequest::Liquidity {
-					lp_account: ALICE,
-					asset: eth::Asset::Eth,
-					expiry_block: 1000_u64,
-				},
+				DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
 				100u32.into(),
 			),
-			(
-				DepositRequest::Liquidity {
-					lp_account: ALICE,
-					asset: eth::Asset::Eth,
-					expiry_block: 1000_u64,
-				},
-				0u32.into(),
-			),
+			(DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth }, 0u32.into()),
 		])
 		.inspect_storage(|deposit_details| {
 			assert_eq!(ChannelIdCounter::<Test, _>::get(), deposit_details.len() as u64);
@@ -365,9 +353,10 @@ fn addresses_are_getting_reused() {
 			channels
 		})
 		.then_execute_at_next_block(|channels| {
-			for (_request, _id, address) in &channels {
-				IngressEgress::expire_channel(*address);
-			}
+			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
+				DepositChannelLifetime::<Test, _>::get() * 2;
+			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+
 			channels[0].clone()
 		})
 		// Check that the used address is now deployed and in the pool of available addresses.
@@ -379,7 +368,6 @@ fn addresses_are_getting_reused() {
 		.request_deposit_addresses(&[(DepositRequest::Liquidity {
 			lp_account: ALICE,
 			asset: eth::Asset::Eth,
-			expiry_block: 1000_u64,
 		})])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.inspect_storage(|_| {
@@ -392,18 +380,23 @@ fn addresses_are_getting_reused() {
 fn proof_address_pool_integrity() {
 	new_test_ext().execute_with(|| {
 		let channel_details = (0..3)
-			.map(|id| request_address_and_deposit(id, eth::Asset::Eth, 1_000u64))
+			.map(|id| request_address_and_deposit(id, eth::Asset::Eth))
 			.collect::<Vec<_>>();
 		// All addresses in use
 		expect_size_of_address_pool(0);
 		IngressEgress::on_finalize(1);
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::expire_channel(address);
 		}
+		let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
+			DepositChannelLifetime::<Test, _>::get() * 2;
+		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+
+		IngressEgress::on_idle(1, Weight::MAX);
+
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
-		request_address_and_deposit(4u64, eth::Asset::Eth, 1_000u64);
+		request_address_and_deposit(4u64, eth::Asset::Eth);
 		// Expect one address to be in use
 		expect_size_of_address_pool(2);
 	});
@@ -413,19 +406,21 @@ fn proof_address_pool_integrity() {
 fn create_new_address_while_pool_is_empty() {
 	new_test_ext().execute_with(|| {
 		let channel_details = (0..2)
-			.map(|id| request_address_and_deposit(id, eth::Asset::Eth, 1_000u64))
+			.map(|id| request_address_and_deposit(id, eth::Asset::Eth))
 			.collect::<Vec<_>>();
 		IngressEgress::on_finalize(1);
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::expire_channel(address);
 		}
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
+			DepositChannelLifetime::<Test, _>::get() * 2;
+		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+		IngressEgress::on_idle(1, Weight::MAX);
+
 		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
-		request_address_and_deposit(3u64, eth::Asset::Eth, 1_000u64);
+		request_address_and_deposit(3u64, eth::Asset::Eth);
 		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
 		IngressEgress::on_finalize(1);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
 	});
 }
@@ -442,7 +437,6 @@ fn reused_address_channel_id_matches() {
 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
-			1_000u64,
 		)
 		.unwrap();
 		// The reused details should be the same as before.
@@ -478,7 +472,6 @@ fn can_process_ccm_deposit() {
 			0,
 			1,
 			Some(channel_metadata),
-			1_000u64,
 		)
 		.unwrap();
 
@@ -590,7 +583,7 @@ fn multi_use_deposit_address_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 
 	new_test_ext()
-		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH, 1_000u64))
+		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
 		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
 			// Set the address to deployed.
 			// Do another, should succeed.
@@ -601,11 +594,14 @@ fn multi_use_deposit_address_different_blocks() {
 				(),
 				Default::default()
 			));
+			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
+				DepositChannelLifetime::<Test, _>::get() * 2;
+			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+
 			channel
 		})
 		.then_execute_at_next_block(|(_, deposit_address)| {
 			// Closing the channel should invalidate the deposit address.
-			IngressEgress::expire_channel(deposit_address);
 			assert_noop!(
 				IngressEgress::process_deposits(
 					RuntimeOrigin::root(),
@@ -628,11 +624,7 @@ fn multi_use_deposit_same_block() {
 	const FLIP: eth::Asset = eth::Asset::Flip;
 	const DEPOSIT_AMOUNT: <Ethereum as Chain>::ChainAmount = 1_000;
 	new_test_ext()
-		.request_deposit_addresses(&[DepositRequest::Liquidity {
-			lp_account: ALICE,
-			asset: FLIP,
-			expiry_block: 1_000u64,
-		}])
+		.request_deposit_addresses(&[DepositRequest::Liquidity { lp_account: ALICE, asset: FLIP }])
 		.map_context(|mut ctx| {
 			assert!(ctx.len() == 1);
 			ctx.pop().unwrap()
@@ -785,7 +777,7 @@ fn deposits_below_minimum_are_rejected() {
 		));
 
 		// Observe that eth deposit gets rejected.
-		let (_, deposit_address) = request_address_and_deposit(0, eth, 1_000u64);
+		let (_, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositIgnored {
 				deposit_address,
@@ -796,7 +788,7 @@ fn deposits_below_minimum_are_rejected() {
 		));
 
 		// Flip deposit should succeed.
-		let (_, deposit_address) = request_address_and_deposit(0, flip, 1_000u64);
+		let (_, deposit_address) = request_address_and_deposit(0, flip);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::DepositReceived {
 				deposit_address,
@@ -813,7 +805,7 @@ fn handle_pending_deployment() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext().execute_with(|| {
 		// Initial request.
-		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth, 1_000u64);
+		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Process deposits.
 		IngressEgress::on_finalize(1);
@@ -822,8 +814,8 @@ fn handle_pending_deployment() {
 		Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, (), Default::default())
 			.unwrap();
 		// None-pending requests can still be sent
-		request_address_and_deposit(1u64, eth::Asset::Eth, 1_000u64);
-		request_address_and_deposit(2u64, eth::Asset::Eth, 1_000u64);
+		request_address_and_deposit(1u64, eth::Asset::Eth);
+		request_address_and_deposit(2u64, eth::Asset::Eth);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 3);
 		// Process deposit again.
 		IngressEgress::on_finalize(1);
@@ -841,7 +833,7 @@ fn handle_pending_deployment() {
 fn handle_pending_deployment_same_block() {
 	new_test_ext().execute_with(|| {
 		// Initial request.
-		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth, 1_000u64);
+		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
 		Pallet::<Test, _>::process_single_deposit(
 			deposit_address,
 			eth::Asset::Eth,
@@ -877,7 +869,7 @@ fn channel_reuse_with_different_assets() {
 	new_test_ext()
 		// First, request a deposit address and use it, then close it so it gets recycled.
 		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: ASSET_1, expiry_block: 1_000u64 },
+			DepositRequest::Liquidity { lp_account: ALICE, asset: ASSET_1 },
 			100_000,
 		)])
 		.map_context(|mut result| result.pop().unwrap())
@@ -894,8 +886,11 @@ fn channel_reuse_with_different_assets() {
 					asset
 			);
 		})
-		.then_execute_at_next_block(|(_, channel_id, channel_address)| {
-			IngressEgress::expire_channel(channel_address);
+		// move forward expired blocks
+		.then_execute_at_next_block(|(_, channel_id, _)| {
+			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
+				DepositChannelLifetime::<Test, _>::get() * 2;
+			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 			channel_id
 		})
 		.inspect_storage(|channel_id| {
@@ -909,7 +904,6 @@ fn channel_reuse_with_different_assets() {
 		.request_deposit_addresses(&[DepositRequest::Liquidity {
 			lp_account: ALICE,
 			asset: ASSET_2,
-			expiry_block: 1_000u64,
 		}])
 		.map_context(|mut result| result.pop().unwrap())
 		// Ensure that the deposit channel's asset is updated.
@@ -921,6 +915,28 @@ fn channel_reuse_with_different_assets() {
 					asset
 			);
 		});
+}
+
+/// This is the sequence we're testing.
+/// 1. Request deposit address
+/// 2. Deposit to address when it's almost expired
+/// 3. The channel is expired
+/// 4. We need to finalise the ingress, by fetching
+/// 5. The fetch should succeed.
+#[test]
+fn ingress_finalisation_succeeds_after_channel_recycled() {
+	new_test_ext().execute_with(|| {
+		request_address_and_deposit(ALICE, eth::Asset::Eth);
+
+		let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
+			DepositChannelLifetime::<Test, _>::get() * 2;
+		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+		IngressEgress::on_idle(1, Weight::MAX);
+
+		IngressEgress::on_finalize(1);
+
+		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+	});
 }
 
 #[test]
@@ -953,8 +969,6 @@ fn basic_balance_tracking() {
 	const ETH_DEPOSIT_AMOUNT: u128 = 1_000;
 	const FLIP_DEPOSIT_AMOUNT: u128 = 2_000;
 	const USDC_DEPOSIT_AMOUNT: u128 = 3_000;
-	// Expiry just needs to be sufficiently high so that it won't trigger.
-	const EXPIRY_BLOCK: u64 = 1_000;
 
 	new_test_ext()
 		.check_deposit_balances(&[
@@ -963,11 +977,7 @@ fn basic_balance_tracking() {
 			(eth::Asset::Usdc, 0),
 		])
 		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity {
-				lp_account: ALICE,
-				asset: eth::Asset::Eth,
-				expiry_block: EXPIRY_BLOCK,
-			},
+			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
 			ETH_DEPOSIT_AMOUNT,
 		)])
 		.check_deposit_balances(&[
@@ -976,11 +986,7 @@ fn basic_balance_tracking() {
 			(eth::Asset::Usdc, 0),
 		])
 		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity {
-				lp_account: ALICE,
-				asset: eth::Asset::Flip,
-				expiry_block: EXPIRY_BLOCK,
-			},
+			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Flip },
 			FLIP_DEPOSIT_AMOUNT,
 		)])
 		.check_deposit_balances(&[
@@ -989,11 +995,7 @@ fn basic_balance_tracking() {
 			(eth::Asset::Usdc, 0),
 		])
 		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity {
-				lp_account: ALICE,
-				asset: eth::Asset::Usdc,
-				expiry_block: EXPIRY_BLOCK,
-			},
+			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Usdc },
 			USDC_DEPOSIT_AMOUNT,
 		)])
 		.check_deposit_balances(&[
@@ -1002,11 +1004,7 @@ fn basic_balance_tracking() {
 			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
 		])
 		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity {
-				lp_account: ALICE,
-				asset: eth::Asset::Eth,
-				expiry_block: EXPIRY_BLOCK,
-			},
+			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
 			ETH_DEPOSIT_AMOUNT,
 		)])
 		.check_deposit_balances(&[
@@ -1019,7 +1017,6 @@ fn basic_balance_tracking() {
 				source_asset: eth::Asset::Eth,
 				destination_asset: eth::Asset::Flip,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				expiry_block: EXPIRY_BLOCK,
 			},
 			ETH_DEPOSIT_AMOUNT,
 		)])

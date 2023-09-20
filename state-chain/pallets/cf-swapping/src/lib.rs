@@ -7,14 +7,17 @@ use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
-use frame_support::{pallet_prelude::*, storage::with_storage_layer};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{
+		traits::{Get, Saturating},
+		DispatchError, Permill,
+	},
+	storage::with_storage_layer,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
-use sp_runtime::{
-	traits::{BlockNumberProvider, Get, Saturating},
-	DispatchError, Permill,
-};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 #[cfg(test)]
@@ -223,23 +226,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, u64, (Asset, AssetAmount)>;
 
-	/// Stores the swap TTL in blocks.
-	#[pallet::storage]
-	pub type SwapTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
 	pub(crate) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
 
-	/// For a given block number, stores the list of swap channels that expire at that block.
-	#[pallet::storage]
-	pub type SwapChannelExpiries<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BlockNumberFor<T>,
-		Vec<(ChannelId, ForeignChainAddress)>,
-		ValueQuery,
-	>;
 	/// Tracks the outputs of Ccm swaps.
 	#[pallet::storage]
 	pub(crate) type CcmOutputs<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwapOutput>;
@@ -262,7 +252,6 @@ pub mod pallet {
 		SwapDepositAddressReady {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
-			expiry_block: BlockNumberFor<T>,
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
@@ -312,13 +301,6 @@ pub mod pallet {
 		CcmEgressScheduled {
 			ccm_id: u64,
 			egress_id: EgressId,
-		},
-		SwapDepositAddressExpired {
-			deposit_address: EncodedAddress,
-			channel_id: ChannelId,
-		},
-		SwapTtlSet {
-			ttl: BlockNumberFor<T>,
 		},
 		CcmDepositReceived {
 			ccm_id: u64,
@@ -370,14 +352,13 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub swap_ttl: BlockNumberFor<T>,
 		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
+		pub _phantom: PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			SwapTTL::<T>::put(self.swap_ttl);
 			for (asset, min) in &self.minimum_swap_amounts {
 				MinimumSwapAmount::<T>::insert(asset, min);
 			}
@@ -386,27 +367,12 @@ pub mod pallet {
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			// 1200 = 2 hours (6 sec per block)
-			Self { swap_ttl: BlockNumberFor::<T>::from(1_200u32), minimum_swap_amounts: vec![] }
+			Self { minimum_swap_amounts: vec![], _phantom: PhantomData }
 		}
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Clean up expired deposit channels
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = SwapChannelExpiries::<T>::take(n);
-			let expired_count = expired.len();
-			for (channel_id, address) in expired {
-				T::DepositHandler::expire_channel(address.clone());
-				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
-					deposit_address: T::AddressConverter::to_encoded_address(address),
-					channel_id,
-				});
-			}
-			T::WeightInfo::on_initialize(expired_count as u32)
-		}
-
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			if !T::SafeMode::get().swaps_enabled {
@@ -528,9 +494,6 @@ pub mod pallet {
 				);
 			}
 
-			let expiry_block = frame_system::Pallet::<T>::current_block_number()
-				.saturating_add(SwapTTL::<T>::get());
-
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
 				destination_asset,
@@ -538,15 +501,11 @@ pub mod pallet {
 				broker_commission_bps,
 				broker,
 				channel_metadata.clone(),
-				expiry_block,
 			)?;
-
-			SwapChannelExpiries::<T>::append(expiry_block, (channel_id, deposit_address.clone()));
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
-				expiry_block,
 				source_asset,
 				destination_asset,
 				channel_id,
@@ -681,23 +640,6 @@ pub mod pallet {
 
 			T::AccountRoleRegistry::register_as_broker(&account_id)?;
 
-			Ok(())
-		}
-
-		/// Sets the lifetime of swap channels.
-		///
-		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::SwapTtlSet)
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
-		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			SwapTTL::<T>::set(ttl);
-
-			Self::deposit_event(Event::<T>::SwapTtlSet { ttl });
 			Ok(())
 		}
 

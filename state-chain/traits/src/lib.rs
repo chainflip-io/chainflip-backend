@@ -640,7 +640,6 @@ pub trait DepositApi<C: Chain> {
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
-		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -651,11 +650,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
-
-	/// Expires a channel.
-	fn expire_channel(address: C::ChainAccount);
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {

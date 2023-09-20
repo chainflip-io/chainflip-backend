@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness};
+use crate::{DepositBalances, DepositChannelLifetime, DepositWitness};
 
 pub use cf_chains::{
 	address::{AddressDerivationApi, ForeignChainAddress},
@@ -26,7 +26,6 @@ use cf_traits::{
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
-use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
@@ -116,8 +115,18 @@ impl crate::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
 
+// TODO: Use genesis config here?
 // Configure a mock runtime to test the pallet.
-impl_test_helpers!(Test);
+impl_test_helpers! {
+	Test,
+	RuntimeGenesisConfig {
+		system: Default::default(),
+		ingress_egress: Default::default(),
+	},
+	|| {
+		DepositChannelLifetime::<Test>::put(100);
+	},
+}
 
 type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
 type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
@@ -131,6 +140,7 @@ pub trait RequestAddressAndDeposit {
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
+	/// Request desposit addresses and complete the deposit of funds into those addresses.
 	#[track_caller]
 	fn request_address_and_deposit(
 		self,
@@ -168,14 +178,12 @@ pub enum DepositRequest {
 	Liquidity {
 		lp_account: AccountId,
 		asset: TestChainAsset,
-		expiry_block: BlockNumberFor<Test>,
 	},
 	/// Do a non-ccm swap using a default broker and no fees.
 	SimpleSwap {
 		source_asset: TestChainAsset,
 		destination_asset: TestChainAsset,
 		destination_address: ForeignChainAddress,
-		expiry_block: BlockNumberFor<Test>,
 	},
 }
 
@@ -206,19 +214,16 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 				.iter()
 				.cloned()
 				.map(|request| match request {
-					DepositRequest::Liquidity { lp_account, asset, expiry_block } =>
-						IngressEgress::request_liquidity_deposit_address(
-							lp_account,
-							asset,
-							expiry_block,
-						)
-						.map(|(id, addr)| (request, id, TestChainAccount::try_from(addr).unwrap()))
-						.unwrap(),
+					DepositRequest::Liquidity { lp_account, asset } =>
+						IngressEgress::request_liquidity_deposit_address(lp_account, asset)
+							.map(|(id, addr)| {
+								(request, id, TestChainAccount::try_from(addr).unwrap())
+							})
+							.unwrap(),
 					DepositRequest::SimpleSwap {
 						source_asset,
 						destination_asset,
 						ref destination_address,
-						expiry_block,
 					} => IngressEgress::request_swap_deposit_address(
 						source_asset,
 						destination_asset.into(),
@@ -226,7 +231,6 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						Default::default(),
 						BROKER,
 						None,
-						expiry_block,
 					)
 					.map(|(channel_id, deposit_address)| {
 						(request, channel_id, TestChainAccount::try_from(deposit_address).unwrap())

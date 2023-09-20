@@ -267,7 +267,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::PENALTIES.to_vec(),
 				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-				common::SWAP_TTL,
 				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
 			)
@@ -390,7 +389,6 @@ macro_rules! network_spec {
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-							SWAP_TTL,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
 						)
@@ -445,7 +443,6 @@ fn testnet_genesis(
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
-	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
 ) -> RuntimeGenesisConfig {
@@ -650,8 +647,10 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: SwappingConfig { swap_ttl, minimum_swap_amounts },
-		liquidity_provider: Default::default(),
+		swapping: SwappingConfig { minimum_swap_amounts, _phantom: PhantomData },
+		bitcoin_ingress_egress: Default::default(),
+		ethereum_ingress_egress: Default::default(),
+		polkadot_ingress_egress: Default::default(),
 	}
 }
 

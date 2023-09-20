@@ -4,6 +4,7 @@ use cf_primitives::{chains::assets::any, AssetAmount};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
+use pallet_cf_ingress_egress::DepositChannelDetails;
 use serde::Deserialize;
 use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, sync::Arc};
@@ -15,7 +16,6 @@ pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
 	source_asset: any::Asset,
 	destination_asset: any::Asset,
-	expiry_block: state_chain_runtime::BlockNumber,
 }
 
 pub struct QueryApi {
@@ -52,47 +52,33 @@ impl QueryApi {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 
-		let (channel_details, channel_actions, network_environment) = tokio::try_join!(
-				self.state_chain_client
-					.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
-						state_chain_runtime::Runtime,
-						C::Instance,
-					>, Vec<_>>(block_hash)
-					.map(|result| {
-						result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
-					}),
-				self.state_chain_client.storage_map::<pallet_cf_ingress_egress::ChannelActions<
+		let (channel_details, network_environment) = tokio::try_join!(
+			self.state_chain_client
+				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,
 					C::Instance,
-				>, Vec<_>>(block_hash,),
-				self.state_chain_client
-					.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
-						state_chain_runtime::Runtime,
-					>>(block_hash),
-			)?;
+				>, Vec<_>>(block_hash)
+				.map(|result| {
+					result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
+				}),
+			self.state_chain_client
+				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+					block_hash
+				),
+		)?;
 
-		Ok(channel_actions
+		Ok(channel_details
 			.iter()
-			.filter_map(|(address, action)| {
-				match action {
-					pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } |
-					pallet_cf_ingress_egress::ChannelAction::CcmTransfer {
-						destination_asset,
-						..
-					} => Some(destination_asset),
-					_ => None,
-				}
-				.and_then(|destination_asset| {
-					channel_details.get(address).map(|details| {
-						(destination_asset, details.deposit_channel.clone(), details.expires_at)
-					})
-				})
-				.map(|(&destination_asset, deposit_channel, expiry)| SwapChannelInfo {
+			.filter_map(|(_, DepositChannelDetails { action, deposit_channel, .. })| match action {
+				pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } |
+				pallet_cf_ingress_egress::ChannelAction::CcmTransfer {
+					destination_asset, ..
+				} => Some(SwapChannelInfo {
 					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
 					source_asset: deposit_channel.asset.into(),
-					destination_asset,
-					expiry_block: expiry,
-				})
+					destination_asset: *destination_asset,
+				}),
+				_ => None,
 			})
 			.collect::<Vec<_>>())
 	}

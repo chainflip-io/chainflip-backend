@@ -212,9 +212,11 @@ impl ExtBuilder {
 			environment: Default::default(),
 			liquidity_pools: Default::default(),
 			swapping: Default::default(),
-			liquidity_provider: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
+			bitcoin_ingress_egress: Default::default(),
+			polkadot_ingress_egress: Default::default(),
+			ethereum_ingress_egress: Default::default(),
 		})
 	}
 }

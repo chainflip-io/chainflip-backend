@@ -24,7 +24,6 @@ use tracing::log;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BrokerSwapDepositAddress {
 	pub address: String,
-	pub expiry_block: BlockNumber,
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
 }
@@ -33,7 +32,6 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 	fn from(value: chainflip_api::SwapDepositAddress) -> Self {
 		Self {
 			address: value.address,
-			expiry_block: value.expiry_block,
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
 		}

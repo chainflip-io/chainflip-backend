@@ -7,13 +7,9 @@ use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi,
 };
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::{traits::BlockNumberProvider, DispatchResult, Saturating},
-};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
 
 mod benchmarking;
 
@@ -83,21 +79,6 @@ pub mod pallet {
 		WithdrawalsDisabled,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = LiquidityChannelExpiries::<T>::take(n);
-			let expired_count = expired.len();
-			for (_, address) in expired {
-				T::DepositHandler::expire_channel(address.clone());
-				Self::deposit_event(Event::LiquidityDepositAddressExpired {
-					address: T::AddressConverter::to_encoded_address(address),
-				});
-			}
-			T::WeightInfo::on_initialize(expired_count as u32)
-		}
-	}
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -115,12 +96,8 @@ pub mod pallet {
 			channel_id: ChannelId,
 			asset: Asset,
 			deposit_address: EncodedAddress,
-			expiry_block: BlockNumberFor<T>,
 			// account the funds will be credited to upon deposit
 			account_id: T::AccountId,
-		},
-		LiquidityDepositAddressExpired {
-			address: EncodedAddress,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -128,32 +105,11 @@ pub mod pallet {
 			amount: AssetAmount,
 			destination_address: EncodedAddress,
 		},
-		LpTtlSet {
-			ttl: BlockNumberFor<T>,
-		},
 		LiquidityRefundAddressRegistered {
 			account_id: T::AccountId,
 			chain: ForeignChain,
 			address: ForeignChainAddress,
 		},
-	}
-
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub lp_ttl: BlockNumberFor<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {
-			LpTTL::<T>::put(self.lp_ttl);
-		}
-	}
-
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { lp_ttl: BlockNumberFor::<T>::from(1200u32) }
-		}
 	}
 
 	#[pallet::pallet]
@@ -165,18 +121,7 @@ pub mod pallet {
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
-	/// For a given block number, stores the list of liquidity deposit channels that expire at that
-	/// block.
-	#[pallet::storage]
-	pub(super) type LiquidityChannelExpiries<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BlockNumberFor<T>,
-		Vec<(ChannelId, cf_chains::ForeignChainAddress)>,
-		ValueQuery,
-	>;
-
-	/// Stores the registered refund address for an Account
+	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
 	pub type LiquidityRefundAddress<T: Config> = StorageDoubleMap<
 		_,
@@ -186,10 +131,6 @@ pub mod pallet {
 		ForeignChain,
 		ForeignChainAddress,
 	>;
-
-	/// The TTL for liquidity channels.
-	#[pallet::storage]
-	pub type LpTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -210,26 +151,13 @@ pub mod pallet {
 				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
-			let expiry_block =
-				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
-
 			let (channel_id, deposit_address) =
-				T::DepositHandler::request_liquidity_deposit_address(
-					account_id.clone(),
-					asset,
-					expiry_block,
-				)?;
-
-			LiquidityChannelExpiries::<T>::append(
-				expiry_block,
-				(channel_id, deposit_address.clone()),
-			);
+				T::DepositHandler::request_liquidity_deposit_address(account_id.clone(), asset)?;
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
 				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				expiry_block,
 				account_id,
 			});
 
@@ -293,23 +221,6 @@ pub mod pallet {
 
 			T::AccountRoleRegistry::register_as_liquidity_provider(&account_id)?;
 
-			Ok(())
-		}
-
-		/// Sets the lifetime of liquidity deposit channels.
-		///
-		/// Requires Governance
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::LpTtlSet)
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
-		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			LpTTL::<T>::set(ttl);
-
-			Self::deposit_event(Event::<T>::LpTtlSet { ttl });
 			Ok(())
 		}
 
