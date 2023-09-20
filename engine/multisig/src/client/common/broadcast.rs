@@ -230,11 +230,11 @@ where
 			.map(|idx| (*idx, received_messages.remove(idx)))
 			.collect();
 
-		let process_msg_dutration = Instant::now();
+		let process_msg_duration = Instant::now();
 		let result = self.processor.process(messages).await;
 		metrics
 			.stage_duration
-			.set(&[stage_name, "processing"], process_msg_dutration.elapsed().as_millis());
+			.set(&[stage_name, "processing"], process_msg_duration.elapsed().as_millis());
 		result
 	}
 
