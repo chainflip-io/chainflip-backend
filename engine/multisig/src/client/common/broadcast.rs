@@ -16,7 +16,6 @@ use crate::{
 use utilities::metrics::CeremonyMetrics;
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
-use utilities::metrics::CeremonyMetrics;
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone
