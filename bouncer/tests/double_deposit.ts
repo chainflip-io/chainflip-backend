@@ -43,7 +43,11 @@ async function main(): Promise<void> {
 
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
   const ethIngressKey = (
-    await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip)
+    await observeEvent(
+      'liquidityProvider:LiquidityDepositAddressReady',
+      chainflip,
+      (event) => event.data.depositAddress.Eth,
+    )
   ).data.depositAddress.Eth as string;
   console.log('ETH ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
