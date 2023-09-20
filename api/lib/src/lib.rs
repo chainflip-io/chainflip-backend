@@ -9,6 +9,7 @@ use cf_chains::{
 	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
+use codec::Encode;
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -138,7 +139,24 @@ impl StateChainApi {
 }
 
 #[async_trait]
-impl OperatorApi for StateChainClient {}
+impl<
+		SignedExtrinsicClient: Send + Sync + 'static + SignedExtrinsicApi,
+		RawRpcClient: Send + Sync + 'static + RawRpcApi,
+	> OperatorApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	async fn dry_run(
+		&self,
+		call: RuntimeCall,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<Bytes> {
+		Ok(self
+			.base_rpc_client
+			.raw_rpc_client
+			.dry_run(Encode::encode(&call).into(), at)
+			.await?)
+	}
+}
+
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
@@ -186,6 +204,8 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 			AccountRole::None => bail!("Cannot register account role None"),
 		};
+
+		let _ = self.dry_run(call.clone(), None).await?;
 
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(call)
@@ -258,6 +278,12 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
+
+	async fn dry_run(
+		&self,
+		call: RuntimeCall,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<Bytes>;
 }
 
 #[async_trait]

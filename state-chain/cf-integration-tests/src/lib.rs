@@ -1,5 +1,6 @@
 #![cfg(test)]
 #![feature(exclusive_range_pattern)]
+#![feature(local_key_cell_methods)]
 mod network;
 
 mod signer_nomination;
@@ -25,8 +26,9 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,
-	Reputation, Runtime, RuntimeOrigin, System, Validator,
+	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
+	Flip, Funding, Governance, PolkadotVault, Reputation, Runtime, RuntimeOrigin, System,
+	Validator,
 };
 
 type NodeId = AccountId32;
@@ -56,10 +58,13 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 }
 
 // The minimum number of blocks a vault rotation should last
-const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
+// 4 (keygen + key verification) + 4(key handover) + 2(activating_key) + 2(session rotating)
+const VAULT_ROTATION_BLOCKS: BlockNumber = 12;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	Backup,
 }
+
+pub type AllVaults = <Runtime as pallet_cf_validator::Config>::VaultRotator;

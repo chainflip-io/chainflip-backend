@@ -78,18 +78,18 @@ impl BtcRpcClient {
 			loop {
 				poll_interval.tick().await;
 				match get_bitcoin_network(&client, &endpoint).await {
-					Ok(network) if network == expected_btc_network.into() => break,
+					Ok(network) if network == expected_btc_network => break,
 					Ok(network) => {
 						warn!(
 								"Connected to Bitcoin node but with incorrect network name {network:?}, expected {expected_btc_network:?} on endpoint {}. Please check your CFE
 								configuration file...",
-								endpoint.http_node_endpoint
+								endpoint.http_endpoint
 							);
 					},
 					Err(e) => error!(
 						"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
 							configuration file. Retrying in {BTC_AVERAGE_BLOCK_TIME:?}...",
-						endpoint.http_node_endpoint
+						endpoint.http_endpoint
 					),
 				}
 			}
@@ -121,8 +121,8 @@ async fn call_rpc_raw(
 	});
 
 	let response = client
-		.post(endpoint.http_node_endpoint.as_ref())
-		.basic_auth(&endpoint.rpc_user, Some(&endpoint.rpc_password))
+		.post(endpoint.http_endpoint.as_ref())
+		.basic_auth(&endpoint.basic_auth_user, Some(&endpoint.basic_auth_password))
 		.json(&request_body)
 		.send()
 		.await
@@ -285,9 +285,9 @@ mod tests {
 
 		let client = BtcRpcClient::new(
 			HttpBasicAuthEndpoint {
-				http_node_endpoint: "http://localhost:8332".into(),
-				rpc_user: "flip".to_string(),
-				rpc_password: "flip".to_string(),
+				http_endpoint: "http://localhost:8332".into(),
+				basic_auth_user: "flip".to_string(),
+				basic_auth_password: "flip".to_string(),
 			},
 			BitcoinNetwork::Regtest,
 		)
