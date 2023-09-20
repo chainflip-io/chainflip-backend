@@ -16,6 +16,7 @@ pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;
 pub use unending_stream::UnendingStream;
+pub mod metrics;
 pub mod redact_endpoint_secret;
 
 pub mod serde_helpers;

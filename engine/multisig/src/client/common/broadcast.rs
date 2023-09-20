@@ -8,12 +8,12 @@ use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
+use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
-
-use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+use utilities::metrics::CeremonyMetrics;
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
 use utilities::metrics::CeremonyMetrics;

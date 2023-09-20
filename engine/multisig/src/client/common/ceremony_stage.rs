@@ -1,16 +1,15 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use async_trait::async_trait;
-use cf_primitives::{AuthorityCount, CeremonyId};
-use tokio::sync::mpsc::UnboundedSender;
-use utilities::metrics::CeremonyMetrics;
-
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
 	crypto::Rng,
 	p2p::OutgoingMultisigStageMessages,
 	ChainSigning,
 };
+use async_trait::async_trait;
+use cf_primitives::{AuthorityCount, CeremonyId};
+use tokio::sync::mpsc::UnboundedSender;
+use utilities::metrics::CeremonyMetrics;
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<C: CeremonyTrait> {
