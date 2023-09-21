@@ -991,23 +991,6 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 			rotation,
 			Error::<T, I>::InvalidRotationStatus
 		);
-
-		// Unlock the key that was used to authorise the activation, *if* this was triggered via
-		// broadcast (as opposed to governance, for example).
-		// TODO: use broadcast callbacks for this.
-		CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut Option<VaultEpochAndState>| {
-			state
-				.as_mut()
-				.map(|VaultEpochAndState { key_state, .. }| key_state.unlock())
-				.ok_or(())
-		})
-		.unwrap_or_else(|_| {
-			log::info!(
-				"No key to unlock for {}. This is expected if the rotation was triggered via governance.",
-				T::Chain::NAME,
-			);
-		});
-
 		Self::activate_new_key(new_public_key, block_number);
 
 		Ok(().into())
