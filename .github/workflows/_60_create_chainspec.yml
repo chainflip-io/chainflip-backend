@@ -98,6 +98,7 @@ jobs:
           echo "No chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
 
       - name: Set DISCORD_URL
+        if: steps.check-chainspec-exists.outcome == 'success'
         run: |
           if [ "${{ inputs.network }}" == "perseverance" ]; then
             echo "DISCORD_URL=${{ secrets.CF_DISCORD_WH_NETWORK_PERSEVERANCE }}" >> $GITHUB_ENV
@@ -106,6 +107,7 @@ jobs:
           fi
 
       - name: Notify that chainspec was created
+        if: steps.check-chainspec-exists.outcome == 'success'
         env:
           DISCORD_WEBHOOK: ${{ env.DISCORD_URL }}
         uses: Ilshidur/action-discord@0.3.2
