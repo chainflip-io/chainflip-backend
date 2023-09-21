@@ -627,7 +627,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.collect()
 			});
 
-		// Returns Ok(()) if there's nothing to send.
 		if batch_to_send.is_empty() {
 			return TransactionOutcome::Commit(Ok(()))
 		}
@@ -638,7 +637,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut addresses = vec![];
 
 		for request in batch_to_send {
-			// We need to pull out what we need above.
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch {
 					asset,

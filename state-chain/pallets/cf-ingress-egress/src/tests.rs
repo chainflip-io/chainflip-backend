@@ -886,7 +886,6 @@ fn channel_reuse_with_different_assets() {
 					asset
 			);
 		})
-		// move forward expired blocks
 		.then_execute_at_next_block(|(_, channel_id, _)| {
 			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
 				DepositChannelLifetime::<Test, _>::get() * 2;
@@ -919,8 +918,8 @@ fn channel_reuse_with_different_assets() {
 
 /// This is the sequence we're testing.
 /// 1. Request deposit address
-/// 2. Deposit to address when it's almost expired
-/// 3. The channel is expired
+/// 2. Deposit to address when it's almost recycled
+/// 3. The channel is recycled
 /// 4. We need to finalise the ingress, by fetching
 /// 5. The fetch should succeed.
 #[test]
