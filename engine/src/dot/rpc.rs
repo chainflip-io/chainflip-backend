@@ -14,7 +14,7 @@ use subxt::{
 use tokio::sync::RwLock;
 use utilities::redact_endpoint_secret::SecretUrl;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
 use super::http_rpc::DotHttpRpcClient;
 
@@ -136,11 +136,12 @@ impl DotRpcApi for DotRpcClient {
 #[derive(Clone)]
 pub struct DotSubClient {
 	pub ws_endpoint: SecretUrl,
+	expected_genesis_hash: PolkadotHash,
 }
 
 impl DotSubClient {
-	pub fn new(ws_endpoint: SecretUrl) -> Self {
-		Self { ws_endpoint }
+	pub fn new(ws_endpoint: SecretUrl, expected_genesis_hash: PolkadotHash) -> Self {
+		Self { ws_endpoint, expected_genesis_hash }
 	}
 }
 
@@ -150,6 +151,12 @@ impl DotSubscribeApi for DotSubClient {
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
 		let client = OnlineClient::<PolkadotConfig>::from_url(&self.ws_endpoint).await?;
+
+		let genesis_hash = client.genesis_hash();
+		if genesis_hash != self.expected_genesis_hash {
+			bail!("Expected genesis hash {} but got {genesis_hash}", self.expected_genesis_hash);
+		}
+
 		Ok(Box::pin(
 			client
 				.blocks()
@@ -164,6 +171,12 @@ impl DotSubscribeApi for DotSubClient {
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
 		let client = OnlineClient::<PolkadotConfig>::from_url(&self.ws_endpoint).await?;
+
+		let genesis_hash = client.genesis_hash();
+		if genesis_hash != self.expected_genesis_hash {
+			bail!("Expected genesis hash {} but got {genesis_hash}", self.expected_genesis_hash);
+		}
+
 		Ok(Box::pin(
 			client
 				.blocks()
