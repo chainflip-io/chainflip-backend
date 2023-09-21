@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositChannelLifetime, DepositWitness};
+use crate::{DepositBalances, DepositWitness};
 
 pub use cf_chains::{
 	address::{AddressDerivationApi, ForeignChainAddress},

@@ -10,6 +10,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+use frame_support::sp_runtime::SaturatedConversion;
 pub use weights::WeightInfo;
 
 use cf_chains::{
@@ -400,7 +401,20 @@ pub mod pallet {
 			let current_target_chain_height = T::ChainTracking::get_block_height();
 			let channel_lifetime = DepositChannelLifetime::<T, I>::get();
 
-			for (_, details) in DepositChannelLookup::<T, I>::iter() {
+			let read_write_weight =
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 1);
+
+			let number_to_recycle = remaining_weight
+				.ref_time()
+				.checked_div(read_write_weight.ref_time())
+				.unwrap_or_default()
+				.saturated_into::<usize>();
+
+			let mut number_recycled = 0;
+			for (_, details) in
+				DepositChannelLookup::<T, I>::iter().take(number_to_recycle as usize)
+			{
+				number_recycled += 1;
 				// We add an extra lifetime of safety.
 				// The CFEs will stop witnessing the address of this deposit channel at the
 				// expires_at block number. However, because the CFE uses a safety margin, and here
@@ -418,8 +432,7 @@ pub mod pallet {
 				}
 			}
 
-			// TODO: return the actual weight
-			remaining_weight
+			read_write_weight.saturating_mul(number_recycled)
 		}
 
 		/// Take all scheduled Egress and send them out
