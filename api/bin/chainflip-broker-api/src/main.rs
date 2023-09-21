@@ -46,7 +46,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 pub struct BrokerCcmChannelMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
-	cf_parameters: String,
+	cf_parameters: Option<String>,
 }
 
 fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
