@@ -29,6 +29,7 @@ export async function testLpDepositExpiry() {
   const depositEventResult = await observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
+    (event) => event.data.depositAddress.Btc,
   );
   const ingressAddress = depositEventResult.data.depositAddress.Btc;
 

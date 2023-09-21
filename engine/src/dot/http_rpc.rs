@@ -23,7 +23,7 @@ use subxt::{
 use anyhow::Result;
 use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
-use crate::constants::DOT_AVERAGE_BLOCK_TIME;
+use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 
 use super::rpc::DotRpcApi;
 
@@ -80,21 +80,33 @@ pub struct DotHttpRpcClient {
 }
 
 impl DotHttpRpcClient {
-	pub fn new(url: SecretUrl) -> Result<impl Future<Output = Self>> {
+	pub fn new(
+		url: SecretUrl,
+		expected_genesis_hash: PolkadotHash,
+	) -> Result<impl Future<Output = Self>> {
 		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
 
 		Ok(async move {
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the
 			// Polkadot node. So the other chains are unaffected
-			let mut poll_interval = make_periodic_tick(DOT_AVERAGE_BLOCK_TIME, true);
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			let online_client = loop {
 				poll_interval.tick().await;
 
 				match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
 					.await
 				{
-					Ok(online_client) => break online_client,
+					Ok(online_client) => {
+						let genesis_hash = online_client.genesis_hash();
+						if genesis_hash == expected_genesis_hash {
+							break online_client
+						} else {
+							tracing::error!(
+								"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
+							)
+						}
+					},
 					Err(e) => {
 						tracing::error!(
 						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE
@@ -201,7 +213,11 @@ mod tests {
 	#[ignore = "requires local node"]
 	#[tokio::test]
 	async fn test_http_rpc() {
-		let dot_http_rpc = DotHttpRpcClient::new("http://localhost:9945".into()).unwrap().await;
+		// This will no longer work because we need to know the genesis hash
+		let dot_http_rpc =
+			DotHttpRpcClient::new("http://localhost:9945".into(), PolkadotHash::default())
+				.unwrap()
+				.await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}

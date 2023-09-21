@@ -17,11 +17,12 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		block_height_provider::BlockHeightProvider,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
-	DepositApi, DepositHandler, GetBlockHeight,
+	DepositApi, DepositHandler,
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
@@ -74,16 +75,6 @@ impl DepositHandler<Ethereum> for MockDepositHandler {}
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
 
-pub struct BlockNumberProvider;
-
-pub const OPEN_INGRESS_AT: u64 = 420;
-
-impl GetBlockHeight<Ethereum> for BlockNumberProvider {
-	fn get_block_height() -> u64 {
-		OPEN_INGRESS_AT
-	}
-}
-
 pub struct MockAddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
@@ -118,7 +109,7 @@ impl crate::Config for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type ChainTracking = BlockNumberProvider;
+	type ChainTracking = BlockHeightProvider<Ethereum>;
 	type WeightInfo = ();
 }
 

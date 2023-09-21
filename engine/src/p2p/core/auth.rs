@@ -15,9 +15,34 @@ use super::{socket::DO_NOT_LINGER, PeerInfo};
 
 use super::{pk_to_string, XPublicKey};
 
+use utilities::metrics::{P2P_ALLOWED_PUBKEYS, P2P_DECLINED_CONNECTIONS};
 /// These values are ZMQ convention
 const ZAP_AUTH_SUCCESS: &str = "200";
 const ZAP_AUTH_FAILURE: &str = "400";
+
+struct AllowedPubkeysWrapper {
+	metric: &'static P2P_ALLOWED_PUBKEYS,
+	map: HashMap<XPublicKey, AccountId>,
+}
+
+impl AllowedPubkeysWrapper {
+	fn new() -> AllowedPubkeysWrapper {
+		AllowedPubkeysWrapper { metric: &P2P_ALLOWED_PUBKEYS, map: Default::default() }
+	}
+	fn get(&self, x_pub_key: &XPublicKey) -> Option<&AccountId> {
+		self.map.get(x_pub_key)
+	}
+	fn insert(&mut self, key: XPublicKey, value: AccountId) -> Option<AccountId> {
+		let result = self.map.insert(key, value);
+		self.metric.set(self.map.len());
+		result
+	}
+	fn remove(&mut self, key: &XPublicKey) -> Option<AccountId> {
+		let result = self.map.remove(key);
+		self.metric.set(self.map.len());
+		result
+	}
+}
 
 pub struct Authenticator {
 	// NOTE: we might be able to remove this mutex
@@ -30,12 +55,12 @@ pub struct Authenticator {
 	// require a mutex)
 
 	// We don't use BTreeSet because XPublicKey doesn't implement Ord
-	allowed_pubkeys: RwLock<HashMap<XPublicKey, AccountId>>,
+	allowed_pubkeys: RwLock<AllowedPubkeysWrapper>,
 }
 
 impl Authenticator {
 	fn new() -> Self {
-		Authenticator { allowed_pubkeys: Default::default() }
+		Authenticator { allowed_pubkeys: RwLock::new(AllowedPubkeysWrapper::new()) }
 	}
 
 	pub fn add_peer(&self, peer: &PeerInfo) {
@@ -44,6 +69,7 @@ impl Authenticator {
 			peer.account_id,
 			pk_to_string(&peer.pubkey)
 		);
+
 		self.allowed_pubkeys
 			.write()
 			.unwrap()
@@ -72,6 +98,7 @@ impl Authenticator {
 				"Declining an incoming connection for an unknown pubkey: {}",
 				pk_to_string(&req.pubkey)
 			);
+			P2P_DECLINED_CONNECTIONS.inc();
 			send_auth_response(socket, &req.request_id, ZAP_AUTH_FAILURE, &req.pubkey)
 		}
 	}

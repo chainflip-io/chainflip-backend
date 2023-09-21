@@ -610,7 +610,7 @@ pub mod pallet {
 		/// of liquidity. As different ranges may require different ratios of assets, when
 		/// optionally moving the order it may not be possible to allocate all the assets previously
 		/// associated with the order to the new range; If so the unused assets will be returned to
-		/// your balance. The appropiate assets will be debited or credited from your balance as
+		/// your balance. The appropriate assets will be debited or credited from your balance as
 		/// needed.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_range_order())]
@@ -693,7 +693,7 @@ pub mod pallet {
 		}
 
 		/// Optionally move the order to a different range and then set its amount of liquidity. The
-		/// appropiate assets will be debited or credited from your balance as needed.
+		/// appropriate assets will be debited or credited from your balance as needed.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_range_order())]
 		pub fn set_range_order(

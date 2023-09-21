@@ -6,9 +6,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
 use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
-use multisig::ChainTag;
-
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
+use multisig::ChainTag;
+use utilities::metrics::P2P_BAD_MSG;
 
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
@@ -153,17 +153,22 @@ impl P2PMuxer {
 									.expect("bitcoin receiver dropped");
 							},
 							ChainTag::Ed25519 => {
+								P2P_BAD_MSG.inc(&["Ed25519_not_supported"]);
 								warn!("Ed25519 not yet supported")
 							},
 						}
 					},
 					Err(e) => {
+						P2P_BAD_MSG.inc(&["deserialization_tagged_msg"]);
 						trace!("Could not deserialize tagged p2p message: {e:?}",);
 					},
 				}
 			} else {
+				P2P_BAD_MSG.inc(&["unexpected_version"]);
 				trace!("ignoring p2p message with unexpected version: {version}",);
 			}
+		} else {
+			P2P_BAD_MSG.inc(&["deserialization_versioned_msg"]);
 		}
 	}
 

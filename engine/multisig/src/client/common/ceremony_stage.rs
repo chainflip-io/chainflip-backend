@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use tokio::sync::mpsc::UnboundedSender;
+use utilities::metrics::CeremonyMetrics;
 
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
@@ -35,12 +36,17 @@ pub enum ProcessMessageResult {
 #[async_trait]
 pub trait CeremonyStage<C: CeremonyTrait> {
 	/// Perform initial computation for this stage (and initiate communication with other parties)
-	fn init(&mut self) -> ProcessMessageResult;
+	fn init(&mut self, metrics: &CeremonyMetrics) -> ProcessMessageResult;
 
 	/// Process message from signer at index `signer_idx`. Precondition: the signer is a valid
 	/// holder of the key and selected to participate in this ceremony (TODO: also check that
 	/// we haven't processed a message from them?)
-	fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult;
+	fn process_message(
+		&mut self,
+		signer_idx: AuthorityCount,
+		m: C::Data,
+		metrics: &CeremonyMetrics,
+	) -> ProcessMessageResult;
 
 	/// Verify data for this stage after it is received from all other parties,
 	/// either abort or proceed to the next stage based on the result
