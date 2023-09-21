@@ -12,7 +12,7 @@ use cf_traits::{AsyncResult, EpochInfo, SafeMode, VaultRotator, VaultStatus};
 use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	chainflip::RuntimeSafeMode, BitcoinVault, Environment, EthereumInstance, EthereumVault, Flip,
+	safe_mode::RuntimeSafeMode, BitcoinVault, Environment, EthereumInstance, EthereumVault, Flip,
 	PolkadotInstance, PolkadotVault, Runtime, RuntimeOrigin, Validator,
 };
 

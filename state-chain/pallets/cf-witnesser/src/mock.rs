@@ -1,9 +1,13 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
-use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry};
-use frame_support::parameter_types;
+use cf_traits::{
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, CallDispatchFilter,
+};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{parameter_types, RuntimeDebug};
 use frame_system as system;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_std::collections::btree_set::BTreeSet;
@@ -53,13 +57,27 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode }
+impl_mock_runtime_safe_mode! { witnesser: pallet_cf_witness::PalletSafeMode<MockCallFilter> }
+
+parameter_types! {
+	pub static AllowCall: bool = true;
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct MockCallFilter;
+
+impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
+	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
+		AllowCall::get()
+	}
+}
 
 impl pallet_cf_witness::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
+	type CallDispatchPermission = MockCallFilter;
 	type WeightInfo = ();
 }
 
