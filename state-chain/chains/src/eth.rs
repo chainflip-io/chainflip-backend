@@ -6,7 +6,7 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId, Transaction},
+	evm::{DeploymentStatus, EvmFetchId, RawSignedTransaction, Transaction},
 	*,
 };
 use cf_primitives::chains::assets;
@@ -69,10 +69,11 @@ pub struct EthereumTransactionValidator;
 
 impl TransactionValidator for EthereumTransactionValidator {
 	type Transaction = Transaction;
-	type Signature = H256;
+	type Signature = RawSignedTransaction;
 
 	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
-		true
+		let f = transaction.check_transaction(signature);
+		f.is_ok()
 	}
 }
 
@@ -122,6 +123,10 @@ impl From<&DepositChannel<Ethereum>> for EvmFetchId {
 				},
 		}
 	}
+}
+
+pub fn verify_transaction() -> bool {
+	true
 }
 
 #[cfg(any(test, feature = "runtime-benchmarks"))]

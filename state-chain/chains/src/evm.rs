@@ -10,6 +10,7 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
+use ethereum::TransactionV2;
 use evm::tokenizable::Tokenizable;
 use frame_support::sp_runtime::{
 	traits::{Hash, Keccak256},
@@ -23,6 +24,9 @@ use sp_std::{convert::TryFrom, str, vec};
 
 pub struct EvmCrypto;
 
+/// Raw bytes of an rlp-encoded Ethereum transaction.
+pub type RawSignedTransaction = Vec<u8>;
+
 impl ChainCrypto for EvmCrypto {
 	type UtxoChain = ConstBool<false>;
 
@@ -35,7 +39,7 @@ impl ChainCrypto for EvmCrypto {
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
 
-	type NativeSignature = H256;
+	type NativeSignature = RawSignedTransaction;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -111,6 +115,22 @@ impl ParityBit {
 	/// Returns `true` if the parity bit is even, otherwise `false`.
 	pub fn is_even(&self) -> bool {
 		matches!(self, Self::Even)
+	}
+
+	/// Converts this parity bit to a recovery id for the provided chain_id as per EIP-155.
+	/// `v = y_parity + CHAIN_ID * 2 + 35` where y_parity is `0` or `1`.
+	///
+	/// Returns `None` if conversion was not possible for this chain id.
+	pub(super) fn eth_recovery_id(&self, chain_id: u64) -> Option<ethereum::TransactionRecoveryId> {
+		let offset = match self {
+			ParityBit::Odd => 36,
+			ParityBit::Even => 35,
+		};
+
+		chain_id
+			.checked_mul(2)
+			.and_then(|x| x.checked_add(offset))
+			.map(ethereum::TransactionRecoveryId)
 	}
 }
 
@@ -417,6 +437,72 @@ impl Transaction {
 				return Err(CheckedTransactionParameter::MaxPriorityFeePerGas)
 			}
 		}
+		Ok(())
+	}
+
+	fn recover_transaction(
+		signed: &RawSignedTransaction,
+	) -> Result<TransactionV2, TransactionVerificationError> {
+		let decoded_tx: ethereum::TransactionV2 = match signed.get(0) {
+			Some(0x01) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP2930),
+			Some(0x02) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP1559),
+			_ => rlp::decode(&signed[..]).map(ethereum::TransactionV2::Legacy),
+		}
+		.map_err(|_| TransactionVerificationError::InvalidRlp)?;
+		Ok(decoded_tx)
+	}
+
+	fn recover_hash(transaction: TransactionV2) -> H256 {
+		let hash = match transaction {
+			ethereum::TransactionV2::Legacy(ref tx) =>
+				ethereum::LegacyTransactionMessage::from(tx.clone()).hash(),
+			ethereum::TransactionV2::EIP2930(ref tx) =>
+				ethereum::EIP2930TransactionMessage::from(tx.clone()).hash(),
+			ethereum::TransactionV2::EIP1559(ref tx) =>
+				ethereum::EIP1559TransactionMessage::from(tx.clone()).hash(),
+		};
+		hash
+	}
+
+	fn verify_signature(
+		transaction: TransactionV2,
+		message_hash: H256,
+	) -> Result<(), TransactionVerificationError> {
+		let parity_to_recovery_id = |odd: bool, chain_id: u64| {
+			let parity = if odd { ParityBit::Odd } else { ParityBit::Even };
+			parity
+				.eth_recovery_id(chain_id)
+				.ok_or(TransactionVerificationError::InvalidChainId)
+		};
+		let (r, s, v) = match transaction {
+			ethereum::TransactionV2::Legacy(ref tx) =>
+				(tx.signature.r(), tx.signature.s(), tx.signature.standard_v()),
+			ethereum::TransactionV2::EIP2930(ref tx) =>
+				(&tx.r, &tx.s, parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard()),
+			ethereum::TransactionV2::EIP1559(ref tx) =>
+				(&tx.r, &tx.s, parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard()),
+		};
+		let _ = libsecp256k1::recover(
+			&libsecp256k1::Message::parse(message_hash.as_fixed_bytes()),
+			&libsecp256k1::Signature::parse_standard_slice(
+				[r.as_bytes(), s.as_bytes()].concat().as_slice(),
+			)
+			.map_err(|_| TransactionVerificationError::InvalidSignature)?,
+			&libsecp256k1::RecoveryId::parse(v)
+				.map_err(|_| TransactionVerificationError::InvalidRecoveryId)?,
+		)
+		.map_err(|_| TransactionVerificationError::InvalidSignature)?;
+		Ok(())
+	}
+
+	pub fn check_transaction(
+		&self,
+		signature: Vec<u8>,
+	) -> Result<(), TransactionVerificationError> {
+		let recovered = Self::recover_transaction(&signature)?;
+		let hash = Self::recover_hash(recovered.clone());
+		Self::verify_signature(recovered.clone(), hash)?;
+		self.match_against_recovered(recovered.clone())?;
 		Ok(())
 	}
 
