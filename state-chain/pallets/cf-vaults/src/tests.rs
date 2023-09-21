@@ -796,7 +796,8 @@ fn test_key_handover_timeout_period() {
 
 #[cfg(test)]
 mod vault_key_rotation {
-	use cf_chains::mocks::BAD_AGG_KEY_POST_HANDOVER;
+	use cf_chains::mocks::{MockEthereum, BAD_AGG_KEY_POST_HANDOVER};
+	use cf_traits::mocks::block_height_provider::BlockHeightProvider;
 
 	use super::*;
 
@@ -925,11 +926,13 @@ mod vault_key_rotation {
 
 	#[test]
 	fn optimistic_activation() {
+		const HANDOVER_ACTIVATION_BLOCK: u64 = 420;
 		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
 			BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![
 				BTC_DUMMY_SIG,
 			]));
 
+			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
 			MockOptimisticActivation::set(true);
 			VaultsPallet::activate();
 
@@ -953,11 +956,13 @@ mod vault_key_rotation {
 
 	#[test]
 	fn can_recover_after_handover_failure() {
+		const HANDOVER_ACTIVATION_BLOCK: u64 = 420;
 		let ext = setup(Err(Default::default())).execute_with(|| {
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get().unwrap(),
 				VaultRotationStatus::KeyHandoverFailed { .. }
 			));
+			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
 
 			// Start handover again, but successful this time.
 			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());

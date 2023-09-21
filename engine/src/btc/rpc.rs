@@ -1,3 +1,5 @@
+use cf_chains::btc::BitcoinNetwork;
+use futures_core::Future;
 use thiserror::Error;
 
 use reqwest::Client;
@@ -7,11 +9,12 @@ use serde;
 use serde_json::json;
 
 use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
-use utilities::redact_endpoint_secret::SecretUrl;
+use tracing::error;
+use utilities::make_periodic_tick;
 
-use crate::settings::HttpBasicAuthEndpoint;
+use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 // From jsonrpc crate
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -58,20 +61,40 @@ struct FeeRateResponse {
 
 #[derive(Clone)]
 pub struct BtcRpcClient {
-	// internally the Client is Arc'd
+	// Internally the Client is Arc'd
 	client: Client,
-	url: SecretUrl,
-	user: String,
-	password: String,
+	endpoint: HttpBasicAuthEndpoint,
 }
 
 impl BtcRpcClient {
-	pub fn new(basic_auth_endpoint: HttpBasicAuthEndpoint) -> Result<Self> {
-		Ok(Self {
-			client: Client::builder().build()?,
-			url: basic_auth_endpoint.http_node_endpoint,
-			user: basic_auth_endpoint.rpc_user,
-			password: basic_auth_endpoint.rpc_password,
+	pub fn new(
+		endpoint: HttpBasicAuthEndpoint,
+		expected_btc_network: BitcoinNetwork,
+	) -> Result<impl Future<Output = Self>> {
+		let client = Client::builder().build()?;
+
+		Ok(async move {
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
+			loop {
+				poll_interval.tick().await;
+				match get_bitcoin_network(&client, &endpoint).await {
+					Ok(network) if network == expected_btc_network => break,
+					Ok(network) => {
+						error!(
+								"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
+								configuration file...",
+								endpoint.http_endpoint
+							);
+					},
+					Err(e) => error!(
+						"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
+							configuration file. Retrying in {:?}...",
+						endpoint.http_endpoint,
+						poll_interval.period()
+					),
+				}
+			}
+			Self { client, endpoint }
 		})
 	}
 
@@ -79,33 +102,58 @@ impl BtcRpcClient {
 		&self,
 		method: &str,
 		params: Vec<serde_json::Value>,
-	) -> Result<T, Error> {
-		let request_body = json!({
-			"jsonrpc": "1.0",
-			"id":"1",
-			"method": method,
-			"params": params
-		});
-
-		let response = &self
-			.client
-			.post(self.url.as_ref())
-			.basic_auth(&self.user, Some(&self.password))
-			.json(&request_body)
-			.send()
-			.await
-			.map_err(Error::Transport)?
-			.json::<serde_json::Value>()
-			.await
-			.map_err(Error::Transport)?;
-
-		let error = &response["error"];
-		if !error.is_null() {
-			Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
-		} else {
-			Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
-		}
+	) -> Result<T> {
+		T::deserialize(call_rpc_raw(&self.client, &self.endpoint, method, params).await?)
+			.map_err(anyhow::Error::msg)
 	}
+}
+
+async fn call_rpc_raw(
+	client: &Client,
+	endpoint: &HttpBasicAuthEndpoint,
+	method: &str,
+	params: Vec<serde_json::Value>,
+) -> Result<serde_json::Value, Error> {
+	let request_body = json!({
+		"jsonrpc": "1.0",
+		"id":"1",
+		"method": method,
+		"params": params
+	});
+
+	let response = client
+		.post(endpoint.http_endpoint.as_ref())
+		.basic_auth(&endpoint.basic_auth_user, Some(&endpoint.basic_auth_password))
+		.json(&request_body)
+		.send()
+		.await
+		.map_err(Error::Transport)?
+		.json::<serde_json::Value>()
+		.await
+		.map_err(Error::Transport)?;
+
+	let error = &response["error"];
+	if !error.is_null() {
+		Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+	} else {
+		Ok(response["result"].to_owned())
+	}
+}
+
+/// Get the BitcoinNetwork by calling the `getblockchaininfo` RPC.
+async fn get_bitcoin_network(
+	client: &Client,
+	endpoint: &HttpBasicAuthEndpoint,
+) -> anyhow::Result<BitcoinNetwork> {
+	// Using `call_rpc_raw` so we don't have to deserialize the whole response.
+	let json_value = call_rpc_raw(client, endpoint, "getblockchaininfo", vec![])
+		.await
+		.map_err(anyhow::Error::msg)?;
+	let network_name = json_value["chain"]
+		.as_str()
+		.ok_or(anyhow!("Missing or empty `chain` field in getblockchaininfo response"))?;
+
+	BitcoinNetwork::try_from(network_name)
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -218,41 +266,49 @@ impl BtcRpcApi for BtcRpcClient {
 
 #[cfg(test)]
 mod tests {
+	use utilities::testing::logging::init_test_logger;
+
 	use super::*;
 
 	#[tokio::test]
 	#[ignore = "requires local node, useful for manual testing"]
 	async fn test_btc_async() {
-		let client = BtcRpcClient::new(HttpBasicAuthEndpoint {
-			http_node_endpoint: "http://localhost:8332".into(),
-			rpc_user: "flip".to_string(),
-			rpc_password: "flip".to_string(),
-		})
-		.unwrap();
+		init_test_logger();
+
+		let client = BtcRpcClient::new(
+			HttpBasicAuthEndpoint {
+				http_endpoint: "http://localhost:8332".into(),
+				basic_auth_user: "flip".to_string(),
+				basic_auth_password: "flip".to_string(),
+			},
+			BitcoinNetwork::Regtest,
+		)
+		.unwrap()
+		.await;
 
 		let block_hash_zero = client.block_hash(0).await.unwrap();
 
-		println!("block_hash_zero: {:?}", block_hash_zero);
+		println!("block_hash_zero: {block_hash_zero:?}");
 
 		let block_zero = client.block(block_hash_zero).await.unwrap();
 
-		println!("block_zero: {:?}", block_zero);
+		println!("block_zero: {block_zero:?}");
 
 		let next_block_fee_rate = client.next_block_fee_rate().await.unwrap();
 
-		println!("next_block_fee_rate: {:?}", next_block_fee_rate);
-
-		let average_block_fee_rate = client.average_block_fee_rate(block_hash_zero).await.unwrap();
-
-		println!("average_block_fee_rate: {}", average_block_fee_rate);
+		println!("next_block_fee_rate: {next_block_fee_rate:?}");
 
 		let best_block_hash = client.best_block_hash().await.unwrap();
 
-		println!("best_block_hash: {:?}", best_block_hash);
+		println!("best_block_hash: {best_block_hash:?}");
 
 		let block_header = client.block_header(best_block_hash).await.unwrap();
 
-		println!("block_header: {:?}", block_header);
+		println!("block_header: {block_header:?}");
+
+		let average_block_fee_rate = client.average_block_fee_rate(best_block_hash).await.unwrap();
+
+		println!("average_block_fee_rate: {average_block_fee_rate}");
 
 		// Generate new hex bytes using ./bouncer/commands/create_raw_btc_tx.ts;
 		// let hex_str =

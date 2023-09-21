@@ -5,7 +5,7 @@
 // It will fund the polkadot address provided as the first argument with the amount
 // provided in the second argument. The asset amount is interpreted in DOT.
 //
-// For example: ./commands/fund_dot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
+// For example: ./commands/send_dot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
 // will send 1.2 DOT to account 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB
 
 import { sendDot } from '../shared/send_dot';
