@@ -24,7 +24,7 @@ jobs:
         with:
           workflow: release-sisyphos.yml
           name: chainflip-backend-bin-ubuntu-22.04
-          branch: pla-760
+          branch: release/0.9
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           search_artifacts: true
           check_artifacts: true
