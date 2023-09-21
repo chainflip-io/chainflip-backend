@@ -46,7 +46,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 pub struct BrokerCcmChannelMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
-	cf_parameters: String,
+	cf_parameters: Option<String>,
 }
 
 fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
@@ -66,7 +66,7 @@ impl TryInto<CcmChannelMetadataBoundedLen<MaxCcmLength>> for BrokerCcmChannelMet
 			.try_into()
 			.map_err(|_| anyhow!("CCM message too long."))?;
 
-		let cf_parameters = parse_hex_bytes(&self.cf_parameters)
+		let cf_parameters = parse_hex_bytes(&self.cf_parameters.unwrap_or_default())
 			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
 			.try_into()
 			.map_err(|_| anyhow!("CCM message too long."))?;
