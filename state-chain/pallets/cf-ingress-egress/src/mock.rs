@@ -115,17 +115,12 @@ impl crate::Config for Test {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
 
-// TODO: Use genesis config here?
-// Configure a mock runtime to test the pallet.
 impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: Default::default(),
-	},
-	|| {
-		DepositChannelLifetime::<Test>::put(100);
-	},
+		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100 },
+	}
 }
 
 type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
