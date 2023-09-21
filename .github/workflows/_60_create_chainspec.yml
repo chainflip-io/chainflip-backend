@@ -18,6 +18,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      # TODO: Remove before merging
+      - name: Fetch binaries
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: release-sisyphos.yml
+          name: chainflip-backend-bin-ubuntu-22.04
+          branch: pla-760
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
+
       - name: Check if the chainspec file already exists
         id: check-chainspec-exists
         continue-on-error: true
