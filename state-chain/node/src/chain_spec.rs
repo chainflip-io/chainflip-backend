@@ -22,12 +22,13 @@ use sp_core::{
 };
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
-	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumThresholdSignerConfig,
+	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
+	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
+	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
 	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
-	ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
-	ValidatorConfig, WASM_BINARY,
+	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
+	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature,
+	SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -269,6 +270,10 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
+				// Bitcoin block times on localnets are much faster, so we account for that here.
+				500,
+				500,
+				1200,
 			)
 		},
 		// Bootnodes
@@ -391,6 +396,10 @@ macro_rules! network_spec {
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
+							// deposit channel lifetimes
+							12,
+							500,
+							1200,
 						)
 					},
 					// Bootnodes
@@ -445,6 +454,9 @@ fn testnet_genesis(
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
+	bitcoin_deposit_channel_lifetime: u32,
+	ethereum_deposit_channel_lifetime: u32,
+	polkadot_deposit_channel_lifetime: u32,
 ) -> RuntimeGenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -648,9 +660,16 @@ fn testnet_genesis(
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
 		swapping: SwappingConfig { minimum_swap_amounts, _phantom: PhantomData },
-		bitcoin_ingress_egress: Default::default(),
-		ethereum_ingress_egress: Default::default(),
-		polkadot_ingress_egress: Default::default(),
+		// These are set to ~2 hours at average block times.
+		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
+			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
+		},
+		ethereum_ingress_egress: EthereumIngressEgressConfig {
+			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
+		},
+		polkadot_ingress_egress: PolkadotIngressEgressConfig {
+			deposit_channel_lifetime: polkadot_deposit_channel_lifetime.into(),
+		},
 	}
 }
 
