@@ -57,8 +57,6 @@ pub trait CeremonyStage<C: CeremonyTrait> {
 	fn get_stage_name(&self) -> C::CeremonyStageName;
 
 	fn ceremony_common(&self) -> &CeremonyCommon;
-
-	fn get_stage_duration(&self) -> u128;
 }
 
 /// Data useful during any stage of a ceremony

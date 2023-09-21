@@ -221,7 +221,7 @@ macro_rules! build_gauge_vec_struct {
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			const_labels: [String; { $const_labels.len() }],
-			labels: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
+			non_const_labels_used: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
 			drop: bool,
 		}
 		impl $struct_ident {
@@ -229,7 +229,12 @@ macro_rules! build_gauge_vec_struct {
 				metric: &'static $metric_ident,
 				const_labels: [String; { $const_labels.len() }],
 			) -> $struct_ident {
-				$struct_ident { metric, const_labels, labels: HashSet::new(), drop: $drop }
+				$struct_ident {
+					metric,
+					const_labels,
+					non_const_labels_used: HashSet::new(),
+					drop: $drop,
+				}
 			}
 
 			pub fn inc(
@@ -237,7 +242,7 @@ macro_rules! build_gauge_vec_struct {
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
 				if self.drop {
-					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
 				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
@@ -253,7 +258,7 @@ macro_rules! build_gauge_vec_struct {
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
 				if self.drop {
-					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
 				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
@@ -272,7 +277,7 @@ macro_rules! build_gauge_vec_struct {
 				<T as TryInto<i64>>::Error: std::fmt::Debug,
 			{
 				if self.drop {
-					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
 				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
@@ -288,7 +293,7 @@ macro_rules! build_gauge_vec_struct {
 				if self.drop {
 					let metric = self.metric.prom_metric.clone();
 					let labels: Vec<String> = self.const_labels.to_vec();
-					for non_const_labels in self.labels.drain() {
+					for non_const_labels in self.non_const_labels_used.drain() {
 						let mut final_labels = labels.clone();
 						final_labels.append(&mut non_const_labels.to_vec());
 						DELETE_METRIC_CHANNEL
@@ -346,7 +351,7 @@ macro_rules! build_counter_vec_struct {
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			const_labels: [String; { $const_labels.len() }],
-			labels: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
+			non_const_labels_used: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
 			drop: bool,
 		}
 		impl $struct_ident {
@@ -354,7 +359,12 @@ macro_rules! build_counter_vec_struct {
 				metric: &'static $metric_ident,
 				const_labels: [String; { $const_labels.len() }],
 			) -> $struct_ident {
-				$struct_ident { metric, const_labels, drop: $drop, labels: HashSet::new() }
+				$struct_ident {
+					metric,
+					const_labels,
+					drop: $drop,
+					non_const_labels_used: HashSet::new(),
+				}
 			}
 
 			pub fn inc(
@@ -362,7 +372,7 @@ macro_rules! build_counter_vec_struct {
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
 				if self.drop {
-					self.labels.insert(non_const_labels.map(|s| s.to_string()));
+					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
 				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
@@ -378,7 +388,7 @@ macro_rules! build_counter_vec_struct {
 				if self.drop {
 					let metric = self.metric.prom_metric.clone();
 					let labels: Vec<String> = self.const_labels.to_vec();
-					for non_const_labels in self.labels.drain() {
+					for non_const_labels in self.non_const_labels_used.drain() {
 						let mut final_labels = labels.clone();
 						final_labels.append(&mut non_const_labels.to_vec());
 						DELETE_METRIC_CHANNEL
@@ -460,7 +470,7 @@ build_gauge_vec_struct!(
 	"ceremony_duration",
 	"Measure the duration of a ceremony in ms",
 	true,
-	["chain", "ceremony_id"]
+	["chain", "ceremony_id", "ceremony_type"]
 );
 build_gauge_vec_struct!(
 	CEREMONY_TIMEOUT_MISSING_MSG,
@@ -468,7 +478,8 @@ build_gauge_vec_struct!(
 	"ceremony_timeout_missing_msg",
 	"Measure the number of missing messages when reaching timeout",
 	true,
-	["chain", "ceremony_id"]
+	["chain", "ceremony_id", "ceremony_type", "stage"],
+	["chain", "ceremony_id", "ceremony_type"]
 );
 build_gauge_vec_struct!(
 	STAGE_DURATION,
@@ -483,9 +494,9 @@ build_counter_vec_struct!(
 	STAGE_FAILING,
 	StageFailingNotDrop,
 	"stage_failing",
-	"Count the number of stages which are failing and reaching timeout",
+	"Count the number of stages which are failing with the cause of the failure attached",
 	false,
-	["chain", "stage"],
+	["chain", "stage", "reason"],
 	["chain"]
 );
 build_counter_vec_struct!(
@@ -508,6 +519,31 @@ pub struct CeremonyMetrics {
 	pub stage_duration: StageDurationDrop,
 	pub stage_failing: StageFailingNotDrop,
 	pub stage_completing: StageCompletingNotDrop,
+}
+impl CeremonyMetrics {
+	pub fn new(ceremony_id: String, chain_name: String, ceremony_type: String) -> Self {
+		CeremonyMetrics {
+			processed_messages: CeremonyProcessedMsgDrop::new(
+				&CEREMONY_PROCESSED_MSG,
+				[chain_name.clone(), ceremony_id.clone()],
+			),
+			bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [chain_name.clone()]),
+			ceremony_duration: CeremonyDurationDrop::new(
+				&CEREMONY_DURATION,
+				[chain_name.clone(), ceremony_id.clone(), ceremony_type.clone()],
+			),
+			missing_messages: CeremonyTimeoutMissingMsgDrop::new(
+				&CEREMONY_TIMEOUT_MISSING_MSG,
+				[chain_name.clone(), ceremony_id.clone(), ceremony_type],
+			),
+			stage_duration: StageDurationDrop::new(
+				&STAGE_DURATION,
+				[chain_name.clone(), ceremony_id],
+			),
+			stage_failing: StageFailingNotDrop::new(&STAGE_FAILING, [chain_name.clone()]),
+			stage_completing: StageCompletingNotDrop::new(&STAGE_COMPLETING, [chain_name]),
+		}
+	}
 }
 
 #[tracing::instrument(name = "prometheus-metric", skip_all)]
@@ -578,7 +614,7 @@ mod test {
 
 	#[tokio::test]
 	async fn prometheus_test() {
-		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5566 };
+		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5567 };
 		let metric = create_and_register_metric();
 
 		let _ = DELETE_METRIC_CHANNEL

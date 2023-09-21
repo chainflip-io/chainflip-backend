@@ -61,7 +61,7 @@ where
 	/// Determines the actual computations before/after
 	/// the data is collected
 	processor: Stage,
-	duration: Instant,
+	stage_started: Instant,
 }
 
 impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
@@ -69,7 +69,12 @@ where
 	Stage: BroadcastStageProcessor<C>,
 {
 	pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
-		BroadcastStage { common, messages: BTreeMap::new(), processor, duration: Instant::now() }
+		BroadcastStage {
+			common,
+			messages: BTreeMap::new(),
+			processor,
+			stage_started: Instant::now(),
+		}
 	}
 }
 
@@ -102,7 +107,7 @@ where
 {
 	fn init(&mut self, metrics: &mut CeremonyMetrics) -> ProcessMessageResult {
 		let common = &self.common;
-		self.duration = Instant::now();
+		self.stage_started = Instant::now();
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
 
 		let (own_message, outgoing_messages) = match self.processor.init() {
@@ -214,11 +219,12 @@ where
 		// Because we might want to finalize the stage before
 		// all data has been received (e.g. due to a timeout),
 		// we insert None for any missing data
-		let stage_name: &str = &format!("{}", self.get_stage_name());
+		let stage_name = self.get_stage_name().to_string();
 		metrics
 			.stage_duration
-			.set(&[stage_name, "receiving"], self.get_stage_duration());
+			.set(&[&stage_name, "receiving"], self.stage_started.elapsed().as_millis());
 
+		let process_msg_instant = Instant::now();
 		let mut received_messages = std::mem::take(&mut self.messages);
 
 		// Turns values T into Option<T>, inserting `None` where
@@ -230,11 +236,10 @@ where
 			.map(|idx| (*idx, received_messages.remove(idx)))
 			.collect();
 
-		let process_msg_duration = Instant::now();
 		let result = self.processor.process(messages).await;
 		metrics
 			.stage_duration
-			.set(&[stage_name, "processing"], process_msg_duration.elapsed().as_millis());
+			.set(&[&stage_name, "processing"], process_msg_instant.elapsed().as_millis());
 		result
 	}
 
@@ -256,10 +261,6 @@ where
 
 	fn ceremony_common(&self) -> &CeremonyCommon {
 		&self.common
-	}
-
-	fn get_stage_duration(&self) -> u128 {
-		self.duration.elapsed().as_millis()
 	}
 }
 

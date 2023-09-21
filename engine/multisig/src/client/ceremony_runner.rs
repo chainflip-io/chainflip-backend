@@ -15,15 +15,7 @@ use tokio::sync::{
 	oneshot,
 };
 use tracing::{debug, warn, Instrument};
-use utilities::{
-	format_iterator,
-	metrics::{
-		CeremonyBadMsgNotDrop, CeremonyDurationDrop, CeremonyMetrics, CeremonyProcessedMsgDrop,
-		CeremonyTimeoutMissingMsgDrop, StageCompletingNotDrop, StageDurationDrop,
-		StageFailingNotDrop, CEREMONY_BAD_MSG, CEREMONY_DURATION, CEREMONY_PROCESSED_MSG,
-		CEREMONY_TIMEOUT_MISSING_MSG, STAGE_COMPLETING, STAGE_DURATION, STAGE_FAILING,
-	},
-};
+use utilities::{format_iterator, metrics::CeremonyMetrics};
 
 use crate::{
 	client::{
@@ -88,7 +80,7 @@ where
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
 		let mut runner = Self::new_unauthorised(outcome_sender, ceremony_id);
-		let ceremony_duration = Instant::now();
+		let mut ceremony_start = Instant::now();
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
 
@@ -104,7 +96,7 @@ where
 				request = &mut request_receiver => {
 
 					let PreparedRequest { initial_stage } = request.expect("Ceremony request channel was dropped unexpectedly");
-
+					ceremony_start = Instant::now();
 					if let Some(result) = runner.on_ceremony_request(initial_stage).instrument(span.clone()).await {
 						break result;
 					}
@@ -118,7 +110,14 @@ where
 				}
 			}
 		};
-		runner.metrics.ceremony_duration.set(ceremony_duration.elapsed().as_millis());
+		let duration = ceremony_start.elapsed().as_millis();
+		runner.metrics.ceremony_duration.set(duration);
+		tracing::info!(
+			"Ceremony {} ({}) took {}ms to complete",
+			Ceremony::CEREMONY_TYPE,
+			ceremony_id,
+			duration
+		);
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
 	}
@@ -130,8 +129,9 @@ where
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		ceremony_id: CeremonyId,
 	) -> Self {
-		let ceremony_id = format!("{}", ceremony_id);
+		let ceremony_id = ceremony_id.to_string();
 		let chain_name = Chain::NAME.to_string();
+		let ceremony_type = Ceremony::CEREMONY_TYPE.to_string();
 		CeremonyRunner {
 			stage: None,
 			delayed_messages: Default::default(),
@@ -139,27 +139,7 @@ where
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
 			_phantom: Default::default(),
-			metrics: CeremonyMetrics {
-				processed_messages: CeremonyProcessedMsgDrop::new(
-					&CEREMONY_PROCESSED_MSG,
-					[chain_name.clone(), ceremony_id.clone()],
-				),
-				bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [chain_name.clone()]),
-				ceremony_duration: CeremonyDurationDrop::new(
-					&CEREMONY_DURATION,
-					[chain_name.clone(), ceremony_id.clone()],
-				),
-				missing_messages: CeremonyTimeoutMissingMsgDrop::new(
-					&CEREMONY_TIMEOUT_MISSING_MSG,
-					[chain_name.clone(), ceremony_id.clone()],
-				),
-				stage_duration: StageDurationDrop::new(
-					&STAGE_DURATION,
-					[chain_name.clone(), ceremony_id],
-				),
-				stage_failing: StageFailingNotDrop::new(&STAGE_FAILING, [chain_name.clone()]),
-				stage_completing: StageCompletingNotDrop::new(&STAGE_COMPLETING, [chain_name]),
-			},
+			metrics: CeremonyMetrics::new(ceremony_id, chain_name, ceremony_type),
 		}
 	}
 
@@ -198,13 +178,13 @@ where
 				.stage
 				.take()
 				.expect("Ceremony must be authorised to finalize any of its stages");
-			let stage_name: &str = &format!("{}", stage.get_stage_name());
+			let stage_name = stage.get_stage_name().to_string();
 			let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
 			match stage.finalize(&mut self.metrics).await {
 				StageResult::NextStage(mut next_stage) => {
 					debug!("Ceremony transitions to {}", next_stage.get_stage_name());
-					self.metrics.stage_completing.inc(&[stage_name]);
+					self.metrics.stage_completing.inc(&[&stage_name]);
 
 					let single_party_result = next_stage.init(&mut self.metrics);
 
@@ -227,11 +207,13 @@ where
 						self.process_delayed().await
 					}
 				},
-				StageResult::Error(bad_validators, reason) =>
-					Some(Err((validator_mapping.get_ids(bad_validators), reason))),
+				StageResult::Error(bad_validators, reason) => {
+					self.metrics.stage_failing.inc(&[&stage_name, &format!("{:?}", reason)]);
+					Some(Err((validator_mapping.get_ids(bad_validators), reason)))
+				},
 				StageResult::Done(result) => {
 					debug!("Ceremony reached the final stage!");
-					self.metrics.stage_completing.inc(&[stage_name]);
+					self.metrics.stage_completing.inc(&[&stage_name]);
 
 					Some(Ok(result))
 				},
@@ -373,9 +355,10 @@ where
 					stage.get_stage_name(),
 					missing_messages_from_accounts.len()
 				);
-
-			self.metrics.stage_failing.inc(&[&format!("{}", stage.get_stage_name())]);
-			self.metrics.missing_messages.set(missing_messages_from_accounts.len());
+			let stage_name = stage.get_stage_name().to_string();
+			self.metrics
+				.missing_messages
+				.set(&[&stage_name], missing_messages_from_accounts.len());
 			self.finalize_current_stage().await
 		} else {
 			panic!("Unauthorised ceremonies cannot timeout");
