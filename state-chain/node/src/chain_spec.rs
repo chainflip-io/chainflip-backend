@@ -21,14 +21,18 @@ use sp_core::{
 	sr25519, Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
-	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
-	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature,
-	SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	chainflip::Offence,
+	constants::common::{
+		DEV_BITCOIN_EXPIRY_BLOCKS, DEV_ETHEREUM_EXPIRY_BLOCKS, DEV_POLKADOT_EXPIRY_BLOCKS,
+	},
+	opaque::SessionKeys,
+	AccountId, AccountRolesConfig, AuraConfig, BitcoinChainTrackingConfig,
+	BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
+	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumIngressEgressConfig,
+	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig,
+	GovernanceConfig, GrandpaConfig, PolkadotChainTrackingConfig, PolkadotIngressEgressConfig,
+	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig,
+	SessionConfig, Signature, SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -271,9 +275,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
 				// Bitcoin block times on localnets are much faster, so we account for that here.
-				500,
-				500,
-				1200,
+				DEV_BITCOIN_EXPIRY_BLOCKS,
+				DEV_ETHEREUM_EXPIRY_BLOCKS,
+				DEV_POLKADOT_EXPIRY_BLOCKS,
 			)
 		},
 		// Bootnodes
@@ -396,10 +400,9 @@ macro_rules! network_spec {
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
-							// deposit channel lifetimes
-							12,
-							500,
-							1200,
+							MAINNET_BITCOIN_EXPIRY_BLOCKS,
+							MAINNET_ETHEREUM_EXPIRY_BLOCKS,
+							MAINNET_POLKADOT_EXPIRY_BLOCKS,
 						)
 					},
 					// Bootnodes

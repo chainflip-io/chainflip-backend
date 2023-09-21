@@ -101,6 +101,20 @@ pub mod common {
 	/// See https://github.com/chainflip-io/chainflip-backend/issues/1629
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
 
+	/// Deposit channel expiries. This is how many external chain blocks after creation can a
+	/// deposit channel be witnessed.
+	// These represent approximately 2 hours on localnet block times
+	// Bitcoin blocks are 5 seconds on localnets.
+	pub const MAINNET_BITCOIN_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / (10 * 60);
+	pub const MAINNET_ETHEREUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 14;
+	pub const MAINNET_POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
+
+	// These represent approximately 10 minutes in localnet block times
+	// Bitcoin blocks are 5 seconds on localnets.
+	pub const DEV_BITCOIN_EXPIRY_BLOCKS: u32 = 10 * 60 / 5;
+	pub const DEV_ETHEREUM_EXPIRY_BLOCKS: u32 = 10 * 60 / 14;
+	pub const DEV_POLKADOT_EXPIRY_BLOCKS: u32 = 10 * 60 / 6;
+
 	/// Default supply update interval is 24 hours.
 
 	pub mod eth {
