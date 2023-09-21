@@ -10,6 +10,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+use cf_runtime_utilities::log_or_panic;
 use frame_support::sp_runtime::SaturatedConversion;
 pub use weights::WeightInfo;
 
@@ -744,12 +745,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-		// The address should not be used if it's being recycled
-		ensure!(
-			DepositChannelPool::<T, I>::get(&deposit_channel_details.deposit_channel.channel_id)
-				.is_none(),
-			Error::<T, I>::InvalidDepositAddress
-		);
+		if DepositChannelPool::<T, I>::get(&deposit_channel_details.deposit_channel.channel_id)
+			.is_some()
+		{
+			log_or_panic!(
+				"Deposit channel {} should not be in the recycled address pool if it's active",
+				deposit_channel_details.deposit_channel.channel_id
+			);
+			#[cfg(not(debug_assertions))]
+			return Err(Error::<T, I>::InvalidDepositAddress.into())
+		}
 
 		ensure!(
 			deposit_channel_details.deposit_channel.asset == asset,
