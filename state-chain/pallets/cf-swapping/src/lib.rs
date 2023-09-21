@@ -21,8 +21,8 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 mod benchmarking;
 
@@ -30,7 +30,15 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
+const MAX_CCM_LENGTH: u32 = 10_000;
 
+#[derive(Encode, Decode, Eq, PartialEq, Debug, Copy, Clone, TypeInfo)]
+pub struct MaxCcmLength;
+impl Get<u32> for MaxCcmLength {
+	fn get() -> u32 {
+		MAX_CCM_LENGTH
+	}
+}
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
@@ -194,10 +202,6 @@ pub mod pallet {
 
 		/// Safe mode access.
 		type SafeMode: Get<PalletSafeMode>;
-
-		/// Maximum size of a CCM message
-		#[pallet::constant]
-		type MaxCcmLength: Get<u32> + core::fmt::Debug + Eq + PartialEq + Copy + Clone + TypeInfo;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -371,8 +375,6 @@ pub mod pallet {
 		DepositsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
 		BrokerRegistrationDisabled,
-		/// Ccm message is too long.
-		CcmMessageTooLong,
 	}
 
 	#[pallet::genesis_config]
@@ -519,7 +521,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
-			channel_metadata_bounded_len: Option<CcmChannelMetadataBoundedLen<T::MaxCcmLength>>,
+			channel_metadata_bounded_len: Option<CcmChannelMetadataBoundedLen<MaxCcmLength>>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
@@ -530,15 +532,11 @@ pub mod pallet {
 			let channel_metadata: Option<CcmChannelMetadata> =
 				channel_metadata_bounded_len.map(|metadata| metadata.into());
 
-			if let Some(ref ccm) = channel_metadata {
+			if channel_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
 				ensure!(
 					ForeignChain::Ethereum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
-				);
-				ensure!(
-					ccm.message.len() <= T::MaxCcmLength::get() as usize,
-					Error::<T>::CcmMessageTooLong
 				);
 			}
 
@@ -660,7 +658,7 @@ pub mod pallet {
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			deposit_metadata_bounded_len: CcmDepositMetadataBoundedLen<T::MaxCcmLength>,
+			deposit_metadata_bounded_len: CcmDepositMetadataBoundedLen<MaxCcmLength>,
 			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;

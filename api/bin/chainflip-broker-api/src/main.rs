@@ -8,12 +8,13 @@ use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, ChannelId},
 	settings::StateChain,
-	BrokerApi, MaxCcmLength, OperatorApi, StateChainApi,
+	BrokerApi, OperatorApi, StateChainApi,
 };
 use clap::Parser;
 use futures::FutureExt;
 use hex::FromHexError;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
+use pallet_cf_swapping::MaxCcmLength;
 use serde::{Deserialize, Serialize};
 use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
@@ -45,7 +46,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 pub struct BrokerCcmChannelMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
-	cf_parameters: Option<String>,
+	cf_parameters: String,
 }
 
 fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
@@ -65,15 +66,10 @@ impl TryInto<CcmChannelMetadataBoundedLen<MaxCcmLength>> for BrokerCcmChannelMet
 			.try_into()
 			.map_err(|_| anyhow!("CCM message too long."))?;
 
-		let cf_parameters = self
-			.cf_parameters
-			.map(|parameters| parse_hex_bytes(&parameters))
-			.transpose()
+		let cf_parameters = parse_hex_bytes(&self.cf_parameters)
 			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
-			.unwrap_or_default()
 			.try_into()
-			.map_err(|_| anyhow!("CCM cf_parameter too long."))?;
-
+			.map_err(|_| anyhow!("CCM message too long."))?;
 		Ok(CcmChannelMetadataBoundedLen { gas_budget, message, cf_parameters })
 	}
 }
@@ -129,7 +125,7 @@ impl RpcServer for RpcServerImpl {
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<BrokerCcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError> {
-		let channel_metadata = channel_metadata.map(TryInto::try_into).transpose()?;
+		let channel_metadata_bounded_len = channel_metadata.map(TryInto::try_into).transpose()?;
 
 		Ok(self
 			.api
@@ -139,7 +135,7 @@ impl RpcServer for RpcServerImpl {
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,
-				channel_metadata,
+				channel_metadata_bounded_len,
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)

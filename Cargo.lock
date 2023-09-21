@@ -1399,6 +1399,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonrpsee 0.20.0",
+ "pallet-cf-swapping",
  "serde",
  "sp-rpc",
  "tokio",

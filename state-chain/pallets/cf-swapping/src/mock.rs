@@ -9,10 +9,8 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SwappingApi,
 };
-use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchError, parameter_types, traits::Get, weights::Weight};
+use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
-use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
@@ -123,14 +121,6 @@ impl WeightInfo for MockWeightInfo {
 	}
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, Debug, Copy, Clone, TypeInfo)]
-pub struct MaxCcmLength;
-impl Get<u32> for MaxCcmLength {
-	fn get() -> u32 {
-		100u32
-	}
-}
-
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
@@ -138,7 +128,6 @@ impl pallet_cf_swapping::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type SwappingApi = MockSwappingApi;
 	type SafeMode = MockRuntimeSafeMode;
-	type MaxCcmLength = MaxCcmLength;
 	type WeightInfo = MockWeightInfo;
 }
 

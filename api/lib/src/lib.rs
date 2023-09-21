@@ -11,12 +11,12 @@ use cf_chains::{
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
+use pallet_cf_swapping::MaxCcmLength;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
-pub use state_chain_runtime::MaxCcmLength;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
 

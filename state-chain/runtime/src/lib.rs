@@ -95,9 +95,6 @@ use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
-
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -223,13 +220,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, Debug, Copy, Clone, TypeInfo)]
-pub struct MaxCcmLength;
-impl Get<u32> for MaxCcmLength {
-	fn get() -> u32 {
-		10_000u32
-	}
-}
 impl pallet_cf_swapping::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
@@ -237,7 +227,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = chainflip::RuntimeSafeMode;
-	type MaxCcmLength = MaxCcmLength;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
