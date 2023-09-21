@@ -41,7 +41,10 @@ def main():
     bootnodes = get_file_content(bootnodes_filename)
 
     chainspec_filename = os.path.join(CHAINSPECS_BASE_PATH, f"{network}.chainspec.json")
-    generate_chainspec_command = [binary, "build-spec", "--chain", network + "-new", "--disable-default-bootnode"]
+
+    generate_chainspec_command = [binary, "build-spec", "--chain", network, "--disable-default-bootnode"]
+    # TODO: Uncomment this line before merging
+    # generate_chainspec_command = [binary, "build-spec", "--chain", network + "-new", "--disable-default-bootnode"]
 
     with open(chainspec_filename, "w") as chainspec:
         subprocess.call(generate_chainspec_command, stdout=chainspec)
