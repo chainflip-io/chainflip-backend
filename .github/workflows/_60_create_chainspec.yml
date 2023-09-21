@@ -45,11 +45,11 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Download binary artifacts
-        if: steps.check-chainspec-exists.outcome == 'success'
-        uses: actions/download-artifact@v3
-        with:
-          name: chainflip-backend-bin-ubuntu-22.04
+#      - name: Download binary artifacts
+#        if: steps.check-chainspec-exists.outcome == 'success'
+#        uses: actions/download-artifact@v3
+#        with:
+#          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Setup python
         if: steps.check-chainspec-exists.outcome == 'success'
