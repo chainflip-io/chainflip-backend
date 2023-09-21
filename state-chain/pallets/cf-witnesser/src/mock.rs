@@ -65,13 +65,10 @@ parameter_types! {
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct MockCallFilter;
+
 impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
-	fn should_dispatch(_call: &RuntimeCall) -> bool {
-		match MockSafeModeStorage::get().witnesser {
-			pallet_cf_witness::PalletSafeMode::CodeGreen => true,
-			pallet_cf_witness::PalletSafeMode::CodeRed => false,
-			pallet_cf_witness::PalletSafeMode::CodeAmber(MockCallFilter) => AllowCall::get(),
-		}
+	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
+		AllowCall::get()
 	}
 }
 

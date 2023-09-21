@@ -3,7 +3,6 @@
 use crate::{Runtime, RuntimeCall};
 use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::traits::Get;
 use scale_info::TypeInfo;
 
 impl_runtime_safe_mode! {
@@ -84,37 +83,34 @@ impl WitnesserCallPermission {
 }
 
 impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
-	fn should_dispatch(call: &RuntimeCall) -> bool {
-		match <RuntimeSafeMode as Get<
-			pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
-		>>::get()
-		{
-			pallet_cf_witnesser::PalletSafeMode::CodeGreen => true,
-			pallet_cf_witnesser::PalletSafeMode::CodeRed => false,
-			pallet_cf_witnesser::PalletSafeMode::CodeAmber(permission) => match call {
-				RuntimeCall::Governance(..) => permission.governance,
-				RuntimeCall::Funding(..) => permission.funding,
-				RuntimeCall::Swapping(..) => permission.swapping,
+	fn should_dispatch(&self, call: &RuntimeCall) -> bool {
+		match call {
+			RuntimeCall::Governance(..) => self.governance,
+			RuntimeCall::Funding(..) => self.funding,
+			RuntimeCall::Swapping(..) => self.swapping,
 
-				RuntimeCall::EthereumBroadcaster(..) => permission.ethereum_broadcast,
-				RuntimeCall::EthereumChainTracking(..) => permission.ethereum_chain_tracking,
-				RuntimeCall::EthereumIngressEgress(..) => permission.ethereum_ingress_egress,
-				RuntimeCall::EthereumVault(..) => permission.ethereum_vault,
+			RuntimeCall::EthereumBroadcaster(..) => self.ethereum_broadcast,
+			RuntimeCall::EthereumChainTracking(..) => self.ethereum_chain_tracking,
+			RuntimeCall::EthereumIngressEgress(..) => self.ethereum_ingress_egress,
+			RuntimeCall::EthereumVault(..) => self.ethereum_vault,
 
-				RuntimeCall::PolkadotBroadcaster(..) => permission.polkadot_broadcast,
-				RuntimeCall::PolkadotChainTracking(..) => permission.polkadot_chain_tracking,
-				RuntimeCall::PolkadotIngressEgress(..) => permission.polkadot_ingress_egress,
-				RuntimeCall::PolkadotVault(..) => permission.polkadot_vault,
+			RuntimeCall::PolkadotBroadcaster(..) => self.polkadot_broadcast,
+			RuntimeCall::PolkadotChainTracking(..) => self.polkadot_chain_tracking,
+			RuntimeCall::PolkadotIngressEgress(..) => self.polkadot_ingress_egress,
+			RuntimeCall::PolkadotVault(..) => self.polkadot_vault,
 
-				RuntimeCall::BitcoinBroadcaster(..) => permission.bitcoin_broadcast,
-				RuntimeCall::BitcoinChainTracking(..) => permission.bitcoin_chain_tracking,
-				RuntimeCall::BitcoinIngressEgress(..) => permission.bitcoin_ingress_egress,
-				RuntimeCall::BitcoinVault(..) => permission.bitcoin_vault,
+			RuntimeCall::BitcoinBroadcaster(..) => self.bitcoin_broadcast,
+			RuntimeCall::BitcoinChainTracking(..) => self.bitcoin_chain_tracking,
+			RuntimeCall::BitcoinIngressEgress(..) => self.bitcoin_ingress_egress,
+			RuntimeCall::BitcoinVault(..) => self.bitcoin_vault,
 
-				_ => {
-					log::warn!("All witnesser calls must be controllable through `WitnesserCallPermission` during SafeMode: CodeAmber. Call: {:?}", call);
-					false
-				},
+			_ => {
+				cf_runtime_utilities::log_or_panic!(
+					"All witnesser calls must be controllable through `WitnesserCallPermission`. Call: {:?}",
+					call
+				);
+				#[allow(unreachable_code)]
+				false
 			},
 		}
 	}

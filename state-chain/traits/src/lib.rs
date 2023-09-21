@@ -817,11 +817,11 @@ pub trait AuthoritiesCfeVersions {
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {
-	fn should_dispatch(call: &RuntimeCall) -> bool;
+	fn should_dispatch(&self, call: &RuntimeCall) -> bool;
 }
 
 impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
-	fn should_dispatch(_call: &RuntimeCall) -> bool {
+	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
 		true
 	}
 }

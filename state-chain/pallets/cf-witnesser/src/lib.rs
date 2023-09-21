@@ -36,6 +36,18 @@ pub enum PalletSafeMode<CallPermission> {
 	CodeAmber(CallPermission),
 }
 
+impl<C, CallPermission: CallDispatchFilter<C>> CallDispatchFilter<C>
+	for PalletSafeMode<CallPermission>
+{
+	fn should_dispatch(&self, call: &C) -> bool {
+		match self {
+			Self::CodeGreen => true,
+			Self::CodeRed => false,
+			Self::CodeAmber(permissions) => permissions.should_dispatch(call),
+		}
+	}
+}
+
 impl<CallPermission> Default for PalletSafeMode<CallPermission> {
 	fn default() -> Self {
 		<PalletSafeMode<CallPermission> as SafeMode>::CODE_GREEN
@@ -134,17 +146,18 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
-			if T::SafeMode::get() != SafeMode::CODE_RED {
+
+			let safe_mode = T::SafeMode::get();
+			if safe_mode != SafeMode::CODE_RED {
 				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls_storage| {
 					witnessed_calls_storage
 						.extract_if(|(_, call, _)| {
 							let next_weight =
 								used_weight.saturating_add(call.get_dispatch_info().weight);
 							if remaining_weight.all_gte(next_weight) &&
-								T::CallDispatchPermission::should_dispatch(call)
+								safe_mode.should_dispatch(call)
 							{
 								used_weight = next_weight;
 								true
@@ -365,7 +378,7 @@ pub mod pallet {
 				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
-				if T::CallDispatchPermission::should_dispatch(&call) {
+				if T::SafeMode::get().should_dispatch(&call) {
 					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
 				} else {
 					WitnessedCallsScheduledForDispatch::<T>::append((
