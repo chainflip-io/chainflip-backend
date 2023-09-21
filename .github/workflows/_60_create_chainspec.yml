@@ -18,17 +18,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # TODO: Remove before merging
-      - name: Fetch binaries
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: release-sisyphos.yml
-          name: chainflip-backend-bin-ubuntu-22.04
-          branch: release/0.9
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          search_artifacts: true
-          check_artifacts: true
-
       - name: Check if the chainspec file already exists
         id: check-chainspec-exists
         continue-on-error: true
@@ -45,11 +34,11 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-#      - name: Download binary artifacts
-#        if: steps.check-chainspec-exists.outcome == 'success'
-#        uses: actions/download-artifact@v3
-#        with:
-#          name: chainflip-backend-bin-ubuntu-22.04
+      - name: Download binary artifacts
+        if: steps.check-chainspec-exists.outcome == 'success'
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Setup python
         if: steps.check-chainspec-exists.outcome == 'success'
@@ -61,12 +50,6 @@ jobs:
           echo "DATE=$(date '+%d-%m-%Y')" >> $GITHUB_ENV
           python3 ./ci/scripts/create_chainspec.py ${{ inputs.network }} ./chainflip-node
 
-
-      - name: Upload chainspec to s3
-        if: steps.check-chainspec-exists.outcome == 'success'
-        run: |
-          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
-
       - name: Create a pull request against current branch
         if: steps.check-chainspec-exists.outcome == 'success'
         id: create-pr
@@ -74,8 +57,13 @@ jobs:
         with:
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           commit-message: "[skip ci] - Create chainspec for ${{ inputs.network }}"
-          title: "Create chainspec for ${{ inputs.network }}"
-          body: "This PR was automatically created by the `create-chainspec` workflow."
+          title: "New chainspec for ${{ inputs.network }}"
+          body: |
+            This PR was automatically created by the `create-chainspec` workflow.
+            Please bear in mind this might not be the final chainspec.
+            Only once the `${{ inputs.network }}.rs` file has been updated should this PR be merged.
+            Successive pushes to the release branch will not create new PRs. 
+            To recreate this chainspec, please first delete the chainspec files from the release branch.
           branch: chainspec/${{ inputs.network }}-${{ env.DATE }}
           committer: cf-bot <dev@chainflip.io>
           reviewers: |
@@ -92,13 +80,7 @@ jobs:
           echo "Chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
           echo "[Pull requests created](${{ steps.create-pr.outputs.pull-request-url }})" >> $GITHUB_STEP_SUMMARY
 
-      - name: Set summary output
-        if: steps.check-chainspec-exists.outcome == 'failure'
-        run: |
-          echo "No chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
-
       - name: Set DISCORD_URL
-        if: steps.check-chainspec-exists.outcome == 'success'
         run: |
           if [ "${{ inputs.network }}" == "perseverance" ]; then
             echo "DISCORD_URL=${{ secrets.CF_DISCORD_WH_NETWORK_PERSEVERANCE }}" >> $GITHUB_ENV
@@ -116,3 +98,24 @@ jobs:
             ⛓️ New chainspec available for review
             > **Network:** ${{ inputs.network }}
             > **Pull requests:** ${{ steps.create-pr.outputs.pull-request-url }}
+
+      - name: Upload chainspec to s3
+        if: steps.check-chainspec-exists.outcome == 'failure'
+        run: |
+          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json
+
+      - name: Set summary output
+        if: steps.check-chainspec-exists.outcome == 'failure'
+        run: |
+          echo "No chainspec created for `${{ inputs.network }}`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify that chainspec was created
+        if: steps.check-chainspec-exists.outcome == 'failure'
+        env:
+          DISCORD_WEBHOOK: ${{ env.DISCORD_URL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            ✅ Chainspec uploaded to S3
+            > **Network:** ${{ inputs.network }}
+            > **S3 URL:** https://repo.chainflip.io/chainspecs/${{ inputs.network }}.chainspec.json

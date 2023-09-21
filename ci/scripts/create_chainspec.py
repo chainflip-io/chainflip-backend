@@ -42,9 +42,12 @@ def main():
 
     chainspec_filename = os.path.join(CHAINSPECS_BASE_PATH, f"{network}.chainspec.json")
 
-    generate_chainspec_command = [binary, "build-spec", "--chain", network, "--disable-default-bootnode"]
-    # TODO: Uncomment this line before merging
-    # generate_chainspec_command = [binary, "build-spec", "--chain", network + "-new", "--disable-default-bootnode"]
+    if network == "test":
+        chainspec_name = network
+    else:
+        chainspec_name = network + "-new"
+
+    generate_chainspec_command = [binary, "build-spec", "--chain", chainspec_name, "--disable-default-bootnode"]
 
     with open(chainspec_filename, "w") as chainspec:
         subprocess.call(generate_chainspec_command, stdout=chainspec)
