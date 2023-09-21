@@ -13,6 +13,10 @@ pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 pub const DOT_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(6);
 
+// ======= Rpc Clients =======
+
+pub const RPC_RETRY_CONNECTION_INTERVAL: Duration = Duration::from_secs(10);
+
 // ======= Settings environment variables =======
 
 pub const ETH_HTTP_ENDPOINT: &str = "ETH__RPC__HTTP_ENDPOINT";
