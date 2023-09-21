@@ -98,7 +98,7 @@ pub struct SubmissionWatcher<
 	submissions_by_nonce: BTreeMap<Nonce, BTreeMap<SubmissionID, Submission>>,
 	#[allow(clippy::type_complexity)]
 	submission_status_futures:
-		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, usize)>>>,
+		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, H256)>>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
@@ -193,10 +193,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						(request.id, request.next_submission_id),
 						self.scope.spawn_with_handle(async move {
 							while let Some(status) = transaction_status_stream.next().await {
-								if let TransactionStatus::InBlock((block_hash, extrinsic_index)) =
+								// NOTE: Currently the _extrinsic_index returned by substrate
+								// through the subscription is wrong and is always 0
+								if let TransactionStatus::InBlock((block_hash, _extrinsic_index)) =
 									status?
 								{
-									return Ok(Some((block_hash, extrinsic_index)))
+									return Ok(Some((block_hash, tx_hash)))
 								}
 							}
 
@@ -330,14 +332,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			.map(|dispatch_info| (tx_hash, extrinsic_events, header, dispatch_info))
 	}
 
-	pub async fn watch_for_submission_in_block(
-		&mut self,
-	) -> (RequestID, SubmissionID, H256, usize) {
+	pub async fn watch_for_submission_in_block(&mut self) -> (RequestID, SubmissionID, H256, H256) {
 		loop {
-			if let ((request_id, submission_id), Some((tx_hash, extrinsic_index))) =
+			if let ((request_id, submission_id), Some((block_hash, tx_hash))) =
 				self.submission_status_futures.next_or_pending().await
 			{
-				return (request_id, submission_id, tx_hash, extrinsic_index)
+				return (request_id, submission_id, block_hash, tx_hash)
 			}
 		}
 	}
@@ -345,12 +345,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn on_submission_in_block(
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
-		(request_id, _submission_id, block_hash, extrinsic_index): (
-			RequestID,
-			SubmissionID,
-			H256,
-			usize,
-		),
+		(request_id, _submission_id, block_hash, tx_hash): (RequestID, SubmissionID, H256, H256),
 	) -> Result<(), anyhow::Error> {
 		if let Some((header, extrinsics, events)) = {
 			if let Some((_, header, extrinsics, events)) = self
@@ -380,9 +375,16 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				None
 			}
 		} {
-			let extrinsic = extrinsics.get(extrinsic_index).expect(SUBSTRATE_BEHAVIOUR);
-			let tx_hash =
-				<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
+			let (extrinsic_index, _extrinsic) = extrinsics
+				.iter()
+				.enumerate()
+				.find(|(_extrinsic_index, extrinsic)| {
+					tx_hash ==
+						<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(
+							extrinsic,
+						)
+				})
+				.expect(SUBSTRATE_BEHAVIOUR);
 
 			let extrinsic_events = events
 				.iter()
