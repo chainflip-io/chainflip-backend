@@ -11,7 +11,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
-		DispatchError,
+		BoundedVec, DispatchError,
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
 	StorageHasher,
@@ -388,12 +388,49 @@ pub struct CcmChannelMetadata {
 	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
 	pub cf_parameters: Vec<u8>,
 }
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmDepositMetadata {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	pub channel_metadata: CcmChannelMetadata,
+}
+
+/// CCM parameters with bounded vec length. Used for input parameter only.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize)]
+pub struct CcmChannelMetadataBoundedLen<Length: Get<u32>> {
+	/// Call data used after the message is egressed.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
+	pub message: BoundedVec<u8, Length>,
+	/// User funds designated to be used for gas.
+	pub gas_budget: AssetAmount,
+	/// Additonal parameters for the cross chain message.
+	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
+	pub cf_parameters: BoundedVec<u8, Length>,
+}
+impl<Length: Get<u32>> From<CcmChannelMetadataBoundedLen<Length>> for CcmChannelMetadata {
+	fn from(input: CcmChannelMetadataBoundedLen<Length>) -> Self {
+		CcmChannelMetadata {
+			message: input.message.into(),
+			gas_budget: input.gas_budget,
+			cf_parameters: input.cf_parameters.into(),
+		}
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize)]
+pub struct CcmDepositMetadataBoundedLen<Length: Get<u32>> {
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
+	pub channel_metadata: CcmChannelMetadataBoundedLen<Length>,
+}
+impl<Length: Get<u32>> From<CcmDepositMetadataBoundedLen<Length>> for CcmDepositMetadata {
+	fn from(input: CcmDepositMetadataBoundedLen<Length>) -> Self {
+		CcmDepositMetadata {
+			source_chain: input.source_chain,
+			source_address: input.source_address,
+			channel_metadata: input.channel_metadata.into(),
+		}
+	}
 }
 
 #[derive(

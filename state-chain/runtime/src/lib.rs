@@ -40,7 +40,7 @@ pub use frame_support::{
 	instances::{Instance1, Instance2},
 	parameter_types,
 	traits::{
-		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
+		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
 		Randomness, StorageInfo,
 	},
 	weights::{
@@ -227,7 +227,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = chainflip::RuntimeSafeMode;
-	type MaxCcmLength = ConstU32<10_000u32>;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 

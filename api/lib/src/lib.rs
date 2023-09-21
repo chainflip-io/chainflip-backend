@@ -6,11 +6,12 @@ use cf_chains::{
 	address::EncodedAddress,
 	dot::PolkadotAccountId,
 	evm::{to_evm_address, Address as EthereumAddress},
-	CcmChannelMetadata, ForeignChain,
+	CcmChannelMetadataBoundedLen, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
+use pallet_cf_swapping::MaxCcmLength;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -294,7 +295,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		broker_commission_bps: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
+		channel_metadata_bounded_len: Option<CcmChannelMetadataBoundedLen<MaxCcmLength>>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic(pallet_cf_swapping::Call::request_swap_deposit_address {
@@ -302,7 +303,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				destination_asset,
 				destination_address,
 				broker_commission_bps,
-				channel_metadata,
+				channel_metadata_bounded_len,
 			})
 			.await
 			.until_finalized()

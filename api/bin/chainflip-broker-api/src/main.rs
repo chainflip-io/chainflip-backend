@@ -1,11 +1,12 @@
 use anyhow::anyhow;
+use cf_chains::CcmChannelMetadataBoundedLen;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	AnyhowRpcError,
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, ChannelId},
 	settings::StateChain,
 	BrokerApi, OperatorApi, StateChainApi,
 };
@@ -13,6 +14,7 @@ use clap::Parser;
 use futures::FutureExt;
 use hex::FromHexError;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
+use pallet_cf_swapping::MaxCcmLength;
 use serde::{Deserialize, Serialize};
 use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
@@ -44,32 +46,31 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 pub struct BrokerCcmChannelMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
-	cf_parameters: Option<String>,
+	cf_parameters: String,
 }
 
 fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
 	hex::decode(string.strip_prefix("0x").unwrap_or(string))
 }
 
-impl TryInto<CcmChannelMetadata> for BrokerCcmChannelMetadata {
+impl TryInto<CcmChannelMetadataBoundedLen<MaxCcmLength>> for BrokerCcmChannelMetadata {
 	type Error = anyhow::Error;
 
-	fn try_into(self) -> Result<CcmChannelMetadata, Self::Error> {
+	fn try_into(self) -> Result<CcmChannelMetadataBoundedLen<MaxCcmLength>, Self::Error> {
 		let gas_budget = self
 			.gas_budget
 			.try_into()
 			.map_err(|_| anyhow!("Failed to parse {:?} as gas budget", self.gas_budget))?;
-		let message =
-			parse_hex_bytes(&self.message).map_err(|e| anyhow!("Failed to parse message: {e}"))?;
+		let message = parse_hex_bytes(&self.message)
+			.map_err(|e| anyhow!("Failed to parse message: {e}"))?
+			.try_into()
+			.map_err(|_| anyhow!("CCM message too long."))?;
 
-		let cf_parameters = self
-			.cf_parameters
-			.map(|parameters| parse_hex_bytes(&parameters))
-			.transpose()
+		let cf_parameters = parse_hex_bytes(&self.cf_parameters)
 			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
-			.unwrap_or_default();
-
-		Ok(CcmChannelMetadata { gas_budget, message, cf_parameters })
+			.try_into()
+			.map_err(|_| anyhow!("CCM message too long."))?;
+		Ok(CcmChannelMetadataBoundedLen { gas_budget, message, cf_parameters })
 	}
 }
 
@@ -124,7 +125,7 @@ impl RpcServer for RpcServerImpl {
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<BrokerCcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError> {
-		let channel_metadata = channel_metadata.map(TryInto::try_into).transpose()?;
+		let channel_metadata_bounded_len = channel_metadata.map(TryInto::try_into).transpose()?;
 
 		Ok(self
 			.api
@@ -134,7 +135,7 @@ impl RpcServer for RpcServerImpl {
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,
-				channel_metadata,
+				channel_metadata_bounded_len,
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)
