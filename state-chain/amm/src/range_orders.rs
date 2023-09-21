@@ -50,8 +50,8 @@ pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Position {
-	/// The `depth` of this range order, this value is proportional the value of the order i.e. the
-	/// amount of assets that make up the order.
+	/// The `depth` of this range order, this value is proportional to the value of the order i.e.
+	/// the amount of assets that make up the order.
 	liquidity: Liquidity,
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
@@ -123,7 +123,7 @@ impl Position {
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct TickDelta {
 	/// This is the change in the total amount of liquidity in the pool at this price, i.e. if the
-	/// price moves from a lower price to a higher one above this tick (higher/lower in literal
+	/// price moves from a lower price to a higher one, above this tick (higher/lower in literal
 	/// integer value), the liquidity will increase by `liquidity_delta` and therefore swaps (In
 	/// both directions) will experience less slippage (Assuming liquidity_delta is positive).
 	liquidity_delta: i128,
@@ -150,14 +150,14 @@ pub struct PoolState<LiquidityProvider> {
 	/// `current_sqrt_price` is moving towards (going down in literal value), and will cross when
 	/// `current_sqrt_price` reachs it. `current_tick + 1` is the tick the price is moving towards
 	/// (going up in literal value) when you swap OneToZero and will cross when
-	/// `current_sqrt_price` reachs it,
+	/// `current_sqrt_price` reaches it,
 	current_tick: Tick,
 	/// The total liquidity/depth at the `current_sqrt_price`
 	current_liquidity: Liquidity,
 	/// The total fees earned over all time per unit liquidity
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
-	/// All the ticks that have atleast one range order that starts or ends at it, i.e. those ticks
-	/// where liquidity_gross is non-zero.
+	/// All the ticks that have at least one range order that starts or ends at it, i.e. those
+	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }

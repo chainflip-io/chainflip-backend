@@ -8,9 +8,9 @@
 //! Swaps in this pool will execute on the best priced positions first. Note if two positions
 //! have the same price, both positions will be partially executed, and neither will receive
 //! "priority" regardless of when they were created, i.e. an equal percentage of all positions at
-//! the same price will be executed. So a larger positions will earn more fees (and have more
-//! absolute value executed, but the same amount percentage-wise) as it contributes more to the
-//! swap.
+//! the same price will be executed. So larger positions will earn more fees (and the absolute
+//! amount of the position that is executed will be greater, but the same percentage-wise) as they
+//! contribute more to the swap.
 //!
 //! To track fees earned and remaining liquidity in each position, the pool records the big product
 //! of the "percent_remaining" of each swap. Using two of these values you can calculate the
@@ -47,20 +47,22 @@ const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* litt
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Default))]
 struct FloatBetweenZeroAndOne {
-	normalised_mantissa: U256, /* A fixed point number where the msb has a value of `0.5`,
-	                            * therefore it cannot represent 1.0, only numbers inside
-	                            * `0.0..1.0`, although note the mantissa will never be zero, and
-	                            * this is enforced by the public functions of the type. We also
-	                            * enforce that the top bit of the mantissa is always set, i.e.
-	                            * the float point number is `normalised`. Therefore the mantissa
-	                            * always has a value between `0.5..1.0`. */
-	negative_exponent: U256, /* As we are only interested in representing real numbers below 1,
-	                          * the exponent is either 0 or negative. */
+	/// A fixed point number where the msb has a value of `0.5`,
+	/// therefore it cannot represent 1.0, only numbers inside
+	/// `0.0..1.0`, although note the mantissa will never be zero, and
+	/// this is enforced by the public functions of the type. We also
+	/// enforce that the top bit of the mantissa is always set, i.e.
+	/// the float point number is `normalised`. Therefore the mantissa
+	/// always has a value between `0.5..1.0`.
+	normalised_mantissa: U256,
+	/// As we are only interested in representing real numbers below 1,
+	/// the exponent is either 0 or negative.                                   
+	negative_exponent: U256,
 }
 impl Ord for FloatBetweenZeroAndOne {
 	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
 		// Because the float is normalised we can get away with comparing only the exponents (unless
-		// they are the same). Also note the exponent compoarison is reversed, as the exponent is
+		// they are the same). Also note the exponent comparison is reversed, as the exponent is
 		// implicitly negative.
 		other
 			.negative_exponent
@@ -147,9 +149,9 @@ impl FloatBetweenZeroAndOne {
 		}
 	}
 
-	/// Returns both floor and ceil of `y = x * numerator / denominator`
+	/// Returns both floor and ceil of `y = x * numerator / denominator`.
 	///
-	/// This will panic if the numerator is more than the denominator
+	/// This will panic if the numerator is more than the denominator.
 	fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> (U256, U256) {
 		// Note this does not imply numerator.normalised_mantissa <= denominator.normalised_mantissa
 		assert!(numerator <= denominator);
@@ -161,9 +163,10 @@ impl FloatBetweenZeroAndOne {
 			denominator.normalised_mantissa.into(),
 		);
 
+		// Unwrap safe as numerator is smaller than denominator, so its negative_exponent must be
+		// greater than or equal to the denominator's
 		let negative_exponent =
-			numerator.negative_exponent.checked_sub(denominator.negative_exponent).unwrap(); // Unwrap safe as numerator is smaller than denominator, so its negative_exponent must be
-																				 // greater than or equal to the denominator's
+			numerator.negative_exponent.checked_sub(denominator.negative_exponent).unwrap();
 
 		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
 
@@ -315,18 +318,19 @@ impl<'a> From<&'a Position> for PositionInfo {
 	}
 }
 
+/// Represents a single LP position
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct Position {
 	/// Used to identify when the position was created and thereby determine if all the liquidity
 	/// in the position has been used or not. As once all the liquidity at a tick has been used,
-	/// the internal record of that tick is deleted, and if liquidity is added back later the
-	/// record will have a different pool_instance. Therefore a position can tell if all its
-	/// liquidity has been used, by seeing if there is not a pool at the same tick, or if that pool
-	/// has a different pool_instance.
+	/// the internal record of that tick/fixed pool is deleted, and if liquidity is added back
+	/// later the record will have a different pool_instance. Therefore a position can tell if all
+	/// its liquidity has been used, by seeing if there is not a fixed pool at the same tick, or if
+	/// that fixed pool has a different pool_instance.
 	pool_instance: u128,
-	/// The total amount of liquidity provided by this position as of the last collect operation.
-	/// I.e. This value is not updated when swaps occur, only when the LP updates there position in
-	/// some way.
+	/// The total amount of liquidity provided by this position as of the last operation on the
+	/// position. I.e. This value is not updated when swaps occur, only when the LP updates their
+	/// position in some way.
 	amount: Amount,
 	/// This value is used in combination with the FixedPool's `percent_remaining` to determine how
 	/// much liquidity/amount is remaining in a position when an LP does a collect/update of the
@@ -335,6 +339,8 @@ struct Position {
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
+/// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
+/// single fixed pool will contain the liquidity/assets for all limit orders at that specific price.
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub(super) struct FixedPool {
 	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
@@ -349,7 +355,7 @@ pub(super) struct FixedPool {
 	/// associated position but have some liquidity available, but this would likely be a very
 	/// small amount.
 	available: Amount,
-	/// This is the big mul of all `1.0 - percent_used_by_swap` for all swaps that have occured
+	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have occured
 	/// since this FixedPool instance was created and used liquidity from it.
 	percent_remaining: FloatBetweenZeroAndOne,
 }
@@ -364,9 +370,10 @@ pub(super) struct PoolState<LiquidityProvider> {
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
 	/// selling asset `Zero` and all those that are selling asset `one` used the SideMap.
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
-	/// All the Positions that either are providing liquidity currently, or were directly after the
-	/// last time they where updated. They are grouped into all those that are selling asset `Zero`
-	/// and all those that are selling asset `one` used the SideMap.
+	/// All the Positions that either are providing liquidity currently, or were providing
+	/// liquidity directly after the last time they where updated. They are grouped into all those
+	/// that are selling asset `Zero` and all those that are selling asset `one` used the SideMap.
+	/// Therefore there can be positions stored here that don't provide any liquidity.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
 

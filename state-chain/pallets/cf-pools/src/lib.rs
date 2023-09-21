@@ -39,11 +39,10 @@ enum Stability {
 	Unstable,
 }
 
+// TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
+// nature.
 /// Represents a pair of assets in a canonical ordering, so given two different assets they are
 /// always the same way around. In this case the unstable asset is `zero` and the stable is `one`.
-///
-/// TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
-/// nature.
 #[derive(
 	Clone, DebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEqNoBound, EqNoBound,
 )]
@@ -110,8 +109,8 @@ impl<T: Config> AssetPair<T> {
 		})
 	}
 
-	// Remaps the amounts into a SideMap, assuming the base and pair are the same way around as the
-	// assets when this AssetPair was created.
+	/// Remaps the amounts into a SideMap, assuming the base and pair are the same way around as the
+	/// assets when this AssetPair was created.
 	pub fn asset_amounts_to_side_map(
 		&self,
 		asset_amounts: AssetAmounts,
@@ -122,8 +121,8 @@ impl<T: Config> AssetPair<T> {
 		})
 	}
 
-	// Remaps the amounts into an AssetsMap, assuming the base and pair should be the same way
-	// around as the assets when this AssetPair was created.
+	/// Remaps the amounts into an AssetsMap, assuming the base and pair should be the same way
+	/// around as the assets when this AssetPair was created.
 	pub fn side_map_to_asset_amounts(
 		&self,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
@@ -131,8 +130,8 @@ impl<T: Config> AssetPair<T> {
 		Ok(self.side_map_to_assets_map(side_map.try_map(|_, amount| amount.try_into())?))
 	}
 
-	// Remaps a SideMap into an AssetsMap, assuming the base and pair should be the same way around
-	// as the assets when this AssetPair was created.
+	/// Remaps a SideMap into an AssetsMap, assuming the base and pair should be the same way around
+	/// as the assets when this AssetPair was created.
 	pub fn side_map_to_assets_map<R>(&self, side_map: cf_amm::common::SideMap<R>) -> AssetsMap<R> {
 		match self.base_side {
 			Side::Zero => AssetsMap { base: side_map.zero, pair: side_map.one },

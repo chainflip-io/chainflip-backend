@@ -8,11 +8,12 @@ pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
-/// Represents a price as log1.0001(price) rounded to the nearest integer, where price is measured
-/// in asset one.
+/// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
+/// in units of asset One.
 pub type Tick = i32;
-/// Represents a price as a sqrt, as a fixed point integer with 96 fractional bits and 64 integer
-/// bits (The higher bits past 96+64 th aren't used). The price is always measured in asset one.
+/// The square root of the price, represented as a fixed point integer with 96 fractional bits and
+/// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPriceQ64F96] is always in sqrt
+/// units of asset one.
 pub type SqrtPriceQ64F96 = U256;
 /// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
@@ -222,18 +223,17 @@ impl SwapDirection for OneToZero {
 	}
 }
 
+// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
+// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
+// cause any problems for the AMM code in terms of correctness
 /// This is the ratio of equivalently valued amounts of asset One and asset Zero. The price is
 /// always measured in amount of asset One per unit of asset Zero. Therefore as asset zero becomes
 /// more valuable relative to asset one the price's literal value goes up, and vice versa. This
 /// ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional bits.
-///
-/// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
-/// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
-/// cause any problems for the AMM code in terms of correctness
 pub type Price = U256;
 pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
-/// Converts from a `sqrt_price` to a `price`
+/// Converts from a [SqrtPriceQ64F96] to a [Price].
 ///
 /// Will panic for `sqrt_price`'s outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`
 pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
