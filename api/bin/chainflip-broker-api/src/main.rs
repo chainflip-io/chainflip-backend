@@ -66,7 +66,7 @@ impl TryInto<CcmChannelMetadataBoundedLen<MaxCcmLength>> for BrokerCcmChannelMet
 			.try_into()
 			.map_err(|_| anyhow!("CCM message too long."))?;
 
-		let cf_parameters = parse_hex_bytes(&self.cf_parameters)
+		let cf_parameters = parse_hex_bytes(&self.cf_parameters.unwrap_or_default())
 			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
 			.try_into()
 			.map_err(|_| anyhow!("CCM message too long."))?;
