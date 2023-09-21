@@ -62,6 +62,10 @@ impl<
 				state_chain_runtime::Hash,
 				state_chain_runtime::Header,
 				state_chain_runtime::SignedBlock,
+			> + substrate_frame_rpc_system::SystemApiClient<
+				state_chain_runtime::Block,
+				state_chain_runtime::AccountId,
+				state_chain_runtime::Nonce,
 			>,
 	> RawRpcApi for T
 {
@@ -77,6 +81,11 @@ impl<
 #[async_trait]
 pub trait BaseRpcApi {
 	async fn health(&self) -> RpcResult<Health>;
+
+	async fn next_account_nonce(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+	) -> RpcResult<state_chain_runtime::Nonce>;
 
 	async fn submit_extrinsic(
 		&self,
@@ -152,6 +161,13 @@ fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcClient> {
 	async fn health(&self) -> RpcResult<Health> {
 		self.raw_rpc_client.system_health().await
+	}
+
+	async fn next_account_nonce(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+	) -> RpcResult<state_chain_runtime::Nonce> {
+		self.raw_rpc_client.nonce(account_id).await
 	}
 
 	async fn submit_extrinsic(
