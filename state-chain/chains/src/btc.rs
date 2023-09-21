@@ -438,6 +438,20 @@ impl core::fmt::Display for BitcoinNetwork {
 	}
 }
 
+#[cfg(feature = "std")]
+impl TryFrom<&str> for BitcoinNetwork {
+	type Error = anyhow::Error;
+
+	fn try_from(s: &str) -> Result<Self, Self::Error> {
+		match s {
+			"main" => Ok(BitcoinNetwork::Mainnet),
+			"test" => Ok(BitcoinNetwork::Testnet),
+			"regtest" => Ok(BitcoinNetwork::Regtest),
+			unknown => Err(anyhow::anyhow!("Unknown Bitcoin network: {unknown}")),
+		}
+	}
+}
+
 const SEGWIT_VERSION_ZERO: u8 = 0;
 const SEGWIT_VERSION_TAPROOT: u8 = 1;
 const SEGWIT_VERSION_MAX: u8 = 16;
@@ -1273,5 +1287,21 @@ mod test {
 		for x in test_data {
 			assert_eq!(to_varint(x.0), x.1);
 		}
+	}
+
+	#[test]
+	fn test_btc_network_names() {
+		assert_eq!(
+			BitcoinNetwork::try_from(BitcoinNetwork::Mainnet.to_string().as_str()).unwrap(),
+			BitcoinNetwork::Mainnet
+		);
+		assert_eq!(
+			BitcoinNetwork::try_from(BitcoinNetwork::Testnet.to_string().as_str()).unwrap(),
+			BitcoinNetwork::Testnet
+		);
+		assert_eq!(
+			BitcoinNetwork::try_from(BitcoinNetwork::Regtest.to_string().as_str()).unwrap(),
+			BitcoinNetwork::Regtest
+		);
 	}
 }

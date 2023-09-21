@@ -30,11 +30,11 @@ impl BtcRetryRpcClient {
 		expected_btc_network: BitcoinNetwork,
 	) -> Result<Self> {
 		let rpc_client = BtcRpcClient::new(nodes.primary, expected_btc_network)?;
-		let backup_rpc_client = match nodes.backup {
-			Some(backup_endpoint) =>
-				Some(BtcRpcClient::new(backup_endpoint, expected_btc_network)?),
-			None => None,
-		};
+
+		let backup_rpc_client = nodes
+			.backup
+			.map(|backup_endpoint| BtcRpcClient::new(backup_endpoint, expected_btc_network))
+			.transpose()?;
 
 		Ok(Self {
 			retry_client: RetrierClient::new(

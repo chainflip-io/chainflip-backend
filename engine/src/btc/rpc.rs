@@ -9,10 +9,10 @@ use serde;
 use serde_json::json;
 
 use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
-use tracing::{error, warn};
+use tracing::error;
 use utilities::make_periodic_tick;
 
-use crate::{constants::BTC_AVERAGE_BLOCK_TIME, settings::HttpBasicAuthEndpoint};
+use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
 
 use anyhow::{anyhow, Context, Result};
 
@@ -74,13 +74,13 @@ impl BtcRpcClient {
 		let client = Client::builder().build()?;
 
 		Ok(async move {
-			let mut poll_interval = make_periodic_tick(BTC_AVERAGE_BLOCK_TIME, true);
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			loop {
 				poll_interval.tick().await;
 				match get_bitcoin_network(&client, &endpoint).await {
 					Ok(network) if network == expected_btc_network => break,
 					Ok(network) => {
-						warn!(
+						error!(
 								"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
 								configuration file...",
 								endpoint.http_endpoint
@@ -88,8 +88,9 @@ impl BtcRpcClient {
 					},
 					Err(e) => error!(
 						"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
-							configuration file. Retrying in {BTC_AVERAGE_BLOCK_TIME:?}...",
-						endpoint.http_endpoint
+							configuration file. Retrying in {:?}...",
+						endpoint.http_endpoint,
+						poll_interval.period()
 					),
 				}
 			}
@@ -150,18 +151,9 @@ async fn get_bitcoin_network(
 		.map_err(anyhow::Error::msg)?;
 	let network_name = json_value["chain"]
 		.as_str()
-		.ok_or(anyhow!("Missing or empty `chain` field in getblockchaininfo response"))?
-		.to_string();
+		.ok_or(anyhow!("Missing or empty `chain` field in getblockchaininfo response"))?;
 
-	Ok(match network_name.as_str() {
-		"main" => BitcoinNetwork::Mainnet,
-		"test" => BitcoinNetwork::Testnet,
-		"regtest" => BitcoinNetwork::Regtest,
-		unknown_network =>
-			return Err(anyhow!(
-				"Unknown Bitcoin network `{unknown_network}` in getblockchaininfo response",
-			)),
-	})
+	BitcoinNetwork::try_from(network_name)
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

@@ -13,9 +13,9 @@ pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 pub const DOT_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(6);
 
-// ======= Btc Rpc Client =======
+// ======= Rpc Clients =======
 
-pub const BTC_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(600);
+pub const RPC_RETRY_CONNECTION_INTERVAL: Duration = Duration::from_secs(10);
 
 // ======= Settings environment variables =======
 

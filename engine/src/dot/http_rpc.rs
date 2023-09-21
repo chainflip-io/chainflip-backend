@@ -23,7 +23,7 @@ use subxt::{
 use anyhow::Result;
 use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
-use crate::constants::DOT_AVERAGE_BLOCK_TIME;
+use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 
 use super::rpc::DotRpcApi;
 
@@ -90,7 +90,7 @@ impl DotHttpRpcClient {
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the
 			// Polkadot node. So the other chains are unaffected
-			let mut poll_interval = make_periodic_tick(DOT_AVERAGE_BLOCK_TIME, true);
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			let online_client = loop {
 				poll_interval.tick().await;
 
@@ -102,7 +102,7 @@ impl DotHttpRpcClient {
 						if genesis_hash == expected_genesis_hash {
 							break online_client
 						} else {
-							tracing::warn!(
+							tracing::error!(
 								"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
 							)
 						}
