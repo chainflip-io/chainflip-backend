@@ -101,9 +101,9 @@ jobs:
         run: |
           if [ "${{ inputs.network }}" == "perseverance" ]; then
             echo "DISCORD_URL=${{ secrets.CF_DISCORD_WH_NETWORK_PERSEVERANCE }}" >> $GITHUB_ENV
-          elif [ "${{ inputs.network }}" == "sisyphos" ]; then
+          else
             echo "DISCORD_URL=${{ secrets.CF_DISCORD_WH_NETWORK_SISYPHOS }}" >> $GITHUB_ENV
-          fi 
+          fi
 
       - name: Notify that chainspec was created
         env:
