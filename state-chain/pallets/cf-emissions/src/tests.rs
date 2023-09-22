@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
+use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet, BLOCKS_PER_YEAR};
 use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, SetSafeMode};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
@@ -126,11 +126,30 @@ fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 
 #[test]
 fn test_example_block_reward_calcaulation() {
-	use crate::calculate_inflation_to_block_reward;
 	let issuance: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
-	let inflation: u128 = 2720; // perbill
-	let expected: u128 = 1_813_333_333_333_333_333;
-	assert_eq!(calculate_inflation_to_block_reward(issuance, inflation, 150u128), expected);
+	let inflation: u128 = 10; // in basis points
+	let expected: u128 = 19_012_852_688_417_370; // ~0.019 Flip
+	assert_eq!(crate::calculate_inflation_to_block_reward(issuance, inflation), expected);
+}
+
+#[test]
+fn rewards_calculation_compounding() {
+	// This test ensures that even if we "compound" every block,
+	// the result is still very close the target annual emission.
+	const INITIAL_ISSUANCE: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
+
+	let mut total_issuance: u128 = INITIAL_ISSUANCE;
+	const INFLATION: u128 = 10; // in basis points
+
+	for _ in 0..BLOCKS_PER_YEAR {
+		let reward = crate::calculate_inflation_to_block_reward(total_issuance, INFLATION);
+		total_issuance += reward;
+	}
+
+	let minted_expected = INITIAL_ISSUANCE * INFLATION / 10_000;
+	let minted_actual = total_issuance.checked_sub(INITIAL_ISSUANCE).unwrap();
+	let error = minted_actual as f64 / minted_expected as f64;
+	assert!(error > 0.999 && error < 1.001);
 }
 
 #[test]

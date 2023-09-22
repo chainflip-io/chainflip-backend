@@ -18,8 +18,8 @@ use state_chain_runtime::{
 	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
 };
 
-pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
-pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
+pub const CURRENT_AUTHORITY_EMISSION_INFLATION_BPS: u32 = 10; // 0.1%
+pub const BACKUP_NODE_EMISSION_INFLATION_BPS: u32 = 2; // 0.02%
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
@@ -165,8 +165,8 @@ impl ExtBuilder {
 				keygen_response_timeout: 4,
 			},
 			emissions: EmissionsConfig {
-				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 				..Default::default()
 			},

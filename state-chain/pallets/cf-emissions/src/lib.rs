@@ -30,6 +30,11 @@ use cf_primitives::{chains::AnyChain, Asset};
 pub mod weights;
 pub use weights::WeightInfo;
 
+// TODO: get this from runtime constants
+pub(crate) const SECONDS_PER_BLOCK: u64 = 6;
+/// Expected number of blocks in a year (note the extra 6 hours to account for leap years)
+const BLOCKS_PER_YEAR: u64 = (365 * 24 + 6) * 60 * 60 / SECONDS_PER_BLOCK;
+
 impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 
 #[frame_support::pallet]
@@ -87,10 +92,6 @@ pub mod pallet {
 		/// Transaction broadcaster for the host chain.
 		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
 
-		/// The number of blocks for the time frame we would test liveliness within
-		#[pallet::constant]
-		type CompoundingInterval: Get<BlockNumberFor<Self>>;
-
 		/// Something that can provide the state chain gatweay address.
 		type EthEnvironment: EthEnvironmentProvider;
 
@@ -128,12 +129,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn current_authority_emission_inflation)]
-	/// Inflation per `COMPOUNDING_INTERVAL` set aside for current authorities in parts per billion.
+	/// Annual inflation set aside for current authorities in basis points.
 	pub(super) type CurrentAuthorityEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_inflation)]
-	/// Inflation per `COMPOUNDING_INTERVAL` set aside for *backup* nodes, in parts per billion.
+	/// Annual inflation set aside for *backup* nodes in basis points.
 	pub(super) type BackupNodeEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
@@ -321,11 +322,10 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 
 	fn calculate_block_emissions() {
-		fn inflation_to_block_reward<T: Config>(inflation_per_bill: u32) -> T::FlipBalance {
+		fn inflation_to_block_reward<T: Config>(annual_inflation_bps: u32) -> T::FlipBalance {
 			calculate_inflation_to_block_reward(
 				T::Issuance::total_issuance(),
-				inflation_per_bill.into(),
-				T::FlipBalance::unique_saturated_from(T::CompoundingInterval::get()),
+				annual_inflation_bps.into(),
 			)
 		}
 
@@ -339,11 +339,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 }
 
-fn calculate_inflation_to_block_reward<T>(
-	issuance: T,
-	inflation_per_bill: T,
-	heartbeat_interval: T,
-) -> T
+fn calculate_inflation_to_block_reward<T>(issuance: T, annual_inflation_bps: T) -> T
 where
 	T: Into<u128> + From<u128>,
 {
@@ -351,18 +347,15 @@ where
 
 	multiply_by_rational_with_rounding(
 		issuance.into(),
-		inflation_per_bill.into(),
-		1_000_000_000u128,
+		annual_inflation_bps.into(),
+		10_000,
 		Rounding::Down,
 	)
 	.unwrap_or_else(|| {
 		log::error!("Error calculating block rewards, Either Issuance or inflation value too big",);
 		0_u128
 	})
-	.checked_div(heartbeat_interval.into())
-	.unwrap_or_else(|| {
-		log::error!("Heartbeat Interval should be greater than zero");
-		Zero::zero()
-	})
+	.checked_div(BLOCKS_PER_YEAR.into())
+	.expect("division by non-zero constant")
 	.into()
 }

@@ -1,8 +1,7 @@
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::mock_runtime::{
-	ExtBuilder, BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-	CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+	ExtBuilder, BACKUP_NODE_EMISSION_INFLATION_BPS, CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 };
 
 use super::*;
@@ -81,13 +80,13 @@ fn state_of_genesis_is_as_expected() {
 
 		assert_eq!(
 			Emissions::current_authority_emission_inflation(),
-			CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+			CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
 			"invalid emission inflation for authorities"
 		);
 
 		assert_eq!(
 			Emissions::backup_node_emission_inflation(),
-			BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+			BACKUP_NODE_EMISSION_INFLATION_BPS,
 			"invalid emission inflation for backup authorities"
 		);
 
