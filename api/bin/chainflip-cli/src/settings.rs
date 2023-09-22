@@ -109,17 +109,26 @@ pub enum CliCommand {
 		)]
 		eth_address: Option<String>,
 		#[clap(
-			help = "Optional executor. If specified, only this address will be able to execute the redemption."
+			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
 		)]
-		executor: Option<cf_chains::eth::Address>,
+		executor_address: Option<String>,
 	},
 	#[clap(about = "Restricts your account to only be able to redeem to the specified address")]
 	BindRedeemAddress {
 		#[clap(help = "The Ethereum address you wish to bind your account to")]
 		eth_address: String,
 	},
+	#[clap(
+		about = "Restricts your account to only be able to execute registered redemptions with the specified address"
+	)]
+	BindExecutorAddress {
+		#[clap(help = "The Ethereum address you wish to bind your account to")]
+		eth_address: String,
+	},
 	#[clap(about = "Shows the redeem address your account is bound to")]
 	GetBoundRedeemAddress,
+	#[clap(about = "Shows the executor address your account is bound to")]
+	GetBoundExecutorAddress,
 	#[clap(
 		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
 	)]

@@ -363,14 +363,15 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: RedemptionAmount<FlipBalance<T>>,
 			address: EthereumAddress,
-			// Only this address can execute the claim.
+			// Only this address can execute the redemption.
 			executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
 			if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
+				ensure!(executor.is_some(), Error::<T>::ExecutorBindingRestrictionViolated);
 				ensure!(
-					executor_addr == executor.unwrap_or_default(),
+					executor_addr == executor.unwrap(),
 					Error::<T>::ExecutorBindingRestrictionViolated
 				);
 			}
