@@ -103,6 +103,9 @@ pub mod pallet {
 	};
 	use sp_std::vec::Vec;
 
+	pub(crate) type RecycleAddressAtBlock<T, I> =
+		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
+
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
@@ -585,24 +588,17 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn can_and_cannot_recycle(
 		maximum_recyclable_number: usize,
-		channel_recycle_blocks: Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>,
+		channel_recycle_blocks: RecycleAddressAtBlock<T, I>,
 		current_block_height: TargetChainBlockNumber<T, I>,
-	) -> (
-		Vec<TargetChainAccount<T, I>>,
-		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>,
-	) {
-		let partition_point =
-			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height);
-		let (ready_to_recycle, not_ready_to_recycle) =
-			channel_recycle_blocks.split_at(partition_point);
-
-		let ready_to_recycle = ready_to_recycle.to_vec();
+	) -> (Vec<TargetChainAccount<T, I>>, RecycleAddressAtBlock<T, I>) {
+		let (ready_to_recycle, not_ready_to_recycle) = channel_recycle_blocks
+			.into_iter()
+			.partition::<Vec<_>, _>(|(block, _)| *block <= current_block_height);
 
 		let (can_recycle, mut cannot_recycle) =
 			if maximum_recyclable_number < ready_to_recycle.len() {
-				let (can_recycle, cannot_recycle) =
-					ready_to_recycle.split_at(maximum_recyclable_number);
-				(can_recycle.to_vec(), cannot_recycle.to_vec())
+				let (can, cannot) = ready_to_recycle.split_at(maximum_recyclable_number);
+				(can.to_vec(), cannot.to_vec())
 			} else {
 				(ready_to_recycle, Vec::new())
 			};
@@ -772,7 +768,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-		if DepositChannelPool::<T, I>::get(&deposit_channel_details.deposit_channel.channel_id)
+		if DepositChannelPool::<T, I>::get(deposit_channel_details.deposit_channel.channel_id)
 			.is_some()
 		{
 			log_or_panic!(

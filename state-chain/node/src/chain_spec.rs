@@ -671,7 +671,7 @@ fn testnet_genesis(
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
 		},
 		polkadot_ingress_egress: PolkadotIngressEgressConfig {
-			deposit_channel_lifetime: polkadot_deposit_channel_lifetime.into(),
+			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
 		},
 	}
 }
