@@ -1025,47 +1025,50 @@ fn basic_balance_tracking() {
 
 #[test]
 fn test_default_empty_amounts() {
-	let (can_recycle, cannot_recycle) =
-		IngressEgress::can_and_cannot_recycle(0, Default::default(), 0);
+	let mut channel_recycle_blocks = Default::default();
+	let can_recycle = IngressEgress::can_and_cannot_recycle(&mut channel_recycle_blocks, 0, 0);
 
 	assert_eq!(can_recycle, vec![]);
-	assert_eq!(cannot_recycle, vec![]);
+	assert_eq!(channel_recycle_blocks, vec![]);
 }
 
 #[test]
 fn test_cannot_recycle_if_block_number_less_than_current_height() {
 	let maximum_recyclable_number = 2;
-	let channel_recycle_blocks =
+	let mut channel_recycle_blocks =
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 3;
 
-	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
-		channel_recycle_blocks,
 		current_block_height,
 	);
 
 	assert_eq!(can_recycle, vec![H160::from([1u8; 20]), H160::from([2; 20])]);
-	assert_eq!(cannot_recycle, vec![(3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]);
+	assert_eq!(
+		channel_recycle_blocks,
+		vec![(3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
+	);
 }
 
 // Same test as above, but lower maximum recyclable number
 #[test]
 fn test_can_only_recycle_up_to_max_amount() {
 	let maximum_recyclable_number = 1;
-	let channel_recycle_blocks =
+	let mut channel_recycle_blocks =
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 3;
 
-	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
-		channel_recycle_blocks,
 		current_block_height,
 	);
 
 	assert_eq!(can_recycle, vec![H160::from([1u8; 20])]);
 	assert_eq!(
-		cannot_recycle,
+		channel_recycle_blocks,
 		vec![(2, H160::from([2; 20])), (3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
 	);
 }
@@ -1073,19 +1076,19 @@ fn test_can_only_recycle_up_to_max_amount() {
 #[test]
 fn none_can_be_recycled_due_to_low_block_number() {
 	let maximum_recyclable_number = 4;
-	let channel_recycle_blocks =
+	let mut channel_recycle_blocks =
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 0;
 
-	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
-		channel_recycle_blocks,
 		current_block_height,
 	);
 
 	assert!(can_recycle.is_empty());
 	assert_eq!(
-		cannot_recycle,
+		channel_recycle_blocks,
 		vec![
 			(1, H160::from([1u8; 20])),
 			(2, H160::from([2; 20])),
@@ -1098,13 +1101,13 @@ fn none_can_be_recycled_due_to_low_block_number() {
 #[test]
 fn all_can_be_recycled() {
 	let maximum_recyclable_number = 4;
-	let channel_recycle_blocks =
+	let mut channel_recycle_blocks =
 		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
 	let current_block_height = 4;
 
-	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+	let can_recycle = IngressEgress::can_and_cannot_recycle(
+		&mut channel_recycle_blocks,
 		maximum_recyclable_number,
-		channel_recycle_blocks,
 		current_block_height,
 	);
 
@@ -1112,5 +1115,5 @@ fn all_can_be_recycled() {
 		can_recycle,
 		vec![H160::from([1u8; 20]), H160::from([2; 20]), H160::from([3; 20]), H160::from([4; 20])]
 	);
-	assert!(cannot_recycle.is_empty());
+	assert!(channel_recycle_blocks.is_empty());
 }

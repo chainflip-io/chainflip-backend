@@ -103,7 +103,7 @@ pub mod pallet {
 	};
 	use sp_std::vec::Vec;
 
-	pub(crate) type RecycleAddressAtBlock<T, I> =
+	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
 
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
@@ -337,7 +337,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>, ValueQuery>;
+		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -415,11 +415,13 @@ pub mod pallet {
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			let (can_recycle, cannot_recycle) = Self::can_and_cannot_recycle(
-				maximum_recycle_number,
-				DepositChannelRecycleBlocks::<T, I>::take(),
-				T::ChainTracking::get_block_height(),
-			);
+			let can_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+				Self::can_and_cannot_recycle(
+					recycle_queue,
+					maximum_recycle_number,
+					T::ChainTracking::get_block_height(),
+				)
+			});
 
 			for address in can_recycle.iter() {
 				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
@@ -431,8 +433,6 @@ pub mod pallet {
 					}
 				}
 			}
-
-			DepositChannelRecycleBlocks::<T, I>::put(cannot_recycle);
 
 			read_write_weight.saturating_mul(can_recycle.len() as u64)
 		}
@@ -587,24 +587,18 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn can_and_cannot_recycle(
+		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
 		maximum_recyclable_number: usize,
-		channel_recycle_blocks: RecycleAddressAtBlock<T, I>,
 		current_block_height: TargetChainBlockNumber<T, I>,
-	) -> (Vec<TargetChainAccount<T, I>>, RecycleAddressAtBlock<T, I>) {
-		let (ready_to_recycle, not_ready_to_recycle) = channel_recycle_blocks
-			.into_iter()
-			.partition::<Vec<_>, _>(|(block, _)| *block <= current_block_height);
-
-		let (can_recycle, mut cannot_recycle) =
-			if maximum_recyclable_number < ready_to_recycle.len() {
-				let (can, cannot) = ready_to_recycle.split_at(maximum_recyclable_number);
-				(can.to_vec(), cannot.to_vec())
-			} else {
-				(ready_to_recycle, Vec::new())
-			};
-
-		cannot_recycle.extend(not_ready_to_recycle.to_vec());
-		(can_recycle.into_iter().map(|(_, a)| a).collect(), cannot_recycle)
+	) -> Vec<TargetChainAccount<T, I>> {
+		let partition_point = sp_std::cmp::min(
+			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
+			maximum_recyclable_number,
+		);
+		channel_recycle_blocks
+			.drain(..partition_point)
+			.map(|(_, address)| address)
+			.collect()
 	}
 
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
