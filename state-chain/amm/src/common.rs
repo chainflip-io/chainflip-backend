@@ -114,9 +114,8 @@ impl<T> core::ops::IndexMut<Side> for SideMap<T> {
 		}
 	}
 }
-#[cfg(test)]
-impl<T: std::ops::Add<R>, R> std::ops::Add<SideMap<R>> for SideMap<T> {
-	type Output = SideMap<<T as std::ops::Add<R>>::Output>;
+impl<T: core::ops::Add<R>, R> core::ops::Add<SideMap<R>> for SideMap<T> {
+	type Output = SideMap<<T as core::ops::Add<R>>::Output>;
 	fn add(self, rhs: SideMap<R>) -> Self::Output {
 		SideMap { zero: self.zero + rhs.zero, one: self.one + rhs.one }
 	}
