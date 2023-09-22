@@ -21,6 +21,7 @@ use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	sp_io::hashing::sha2_256,
+	sp_runtime::DispatchError,
 	traits::{ConstBool, ConstU32},
 	BoundedVec, RuntimeDebug,
 };
@@ -300,8 +301,11 @@ impl TransactionValidator for BitcoinTransactionValidator {
 	type Transaction = BitcoinTransactionData;
 	type Signature = Signature;
 
-	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
-		true
+	fn is_valid(
+		_transaction: Self::Transaction,
+		_signature: Self::Signature,
+	) -> Result<(), DispatchError> {
+		Ok(())
 	}
 }
 

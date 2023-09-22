@@ -420,5 +420,8 @@ pub trait TransactionValidator {
 	type Transaction;
 	type Signature;
 	/// Fit the transaction and signature together and check if the signature is valid.
-	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool;
+	fn is_valid(
+		transaction: Self::Transaction,
+		signature: Self::Signature,
+	) -> Result<(), DispatchError>;
 }

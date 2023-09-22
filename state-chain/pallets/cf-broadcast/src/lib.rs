@@ -607,15 +607,14 @@ pub mod pallet {
 			// Check the payload is the same
 			ensure!(transaction == expected_transaction, Error::<T, I>::InvalidPayload);
 			// Ensure the signature
-			if T::TransactionValidator::is_valid(transaction, transaction_signature) {
-				// If the signature is valid, we can remove the transaction from storage
-				Transaction::<T, I>::remove(broadcast_attempt_id.broadcast_id);
-				// And mark the broadcast as validated
-				BroadcastValidated::<T, I>::insert(broadcast_attempt_id.broadcast_id, true);
-				Ok(())
-			} else {
-				Err(Error::<T, I>::InvalidPayload.into())
-			}
+
+			T::TransactionValidator::is_valid(transaction, transaction_signature)?;
+
+			// If the signature is valid, we can remove the transaction from storage
+			Transaction::<T, I>::remove(broadcast_attempt_id.broadcast_id);
+			// And mark the broadcast as validated
+			BroadcastValidated::<T, I>::insert(broadcast_attempt_id.broadcast_id, true);
+			Ok(())
 		}
 	}
 }

@@ -9,6 +9,7 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId, RawSignedTransaction, Transaction},
 	*,
 };
+
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -71,9 +72,15 @@ impl TransactionValidator for EthereumTransactionValidator {
 	type Transaction = Transaction;
 	type Signature = RawSignedTransaction;
 
-	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
-		let f = transaction.check_transaction(signature);
-		f.is_ok()
+	fn is_valid(
+		transaction: Self::Transaction,
+		signature: Self::Signature,
+	) -> Result<(), DispatchError> {
+		if let Err(err) = transaction.check_transaction(signature) {
+			DispatchError::Other(err.error_as_string()).into()
+		} else {
+			Ok(())
+		}
 	}
 }
 

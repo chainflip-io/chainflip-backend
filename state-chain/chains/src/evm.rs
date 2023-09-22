@@ -649,6 +649,19 @@ pub enum TransactionVerificationError {
 	InvalidParam(CheckedTransactionParameter),
 }
 
+impl TransactionVerificationError {
+	pub fn error_as_string(self) -> &'static str {
+		match self {
+			Self::InvalidChainId => "InvalidChainId: The transaction's chain id is invalid",
+			Self::InvalidRecoveryId => "InvalidRecoveryId: The derived recovery id is invalid",
+			Self::InvalidRlp => "InvalidRlp: The signed payload was not valid rlp-encoded data",
+			Self::InvalidSignature => "InvalidSignature: The transaction signature was invalid",
+			Self::NoMatch => "NoMatch: The recovered address does not match the provided one",
+			Self::InvalidParam(_) => "InvalidParam: The signed transaction parameters do not all match those of the unsigned transaction.",
+		}
+	}
+}
+
 /// Parameters that are checked as part of EVM transaction verification.
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum CheckedTransactionParameter {

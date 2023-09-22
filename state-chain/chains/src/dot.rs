@@ -314,8 +314,11 @@ impl TransactionValidator for PolkadotTransactionValidator {
 	type Transaction = PolkadotTransactionData;
 	type Signature = ();
 
-	fn is_valid(transaction: Self::Transaction, signature: Self::Signature) -> bool {
-		true
+	fn is_valid(
+		_transaction: Self::Transaction,
+		_signature: Self::Signature,
+	) -> Result<(), frame_support::dispatch::DispatchError> {
+		Ok(())
 	}
 }
 
