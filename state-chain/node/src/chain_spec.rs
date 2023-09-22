@@ -21,18 +21,14 @@ use sp_core::{
 	sr25519, Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::Offence,
-	constants::common::{
-		DEV_BITCOIN_EXPIRY_BLOCKS, DEV_ETHEREUM_EXPIRY_BLOCKS, DEV_POLKADOT_EXPIRY_BLOCKS,
-	},
-	opaque::SessionKeys,
-	AccountId, AccountRolesConfig, AuraConfig, BitcoinChainTrackingConfig,
-	BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
-	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumIngressEgressConfig,
-	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig,
-	GovernanceConfig, GrandpaConfig, PolkadotChainTrackingConfig, PolkadotIngressEgressConfig,
-	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig,
-	SessionConfig, Signature, SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
+	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
+	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
+	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
+	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
+	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
+	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature,
+	SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -50,6 +46,7 @@ use sp_runtime::{
 };
 
 pub mod common;
+pub mod devnet;
 pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
@@ -241,7 +238,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				// Governance account - Snow White
 				snow_white.into(),
 				1,
-				common::MAX_AUTHORITIES,
+				devnet::MAX_AUTHORITIES,
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
 					eth_usdc_address: eth_usdc_address.into(),
@@ -257,27 +254,27 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
-				common::TOTAL_ISSUANCE,
+				devnet::TOTAL_ISSUANCE,
 				genesis_funding_amount,
 				min_funding,
-				common::REDEMPTION_TAX,
-				8 * common::HOURS,
-				common::REDEMPTION_DELAY_SECS,
-				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-				common::EXPIRY_SPAN_IN_SECONDS,
-				common::ACCRUAL_RATIO,
-				Percent::from_percent(common::REDEMPTION_PERIOD_AS_PERCENTAGE),
-				common::SUPPLY_UPDATE_INTERVAL,
-				common::PENALTIES.to_vec(),
-				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
+				devnet::REDEMPTION_TAX,
+				8 * devnet::HOURS,
+				devnet::REDEMPTION_DELAY_SECS,
+				devnet::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+				devnet::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+				devnet::EXPIRY_SPAN_IN_SECONDS,
+				devnet::ACCRUAL_RATIO,
+				Percent::from_percent(devnet::REDEMPTION_PERIOD_AS_PERCENTAGE),
+				devnet::SUPPLY_UPDATE_INTERVAL,
+				devnet::PENALTIES.to_vec(),
+				devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+				devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+				devnet::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
 				// Bitcoin block times on localnets are much faster, so we account for that here.
-				DEV_BITCOIN_EXPIRY_BLOCKS,
-				DEV_ETHEREUM_EXPIRY_BLOCKS,
-				DEV_POLKADOT_EXPIRY_BLOCKS,
+				devnet::BITCOIN_EXPIRY_BLOCKS,
+				devnet::ETHEREUM_EXPIRY_BLOCKS,
+				devnet::POLKADOT_EXPIRY_BLOCKS,
 			)
 		},
 		// Bootnodes
@@ -400,9 +397,9 @@ macro_rules! network_spec {
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
-							MAINNET_BITCOIN_EXPIRY_BLOCKS,
-							MAINNET_ETHEREUM_EXPIRY_BLOCKS,
-							MAINNET_POLKADOT_EXPIRY_BLOCKS,
+							BITCOIN_EXPIRY_BLOCKS,
+							ETHEREUM_EXPIRY_BLOCKS,
+							POLKADOT_EXPIRY_BLOCKS,
 						)
 					},
 					// Bootnodes
