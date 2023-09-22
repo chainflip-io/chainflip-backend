@@ -1,9 +1,8 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLifetime, DepositChannelLookup, DepositChannelPool, DepositWitness,
-	DisabledEgressAssets, Error, Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer,
-	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	VaultTransfer,
+	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
+	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -353,8 +352,7 @@ fn addresses_are_getting_reused() {
 			channels
 		})
 		.then_execute_at_next_block(|channels| {
-			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
-				DepositChannelLifetime::<Test, _>::get() * 2;
+			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 
 			channels[0].clone()
@@ -388,8 +386,7 @@ fn proof_address_pool_integrity() {
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
 		}
-		let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
-			DepositChannelLifetime::<Test, _>::get() * 2;
+		let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 
 		IngressEgress::on_idle(1, Weight::MAX);
@@ -412,8 +409,7 @@ fn create_new_address_while_pool_is_empty() {
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
 		}
-		let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
-			DepositChannelLifetime::<Test, _>::get() * 2;
+		let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 		IngressEgress::on_idle(1, Weight::MAX);
 
@@ -594,8 +590,7 @@ fn multi_use_deposit_address_different_blocks() {
 				(),
 				Default::default()
 			));
-			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
-				DepositChannelLifetime::<Test, _>::get() * 2;
+			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 
 			channel
@@ -887,8 +882,7 @@ fn channel_reuse_with_different_assets() {
 			);
 		})
 		.then_execute_at_next_block(|(_, channel_id, _)| {
-			let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
-				DepositChannelLifetime::<Test, _>::get() * 2;
+			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 			channel_id
 		})
@@ -918,23 +912,26 @@ fn channel_reuse_with_different_assets() {
 
 /// This is the sequence we're testing.
 /// 1. Request deposit address
-/// 2. Deposit to address when it's almost recycled
-/// 3. The channel is recycled
+/// 2. Deposit to address when it's almost expired
+/// 3. The channel is expired
 /// 4. We need to finalise the ingress, by fetching
 /// 5. The fetch should succeed.
 #[test]
-fn ingress_finalisation_succeeds_after_channel_recycled() {
+fn ingress_finalisation_succeeds_after_channel_expired_but_not_recycled() {
 	new_test_ext().execute_with(|| {
+		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty(), "Is empty after genesis");
+
 		request_address_and_deposit(ALICE, eth::Asset::Eth);
 
-		let recycle_block = BlockHeightProvider::<MockEthereum>::get_block_height() +
-			DepositChannelLifetime::<Test, _>::get() * 2;
-		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+		// Because we're only *expiring* and not recycling, we should still be able to fetch.
+		let expiry_block = IngressEgress::expiry_and_recycle_block_height().1;
+		BlockHeightProvider::<MockEthereum>::set_block_height(expiry_block);
+
 		IngressEgress::on_idle(1, Weight::MAX);
 
 		IngressEgress::on_finalize(1);
 
-		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
+		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty(),);
 	});
 }
 
@@ -1024,4 +1021,51 @@ fn basic_balance_tracking() {
 			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT),
 			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
 		]);
+}
+
+#[test]
+fn test_default_empty_amounts() {
+	let (can_recycle, cannot_recycle) =
+		IngressEgress::can_and_cannot_recycle(0, Default::default(), 0);
+
+	assert_eq!(can_recycle, vec![]);
+	assert_eq!(cannot_recycle, vec![]);
+}
+
+#[test]
+fn test_cannot_recycle_if_block_number_less_than_current_height() {
+	let maximum_recyclable_number = 2;
+	let channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 3;
+
+	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+		maximum_recyclable_number,
+		channel_recycle_blocks,
+		current_block_height,
+	);
+
+	assert_eq!(can_recycle, vec![H160::from([1u8; 20]), H160::from([2; 20])]);
+	assert_eq!(cannot_recycle, vec![(3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]);
+}
+
+// Same test as above, but lower maximum recyclable number
+#[test]
+fn test_can_only_recycle_up_to_max_amount() {
+	let maximum_recyclable_number = 1;
+	let channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 3;
+
+	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+		maximum_recyclable_number,
+		channel_recycle_blocks,
+		current_block_height,
+	);
+
+	assert_eq!(can_recycle, vec![H160::from([1u8; 20])]);
+	assert_eq!(
+		cannot_recycle,
+		vec![(2, H160::from([2; 20])), (3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
+	);
 }

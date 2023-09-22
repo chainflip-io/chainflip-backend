@@ -332,6 +332,10 @@ pub mod pallet {
 	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, DepositTracker<T, I>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -399,31 +403,23 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Recycle addresses if we can
 		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let current_target_chain_height = T::ChainTracking::get_block_height();
-			let channel_lifetime = DepositChannelLifetime::<T, I>::get();
-
 			let read_write_weight =
 				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 1);
 
-			let number_to_recycle = remaining_weight
+			let maximum_recycle_number = remaining_weight
 				.ref_time()
 				.checked_div(read_write_weight.ref_time())
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			let mut number_recycled = 0;
-			for (_, details) in
-				DepositChannelLookup::<T, I>::iter().take(number_to_recycle as usize)
-			{
-				number_recycled += 1;
-				// We add an extra lifetime of safety.
-				// The CFEs will stop witnessing the address of this deposit channel at the
-				// expires_at block number. However, because the CFE uses a safety margin, and here
-				// we're using teh ChainTracking block number, we don't want to expire
-				// this too early. Even accounting for the safety margin, there is potential for
-				// latency, full SC blocks which might block ingress witnesses getting in etc. By
-				// having this buffer we protect against this probabilistically.
-				if details.expires_at + channel_lifetime <= current_target_chain_height {
+			let (can_recycle, cannot_recycle) = Self::can_and_cannot_recycle(
+				maximum_recycle_number,
+				DepositChannelRecycleBlocks::<T, I>::take(),
+				T::ChainTracking::get_block_height(),
+			);
+
+			for address in can_recycle.iter() {
+				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
 					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
 						DepositChannelPool::<T, I>::insert(
 							details.deposit_channel.channel_id,
@@ -433,7 +429,9 @@ pub mod pallet {
 				}
 			}
 
-			read_write_weight.saturating_mul(number_recycled)
+			DepositChannelRecycleBlocks::<T, I>::put(cannot_recycle);
+
+			read_write_weight.saturating_mul(can_recycle.len() as u64)
 		}
 
 		/// Take all scheduled Egress and send them out
@@ -585,6 +583,34 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn can_and_cannot_recycle(
+		maximum_recyclable_number: usize,
+		channel_recycle_blocks: Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>,
+		current_block_height: TargetChainBlockNumber<T, I>,
+	) -> (
+		Vec<TargetChainAccount<T, I>>,
+		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>,
+	) {
+		let partition_point =
+			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height);
+		let (ready_to_recycle, not_ready_to_recycle) =
+			channel_recycle_blocks.split_at(partition_point);
+
+		let ready_to_recycle = ready_to_recycle.to_vec();
+
+		let (can_recycle, mut cannot_recycle) =
+			if maximum_recyclable_number < ready_to_recycle.len() {
+				let (can_recycle, cannot_recycle) =
+					ready_to_recycle.split_at(maximum_recyclable_number);
+				(can_recycle.to_vec(), cannot_recycle.to_vec())
+			} else {
+				(ready_to_recycle, Vec::new())
+			};
+
+		cannot_recycle.extend(not_ready_to_recycle.to_vec());
+		(can_recycle.into_iter().map(|(_, a)| a).collect(), cannot_recycle)
+	}
+
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
@@ -608,6 +634,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 											.map(|details| {
 												let can_fetch =
 													details.deposit_channel.state.can_fetch();
+
 												if can_fetch {
 													deposit_fetch_id.replace(
 														details.deposit_channel.fetch_id(),
@@ -844,6 +871,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	fn expiry_and_recycle_block_height(
+	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
+	{
+		let current_height = T::ChainTracking::get_block_height();
+		let lifetime = DepositChannelLifetime::<T, I>::get();
+		let expiry_height = current_height + lifetime;
+		let recycle_height = expiry_height + lifetime;
+
+		(current_height, expiry_height, recycle_height)
+	}
+
 	/// Opens a channel for the given asset and registers it with the given action.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
@@ -873,14 +911,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let deposit_address = deposit_channel.address.clone();
 
-		let current_target_chain_height = T::ChainTracking::get_block_height();
+		let (current_height, expiry_height, recycle_height) =
+			Self::expiry_and_recycle_block_height();
+
+		DepositChannelRecycleBlocks::<T, I>::append((recycle_height, deposit_address.clone()));
 
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
 			DepositChannelDetails {
 				deposit_channel,
-				opened_at: current_target_chain_height,
-				expires_at: current_target_chain_height + DepositChannelLifetime::<T, I>::get(),
+				opened_at: current_height,
+				expires_at: expiry_height,
 				action,
 			},
 		);
