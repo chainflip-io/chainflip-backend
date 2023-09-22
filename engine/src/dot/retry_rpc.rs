@@ -46,6 +46,15 @@ impl DotRetryRpcClient {
 		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_genesis_hash: PolkadotHash,
 	) -> Result<Self> {
+		Self::new_ext(scope, nodes, Some(expected_genesis_hash))
+	}
+
+	fn new_ext(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		// The genesis hash is optional to facilitate testing
+		expected_genesis_hash: Option<PolkadotHash>,
+	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
 				DotHttpRpcClient::new(endpoints.http_endpoint, expected_genesis_hash)?,
@@ -58,7 +67,7 @@ impl DotRetryRpcClient {
 		let (backup_rpc_client, backup_sub_client) =
 			option_inner(nodes.backup.map(f_create_clients).transpose()?);
 
-		Ok(Self {
+		Ok(DotRetryRpcClient {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"dot_rpc",
@@ -307,8 +316,7 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				// This will no longer work because we need to know the genesis hash
-				let dot_retry_rpc_client = DotRetryRpcClient::new(
+				let dot_retry_rpc_client = DotRetryRpcClient::new_ext(
 					scope,
 					NodeContainer {
 						primary: WsHttpEndpoints {
@@ -317,7 +325,7 @@ mod tests {
 						},
 						backup: None,
 					},
-					PolkadotHash::default(),
+					None,
 				)
 				.unwrap();
 

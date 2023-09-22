@@ -12,6 +12,7 @@ use subxt::{
 	Config, OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
+use tracing::warn;
 use utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, bail, Result};
@@ -136,11 +137,11 @@ impl DotRpcApi for DotRpcClient {
 #[derive(Clone)]
 pub struct DotSubClient {
 	pub ws_endpoint: SecretUrl,
-	expected_genesis_hash: PolkadotHash,
+	expected_genesis_hash: Option<PolkadotHash>,
 }
 
 impl DotSubClient {
-	pub fn new(ws_endpoint: SecretUrl, expected_genesis_hash: PolkadotHash) -> Self {
+	pub fn new(ws_endpoint: SecretUrl, expected_genesis_hash: Option<PolkadotHash>) -> Self {
 		Self { ws_endpoint, expected_genesis_hash }
 	}
 }
@@ -150,12 +151,7 @@ impl DotSubscribeApi for DotSubClient {
 	async fn subscribe_best_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		let client = OnlineClient::<PolkadotConfig>::from_url(&self.ws_endpoint).await?;
-
-		let genesis_hash = client.genesis_hash();
-		if genesis_hash != self.expected_genesis_hash {
-			bail!("Expected genesis hash {} but got {genesis_hash}", self.expected_genesis_hash);
-		}
+		let client = create_online_client(&self.ws_endpoint, self.expected_genesis_hash).await?;
 
 		Ok(Box::pin(
 			client
@@ -170,12 +166,7 @@ impl DotSubscribeApi for DotSubClient {
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		let client = OnlineClient::<PolkadotConfig>::from_url(&self.ws_endpoint).await?;
-
-		let genesis_hash = client.genesis_hash();
-		if genesis_hash != self.expected_genesis_hash {
-			bail!("Expected genesis hash {} but got {genesis_hash}", self.expected_genesis_hash);
-		}
+		let client = create_online_client(&self.ws_endpoint, self.expected_genesis_hash).await?;
 
 		Ok(Box::pin(
 			client
@@ -186,6 +177,26 @@ impl DotSubscribeApi for DotSubClient {
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
+}
+
+/// Creates an OnlineClient from the given websocket endpoint and checks the genesis hash if
+/// provided.
+async fn create_online_client(
+	ws_endpoint: &SecretUrl,
+	expected_genesis_hash: Option<PolkadotHash>,
+) -> Result<OnlineClient<PolkadotConfig>> {
+	let client = OnlineClient::<PolkadotConfig>::from_url(ws_endpoint).await?;
+
+	if let Some(expected_genesis_hash) = expected_genesis_hash {
+		let genesis_hash = client.genesis_hash();
+		if genesis_hash != expected_genesis_hash {
+			bail!("Expected Polkadot genesis hash {expected_genesis_hash} but got {genesis_hash}");
+		}
+	} else {
+		warn!("Skipping Polkadot genesis hash check");
+	}
+
+	Ok(client)
 }
 
 #[async_trait]
