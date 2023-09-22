@@ -25,13 +25,11 @@ use frame_support::{
 };
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 
-use cf_primitives::{chains::AnyChain, Asset};
+use cf_primitives::{chains::AnyChain, Asset, SECONDS_PER_BLOCK};
 
 pub mod weights;
 pub use weights::WeightInfo;
 
-// TODO: get this from runtime constants
-pub(crate) const SECONDS_PER_BLOCK: u64 = 6;
 /// Expected number of blocks in a year (note the extra 6 hours to account for leap years)
 const BLOCKS_PER_YEAR: u64 = (365 * 24 + 6) * 60 * 60 / SECONDS_PER_BLOCK;
 
