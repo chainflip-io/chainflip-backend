@@ -1069,3 +1069,48 @@ fn test_can_only_recycle_up_to_max_amount() {
 		vec![(2, H160::from([2; 20])), (3, H160::from([3u8; 20])), (4, H160::from([4u8; 20]))]
 	);
 }
+
+#[test]
+fn none_can_be_recycled_due_to_low_block_number() {
+	let maximum_recyclable_number = 4;
+	let channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 0;
+
+	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+		maximum_recyclable_number,
+		channel_recycle_blocks,
+		current_block_height,
+	);
+
+	assert!(can_recycle.is_empty());
+	assert_eq!(
+		cannot_recycle,
+		vec![
+			(1, H160::from([1u8; 20])),
+			(2, H160::from([2; 20])),
+			(3, H160::from([3; 20])),
+			(4, H160::from([4; 20]))
+		]
+	);
+}
+
+#[test]
+fn all_can_be_recycled() {
+	let maximum_recyclable_number = 4;
+	let channel_recycle_blocks =
+		(1u64..5).map(|i| (i, H160::from([i as u8; 20]))).collect::<Vec<_>>();
+	let current_block_height = 4;
+
+	let (can_recycle, cannot_recycle) = IngressEgress::can_and_cannot_recycle(
+		maximum_recyclable_number,
+		channel_recycle_blocks,
+		current_block_height,
+	);
+
+	assert_eq!(
+		can_recycle,
+		vec![H160::from([1u8; 20]), H160::from([2; 20]), H160::from([3; 20]), H160::from([4; 20])]
+	);
+	assert!(cannot_recycle.is_empty());
+}
