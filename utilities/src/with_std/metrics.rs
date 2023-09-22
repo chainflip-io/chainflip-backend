@@ -686,7 +686,7 @@ mod test {
 				//Second request we get only the metrics which don't depend on a specific label like ceremony_id
 				request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
 
-
+				check_deleted_metrics();
 
 				Ok(())
 			}
@@ -712,5 +712,28 @@ mod test {
 		assert_eq!(metric.with_label_values(&["C"]).get(), 100);
 
 		metric
+	}
+
+	fn check_deleted_metrics() {
+		assert!(STAGE_DURATION
+			.prom_metric
+			.remove_label_values(&["Chain1", "7", "stage1", "receiving"])
+			.is_err());
+		assert!(STAGE_DURATION
+			.prom_metric
+			.remove_label_values(&["Chain1", "7", "stage1", "processing"])
+			.is_err());
+		assert!(CEREMONY_TIMEOUT_MISSING_MSG
+			.prom_metric
+			.remove_label_values(&["Chain1", "7", "Keygen", "stage1"])
+			.is_err());
+		assert!(CEREMONY_DURATION
+			.prom_metric
+			.remove_label_values(&["Chain1", "7", "Keygen"])
+			.is_err());
+		assert!(CEREMONY_PROCESSED_MSG
+			.prom_metric
+			.remove_label_values(&["Chain1", "7", "Keygen"])
+			.is_err());
 	}
 }
