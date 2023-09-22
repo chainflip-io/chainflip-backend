@@ -1,13 +1,15 @@
 #![cfg(test)]
 
+use crate::TransactionValidator;
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMode};
 use cf_chains::{
 	eth::Ethereum,
-	evm::EvmCrypto,
+	evm::{EvmCrypto, RawSignedTransaction},
 	mocks::{
-		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
+		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransaction,
+		MockTransactionBuilder,
 	},
 	Chain, ChainCrypto,
 };
@@ -21,7 +23,10 @@ use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_core::{ConstU64, H256};
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup},
+	DispatchError,
+};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -131,6 +136,20 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+pub struct MockTransactionValidator;
+
+impl TransactionValidator for MockTransactionValidator {
+	type Transaction = MockTransaction;
+	type Signature = RawSignedTransaction;
+
+	fn is_valid(
+		transaction: Self::Transaction,
+		signature: Self::Signature,
+	) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
+
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -151,6 +170,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastCallable = MockCallback;
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
+	type TransactionValidator = MockTransactionValidator;
 	type SafeModeBlockMargin = ConstU64<10>;
 }
 

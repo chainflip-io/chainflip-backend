@@ -215,7 +215,7 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	type TransactionOutId = [u8; 4];
 	type GovKey = [u8; 32];
 
-	type NativeSignature = H256;
+	type NativeSignature = Vec<u8>;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
