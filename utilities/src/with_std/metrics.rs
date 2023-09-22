@@ -694,7 +694,6 @@ mod test {
 		})
 		.await
 		.unwrap();
-		
 	}
 
 	fn create_and_register_metric() -> IntCounterVec {
@@ -714,5 +713,4 @@ mod test {
 
 		metric
 	}
-
 }
