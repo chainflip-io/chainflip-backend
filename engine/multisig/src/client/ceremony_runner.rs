@@ -80,7 +80,7 @@ where
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
 		let mut runner = Self::new_unauthorised(outcome_sender, ceremony_id);
-		let mut ceremony_start = Instant::now();
+		let mut ceremony_start: Option<Instant> = None;
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
 
@@ -96,7 +96,7 @@ where
 				request = &mut request_receiver => {
 
 					let PreparedRequest { initial_stage } = request.expect("Ceremony request channel was dropped unexpectedly");
-					ceremony_start = Instant::now();
+					ceremony_start = Some(Instant::now());
 					if let Some(result) = runner.on_ceremony_request(initial_stage).instrument(span.clone()).await {
 						break result;
 					}
@@ -110,14 +110,16 @@ where
 				}
 			}
 		};
-		let duration = ceremony_start.elapsed().as_millis();
-		runner.metrics.ceremony_duration.set(duration);
-		tracing::info!(
-			"Ceremony {} ({}) took {}ms to complete",
-			Ceremony::CEREMONY_TYPE,
-			ceremony_id,
-			duration
-		);
+		if let Some(start_instant) = ceremony_start {
+			let duration = start_instant.elapsed().as_millis();
+			runner.metrics.ceremony_duration.set(duration);
+			tracing::info!(
+				"Ceremony {} ({}) took {}ms to complete",
+				Ceremony::CEREMONY_TYPE,
+				ceremony_id,
+				duration
+			);
+		}
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
 	}
@@ -129,9 +131,6 @@ where
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		ceremony_id: CeremonyId,
 	) -> Self {
-		let ceremony_id = ceremony_id.to_string();
-		let chain_name = Chain::NAME.to_string();
-		let ceremony_type = Ceremony::CEREMONY_TYPE.to_string();
 		CeremonyRunner {
 			stage: None,
 			delayed_messages: Default::default(),
@@ -139,7 +138,7 @@ where
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
 			_phantom: Default::default(),
-			metrics: CeremonyMetrics::new(ceremony_id, chain_name, ceremony_type),
+			metrics: CeremonyMetrics::new(ceremony_id, Chain::NAME, Ceremony::CEREMONY_TYPE),
 		}
 	}
 

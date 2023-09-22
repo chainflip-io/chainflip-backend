@@ -61,7 +61,7 @@ where
 	/// Determines the actual computations before/after
 	/// the data is collected
 	processor: Stage,
-	stage_started: Instant,
+	stage_started: Option<Instant>,
 }
 
 impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
@@ -69,12 +69,7 @@ where
 	Stage: BroadcastStageProcessor<C>,
 {
 	pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
-		BroadcastStage {
-			common,
-			messages: BTreeMap::new(),
-			processor,
-			stage_started: Instant::now(),
-		}
+		BroadcastStage { common, messages: BTreeMap::new(), processor, stage_started: None }
 	}
 }
 
@@ -107,7 +102,7 @@ where
 {
 	fn init(&mut self, metrics: &mut CeremonyMetrics) -> ProcessMessageResult {
 		let common = &self.common;
-		self.stage_started = Instant::now();
+		self.stage_started = Some(Instant::now());
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
 
 		let (own_message, outgoing_messages) = match self.processor.init() {
@@ -220,9 +215,11 @@ where
 		// all data has been received (e.g. due to a timeout),
 		// we insert None for any missing data
 		let stage_name = self.get_stage_name().to_string();
-		metrics
-			.stage_duration
-			.set(&[&stage_name, "receiving"], self.stage_started.elapsed().as_millis());
+		if let Some(start_instant) = self.stage_started {
+			metrics
+				.stage_duration
+				.set(&[&stage_name, "receiving"], start_instant.elapsed().as_millis());
+		}
 
 		let process_msg_instant = Instant::now();
 		let mut received_messages = std::mem::take(&mut self.messages);

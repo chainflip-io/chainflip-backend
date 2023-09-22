@@ -453,7 +453,7 @@ build_counter_vec_struct!(
 	"ceremony_msg",
 	"Count all the processed messages for a given ceremony",
 	true,
-	["chain", "ceremony_id"]
+	["chain", "ceremony_id", "ceremony_type"]
 );
 build_counter_vec_struct!(
 	CEREMONY_BAD_MSG,
@@ -521,11 +521,14 @@ pub struct CeremonyMetrics {
 	pub stage_completing: StageCompletingNotDrop,
 }
 impl CeremonyMetrics {
-	pub fn new(ceremony_id: String, chain_name: String, ceremony_type: String) -> Self {
+	pub fn new(ceremony_id: u64, chain_name: &str, ceremony_type: &str) -> Self {
+		let ceremony_id = ceremony_id.to_string();
+		let chain_name = chain_name.to_string();
+		let ceremony_type = ceremony_type.to_string();
 		CeremonyMetrics {
 			processed_messages: CeremonyProcessedMsgDrop::new(
 				&CEREMONY_PROCESSED_MSG,
-				[chain_name.clone(), ceremony_id.clone()],
+				[chain_name.clone(), ceremony_id.clone(), ceremony_type.clone()],
 			),
 			bad_message: CeremonyBadMsgNotDrop::new(&CEREMONY_BAD_MSG, [chain_name.clone()]),
 			ceremony_duration: CeremonyDurationDrop::new(
@@ -673,5 +676,67 @@ mod test {
 		assert_eq!(metric.with_label_values(&["C"]).get(), 100);
 
 		metric
+	}
+
+	#[tokio::test]
+	async fn test_metric_deletion() {
+		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5568 };
+
+		task_scope::task_scope(|scope| {
+			async {
+				start(scope, &prometheus_settings).await.unwrap();
+
+				let request_test = |path: &'static str,
+				                    expected_status: reqwest::StatusCode,
+				                    expected_text: &'static str| {
+					let prometheus_settings = prometheus_settings.clone();
+
+					async move {
+						let resp = reqwest::get(&format!(
+							"http://{}:{}/{}",
+							&prometheus_settings.hostname, &prometheus_settings.port, path
+						))
+						.await
+						.unwrap();
+
+						assert_eq!(expected_status, resp.status());
+						assert_eq!(resp.text().await.unwrap(), expected_text);
+					}
+				};
+
+				//we create the ceremony struct and put some metrics in it
+				{
+					let mut metrics = CeremonyMetrics::new(7, "Chain1", "Keygen");
+					metrics.bad_message.inc(&["AA"]);
+					metrics.ceremony_duration.set(999);
+					metrics.missing_messages.set(&["stage1",], 5);
+					metrics.processed_messages.inc();
+					metrics.processed_messages.inc();
+					metrics.stage_completing.inc(&["stage1"]);
+					metrics.stage_completing.inc(&["stage1"]);
+					metrics.stage_completing.inc(&["stage2"]);
+					metrics.stage_duration.set(&["stage1", "receiving"], 780);
+					metrics.stage_duration.set(&["stage1", "processing"], 78);
+					metrics.stage_failing.inc(&["stage3", "NotEnoughMessages"]);
+
+					//This request does nothing, the ceremony is still ongoning so there is no deletion
+					request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP ceremony_duration Measure the duration of a ceremony in ms\n# TYPE ceremony_duration gauge\nceremony_duration{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 999\n# HELP ceremony_msg Count all the processed messages for a given ceremony\n# TYPE ceremony_msg counter\nceremony_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 2\n# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout\n# TYPE ceremony_timeout_missing_msg gauge\nceremony_timeout_missing_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\",stage=\"stage1\"} 5\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_duration Measure the duration of a stage in ms\n# TYPE stage_duration gauge\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"processing\",stage=\"stage1\"} 78\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"receiving\",stage=\"stage1\"} 780\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
+
+					//End of ceremony
+					//struct gets dropped
+				}
+
+				//First request after the ceremony ended we get all the metrics (same as the request above), and after we delete the ones that have no more reason to exists
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP ceremony_duration Measure the duration of a ceremony in ms\n# TYPE ceremony_duration gauge\nceremony_duration{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 999\n# HELP ceremony_msg Count all the processed messages for a given ceremony\n# TYPE ceremony_msg counter\nceremony_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 2\n# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout\n# TYPE ceremony_timeout_missing_msg gauge\nceremony_timeout_missing_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\",stage=\"stage1\"} 5\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_duration Measure the duration of a stage in ms\n# TYPE stage_duration gauge\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"processing\",stage=\"stage1\"} 78\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"receiving\",stage=\"stage1\"} 780\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
+
+				//Second request we get only the metrics which don't depend on a specific label like ceremony_id
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
 	}
 }
