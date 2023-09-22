@@ -652,57 +652,11 @@ mod test {
 				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
 				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"B\"} 10\n").await;
 
-				Ok(())
-			}
-			.boxed()
-		})
-		.await
-		.unwrap();
-	}
+				REGISTRY.unregister(Box::new(metric)).unwrap();
+				request_test("metrics", reqwest::StatusCode::OK, "").await;
 
-	fn create_and_register_metric() -> IntCounterVec {
-		let metric = register_int_counter_vec_with_registry!(
-			Opts::new("test", "test help"),
-			&["label"],
-			REGISTRY
-		)
-		.unwrap();
-		metric.with_label_values(&["A"]).inc();
-		metric.with_label_values(&["B"]).inc_by(10);
-		metric.with_label_values(&["C"]).inc_by(100);
 
-		assert_eq!(metric.with_label_values(&["A"]).get(), 1);
-		assert_eq!(metric.with_label_values(&["B"]).get(), 10);
-		assert_eq!(metric.with_label_values(&["C"]).get(), 100);
-
-		metric
-	}
-
-	#[tokio::test]
-	async fn test_metric_deletion() {
-		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5568 };
-
-		task_scope::task_scope(|scope| {
-			async {
-				start(scope, &prometheus_settings).await.unwrap();
-
-				let request_test = |path: &'static str,
-				                    expected_status: reqwest::StatusCode,
-				                    expected_text: &'static str| {
-					let prometheus_settings = prometheus_settings.clone();
-
-					async move {
-						let resp = reqwest::get(&format!(
-							"http://{}:{}/{}",
-							&prometheus_settings.hostname, &prometheus_settings.port, path
-						))
-						.await
-						.unwrap();
-
-						assert_eq!(expected_status, resp.status());
-						assert_eq!(resp.text().await.unwrap(), expected_text);
-					}
-				};
+				//test CeremonyMetrics correct deletion
 
 				//we create the ceremony struct and put some metrics in it
 				{
@@ -732,11 +686,33 @@ mod test {
 				//Second request we get only the metrics which don't depend on a specific label like ceremony_id
 				request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
 
+
+
 				Ok(())
 			}
 			.boxed()
 		})
 		.await
 		.unwrap();
+		
 	}
+
+	fn create_and_register_metric() -> IntCounterVec {
+		let metric = register_int_counter_vec_with_registry!(
+			Opts::new("test", "test help"),
+			&["label"],
+			REGISTRY
+		)
+		.unwrap();
+		metric.with_label_values(&["A"]).inc();
+		metric.with_label_values(&["B"]).inc_by(10);
+		metric.with_label_values(&["C"]).inc_by(100);
+
+		assert_eq!(metric.with_label_values(&["A"]).get(), 1);
+		assert_eq!(metric.with_label_values(&["B"]).get(), 10);
+		assert_eq!(metric.with_label_values(&["C"]).get(), 100);
+
+		metric
+	}
+
 }
