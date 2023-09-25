@@ -12,7 +12,7 @@ use sp_runtime::{traits::Hash, MultiAddress};
 use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use utilities::{
 	future_map::FutureMap,
 	task_scope::{self, Scope},
@@ -201,10 +201,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 									return Ok(Some((block_hash, tx_hash)))
 								}
 							}
-
+							
 							Ok(None)
 						}),
 					);
+					info!(target: "state_chain_client", request_id = request.id, submission_id = request.next_submission_id, "Submission succeeded");
 					request.next_submission_id += 1;
 					break Ok(Ok(tx_hash))
 				},
@@ -226,7 +227,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						jsonrpsee::core::Error::Call(
 							jsonrpsee::types::error::CallError::Custom(ref obj),
 						) if obj.code() == 1014 => {
-							debug!("Failed as transaction with same nonce found in transaction pool: {obj:?}");
+							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						// This occurs when the nonce has already been *consumed* i.e a
@@ -234,13 +235,13 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						jsonrpsee::core::Error::Call(
 							jsonrpsee::types::error::CallError::Custom(ref obj),
 						) if obj == &invalid_err_obj(InvalidTransaction::Stale) => {
-							debug!("Failed as the transaction is stale: {obj:?}");
+							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						jsonrpsee::core::Error::Call(
 							jsonrpsee::types::error::CallError::Custom(ref obj),
 						) if obj == &invalid_err_obj(InvalidTransaction::BadProof) => {
-							warn!("Failed due to a bad proof: {obj:?}. Refetching the runtime version.");
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
 
 							// TODO: Check if hash and block number should also be updated
 							// here
@@ -345,7 +346,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn on_submission_in_block(
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
-		(request_id, _submission_id, block_hash, tx_hash): (RequestID, SubmissionID, H256, H256),
+		(request_id, submission_id, block_hash, tx_hash): (RequestID, SubmissionID, H256, H256),
 	) -> Result<(), anyhow::Error> {
 		if let Some((header, extrinsics, events)) = {
 			if let Some((_, header, extrinsics, events)) = self
@@ -372,6 +373,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				let (_, header, extrinsics, events) = self.block_cache.back().unwrap();
 				Some((header, extrinsics, events))
 			} else {
+				warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
 				None
 			}
 		} {
@@ -399,13 +401,13 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				.collect::<Vec<_>>();
 
 			if let Some(request) = requests.get_mut(&request_id) {
-				if let Some(until_in_block_sender) = request.until_in_block_sender.take() {
-					let _result = until_in_block_sender.send(self.decide_extrinsic_success(
-						tx_hash,
-						extrinsic_events,
-						header.clone(),
-					));
-				}
+				warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Request found in block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
+				let until_in_block_sender = request.until_in_block_sender.take().unwrap();
+				let _result = until_in_block_sender.send(self.decide_extrinsic_success(
+					tx_hash,
+					extrinsic_events,
+					header.clone(),
+				));
 			}
 		}
 
@@ -503,6 +505,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								extrinsic_events,
 								block.header.clone(),
 							);
+							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission_id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 							if let Some(until_in_block_sender) =
 								matching_request.until_in_block_sender
 							{
@@ -532,10 +535,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					let alive = submission.lifetime.contains(&(block.header.number + 1));
 
 					if !alive {
+						info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission_id, "Submission has timed out.");
 						if let Some(request) = requests.get_mut(&submission.request_id) {
 							request.pending_submissions.remove(submission_id).unwrap();
-							self.submission_status_futures.remove((request.id, *submission_id));
 						}
+						self.submission_status_futures.remove((submission.request_id, *submission_id));
 					}
 
 					alive
@@ -551,6 +555,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					(!request.resubmit_window.contains(&(block.header.number + 1)) ||
 						request.strictly_one_submission)
 			}) {
+				info!(target: "state_chain_client", request_id = request.id, "Request has timed out.");
 				if let Some(until_in_block_sender) = request.until_in_block_sender {
 					let _result = until_in_block_sender
 						.send(Err(ExtrinsicError::Other(InBlockError::NotInBlock)));
@@ -564,7 +569,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			// extract_if
 			for (_request_id, request) in requests.iter_mut() {
 				if request.pending_submissions.is_empty() {
-					debug!("Resubmitting extrinsic as all existing submissions have expired.");
+					info!("Resubmitting extrinsic as all existing submissions have expired.");
 					self.submit_extrinsic(request).await?;
 				}
 			}
