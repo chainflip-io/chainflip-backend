@@ -518,7 +518,7 @@ pub mod pallet {
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
-			block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -761,7 +761,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
