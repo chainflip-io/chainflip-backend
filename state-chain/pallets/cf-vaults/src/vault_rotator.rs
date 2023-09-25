@@ -30,7 +30,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				Ok(activation_call) => {
 					let (_, threshold_request_id) =
 						T::Broadcaster::threshold_sign_and_broadcast(activation_call);
-					if <T::Chain as Chain>::OptimisticActivation::get() {
+					if <T::Chain as Chain>::ChainCrypto::optimistic_activation() {
 						// Optimistic activation means we don't need to wait for the activation
 						// transaction to succeed before using the new key.
 						Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());

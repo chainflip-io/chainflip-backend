@@ -5,7 +5,7 @@ use cf_amm::{
 	common::{Amount, Order, Price, Side, SideMap, Tick},
 	limit_orders, range_orders,
 	range_orders::Liquidity,
-	NewError, PoolState,
+	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
@@ -193,6 +193,7 @@ pub mod pallet {
 		common::Tick,
 		limit_orders,
 		range_orders::{self, Liquidity},
+		NewError,
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -610,7 +611,7 @@ pub mod pallet {
 		/// of liquidity. As different ranges may require different ratios of assets, when
 		/// optionally moving the order it may not be possible to allocate all the assets previously
 		/// associated with the order to the new range; If so the unused assets will be returned to
-		/// your balance. The appropiate assets will be debited or credited from your balance as
+		/// your balance. The appropriate assets will be debited or credited from your balance as
 		/// needed.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_range_order())]
@@ -693,7 +694,7 @@ pub mod pallet {
 		}
 
 		/// Optionally move the order to a different range and then set its amount of liquidity. The
-		/// appropiate assets will be debited or credited from your balance as needed.
+		/// appropriate assets will be debited or credited from your balance as needed.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_range_order())]
 		pub fn set_range_order(
@@ -954,6 +955,18 @@ pub struct PoolOrders {
 pub struct PoolLiquidity {
 	pub limit_orders: AssetsMap<Vec<(Tick, Amount)>>,
 	pub range_orders: Vec<(Tick, Liquidity)>,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct SingleDepth {
+	pub price: Option<Price>,
+	pub depth: Amount,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Depth {
+	pub limit_orders: SingleDepth,
+	pub range_orders: SingleDepth,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1241,6 +1254,43 @@ impl<T: Config> Pallet<T> {
 				})
 				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
 		)
+	}
+
+	pub fn pool_depth(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+		tick_range: Range<cf_amm::common::Tick>,
+	) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
+		let mut pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
+
+		let limit_orders = pool.pool_state.limit_order_depth(tick_range.clone()).map_err(|error| {
+			match error {
+				limit_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
+				limit_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
+			}
+			.into()
+		});
+
+		let range_orders = pool.pool_state.range_order_depth(tick_range).map_err(|error| {
+			match error {
+				range_orders::DepthError::InvalidTickRange => Error::<T>::InvalidTickRange,
+				range_orders::DepthError::InvalidTick => Error::<T>::InvalidTick,
+			}
+			.into()
+		});
+
+		Some(limit_orders.and_then(|limit_orders| {
+			range_orders.map(|range_orders| {
+				asset_pair.side_map_to_assets_map(SideMap::<()>::default().map(|side, ()| {
+					let to_single_depth = |(price, depth)| SingleDepth { price, depth };
+					Depth {
+						limit_orders: to_single_depth(limit_orders[side]),
+						range_orders: to_single_depth(range_orders[side]),
+					}
+				}))
+			})
+		}))
 	}
 
 	pub fn pool_liquidity_providers(

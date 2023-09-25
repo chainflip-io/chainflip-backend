@@ -16,7 +16,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
 		<Members<T>>::put(BTreeSet::from([caller.clone()]));
-	}: _(RawOrigin::Signed(caller.clone()), call)
+	}: _(RawOrigin::Signed(caller.clone()), call, ExecutionMode::Automatic)
 	verify {
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
@@ -24,7 +24,7 @@ benchmarks! {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark{remark: vec![]}.into();
 		let caller: T::AccountId = whitelisted_caller();
 		<Members<T>>::put(BTreeSet::from([caller.clone()]));
-		Pallet::<T>::push_proposal(Box::new(call));
+		Pallet::<T>::push_proposal(Box::new(call), ExecutionMode::Automatic);
 	}: _(RawOrigin::Signed(caller.clone()), 1)
 	verify {
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
@@ -48,7 +48,7 @@ benchmarks! {
 		let b in 1 .. 100u32;
 		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
-			Pallet::<T>::push_proposal(call);
+			Pallet::<T>::push_proposal(call, ExecutionMode::Automatic);
 		}
 	}: {
 		Pallet::<T>::on_initialize(2u32.into());
@@ -61,7 +61,7 @@ benchmarks! {
 		let b in 1 .. 100u32;
 		for _n in 1 .. b {
 			let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
-			Pallet::<T>::push_proposal(call);
+			Pallet::<T>::push_proposal(call, ExecutionMode::Automatic);
 		}
 	} : {
 		Pallet::<T>::expire_proposals(<ActiveProposals<T>>::get());
@@ -105,6 +105,16 @@ benchmarks! {
 		assert_eq!(NextGovKeyCallHashNonce::<T>::get(), next_nonce + 1);
 		assert!(GovKeyWhitelistedCallHash::<T>::get().is_none());
 	}
+
+	dispatch_whitelisted_call {
+		let caller: T::AccountId = whitelisted_caller();
+		<Members<T>>::put(BTreeSet::from([caller.clone()]));
+		let call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
+			accounts: vec![]
+		}.into();
+		Pallet::<T>::push_proposal(Box::new(call.clone()), ExecutionMode::Manual);
+		PreAuthorisedGovCalls::<T>::insert(1, call.encode());
+	}: _(RawOrigin::Signed(caller.clone()), 1)
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

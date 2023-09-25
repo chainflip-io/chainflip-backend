@@ -75,7 +75,7 @@ impl FloatBetweenZeroAndOne {
 
 		let (mul_div_normalised_mantissa, div_normalise_shift) = {
 			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than
-			// 256 bits, so we maintain atleast 256 accurate bits in the result.
+			// 256 bits, so we maintain at least 256 accurate bits in the result.
 			let (d, div_remainder) =
 				U512::div_mod(mul_normalised_mantissa, U512::from(denominator));
 			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
@@ -96,11 +96,11 @@ impl FloatBetweenZeroAndOne {
 			Self { normalised_mantissa: mul_div_normalised_mantissa, negative_exponent }
 		} else {
 			// This bounding will cause swaps to get bad prices, but this case will effectively
-			// never happen, as atleast (U256::MAX / 256) (~10^74) swaps would have to happen to get
-			// into this situation. TODO: A possible solution is disabling minting for pools "close"
-			// to this minimum. With a small change to the swapping logic it would be possible to
-			// guarantee that the pool would be emptied before percent_remaining could reach this
-			// min bound.
+			// never happen, as at least (U256::MAX / 256) (~10^74) swaps would have to happen to
+			// get into this situation. TODO: A possible solution is disabling minting for pools
+			// "close" to this minimum. With a small change to the swapping logic it would be
+			// possible to guarantee that the pool would be emptied before percent_remaining could
+			// reach this min bound.
 			Self { normalised_mantissa: U256::one() << 255, negative_exponent: U256::MAX }
 		}
 	}
@@ -203,6 +203,14 @@ pub enum NewError {
 pub enum SetFeesError {
 	/// Fee must be between 0 - 50%
 	InvalidFeeAmount,
+}
+
+#[derive(Debug)]
+pub enum DepthError {
+	/// Invalid Price
+	InvalidTick,
+	/// Start tick must be less than or equal to the end tick
+	InvalidTickRange,
 }
 
 #[derive(Debug)]
@@ -729,11 +737,31 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets available for swaps in a given direction
 	///
 	/// This function never panics.
-	#[allow(dead_code)]
 	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
 		self.fixed_pools[!SD::INPUT_SIDE]
 			.iter()
 			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
 			.collect()
+	}
+
+	/// Returns all the assets available for swaps between two prices (inclusive..exclusive)
+	///
+	/// This function never panics.
+	pub(super) fn depth<SD: SwapDirection>(
+		&self,
+		range: core::ops::Range<Tick>,
+	) -> Result<Amount, DepthError> {
+		let start =
+			Self::validate_tick::<Infallible>(range.start).map_err(|_| DepthError::InvalidTick)?;
+		let end =
+			Self::validate_tick::<Infallible>(range.end).map_err(|_| DepthError::InvalidTick)?;
+		if start <= end {
+			Ok(self.fixed_pools[!SD::INPUT_SIDE]
+				.range(start..end)
+				.map(|(_, fixed_pool)| fixed_pool.available)
+				.fold(Default::default(), |acc, x| acc + x))
+		} else {
+			Err(DepthError::InvalidTickRange)
+		}
 	}
 }

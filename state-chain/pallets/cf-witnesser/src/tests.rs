@@ -56,20 +56,27 @@ fn call_on_threshold() {
 	});
 }
 
+/// This test is very important! It supports the assumption that the CFE witnessing may occur twice.
+/// and that if it does, we handle that correctly, by not executing the call twice.
 #[test]
 fn no_double_call_on_epoch_boundary() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
+		assert_eq!(MockEpochInfo::epoch_index(), 1);
+
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 		MockEpochInfo::next_epoch(BTreeSet::from([ALISSA, BOBSON, CHARLEMAGNE]));
-		// Vote for the same call, this time in another epoch.
+		assert_eq!(MockEpochInfo::epoch_index(), 2);
+
+		// Vote for the same call, this time in the next epoch.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
-		// Vote again, we should reach the threshold and dispatch the call.
+		// Vote again with different signer on epoch 1, we should reach the threshold and dispatch
+		// the call from epoch 1.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(BOBSON), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
@@ -379,6 +386,41 @@ fn test_safe_mode() {
 
 		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
+	});
+}
+
+#[test]
+fn safe_mode_code_amber_can_filter_calls() {
+	new_test_ext().execute_with(|| {
+		// Block calls via SafeMode::CodeAmber
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CodeAmber(MockCallFilter {}),
+		});
+		AllowCall::set(false);
+
+		// Sign the call so its ready to be dispatched
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
+		for s in [ALISSA, BOBSON] {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(s),
+				call.clone(),
+				current_epoch
+			));
+		}
+		assert_eq!(WitnessedCallsScheduledForDispatch::<Test>::decode_len(), Some(1));
+
+		// Call is not dispatched because its blocked by the CallDispatchFilter
+		Witnesser::on_idle(1, Weight::zero().set_ref_time(1_000_000_000_000u64));
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		// Allow the call to pass the filter
+		AllowCall::set(true);
+
+		// Call should be dispatched now.
+		Witnesser::on_idle(2, Weight::zero().set_ref_time(1_000_000_000_000u64));
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});
 }

@@ -24,6 +24,8 @@ use sp_std::{convert::TryFrom, str, vec};
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
+	type UtxoChain = ConstBool<false>;
+
 	type AggKey = evm::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
@@ -417,7 +419,7 @@ impl Transaction {
 		Ok(())
 	}
 
-	/// Returns an error if any of the recovered transactoin parameters do not match those specified
+	/// Returns an error if any of the recovered transaction parameters do not match those specified
 	/// in the original [Transaction].
 	///
 	/// See [CheckedTransactionParameter].

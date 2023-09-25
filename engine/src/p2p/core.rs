@@ -17,7 +17,12 @@ use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use utilities::Port;
+use utilities::{
+	metrics::{
+		P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
+	},
+	Port,
+};
 use x25519_dalek::StaticSecret;
 
 use crate::p2p::{pk_to_string, OutgoingMultisigStageMessages};
@@ -151,7 +156,7 @@ impl ReconnectContext {
 		let delay = self.get_delay_for(&account_id);
 
 		tracing::debug!("Will reconnect to {} in {:?}", account_id, delay);
-
+		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len());
 		tokio::spawn({
 			let sender = self.reconnect_sender.clone();
 			async move {
@@ -165,6 +170,35 @@ impl ReconnectContext {
 		if self.reconnect_delays.remove(account_id).is_some() {
 			tracing::debug!("Reconnection delay for {} is reset", account_id);
 		}
+		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len());
+	}
+}
+
+struct ActiveConnectionWrapper {
+	metric: &'static P2P_ACTIVE_CONNECTIONS,
+	map: BTreeMap<AccountId, ConnectedOutgoingSocket>,
+}
+
+impl ActiveConnectionWrapper {
+	fn new() -> ActiveConnectionWrapper {
+		ActiveConnectionWrapper { metric: &P2P_ACTIVE_CONNECTIONS, map: Default::default() }
+	}
+	fn get(&self, account_id: &AccountId) -> Option<&ConnectedOutgoingSocket> {
+		self.map.get(account_id)
+	}
+	fn insert(
+		&mut self,
+		key: AccountId,
+		value: ConnectedOutgoingSocket,
+	) -> Option<ConnectedOutgoingSocket> {
+		let result = self.map.insert(key, value);
+		self.metric.set(self.map.len());
+		result
+	}
+	fn remove(&mut self, key: &AccountId) -> Option<ConnectedOutgoingSocket> {
+		let result = self.map.remove(key);
+		self.metric.set(self.map.len());
+		result
 	}
 }
 
@@ -177,7 +211,7 @@ struct P2PContext {
 	authenticator: Arc<Authenticator>,
 	/// NOTE: The mapping is from AccountId because we want to optimise for message
 	/// sending, which uses AccountId
-	active_connections: BTreeMap<AccountId, ConnectedOutgoingSocket>,
+	active_connections: ActiveConnectionWrapper,
 	/// NOTE: this is used for incoming messages when we want to map them to account_id
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
@@ -236,7 +270,7 @@ pub(super) fn start(
 		key: p2p_key.encryption_key.clone(),
 		monitor_handle,
 		authenticator,
-		active_connections: Default::default(),
+		active_connections: ActiveConnectionWrapper::new(),
 		x25519_to_account_id: Default::default(),
 		peer_infos: Default::default(),
 		reconnect_context: ReconnectContext::new(reconnect_sender),
@@ -322,6 +356,7 @@ impl P2PContext {
 		match self.active_connections.get(&account_id) {
 			Some(socket) => {
 				socket.send(payload);
+				P2P_MSG_SENT.inc();
 			},
 			None => {
 				warn!("Failed to send message. Peer not registered: {account_id}")
@@ -341,6 +376,7 @@ impl P2PContext {
 			trace!("Received a message from {acc_id}");
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
+			P2P_BAD_MSG.inc(&["unknown_x25519_key"]);
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
 		}
 	}
@@ -500,7 +536,7 @@ impl P2PContext {
 		// TODO: combine this with the authentication thread?
 		std::thread::spawn(move || loop {
 			let mut parts = receive_multipart(&socket).unwrap();
-
+			P2P_MSG_RECEIVED.inc();
 			// We require that all messages exchanged between
 			// peers only consist of one part. ZMQ dealer
 			// sockets automatically prepend a sender id
@@ -519,6 +555,7 @@ impl P2PContext {
 
 				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
 			} else {
+				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 				warn!(
 					"Ignoring a multipart message with unexpected number of parts ({})",
 					parts.len()

@@ -1,21 +1,21 @@
 use anyhow::Context;
+use cf_chains::dot::PolkadotHash;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
-	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcClient},
+	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::{http_rpc::DotHttpRpcClient, retry_rpc::DotRetryRpcClient, rpc::DotSubClient},
-	eth::{
-		retry_rpc::EthersRetryRpcClient,
-		rpc::{EthRpcClient, ReconnectSubscriptionClient},
-	},
-	health, metrics, p2p,
+	dot::retry_rpc::DotRetryRpcClient,
+	eth::retry_rpc::EthersRetryRpcClient,
+	health, p2p,
 	settings::{CommandLineOptions, Settings},
+	settings_migrate::migrate_settings0_9_2_to_0_9_3,
 	state_chain_observer::{
 		self,
 		client::{
 			chain_api::ChainApi,
 			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 			storage_api::StorageApi,
+			StateChainClient, StateChainStreamApi,
 		},
 	},
 	witness::{self, common::STATE_CHAIN_CONNECTION},
@@ -26,10 +26,10 @@ use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
+use tracing::info;
 use utilities::{
-	make_periodic_tick,
+	make_periodic_tick, metrics,
 	task_scope::{self, task_scope, ScopedJoinHandle},
-	CachedStream,
 };
 
 lazy_static::lazy_static! {
@@ -45,11 +45,45 @@ enum CfeStatus {
 	Idle,
 }
 
+async fn ensure_cfe_version_record_up_to_date(
+	state_chain_client: &Arc<StateChainClient>,
+	state_chain_stream: &impl StateChainStreamApi,
+) -> anyhow::Result<()> {
+	let recorded_version = state_chain_client
+		.storage_map_entry::<pallet_cf_validator::NodeCFEVersion<state_chain_runtime::Runtime>>(
+			state_chain_stream.cache().block_hash,
+			&state_chain_client.account_id(),
+		)
+		.await?;
+
+	// Note that around CFE upgrade period, the less recent version might still be running (and
+	// can even be *the* "active" instance), so it is important that it doesn't downgrade the
+	// version record:
+	if CFE_VERSION.is_more_recent_than(recorded_version) {
+		info!("Updating CFE version record from {:?} to {:?}", recorded_version, *CFE_VERSION);
+
+		state_chain_client
+			.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+				new_version: *CFE_VERSION,
+			})
+			.await
+			.until_finalized()
+			.await
+			.context("Failed to submit version to state chain")?;
+	}
+
+	Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 
-	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+	let opts = CommandLineOptions::parse();
+
+	migrate_settings0_9_2_to_0_9_3(opts.config_root.clone())?;
+
+	let settings = Settings::new(opts).context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
@@ -64,6 +98,21 @@ async fn main() -> anyhow::Result<()> {
 				.await?;
 
 			let mut cfe_status = CfeStatus::Idle;
+
+			let (state_chain_stream, state_chain_client) =
+				state_chain_observer::client::StateChainClient::connect_with_account(
+					scope,
+					&settings.state_chain.ws_endpoint,
+					&settings.state_chain.signing_key_file,
+					AccountRole::Validator,
+					true,
+				)
+				.await?;
+
+			ensure_cfe_version_record_up_to_date(&state_chain_client, &state_chain_stream).await?;
+
+			// Use Option so we can take it out later without cloning (while inside a loop)
+			let mut stream_container = Some(state_chain_stream);
 
 			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
 			loop {
@@ -93,8 +142,11 @@ async fn main() -> anyhow::Result<()> {
 							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
 							let settings = settings.clone();
+
+							let state_chain_stream = stream_container.take().expect("only called once");
+							let state_chain_client = state_chain_client.clone();
 							let handle = scope.spawn_with_handle(
-								task_scope(|scope| start(scope, settings).boxed())
+								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
 							);
 
 							cfe_status = CfeStatus::Active(handle);
@@ -112,6 +164,8 @@ async fn main() -> anyhow::Result<()> {
 async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: Settings,
+	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()> {
 	let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
@@ -122,25 +176,6 @@ async fn start(
 	if let Some(prometheus_settings) = &settings.prometheus {
 		metrics::start(scope, prometheus_settings).await?;
 	}
-
-	let (state_chain_stream, state_chain_client) =
-		state_chain_observer::client::StateChainClient::connect_with_account(
-			scope,
-			&settings.state_chain.ws_endpoint,
-			&settings.state_chain.signing_key_file,
-			AccountRole::Validator,
-			true,
-		)
-		.await?;
-
-	state_chain_client
-		.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
-			new_version: *CFE_VERSION,
-		})
-		.await
-		.until_finalized()
-		.await
-		.context("Failed to submit version to state chain")?;
 
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
@@ -221,29 +256,44 @@ async fn start(
 	scope.spawn(btc_multisig_client_backend_future);
 
 	// Create all the clients
-	let expected_chain_id = web3::types::U256::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION),
-	);
-
-	let eth_client = EthersRetryRpcClient::new(
-		scope,
-		EthRpcClient::new(settings.eth.clone(), expected_chain_id.as_u64())?,
-		ReconnectSubscriptionClient::new(settings.eth.ws_node_endpoint, expected_chain_id),
-	);
-
-	let btc_rpc_client = BtcRpcClient::new(settings.btc)?;
-	let btc_client = BtcRetryRpcClient::new(scope, async move { btc_rpc_client });
-
-	let dot_client = DotRetryRpcClient::new(
-		scope,
-		DotHttpRpcClient::new(settings.dot.http_node_endpoint)?,
-		DotSubClient::new(&settings.dot.ws_node_endpoint),
-	);
+	let eth_client = {
+		let expected_eth_chain_id = web3::types::U256::from(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+					state_chain_client.latest_finalized_hash(),
+				)
+				.await
+				.expect(STATE_CHAIN_CONNECTION),
+		);
+		EthersRetryRpcClient::new(
+			scope,
+			settings.eth.private_key_file,
+			settings.eth.nodes,
+			expected_eth_chain_id,
+		)?
+	};
+	let btc_client = {
+		let expected_btc_network = cf_chains::btc::BitcoinNetwork::from(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+					state_chain_client.latest_finalized_hash(),
+				)
+				.await
+				.expect(STATE_CHAIN_CONNECTION),
+		);
+		BtcRetryRpcClient::new(scope, settings.btc.nodes, expected_btc_network).await?
+	};
+	let dot_client = {
+		let expected_dot_genesis_hash = PolkadotHash::from(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
+					state_chain_client.latest_finalized_hash(),
+				)
+				.await
+				.expect(STATE_CHAIN_CONNECTION),
+		);
+		DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
+	};
 
 	witness::start::start(
 		scope,

@@ -175,7 +175,6 @@ pub struct EpochStartData {
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	type ChainCrypto = BitcoinCrypto;
-	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;
@@ -200,6 +199,8 @@ pub enum PreviousOrCurrent {
 
 pub struct BitcoinCrypto;
 impl ChainCrypto for BitcoinCrypto {
+	type UtxoChain = ConstBool<true>;
+
 	type AggKey = AggKey;
 
 	// A single transaction can sign over multiple UTXOs
@@ -423,6 +424,30 @@ impl BitcoinNetwork {
 			BitcoinNetwork::Mainnet => "bc",
 			BitcoinNetwork::Testnet => "tb",
 			BitcoinNetwork::Regtest => "bcrt",
+		}
+	}
+}
+
+impl core::fmt::Display for BitcoinNetwork {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			BitcoinNetwork::Mainnet => write!(f, "main"),
+			BitcoinNetwork::Testnet => write!(f, "test"),
+			BitcoinNetwork::Regtest => write!(f, "regtest"),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<&str> for BitcoinNetwork {
+	type Error = anyhow::Error;
+
+	fn try_from(s: &str) -> Result<Self, Self::Error> {
+		match s {
+			"main" => Ok(BitcoinNetwork::Mainnet),
+			"test" => Ok(BitcoinNetwork::Testnet),
+			"regtest" => Ok(BitcoinNetwork::Regtest),
+			unknown => Err(anyhow::anyhow!("Unknown Bitcoin network: {unknown}")),
 		}
 	}
 }
@@ -1262,5 +1287,21 @@ mod test {
 		for x in test_data {
 			assert_eq!(to_varint(x.0), x.1);
 		}
+	}
+
+	#[test]
+	fn test_btc_network_names() {
+		assert_eq!(
+			BitcoinNetwork::try_from(BitcoinNetwork::Mainnet.to_string().as_str()).unwrap(),
+			BitcoinNetwork::Mainnet
+		);
+		assert_eq!(
+			BitcoinNetwork::try_from(BitcoinNetwork::Testnet.to_string().as_str()).unwrap(),
+			BitcoinNetwork::Testnet
+		);
+		assert_eq!(
+			BitcoinNetwork::try_from(BitcoinNetwork::Regtest.to_string().as_str()).unwrap(),
+			BitcoinNetwork::Regtest
+		);
 	}
 }

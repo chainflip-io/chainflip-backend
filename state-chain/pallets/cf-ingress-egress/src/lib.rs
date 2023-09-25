@@ -73,6 +73,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
+	pub gas_budget: C::ChainAmount,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -105,8 +106,6 @@ pub mod pallet {
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
-	pub(crate) type TargetChainBlockNumber<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct DepositWitness<C: Chain> {
@@ -320,15 +319,6 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		StartWitnessing {
-			deposit_address: TargetChainAccount<T, I>,
-			source_asset: TargetChainAsset<T, I>,
-			opened_at: TargetChainBlockNumber<T, I>,
-		},
-		StopWitnessing {
-			deposit_address: TargetChainAccount<T, I>,
-			source_asset: TargetChainAsset<T, I>,
-		},
 		DepositReceived {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
@@ -414,18 +404,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for deposit_address in addresses {
-				if let Some(mut deposit_details) =
-					DepositChannelLookup::<T, I>::get(&deposit_address)
-				{
-					if deposit_details.deposit_channel.on_fetch_completed() {
-						DepositChannelLookup::<T, I>::insert(&deposit_address, deposit_details);
-					}
-				} else {
-					log::error!(
-						"Deposit address {:?} not found in DepositChannelLookup",
-						deposit_address
-					);
-				}
+				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
+					deposit_channel_details
+						.as_mut()
+						.map(|details| details.deposit_channel.state.on_fetch_completed());
+				});
 			}
 			Ok(())
 		}
@@ -561,27 +544,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} =>
-									if let Some(mut details) =
-										DepositChannelLookup::<T, I>::get(&*deposit_address)
-									{
-										if details.deposit_channel.can_fetch() {
-											deposit_fetch_id
-												.replace(details.deposit_channel.fetch_id());
-											if details.deposit_channel.on_fetch_scheduled() {
-												DepositChannelLookup::<T, I>::insert(
-													deposit_address,
-													details,
-												);
-											}
-											true
-										} else {
-											false
-										}
-									} else {
-										log::error!("Deposit address {:?} not found in DepositChannelLookup", deposit_address);
-										false
+								} => DepositChannelLookup::<T, I>::mutate(
+									deposit_address,
+									|details| {
+										details
+											.as_mut()
+											.map(|details| {
+												let can_fetch =
+													details.deposit_channel.state.can_fetch();
+												if can_fetch {
+													deposit_fetch_id.replace(
+														details.deposit_channel.fetch_id(),
+													);
+													details
+														.deposit_channel
+														.state
+														.on_fetch_scheduled();
+												}
+												can_fetch
+											})
+											.unwrap_or(false)
 									},
+								),
 								FetchOrTransfer::Transfer { .. } => true,
 							}
 					})
@@ -677,6 +661,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 				ccm.source_chain,
 				ccm.source_address,
+				ccm.gas_budget,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -799,7 +784,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Opens a channel for the given asset and registers it with the given action.
-	/// Emits the `StartWitnessing` event so CFEs can start watching for deposits to the address.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
 	fn open_channel(
@@ -830,36 +814,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_address = deposit_channel.address.clone();
 
 		ChannelActions::<T, I>::insert(&deposit_address, channel_action);
-
-		let opened_at = T::ChainTracking::get_block_height();
-
-		Self::deposit_event(Event::StartWitnessing {
-			deposit_address: deposit_address.clone(),
-			source_asset,
-			opened_at,
-		});
-
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
-			DepositChannelDetails { deposit_channel, opened_at, expires_at },
+			DepositChannelDetails {
+				deposit_channel,
+				opened_at: T::ChainTracking::get_block_height(),
+				expires_at,
+			},
 		);
 
 		Ok((channel_id, deposit_address))
-	}
-
-	fn close_channel(address: TargetChainAccount<T, I>) {
-		ChannelActions::<T, I>::remove(&address);
-		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
-			Self::deposit_event(Event::<T, I>::StopWitnessing {
-				deposit_address: address,
-				source_asset: deposit_channel_details.deposit_channel.asset,
-			});
-			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
-			}
-		} else {
-			log_or_panic!("Tried to close an unknown channel.");
-		}
 	}
 }
 
@@ -868,25 +832,28 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_message: Option<CcmDepositMetadata>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
 			*id = id.saturating_add(1);
 			*id
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		match maybe_message {
-			Some(CcmDepositMetadata { source_chain, source_address, channel_metadata }) =>
-				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-					egress_id,
-					asset,
-					amount,
-					destination_address: destination_address.clone(),
-					message: channel_metadata.message,
-					cf_parameters: channel_metadata.cf_parameters,
-					source_chain,
-					source_address,
-				}),
+		match maybe_ccm_with_gas_budget {
+			Some((
+				CcmDepositMetadata { source_chain, source_address, channel_metadata },
+				gas_budget,
+			)) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+				egress_id,
+				asset,
+				amount,
+				destination_address: destination_address.clone(),
+				message: channel_metadata.message,
+				cf_parameters: channel_metadata.cf_parameters,
+				source_chain,
+				source_address,
+				gas_budget,
+			}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
 			>::Transfer {
@@ -960,6 +927,16 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
 	fn expire_channel(address: TargetChainAccount<T, I>) {
-		Self::close_channel(address);
+		ChannelActions::<T, I>::remove(&address);
+		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
+			if let Some(state) = deposit_channel_details.deposit_channel.state.maybe_recycle() {
+				DepositChannelPool::<T, I>::insert(
+					deposit_channel_details.deposit_channel.channel_id,
+					DepositChannel { state, ..deposit_channel_details.deposit_channel },
+				);
+			}
+		} else {
+			log_or_panic!("Tried to close an unknown channel.");
+		}
 	}
 }

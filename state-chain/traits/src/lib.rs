@@ -554,26 +554,17 @@ impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorI
 	}
 }
 
-impl<Id: Ord, A, B, C, D, E> QualifyNode<Id> for (A, B, C, D, E)
+impl<Id: Ord, A, B> QualifyNode<Id> for (A, B)
 where
 	A: QualifyNode<Id>,
 	B: QualifyNode<Id>,
-	C: QualifyNode<Id>,
-	D: QualifyNode<Id>,
-	E: QualifyNode<Id>,
 {
 	fn is_qualified(validator_id: &Id) -> bool {
-		A::is_qualified(validator_id) &&
-			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id) &&
-			D::is_qualified(validator_id) &&
-			E::is_qualified(validator_id)
+		A::is_qualified(validator_id) && B::is_qualified(validator_id)
 	}
 
 	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		E::filter_unqualified(D::filter_unqualified(C::filter_unqualified(B::filter_unqualified(
-			A::filter_unqualified(validators),
-		))))
+		B::filter_unqualified(A::filter_unqualified(validators))
 	}
 }
 
@@ -722,7 +713,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_message: Option<CcmDepositMetadata>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
 	) -> EgressId;
 }
 
@@ -731,7 +722,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
 		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Ethereum as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -742,7 +733,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
 		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
+		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <Polkadot as Chain>::ChainAmount)>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
@@ -832,4 +823,14 @@ pub trait CompatibleCfeVersions {
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
 	fn precent_authorities_at_version(version: SemVer) -> Percent;
+}
+
+pub trait CallDispatchFilter<RuntimeCall> {
+	fn should_dispatch(&self, call: &RuntimeCall) -> bool;
+}
+
+impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
+	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
+		true
+	}
 }

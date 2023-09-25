@@ -59,6 +59,7 @@ pub enum PalletConfigUpdate {
 	EpochDuration { blocks: u32 },
 	AuthoritySetMinSize { min_size: AuthorityCount },
 	AuctionParameters { parameters: SetSizeParameters },
+	MinimumReportedCfeVersion { version: SemVer },
 }
 
 type RuntimeRotationState<T> =
@@ -275,6 +276,12 @@ pub mod pallet {
 	#[pallet::getter(fn auction_bid_cutoff_percentage)]
 	pub(super) type AuctionBidCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
 
+	/// Determines the minimum version that each CFE must report to be considered qualified
+	/// for Keygen.
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_reported_cfe_version)]
+	pub(super) type MinimumReportedCfeVersion<T: Config> = StorageValue<_, SemVer, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -408,7 +415,7 @@ pub mod pallet {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
-								Self::try_restart_key_handover(rotation_state, block_number)
+								Self::try_start_key_handover(rotation_state, block_number)
 							};
 						},
 						AsyncResult::Pending => {
@@ -499,6 +506,9 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::AuctionParameters { parameters } => {
 					Self::try_update_auction_parameters(parameters)?;
+				},
+				PalletConfigUpdate::MinimumReportedCfeVersion { version } => {
+					MinimumReportedCfeVersion::<T>::put(version);
 				},
 			}
 
@@ -1066,14 +1076,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn try_restart_key_handover(
-		rotation_state: RuntimeRotationState<T>,
-		block_number: BlockNumberFor<T>,
-	) {
-		T::VaultRotator::reset_vault_rotation();
-		Self::try_start_key_handover(rotation_state, block_number);
-	}
-
 	fn try_start_key_handover(
 		rotation_state: RuntimeRotationState<T>,
 		block_number: BlockNumberFor<T>,
@@ -1362,5 +1364,23 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			.count() as u32;
 
 		Percent::from_rational(num_authorities_at_target_version, authorities_count)
+	}
+}
+
+pub struct QualifyByCfeVersion<T>(PhantomData<T>);
+
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
+	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
+		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
+	}
+
+	fn filter_unqualified(
+		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
+	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
+		let min_version = MinimumReportedCfeVersion::<T>::get();
+		validators
+			.into_iter()
+			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.collect()
 	}
 }

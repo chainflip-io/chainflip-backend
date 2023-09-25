@@ -6,7 +6,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use config::{Config, ConfigBuilder, ConfigError, Environment, File, Map, Source, Value};
 use serde::{de, Deserialize, Deserializer};
 
@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::Port;
+use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -37,41 +37,88 @@ pub struct StateChain {
 
 impl StateChain {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_endpoint)
+		validate_websocket_endpoint(self.ws_endpoint.clone().into())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct WsHttpEndpoints {
+	pub ws_endpoint: SecretUrl,
+	pub http_endpoint: SecretUrl,
+}
+
+pub trait ValidateSettings {
+	fn validate(&self) -> Result<(), ConfigError>;
+}
+
+impl ValidateSettings for WsHttpEndpoints {
+	/// Ensure the endpoints are valid HTTP and WS endpoints.
+	fn validate(&self) -> Result<(), ConfigError> {
+		validate_websocket_endpoint(self.ws_endpoint.clone())
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		validate_http_endpoint(self.http_endpoint.clone())
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct NodeContainer<NodeConfig> {
+	#[serde(rename = "rpc")]
+	pub primary: NodeConfig,
+	#[serde(rename = "backup_rpc")]
+	pub backup: Option<NodeConfig>,
+}
+
+impl<NodeConfig: ValidateSettings> NodeContainer<NodeConfig> {
+	pub fn validate(&self) -> Result<(), ConfigError> {
+		self.primary.validate()?;
+		if let Some(backup) = &self.backup {
+			backup.validate()?;
+		}
 		Ok(())
 	}
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Eth {
-	pub ws_node_endpoint: String,
-	pub http_node_endpoint: String,
+	#[serde(flatten)]
+	pub nodes: NodeContainer<WsHttpEndpoints>,
 	#[serde(deserialize_with = "deser_path")]
 	pub private_key_file: PathBuf,
 }
 
 impl Eth {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		validate_http_endpoint(&self.http_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
+		self.nodes.validate()
 	}
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
-	pub ws_node_endpoint: String,
-	pub http_node_endpoint: String,
+	#[serde(flatten)]
+	pub nodes: NodeContainer<WsHttpEndpoints>,
 }
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		validate_http_endpoint(&self.http_node_endpoint)
+		self.nodes.validate()
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct HttpBasicAuthEndpoint {
+	pub http_endpoint: SecretUrl,
+	pub basic_auth_user: String,
+	pub basic_auth_password: String,
+}
+
+impl ValidateSettings for HttpBasicAuthEndpoint {
+	/// Ensure the endpoint is a valid HTTP endpoint.
+	fn validate(&self) -> Result<(), ConfigError> {
+		validate_http_endpoint(self.http_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -79,16 +126,13 @@ impl Dot {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Btc {
-	pub http_node_endpoint: String,
-	pub rpc_user: String,
-	pub rpc_password: String,
+	#[serde(flatten)]
+	pub nodes: NodeContainer<HttpBasicAuthEndpoint>,
 }
 
 impl Btc {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_http_endpoint(&self.http_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
+		self.nodes.validate()
 	}
 }
 
@@ -101,12 +145,6 @@ pub struct HealthCheck {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Logging {
 	pub span_lifecycle: bool,
-}
-
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Prometheus {
-	pub hostname: String,
-	pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -140,30 +178,48 @@ pub struct StateChainOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct EthOptions {
-	#[clap(long = "eth.ws_node_endpoint")]
-	pub eth_ws_node_endpoint: Option<String>,
-	#[clap(long = "eth.http_node_endpoint")]
-	pub eth_http_node_endpoint: Option<String>,
+	#[clap(long = "eth.rpc.ws_endpoint")]
+	pub eth_ws_endpoint: Option<String>,
+	#[clap(long = "eth.rpc.http_endpoint")]
+	pub eth_http_endpoint: Option<String>,
+
+	#[clap(long = "eth.backup_rpc.ws_endpoint")]
+	pub eth_backup_ws_endpoint: Option<String>,
+	#[clap(long = "eth.backup_rpc.http_endpoint")]
+	pub eth_backup_http_endpoint: Option<String>,
+
 	#[clap(long = "eth.private_key_file")]
 	pub eth_private_key_file: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct DotOptions {
-	#[clap(long = "dot.ws_node_endpoint")]
-	pub dot_ws_node_endpoint: Option<String>,
-	#[clap(long = "dot.http_node_endpoint")]
-	pub dot_http_node_endpoint: Option<String>,
+	#[clap(long = "dot.rpc.ws_endpoint")]
+	pub dot_ws_endpoint: Option<String>,
+	#[clap(long = "dot.rpc.http_endpoint")]
+	pub dot_http_endpoint: Option<String>,
+
+	#[clap(long = "dot.backup_rpc.ws_endpoint")]
+	pub dot_backup_ws_endpoint: Option<String>,
+	#[clap(long = "dot.backup_rpc.http_endpoint")]
+	pub dot_backup_http_endpoint: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BtcOptions {
-	#[clap(long = "btc.http_node_endpoint")]
-	pub btc_http_node_endpoint: Option<String>,
-	#[clap(long = "btc.rpc_user")]
-	pub btc_rpc_user: Option<String>,
-	#[clap(long = "btc.rpc_password")]
-	pub btc_rpc_password: Option<String>,
+	#[clap(long = "btc.rpc.http_endpoint")]
+	pub btc_http_endpoint: Option<String>,
+	#[clap(long = "btc.basic_auth_user")]
+	pub btc_basic_auth_user: Option<String>,
+	#[clap(long = "btc.basic_auth_password")]
+	pub btc_basic_auth_password: Option<String>,
+
+	#[clap(long = "btc.backup_rpc.http_endpoint")]
+	pub btc_backup_http_endpoint: Option<String>,
+	#[clap(long = "btc.backup_rpc.basic_auth_user")]
+	pub btc_backup_basic_auth_user: Option<String>,
+	#[clap(long = "btc.backup_rpc.basic_auth_password")]
+	pub btc_backup_basic_auth_password: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -183,42 +239,42 @@ pub struct P2POptions {
 pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
-	config_root: String,
+	pub config_root: String,
 
 	#[clap(flatten)]
-	p2p_opts: P2POptions,
+	pub p2p_opts: P2POptions,
 
 	#[clap(flatten)]
-	state_chain_opts: StateChainOptions,
+	pub state_chain_opts: StateChainOptions,
 
 	#[clap(flatten)]
-	eth_opts: EthOptions,
+	pub eth_opts: EthOptions,
 
 	#[clap(flatten)]
-	dot_opts: DotOptions,
+	pub dot_opts: DotOptions,
 
 	#[clap(flatten)]
-	btc_opts: BtcOptions,
+	pub btc_opts: BtcOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
-	health_check_hostname: Option<String>,
+	pub health_check_hostname: Option<String>,
 	#[clap(long = "health_check.port")]
-	health_check_port: Option<Port>,
+	pub health_check_port: Option<Port>,
 
 	// Prometheus Settings
 	#[clap(long = "prometheus.hostname")]
-	prometheus_hostname: Option<String>,
+	pub prometheus_hostname: Option<String>,
 	#[clap(long = "prometheus.port")]
-	prometheus_port: Option<Port>,
+	pub prometheus_port: Option<Port>,
 
 	// Signing Settings
 	#[clap(long = "signing.db_file", parse(from_os_str))]
-	signing_db_file: Option<PathBuf>,
+	pub signing_db_file: Option<PathBuf>,
 
 	// Logging settings
 	#[clap(long = "logging.span_lifecycle")]
-	logging_span_lifecycle: bool,
+	pub logging_span_lifecycle: bool,
 }
 
 impl Default for CommandLineOptions {
@@ -481,8 +537,16 @@ impl StateChainOptions {
 impl EthOptions {
 	/// Inserts all the Eth Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
-		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
+		insert_command_line_option(map, "eth.rpc.ws_endpoint", &self.eth_ws_endpoint);
+		insert_command_line_option(map, "eth.rpc.http_endpoint", &self.eth_http_endpoint);
+
+		insert_command_line_option(map, "eth.backup_rpc.ws_endpoint", &self.eth_backup_ws_endpoint);
+		insert_command_line_option(
+			map,
+			"eth.backup_rpc.http_endpoint",
+			&self.eth_backup_http_endpoint,
+		);
+
 		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.eth_private_key_file);
 	}
 }
@@ -503,16 +567,43 @@ impl P2POptions {
 
 impl BtcOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "btc.http_node_endpoint", &self.btc_http_node_endpoint);
-		insert_command_line_option(map, "btc.rpc_user", &self.btc_rpc_user);
-		insert_command_line_option(map, "btc.rpc_password", &self.btc_rpc_password);
+		insert_command_line_option(map, "btc.rpc.http_endpoint", &self.btc_http_endpoint);
+		insert_command_line_option(map, "btc.rpc.basic_auth_user", &self.btc_basic_auth_user);
+		insert_command_line_option(
+			map,
+			"btc.rpc.basic_auth_password",
+			&self.btc_basic_auth_password,
+		);
+
+		insert_command_line_option(
+			map,
+			"btc.backup_rpc.http_endpoint",
+			&self.btc_backup_http_endpoint,
+		);
+		insert_command_line_option(
+			map,
+			"btc.backup_rpc.basic_auth_user",
+			&self.btc_backup_basic_auth_user,
+		);
+		insert_command_line_option(
+			map,
+			"btc.backup_rpc.basic_auth_password",
+			&self.btc_backup_basic_auth_password,
+		);
 	}
 }
 
 impl DotOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "dot.ws_node_endpoint", &self.dot_ws_node_endpoint);
-		insert_command_line_option(map, "dot.http_node_endpoint", &self.dot_http_node_endpoint);
+		insert_command_line_option(map, "dot.rpc.ws_endpoint", &self.dot_ws_endpoint);
+		insert_command_line_option(map, "dot.rpc.http_endpoint", &self.dot_http_endpoint);
+
+		insert_command_line_option(map, "dot.backup_rpc.ws_endpoint", &self.dot_backup_ws_endpoint);
+		insert_command_line_option(
+			map,
+			"dot.backup_rpc.http_endpoint",
+			&self.dot_backup_http_endpoint,
+		);
 	}
 }
 
@@ -525,7 +616,6 @@ impl Settings {
 
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
-		tests::set_test_env();
 		Settings::load_settings_from_all_sources(
 			"config/testing/".to_owned(),
 			CommandLineOptions::default(),
@@ -534,21 +624,21 @@ impl Settings {
 }
 
 /// Validate a websocket endpoint URL
-pub fn validate_websocket_endpoint(url: &str) -> Result<()> {
+pub fn validate_websocket_endpoint(url: SecretUrl) -> Result<()> {
 	validate_endpoint(vec!["ws", "wss"], url)
 }
 
 /// Validate a http endpoint URL
-pub fn validate_http_endpoint(url: &str) -> Result<()> {
+pub fn validate_http_endpoint(url: SecretUrl) -> Result<()> {
 	validate_endpoint(vec!["http", "https"], url)
 }
 
 /// Parse the URL to check that it is the correct scheme and a valid endpoint URL
-fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
-	let parsed_url = Url::parse(url)?;
+fn validate_endpoint(valid_schemes: Vec<&str>, url: SecretUrl) -> Result<()> {
+	let parsed_url = Url::parse(url.as_ref()).context(format!("Error parsing url: {url}"))?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
-		bail!("Invalid scheme: `{scheme}`");
+		bail!("Invalid scheme: `{scheme}` in endpoint: {url}");
 	}
 	if parsed_url.host().is_none() ||
 		parsed_url.username() != "" ||
@@ -556,7 +646,7 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 		parsed_url.fragment().is_some() ||
 		parsed_url.cannot_be_a_base()
 	{
-		bail!("Invalid URL data.");
+		bail!("Invalid URL data in endpoint: {url}");
 	}
 
 	Ok(())
@@ -570,45 +660,100 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_HTTP_NODE_ENDPOINT,
-		DOT_WS_NODE_ENDPOINT,
+		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
+		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
+		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
+		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
 	};
 
 	use super::*;
-	use std::env;
 
-	pub fn set_test_env() {
-		use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS};
+	macro_rules! implement_test_environment {
+		($($const_name:ident => $const_value:expr),*) => {
+			pub struct TestEnvironment {}
 
-		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
-		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
-		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
+			impl Default for TestEnvironment {
+				fn default() -> TestEnvironment {
+					$(
+						std::env::set_var($const_name, $const_value);
+					)*
+					TestEnvironment {}
+				}
+			}
 
-		env::set_var(BTC_HTTP_NODE_ENDPOINT, "http://localhost:18443");
-		env::set_var(BTC_RPC_USER, "user");
-		env::set_var(BTC_RPC_PASSWORD, "password");
-
-		env::set_var(DOT_WS_NODE_ENDPOINT, "wss://my_fake_polkadot_rpc:443/<secret_key>");
-		env::set_var(DOT_HTTP_NODE_ENDPOINT, "https://my_fake_polkadot_rpc:443/<secret_key>");
+			impl Drop for TestEnvironment {
+				fn drop(&mut self) {
+					$(
+						std::env::remove_var($const_name);
+					)*
+				}
+			}
+		};
 	}
 
+	implement_test_environment! {
+		ETH_HTTP_ENDPOINT => "http://localhost:8545",
+		ETH_WS_ENDPOINT => "ws://localhost:8545",
+		ETH_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8545",
+		ETH_BACKUP_WS_ENDPOINT => "ws://second.localhost:8545",
+
+		NODE_P2P_IP_ADDRESS => "1.1.1.1",
+
+		BTC_HTTP_ENDPOINT => "http://localhost:18443",
+		BTC_RPC_USER => "user",
+		BTC_RPC_PASSWORD => "password",
+
+		BTC_BACKUP_HTTP_ENDPOINT => "http://second.localhost:18443",
+		BTC_BACKUP_RPC_USER => "second.user",
+		BTC_BACKUP_RPC_PASSWORD => "second.password",
+
+		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_BACKUP_WS_ENDPOINT =>
+		"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_BACKUP_HTTP_ENDPOINT =>
+		"https://second.my_fake_polkadot_rpc:443/<secret_key>"
+	}
+
+	// We do them like this so they run sequentially, which is necessary so the environment doesn't
+	// interfere with tests running in parallel.
 	#[test]
-	fn init_default_config() {
-		set_test_env();
+	fn all_settings_tests() {
+		settings_valid_if_only_all_the_environment_set();
+
+		test_init_config_with_testing_config();
+
+		test_base_config_path_command_line_option();
+
+		test_all_command_line_options();
+	}
+
+	fn settings_valid_if_only_all_the_environment_set() {
+		let _guard = TestEnvironment::default();
 
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
-		assert_eq!(settings.dot.ws_node_endpoint, "wss://my_fake_polkadot_rpc:443/<secret_key>");
+		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
+		assert_eq!(
+			settings.dot.nodes.primary.ws_endpoint.as_ref(),
+			"wss://my_fake_polkadot_rpc:443/<secret_key>"
+		);
+		assert_eq!(
+			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
+			"http://second.localhost:8545"
+		);
+		assert_eq!(
+			settings.dot.nodes.backup.unwrap().ws_endpoint.as_ref(),
+			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
+		);
 	}
 
-	#[test]
 	fn test_init_config_with_testing_config() {
 		let test_settings = Settings::new_test().unwrap();
 
@@ -618,45 +763,7 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn test_websocket_endpoint_url_parsing() {
-		assert_ok!(validate_websocket_endpoint(
-			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
-		));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node"));
-		assert_ok!(validate_websocket_endpoint(
-			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
-		));
-		assert!(validate_websocket_endpoint("https://wrong_scheme.com").is_err());
-		assert!(validate_websocket_endpoint("").is_err());
-	}
-
-	#[test]
-	fn test_http_endpoint_url_parsing() {
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>"));
-		assert_ok!(validate_http_endpoint("http://network.my_eth_node"));
-		assert!(validate_http_endpoint("wss://wrong_scheme.com").is_err());
-		assert!(validate_http_endpoint("").is_err());
-	}
-
-	#[test]
-	fn test_db_file_path_parsing() {
-		assert_ok!(is_valid_db_path(Path::new("data.db")));
-		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
-		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
-		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
-	}
-
-	#[test]
 	fn test_base_config_path_command_line_option() {
-		set_test_env();
-
 		// Load the settings using a custom base config path.
 		let test_base_config_path = "config/testing/";
 		let custom_base_path_settings = Settings::new(CommandLineOptions {
@@ -666,11 +773,15 @@ mod tests {
 		.unwrap();
 
 		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
-		// by comparing it to the default settings. Note: This check will fail if the
-		// Settings.toml contains only default or no values.
+		// by comparing it to a different settings file.
+		let different_settings_config_path = "config/testing2/";
 		assert_ne!(
 			custom_base_path_settings,
-			Settings::new(CommandLineOptions::default()).unwrap()
+			Settings::new(CommandLineOptions {
+				config_root: different_settings_config_path.to_owned(),
+				..Default::default()
+			})
+			.unwrap()
 		);
 
 		// Check that a key file is a child of the custom base path.
@@ -681,9 +792,14 @@ mod tests {
 			.node_key_file
 			.to_string_lossy()
 			.contains(test_base_config_path));
+
+		assert_eq!(
+			custom_base_path_settings.btc.nodes.primary.http_endpoint,
+			"http://localhost:18443".into()
+		);
+		assert!(custom_base_path_settings.btc.nodes.backup.is_none());
 	}
 
-	#[test]
 	fn test_all_command_line_options() {
 		use std::str::FromStr;
 		// Fill the options with test values that will pass the parsing/validation.
@@ -702,18 +818,27 @@ mod tests {
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
 			},
 			eth_opts: EthOptions {
-				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+				eth_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
+				eth_http_endpoint: Some("http://endpoint:4321".to_owned()),
+				eth_backup_ws_endpoint: Some("ws://second_endpoint:4321".to_owned()),
+				eth_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 			dot_opts: DotOptions {
-				dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-				dot_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+				dot_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
+				dot_http_endpoint: Some("http://endpoint:4321".to_owned()),
+
+				dot_backup_ws_endpoint: Some("ws://second.endpoint:4321".to_owned()),
+				dot_backup_http_endpoint: Some("http://second.endpoint:4321".to_owned()),
 			},
 			btc_opts: BtcOptions {
-				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
-				btc_rpc_user: Some("my_username".to_owned()),
-				btc_rpc_password: Some("my_password".to_owned()),
+				btc_http_endpoint: Some("http://btc-endpoint:4321".to_owned()),
+				btc_basic_auth_user: Some("my_username".to_owned()),
+				btc_basic_auth_password: Some("my_password".to_owned()),
+
+				btc_backup_http_endpoint: Some("http://second.btc-endpoint:4321".to_owned()),
+				btc_backup_basic_auth_user: Some("second.my_username".to_owned()),
+				btc_backup_basic_auth_password: Some("second.my_password".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -742,16 +867,68 @@ mod tests {
 			settings.state_chain.signing_key_file
 		);
 
-		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
-		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
+		assert_eq!(
+			opts.eth_opts.eth_ws_endpoint.unwrap(),
+			settings.eth.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.eth_opts.eth_http_endpoint.unwrap(),
+			settings.eth.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let eth_backup_node = settings.eth.nodes.backup.unwrap();
+		assert_eq!(
+			opts.eth_opts.eth_backup_ws_endpoint.unwrap(),
+			eth_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.eth_opts.eth_backup_http_endpoint.unwrap(),
+			eth_backup_node.http_endpoint.as_ref()
+		);
+
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
-		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
-		assert_eq!(opts.dot_opts.dot_http_node_endpoint.unwrap(), settings.dot.http_node_endpoint);
+		assert_eq!(
+			opts.dot_opts.dot_ws_endpoint.unwrap(),
+			settings.dot.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.dot_opts.dot_http_endpoint.unwrap(),
+			settings.dot.nodes.primary.http_endpoint.as_ref()
+		);
 
-		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), settings.btc.http_node_endpoint);
-		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.rpc_user);
-		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), settings.btc.rpc_password);
+		let dot_backup_node = settings.dot.nodes.backup.unwrap();
+		assert_eq!(
+			opts.dot_opts.dot_backup_ws_endpoint.unwrap(),
+			dot_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.dot_opts.dot_backup_http_endpoint.unwrap(),
+			dot_backup_node.http_endpoint.as_ref()
+		);
+
+		assert_eq!(
+			opts.btc_opts.btc_http_endpoint.unwrap(),
+			settings.btc.nodes.primary.http_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.btc_opts.btc_basic_auth_user.unwrap(),
+			settings.btc.nodes.primary.basic_auth_user
+		);
+		assert_eq!(
+			opts.btc_opts.btc_basic_auth_password.unwrap(),
+			settings.btc.nodes.primary.basic_auth_password
+		);
+
+		let btc_backup_node = settings.btc.nodes.backup.unwrap();
+		assert_eq!(
+			opts.btc_opts.btc_backup_basic_auth_user.unwrap(),
+			btc_backup_node.basic_auth_user
+		);
+		assert_eq!(
+			opts.btc_opts.btc_backup_basic_auth_password.unwrap(),
+			btc_backup_node.basic_auth_password
+		);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),
@@ -766,5 +943,43 @@ mod tests {
 		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
 
 		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
+	}
+
+	#[test]
+	fn test_websocket_endpoint_url_parsing() {
+		assert_ok!(validate_websocket_endpoint(
+			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
+		));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node".into()));
+		assert_ok!(validate_websocket_endpoint(
+			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
+				.into()
+		));
+		assert!(validate_websocket_endpoint("https://wrong_scheme.com".into()).is_err());
+		assert!(validate_websocket_endpoint("".into()).is_err());
+	}
+
+	#[test]
+	fn test_http_endpoint_url_parsing() {
+		assert_ok!(validate_http_endpoint(
+			"http://network.my_eth_node:80/d2er2easdfasdfasdf2e".into()
+		));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>".into()));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node".into()));
+		assert!(validate_http_endpoint("wss://wrong_scheme.com".into()).is_err());
+		assert!(validate_http_endpoint("".into()).is_err());
+	}
+
+	#[test]
+	fn test_db_file_path_parsing() {
+		assert_ok!(is_valid_db_path(Path::new("data.db")));
+		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
+		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
+		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
 	}
 }

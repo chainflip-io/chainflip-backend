@@ -8,7 +8,6 @@ pub enum NoneChain {}
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
 	type ChainCrypto = NoneChainCrypto;
-	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
 	type TransactionFee = u64;
@@ -34,6 +33,7 @@ impl FeeRefundCalculator<NoneChain> for () {
 }
 pub struct NoneChainCrypto;
 impl ChainCrypto for NoneChainCrypto {
+	type UtxoChain = ConstBool<false>;
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();

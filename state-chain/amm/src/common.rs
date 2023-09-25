@@ -114,9 +114,8 @@ impl<T> core::ops::IndexMut<Side> for SideMap<T> {
 		}
 	}
 }
-#[cfg(test)]
-impl<T: std::ops::Add<R>, R> std::ops::Add<SideMap<R>> for SideMap<T> {
-	type Output = SideMap<<T as std::ops::Add<R>>::Output>;
+impl<T: core::ops::Add<R>, R> core::ops::Add<SideMap<R>> for SideMap<T> {
+	type Output = SideMap<<T as core::ops::Add<R>>::Output>;
 	fn add(self, rhs: SideMap<R>) -> Self::Output {
 		SideMap { zero: self.zero + rhs.zero, one: self.one + rhs.one }
 	}
@@ -335,13 +334,13 @@ pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	/* Proof that r is never zero (therefore avoiding the divide by zero case here):
 		We can think of an application of the `handle_tick_bit` macro as increasing the index I of r's MSB/`r.ilog2()` (mul by constant), and then decreasing it by 128 (the right shift).
 
-		Note the increase in I caused by the constant mul will be atleast constant.ilog2().
+		Note the increase in I caused by the constant mul will be at least constant.ilog2().
 
 		Also note each application of `handle_tick_bit` decreases (if the if branch is entered) or else maintains r's value as all the constants are less than 2^128.
 
 		Therefore the largest decrease would be caused if all the macros application's if branches where entered.
 
-		So we assuming all if branches are entered, after all the applications `I` would be atleast I_initial + bigsum(constant.ilog2()) - 19*128.
+		So we assuming all if branches are entered, after all the applications `I` would be at least I_initial + bigsum(constant.ilog2()) - 19*128.
 
 		The test `r_non_zero` checks with value is >= 0, therefore imply the smallest value r could have is more than 0.
 	*/
