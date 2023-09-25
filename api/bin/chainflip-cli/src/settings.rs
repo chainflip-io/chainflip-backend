@@ -113,13 +113,15 @@ pub enum CliCommand {
 		)]
 		executor_address: Option<String>,
 	},
-	#[clap(about = "Restricts your account to only be able to redeem to the specified address")]
+	#[clap(
+		about = "Irreversible action that restricts your account to only be able to redeem to the specified address"
+	)]
 	BindRedeemAddress {
 		#[clap(help = "The Ethereum address you wish to bind your account to")]
 		eth_address: String,
 	},
 	#[clap(
-		about = "Restricts your account to only be able to execute registered redemptions with the specified address"
+		about = "Irreversible action that restricts your account to only be able to execute registered redemptions with the specified address"
 	)]
 	BindExecutorAddress {
 		#[clap(help = "The Ethereum address you wish to bind your account to")]

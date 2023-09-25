@@ -52,7 +52,7 @@ Validators who are actively bidding in an auction cannot redeem funds. This is t
 >
 > *The bond is 1,000 FLIP as before, and the account balance is 1,200 FLIP. When a new auction starts, all available funds are implicitly used for bidding, and so all 1,200 FLIP are restricted and cannot be redeemed until the conclusion of the auction.*
 
-#### Address Binding
+#### Redeem Address Binding
 
 Any account may be explicitly *bound* to a single redemption address. Henceforth, any redemption request from that account can *only redeem to this exact address*.
 
@@ -65,6 +65,16 @@ Note, address binding is a one-off *irreversible* operation.
 > *Example:*
 >
 > *A liquid staking provider wants to allow users to pool their FLIP through a smart contract on Ethereum, to then fund a validator account. They bind their validator account to the smart contract address. This binding is permanent and irrevocable, so users can now rest assured that there is no way the pooled funds can be redeemed to any other address.*
+
+#### Executor Address Binding
+
+Any account may be explicitly *bound* to a single executor address. Henceforth, any  registered redemption from that account can *only be executed by this exact address*.
+
+Note, address binding is a one-off *irreversible* operation.
+
+> *Example:*
+>
+> TODO
 
 #### Restricted Balances
 
