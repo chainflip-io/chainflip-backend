@@ -43,7 +43,8 @@ pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
-	base_rpc_api::BaseRpcClient, DefaultRpcClient, StateChainClient,
+	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
+	StateChainClient,
 };
 use utilities::{clean_hex_address, task_scope::Scope};
 
@@ -178,7 +179,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(tx_hash)
@@ -188,7 +189,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_redeem_address { address })
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(tx_hash)
@@ -210,7 +211,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(call)
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not register account role for account")?;
 		Ok(tx_hash)
@@ -233,7 +234,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				proof: [0; 1].to_vec(),
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(tx_hash)
@@ -243,7 +244,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not stop bidding")?;
 		println!("Account stopped bidding, in tx {tx_hash:#x}.");
@@ -254,7 +255,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not start bidding")?;
 		println!("Account started bidding at tx {tx_hash:#x}.");
@@ -272,7 +273,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				name: name.as_bytes().to_vec(),
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not set vanity name for your account")?;
 		println!("Vanity name set at tx {tx_hash:#x}.");
@@ -295,7 +296,7 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 			execution: ExecutionMode::Automatic,
 		})
 		.await
-		.until_finalized()
+		.until_in_block()
 		.await
 		.context("Failed to submit rotation governance proposal")?;
 
@@ -331,7 +332,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				channel_metadata,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
