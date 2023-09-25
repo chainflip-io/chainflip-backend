@@ -369,11 +369,8 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 
 			if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
-				ensure!(executor.is_some(), Error::<T>::ExecutorBindingRestrictionViolated);
-				ensure!(
-					executor_addr == executor.unwrap(),
-					Error::<T>::ExecutorBindingRestrictionViolated
-				);
+				let executor = executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
+				ensure!(executor_addr == executor, Error::<T>::ExecutorBindingRestrictionViolated);
 			}
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
