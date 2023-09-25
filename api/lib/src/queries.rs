@@ -139,4 +139,22 @@ impl QueryApi {
 			)
 			.await?)
 	}
+
+	pub async fn get_bound_executor_address(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<Option<EthereumAddress>, anyhow::Error> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		Ok(self
+			.state_chain_client
+			.storage_map_entry::<pallet_cf_funding::BoundExecutorAddress<state_chain_runtime::Runtime>>(
+				block_hash,
+				&account_id,
+			)
+			.await?)
+	}
 }
