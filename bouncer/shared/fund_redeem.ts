@@ -19,7 +19,7 @@ export async function testFundRedeem(seed: string) {
   // We fund to a specific SC address.
   await fundFlip(redeemSCAddress, amount.toString());
 
-  // The ERC20 FLIP is sent back to an ETH address, and the registered claim can only be executed by that address.
+  // The ERC20 FLIP is sent back to an ETH address, and the registered redemption can only be executed by that address.
   await redeemFlip(seed, redeemEthAddress as HexString, (amount / 2).toString());
   console.log('Observed RedemptionSettled event');
   const newBalance = await observeBalanceIncrease('FLIP', redeemEthAddress, initBalance);
