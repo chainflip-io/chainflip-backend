@@ -78,6 +78,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		.map(sqrt_price_to_price)
 	}
 
+	/// Performs a swap to sell or buy an amount of either side/asset.
+	///
+	/// This function never panics.
 	pub fn swap(&mut self, side: Side, order: Order, amount: Amount) -> (Amount, Amount) {
 		match (side, order) {
 			(Side::Zero, Order::Sell) => self.inner_swap::<ZeroToOne>(amount, None),
