@@ -7209,6 +7209,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7275,6 +7276,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
