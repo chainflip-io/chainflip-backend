@@ -20,7 +20,7 @@ use sp_std::prelude::*;
 
 mod benchmarking;
 
-mod vault_rotator;
+mod vault_activator;
 
 pub mod weights;
 pub use weights::WeightInfo;

@@ -55,6 +55,11 @@ where
 				.all(|x| matches!(x, VaultRotationStatusOuter::KeyHandoverComplete))
 			{
 				AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete)
+			} else if statuses
+				.iter()
+				.all(|x| matches!(x, VaultRotationStatusOuter::RotationComplete))
+			{
+				AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete)
 			} else {
 				// We currently treat an offence in one vault rotation as bad as in all rotations.
 				// We may want to change it, but this is simplest for now.
