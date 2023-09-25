@@ -8,7 +8,7 @@ mod tests;
 
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
-use cf_traits::impl_pallet_safe_mode;
+use cf_traits::{impl_pallet_safe_mode, GetBlockHeight};
 pub use weights::WeightInfo;
 
 impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
@@ -179,6 +179,9 @@ pub mod pallet {
 
 		type BroadcastReadyProvider: OnBroadcastReady<Self::TargetChain, ApiCall = Self::ApiCall>;
 
+		/// Get the latest block height of the target chain via Chain Tracking.
+		type ChainTracking: GetBlockHeight<Self::TargetChain>;
+
 		/// The timeout duration for the broadcast, measured in number of blocks.
 		#[pallet::constant]
 		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
@@ -237,8 +240,13 @@ pub mod pallet {
 
 	/// Lookup table between TransactionOutId -> Broadcast.
 	#[pallet::storage]
-	pub type TransactionOutIdToBroadcastId<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TransactionOutIdFor<T, I>, BroadcastId, OptionQuery>;
+	pub type TransactionOutIdToBroadcastId<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		TransactionOutIdFor<T, I>,
+		(BroadcastId, ChainBlockNumberFor<T, I>),
+		OptionQuery,
+	>;
 
 	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
@@ -452,6 +460,7 @@ pub mod pallet {
 			threshold_signature_payload: PayloadFor<T, I>,
 			api_call: Box<<T as Config<I>>::ApiCall>,
 			broadcast_id: BroadcastId,
+			initiated_at: ChainBlockNumberFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -474,6 +483,7 @@ pub mod pallet {
 				signed_api_call,
 				threshold_signature_payload,
 				broadcast_id,
+				initiated_at,
 			);
 			Ok(().into())
 		}
@@ -502,8 +512,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			let broadcast_id = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
-				.ok_or(Error::<T, I>::InvalidPayload)?;
+			let (broadcast_id, _initiated_at) =
+				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
+					.ok_or(Error::<T, I>::InvalidPayload)?;
 
 			let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
 				broadcast_id,
@@ -616,6 +627,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(callback) = maybe_callback {
 			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
+
+		// We must set this here because after the threshold signature is requested, it's
+		// possible that an authority submits the transaction themselves, not going through the
+		// standard path. This protects against that, to ensure we always set the earliest possible
+		// block number we could have broadcast at, so that we can ensure we witness it.
+		let initiated_at = T::ChainTracking::get_block_height();
+
 		let threshold_signature_payload = api_call.threshold_signature_payload();
 		let signature_request_id = T::ThresholdSigner::request_signature_with_callback(
 			threshold_signature_payload.clone(),
@@ -625,6 +643,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					threshold_signature_payload,
 					api_call: Box::new(api_call),
 					broadcast_id,
+					initiated_at,
 				}
 				.into()
 			},
@@ -643,12 +662,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		api_call: <T as Config<I>>::ApiCall,
 		threshold_signature_payload: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		broadcast_id: BroadcastId,
+		initiated_at: ChainBlockNumberFor<T, I>,
 	) -> BroadcastAttemptId {
 		let transaction_out_id = api_call.transaction_out_id();
 
 		T::BroadcastReadyProvider::on_broadcast_ready(&api_call);
 
-		TransactionOutIdToBroadcastId::<T, I>::insert(&transaction_out_id, broadcast_id);
+		TransactionOutIdToBroadcastId::<T, I>::insert(
+			&transaction_out_id,
+			(broadcast_id, initiated_at),
+		);
 
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 

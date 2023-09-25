@@ -128,6 +128,7 @@ fn start_mock_broadcast_tx_out_id(
 		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
 		Default::default(),
 		1,
+		100u64.into(),
 	)
 }
 
