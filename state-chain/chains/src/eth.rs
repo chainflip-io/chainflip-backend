@@ -32,7 +32,6 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	type ChainCrypto = evm::EvmCrypto;
-	type KeyHandoverIsRequired = ConstBool<false>;
 	type OptimisticActivation = ConstBool<false>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;

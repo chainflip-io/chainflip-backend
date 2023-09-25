@@ -1,4 +1,7 @@
-use frame_support::{IterableStorageMap, StorageMap, StoragePrefixedMap, StorageValue};
+use frame_support::{
+	CloneNoBound, DebugNoBound, EqNoBound, IterableStorageMap, PartialEqNoBound, StorageMap,
+	StoragePrefixedMap, StorageValue,
+};
 
 use super::*;
 

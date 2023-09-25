@@ -387,12 +387,12 @@ impl<
 }
 
 pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> = Epoch<
-	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
+	(<TChain as Chain>::ChainBlockNumber, ExtraInfo),
 	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
 pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
-	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
+	(<TChain as Chain>::ChainBlockNumber, ExtraInfo),
 	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
@@ -413,7 +413,7 @@ impl<
 		'a,
 		'env,
 		StateChainClient,
-		(pallet_cf_vaults::Vault<TChain>, Info),
+		(<TChain as Chain>::ChainBlockNumber, Info),
 		(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
 	>
 	where
@@ -424,7 +424,7 @@ impl<
 		self.filter_map(
 			|state_chain_client, epoch, block_hash, info| async move {
 				state_chain_client
-					.storage_map_entry::<pallet_cf_vaults::Vaults<
+					.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 						state_chain_runtime::Runtime,
 						<TChain as PalletInstanceAlias>::Instance,
 					>>(block_hash, &epoch)
@@ -435,14 +435,13 @@ impl<
 			|state_chain_client, epoch, block_hash, historic_info| async move {
 				(
 					state_chain_client
-						.storage_map_entry::<pallet_cf_vaults::Vaults<
+						.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 							state_chain_runtime::Runtime,
 							<TChain as PalletInstanceAlias>::Instance,
 						>>(block_hash, &(epoch + 1))
 						.await
 						.expect(STATE_CHAIN_CONNECTION)
-						.expect("We know the epoch ended, so the next vault must exist.")
-						.active_from_block,
+						.expect("We know the epoch ended, so the next vault must exist."),
 					historic_info,
 				)
 			},

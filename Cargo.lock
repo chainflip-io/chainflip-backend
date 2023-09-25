@@ -6867,6 +6867,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+1)",
+ "utilities",
 ]
 
 [[package]]

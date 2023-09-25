@@ -9,7 +9,6 @@ use frame_support::traits::ConstBool;
 impl Chain for AnyChain {
 	const NAME: &'static str = "AnyChain";
 	type ChainCrypto = NoneChainCrypto;
-	type KeyHandoverIsRequired = ConstBool<false>;
 	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;

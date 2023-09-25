@@ -68,19 +68,19 @@ impl From<pallet_cf_threshold_signature::PalletOffence> for Offence {
 		match offences {
 			pallet_cf_threshold_signature::PalletOffence::ParticipateSigningFailed =>
 				Self::ParticipateSigningFailed,
-		}
-	}
-}
-
-impl From<pallet_cf_vaults::PalletOffence> for Offence {
-	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
-		match offences {
-			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateKeygenFailed,
-			pallet_cf_vaults::PalletOffence::FailedKeyHandover =>
+			pallet_cf_threshold_signature::PalletOffence::FailedKeygen =>
+				Self::ParticipateKeygenFailed,
+			pallet_cf_threshold_signature::PalletOffence::FailedKeyHandover =>
 				Self::ParticipateKeyHandoverFailed,
 		}
 	}
 }
+
+// impl From<pallet_cf_vaults::PalletOffence> for Offence {
+// 	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
+// 		match offences {}
+// 	}
+// }
 
 impl From<pallet_cf_validator::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_validator::PalletOffence) -> Self {

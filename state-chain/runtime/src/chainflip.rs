@@ -9,10 +9,10 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
-	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
+	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -84,7 +84,7 @@ impl_runtime_safe_mode! {
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
-	vault: pallet_cf_vaults::PalletSafeMode,
+	threshold_signature: pallet_cf_threshold_signature        ::PalletSafeMode,
 	witnesser: pallet_cf_witnesser::PalletSafeMode,
 	broadcast: pallet_cf_broadcast::PalletSafeMode,
 }
@@ -339,10 +339,10 @@ impl Get<RuntimeVersion> for DotEnvironment {
 
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
-		use crate::PolkadotVault;
+		use crate::PolkadotThresholdSigner;
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				<PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+				<PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
 					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
@@ -364,7 +364,7 @@ impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEn
 
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		<BitcoinVault as KeyProvider<BitcoinCrypto>>::active_epoch_key()
+		<BitcoinThresholdSigner as KeyProvider<BitcoinCrypto>>::active_epoch_key()
 			.map(|epoch_key| epoch_key.key)
 	}
 }

@@ -8,7 +8,6 @@ pub enum NoneChain {}
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
 	type ChainCrypto = NoneChainCrypto;
-	type KeyHandoverIsRequired = ConstBool<false>;
 	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
@@ -40,8 +39,8 @@ impl ChainCrypto for NoneChainCrypto {
 	type ThresholdSignature = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = ();
-	type Chains = ();
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,

@@ -11,7 +11,7 @@ use cf_chains::{
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider, key_provider::MockKeyProvider,
+		, key_provider::MockKeyProvider,
 		signer_nomination::MockNominator,
 	},
 	AccountRoleRegistry, AsyncResult, KeyProvider, ThresholdSigner,
@@ -144,7 +144,6 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type ThresholdSignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider<MockEthereumChainCrypto>;
 	type OffenceReporter = MockOffenceReporter;
-	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
 }

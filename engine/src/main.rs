@@ -176,7 +176,7 @@ async fn start(
 			eth_incoming_receiver,
 			eth_outgoing_sender,
 			state_chain_client
-				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
 					state_chain_runtime::EthereumInstance,
 				>>(state_chain_stream.cache().block_hash)
@@ -193,7 +193,7 @@ async fn start(
 			dot_incoming_receiver,
 			dot_outgoing_sender,
 			state_chain_client
-				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
 					state_chain_runtime::PolkadotInstance,
 				>>(state_chain_stream.cache().block_hash)
@@ -210,7 +210,7 @@ async fn start(
 			btc_incoming_receiver,
 			btc_outgoing_sender,
 			state_chain_client
-				.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
 					state_chain_runtime::BitcoinInstance,
 				>>(state_chain_stream.cache().block_hash)

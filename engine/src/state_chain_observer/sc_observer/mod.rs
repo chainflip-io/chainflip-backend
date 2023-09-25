@@ -3,10 +3,7 @@ mod crypto_compat;
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{
-	btc::{self, PreviousOrCurrent},
-	Chain,
-};
+use cf_chains::btc::{self, PreviousOrCurrent};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
@@ -54,12 +51,12 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 ) where
 	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: ChainSigning<ChainCrypto = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto>
+	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
+	C: ChainSigning<ChainCrypto = <state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto>
 		+ 'static,
 	I: CryptoCompat<C, C::ChainCrypto> + 'static + Sync + Send,
 	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -67,7 +64,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
 			state_chain_client
-				.finalize_signed_extrinsic(pallet_cf_vaults::Call::<
+				.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 					state_chain_runtime::Runtime,
 					I,
 				>::report_keygen_outcome {
@@ -101,9 +98,10 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 ) where
 	MultisigClient: MultisigClientApi<BtcCryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	state_chain_runtime::Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, BitcoinInstance>>,
+	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<BitcoinInstance>,
+	state_chain_runtime::RuntimeCall: std::convert::From<
+		pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, BitcoinInstance>,
+	>,
 {
 	let account_id = &state_chain_client.account_id();
 	if sharing_participants.contains(account_id) || receiving_participants.contains(account_id) {
@@ -116,7 +114,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 		);
 		scope.spawn(async move {
 			let _result = state_chain_client
-				.finalize_signed_extrinsic(pallet_cf_vaults::Call::<
+				.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 					state_chain_runtime::Runtime,
 					BitcoinInstance,
 				>::report_key_handover_outcome {
@@ -321,8 +319,8 @@ where
                                             .send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
                                             .unwrap();
                                     }
-                                    state_chain_runtime::RuntimeEvent::EthereumVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
+                                    state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::KeygenRequest {
                                             ceremony_id,
                                             participants,
                                             epoch_index
@@ -337,8 +335,8 @@ where
                                             participants,
                                         ).await;
                                     }
-                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
+                                    state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::KeygenRequest {
                                             ceremony_id,
                                             participants,
                                             epoch_index
@@ -353,8 +351,8 @@ where
                                             participants,
                                         ).await;
                                     }
-                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
-                                        pallet_cf_vaults::Event::KeygenRequest {
+                                    state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::KeygenRequest {
                                             ceremony_id,
                                             participants,
                                             epoch_index
@@ -455,8 +453,8 @@ where
                                         }
                                     }
                                     // ======= KEY HANDOVER =======
-                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                    state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::KeyHandoverRequest {
                                            ceremony_id,
                                            key_to_share,
                                            from_epoch,
@@ -479,15 +477,15 @@ where
                                             new_key,
                                         ).await;
                                     }
-                                    state_chain_runtime::RuntimeEvent::EthereumVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                    state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::KeyHandoverRequest {
                                            ..
                                         },
                                     ) => {
                                         panic!("There should be no key handover requests made for Ethereum")
                                     }
-                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
-                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                    state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::KeyHandoverRequest {
                                            ..
                                         },
                                     ) => {

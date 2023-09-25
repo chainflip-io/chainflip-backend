@@ -18,6 +18,7 @@ use frame_support::sp_runtime::{
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
 pub struct EvmCrypto;
@@ -30,8 +31,8 @@ impl ChainCrypto for EvmCrypto {
 	// We can't use the hash since we don't know it for the Evm, as we must select an individaul
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
+	type KeyHandoverIsRequired = ConstBool<false>;
 	type GovKey = Address;
-	type Chains = EvmChains;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -47,10 +48,6 @@ impl ChainCrypto for EvmCrypto {
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
 	}
-}
-
-pub enum EvmChains {
-	Ethereum,
 }
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]

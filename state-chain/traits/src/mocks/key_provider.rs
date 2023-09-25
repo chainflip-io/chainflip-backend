@@ -25,7 +25,7 @@ impl<C: ChainCrypto> MockKeyProvider<C> {
 	pub fn lock_key(request_id: ThresholdSignatureRequestId) {
 		Self::mutate_value::<EpochKey<C::AggKey>, _, _>(EPOCH_KEY, |maybe_key| {
 			if let Some(key) = maybe_key.as_mut() {
-				key.lock_for_request(request_id);
+				key.lock_for_request(vec![request_id]);
 			}
 		});
 	}

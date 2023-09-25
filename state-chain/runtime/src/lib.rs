@@ -92,7 +92,6 @@ use chainflip::{
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
-use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
 // Make the WASM binary available.
@@ -224,56 +223,35 @@ impl pallet_cf_swapping::Config for Runtime {
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
-	type EnsureThresholdSigned =
-		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
-	type ThresholdSigner = EthereumThresholdSigner;
-	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
 	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
-	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ChainTracking = EthereumChainTracking;
 	type SafeMode = chainflip::RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
 }
 
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
-	type EnsureThresholdSigned =
-		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
-	type ThresholdSigner = PolkadotThresholdSigner;
-	type Offence = chainflip::Offence;
 	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
 	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
-	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ChainTracking = PolkadotChainTracking;
 	type SafeMode = chainflip::RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
 }
 
 impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
-	type EnsureThresholdSigned =
-		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
-	type ThresholdSigner = BitcoinThresholdSigner;
-	type Offence = chainflip::Offence;
 	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
-	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type ChainTracking = BitcoinChainTracking;
 	type SafeMode = chainflip::RuntimeSafeMode;
-	type Slasher = FlipSlasher<Self>;
 }
 
 use chainflip::address_derivation::AddressDerivation;
@@ -618,10 +596,10 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = EvmCrypto;
 	type VaultActivator = EthereumVault;
-	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = EthereumVault;
 	type CeremonyRetryDelay = ConstU32<1>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type Slasher = FlipSlasher<Self>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -633,10 +611,10 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = PolkadotCrypto;
 	type VaultActivator = PolkadotVault;
-	type KeyProvider = PolkadotVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = PolkadotVault;
 	type CeremonyRetryDelay = ConstU32<1>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type Slasher = FlipSlasher<Self>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -648,10 +626,10 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = BitcoinCrypto;
 	type VaultActivator = BitcoinVault;
-	type KeyProvider = BitcoinVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = BitcoinVault;
 	type CeremonyRetryDelay = ConstU32<1>;
+	type SafeMode = chainflip::RuntimeSafeMode;
+	type Slasher = FlipSlasher<Self>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -674,7 +652,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = EthereumVault;
+	type KeyProvider = EthereumThresholdSigner;
 }
 
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
@@ -696,7 +674,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = PolkadotVault;
+	type KeyProvider = PolkadotThresholdSigner;
 }
 
 impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
@@ -718,7 +696,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = chainflip::RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = BitcoinVault;
+	type KeyProvider = BitcoinThresholdSigner;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
@@ -879,8 +857,7 @@ impl_runtime_apis! {
 			let epoch_index = Self::cf_current_epoch();
 			// We should always have a Vault for the current epoch, but in case we do
 			// not, just return an empty Vault.
-			let vault: Vault<Ethereum> = EthereumVault::vaults(epoch_index).unwrap_or_default();
-			(vault.public_key.to_pubkey_compressed(), vault.active_from_block.unique_saturated_into())
+			(EthereumThresholdSigner::vault_keys(epoch_index).unwrap_or_default().to_pubkey_compressed(), EthereumVault::vault_start_block_numbers(epoch_index).unwrap().unique_saturated_into())
 		}
 		fn cf_auction_parameters() -> (u32, u32) {
 			let auction_params = Validator::auction_parameters();

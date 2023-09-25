@@ -18,12 +18,16 @@ use crate::{
 	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
 	db::PersistentKeyDB,
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+		StateChainStreamApi,
 	},
 };
 use btc_source::BtcSource;
 
-use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
+use super::common::{
+	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
+	STATE_CHAIN_CONNECTION,
+};
 
 use anyhow::Result;
 
@@ -38,7 +42,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
 {
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
@@ -64,7 +68,7 @@ where
 			}
 		})
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await)
+		.chunk_by_vault(epoch_source.vaults::<Bitcoin>().await)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
@@ -112,7 +116,18 @@ where
 								pallet_cf_broadcast::Call::transaction_succeeded {
 									tx_out_id: tx_hash,
 									signer_id: DepositAddress::new(
-										epoch.info.0.public_key.current,
+										state_chain_client
+											.storage_map_entry::<pallet_cf_threshold_signature::VaultKeys<
+												state_chain_runtime::Runtime,
+												BitcoinInstance,
+											>>(
+												state_chain_client.latest_finalized_hash(),
+												&epoch.index,
+											)
+											.await
+											.expect(STATE_CHAIN_CONNECTION)
+											.expect("") //todo
+											.current,
 										CHANGE_ADDRESS_SALT,
 									)
 									.script_pubkey(),

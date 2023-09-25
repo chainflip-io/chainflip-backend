@@ -98,7 +98,7 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 pub struct Generic<T>(pub T);
 #[async_trait::async_trait]
 impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
-	type Info = (pallet_cf_vaults::Vault<T::Chain>, T::ExtraInfo);
+	type Info = (<T::Chain as Chain>::ChainBlockNumber, T::ExtraInfo);
 	type HistoricInfo = (<T::Chain as Chain>::ChainBlockNumber, T::ExtraHistoricInfo);
 
 	type Index = T::Index;

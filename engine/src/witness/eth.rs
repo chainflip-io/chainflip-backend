@@ -9,6 +9,7 @@ pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
+use cf_chains::Ethereum;
 use cf_primitives::chains::assets::eth;
 use sp_core::H160;
 use utilities::task_scope::Scope;
@@ -107,7 +108,7 @@ where
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await);
+		.chunk_by_vault(epoch_source.vaults::<Ethereum>().await);
 
 	eth_safe_vault_source
 		.clone()

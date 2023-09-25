@@ -1,5 +1,5 @@
 use super::AddressDerivation;
-use crate::BitcoinVault;
+use crate::BitcoinThresholdSigner;
 use cf_chains::{
 	address::AddressDerivationApi, btc::deposit_address::DepositAddress, Bitcoin, Chain,
 };
@@ -32,7 +32,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 		let channel_state = DepositAddress::new(
 			// TODO: The key should be passed as an argument (or maybe KeyProvider type arg).
-			BitcoinVault::active_epoch_key()
+			BitcoinThresholdSigner::active_epoch_key()
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.key
 				.current,

@@ -76,8 +76,8 @@ where
 				let unprocessed_indices = {
 					let mut processed_inverse = processed_indices.clone();
 					processed_inverse.invert();
-					processed_inverse.set_range(..epoch.info.0.active_from_block, false);
-					let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.0.active_from_block, |highest_processed| std::cmp::max(highest_processed, epoch.info.0.active_from_block));
+					processed_inverse.set_range(..epoch.info.0, false);
+					let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.0, |highest_processed| std::cmp::max(highest_processed, epoch.info.0));
 					processed_inverse.set_range(highest_processed.., false);
 					processed_inverse
 				};
@@ -89,7 +89,7 @@ where
 						move |(mut chain_stream, chain_client, mut epoch, mut unprocessed_indices, mut inprogress_indices, mut processed_indices)| async move {
 							loop_select!(
 								let header = chain_stream.next_or_pending() => {
-									let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.0.active_from_block, |highest_processed| std::cmp::max(highest_processed, epoch.info.0.active_from_block));
+									let highest_processed = processed_indices.iter(true).last().map_or(epoch.info.0, |highest_processed| std::cmp::max(highest_processed, epoch.info.0));
 									if highest_processed < header.index {
 										for unprocessed_index in Step::forward(highest_processed, 1)..header.index {
 											if inprogress_indices.len() < MAXIMUM_CONCURRENT_INPROGRESS {
@@ -115,7 +115,7 @@ where
 								},
 								if epoch.historic_signal.get().is_some() && processed_indices.is_superset(&{
 									let mut bitmap = RleBitmap::new(true);
-									bitmap.set_range(..epoch.info.0.active_from_block, false);
+									bitmap.set_range(..epoch.info.0, false);
 									bitmap.set_range(epoch.historic_signal.get().unwrap().0.., false);
 									bitmap
 								}) => break None,

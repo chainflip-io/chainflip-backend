@@ -52,7 +52,6 @@ pub trait Chain: Member + Parameter {
 
 	type ChainCrypto: ChainCrypto;
 
-	type KeyHandoverIsRequired: Get<bool>;
 	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
@@ -155,10 +154,9 @@ pub trait ChainCrypto {
 	/// Uniquely identifies a transaction on the outoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
-	type GovKey: Member + Parameter + Copy + BenchmarkValue;
+	type KeyHandoverIsRequired: Get<bool>;
 
-	/// The list of chains that use this ChainCrypto type
-	type Chains;
+	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

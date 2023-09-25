@@ -48,7 +48,7 @@ impl<R> From<R> for AsyncResult<R> {
 }
 
 pub trait MapAsyncResultTo<S> {
-	fn map_to(inner: S) -> AsyncResult<S>;
+	fn map_to(self, inner: S) -> AsyncResult<S>;
 }
 
 impl<R, S> MapAsyncResultTo<S> for AsyncResult<R> {

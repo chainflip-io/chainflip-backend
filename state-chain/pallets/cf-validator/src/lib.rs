@@ -21,7 +21,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SetSafeMode,
+	ReputationResetter, SetSafeMode, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -94,9 +94,8 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, KeyRotationStatus, VaultRotator};
+	use cf_traits::{AccountRoleRegistry, VaultRotationStatusOuter};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
-	use frame_system::Key;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
@@ -362,10 +361,10 @@ pub mod pallet {
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
-						AsyncResult::Ready(KeyRotationStatus::KeygenComplete) => {
+						AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete) => {
 							Self::try_start_key_handover(rotation_state, block_number);
 						},
-						AsyncResult::Ready(KeyRotationStatus::Failed(offenders)) => {
+						AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)) => {
 							rotation_state.ban(offenders);
 							Self::try_restart_keygen(rotation_state);
 						},
@@ -386,13 +385,13 @@ pub mod pallet {
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
-						AsyncResult::Ready(KeyRotationStatus::KeyHandoverComplete) => {
+						AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
+							T::VaultRotator::activate_vaults();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
-						AsyncResult::Ready(KeyRotationStatus::Failed(offenders)) => {
+						AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)) => {
 							// NOTE: we distinguish between candidates (nodes currently selected to become next authorities)
 							// and non-candidates (current authorities *not* currently selected to become next authorities).
 							// The outcome of this failure depends on whether any of the candidates caused it:
@@ -430,7 +429,7 @@ pub mod pallet {
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
-						AsyncResult::Ready(KeyRotationStatus::RotationComplete) => {
+						AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
 							));

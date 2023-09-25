@@ -10,17 +10,16 @@ pub mod mocks;
 pub mod offence_reporting;
 
 use core::fmt::Debug;
-use std::collections::HashMap;
 
-pub use async_result::AsyncResult;
+pub use async_result::{AsyncResult, MapAsyncResultTo};
 
 use cf_chains::{
-	address::ForeignChainAddress, evm::EvmCrypto, ApiCall, CcmChannelMetadata, CcmDepositMetadata,
-	Chain, ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
+	ChainCrypto, DepositChannel, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
+	ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -189,7 +188,7 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate(key: C::AggKey);
+	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> Vec<u32>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);
@@ -369,18 +368,19 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, TypeInfo, Decode, Encode, Clone, PartialEq, Eq)]
 pub enum KeyState {
 	Unlocked,
-	/// Key is only available to sign this request id.
-	Locked(ThresholdSignatureRequestId),
+	/// Key is only available to sign these request ids.
+	Locked(Vec<ThresholdSignatureRequestId>),
 }
 
 impl KeyState {
 	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
 		match self {
 			KeyState::Unlocked => true,
-			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
+			KeyState::Locked(locked_request_ids) =>
+				locked_request_ids.iter().any(|id| *id == request_id),
 		}
 	}
 
@@ -388,12 +388,12 @@ impl KeyState {
 		*self = KeyState::Unlocked;
 	}
 
-	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
-		*self = KeyState::Locked(request_id);
+	pub fn lock(&mut self, request_ids: Vec<ThresholdSignatureRequestId>) {
+		*self = KeyState::Locked(request_ids);
 	}
 }
 
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, TypeInfo, Decode, Encode, Clone, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
@@ -401,8 +401,8 @@ pub struct EpochKey<Key> {
 }
 
 impl<Key> EpochKey<Key> {
-	pub fn lock_for_request(&mut self, request_id: ThresholdSignatureRequestId) {
-		self.key_state = KeyState::Locked(request_id);
+	pub fn lock_for_request(&mut self, request_ids: Vec<ThresholdSignatureRequestId>) {
+		self.key_state = KeyState::Locked(request_ids);
 	}
 }
 
@@ -617,11 +617,6 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
-}
-
-pub trait CeremonyIdProvider {
-	/// Increment the ceremony id, returning the new one.
-	fn increment_ceremony_id() -> CeremonyId;
 }
 
 /// Something that is able to provide block authorship slots that were missed.

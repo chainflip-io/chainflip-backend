@@ -175,7 +175,6 @@ pub struct EpochStartData {
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	type ChainCrypto = BitcoinCrypto;
-	type KeyHandoverIsRequired = ConstBool<true>;
 	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
@@ -211,10 +210,9 @@ impl ChainCrypto for BitcoinCrypto {
 	type ThresholdSignature = Vec<Signature>;
 	type TransactionInId = Hash;
 	type TransactionOutId = Hash;
+	type KeyHandoverIsRequired = ConstBool<true>;
 
 	type GovKey = Self::AggKey;
-
-	type Chains = BitcoinCryptoChains;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -248,10 +246,6 @@ impl ChainCrypto for BitcoinCrypto {
 	fn handover_key_matches(current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
 		new_key.previous.is_some_and(|previous| current_key.current == previous)
 	}
-}
-
-pub enum BitcoinCryptoChains {
-	Bitcoin,
 }
 
 fn verify_single_threshold_signature(

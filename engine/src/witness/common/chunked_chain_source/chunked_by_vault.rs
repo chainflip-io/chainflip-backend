@@ -53,7 +53,7 @@ impl<
 		TExtraHistoricInfo: Clone + Send + Sync + 'static,
 		TChain: ExternalChain<ChainBlockNumber = T::Index>,
 		T: ChunkedChainSource<
-			Info = (pallet_cf_vaults::Vault<TChain>, TExtraInfo),
+			Info = (<TChain as Chain>::ChainBlockNumber, TExtraInfo),
 			HistoricInfo = (<TChain as Chain>::ChainBlockNumber, TExtraHistoricInfo),
 			Chain = TChain,
 		>,
@@ -128,7 +128,7 @@ where
 						.take_until(vault.expired_signal.wait())
 						.filter(move |header| {
 							futures::future::ready(
-								header.index >= vault.info.0.active_from_block &&
+								header.index >= vault.info.0 &&
 									vault
 										.historic_signal
 										.get()

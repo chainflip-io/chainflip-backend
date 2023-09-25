@@ -122,7 +122,7 @@ where
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await)
+		.chunk_by_vault(epoch_source.vaults::<Polkadot>().await)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing

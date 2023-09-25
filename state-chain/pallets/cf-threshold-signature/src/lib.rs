@@ -13,6 +13,11 @@ mod migrations;
 
 pub mod weights;
 
+mod response_status;
+mod vault_rotator;
+
+use response_status::ResponseStatus;
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -20,20 +25,21 @@ use cf_chains::ChainCrypto;
 use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
 };
+use cf_runtime_utilities::{log_or_panic, EnumVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	EpochKey, KeyProvider, ThresholdSignerNomination,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, Chainflip,
+	CurrentEpochIndex, EpochInfo, EpochKey, KeyProvider, KeyState, Slashing, ThresholdSigner,
+	ThresholdSignerNomination, VaultRotator,
 };
-
-use cf_runtime_utilities::log_or_panic;
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	ensure,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating, Zero},
-		RuntimeDebug,
+		Percent, RuntimeDebug,
 	},
 	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
+	weights::Weight,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -47,12 +53,13 @@ use weights::WeightInfo;
 /// The type used for counting signing attempts.
 type AttemptCount = AuthorityCount;
 
+impl_pallet_safe_mode!(PalletSafeMode; slashing_enabled);
+
 type SignatureFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
 	Result<AggKeyFor<T, I>, BTreeSet<<T as Chainflip>::ValidatorId>>;
-pub type AggKeyFor<T, I = ()> =
-<<T as Config<I>>::TargetChainCrypto as ChainCrypto>::AggKey;
+pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::AggKey;
 pub type KeygenResponseStatus<T, I> =
 	ResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
 
@@ -62,6 +69,8 @@ pub type KeyHandoverResponseStatus<T, I> =
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	ParticipateSigningFailed,
+	FailedKeygen,
+	FailedKeyHandover,
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -141,6 +150,7 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
+const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
 
 macro_rules! handle_key_ceremony_report {
 	($origin:expr, $ceremony_id:expr, $reported_outcome:expr, $variant:path, $success_event:expr, $failure_event:expr) => {
@@ -149,7 +159,7 @@ macro_rules! handle_key_ceremony_report {
 
 		// There is a rotation happening.
 		let mut rotation =
-			PendingKeyRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
+			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
 		// Keygen is in progress, pull out the details.
 		let (pending_ceremony_id, response_status) = ensure_variant!(
@@ -161,10 +171,10 @@ macro_rules! handle_key_ceremony_report {
 		);
 
 		// Make sure the ceremony id matches
-		ensure!(pending_ceremony_id == $ceremony_id, Error::<T, I>::InvalidCeremonyId);
+		ensure!(pending_ceremony_id == $ceremony_id, Error::<T, I>::InvalidKeygenCeremonyId);
 		ensure!(
 			response_status.remaining_candidates().contains(&reporter),
-			Error::<T, I>::InvalidRespondent
+			Error::<T, I>::InvalidKeygenRespondent
 		);
 
 		Self::deposit_event(match $reported_outcome {
@@ -189,18 +199,15 @@ macro_rules! handle_key_ceremony_report {
 			},
 		});
 
-		PendingKeyRotation::<T, I>::put(rotation);
+		PendingVaultRotation::<T, I>::put(rotation);
 	};
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{
-		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination, VaultActivator,
-	};
+	use cf_traits::{AccountRoleRegistry, AsyncResult, ThresholdSignerNomination, VaultActivator};
 	use frame_support::{
-		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
@@ -331,7 +338,8 @@ pub mod pallet {
 		/// The calls that this pallet can dispatch after generating a signature.
 		type ThresholdCallable: Member
 			+ Parameter
-			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>
+			+ From<Call<Self, I>>;
 
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChainCrypto: ChainCrypto;
@@ -342,17 +350,16 @@ pub mod pallet {
 		/// Signer nomination.
 		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;
 
-		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChainCrypto>;
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
+
+		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
 			ValidatorId = <Self as Chainflip>::ValidatorId,
 			Offence = Self::Offence,
 		>;
-
-		/// CeremonyId source.
-		type CeremonyIdProvider: CeremonyIdProvider;
 
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.
@@ -415,16 +422,23 @@ pub mod pallet {
 	pub type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// The epoch whose authorities control the current vault key for each chain associated with the CryptoScheme.
+	/// The epoch whose authorities control the current vault key for each chain associated with the
+	/// CryptoScheme.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
 	pub type CurrentVaultEpochAndState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, sp_std::collections::HashMap<T::TargetChainCrypto::Chains,VaultEpochAndState> >;
+		StorageValue<_, VaultEpochAndState>;
+
+	/// The map of all keys by epoch.
+	#[pallet::storage]
+	#[pallet::getter(fn vault_keys)]
+	pub type VaultKeys<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, EpochIndex, AggKeyFor<T, I>>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_vault_rotations)]
-	pub type PendingKeyRotation<T: Config<I>, I: 'static = ()> =
+	pub type PendingVaultRotation<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, KeyRotationStatus<T, I>>;
 
 	/// The voters who voted for success for a particular agg key rotation
@@ -472,17 +486,27 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type KeygenSlashRate<T, I = ()> = StorageValue<_, Percent, ValueQuery>;
 
+	/// Counter for generating unique ceremony ids.
+	#[pallet::storage]
+	#[pallet::getter(fn ceremony_id_counter)]
+	pub type CeremonyIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, CeremonyId, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub vault_key: Option<AggKeyFor<T, I>>,
 		pub threshold_signature_response_timeout: BlockNumberFor<T>,
+		pub keygen_response_timeout: BlockNumberFor<T>,
 		pub _instance: PhantomData<I>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {
+				vault_key: None,
 				threshold_signature_response_timeout: THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT
 					.into(),
+				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
 				_instance: PhantomData,
 			}
 		}
@@ -494,6 +518,12 @@ pub mod pallet {
 			ThresholdSignatureResponseTimeout::<T, I>::put(
 				self.threshold_signature_response_timeout,
 			);
+			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
+			if let Some(vault_key) = self.vault_key {
+				Pallet::<T, I>::set_vault_key_for_epoch(cf_primitives::GENESIS_EPOCH, vault_key);
+			} else {
+				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
+			}
 		}
 	}
 
@@ -559,11 +589,11 @@ pub mod pallet {
 		KeyHandoverRequest {
 			ceremony_id: CeremonyId,
 			from_epoch: EpochIndex,
-			key_to_share: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			key_to_share: AggKeyFor<T, I>,
 			sharing_participants: BTreeSet<T::ValidatorId>,
 			receiving_participants: BTreeSet<T::ValidatorId>,
 			/// The freshly generated key for the next epoch.
-			new_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			new_key: AggKeyFor<T, I>,
 			/// The epoch index for which the key is being handed over.
 			to_epoch: EpochIndex,
 		},
@@ -584,10 +614,10 @@ pub mod pallet {
 		NoKeyHandover,
 		/// The new key was successfully used to sign.
 		KeygenVerificationSuccess {
-			agg_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			agg_key: AggKeyFor<T, I>,
 		},
 		KeyHandoverVerificationSuccess {
-			agg_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			agg_key: AggKeyFor<T, I>,
 		},
 		/// Verification of the new key has failed.
 		KeygenVerificationFailure {
@@ -607,35 +637,48 @@ pub mod pallet {
 		KeygenResponseTimeoutUpdated {
 			new_timeout: BlockNumberFor<T>,
 		},
+		/// Key handover has failed
+		KeyHandoverFailure {
+			ceremony_id: CeremonyId,
+		},
+		/// The vault on chains associated with this key have all rotated
+		VaultRotationCompleted,
 	}
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The provided ceremony id is invalid.
-		InvalidCeremonyId,
+		InvalidThresholdSignatureCeremonyId,
+		/// An invalid keygen ceremony id
+		InvalidKeygenCeremonyId,
 		/// The provided threshold signature is invalid.
 		InvalidThresholdSignature,
 		/// The reporting party is not one of the signatories for this ceremony, or has already
 		/// responded.
-		InvalidRespondent,
+		InvalidThresholdSignatureRespondent,
+		/// An authority sent a response for a ceremony in which they weren't involved, or to which
+		/// they have already submitted a response.
+		InvalidKeygenRespondent,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
+		/// There is no threshold signature available
+		ThresholdSignatureUnavailable,
+		/// There is currently no vault rotation in progress for this chain.
+		NoActiveRotation,
+		/// The requested call is invalid based on the current rotation state.
+		InvalidRotationStatus,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
-
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight = T::DbWeight::get().reads(1);
 
 			// pending rotation tasks
 
 			// We don't need self, we can get our own data.
 			if Self::status() == AsyncResult::Pending {
-				
-			
-
-				match PendingKeyRotation::<T, I>::get() {
+				match PendingVaultRotation::<T, I>::get() {
 					Some(KeyRotationStatus::<T, I>::AwaitingKeygen {
 						ceremony_id,
 						keygen_participants,
@@ -690,7 +733,7 @@ pub mod pallet {
 									.expect("key must exist during handover")
 									.key;
 
-								if <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::handover_key_matches(
+								if T::TargetChainCrypto::handover_key_matches(
 									&current_key,
 									&reported_new_agg_key,
 								) {
@@ -729,7 +772,7 @@ pub mod pallet {
 									PalletOffence::FailedKeyHandover,
 									offenders.iter().cloned().collect::<Vec<_>>().as_slice(),
 								);
-								PendingKeyRotation::<T, I>::put(
+								PendingVaultRotation::<T, I>::put(
 									KeyRotationStatus::<T, I>::KeyHandoverFailed {
 										new_public_key,
 										offenders,
@@ -746,7 +789,7 @@ pub mod pallet {
 			}
 
 			// pending ceremonies
-		
+
 			let mut num_retries = 0;
 			let mut num_offenders = 0;
 
@@ -802,7 +845,8 @@ pub mod pallet {
 				}
 			}
 
-			weight + T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
+			weight +
+				T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
 				T::Weights::report_offenders(num_offenders as AuthorityCount)
 		}
 
@@ -813,6 +857,12 @@ pub mod pallet {
 					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
 				}
 			});
+			// For new pallet instances, genesis items need to be set.
+			if !KeygenResponseTimeout::<T, I>::exists() {
+				KeygenResponseTimeout::<T, I>::set(
+					KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
+				);
+			}
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 		#[cfg(feature = "try-runtime")]
@@ -874,7 +924,7 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [InvalidCeremonyId](sp_runtime::traits::InvalidCeremonyId)
+		/// - [InvalidThresholdSignatureCeremonyId](sp_runtime::traits::InvalidThresholdSignatureCeremonyId)
 		/// - [BadOrigin](sp_runtime::traits::BadOrigin)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::Weights::signature_success())]
@@ -892,7 +942,7 @@ pub mod pallet {
 				// We check the ceremony_id in the ValidateUnsigned transaction, so if this
 				// happens, there is something seriously wrong with our assumptions.
 				log::error!("Invalid ceremony_id received {}.", ceremony_id);
-				Error::<T, I>::InvalidCeremonyId
+				Error::<T, I>::InvalidThresholdSignatureCeremonyId
 			})?;
 
 			PendingRequestInstructions::<T, I>::remove(request_id);
@@ -927,8 +977,8 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
-		/// - [InvalidRespondent](Error::InvalidRespondent)
+		/// - [InvalidThresholdSignatureCeremonyId](Error::InvalidThresholdSignatureCeremonyId)
+		/// - [InvalidThresholdSignatureRespondent](Error::InvalidThresholdSignatureRespondent)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed(
@@ -941,10 +991,10 @@ pub mod pallet {
 			PendingCeremonies::<T, I>::try_mutate(ceremony_id, |maybe_context| {
 				maybe_context
 					.as_mut()
-					.ok_or(Error::<T, I>::InvalidCeremonyId)
+					.ok_or(Error::<T, I>::InvalidThresholdSignatureCeremonyId)
 					.and_then(|context| {
 						if !context.remaining_respondents.remove(&reporter_id) {
-							return Err(Error::<T, I>::InvalidRespondent)
+							return Err(Error::<T, I>::InvalidThresholdSignatureRespondent)
 						}
 
 						// Remove any offenders that are not part of the ceremony and log them
@@ -999,7 +1049,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-				/// Report the outcome of a keygen ceremony.
+		/// Report the outcome of a keygen ceremony.
 		///
 		/// See [`KeygenOutcome`] for possible outcomes.
 		///
@@ -1012,13 +1062,13 @@ pub mod pallet {
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
+		/// - [InvalidKeygenCeremonyId](Error::InvalidKeygenCeremonyId)
 		///
 		/// ## Dependencies
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
+		#[pallet::call_index(3)]
+		#[pallet::weight(T::Weights::report_keygen_outcome())]
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -1036,8 +1086,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::Weights::report_keygen_outcome())]
 		pub fn report_key_handover_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
@@ -1066,12 +1116,12 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [ThresholdSignatureUnavailable](Error::ThresholdSignatureUnavailable)
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::on_keygen_verification_result())]
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::Weights::on_keygen_verification_result())]
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
 			keygen_ceremony_id: CeremonyId,
-			threshold_request_id: ThresholdSignatureRequestId,
+			threshold_request_id: RequestId,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			Self::on_key_verification_result(
@@ -1083,12 +1133,12 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::on_keygen_verification_result())]
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::Weights::on_keygen_verification_result())]
 		pub fn on_handover_verification_result(
 			origin: OriginFor<T>,
 			handover_ceremony_id: CeremonyId,
-			threshold_request_id: ThresholdSignatureRequestId,
+			threshold_request_id: RequestId,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			Self::on_key_verification_result(
@@ -1100,9 +1150,8 @@ pub mod pallet {
 			)
 		}
 
-
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::Weights::set_keygen_response_timeout())]
 		pub fn set_keygen_response_timeout(
 			origin: OriginFor<T>,
 			new_timeout: BlockNumberFor<T>,
@@ -1117,8 +1166,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::Weights::set_keygen_response_timeout())]
 		pub fn set_keygen_slash_rate(
 			origin: OriginFor<T>,
 			percent_of_total_funds: Percent,
@@ -1172,12 +1221,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			} else {
 				(
-					if let Some(EpochKey { key, epoch_index, .. }) =
-						T::KeyProvider::active_epoch_key().filter(
-							|EpochKey { key_state, .. }| {
-								key_state.is_available_for_request(request_id)
-							},
-						) {
+					if let Some(EpochKey { key, epoch_index, .. }) = Self::active_epoch_key()
+						.filter(|EpochKey { key_state, .. }| {
+							key_state.is_available_for_request(request_id)
+						}) {
 						if let Some(nominees) =
 							T::ThresholdSignerNomination::threshold_nomination_with_seed(
 								(request_id, attempt_count),
@@ -1196,7 +1243,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(match maybe_epoch_key_and_participants {
 			Ok((epoch, key, participants)) => {
-				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
+				let ceremony_id = Self::increment_ceremony_id();
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
 					CeremonyContext {
 						request_context: RequestContext {
@@ -1287,7 +1334,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Can't have success unless all candidates responded"
 				);
 				on_success_outcome(new_public_key);
-				T::WeightInfo::on_initialize_success()
+				T::Weights::on_initialize_success()
 			},
 			Err(offenders) => {
 				let offenders_len = offenders.len();
@@ -1299,19 +1346,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Default::default()
 				};
 				on_failure_outcome(offenders);
-				T::WeightInfo::on_initialize_failure(offenders_len as u32)
+				T::Weights::on_initialize_failure(offenders_len as u32)
 			},
 		};
 		PendingSince::kill();
 		weight
-	}
-
-	fn set_vault_key_for_epoch(epoch_index: EpochIndex, vault: Vault<T::Chain>) {
-		Vaults::<T, I>::insert(epoch_index, vault);
-		CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-			epoch_index,
-			key_state: KeyState::Unlocked,
-		});
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -1321,7 +1360,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		participants: BTreeSet<T::ValidatorId>,
 		new_epoch_index: EpochIndex,
-	) -> ThresholdSignatureRequestId {
+	) -> RequestId {
 		Self::trigger_key_verification(
 			new_public_key,
 			participants,
@@ -1344,18 +1383,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		participants: BTreeSet<T::ValidatorId>,
 		is_handover: bool,
 		next_epoch: EpochIndex,
-		signature_callback_fn: impl FnOnce(ThresholdSignatureRequestId) -> <T as Config<I>>::RuntimeCall,
+		signature_callback_fn: impl FnOnce(RequestId) -> <T as Config<I>>::ThresholdCallable,
 		status_to_set: KeyRotationStatus<T, I>,
-	) -> ThresholdSignatureRequestId {
-		let request_id = T::ThresholdSigner::request_verification_signature(
-			<T::Chain as Chain>::ChainCrypto::agg_key_to_payload(new_agg_key, is_handover),
+	) -> RequestId {
+		let request_id = Self::request_verification_signature(
+			T::TargetChainCrypto::agg_key_to_payload(new_agg_key, is_handover),
 			participants,
 			new_agg_key,
 			next_epoch,
 			signature_callback_fn,
 		);
 
-		PendingKeyRotation::<T, I>::put(status_to_set);
+		PendingVaultRotation::<T, I>::put(status_to_set);
 
 		request_id
 	}
@@ -1367,7 +1406,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
 			}
 		}
-		PendingKeyRotation::<T, I>::put(KeyRotationStatus::<T, I>::Failed {
+		PendingVaultRotation::<T, I>::put(KeyRotationStatus::<T, I>::Failed {
 			offenders: offenders.iter().cloned().collect(),
 		});
 		Self::deposit_event(event);
@@ -1375,14 +1414,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn on_key_verification_result(
 		origin: OriginFor<T>,
-		threshold_request_id: ThresholdSignatureRequestId,
+		threshold_request_id: RequestId,
 		status_on_success: KeyRotationStatus<T, I>,
 		event_on_success: Event<T, I>,
 		event_on_error: Event<T, I>,
 	) -> DispatchResultWithPostInfo {
-		T::EnsureThresholdSigned::ensure_origin(origin)?;
+		EnsureThresholdSigned::<T, I>::ensure_origin(Into::<
+			<T as pallet::Config<I>>::RuntimeOrigin,
+		>::into(origin))?;
 
-		match T::ThresholdSigner::signature_result(threshold_request_id).ready_or_else(|r| {
+		match Self::signature_result(threshold_request_id).ready_or_else(|r| {
 			log::error!(
 				"Signature not found for threshold request {:?}. Request status: {:?}",
 				threshold_request_id,
@@ -1392,7 +1433,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})? {
 			Ok(_) => {
 				// Now the validator pallet can use this to check for readiness.
-				PendingKeyRotation::<T, I>::put(status_on_success);
+				PendingVaultRotation::<T, I>::put(status_on_success);
 
 				Self::deposit_event(event_on_success);
 
@@ -1427,6 +1468,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					}),
 			});
 		}
+	}
+
+	fn activate_new_key(new_agg_key: AggKeyFor<T, I>) {
+		PendingVaultRotation::<T, I>::put(KeyRotationStatus::Complete);
+		Self::set_vault_key_for_epoch(CurrentEpochIndex::<T>::get().saturating_add(1), new_agg_key);
+		Self::deposit_event(Event::VaultRotationCompleted);
+	}
+
+	fn set_vault_key_for_epoch(epoch_index: EpochIndex, agg_key: AggKeyFor<T, I>) {
+		VaultKeys::<T, I>::insert(epoch_index, agg_key);
+		CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+			epoch_index,
+			key_state: KeyState::Unlocked,
+		});
+	}
+
+	fn increment_ceremony_id() -> CeremonyId {
+		CeremonyIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		})
 	}
 }
 
@@ -1469,7 +1531,7 @@ where
 		participants: BTreeSet<Self::ValidatorId>,
 		key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(cf_primitives::ThresholdSignatureRequestId) -> Self::Callback,
+		on_signature_ready: impl FnOnce(RequestId) -> Self::Callback,
 	) -> RequestId {
 		let request_id = Self::inner_request_signature(
 			payload,
@@ -1510,12 +1572,11 @@ where
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::TargetChainCrypto> for Pallet<T, I> {
-	fn active_epoch_key(
-	) -> Option<EpochKey<<<T::TargetChainCrypto as ChainCrypto>::AggKey>> {
+	fn active_epoch_key() -> Option<EpochKey<<T::TargetChainCrypto as ChainCrypto>::AggKey>> {
 		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
 			EpochKey {
-				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
-					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+				key: VaultKeys::<T, I>::get(current_vault_epoch_and_state.epoch_index)
+					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()"),
 				epoch_index: current_vault_epoch_and_state.epoch_index,
 				key_state: current_vault_epoch_and_state.key_state,
 			}
@@ -1529,4 +1590,28 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::TargetChainCrypto> for Pallet<T, I
 			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
 		);
 	}
+}
+
+/// Takes three arguments: a pattern, a variable expression and an error literal.
+///
+/// If the variable matches the pattern, returns it, otherwise returns an error. The pattern may
+/// optionally have an expression attached to process and return inner arguments.
+///
+/// ## Example
+///
+/// let x = ensure_variant!(Some(..), optional_value, Error::<T>::ValueIsNone);
+///
+/// let 2x = ensure_variant!(Some(x) => { 2 * x }, optional_value, Error::<T>::ValueIsNone);
+#[macro_export]
+macro_rules! ensure_variant {
+	( $variant:pat => $varexp:expr, $var:expr, $err:expr $(,)? ) => {
+		if let $variant = $var {
+			$varexp
+		} else {
+			frame_support::fail!($err)
+		}
+	};
+	( $variant:pat, $var:expr, $err:expr $(,)? ) => {
+		ensure_variant!($variant => { $var }, $var, $err)
+	};
 }
