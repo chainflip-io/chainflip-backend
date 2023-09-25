@@ -1408,13 +1408,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature_callback_fn: impl FnOnce(RequestId) -> <T as Config<I>>::ThresholdCallable,
 		status_to_set: VaultRotationStatus<T, I>,
 	) -> RequestId {
-		let request_id = Self::request_verification_signature(
+		let request_id = Self::inner_request_signature(
 			T::TargetChainCrypto::agg_key_to_payload(new_agg_key, is_handover),
-			participants,
-			new_agg_key,
-			next_epoch,
-			signature_callback_fn,
+			RequestType::KeygenVerification {
+				key: new_agg_key,
+				participants,
+				epoch_index: next_epoch,
+			},
 		);
+
+		if Self::register_callback(request_id, signature_callback_fn(request_id)).is_err() {
+			// We should never fail to register a callback for a request that we just created.
+			log_or_panic!("Failed to register callback for request {}", request_id);
+		}
 
 		PendingVaultRotation::<T, I>::put(status_to_set);
 
@@ -1546,26 +1552,6 @@ where
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
 		Self::inner_request_signature(payload, RequestType::CurrentKey)
-	}
-
-	fn request_verification_signature(
-		payload: <T::TargetChainCrypto as ChainCrypto>::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
-		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(RequestId) -> Self::Callback,
-	) -> RequestId {
-		let request_id = Self::inner_request_signature(
-			payload,
-			RequestType::KeygenVerification { key, participants, epoch_index },
-		);
-
-		if Self::register_callback(request_id, on_signature_ready(request_id)).is_err() {
-			// We should never fail to register a callback for a request that we just created.
-			log_or_panic!("Failed to register callback for request {}", request_id);
-		}
-
-		request_id
 	}
 
 	fn register_callback(

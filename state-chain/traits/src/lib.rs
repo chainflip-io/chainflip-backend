@@ -438,14 +438,6 @@ where
 	/// ceremony id.
 	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
 
-	fn request_verification_signature(
-		payload: C::Payload,
-		participants: BTreeSet<Self::ValidatorId>,
-		key: C::AggKey,
-		epoch_index: EpochIndex,
-		on_signature_ready: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
-	) -> ThresholdSignatureRequestId;
-
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
 	fn register_callback(
