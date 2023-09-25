@@ -21,6 +21,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	fn activate(
 		new_public_key: AggKeyFor<T, I>,
 		maybe_old_public_key: Option<AggKeyFor<T, I>>,
+		optimistic_activation: bool,
 	) -> Vec<u32> {
 		if let Some(key) = maybe_old_public_key {
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
@@ -30,7 +31,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				Ok(activation_call) => {
 					let (_, threshold_request_id) =
 						T::Broadcaster::threshold_sign_and_broadcast(activation_call);
-					if <T::Chain as Chain>::ChainCrypto::optimistic_activation() {
+					if optimistic_activation {
 						// Optimistic activation means we don't need to wait for the activation
 						// transaction to succeed before using the new key.
 						Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());

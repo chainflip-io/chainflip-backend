@@ -188,7 +188,11 @@ pub trait VaultActivator<C: ChainCrypto> {
 
 	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate(new_key: C::AggKey, maybe_old_key: Option<C::AggKey>) -> Vec<u32>;
+	fn activate(
+		new_key: C::AggKey,
+		maybe_old_key: Option<C::AggKey>,
+		maybe_optimistic_activation: bool,
+	) -> Vec<u32>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(_outcome: AsyncResult<()>);

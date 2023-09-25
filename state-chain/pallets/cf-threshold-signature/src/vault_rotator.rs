@@ -171,30 +171,38 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			let maybe_active_epoch_key = Self::active_epoch_key();
-
+			let optimistic_activation = T::TargetChainCrypto::optimistic_activation();
 			let activation_tx_threshold_request_ids = T::VaultActivator::activate(
 				new_public_key,
 				maybe_active_epoch_key.clone().map(|EpochKey { key, .. }| key),
+				optimistic_activation,
 			);
 
 			if let Some(EpochKey { key_state, .. }) = maybe_active_epoch_key {
-				debug_assert!(
-					matches!(key_state, KeyState::Unlocked),
-					"Current epoch key must be active to activate next key."
+				if optimistic_activation {
+					Self::activate_new_key(new_public_key);
+				} else {
+					debug_assert!(
+						matches!(key_state, KeyState::Unlocked),
+						"Current epoch key must be active to activate next key."
+					);
+					// The key needs to be locked until activation on all chains is complete.
+					CurrentVaultEpochAndState::<T, I>::mutate(|epoch_and_state| {
+						epoch_and_state
+							.as_mut()
+							.expect("Checked above at if let Some")
+							.key_state
+							.lock(activation_tx_threshold_request_ids)
+					});
+					PendingVaultRotation::<T, I>::put(
+						VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
+					);
+				}
+			} else {
+				PendingVaultRotation::<T, I>::put(
+					VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
 				);
-				// The key needs to be locked until activation on all chains is complete.
-				CurrentVaultEpochAndState::<T, I>::mutate(|epoch_and_state| {
-					epoch_and_state
-						.as_mut()
-						.expect("Checked above at if let Some")
-						.key_state
-						.lock(activation_tx_threshold_request_ids)
-				});
 			}
-
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingActivation {
-				new_public_key,
-			});
 		} else {
 			log::error!("Vault activation called during wrong state.");
 		}
