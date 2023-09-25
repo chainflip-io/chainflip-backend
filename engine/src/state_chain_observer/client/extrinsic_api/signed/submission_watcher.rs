@@ -201,7 +201,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 									return Ok(Some((block_hash, tx_hash)))
 								}
 							}
-							
+
 							Ok(None)
 						}),
 					);
@@ -302,6 +302,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			)
 			.unwrap();
 		let tx_hash: H256 = self.submit_extrinsic(request).await?;
+		info!(target: "state_chain_client", request_id = request.id, "New request: {:?}", request.call);
 		if let RequestStrategy::StrictlyOneSubmission(hash_sender) = strategy {
 			let _result = hash_sender.send(tx_hash);
 		};
