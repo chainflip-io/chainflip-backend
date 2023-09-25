@@ -141,7 +141,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					let status = T::VaultActivator::status()
 						.map_to(VaultRotationStatusOuter::RotationComplete);
 					if status.is_ready() {
-						Self::activate_new_key(new_public_key)
+						Self::activate_new_key(new_public_key);
 					}
 					status
 				},
@@ -191,6 +191,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						.lock(activation_tx_threshold_request_ids)
 				});
 			}
+
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingActivation {
+				new_public_key,
+			});
 		} else {
 			log::error!("Vault activation called during wrong state.");
 		}
