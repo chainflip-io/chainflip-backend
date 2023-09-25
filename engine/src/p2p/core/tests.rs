@@ -5,7 +5,9 @@ use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use utilities::{
-	testing::{expect_recv_with_custom_timeout, expect_recv_with_timeout},
+	testing::{
+		expect_recv_with_custom_timeout, expect_recv_with_timeout, recv_with_custom_timeout,
+	},
 	Port,
 };
 
@@ -169,4 +171,60 @@ async fn can_connect_after_pubkey_change() {
 		.unwrap();
 
 	let _ = expect_recv_with_custom_timeout(&mut node1.msg_receiver, MAX_CONNECTION_DELAY).await;
+}
+
+/// That the behaviour around receiving own registration: at first, if our node
+/// is not registered, we delay connecting to other nodes; once we receive our
+/// own registration, we connect to other registered nodes.
+#[tokio::test]
+async fn connects_after_registration() {
+	use std::time::Duration;
+
+	const MAX_CONNECTION_DELAY: Duration = Duration::from_millis(200);
+
+	let node_key1 = create_keypair();
+	let node_key2 = create_keypair();
+
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8089);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8090);
+
+	// Node 1 doesn't get its own peer info at first and will wait for registration
+	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi2.clone()]);
+	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
+
+	// For sanity, check that node 1 can't yet communicate with node 2:
+	{
+		node1
+			.msg_sender
+			.send(OutgoingMultisigStageMessages::Private(vec![(
+				pi2.account_id.clone(),
+				b"test".to_vec(),
+			)]))
+			.unwrap();
+
+		assert!(recv_with_custom_timeout(&mut node2.msg_receiver, MAX_CONNECTION_DELAY)
+			.await
+			.is_none());
+	}
+
+	// Update node 1 with its own peer info
+	node1.peer_update_sender.send(PeerUpdate::Registered(pi1.clone())).unwrap();
+
+	// Allow some time for the above command to propagate through the channel
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+	// It should now be able to communicate with node 2:
+	{
+		node1
+			.msg_sender
+			.send(OutgoingMultisigStageMessages::Private(vec![(
+				pi2.account_id.clone(),
+				b"test".to_vec(),
+			)]))
+			.unwrap();
+
+		assert!(recv_with_custom_timeout(&mut node2.msg_receiver, MAX_CONNECTION_DELAY)
+			.await
+			.is_some());
+	}
 }

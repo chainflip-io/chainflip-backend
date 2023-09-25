@@ -93,8 +93,7 @@ impl std::fmt::Display for PeerInfo {
 enum RegistrationStatus {
 	/// The node is not yet known to the network (its peer info
 	/// may not be known to the network yet)
-	/// (Stores future peers to connect to when then node is registered)
-	Pending(Vec<PeerInfo>),
+	Pending,
 	/// The node is registered, i.e. its peer info has been
 	/// recorded/updated
 	Registered,
@@ -277,7 +276,7 @@ pub(super) fn start(
 		incoming_message_sender,
 		own_peer_info_sender,
 		our_account_id,
-		status: RegistrationStatus::Pending(vec![]),
+		status: RegistrationStatus::Pending,
 	};
 
 	debug!("Registering peer info for {} peers", current_peers.len());
@@ -460,8 +459,8 @@ impl P2PContext {
 
 		self.own_peer_info_sender.send(own_info).unwrap();
 
-		if let RegistrationStatus::Pending(peers) = &mut self.status {
-			let peers = std::mem::take(peers);
+		if let RegistrationStatus::Pending = &mut self.status {
+			let peers: Vec<_> = self.peer_infos.values().cloned().collect();
 			// Connect to all outstanding peers
 			for peer in peers {
 				self.connect_to_peer(peer)
@@ -494,10 +493,10 @@ impl P2PContext {
 		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
 		match &mut self.status {
-			RegistrationStatus::Pending(peers) => {
-				// Not ready to start connecting to peers yet
+			RegistrationStatus::Pending => {
+				// We will connect to all peers in `self.peer_infos` once we receive our own
+				// registration
 				info!("Delaying connecting to {}", peer.account_id);
-				peers.push(peer);
 			},
 			RegistrationStatus::Registered => {
 				self.connect_to_peer(peer);
