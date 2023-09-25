@@ -6,6 +6,7 @@ mod benchmarking;
 mod mock;
 mod tests;
 
+pub mod migrations;
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{impl_pallet_safe_mode, GetBlockHeight};
@@ -23,7 +24,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::DispatchResult,
 	sp_runtime::traits::Saturating,
-	traits::{Get, UnfilteredDispatchable},
+	traits::{Get, StorageVersion, UnfilteredDispatchable},
 	Twox64Concat,
 };
 
@@ -65,6 +66,8 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -205,6 +208,7 @@ pub mod pallet {
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
