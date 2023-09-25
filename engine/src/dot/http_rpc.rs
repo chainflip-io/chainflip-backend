@@ -21,6 +21,7 @@ use subxt::{
 };
 
 use anyhow::Result;
+use tracing::{error, warn};
 use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
@@ -82,7 +83,7 @@ pub struct DotHttpRpcClient {
 impl DotHttpRpcClient {
 	pub fn new(
 		url: SecretUrl,
-		expected_genesis_hash: PolkadotHash,
+		expected_genesis_hash: Option<PolkadotHash>,
 	) -> Result<impl Future<Output = Self>> {
 		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
 
@@ -98,17 +99,22 @@ impl DotHttpRpcClient {
 					.await
 				{
 					Ok(online_client) => {
-						let genesis_hash = online_client.genesis_hash();
-						if genesis_hash == expected_genesis_hash {
-							break online_client
+						if let Some(expected_genesis_hash) = expected_genesis_hash {
+							let genesis_hash = online_client.genesis_hash();
+							if genesis_hash == expected_genesis_hash {
+								break online_client
+							} else {
+								error!(
+									"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
+								)
+							}
 						} else {
-							tracing::error!(
-								"Connected to Polkadot node at {url} but the genesis hash {genesis_hash} does not match the expected genesis hash {expected_genesis_hash}. Please check your CFE configuration file."
-							)
+							warn!("Skipping Polkadot genesis hash check");
+							break online_client
 						}
 					},
 					Err(e) => {
-						tracing::error!(
+						error!(
 						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE
 						configuration file. Retrying in {:?}...",
 						poll_interval.period()
@@ -213,11 +219,8 @@ mod tests {
 	#[ignore = "requires local node"]
 	#[tokio::test]
 	async fn test_http_rpc() {
-		// This will no longer work because we need to know the genesis hash
 		let dot_http_rpc =
-			DotHttpRpcClient::new("http://localhost:9945".into(), PolkadotHash::default())
-				.unwrap()
-				.await;
+			DotHttpRpcClient::new("http://localhost:9945".into(), None).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}
