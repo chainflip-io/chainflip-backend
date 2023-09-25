@@ -20,7 +20,7 @@ benchmarks! {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
 			broker_commission_bps: 0,
-			channel_metadata_bounded_len: None,
+			channel_metadata: None,
 		};
 	} : { call.dispatch_bypass_filter(origin.into())?; }
 
@@ -86,10 +86,10 @@ benchmarks! {
 		call.dispatch_bypass_filter(gov_origin)?;
 
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let metadata = CcmDepositMetadataBoundedLen {
+		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::benchmark_value()),
-			channel_metadata: CcmChannelMetadataBoundedLen {
+			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
 				cf_parameters: Default::default(),
@@ -100,7 +100,7 @@ benchmarks! {
 			deposit_amount: 1_000,
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata_bounded_len: metadata,
+			deposit_metadata,
 			tx_hash: Default::default(),
 		};
 	}: {
@@ -135,7 +135,7 @@ benchmarks! {
 				destination_asset: Asset::Eth,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				broker_commission_bps: Default::default(),
-				channel_metadata_bounded_len: None,
+				channel_metadata: None,
 			};
 			call.dispatch_bypass_filter(origin.clone().into())?;
 		}

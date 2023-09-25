@@ -18,7 +18,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::U256;
+use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -376,61 +376,63 @@ pub enum SwapOrigin {
 	},
 }
 
+pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
+pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 10_000;
+
+pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
+pub type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
+
+#[cfg(feature = "std")]
+mod bounded_hex {
+	use super::*;
+	use sp_core::Get;
+
+	pub fn serialize<S: serde::Serializer, Size>(
+		bounded: &BoundedVec<u8, Size>,
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&hex::encode(bounded))
+	}
+
+	pub fn deserialize<'de, D: serde::Deserializer<'de>, Size: Get<u32>>(
+		deserializer: D,
+	) -> Result<BoundedVec<u8, Size>, D::Error> {
+		let hex_str = String::deserialize(deserializer)?;
+		let bytes =
+			hex::decode(hex_str.trim_start_matches("0x")).map_err(serde::de::Error::custom)?;
+		BoundedVec::try_from(bytes).map_err(|input| {
+			serde::de::Error::invalid_length(
+				input.len(),
+				&format!("{} bytes", Size::get()).as_str(),
+			)
+		})
+	}
+}
+
 /// Deposit channel Metadata for Cross-Chain-Message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, MaxEncodedLen,
+)]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
-	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
-	pub message: Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
+	pub message: CcmMessage,
 	/// User funds designated to be used for gas.
+	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
 	pub gas_budget: AssetAmount,
 	/// Additonal parameters for the cross chain message.
-	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
-	pub cf_parameters: Vec<u8>,
+	#[cfg_attr(
+		feature = "std",
+		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
+	)]
+	pub cf_parameters: CcmCfParameters,
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmDepositMetadata {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	pub channel_metadata: CcmChannelMetadata,
-}
-
-/// CCM parameters with bounded vec length. Used for input parameter only.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize)]
-pub struct CcmChannelMetadataBoundedLen<Length: Get<u32>> {
-	/// Call data used after the message is egressed.
-	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
-	pub message: BoundedVec<u8, Length>,
-	/// User funds designated to be used for gas.
-	pub gas_budget: AssetAmount,
-	/// Additonal parameters for the cross chain message.
-	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
-	pub cf_parameters: BoundedVec<u8, Length>,
-}
-impl<Length: Get<u32>> From<CcmChannelMetadataBoundedLen<Length>> for CcmChannelMetadata {
-	fn from(input: CcmChannelMetadataBoundedLen<Length>) -> Self {
-		CcmChannelMetadata {
-			message: input.message.into(),
-			gas_budget: input.gas_budget,
-			cf_parameters: input.cf_parameters.into(),
-		}
-	}
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize)]
-pub struct CcmDepositMetadataBoundedLen<Length: Get<u32>> {
-	pub source_chain: ForeignChain,
-	pub source_address: Option<ForeignChainAddress>,
-	pub channel_metadata: CcmChannelMetadataBoundedLen<Length>,
-}
-impl<Length: Get<u32>> From<CcmDepositMetadataBoundedLen<Length>> for CcmDepositMetadata {
-	fn from(input: CcmDepositMetadataBoundedLen<Length>) -> Self {
-		CcmDepositMetadata {
-			source_chain: input.source_chain,
-			source_address: input.source_address,
-			channel_metadata: input.channel_metadata.into(),
-		}
-	}
 }
 
 #[derive(

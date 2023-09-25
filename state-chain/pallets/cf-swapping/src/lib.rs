@@ -1,8 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmChannelMetadataBoundedLen, CcmDepositMetadata,
-	CcmDepositMetadataBoundedLen, SwapOrigin,
+	CcmChannelMetadata, CcmDepositMetadata, SwapOrigin,
 };
 use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
@@ -30,15 +29,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
-const MAX_CCM_LENGTH: u32 = 10_000;
 
-#[derive(Encode, Decode, Eq, PartialEq, Debug, Copy, Clone, TypeInfo)]
-pub struct MaxCcmLength;
-impl Get<u32> for MaxCcmLength {
-	fn get() -> u32 {
-		MAX_CCM_LENGTH
-	}
-}
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
@@ -521,16 +512,13 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
-			channel_metadata_bounded_len: Option<CcmChannelMetadataBoundedLen<MaxCcmLength>>,
+			channel_metadata: Option<CcmChannelMetadata>,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
-
-			let channel_metadata: Option<CcmChannelMetadata> =
-				channel_metadata_bounded_len.map(|metadata| metadata.into());
 
 			if channel_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
@@ -658,11 +646,10 @@ pub mod pallet {
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			deposit_metadata_bounded_len: CcmDepositMetadataBoundedLen<MaxCcmLength>,
+			deposit_metadata: CcmDepositMetadata,
 			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			let deposit_metadata = deposit_metadata_bounded_len.into();
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;

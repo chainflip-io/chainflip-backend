@@ -18,8 +18,8 @@ use super::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::{
-	address::EncodedAddress, eth::Address as EthereumAddress, CcmChannelMetadataBoundedLen,
-	CcmDepositMetadataBoundedLen,
+	address::EncodedAddress, eth::Address as EthereumAddress, CcmChannelMetadata,
+	CcmDepositMetadata,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthereumAsset, Asset, ForeignChain};
 use ethers::prelude::*;
@@ -106,17 +106,17 @@ pub fn call_from_event(
 					try_into_primitive(dst_chain)?,
 					dst_address.to_vec(),
 				)?,
-				deposit_metadata_bounded_len: CcmDepositMetadataBoundedLen {
+				deposit_metadata: CcmDepositMetadata {
 					source_chain,
 					source_address: Some(sender.into()),
-					channel_metadata: CcmChannelMetadataBoundedLen {
+					channel_metadata: CcmChannelMetadata {
 						message: message
 							.to_vec()
 							.try_into()
-							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
+							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
 						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
-							anyhow!("Failed to deposit CCM. cf_parameter too long.")
+							anyhow!("Failed to deposit CCM: `cf_parameters` too long.")
 						})?,
 					},
 				},
@@ -143,10 +143,10 @@ pub fn call_from_event(
 					try_into_primitive(dst_chain)?,
 					dst_address.to_vec(),
 				)?,
-				deposit_metadata_bounded_len: CcmDepositMetadataBoundedLen {
+				deposit_metadata: CcmDepositMetadata {
 					source_chain,
 					source_address: Some(sender.into()),
-					channel_metadata: CcmChannelMetadataBoundedLen {
+					channel_metadata: CcmChannelMetadata {
 						message: message
 							.to_vec()
 							.try_into()
