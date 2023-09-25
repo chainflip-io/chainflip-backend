@@ -5,6 +5,7 @@
 
 mod benchmarking;
 
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -89,6 +90,8 @@ pub struct VaultTransfer<C: Chain> {
 	amount: C::ChainAmount,
 	destination_address: C::ChainAccount,
 }
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -222,6 +225,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 

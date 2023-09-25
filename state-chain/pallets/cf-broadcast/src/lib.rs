@@ -243,6 +243,8 @@ pub mod pallet {
 	>;
 
 	/// Lookup table between TransactionOutId -> Broadcast.
+	/// This storage item is used by the CFE to track which broadcasts/egresses it needs to
+	/// witness.
 	#[pallet::storage]
 	pub type TransactionOutIdToBroadcastId<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
