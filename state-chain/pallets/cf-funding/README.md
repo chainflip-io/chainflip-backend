@@ -68,13 +68,13 @@ Note, address binding is a one-off *irreversible* operation.
 
 #### Executor Address Binding
 
-Any account may be explicitly *bound* to a single executor address. Henceforth, any  registered redemption from that account can *only be executed by this exact address*.
+Any account may be explicitly *bound* to a single executor address. Henceforth, any registered redemption from that account can *only be executed by this exact address*.
 
 Note, address binding is a one-off *irreversible* operation.
 
 > *Example:*
 >
-> TODO
+> *A service provider wants to integrate with Chainflip's funding/redeeming mechanism. To this end they want to ensure that they are in full control of when the redeemed funds are actually swept into the redemption account. In order to achieve this, they bind the executor address to a known Ethereum account. Without this it's technically possible for anyone to submit the `executeRedemption` call on their behalf.*
 
 #### Restricted Balances
 
