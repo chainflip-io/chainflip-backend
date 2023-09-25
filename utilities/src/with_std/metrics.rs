@@ -503,7 +503,7 @@ build_counter_vec_struct!(
 	STAGE_COMPLETING,
 	StageCompletingNotDrop,
 	"stage_completing",
-	"Count the number of stages which are completing succesfully by receiving all the messages",
+	"Count the number of stages which are completing successfully",
 	false,
 	["chain", "stage"],
 	["chain"]
@@ -674,17 +674,76 @@ mod test {
 					metrics.stage_failing.inc(&["stage3", "NotEnoughMessages"]);
 
 					//This request does nothing, the ceremony is still ongoning so there is no deletion
-					request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP ceremony_duration Measure the duration of a ceremony in ms\n# TYPE ceremony_duration gauge\nceremony_duration{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 999\n# HELP ceremony_msg Count all the processed messages for a given ceremony\n# TYPE ceremony_msg counter\nceremony_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 2\n# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout\n# TYPE ceremony_timeout_missing_msg gauge\nceremony_timeout_missing_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\",stage=\"stage1\"} 5\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_duration Measure the duration of a stage in ms\n# TYPE stage_duration gauge\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"processing\",stage=\"stage1\"} 78\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"receiving\",stage=\"stage1\"} 780\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
+					request_test("metrics", reqwest::StatusCode::OK, 
+r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE ceremony_bad_msg counter
+ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP ceremony_duration Measure the duration of a ceremony in ms
+# TYPE ceremony_duration gauge
+ceremony_duration{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 999
+# HELP ceremony_msg Count all the processed messages for a given ceremony
+# TYPE ceremony_msg counter
+ceremony_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 2
+# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
+# TYPE ceremony_timeout_missing_msg gauge
+ceremony_timeout_missing_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
+# HELP stage_completing Count the number of stages which are completing successfully
+# TYPE stage_completing counter
+stage_completing{chain="Chain1",stage="stage1"} 2
+stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP stage_duration Measure the duration of a stage in ms
+# TYPE stage_duration gauge
+stage_duration{ceremony_id="7",chain="Chain1",phase="processing",stage="stage1"} 78
+stage_duration{ceremony_id="7",chain="Chain1",phase="receiving",stage="stage1"} 780
+# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE stage_failing counter
+stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+"#).await;
 
 					//End of ceremony
 					//struct gets dropped
 				}
 
 				//First request after the ceremony ended we get all the metrics (same as the request above), and after we delete the ones that have no more reason to exists
-				request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP ceremony_duration Measure the duration of a ceremony in ms\n# TYPE ceremony_duration gauge\nceremony_duration{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 999\n# HELP ceremony_msg Count all the processed messages for a given ceremony\n# TYPE ceremony_msg counter\nceremony_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\"} 2\n# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout\n# TYPE ceremony_timeout_missing_msg gauge\nceremony_timeout_missing_msg{ceremony_id=\"7\",ceremony_type=\"Keygen\",chain=\"Chain1\",stage=\"stage1\"} 5\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_duration Measure the duration of a stage in ms\n# TYPE stage_duration gauge\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"processing\",stage=\"stage1\"} 78\nstage_duration{ceremony_id=\"7\",chain=\"Chain1\",phase=\"receiving\",stage=\"stage1\"} 780\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
+				request_test("metrics", reqwest::StatusCode::OK, 
+r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE ceremony_bad_msg counter
+ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP ceremony_duration Measure the duration of a ceremony in ms
+# TYPE ceremony_duration gauge
+ceremony_duration{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 999
+# HELP ceremony_msg Count all the processed messages for a given ceremony
+# TYPE ceremony_msg counter
+ceremony_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1"} 2
+# HELP ceremony_timeout_missing_msg Measure the number of missing messages when reaching timeout
+# TYPE ceremony_timeout_missing_msg gauge
+ceremony_timeout_missing_msg{ceremony_id="7",ceremony_type="Keygen",chain="Chain1",stage="stage1"} 5
+# HELP stage_completing Count the number of stages which are completing successfully
+# TYPE stage_completing counter
+stage_completing{chain="Chain1",stage="stage1"} 2
+stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP stage_duration Measure the duration of a stage in ms
+# TYPE stage_duration gauge
+stage_duration{ceremony_id="7",chain="Chain1",phase="processing",stage="stage1"} 78
+stage_duration{ceremony_id="7",chain="Chain1",phase="receiving",stage="stage1"} 780
+# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE stage_failing counter
+stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+"#).await;
 
 				//Second request we get only the metrics which don't depend on a specific label like ceremony_id
-				request_test("metrics", reqwest::StatusCode::OK, "# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony\n# TYPE ceremony_bad_msg counter\nceremony_bad_msg{chain=\"Chain1\",reason=\"AA\"} 1\n# HELP stage_completing Count the number of stages which are completing succesfully by receiving all the messages\n# TYPE stage_completing counter\nstage_completing{chain=\"Chain1\",stage=\"stage1\"} 2\nstage_completing{chain=\"Chain1\",stage=\"stage2\"} 1\n# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached\n# TYPE stage_failing counter\nstage_failing{chain=\"Chain1\",reason=\"NotEnoughMessages\",stage=\"stage3\"} 1\n").await;
+				request_test("metrics", reqwest::StatusCode::OK, 
+r#"# HELP ceremony_bad_msg Count all the bad msgs processed during a ceremony
+# TYPE ceremony_bad_msg counter
+ceremony_bad_msg{chain="Chain1",reason="AA"} 1
+# HELP stage_completing Count the number of stages which are completing successfully
+# TYPE stage_completing counter
+stage_completing{chain="Chain1",stage="stage1"} 2
+stage_completing{chain="Chain1",stage="stage2"} 1
+# HELP stage_failing Count the number of stages which are failing with the cause of the failure attached
+# TYPE stage_failing counter
+stage_failing{chain="Chain1",reason="NotEnoughMessages",stage="stage3"} 1
+"#).await;
 
 				check_deleted_metrics();
 
