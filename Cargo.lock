@@ -1504,6 +1504,7 @@ dependencies = [
  "rlp",
  "rocksdb",
  "sc-rpc-api",
+ "sc-transaction-pool-api",
  "scale-info",
  "secp256k1 0.27.0",
  "serde",
