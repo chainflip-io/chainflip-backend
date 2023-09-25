@@ -208,6 +208,8 @@ struct P2PContext {
 	/// A handle to the authenticator thread that can be used to make changes to the
 	/// list of allowed peers
 	authenticator: Arc<Authenticator>,
+	/// Contains ZMQ sockets for nodes that we *should* be connected to (and ZMQ and our
+	/// own reconnection logic will try to keep us connected to them).
 	/// NOTE: The mapping is from AccountId because we want to optimise for message
 	/// sending, which uses AccountId
 	active_connections: ActiveConnectionWrapper,
@@ -436,6 +438,14 @@ impl P2PContext {
 	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
 		if let Some(peer_info) = self.peer_infos.get(account_id) {
 			info!("Reconnecting to peer: {}", peer_info.account_id);
+
+			// It is possible that while we were waiting to reconnect,
+			// we received a peer info update and created a new "connection".
+			// This connection might be "healthy", but it is safer/easier to
+			// remove it and proceed with reconnecting.
+			if self.active_connections.remove(account_id).is_some() {
+				debug!("Reconnecting to a peer that's already connected: {}. Existing connection was removed.", account_id);
+			}
 			self.connect_to_peer(peer_info.clone());
 		} else {
 			error!("Failed to reconnect to peer {account_id}. (Peer info not found.)");
@@ -451,7 +461,13 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer);
 
-		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
+		if let Some(old_socket) = self.active_connections.insert(account_id, connected_socket) {
+			// This should not happen because we always remove existing connection/socket
+			// prior to connecting, but even if it does, it should be OK to replace the
+			// connection (this doesn't break any invariants and the new peer info is
+			// likely to be more up-to-date).
+			warn!("Replacing existing ZMQ socket: {:?}", old_socket.peer());
+		}
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
