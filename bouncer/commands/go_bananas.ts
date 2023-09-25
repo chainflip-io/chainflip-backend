@@ -160,7 +160,7 @@ async function playSwapper() {
       .filter((x) => x !== src)
       .at(Math.floor(Math.random() * (assets.length - 1)))!;
     testSwap(src, dest, undefined, undefined, undefined, swapAmount.get(src));
-    await sleep(5000);
+    await sleep(10000);
   }
 }
 
