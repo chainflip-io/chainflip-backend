@@ -47,10 +47,10 @@ impl EthersRetryRpcClient {
 			Result::<_, anyhow::Error>::Ok((
 				EthRpcClient::new(
 					private_key_file.clone(),
-					endpoints.http_node_endpoint,
+					endpoints.http_endpoint,
 					expected_chain_id.as_u64(),
 				)?,
-				ReconnectSubscriptionClient::new(endpoints.ws_node_endpoint, expected_chain_id),
+				ReconnectSubscriptionClient::new(endpoints.ws_endpoint, expected_chain_id),
 			))
 		};
 

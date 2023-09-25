@@ -1,18 +1,19 @@
 use std::{
 	collections::{btree_map, BTreeMap},
 	fmt::Display,
+	time::Instant,
 };
 
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
+use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
-
-use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+use utilities::metrics::CeremonyMetrics;
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
 
@@ -60,6 +61,7 @@ where
 	/// Determines the actual computations before/after
 	/// the data is collected
 	processor: Stage,
+	stage_started: Option<Instant>,
 }
 
 impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
@@ -67,7 +69,7 @@ where
 	Stage: BroadcastStageProcessor<C>,
 {
 	pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
-		BroadcastStage { common, messages: BTreeMap::new(), processor }
+		BroadcastStage { common, messages: BTreeMap::new(), processor, stage_started: None }
 	}
 }
 
@@ -98,9 +100,9 @@ impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
 	Stage: BroadcastStageProcessor<C> + Send,
 {
-	fn init(&mut self) -> ProcessMessageResult {
+	fn init(&mut self, metrics: &mut CeremonyMetrics) -> ProcessMessageResult {
 		let common = &self.common;
-
+		self.stage_started = Some(Instant::now());
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
 
 		let (own_message, outgoing_messages) = match self.processor.init() {
@@ -150,13 +152,22 @@ where
 			.expect("Could not send p2p message.");
 
 		// Save our own share
-		self.process_message(common.own_idx, own_message.into())
+		self.process_message(common.own_idx, own_message.into(), metrics)
 	}
 
-	fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult {
+	fn process_message(
+		&mut self,
+		signer_idx: AuthorityCount,
+		m: C::Data,
+		metrics: &mut CeremonyMetrics,
+	) -> ProcessMessageResult {
+		metrics.processed_messages.inc();
 		let m: Stage::Message = match m.try_into() {
 			Ok(m) => m,
 			Err(incorrect_type) => {
+				metrics
+					.bad_message
+					.inc(&[&format!("incorrect_type ({})", self.get_stage_name())]);
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring unexpected message {incorrect_type} while in stage {self}",
@@ -166,6 +177,9 @@ where
 		};
 
 		if !self.common.all_idxs.contains(&signer_idx) {
+			metrics
+				.bad_message
+				.inc(&[&format!("message_from_non_participant ({})", self.get_stage_name())]);
 			warn!(
 				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 				"Ignoring a message from non-participant for stage {self}",
@@ -175,6 +189,9 @@ where
 
 		match self.messages.entry(signer_idx) {
 			btree_map::Entry::Occupied(_) => {
+				metrics
+					.bad_message
+					.inc(&[&format!("redundant_message ({})", self.get_stage_name())]);
 				warn!(
 					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
 					"Ignoring a redundant message for stage {self}",
@@ -193,11 +210,18 @@ where
 		}
 	}
 
-	async fn finalize(mut self: Box<Self>) -> StageResult<C> {
+	async fn finalize(mut self: Box<Self>, metrics: &mut CeremonyMetrics) -> StageResult<C> {
 		// Because we might want to finalize the stage before
 		// all data has been received (e.g. due to a timeout),
 		// we insert None for any missing data
+		let stage_name = self.get_stage_name().to_string();
+		if let Some(start_instant) = self.stage_started {
+			metrics
+				.stage_duration
+				.set(&[&stage_name, "receiving"], start_instant.elapsed().as_millis());
+		}
 
+		let process_msg_instant = Instant::now();
 		let mut received_messages = std::mem::take(&mut self.messages);
 
 		// Turns values T into Option<T>, inserting `None` where
@@ -209,7 +233,11 @@ where
 			.map(|idx| (*idx, received_messages.remove(idx)))
 			.collect();
 
-		self.processor.process(messages).await
+		let result = self.processor.process(messages).await;
+		metrics
+			.stage_duration
+			.set(&[&stage_name, "processing"], process_msg_instant.elapsed().as_millis());
+		result
 	}
 
 	fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {

@@ -44,11 +44,21 @@ impl DotRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_genesis_hash: PolkadotHash,
+	) -> Result<Self> {
+		Self::new_inner(scope, nodes, Some(expected_genesis_hash))
+	}
+
+	fn new_inner(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		// The genesis hash is optional to facilitate testing
+		expected_genesis_hash: Option<PolkadotHash>,
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				DotHttpRpcClient::new(endpoints.http_node_endpoint)?,
-				DotSubClient::new(endpoints.ws_node_endpoint),
+				DotHttpRpcClient::new(endpoints.http_endpoint, expected_genesis_hash)?,
+				DotSubClient::new(endpoints.ws_endpoint, expected_genesis_hash),
 			))
 		};
 
@@ -57,7 +67,7 @@ impl DotRetryRpcClient {
 		let (backup_rpc_client, backup_sub_client) =
 			option_inner(nodes.backup.map(f_create_clients).transpose()?);
 
-		Ok(Self {
+		Ok(DotRetryRpcClient {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"dot_rpc",
@@ -306,15 +316,16 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				let dot_retry_rpc_client = DotRetryRpcClient::new(
+				let dot_retry_rpc_client = DotRetryRpcClient::new_inner(
 					scope,
 					NodeContainer {
 						primary: WsHttpEndpoints {
-							http_node_endpoint: "http://127.0.0.1:9945".into(),
-							ws_node_endpoint: "ws://127.0.0.1:9945".into(),
+							http_endpoint: "http://127.0.0.1:9945".into(),
+							ws_endpoint: "ws://127.0.0.1:9945".into(),
 						},
 						backup: None,
 					},
+					None,
 				)
 				.unwrap();
 

@@ -3,9 +3,10 @@ use async_trait::async_trait;
 use cf_amm::{common::Tick, range_orders::Liquidity};
 use cf_primitives::Asset;
 use jsonrpsee::core::{
-	client::{ClientT, SubscriptionClientT},
+	client::{ClientT, Subscription, SubscriptionClientT},
 	RpcResult,
 };
+use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
 	storage::{StorageData, StorageKey},
 	Bytes,
@@ -40,6 +41,10 @@ pub trait RawRpcApi:
 		state_chain_runtime::Hash,
 		state_chain_runtime::Header,
 		state_chain_runtime::SignedBlock,
+	> + substrate_frame_rpc_system::SystemApiClient<
+		state_chain_runtime::Hash,
+		state_chain_runtime::AccountId,
+		state_chain_runtime::Nonce,
 	>
 {
 }
@@ -58,6 +63,10 @@ impl<
 				state_chain_runtime::Hash,
 				state_chain_runtime::Header,
 				state_chain_runtime::SignedBlock,
+			> + substrate_frame_rpc_system::SystemApiClient<
+				state_chain_runtime::Block,
+				state_chain_runtime::AccountId,
+				state_chain_runtime::Nonce,
 			>,
 	> RawRpcApi for T
 {
@@ -74,10 +83,20 @@ impl<
 pub trait BaseRpcApi {
 	async fn health(&self) -> RpcResult<Health>;
 
+	async fn next_account_nonce(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+	) -> RpcResult<state_chain_runtime::Nonce>;
+
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
 	) -> RpcResult<sp_core::H256>;
+
+	async fn submit_and_watch_extrinsic(
+		&self,
+		extrinsic: state_chain_runtime::UncheckedExtrinsic,
+	) -> RpcResult<Subscription<TransactionStatus<sp_core::H256, sp_core::H256>>>;
 
 	async fn storage(
 		&self,
@@ -107,9 +126,7 @@ pub trait BaseRpcApi {
 
 	async fn subscribe_finalized_block_headers(
 		&self,
-	) -> RpcResult<
-		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
-	>;
+	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
 
@@ -119,6 +136,12 @@ pub trait BaseRpcApi {
 		asset: Asset,
 		at: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
+
+	async fn dry_run(
+		&self,
+		extrinsic: Bytes,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Bytes>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -144,11 +167,25 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		self.raw_rpc_client.system_health().await
 	}
 
+	async fn next_account_nonce(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+	) -> RpcResult<state_chain_runtime::Nonce> {
+		self.raw_rpc_client.nonce(account_id).await
+	}
+
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
 	) -> RpcResult<sp_core::H256> {
 		self.raw_rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await
+	}
+
+	async fn submit_and_watch_extrinsic(
+		&self,
+		extrinsic: state_chain_runtime::UncheckedExtrinsic,
+	) -> RpcResult<Subscription<TransactionStatus<sp_core::H256, sp_core::H256>>> {
+		self.raw_rpc_client.watch_extrinsic(Bytes::from(extrinsic.encode())).await
 	}
 
 	async fn storage(
@@ -195,9 +232,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 
 	async fn subscribe_finalized_block_headers(
 		&self,
-	) -> RpcResult<
-		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
-	> {
+	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
 		self.raw_rpc_client.subscribe_finalized_heads().await
 	}
 
@@ -214,5 +249,13 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		// TODO: Add function that gets minted range and limit orders #3082
 		//self.raw_rpc_client.cf_pool_minted_positions(lp, asset, Some(at)).await
 		Err(jsonrpsee::core::Error::Custom("Not implemented".to_string()))
+	}
+
+	async fn dry_run(
+		&self,
+		extrinsic: Bytes,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Bytes> {
+		self.raw_rpc_client.dry_run(extrinsic, at).await
 	}
 }

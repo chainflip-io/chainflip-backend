@@ -404,18 +404,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for deposit_address in addresses {
-				if let Some(mut deposit_details) =
-					DepositChannelLookup::<T, I>::get(&deposit_address)
-				{
-					if deposit_details.deposit_channel.on_fetch_completed() {
-						DepositChannelLookup::<T, I>::insert(&deposit_address, deposit_details);
-					}
-				} else {
-					log::error!(
-						"Deposit address {:?} not found in DepositChannelLookup",
-						deposit_address
-					);
-				}
+				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
+					deposit_channel_details
+						.as_mut()
+						.map(|details| details.deposit_channel.state.on_fetch_completed());
+				});
 			}
 			Ok(())
 		}
@@ -551,27 +544,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} =>
-									if let Some(mut details) =
-										DepositChannelLookup::<T, I>::get(&*deposit_address)
-									{
-										if details.deposit_channel.can_fetch() {
-											deposit_fetch_id
-												.replace(details.deposit_channel.fetch_id());
-											if details.deposit_channel.on_fetch_scheduled() {
-												DepositChannelLookup::<T, I>::insert(
-													deposit_address,
-													details,
-												);
-											}
-											true
-										} else {
-											false
-										}
-									} else {
-										log::error!("Deposit address {:?} not found in DepositChannelLookup", deposit_address);
-										false
+								} => DepositChannelLookup::<T, I>::mutate(
+									deposit_address,
+									|details| {
+										details
+											.as_mut()
+											.map(|details| {
+												let can_fetch =
+													details.deposit_channel.state.can_fetch();
+												if can_fetch {
+													deposit_fetch_id.replace(
+														details.deposit_channel.fetch_id(),
+													);
+													details
+														.deposit_channel
+														.state
+														.on_fetch_scheduled();
+												}
+												can_fetch
+											})
+											.unwrap_or(false)
 									},
+								),
 								FetchOrTransfer::Transfer { .. } => true,
 							}
 					})
@@ -935,8 +929,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	fn expire_channel(address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
-			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
+			if let Some(state) = deposit_channel_details.deposit_channel.state.maybe_recycle() {
+				DepositChannelPool::<T, I>::insert(
+					deposit_channel_details.deposit_channel.channel_id,
+					DepositChannel { state, ..deposit_channel_details.deposit_channel },
+				);
 			}
 		} else {
 			log_or_panic!("Tried to close an unknown channel.");

@@ -5,8 +5,8 @@ use crate::{
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, evm::EvmFetchId, CcmChannelMetadata, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
+	DepositChannel, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
@@ -14,6 +14,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockAllBatch, MockEthEnvironment, MockEthereumApiCall},
+		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
 	DepositApi, EgressApi, GetBlockHeight,
@@ -485,7 +486,7 @@ fn can_process_ccm_deposit() {
 
 		assert_eq!(
 			DepositChannelLookup::<Test>::get(deposit_address).unwrap().opened_at,
-			BlockNumberProvider::get_block_height()
+			BlockHeightProvider::<MockEthereum>::get_block_height()
 		);
 
 		// Making a deposit should trigger CcmHandler.

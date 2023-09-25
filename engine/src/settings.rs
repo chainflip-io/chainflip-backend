@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::{redact_endpoint_secret::SecretUrl, Port};
+use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -45,8 +45,8 @@ impl StateChain {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct WsHttpEndpoints {
-	pub ws_node_endpoint: SecretUrl,
-	pub http_node_endpoint: SecretUrl,
+	pub ws_endpoint: SecretUrl,
+	pub http_endpoint: SecretUrl,
 }
 
 pub trait ValidateSettings {
@@ -56,9 +56,9 @@ pub trait ValidateSettings {
 impl ValidateSettings for WsHttpEndpoints {
 	/// Ensure the endpoints are valid HTTP and WS endpoints.
 	fn validate(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(self.ws_node_endpoint.clone())
+		validate_websocket_endpoint(self.ws_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		validate_http_endpoint(self.http_node_endpoint.clone())
+		validate_http_endpoint(self.http_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -66,9 +66,9 @@ impl ValidateSettings for WsHttpEndpoints {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct NodeContainer<NodeConfig> {
-	#[serde(rename = "node")]
+	#[serde(rename = "rpc")]
 	pub primary: NodeConfig,
-	#[serde(rename = "backup_node")]
+	#[serde(rename = "backup_rpc")]
 	pub backup: Option<NodeConfig>,
 }
 
@@ -110,15 +110,15 @@ impl Dot {
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct HttpBasicAuthEndpoint {
-	pub http_node_endpoint: SecretUrl,
-	pub rpc_user: String,
-	pub rpc_password: String,
+	pub http_endpoint: SecretUrl,
+	pub basic_auth_user: String,
+	pub basic_auth_password: String,
 }
 
 impl ValidateSettings for HttpBasicAuthEndpoint {
 	/// Ensure the endpoint is a valid HTTP endpoint.
 	fn validate(&self) -> Result<(), ConfigError> {
-		validate_http_endpoint(self.http_node_endpoint.clone())
+		validate_http_endpoint(self.http_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -145,12 +145,6 @@ pub struct HealthCheck {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Logging {
 	pub span_lifecycle: bool,
-}
-
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Prometheus {
-	pub hostname: String,
-	pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -184,15 +178,15 @@ pub struct StateChainOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct EthOptions {
-	#[clap(long = "eth.ws_node_endpoint")]
-	pub eth_ws_node_endpoint: Option<String>,
-	#[clap(long = "eth.http_node_endpoint")]
-	pub eth_http_node_endpoint: Option<String>,
+	#[clap(long = "eth.rpc.ws_endpoint")]
+	pub eth_ws_endpoint: Option<String>,
+	#[clap(long = "eth.rpc.http_endpoint")]
+	pub eth_http_endpoint: Option<String>,
 
-	#[clap(long = "eth.backup.ws_node_endpoint")]
-	pub eth_backup_ws_node_endpoint: Option<String>,
-	#[clap(long = "eth.backup.http_node_endpoint")]
-	pub eth_backup_http_node_endpoint: Option<String>,
+	#[clap(long = "eth.backup_rpc.ws_endpoint")]
+	pub eth_backup_ws_endpoint: Option<String>,
+	#[clap(long = "eth.backup_rpc.http_endpoint")]
+	pub eth_backup_http_endpoint: Option<String>,
 
 	#[clap(long = "eth.private_key_file")]
 	pub eth_private_key_file: Option<PathBuf>,
@@ -200,32 +194,32 @@ pub struct EthOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct DotOptions {
-	#[clap(long = "dot.ws_node_endpoint")]
-	pub dot_ws_node_endpoint: Option<String>,
-	#[clap(long = "dot.http_node_endpoint")]
-	pub dot_http_node_endpoint: Option<String>,
+	#[clap(long = "dot.rpc.ws_endpoint")]
+	pub dot_ws_endpoint: Option<String>,
+	#[clap(long = "dot.rpc.http_endpoint")]
+	pub dot_http_endpoint: Option<String>,
 
-	#[clap(long = "dot.backup.ws_node_endpoint")]
-	pub dot_backup_ws_node_endpoint: Option<String>,
-	#[clap(long = "dot.backup.http_node_endpoint")]
-	pub dot_backup_http_node_endpoint: Option<String>,
+	#[clap(long = "dot.backup_rpc.ws_endpoint")]
+	pub dot_backup_ws_endpoint: Option<String>,
+	#[clap(long = "dot.backup_rpc.http_endpoint")]
+	pub dot_backup_http_endpoint: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BtcOptions {
-	#[clap(long = "btc.http_node_endpoint")]
-	pub btc_http_node_endpoint: Option<String>,
-	#[clap(long = "btc.rpc_user")]
-	pub btc_rpc_user: Option<String>,
-	#[clap(long = "btc.rpc_password")]
-	pub btc_rpc_password: Option<String>,
+	#[clap(long = "btc.rpc.http_endpoint")]
+	pub btc_http_endpoint: Option<String>,
+	#[clap(long = "btc.basic_auth_user")]
+	pub btc_basic_auth_user: Option<String>,
+	#[clap(long = "btc.basic_auth_password")]
+	pub btc_basic_auth_password: Option<String>,
 
-	#[clap(long = "btc.backup.http_node_endpoint")]
-	pub btc_backup_http_node_endpoint: Option<String>,
-	#[clap(long = "btc.backup.rpc_user")]
-	pub btc_backup_rpc_user: Option<String>,
-	#[clap(long = "btc.backup.rpc_password")]
-	pub btc_backup_rpc_password: Option<String>,
+	#[clap(long = "btc.backup_rpc.http_endpoint")]
+	pub btc_backup_http_endpoint: Option<String>,
+	#[clap(long = "btc.backup_rpc.basic_auth_user")]
+	pub btc_backup_basic_auth_user: Option<String>,
+	#[clap(long = "btc.backup_rpc.basic_auth_password")]
+	pub btc_backup_basic_auth_password: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -543,22 +537,14 @@ impl StateChainOptions {
 impl EthOptions {
 	/// Inserts all the Eth Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "eth.node.ws_node_endpoint", &self.eth_ws_node_endpoint);
-		insert_command_line_option(
-			map,
-			"eth.node.http_node_endpoint",
-			&self.eth_http_node_endpoint,
-		);
+		insert_command_line_option(map, "eth.rpc.ws_endpoint", &self.eth_ws_endpoint);
+		insert_command_line_option(map, "eth.rpc.http_endpoint", &self.eth_http_endpoint);
 
+		insert_command_line_option(map, "eth.backup_rpc.ws_endpoint", &self.eth_backup_ws_endpoint);
 		insert_command_line_option(
 			map,
-			"eth.backup_node.ws_node_endpoint",
-			&self.eth_backup_ws_node_endpoint,
-		);
-		insert_command_line_option(
-			map,
-			"eth.backup_node.http_node_endpoint",
-			&self.eth_backup_http_node_endpoint,
+			"eth.backup_rpc.http_endpoint",
+			&self.eth_backup_http_endpoint,
 		);
 
 		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.eth_private_key_file);
@@ -581,46 +567,42 @@ impl P2POptions {
 
 impl BtcOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "btc.rpc.http_endpoint", &self.btc_http_endpoint);
+		insert_command_line_option(map, "btc.rpc.basic_auth_user", &self.btc_basic_auth_user);
 		insert_command_line_option(
 			map,
-			"btc.node.http_node_endpoint",
-			&self.btc_http_node_endpoint,
+			"btc.rpc.basic_auth_password",
+			&self.btc_basic_auth_password,
 		);
-		insert_command_line_option(map, "btc.node.rpc_user", &self.btc_rpc_user);
-		insert_command_line_option(map, "btc.node.rpc_password", &self.btc_rpc_password);
 
 		insert_command_line_option(
 			map,
-			"btc.backup_node.http_node_endpoint",
-			&self.btc_backup_http_node_endpoint,
+			"btc.backup_rpc.http_endpoint",
+			&self.btc_backup_http_endpoint,
 		);
-		insert_command_line_option(map, "btc.backup_node.rpc_user", &self.btc_backup_rpc_user);
 		insert_command_line_option(
 			map,
-			"btc.backup_node.rpc_password",
-			&self.btc_backup_rpc_password,
+			"btc.backup_rpc.basic_auth_user",
+			&self.btc_backup_basic_auth_user,
+		);
+		insert_command_line_option(
+			map,
+			"btc.backup_rpc.basic_auth_password",
+			&self.btc_backup_basic_auth_password,
 		);
 	}
 }
 
 impl DotOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "dot.node.ws_node_endpoint", &self.dot_ws_node_endpoint);
-		insert_command_line_option(
-			map,
-			"dot.node.http_node_endpoint",
-			&self.dot_http_node_endpoint,
-		);
+		insert_command_line_option(map, "dot.rpc.ws_endpoint", &self.dot_ws_endpoint);
+		insert_command_line_option(map, "dot.rpc.http_endpoint", &self.dot_http_endpoint);
 
+		insert_command_line_option(map, "dot.backup_rpc.ws_endpoint", &self.dot_backup_ws_endpoint);
 		insert_command_line_option(
 			map,
-			"dot.backup_node.ws_node_endpoint",
-			&self.dot_backup_ws_node_endpoint,
-		);
-		insert_command_line_option(
-			map,
-			"dot.backup_node.http_node_endpoint",
-			&self.dot_backup_http_node_endpoint,
+			"dot.backup_rpc.http_endpoint",
+			&self.dot_backup_http_endpoint,
 		);
 	}
 }
@@ -683,11 +665,10 @@ pub mod tests {
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		BTC_BACKUP_HTTP_NODE_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER,
-		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_NODE_ENDPOINT,
-		DOT_BACKUP_WS_NODE_ENDPOINT, DOT_HTTP_NODE_ENDPOINT, DOT_WS_NODE_ENDPOINT,
-		ETH_BACKUP_HTTP_NODE_ENDPOINT, ETH_BACKUP_WS_NODE_ENDPOINT, ETH_HTTP_NODE_ENDPOINT,
-		ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS,
+		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
+		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
+		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
+		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
 	};
 
 	use super::*;
@@ -716,52 +697,63 @@ pub mod tests {
 	}
 
 	implement_test_environment! {
-		ETH_HTTP_NODE_ENDPOINT => "http://localhost:8545",
-		ETH_WS_NODE_ENDPOINT => "ws://localhost:8545",
-		ETH_BACKUP_HTTP_NODE_ENDPOINT => "http://second.localhost:8545",
-		ETH_BACKUP_WS_NODE_ENDPOINT => "ws://second.localhost:8545",
+		ETH_HTTP_ENDPOINT => "http://localhost:8545",
+		ETH_WS_ENDPOINT => "ws://localhost:8545",
+		ETH_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8545",
+		ETH_BACKUP_WS_ENDPOINT => "ws://second.localhost:8545",
 
 		NODE_P2P_IP_ADDRESS => "1.1.1.1",
 
-		BTC_HTTP_NODE_ENDPOINT => "http://localhost:18443",
+		BTC_HTTP_ENDPOINT => "http://localhost:18443",
 		BTC_RPC_USER => "user",
 		BTC_RPC_PASSWORD => "password",
 
-		BTC_BACKUP_HTTP_NODE_ENDPOINT => "http://second.localhost:18443",
+		BTC_BACKUP_HTTP_ENDPOINT => "http://second.localhost:18443",
 		BTC_BACKUP_RPC_USER => "second.user",
 		BTC_BACKUP_RPC_PASSWORD => "second.password",
 
-		DOT_WS_NODE_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_HTTP_NODE_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_BACKUP_WS_NODE_ENDPOINT =>
+		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_BACKUP_WS_ENDPOINT =>
 		"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_BACKUP_HTTP_NODE_ENDPOINT =>
+		DOT_BACKUP_HTTP_ENDPOINT =>
 		"https://second.my_fake_polkadot_rpc:443/<secret_key>"
 	}
 
+	// We do them like this so they run sequentially, which is necessary so the environment doesn't
+	// interfere with tests running in parallel.
 	#[test]
+	fn all_settings_tests() {
+		settings_valid_if_only_all_the_environment_set();
+
+		test_init_config_with_testing_config();
+
+		test_base_config_path_command_line_option();
+
+		test_all_command_line_options();
+	}
+
 	fn settings_valid_if_only_all_the_environment_set() {
 		let _guard = TestEnvironment::default();
 
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
-		assert_eq!(settings.eth.nodes.primary.http_node_endpoint.as_ref(), "http://localhost:8545");
+		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(
-			settings.dot.nodes.primary.ws_node_endpoint.as_ref(),
+			settings.dot.nodes.primary.ws_endpoint.as_ref(),
 			"wss://my_fake_polkadot_rpc:443/<secret_key>"
 		);
 		assert_eq!(
-			settings.eth.nodes.backup.unwrap().http_node_endpoint.as_ref(),
+			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8545"
 		);
 		assert_eq!(
-			settings.dot.nodes.backup.unwrap().ws_node_endpoint.as_ref(),
+			settings.dot.nodes.backup.unwrap().ws_endpoint.as_ref(),
 			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
 		);
 	}
 
-	#[test]
 	fn test_init_config_with_testing_config() {
 		let test_settings = Settings::new_test().unwrap();
 
@@ -769,6 +761,188 @@ pub mod tests {
 			test_settings.state_chain.signing_key_file,
 			PathBuf::from("./tests/test_keystore/alice_key")
 		);
+	}
+
+	fn test_base_config_path_command_line_option() {
+		// Load the settings using a custom base config path.
+		let test_base_config_path = "config/testing/";
+		let custom_base_path_settings = Settings::new(CommandLineOptions {
+			config_root: test_base_config_path.to_owned(),
+			..Default::default()
+		})
+		.unwrap();
+
+		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
+		// by comparing it to a different settings file.
+		let different_settings_config_path = "config/testing2/";
+		assert_ne!(
+			custom_base_path_settings,
+			Settings::new(CommandLineOptions {
+				config_root: different_settings_config_path.to_owned(),
+				..Default::default()
+			})
+			.unwrap()
+		);
+
+		// Check that a key file is a child of the custom base path.
+		// Note: This check will break if the `node_p2p.node_key_file` settings is set in
+		// "config/testing/config/Settings.toml".
+		assert!(custom_base_path_settings
+			.node_p2p
+			.node_key_file
+			.to_string_lossy()
+			.contains(test_base_config_path));
+
+		assert_eq!(
+			custom_base_path_settings.btc.nodes.primary.http_endpoint,
+			"http://localhost:18443".into()
+		);
+		assert!(custom_base_path_settings.btc.nodes.backup.is_none());
+	}
+
+	fn test_all_command_line_options() {
+		use std::str::FromStr;
+		// Fill the options with test values that will pass the parsing/validation.
+		// The test values need to be different from the default values set during `set_defaults()`
+		// for the test to work. The `config_root` option is covered in a separate test.
+		let opts = CommandLineOptions {
+			config_root: CommandLineOptions::default().config_root,
+			p2p_opts: P2POptions {
+				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
+				ip_address: Some("1.1.1.1".parse().unwrap()),
+				p2p_port: Some(8087),
+				allow_local_ip: Some(false),
+			},
+			state_chain_opts: StateChainOptions {
+				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
+				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
+			},
+			eth_opts: EthOptions {
+				eth_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
+				eth_http_endpoint: Some("http://endpoint:4321".to_owned()),
+				eth_backup_ws_endpoint: Some("ws://second_endpoint:4321".to_owned()),
+				eth_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
+				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+			},
+			dot_opts: DotOptions {
+				dot_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
+				dot_http_endpoint: Some("http://endpoint:4321".to_owned()),
+
+				dot_backup_ws_endpoint: Some("ws://second.endpoint:4321".to_owned()),
+				dot_backup_http_endpoint: Some("http://second.endpoint:4321".to_owned()),
+			},
+			btc_opts: BtcOptions {
+				btc_http_endpoint: Some("http://btc-endpoint:4321".to_owned()),
+				btc_basic_auth_user: Some("my_username".to_owned()),
+				btc_basic_auth_password: Some("my_password".to_owned()),
+
+				btc_backup_http_endpoint: Some("http://second.btc-endpoint:4321".to_owned()),
+				btc_backup_basic_auth_user: Some("second.my_username".to_owned()),
+				btc_backup_basic_auth_password: Some("second.my_password".to_owned()),
+			},
+			health_check_hostname: Some("health_check_hostname".to_owned()),
+			health_check_port: Some(1337),
+			prometheus_hostname: Some(("prometheus_hostname").to_owned()),
+			prometheus_port: Some(9999),
+			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
+			logging_span_lifecycle: true,
+		};
+
+		// Load the test opts into the settings
+		let settings = Settings::new(opts.clone()).unwrap();
+
+		// Compare the opts and the settings
+		assert_eq!(opts.logging_span_lifecycle, settings.logging.span_lifecycle);
+		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
+		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
+		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
+
+		assert_eq!(
+			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
+			settings.state_chain.ws_endpoint
+		);
+		assert_eq!(
+			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
+			settings.state_chain.signing_key_file
+		);
+
+		assert_eq!(
+			opts.eth_opts.eth_ws_endpoint.unwrap(),
+			settings.eth.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.eth_opts.eth_http_endpoint.unwrap(),
+			settings.eth.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let eth_backup_node = settings.eth.nodes.backup.unwrap();
+		assert_eq!(
+			opts.eth_opts.eth_backup_ws_endpoint.unwrap(),
+			eth_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.eth_opts.eth_backup_http_endpoint.unwrap(),
+			eth_backup_node.http_endpoint.as_ref()
+		);
+
+		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
+
+		assert_eq!(
+			opts.dot_opts.dot_ws_endpoint.unwrap(),
+			settings.dot.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.dot_opts.dot_http_endpoint.unwrap(),
+			settings.dot.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let dot_backup_node = settings.dot.nodes.backup.unwrap();
+		assert_eq!(
+			opts.dot_opts.dot_backup_ws_endpoint.unwrap(),
+			dot_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.dot_opts.dot_backup_http_endpoint.unwrap(),
+			dot_backup_node.http_endpoint.as_ref()
+		);
+
+		assert_eq!(
+			opts.btc_opts.btc_http_endpoint.unwrap(),
+			settings.btc.nodes.primary.http_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.btc_opts.btc_basic_auth_user.unwrap(),
+			settings.btc.nodes.primary.basic_auth_user
+		);
+		assert_eq!(
+			opts.btc_opts.btc_basic_auth_password.unwrap(),
+			settings.btc.nodes.primary.basic_auth_password
+		);
+
+		let btc_backup_node = settings.btc.nodes.backup.unwrap();
+		assert_eq!(
+			opts.btc_opts.btc_backup_basic_auth_user.unwrap(),
+			btc_backup_node.basic_auth_user
+		);
+		assert_eq!(
+			opts.btc_opts.btc_backup_basic_auth_password.unwrap(),
+			btc_backup_node.basic_auth_password
+		);
+
+		assert_eq!(
+			opts.health_check_hostname.unwrap(),
+			settings.health_check.as_ref().unwrap().hostname
+		);
+		assert_eq!(opts.health_check_port.unwrap(), settings.health_check.as_ref().unwrap().port);
+
+		assert_eq!(
+			opts.prometheus_hostname.unwrap(),
+			settings.prometheus.as_ref().unwrap().hostname
+		);
+		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
+
+		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 	}
 
 	#[test]
@@ -807,180 +981,5 @@ pub mod tests {
 		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
 		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
 		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
-	}
-
-	#[test]
-	fn test_base_config_path_command_line_option() {
-		// Load the settings using a custom base config path.
-		let test_base_config_path = "config/testing/";
-		let custom_base_path_settings = Settings::new(CommandLineOptions {
-			config_root: test_base_config_path.to_owned(),
-			..Default::default()
-		})
-		.unwrap();
-
-		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
-		// by comparing it to a different settings file.
-		let different_settings_config_path = "config/testing2/";
-		assert_ne!(
-			custom_base_path_settings,
-			Settings::new(CommandLineOptions {
-				config_root: different_settings_config_path.to_owned(),
-				..Default::default()
-			})
-			.unwrap()
-		);
-
-		// Check that a key file is a child of the custom base path.
-		// Note: This check will break if the `node_p2p.node_key_file` settings is set in
-		// "config/testing/config/Settings.toml".
-		assert!(custom_base_path_settings
-			.node_p2p
-			.node_key_file
-			.to_string_lossy()
-			.contains(test_base_config_path));
-
-		assert_eq!(
-			custom_base_path_settings.btc.nodes.primary.http_node_endpoint,
-			"http://localhost:18443".into()
-		);
-		assert!(custom_base_path_settings.btc.nodes.backup.is_none());
-	}
-
-	#[test]
-	fn test_all_command_line_options() {
-		use std::str::FromStr;
-		// Fill the options with test values that will pass the parsing/validation.
-		// The test values need to be different from the default values set during `set_defaults()`
-		// for the test to work. The `config_root` option is covered in a separate test.
-		let opts = CommandLineOptions {
-			config_root: CommandLineOptions::default().config_root,
-			p2p_opts: P2POptions {
-				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
-				ip_address: Some("1.1.1.1".parse().unwrap()),
-				p2p_port: Some(8087),
-				allow_local_ip: Some(false),
-			},
-			state_chain_opts: StateChainOptions {
-				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
-				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
-			},
-			eth_opts: EthOptions {
-				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
-				eth_backup_ws_node_endpoint: Some("ws://second_endpoint:4321".to_owned()),
-				eth_backup_http_node_endpoint: Some("http://second_endpoint:4321".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
-			},
-			dot_opts: DotOptions {
-				dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-				dot_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
-
-				dot_backup_ws_node_endpoint: Some("ws://second.endpoint:4321".to_owned()),
-				dot_backup_http_node_endpoint: Some("http://second.endpoint:4321".to_owned()),
-			},
-			btc_opts: BtcOptions {
-				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
-				btc_rpc_user: Some("my_username".to_owned()),
-				btc_rpc_password: Some("my_password".to_owned()),
-
-				btc_backup_http_node_endpoint: Some("http://second.btc-endpoint:4321".to_owned()),
-				btc_backup_rpc_user: Some("second.my_username".to_owned()),
-				btc_backup_rpc_password: Some("second.my_password".to_owned()),
-			},
-			health_check_hostname: Some("health_check_hostname".to_owned()),
-			health_check_port: Some(1337),
-			prometheus_hostname: Some(("prometheus_hostname").to_owned()),
-			prometheus_port: Some(9999),
-			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
-			logging_span_lifecycle: true,
-		};
-
-		// Load the test opts into the settings
-		let settings = Settings::new(opts.clone()).unwrap();
-
-		// Compare the opts and the settings
-		assert_eq!(opts.logging_span_lifecycle, settings.logging.span_lifecycle);
-		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
-		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
-		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
-		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
-
-		assert_eq!(
-			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
-			settings.state_chain.ws_endpoint
-		);
-		assert_eq!(
-			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
-			settings.state_chain.signing_key_file
-		);
-
-		assert_eq!(
-			opts.eth_opts.eth_ws_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.ws_node_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.eth_opts.eth_http_node_endpoint.unwrap(),
-			settings.eth.nodes.primary.http_node_endpoint.as_ref()
-		);
-
-		let eth_backup_node = settings.eth.nodes.backup.unwrap();
-		assert_eq!(
-			opts.eth_opts.eth_backup_ws_node_endpoint.unwrap(),
-			eth_backup_node.ws_node_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.eth_opts.eth_backup_http_node_endpoint.unwrap(),
-			eth_backup_node.http_node_endpoint.as_ref()
-		);
-
-		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
-
-		assert_eq!(
-			opts.dot_opts.dot_ws_node_endpoint.unwrap(),
-			settings.dot.nodes.primary.ws_node_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.dot_opts.dot_http_node_endpoint.unwrap(),
-			settings.dot.nodes.primary.http_node_endpoint.as_ref()
-		);
-
-		let dot_backup_node = settings.dot.nodes.backup.unwrap();
-		assert_eq!(
-			opts.dot_opts.dot_backup_ws_node_endpoint.unwrap(),
-			dot_backup_node.ws_node_endpoint.as_ref()
-		);
-		assert_eq!(
-			opts.dot_opts.dot_backup_http_node_endpoint.unwrap(),
-			dot_backup_node.http_node_endpoint.as_ref()
-		);
-
-		assert_eq!(
-			opts.btc_opts.btc_http_node_endpoint.unwrap(),
-			settings.btc.nodes.primary.http_node_endpoint.as_ref()
-		);
-		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.nodes.primary.rpc_user);
-		assert_eq!(
-			opts.btc_opts.btc_rpc_password.unwrap(),
-			settings.btc.nodes.primary.rpc_password
-		);
-
-		let btc_backup_node = settings.btc.nodes.backup.unwrap();
-		assert_eq!(opts.btc_opts.btc_backup_rpc_user.unwrap(), btc_backup_node.rpc_user);
-		assert_eq!(opts.btc_opts.btc_backup_rpc_password.unwrap(), btc_backup_node.rpc_password);
-
-		assert_eq!(
-			opts.health_check_hostname.unwrap(),
-			settings.health_check.as_ref().unwrap().hostname
-		);
-		assert_eq!(opts.health_check_port.unwrap(), settings.health_check.as_ref().unwrap().port);
-
-		assert_eq!(
-			opts.prometheus_hostname.unwrap(),
-			settings.prometheus.as_ref().unwrap().hostname
-		);
-		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
-
-		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
 	}
 }

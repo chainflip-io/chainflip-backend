@@ -4,11 +4,12 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use cf_primitives::AccountRole;
 use futures::StreamExt;
+use futures_util::FutureExt;
 use sp_core::H256;
 use state_chain_runtime::AccountId;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, trace, warn};
-use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
+use tracing::{trace, warn};
+use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, OR_CANCEL};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
@@ -24,18 +25,51 @@ mod submission_watcher;
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait UntilFinalized {
-	async fn until_finalized(self) -> submission_watcher::ExtrinsicResult;
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult;
 }
 #[async_trait]
 impl<W: UntilFinalized + Send> UntilFinalized for (state_chain_runtime::Hash, W) {
-	async fn until_finalized(self) -> submission_watcher::ExtrinsicResult {
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
 		self.1.until_finalized().await
 	}
 }
-pub struct UntilFinalizedFuture(oneshot::Receiver<submission_watcher::ExtrinsicResult>);
+#[async_trait]
+impl<T: UntilInBlock + Send, W: UntilFinalized + Send> UntilFinalized for (T, W) {
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
+		self.1.until_finalized().await
+	}
+}
+
+pub struct UntilFinalizedFuture(oneshot::Receiver<submission_watcher::FinalizationResult>);
 #[async_trait]
 impl UntilFinalized for UntilFinalizedFuture {
-	async fn until_finalized(self) -> submission_watcher::ExtrinsicResult {
+	async fn until_finalized(self) -> submission_watcher::FinalizationResult {
+		self.0.await.expect(OR_CANCEL)
+	}
+}
+
+// Wrapper type to avoid await.await on submits/finalize calls being possible
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait UntilInBlock {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult;
+}
+#[async_trait]
+impl<W: UntilInBlock + Send> UntilInBlock for (state_chain_runtime::Hash, W) {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult {
+		self.1.until_in_block().await
+	}
+}
+#[async_trait]
+impl<T: UntilFinalized + Send, W: UntilInBlock + Send> UntilInBlock for (W, T) {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult {
+		self.0.until_in_block().await
+	}
+}
+pub struct UntilInBlockFuture(oneshot::Receiver<submission_watcher::InBlockResult>);
+#[async_trait]
+impl UntilInBlock for UntilInBlockFuture {
+	async fn until_in_block(self) -> submission_watcher::InBlockResult {
 		self.0.await.expect(OR_CANCEL)
 	}
 }
@@ -44,10 +78,14 @@ impl UntilFinalized for UntilFinalizedFuture {
 #[async_trait]
 pub trait SignedExtrinsicApi {
 	type UntilFinalizedFuture: UntilFinalized + Send;
+	type UntilInBlockFuture: UntilInBlock + Send;
 
 	fn account_id(&self) -> AccountId;
 
-	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, Self::UntilFinalizedFuture)
+	async fn submit_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -56,7 +94,10 @@ pub trait SignedExtrinsicApi {
 			+ Sync
 			+ 'static;
 
-	async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> Self::UntilFinalizedFuture
+	async fn finalize_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (Self::UntilInBlockFuture, Self::UntilFinalizedFuture)
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -70,7 +111,8 @@ pub struct SignedExtrinsicClient {
 	account_id: AccountId,
 	request_sender: mpsc::Sender<(
 		state_chain_runtime::RuntimeCall,
-		oneshot::Sender<submission_watcher::ExtrinsicResult>,
+		oneshot::Sender<submission_watcher::InBlockResult>,
+		oneshot::Sender<submission_watcher::FinalizationResult>,
 		submission_watcher::RequestStrategy,
 	)>,
 	_task_handle: ScopedJoinHandle<()>,
@@ -137,62 +179,36 @@ impl SignedExtrinsicClient {
 			_task_handle: scope.spawn_with_handle({
 				let mut state_chain_stream = state_chain_stream.clone();
 
-				async move {
-					let (mut submission_watcher, mut requests) = submission_watcher::SubmissionWatcher::new(
-						signer,
-						account_nonce,
-						state_chain_stream.cache().block_hash,
-						state_chain_stream.cache().block_number,
-						base_rpc_client.runtime_version().await?,
-						genesis_hash,
-						SIGNED_EXTRINSIC_LIFETIME,
-						base_rpc_client.clone()
-					);
+				task_scope(move |scope| async move {
+					let (mut submission_watcher, mut requests) =
+						submission_watcher::SubmissionWatcher::new(
+							scope,
+							signer,
+							account_nonce,
+							state_chain_stream.cache().block_hash,
+							state_chain_stream.cache().block_number,
+							base_rpc_client.runtime_version().await?,
+							genesis_hash,
+							SIGNED_EXTRINSIC_LIFETIME,
+							base_rpc_client.clone(),
+						);
 
 					utilities::loop_select! {
-						if let Some((call, result_sender, strategy)) = request_receiver.recv() => {
-							submission_watcher.new_request(&mut requests, call, result_sender, strategy).await?;
+						if let Some((call, until_in_block_sender, until_finalized_sender, strategy)) = request_receiver.recv() => {
+							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
 						} else break Ok(()),
+						let submission_details = submission_watcher.watch_for_submission_in_block() => {
+							submission_watcher.on_submission_in_block(&mut requests, submission_details).await?;
+						},
 						if let Some((block_hash, block_header)) = state_chain_stream.next() => {
 							trace!("Received state chain block: {number} ({block_hash:x?})", number = block_header.number);
 							submission_watcher.on_block_finalized(
 								&mut requests,
 								block_hash,
 							).await?;
-
-							// TODO: Handle possibility of stuck nonce caused submissions being dropped from the mempool or broken submissions either submitted here or externally when only using submit_signed_extrinsics
-							// TODO: Improve handling only submit_signed_extrinsic requests (using pending_extrinsics rpc call)
-							// TODO: Use system_accountNextIndex
-							{
-								let mut shuffled_requests = {
-									use rand::prelude::SliceRandom;
-									let mut requests = requests.iter_mut().filter(|(_, request)| request.allow_resubmits).collect::<Vec<_>>();
-									requests.shuffle(&mut rand::thread_rng());
-									requests.into_iter()
-								};
-
-								if let Some((_, request)) = shuffled_requests.next() {
-									// TODO: Detect stuck state via getting all pending extrinsics, and checking for missing extrinsics above finalized nonce
-									match submission_watcher.submit_extrinsic_at_nonce(request, submission_watcher.finalized_nonce()).await? {
-										Ok(_) => {
-											debug!("Detected a gap in the account's submitted nonce values, pending extrinsics after this gap will not be including in blocks, unless the gap is filled. Attempting to resolve.");
-											submission_watcher.anticipated_nonce = submission_watcher.finalized_nonce() + 1;
-											for (_, request) in shuffled_requests {
-												match submission_watcher.submit_extrinsic_at_nonce(request, submission_watcher.anticipated_nonce).await? {
-													Ok(_) => {
-														submission_watcher.anticipated_nonce += 1;
-													},
-													Err(submission_watcher::SubmissionLogicError::NonceTooLow) => break
-												}
-											}
-										},
-										Err(submission_watcher::SubmissionLogicError::NonceTooLow) => {} // Expected case, so we ignore
-									}
-								}
-							}
 						} else break Ok(()),
 					}
-				}
+				}.boxed())
 			}),
 		})
 	}
@@ -201,12 +217,16 @@ impl SignedExtrinsicClient {
 #[async_trait]
 impl SignedExtrinsicApi for SignedExtrinsicClient {
 	type UntilFinalizedFuture = UntilFinalizedFuture;
+	type UntilInBlockFuture = UntilInBlockFuture;
 
 	fn account_id(&self) -> AccountId {
 		self.account_id.clone()
 	}
 
-	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, Self::UntilFinalizedFuture)
+	async fn submit_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -215,23 +235,31 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 			+ Sync
 			+ 'static,
 	{
-		let (result_sender, result_receiver) = oneshot::channel();
+		let (until_in_block_sender, until_in_block_receiver) = oneshot::channel();
+		let (until_finalized_sender, until_finalized_receiver) = oneshot::channel();
 		(
 			send_request(&self.request_sender, |hash_sender| {
 				(
 					call.into(),
-					result_sender,
-					submission_watcher::RequestStrategy::Submit(hash_sender),
+					until_in_block_sender,
+					until_finalized_sender,
+					submission_watcher::RequestStrategy::StrictlyOneSubmission(hash_sender),
 				)
 			})
 			.await
 			.await
 			.expect(OR_CANCEL),
-			UntilFinalizedFuture(result_receiver),
+			(
+				UntilInBlockFuture(until_in_block_receiver),
+				UntilFinalizedFuture(until_finalized_receiver),
+			),
 		)
 	}
 
-	async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> Self::UntilFinalizedFuture
+	async fn finalize_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (Self::UntilInBlockFuture, Self::UntilFinalizedFuture)
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -240,11 +268,21 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 			+ Sync
 			+ 'static,
 	{
-		UntilFinalizedFuture(
-			send_request(&self.request_sender, |result_sender| {
-				(call.into(), result_sender, submission_watcher::RequestStrategy::Finalize)
-			})
-			.await,
+		let (until_finalized_sender, until_finalized_receiver) = oneshot::channel();
+
+		(
+			UntilInBlockFuture(
+				send_request(&self.request_sender, |until_in_block_sender| {
+					(
+						call.into(),
+						until_in_block_sender,
+						until_finalized_sender,
+						submission_watcher::RequestStrategy::AllowMultipleSubmissions,
+					)
+				})
+				.await,
+			),
+			UntilFinalizedFuture(until_finalized_receiver),
 		)
 	}
 }
