@@ -46,10 +46,10 @@ impl DotRetryRpcClient {
 		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_genesis_hash: PolkadotHash,
 	) -> Result<Self> {
-		Self::new_ext(scope, nodes, Some(expected_genesis_hash))
+		Self::new_inner(scope, nodes, Some(expected_genesis_hash))
 	}
 
-	fn new_ext(
+	fn new_inner(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<WsHttpEndpoints>,
 		// The genesis hash is optional to facilitate testing
@@ -316,7 +316,7 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				let dot_retry_rpc_client = DotRetryRpcClient::new_ext(
+				let dot_retry_rpc_client = DotRetryRpcClient::new_inner(
 					scope,
 					NodeContainer {
 						primary: WsHttpEndpoints {
