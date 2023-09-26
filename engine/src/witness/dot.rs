@@ -304,7 +304,6 @@ fn transaction_fee_paids(
 	indices_with_fees
 }
 
-#[allow(clippy::vec_box)]
 fn proxy_addeds(
 	block_number: PolkadotBlockNumber,
 	events: &Vec<(Phase, EventWrapper)>,
