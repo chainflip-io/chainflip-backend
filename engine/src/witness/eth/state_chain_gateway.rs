@@ -51,74 +51,46 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					info!("Handling event: {event}");
-					match event.event_parameters {
+					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
 						StateChainGatewayEvents::FundedFilter(FundedFilter {
 							node_id: account_id,
 							amount,
 							funder,
-						}) => {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_funding::Call::funded {
-												account_id: account_id.into(),
-												amount: amount
-													.try_into()
-													.expect("Funded amount should fit in u128"),
-												funder,
-												tx_hash: event.tx_hash.into(),
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
-						},
+						}) => pallet_cf_funding::Call::funded {
+							account_id: account_id.into(),
+							amount: amount.try_into().expect("Funded amount should fit in u128"),
+							funder,
+							tx_hash: event.tx_hash.into(),
+						}
+						.into(),
 						StateChainGatewayEvents::RedemptionExecutedFilter(
 							RedemptionExecutedFilter { node_id: account_id, amount },
-						) => {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_funding::Call::redeemed {
-												account_id: account_id.into(),
-												redeemed_amount: amount
-													.try_into()
-													.expect("Redemption amount should fit in u128"),
-												tx_hash: event.tx_hash.to_fixed_bytes(),
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
-						},
+						) => pallet_cf_funding::Call::redeemed {
+							account_id: account_id.into(),
+							redeemed_amount: amount
+								.try_into()
+								.expect("Redemption amount should fit in u128"),
+							tx_hash: event.tx_hash.to_fixed_bytes(),
+						}
+						.into(),
 						StateChainGatewayEvents::RedemptionExpiredFilter(
 							RedemptionExpiredFilter { node_id: account_id, amount: _ },
-						) => {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_funding::Call::redemption_expired {
-												account_id: account_id.into(),
-												block_number: header.index,
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
-						},
+						) => pallet_cf_funding::Call::redemption_expired {
+							account_id: account_id.into(),
+							block_number: header.index,
+						}
+						.into(),
 						_ => {
 							trace!("Ignoring unused event: {event}");
+							continue
 						},
-					}
+					};
+					state_chain_client
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(call),
+							epoch_index: epoch.index,
+						})
+						.await;
 				}
 
 				Result::Ok(header.data)

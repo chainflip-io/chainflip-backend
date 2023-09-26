@@ -75,52 +75,29 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						.await?
 				{
 					info!("Handling event: {event}");
-					match event.event_parameters {
-						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_vaults::Call::<
-												_,
-												<Inner::Chain as PalletInstanceAlias>::Instance,
-											>::vault_key_rotated {
-												block_number: header.index,
-												tx_id: event.tx_hash,
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
-						},
+					let call: state_chain_runtime::RuntimeCall = match event.event_parameters {
+						KeyManagerEvents::AggKeySetByAggKeyFilter(_) => pallet_cf_vaults::Call::<
+							_,
+							<Inner::Chain as PalletInstanceAlias>::Instance,
+						>::vault_key_rotated {
+							block_number: header.index,
+							tx_id: event.tx_hash,
+						}
+						.into(),
 						KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 							new_agg_key,
 							..
-						}) => {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_vaults::Call::<
-												_,
-												<Inner::Chain as PalletInstanceAlias>::Instance,
-											>::vault_key_rotated_externally {
-												new_public_key:
-													cf_chains::evm::AggKey::from_pubkey_compressed(
-														new_agg_key.serialize(),
-													),
-												block_number: header.index,
-												tx_id: event.tx_hash,
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
-						},
+						}) => pallet_cf_vaults::Call::<
+							_,
+							<Inner::Chain as PalletInstanceAlias>::Instance,
+						>::vault_key_rotated_externally {
+							new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(
+								new_agg_key.serialize(),
+							),
+							block_number: header.index,
+							tx_id: event.tx_hash,
+						}
+						.into(),
 						KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
 							sig_data,
 							..
@@ -145,54 +122,36 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								})?
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_broadcast::Call::<
-												_,
-												<Inner::Chain as PalletInstanceAlias>::Instance,
-											>::transaction_succeeded {
-												tx_out_id: SchnorrVerificationComponents {
-													s: sig_data.sig.into(),
-													k_times_g_address: sig_data
-														.k_times_g_address
-														.into(),
-												},
-												signer_id: from,
-												tx_fee: TransactionFee {
-													effective_gas_price,
-													gas_used,
-												},
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
+							pallet_cf_broadcast::Call::<
+								_,
+								<Inner::Chain as PalletInstanceAlias>::Instance,
+							>::transaction_succeeded {
+								tx_out_id: SchnorrVerificationComponents {
+									s: sig_data.sig.into(),
+									k_times_g_address: sig_data.k_times_g_address.into(),
+								},
+								signer_id: from,
+								tx_fee: TransactionFee { effective_gas_price, gas_used },
+							}
+							.into()
 						},
 						KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter {
 							message,
-						}) => {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_governance::Call::set_whitelisted_call_hash {
-												call_hash: message,
-											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
-						},
+						}) => pallet_cf_governance::Call::set_whitelisted_call_hash {
+							call_hash: message,
+						}
+						.into(),
 						_ => {
 							trace!("Ignoring unused event: {event}");
+							continue
 						},
-					}
+					};
+					state_chain_client
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(call),
+							epoch_index: epoch.index,
+						})
+						.await;
 				}
 
 				Result::Ok(header.data)
