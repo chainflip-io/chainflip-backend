@@ -1,12 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
-use crate::{
-	eth::retry_rpc::EthersRetryRpcApi,
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-};
+use crate::eth::retry_rpc::EthersRetryRpcApi;
 
 use super::{
 	super::common::{
@@ -15,6 +12,8 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
+use cf_primitives::EpochIndex;
+use futures_core::Future;
 
 use anyhow::{anyhow, Result};
 use cf_chains::{
@@ -178,11 +177,12 @@ pub fn call_from_event(
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn vault_witnessing<
-		StateChainClient,
 		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		ProcessCall,
+		ProcessingFut,
 	>(
 		self,
-		state_chain_client: Arc<StateChainClient>,
+		process_call: ProcessCall,
 		eth_rpc: EthRpcClient,
 		contract_address: EthereumAddress,
 		native_asset: Asset,
@@ -193,10 +193,15 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		Inner::Chain:
 			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		ProcessingFut: Future<Output = ()> + Send + 'static,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			let supported_assets = supported_assets.clone();
 			async move {
@@ -206,14 +211,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					match call_from_event(event, native_asset, source_chain, &supported_assets) {
 						Ok(option_call) =>
 							if let Some(call) = option_call {
-								state_chain_client
-									.finalize_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(call),
-											epoch_index: epoch.index,
-										},
-									)
-									.await;
+								process_call(call, epoch.index).await;
 							},
 						Err(message) => {
 							tracing::error!("Ignoring vault contract event: {message}");
