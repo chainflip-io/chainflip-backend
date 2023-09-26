@@ -179,7 +179,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.ethereum_deposits(
-			state_chain_client.clone(),
+			finalize_extrinsic!(state_chain_client),
 			eth_client.clone(),
 			eth::Asset::Eth,
 			address_checker_address,
