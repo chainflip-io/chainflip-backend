@@ -33,6 +33,23 @@ use anyhow::{Context, Result};
 
 const SAFETY_MARGIN: usize = 7;
 
+macro_rules! finalize_extrinsic {
+	($state_chain_client:expr) => {{
+		let state_chain_client = $state_chain_client.clone();
+		move |call, epoch_index| {
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				let _ = state_chain_client
+					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						call: Box::new(call),
+						epoch_index,
+					})
+					.await;
+			}
+		}
+	}};
+}
+
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthersRetryRpcClient,
@@ -131,8 +148,8 @@ where
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.erc20_deposits::<_, _, UsdcEvents>(
-			state_chain_client.clone(),
+		.erc20_deposits::<_, _, _, UsdcEvents>(
+			finalize_extrinsic!(state_chain_client),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Usdc,
 			usdc_contract_address,
@@ -146,8 +163,8 @@ where
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.erc20_deposits::<_, _, FlipEvents>(
-			state_chain_client.clone(),
+		.erc20_deposits::<_, _, _, FlipEvents>(
+			finalize_extrinsic!(state_chain_client),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Flip,
 			flip_contract_address,
