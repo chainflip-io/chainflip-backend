@@ -281,7 +281,7 @@ pub mod pallet {
 	/// Tracks whether a transaction has been validated by the target chain.
 	#[pallet::storage]
 	pub type BroadcastValidated<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, bool, ValueQuery>;
+		StorageMap<_, Twox64Concat, BroadcastId, (), OptionQuery>;
 
 	#[pallet::storage]
 	pub type Transaction<T: Config<I>, I: 'static = ()> =
@@ -542,7 +542,7 @@ pub mod pallet {
 			.transaction_payload
 			.return_fee_refund(tx_fee);
 
-			if BroadcastValidated::<T, I>::take(broadcast_id) {
+			if let Some(_) = BroadcastValidated::<T, I>::take(broadcast_id) {
 				TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
 					*fee_deficit = fee_deficit.saturating_add(to_refund);
 				});
@@ -621,7 +621,7 @@ pub mod pallet {
 			// If the signature is valid, we can remove the transaction from storage
 			Transaction::<T, I>::remove(broadcast_attempt_id.broadcast_id);
 			// And mark the broadcast as validated
-			BroadcastValidated::<T, I>::insert(broadcast_attempt_id.broadcast_id, true);
+			BroadcastValidated::<T, I>::insert(broadcast_attempt_id.broadcast_id, ());
 			Ok(())
 		}
 	}
