@@ -1,15 +1,14 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
+use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
+use futures_core::Future;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
 use state_chain_runtime::PalletInstanceAlias;
 
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
-	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	},
 	witness::common::{
 		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
 		RuntimeHasChain,
@@ -62,9 +61,9 @@ define_erc20!(
 define_erc20!(usdc, Usdc, UsdcEvents, "$CF_ETH_CONTRACT_ABI_ROOT/IUSDC.json");
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn erc20_deposits<StateChainClient, EthRetryRpcClient, Events>(
+	pub async fn erc20_deposits<ProcessCall, ProcessingFut, EthRetryRpcClient, Events>(
 		self,
-		state_chain_client: Arc<StateChainClient>,
+		process_call: ProcessCall,
 		eth_rpc: EthRetryRpcClient,
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		asset_contract_address: H160,
@@ -73,7 +72,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		Inner::Chain:
 			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
-		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		ProcessingFut: Future<Output = ()> + Send + 'static,
 		EthRetryRpcClient: EthersRetryRpcApi + Send + Sync + Clone,
 		Events: std::fmt::Debug
 			+ ethers::contract::EthLogDecode
@@ -86,7 +90,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		Ok(self.then(move |epoch, header| {
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
 				let addresses = header
@@ -126,21 +130,18 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.collect::<Vec<_>>();
 
 				if !deposit_witnesses.is_empty() {
-					state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(
-								pallet_cf_ingress_egress::Call::<
-									_,
-									<Inner::Chain as PalletInstanceAlias>::Instance,
-								>::process_deposits {
-									deposit_witnesses,
-									block_height: header.index,
-								}
-								.into(),
-							),
-							epoch_index: epoch.index,
-						})
-						.await;
+					process_call(
+						pallet_cf_ingress_egress::Call::<
+							_,
+							<Inner::Chain as PalletInstanceAlias>::Instance,
+						>::process_deposits {
+							deposit_witnesses,
+							block_height: header.index,
+						}
+						.into(),
+						epoch.index,
+					)
+					.await;
 				}
 
 				Ok::<(), anyhow::Error>(())
