@@ -96,6 +96,8 @@ pub trait EthersRetryRpcApi: Clone {
 
 	async fn block_with_txs(&self, block_number: U64) -> Block<Transaction>;
 
+	async fn sign_transaction(&self, tx: cf_chains::evm::Transaction) -> anyhow::Result<Signature>;
+
 	async fn fee_history(
 		&self,
 		block_count: U256,
@@ -262,6 +264,34 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 			)
 			.await
 	}
+
+	async fn sign_transaction(&self, tx: cf_chains::evm::Transaction) -> Result<Signature> {
+		let signature = self
+			.rpc_retry_client
+			.request(
+				Box::pin(move |client| {
+					let tx = tx.clone();
+					let transaction_request = Eip1559TransactionRequest {
+						to: Some(NameOrAddress::Address(tx.contract)),
+						data: Some(tx.data.into()),
+						chain_id: Some(tx.chain_id.into()),
+						value: Some(tx.value),
+						max_fee_per_gas: tx.max_fee_per_gas,
+						max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+						// geth uses the latest block gas limit as an upper bound
+						gas: None,
+						access_list: AccessList::default(),
+						from: Some(client.address()),
+						nonce: None,
+					};
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { Ok(client.sign_transaction(transaction_request).await?) })
+				}),
+				RequestLog::new("sign_transaction".to_string(), None),
+			)
+			.await;
+		Ok(signature)
+	}
 }
 
 #[async_trait::async_trait]
@@ -343,6 +373,8 @@ pub mod mocks {
 				&self,
 				tx: cf_chains::evm::Transaction,
 			) -> anyhow::Result<TxHash>;
+
+			async fn sign_transaction(&self, tx: cf_chains::evm::Transaction) -> anyhow::Result<Signature>;
 
 			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 

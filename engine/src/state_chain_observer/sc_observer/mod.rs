@@ -507,8 +507,20 @@ where
                                             let eth_rpc = eth_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
-                                                match eth_rpc.broadcast_transaction(transaction_payload).await {
-                                                    Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                match eth_rpc.broadcast_transaction(transaction_payload.clone()).await {
+                                                    Ok(tx_hash) =>  {
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+                                                                pallet_cf_broadcast::Call::confirm_broadcast_attempt {
+                                                                    broadcast_attempt_id,
+                                                                    transaction: transaction_payload.clone(),
+                                                                    transaction_signature: eth_rpc.sign_transaction(transaction_payload).await?.to_vec(),
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                        info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}");
+                                                    },
                                                     Err(error) => {
                                                         // Note: this error can indicate that we failed to estimate gas, or that there is
                                                         // a problem with the ethereum rpc node, or with the configured account. For example
