@@ -42,9 +42,25 @@ where
 			.participating(state_chain_client.account_id())
 			.await;
 
+	let finalize_extrinsic_closure = {
+		let state_chain_client = state_chain_client.clone();
+		move |call, epoch_index| {
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				let _ = state_chain_client
+					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						call: Box::new(call),
+						epoch_index,
+					})
+					.await;
+			}
+		}
+	};
+
 	let start_eth = super::eth::start(
 		scope,
 		eth_client,
+		finalize_extrinsic_closure.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
@@ -54,6 +70,7 @@ where
 	let start_btc = super::btc::start(
 		scope,
 		btc_client,
+		finalize_extrinsic_closure.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
@@ -63,6 +80,7 @@ where
 	let start_dot = super::dot::start(
 		scope,
 		dot_client,
+		finalize_extrinsic_closure,
 		state_chain_client,
 		state_chain_stream,
 		epoch_source,
