@@ -163,9 +163,9 @@ where
 		})
 		// Proxy added witnessing
 		.then({
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			move |epoch, header| {
-				let state_chain_client = state_chain_client.clone();
+				let process_call = process_call.clone();
 				async move {
 					let (events, mut broadcast_indices) = header.data;
 
@@ -173,12 +173,7 @@ where
 					broadcast_indices.append(&mut proxy_added_broadcasts);
 
 					for call in vault_key_rotated_calls {
-						state_chain_client
-							.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-								call,
-								epoch_index: epoch.index,
-							})
-							.await;
+						process_call(call, epoch.index).await;
 					}
 
 					(events, broadcast_indices)
@@ -314,7 +309,7 @@ fn proxy_addeds(
 	block_number: PolkadotBlockNumber,
 	events: &Vec<(Phase, EventWrapper)>,
 	our_vault: &PolkadotAccountId,
-) -> (Vec<Box<state_chain_runtime::RuntimeCall>>, BTreeSet<PolkadotExtrinsicIndex>) {
+) -> (Vec<state_chain_runtime::RuntimeCall>, BTreeSet<PolkadotExtrinsicIndex>) {
 	let mut vault_key_rotated_calls = vec![];
 	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
@@ -326,13 +321,13 @@ fn proxy_addeds(
 
 				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
-				vault_key_rotated_calls.push(Box::new(
+				vault_key_rotated_calls.push(
 					pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
 						block_number,
 						tx_id: TxId { block_number, extrinsic_index },
 					}
 					.into(),
-				));
+				);
 
 				extrinsic_indices.insert(extrinsic_index);
 			}

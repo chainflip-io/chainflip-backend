@@ -127,7 +127,7 @@ where
 	eth_safe_vault_source
 		.clone()
 		.state_chain_gateway_witnessing(
-			state_chain_client.clone(),
+			process_call.clone(),
 			eth_client.clone(),
 			state_chain_gateway_address,
 		)
@@ -183,7 +183,7 @@ where
 
 	eth_safe_vault_source
 		.vault_witnessing(
-			state_chain_client.clone(),
+			process_call,
 			eth_client.clone(),
 			vault_address,
 			cf_primitives::Asset::Eth,

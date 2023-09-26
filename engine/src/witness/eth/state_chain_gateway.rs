@@ -1,14 +1,7 @@
-use std::sync::Arc;
-
 use cf_chains::Ethereum;
 use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
-
-use crate::{
-	eth::retry_rpc::EthersRetryRpcApi,
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-};
 
 use super::{
 	super::common::{
@@ -17,6 +10,9 @@ use super::{
 	},
 	contract_common::events_at_block,
 };
+use crate::eth::retry_rpc::EthersRetryRpcApi;
+use cf_primitives::EpochIndex;
+use futures_core::Future;
 
 abigen!(
 	StateChainGateway,
@@ -27,20 +23,26 @@ use anyhow::Result;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn state_chain_gateway_witnessing<
-		StateChainClient,
 		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		ProcessCall,
+		ProcessingFut,
 	>(
 		self,
-		state_chain_client: Arc<StateChainClient>,
+		process_call: ProcessCall,
 		eth_rpc: EthRpcClient,
 		contract_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
-		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		ProcessingFut: Future<Output = ()> + Send + 'static,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
 				for event in events_at_block::<StateChainGatewayEvents, _>(
@@ -85,12 +87,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							continue
 						},
 					};
-					state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(call),
-							epoch_index: epoch.index,
-						})
-						.await;
+					process_call(call, epoch.index).await;
 				}
 
 				Result::Ok(header.data)
