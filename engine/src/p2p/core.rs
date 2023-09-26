@@ -208,8 +208,11 @@ struct P2PContext {
 	/// A handle to the authenticator thread that can be used to make changes to the
 	/// list of allowed peers
 	authenticator: Arc<Authenticator>,
-	/// Contains ZMQ sockets for nodes that we *should* be connected to (and ZMQ and our
-	/// own reconnection logic will try to keep us connected to them).
+	/// Contains all existing ZMQ sockets for "client" connections. Note that ZMQ socket
+	/// exists even when there is no internal TCP connection (e.g. before the connection
+	/// is established for the first time, or when ZMQ it is reconnecting). Also, when
+	/// our own (independent from ZMQ) reconnection mechanism kicks in, the entry is removed
+	/// (because we don't want ZMQ's socket behaviour).
 	/// NOTE: The mapping is from AccountId because we want to optimise for message
 	/// sending, which uses AccountId
 	active_connections: ActiveConnectionWrapper,
