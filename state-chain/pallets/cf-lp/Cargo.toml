@@ -49,6 +49,7 @@ default = ['std']
 std = [
   'cf-chains/std',
   'cf-primitives/std',
+  'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
   'codec/std',

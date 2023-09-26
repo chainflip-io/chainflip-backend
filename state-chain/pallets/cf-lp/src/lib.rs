@@ -7,14 +7,16 @@ use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi,
 };
-
-#[cfg(feature = "try-runtime")]
-use frame_support::dispatch::Vec;
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult, traits::OnRuntimeUpgrade};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::BlockNumberProvider, DispatchResult, Saturating},
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
 mod benchmarking;
+mod migrations;
 
 #[cfg(test)]
 mod mock;
@@ -28,6 +30,8 @@ pub use weights::WeightInfo;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -82,6 +86,35 @@ pub mod pallet {
 		LiquidityDepositDisabled,
 		// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			let expired = LiquidityChannelExpiries::<T>::take(n);
+			let expired_count = expired.len();
+			for (_, address) in expired {
+				T::DepositHandler::expire_channel(address.clone());
+				Self::deposit_event(Event::LiquidityDepositAddressExpired {
+					address: T::AddressConverter::to_encoded_address(address),
+				});
+			}
+			T::WeightInfo::on_initialize(expired_count as u32)
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
+		}
 	}
 
 	#[pallet::event]

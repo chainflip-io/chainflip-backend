@@ -73,12 +73,12 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        }
 
        #[cfg(feature = "try-runtime")]
-       fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+       fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
            todo!()
        }
 
        #[cfg(feature = "try-runtime")]
-       fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+       fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
            todo!()
        }
    }
@@ -96,12 +96,12 @@ This crate provides a `VersionedMigration` type that can be used to structure su
            }
 
            #[cfg(feature = "try-runtime")]
-           fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+           fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
                migrations::PalletMigration::<T>::pre_upgrade()
            }
 
            #[cfg(feature = "try-runtime")]
-           fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+           fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
                migrations::PalletMigration::<T>::post_upgrade(state)
            }
        }
