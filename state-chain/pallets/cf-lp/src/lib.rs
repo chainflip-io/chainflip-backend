@@ -10,12 +10,14 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::BlockNumberProvider, DispatchResult, Saturating},
+	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
 mod benchmarking;
+mod migrations;
 
 #[cfg(test)]
 mod mock;
@@ -26,6 +28,8 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -96,6 +100,20 @@ pub mod pallet {
 			}
 			T::WeightInfo::on_initialize(expired_count as u32)
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
+		}
 	}
 
 	#[pallet::event]
@@ -157,6 +175,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
