@@ -70,7 +70,7 @@ where
 	let start_btc = super::btc::start(
 		scope,
 		btc_client,
-		finalize_extrinsic_closure,
+		finalize_extrinsic_closure.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
@@ -80,6 +80,7 @@ where
 	let start_dot = super::dot::start(
 		scope,
 		dot_client,
+		finalize_extrinsic_closure,
 		state_chain_client,
 		state_chain_stream,
 		epoch_source,
