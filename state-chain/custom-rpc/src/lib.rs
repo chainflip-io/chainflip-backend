@@ -51,6 +51,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub restricted_balance: NumberOrHex,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -471,6 +472,7 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
+			restricted_balance: account_info.restricted_balance.into(),
 		})
 	}
 	fn cf_penalties(
