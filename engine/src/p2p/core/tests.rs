@@ -187,8 +187,8 @@ async fn connects_after_registration() {
 	let node_key1 = create_keypair();
 	let node_key2 = create_keypair();
 
-	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8089);
-	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8090);
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8092);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8093);
 
 	// Node 1 doesn't get its own peer info at first and will wait for registration
 	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi2.clone()]);
