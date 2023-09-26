@@ -300,10 +300,12 @@ pub struct BitcoinTransactionValidator;
 impl TransactionValidator for BitcoinTransactionValidator {
 	type Transaction = BitcoinTransactionData;
 	type Signature = Signature;
+	type Hash = Hash;
 
 	fn is_valid(
 		_transaction: Self::Transaction,
 		_signature: Self::Signature,
+		_hash: Self::Hash,
 	) -> Result<(), DispatchError> {
 		Ok(())
 	}

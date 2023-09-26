@@ -71,12 +71,14 @@ pub struct EthereumTransactionValidator;
 impl TransactionValidator for EthereumTransactionValidator {
 	type Transaction = Transaction;
 	type Signature = RawSignedTransaction;
+	type Hash = H256;
 
 	fn is_valid(
 		transaction: Self::Transaction,
 		signature: Self::Signature,
+		hash: Self::Hash,
 	) -> Result<(), DispatchError> {
-		if let Err(err) = transaction.check_transaction(signature) {
+		if let Err(err) = transaction.check_transaction(signature, hash) {
 			DispatchError::Other(err.error_as_string()).into()
 		} else {
 			Ok(())

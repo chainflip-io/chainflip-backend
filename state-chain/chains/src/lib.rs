@@ -419,9 +419,11 @@ pub struct ChainState<C: Chain> {
 pub trait TransactionValidator {
 	type Transaction;
 	type Signature;
+	type Hash;
 	/// Fit the transaction and signature together and check if the signature is valid.
 	fn is_valid(
 		transaction: Self::Transaction,
 		signature: Self::Signature,
+		hash: Self::Hash,
 	) -> Result<(), DispatchError>;
 }

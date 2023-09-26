@@ -111,6 +111,10 @@ pub mod pallet {
 	pub type SignatureFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::NativeSignature;
 
+	/// Type alias for transaction in id.
+	pub type TransactionInIdFor<T, I> =
+		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
@@ -202,6 +206,7 @@ pub mod pallet {
 		type TransactionValidator: TransactionValidator<
 			Transaction = <<Self as Config<I>>::TargetChain as Chain>::Transaction,
 			Signature = <<<Self as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::NativeSignature,
+			Hash = <<<Self as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
 		>;
 
 		/// The weights for the pallet
@@ -597,6 +602,7 @@ pub mod pallet {
 			broadcast_attempt_id: BroadcastAttemptId,
 			transaction: TransactionFor<T, I>,
 			transaction_signature: SignatureFor<T, I>,
+			transaction_hash: TransactionInIdFor<T, I>,
 		) -> DispatchResult {
 			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
@@ -607,9 +613,11 @@ pub mod pallet {
 			// Check the payload is the same
 			ensure!(transaction == expected_transaction, Error::<T, I>::InvalidPayload);
 			// Ensure the signature
-
-			T::TransactionValidator::is_valid(transaction, transaction_signature)?;
-
+			T::TransactionValidator::is_valid(
+				transaction,
+				transaction_signature,
+				transaction_hash,
+			)?;
 			// If the signature is valid, we can remove the transaction from storage
 			Transaction::<T, I>::remove(broadcast_attempt_id.broadcast_id);
 			// And mark the broadcast as validated

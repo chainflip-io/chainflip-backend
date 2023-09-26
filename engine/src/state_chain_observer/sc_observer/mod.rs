@@ -515,6 +515,7 @@ where
                                                                     broadcast_attempt_id,
                                                                     transaction: transaction_payload.clone(),
                                                                     transaction_signature: eth_rpc.sign_transaction(transaction_payload).await?.to_vec(),
+                                                                    transaction_hash: tx_hash,
                                                                 },
                                                             ),
                                                         )

@@ -12,9 +12,12 @@ pub use ethabi::{
 };
 use ethereum::TransactionV2;
 use evm::tokenizable::Tokenizable;
-use frame_support::sp_runtime::{
-	traits::{Hash, Keccak256},
-	RuntimeDebug,
+use frame_support::{
+	ensure,
+	sp_runtime::{
+		traits::{Hash, Keccak256},
+		RuntimeDebug,
+	},
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -498,9 +501,11 @@ impl Transaction {
 	pub fn check_transaction(
 		&self,
 		signature: Vec<u8>,
+		tx_hash: H256,
 	) -> Result<(), TransactionVerificationError> {
 		let recovered = Self::recover_transaction(&signature)?;
 		let hash = Self::recover_hash(recovered.clone());
+		ensure!(hash == tx_hash, TransactionVerificationError::InvalidTransactionHash);
 		Self::verify_signature(recovered.clone(), hash)?;
 		self.match_against_recovered(recovered.clone())?;
 		Ok(())
@@ -647,6 +652,8 @@ pub enum TransactionVerificationError {
 	NoMatch,
 	/// The signed transaction parameters do not all match those of the unsigned transaction.
 	InvalidParam(CheckedTransactionParameter),
+	/// Transaction hash is not matching
+	InvalidTransactionHash,
 }
 
 impl TransactionVerificationError {
@@ -658,6 +665,7 @@ impl TransactionVerificationError {
 			Self::InvalidSignature => "InvalidSignature: The transaction signature was invalid",
 			Self::NoMatch => "NoMatch: The recovered address does not match the provided one",
 			Self::InvalidParam(_) => "InvalidParam: The signed transaction parameters do not all match those of the unsigned transaction.",
+			Self::InvalidTransactionHash => "InvalidTransactionHash: The transaction hash is not matching",
 		}
 	}
 }

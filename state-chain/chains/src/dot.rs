@@ -313,10 +313,12 @@ pub struct PolkadotTransactionValidator;
 impl TransactionValidator for PolkadotTransactionValidator {
 	type Transaction = PolkadotTransactionData;
 	type Signature = ();
+	type Hash = TxId;
 
 	fn is_valid(
 		_transaction: Self::Transaction,
 		_signature: Self::Signature,
+		_hash: Self::Hash,
 	) -> Result<(), frame_support::dispatch::DispatchError> {
 		Ok(())
 	}
