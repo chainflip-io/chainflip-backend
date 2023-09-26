@@ -60,17 +60,17 @@ where
 	let start_eth = super::eth::start(
 		scope,
 		eth_client,
-		finalize_extrinsic_closure,
+		finalize_extrinsic_closure.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
 		db.clone(),
 	);
 
-	// pass in the closure to these two too
 	let start_btc = super::btc::start(
 		scope,
 		btc_client,
+		finalize_extrinsic_closure,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
 		epoch_source.clone(),
