@@ -1,10 +1,10 @@
-use std::sync::Arc;
-
 use cf_chains::evm::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
+use cf_primitives::EpochIndex;
 use ethers::{
 	prelude::abigen,
 	types::{Bloom, TransactionReceipt},
 };
+use futures_core::Future;
 use sp_core::{H160, H256};
 use state_chain_runtime::PalletInstanceAlias;
 use tracing::{info, trace};
@@ -18,7 +18,6 @@ use super::{
 };
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use num_traits::Zero;
@@ -45,11 +44,12 @@ use anyhow::Result;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn key_manager_witnessing<
-		StateChainClient,
+		ProcessCall,
+		ProcessingFut,
 		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
 	>(
 		self,
-		state_chain_client: Arc<StateChainClient>,
+		process_call: ProcessCall,
 		eth_rpc: EthRpcClient,
 		contract_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
@@ -61,13 +61,18 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
 		>,
-		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		ProcessingFut: Future<Output = ()> + Send + 'static,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
 		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
 				for event in
@@ -146,12 +151,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							continue
 						},
 					};
-					state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(call),
-							epoch_index: epoch.index,
-						})
-						.await;
+					process_call(call, epoch.index).await;
 				}
 
 				Result::Ok(header.data)
@@ -223,7 +223,9 @@ mod tests {
 				EthSource::new(retry_client.clone())
 					.chunk_by_vault(vault_source)
 					.key_manager_witnessing(
-						state_chain_client,
+						|call, _| async move {
+							println!("Witnessed call: {:?}", call);
+						},
 						retry_client,
 						H160::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
 					)

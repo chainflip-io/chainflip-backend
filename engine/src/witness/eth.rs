@@ -9,7 +9,8 @@ pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_primitives::chains::assets::eth;
+use cf_primitives::{chains::assets::eth, EpochIndex};
+use futures_core::Future;
 use sp_core::H160;
 use utilities::task_scope::Scope;
 
@@ -33,26 +34,10 @@ use anyhow::{Context, Result};
 
 const SAFETY_MARGIN: usize = 7;
 
-macro_rules! finalize_extrinsic {
-	($state_chain_client:expr) => {{
-		let state_chain_client = $state_chain_client.clone();
-		move |call, epoch_index| {
-			let state_chain_client = state_chain_client.clone();
-			async move {
-				let _ = state_chain_client
-					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(call),
-						epoch_index,
-					})
-					.await;
-			}
-		}
-	}};
-}
-
-pub async fn start<StateChainClient, StateChainStream>(
+pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthersRetryRpcClient,
+	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -61,6 +46,12 @@ pub async fn start<StateChainClient, StateChainStream>(
 where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
@@ -128,7 +119,7 @@ where
 
 	eth_safe_vault_source
 		.clone()
-		.key_manager_witnessing(state_chain_client.clone(), eth_client.clone(), key_manager_address)
+		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
 		.continuous("KeyManager".to_string(), db.clone())
 		.logging("KeyManager")
 		.spawn(scope);
@@ -149,7 +140,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.erc20_deposits::<_, _, _, UsdcEvents>(
-			finalize_extrinsic!(state_chain_client),
+			process_call.clone(),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Usdc,
 			usdc_contract_address,
@@ -164,7 +155,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.erc20_deposits::<_, _, _, FlipEvents>(
-			finalize_extrinsic!(state_chain_client),
+			process_call.clone(),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Flip,
 			flip_contract_address,
@@ -179,7 +170,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.ethereum_deposits(
-			finalize_extrinsic!(state_chain_client),
+			process_call.clone(),
 			eth_client.clone(),
 			eth::Asset::Eth,
 			address_checker_address,
