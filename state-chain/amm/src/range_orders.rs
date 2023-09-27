@@ -29,8 +29,8 @@ use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
-	MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	tick_at_sqrt_price, Amount, OneToZero, SetFeesError, Side, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 /// This is the invariant wrt xy = k. It represents / is proportional to the depth of the
@@ -339,12 +339,6 @@ pub enum NewError {
 }
 
 #[derive(Debug)]
-pub enum SetFeesError {
-	/// Fee must be between 0 - 50%
-	InvalidFeeAmount,
-}
-
-#[derive(Debug)]
 pub enum MintError<E> {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
@@ -473,7 +467,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// fee is greater than 50%.
 	///
 	/// This function never panics
-	#[allow(dead_code)]
 	pub(super) fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
@@ -483,7 +476,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2
+		fee_hundredth_pips <= MAX_LP_FEE
 	}
 
 	/// Returns the current sqrt price of the pool. None if the pool has no more liquidity and the

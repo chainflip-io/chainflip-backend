@@ -31,8 +31,8 @@ use sp_std::vec::Vec;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
-	tick_at_sqrt_price, Amount, OneToZero, Price, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
-	ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
+	tick_at_sqrt_price, Amount, OneToZero, Price, SetFeesError, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
 // This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
@@ -248,12 +248,6 @@ pub enum NewError {
 }
 
 #[derive(Debug)]
-pub enum SetFeesError {
-	/// Fee must be between 0 - 50%
-	InvalidFeeAmount,
-}
-
-#[derive(Debug)]
 pub enum DepthError {
 	/// Invalid Price
 	InvalidTick,
@@ -383,7 +377,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
-		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
+		(fee_hundredth_pips <= MAX_LP_FEE)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
 
@@ -400,7 +394,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
-	#[allow(dead_code)]
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,

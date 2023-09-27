@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, Tick},
+	common::{Amount, Order, Price, Side, SideMap, Tick, MAX_LP_FEE},
 	limit_orders, range_orders,
 	range_orders::Liquidity,
 	PoolState,
@@ -520,6 +520,11 @@ pub mod pallet {
 			input_amount: AssetAmount,
 			output_amount: AssetAmount,
 		},
+		PoolFeeSet {
+			base_asset: Asset,
+			pair_asset: Asset,
+			fee_hundredth_pips: u32,
+		},
 	}
 
 	#[pallet::call]
@@ -927,6 +932,58 @@ pub mod pallet {
 
 				Ok(())
 			})
+		}
+
+		/// Sets the Liquidirt Pool fees. The fee must be >= 50%.
+		/// Requires governance origin.
+		///
+		/// ## Events
+		///
+		/// - [On success](Event::PoolFeeSet)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::set_pool_fees())]
+		pub fn set_pool_fees(
+			origin: OriginFor<T>,
+			base_asset: Asset,
+			pair_asset: Asset,
+			fee_hundredth_pips: u32,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(fee_hundredth_pips <= MAX_LP_FEE, Error::<T>::InvalidFeeAmount);
+			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
+				if pool.pool_state.limit_order_fee() == fee_hundredth_pips &&
+					pool.pool_state.range_order_fee() == fee_hundredth_pips
+				{
+					return Ok(())
+				}
+
+				let SideMap { zero, one } = pool
+					.pool_state
+					.set_fees(fee_hundredth_pips)
+					.map_err(|_| Error::<T>::InvalidFeeAmount)?;
+				for (collected_fees, side) in [(zero, Side::Zero), (one, Side::One)].into_iter() {
+					for ((_, (lp, _order)), (collected, _position_info)) in
+						collected_fees.into_iter()
+					{
+						asset_pair.try_credit_asset(&lp, side, collected.fees)?;
+						asset_pair.try_credit_asset(&lp, side, collected.bought_amount)?;
+					}
+				}
+				Result::<(), DispatchError>::Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T>::PoolFeeSet {
+				base_asset,
+				pair_asset,
+				fee_hundredth_pips,
+			});
+
+			Ok(())
 		}
 	}
 }

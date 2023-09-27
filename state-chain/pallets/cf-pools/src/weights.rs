@@ -39,6 +39,7 @@ pub trait WeightInfo {
 	fn set_range_order() -> Weight;
 	fn update_limit_order() -> Weight;
 	fn set_limit_order() -> Weight;
+	fn set_pool_fees() -> Weight;
 }
 
 /// Weights for pallet_cf_pools using the Substrate node and recommended hardware.
@@ -144,6 +145,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
+
+	fn set_pool_fees() -> Weight {
+		Default::default()
+	}
 }
 
 // For backwards compatibility and tests
@@ -247,5 +252,9 @@ impl WeightInfo for () {
 		Weight::from_parts(45_000_000, 4767)
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+
+	fn set_pool_fees() -> Weight {
+		Default::default()
 	}
 }

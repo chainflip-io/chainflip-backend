@@ -3,7 +3,8 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
-pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
+pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
+pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
@@ -17,6 +18,12 @@ pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
 /// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
+
+#[derive(Debug)]
+pub enum SetFeesError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+}
 
 #[derive(
 	Debug,
