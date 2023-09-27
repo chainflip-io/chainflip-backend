@@ -145,7 +145,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 16,
+	spec_version: 17,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 4,
@@ -818,8 +818,46 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	(),
+	CustomUpgrade,
 >;
+
+// TODO: remove this after upgrade.
+pub struct CustomUpgrade;
+impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
+	fn on_runtime_upgrade() -> Weight {
+		let mut api_calls =
+			pallet_cf_broadcast::ThresholdSignatureData::<Runtime, PolkadotInstance>::iter()
+				.drain()
+				.filter(|&(id, _)| id > 3)
+				.collect::<Vec<_>>();
+
+		let mut nonce = 1;
+		// transfers first
+		for (_id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
+			match api_call {
+				cf_chains::dot::api::PolkadotApi::BatchFetchAndTransfer(ref mut ext_builder) => {
+					ext_builder.force_nonce(nonce);
+				},
+				_ => continue,
+			}
+			nonce += 1;
+			PolkadotBroadcaster::threshold_sign_and_broadcast(api_call.clone(), None);
+		}
+		// then the rotation
+		for (_id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
+			match api_call {
+				cf_chains::dot::api::PolkadotApi::RotateVaultProxy(ref mut ext_builder) => {
+					ext_builder.force_nonce(nonce);
+				},
+				_ => continue,
+			}
+			nonce += 1;
+			PolkadotBroadcaster::threshold_sign_and_broadcast(api_call.clone(), None);
+		}
+
+		Weight::zero()
+	}
+}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

@@ -341,6 +341,10 @@ impl PolkadotExtrinsicBuilder {
 		Self { extrinsic_call, replay_protection, signer_and_signature: None }
 	}
 
+	pub fn force_nonce(&mut self, nonce: u32) {
+		self.replay_protection.nonce = nonce;
+	}
+
 	pub fn signature(&self) -> Option<PolkadotSignature> {
 		self.signer_and_signature.as_ref().map(|(_, sig)| sig.clone())
 	}
