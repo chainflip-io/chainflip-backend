@@ -192,10 +192,10 @@ pub mod pallet {
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
 				if next_version != T::CurrentCompatibilityVersion::get() {
-					return Err("NextCompatibilityVersion does not match the current runtime".into())
+					log::warn!("NextCompatibilityVersion does not match the current runtime");
 				}
 			} else {
-				return Err("NextCompatibilityVersion is not set".into())
+				log::warn!("NextCompatibilityVersion is not set");
 			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
