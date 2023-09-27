@@ -170,14 +170,14 @@ impl FloatBetweenZeroAndOne {
 
 		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
 
-		let y_floor = y_floor.try_into().unwrap(); // Unwrap safe as numerator <= demoninator and therefore y cannot be greater than x
+		let y_floor = y_floor.try_into().unwrap(); // Unwrap safe as numerator <= denominator and therefore y cannot be greater than x
 
 		(
 			y_floor,
 			if div_remainder.is_zero() && shift_remainder.is_zero() {
 				y_floor
 			} else {
-				y_floor + 1 // Safe as for there to be a remainder y_floor must be atleast 1 less than x
+				y_floor + 1 // Safe as for there to be a remainder y_floor must be at least 1 less than x
 			},
 		)
 	}
@@ -349,8 +349,8 @@ pub(super) struct FixedPool {
 	/// associated position but have some liquidity available, but this would likely be a very
 	/// small amount.
 	available: Amount,
-	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have occured
-	/// since this FixedPool instance was created and used liquidity from it.
+	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have
+	/// occurred since this FixedPool instance was created and used liquidity from it.
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
@@ -377,7 +377,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
-		(fee_hundredth_pips <= MAX_LP_FEE)
+		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
 
@@ -556,7 +556,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				// bought_amount and fees than may exist in the pool
 				position.amount - remaining_amount_ceil,
 				// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
-				// than truely exists in the pool
+				// than truly exists in the pool
 				if remaining_amount_floor.is_zero() {
 					None
 				} else {
@@ -742,7 +742,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Collects any earnings from the specified position. The SwapDirection determines which
-	/// direction of swaps the liquidity/position you're refering to is for.
+	/// direction of swaps the liquidity/position you're referring to is for.
 	///
 	/// This function never panics.
 	pub(super) fn collect<SD: SwapDirection>(

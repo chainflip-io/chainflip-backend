@@ -294,7 +294,7 @@ pub mod pallet {
 
 	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
 	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
-	/// that is if the appropiate asset ratio can be achieved while maintaining the max/min bounds.
+	/// that is if the appropriate asset ratio can be achieved while maintaining the max/min bounds.
 	#[derive(
 		Copy,
 		Clone,
@@ -313,7 +313,7 @@ pub mod pallet {
 		Liquidity { liquidity: Liquidity },
 	}
 
-	/// Indicates if an LP wishs to increase or decreease the size of an order.
+	/// Indicates if an LP wishes to increase or decrease the size of an order.
 	#[derive(
 		Copy,
 		Clone,
@@ -796,7 +796,7 @@ pub mod pallet {
 		}
 
 		/// Optionally move the order to a different tick and then increase or decrease its amount
-		/// of liquidity. The appropiate assets will be debited or credited from your balance as
+		/// of liquidity. The appropriate assets will be debited or credited from your balance as
 		/// needed. If the order_id isn't being used at the moment you must specify a tick,
 		/// otherwise it will not know what tick you want the order to be over. Note limit order
 		/// order_id's are independent of range order order_id's. In addition to that, order_id's
@@ -872,7 +872,7 @@ pub mod pallet {
 		}
 
 		/// Optionally move the order to a different tick and then set its amount of liquidity. The
-		/// appropiate assets will be debited or credited from your balance as needed. If the
+		/// appropriate assets will be debited or credited from your balance as needed. If the
 		/// order_id isn't being used at the moment you must specify a tick, otherwise it will not
 		/// know what tick you want the order to be over. Note limit order order_id's are
 		/// independent of range order order_id's. In addition to that, order_id's for buy and sell
@@ -934,7 +934,8 @@ pub mod pallet {
 			})
 		}
 
-		/// Sets the Liquidirt Pool fees. The fee must be >= 50%.
+		/// Sets the Liquidity Pool fees. Also collect earned fees and bought amount for
+		/// all positions within the fee and accredit them to the liquidity provider.
 		/// Requires governance origin.
 		///
 		/// ## Events

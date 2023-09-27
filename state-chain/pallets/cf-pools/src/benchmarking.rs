@@ -170,6 +170,53 @@ benchmarks! {
 	)
 	verify {}
 
+	set_pool_fees {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Eth,
+			1_000_000,
+		));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Usdc,
+			1_000_000,
+		));
+		assert_ok!(Pallet::<T>::set_limit_order(
+			RawOrigin::Signed(caller.clone()).into(),
+			Asset::Usdc,
+			Asset::Eth,
+			0,
+			Some(0),
+			10_000,
+		));
+		assert_ok!(Pallet::<T>::set_limit_order(
+			RawOrigin::Signed(caller.clone()).into(),
+			Asset::Eth,
+			Asset::Usdc,
+			1,
+			Some(0),
+			10_000,
+		));
+		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000));
+		let fee = 1_000;
+		let call = Call::<T>::set_pool_fees {
+			base_asset: Asset::Eth,
+			pair_asset: Asset::Usdc,
+			fee_hundredth_pips: fee,
+		};
+	}: { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()); }
+	verify {
+		assert_eq!(
+			Pallet::<T>::pool_info(Asset::Eth, STABLE_ASSET),
+			Some(PoolInfo {
+				limit_order_fee_hundredth_pips: fee,
+				range_order_fee_hundredth_pips: fee,
+			})
+		);
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),

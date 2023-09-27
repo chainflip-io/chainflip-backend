@@ -87,7 +87,7 @@ impl Position {
 
 				/*
 					Proof that `mul_div_floor` does not overflow:
-					Note position.liqiudity: u128
+					Note position.liquidity: u128
 					U512::one() << 128 > u128::MAX
 				*/
 				mul_div_floor(
@@ -148,7 +148,7 @@ pub struct PoolState<LiquidityProvider> {
 	/// This is the highest tick that represents a strictly lower price than the
 	/// current_sqrt_price. `current_tick` is the tick that when you swap ZeroToOne the
 	/// `current_sqrt_price` is moving towards (going down in literal value), and will cross when
-	/// `current_sqrt_price` reachs it. `current_tick + 1` is the tick the price is moving towards
+	/// `current_sqrt_price` reaches it. `current_tick + 1` is the tick the price is moving towards
 	/// (going up in literal value) when you swap OneToZero and will cross when
 	/// `current_sqrt_price` reaches it,
 	current_tick: Tick,
@@ -646,7 +646,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let (amounts_owed, current_liquidity_delta) =
 				self.inner_liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
 			// Will not underflow as current_liquidity_delta must have previously been added to
-			// current_liquidity for it to need to be substrated now
+			// current_liquidity for it to need to be subtracted now
 			self.current_liquidity -= current_liquidity_delta;
 
 			if lower_delta.liquidity_gross == 0 &&
