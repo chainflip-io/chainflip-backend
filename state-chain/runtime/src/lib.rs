@@ -682,6 +682,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = EthereumVault;
+	type ChainTracking = EthereumChainTracking;
 }
 
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
@@ -704,6 +705,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = PolkadotVault;
+	type ChainTracking = PolkadotChainTracking;
 }
 
 impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
@@ -726,6 +728,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = BitcoinVault;
+	type ChainTracking = BitcoinChainTracking;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
