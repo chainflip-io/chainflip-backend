@@ -4,6 +4,7 @@ use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
+use cf_chains::eth::CHAIN_ID_MAINNET;
 
 // *** Overrides from common
 pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
@@ -13,7 +14,7 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-KitKat";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
-pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
+pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Mainnet;
 pub const PROTOCOL_ID: &str = "flip-kitkat";
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
@@ -23,18 +24,18 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	key_manager_address: hex_literal::hex!("697C9BCA7916305C1D9377AB0E985da1411Dd70b"),
 	eth_vault_address: hex_literal::hex!("806cDBA7E42AdDE2B6cb09b748943E4B9A9188E5"),
 	eth_address_checker_address: hex_literal::hex!("D2D873BCaE693C9Cb9F7757183012edD671d2216"),
-	ethereum_chain_id: CHAIN_ID_GOERLI,
+	ethereum_chain_id: CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024"
 	),
 	ethereum_deployment_block: 18227257u64,
-	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
+	genesis_funding_amount: 1_000 * FLIPPERINOS_PER_FLIP,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9430, transaction_version: 24 },
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
