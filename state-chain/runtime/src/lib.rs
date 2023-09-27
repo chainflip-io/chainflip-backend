@@ -865,6 +865,21 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 
 		Weight::zero()
 	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
+		use codec::Encode;
+		Ok(pallet_cf_broadcast::BroadcastIdCounter::<Runtime, PolkadotInstance>::get().encode())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
+		let pre = <u32 as codec::Decode>::decode(&mut &state[..])
+			.map_err(|_| DispatchError::Other("Invalid state"))?;
+		let post = pallet_cf_broadcast::BroadcastIdCounter::<Runtime, PolkadotInstance>::get();
+		assert_eq!(post, pre + 4);
+		Ok(())
+	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
