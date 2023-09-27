@@ -843,9 +843,9 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 			nonce += 1;
 			PolkadotBroadcaster::threshold_sign_and_broadcast(
 				api_call.clone(),
-				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(id),
+				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(*id),
 			);
-			PolkadotBroadcaster::clean_up_broadcast_storage(id);
+			PolkadotBroadcaster::clean_up_broadcast_storage(*id);
 		}
 		// then the rotation
 		for (id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
@@ -858,9 +858,9 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 			nonce += 1;
 			PolkadotBroadcaster::threshold_sign_and_broadcast(
 				api_call.clone(),
-				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(id),
+				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(*id),
 			);
-			PolkadotBroadcaster::clean_up_broadcast_storage(id);
+			PolkadotBroadcaster::clean_up_broadcast_storage(*id);
 		}
 
 		Weight::zero()
