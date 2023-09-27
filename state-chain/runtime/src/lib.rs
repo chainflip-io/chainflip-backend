@@ -935,7 +935,7 @@ impl_runtime_apis! {
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
 			let account_info_v1 = Self::cf_account_info(account_id.clone());
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
-			let restricted_balance = pallet_cf_flip::PendingRedemptionsReserve::<Runtime>::get(&account_id).unwrap_or(0);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
@@ -949,7 +949,7 @@ impl_runtime_apis! {
 				is_online: account_info_v1.is_live,
 				is_bidding,
 				bound_redeem_address,
-				restricted_balance,
+				restricted_balances,
 			}
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {

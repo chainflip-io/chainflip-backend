@@ -23,7 +23,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -51,7 +51,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
-	pub restricted_balance: NumberOrHex,
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -472,7 +472,7 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
-			restricted_balance: account_info.restricted_balance.into(),
+			restricted_balances: account_info.restricted_balances.into(),
 		})
 	}
 	fn cf_penalties(

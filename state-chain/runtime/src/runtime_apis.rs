@@ -14,7 +14,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_runtime::DispatchError;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 type VanityName = Vec<u8>;
 
@@ -57,7 +57,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
-	pub restricted_balance: u128,
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
