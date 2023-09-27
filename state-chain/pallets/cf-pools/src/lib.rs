@@ -954,7 +954,10 @@ pub mod pallet {
 			fee_hundredth_pips: u32,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips), Error::<T>::InvalidFeeAmount);
+			ensure!(
+				PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips),
+				Error::<T>::InvalidFeeAmount
+			);
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				if pool.pool_state.limit_order_fee() == fee_hundredth_pips &&
 					pool.pool_state.range_order_fee() == fee_hundredth_pips

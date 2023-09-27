@@ -356,10 +356,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}
-	
+
 	// Returns if the pool fee is valid.
 	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) && 
-		range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) 
+		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
+			range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
 	}
 }
