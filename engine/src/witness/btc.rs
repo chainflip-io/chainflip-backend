@@ -196,6 +196,8 @@ mod tests {
 		btc::{deposit_address::DepositAddress, ScriptPubkey},
 		DepositChannel,
 	};
+	use pallet_cf_ingress_egress::ChannelAction;
+	use sp_runtime::AccountId32;
 
 	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
 		Transaction {
@@ -217,6 +219,9 @@ mod tests {
 				address,
 				asset: btc::Asset::Btc,
 				state: DepositAddress::new([0; 32], 1),
+			},
+			action: ChannelAction::<AccountId32>::LiquidityProvision {
+				lp_account: AccountId32::new([0xab; 32]),
 			},
 		}
 	}

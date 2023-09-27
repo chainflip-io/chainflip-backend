@@ -101,8 +101,6 @@ pub mod common {
 	/// See https://github.com/chainflip-io/chainflip-backend/issues/1629
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
 
-	/// Default supply update interval is 24 hours.
-
 	pub mod eth {
 		use cf_chains::{eth::Ethereum, Chain};
 
