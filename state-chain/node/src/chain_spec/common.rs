@@ -40,7 +40,6 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
 
-pub const SWAP_TTL: BlockNumber = 2 * HOURS;
 pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
 	(Asset::Eth, 580_000_000_000_000u128), // 1usd worth of Eth = 0.00058 * 18 d.p
 	(Asset::Flip, FLIPPERINOS_PER_FLIP),   // 1 Flip

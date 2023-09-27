@@ -44,10 +44,10 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
-	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
-	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
-	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
+	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
+	KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -75,21 +75,6 @@ impl Chainflip for Runtime {
 	type EpochInfo = Validator;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
-}
-
-impl_runtime_safe_mode! {
-	RuntimeSafeMode,
-	pallet_cf_environment::RuntimeSafeMode<Runtime>,
-	emissions: pallet_cf_emissions::PalletSafeMode,
-	funding: pallet_cf_funding::PalletSafeMode,
-	swapping: pallet_cf_swapping::PalletSafeMode,
-	liquidity_provider: pallet_cf_lp::PalletSafeMode,
-	validator: pallet_cf_validator::PalletSafeMode,
-	pools: pallet_cf_pools::PalletSafeMode,
-	reputation: pallet_cf_reputation::PalletSafeMode,
-	vault: pallet_cf_vaults::PalletSafeMode,
-	witnesser: pallet_cf_witnesser::PalletSafeMode,
-	broadcast: pallet_cf_broadcast::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -475,7 +460,6 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -483,7 +467,6 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-								expiry,
 							),
 					)+
 				}
@@ -496,7 +479,6 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -507,20 +489,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
-							expiry,
 						),
-					)+
-				}
-			}
-
-			fn expire_channel(address: ForeignChainAddress) {
-				match address.chain() {
-					$(
-						ForeignChain::$chain => {
-							<$pallet as DepositApi<$chain>>::expire_channel(
-								address.try_into().expect("Checked for address compatibility")
-							);
-						},
 					)+
 				}
 			}

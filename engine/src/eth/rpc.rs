@@ -1,10 +1,11 @@
 pub mod address_checker;
 
+use anyhow::bail;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
 use utilities::redact_endpoint_secret::SecretUrl;
 
-use crate::constants::{ETH_AVERAGE_BLOCK_TIME, SYNC_POLL_INTERVAL};
+use crate::constants::{RPC_RETRY_CONNECTION_INTERVAL, SYNC_POLL_INTERVAL};
 use anyhow::{anyhow, Context, Result};
 use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -43,20 +44,21 @@ impl EthRpcClient {
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the ETH
 			// node. So the other chains are unaffected
-			let mut poll_interval = make_periodic_tick(ETH_AVERAGE_BLOCK_TIME, true);
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			loop {
 				poll_interval.tick().await;
 				match client.chain_id().await {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
-						tracing::warn!(
-								"Connected to Ethereum node but with chain_id {chain_id}, expected {expected_chain_id}. Please check your CFE
+						tracing::error!(
+								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. Please check your CFE
 								configuration file...",
 							);
 					},
 					Err(e) => tracing::error!(
 							"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. Please check your CFE
-							configuration file. Retrying...",
+							configuration file. Retrying in {:?}...",
+							poll_interval.period()
 						),
 				}
 			}
@@ -227,20 +229,17 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 
 		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
 		if self.chain_id != client_chain_id {
-			Err(anyhow!(
-				"Expected chain id {}, eth ws client returned {client_chain_id}.",
-				self.chain_id
-			))
-		} else {
-			Ok(ConscientiousEthWebsocketBlockHeaderStream {
-				stream: Some(
-					web3.eth_subscribe()
-						.subscribe_new_heads()
-						.await
-						.context("Failed to subscribe to new heads with WS Client")?,
-				),
-			})
+			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
+
+		Ok(ConscientiousEthWebsocketBlockHeaderStream {
+			stream: Some(
+				web3.eth_subscribe()
+					.subscribe_new_heads()
+					.await
+					.context("Failed to subscribe to new heads with WS Client")?,
+			),
+		})
 	}
 }
 

@@ -8,7 +8,8 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey, UtxoId, CHANGE_ADDRESS_SALT},
 	Bitcoin,
 };
-use cf_primitives::chains::assets::btc;
+use cf_primitives::{chains::assets::btc, EpochIndex};
+use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use secp256k1::hashes::Hash;
 use state_chain_runtime::BitcoinInstance;
@@ -29,9 +30,10 @@ use anyhow::Result;
 
 const SAFETY_MARGIN: usize = 6;
 
-pub async fn start<StateChainClient, StateChainStream>(
+pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	btc_client: BtcRetryRpcClient,
+	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -40,6 +42,12 @@ pub async fn start<StateChainClient, StateChainStream>(
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 
@@ -68,9 +76,9 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			move |epoch, header| {
-				let state_chain_client = state_chain_client.clone();
+				let process_call = process_call.clone();
 				async move {
 					// TODO: Make addresses a Map of some kind?
 					let (((), txs), addresses) = header.data;
@@ -81,18 +89,12 @@ where
 
 					// Submit all deposit witnesses for the block.
 					if !deposit_witnesses.is_empty() {
-						state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(
-								pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
-									deposit_witnesses,
-									block_height: header.index,
-								}
-								.into(),
-							),
-							epoch_index: epoch.index,
-						})
-						.await;
+						process_call(
+							pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
+								deposit_witnesses,
+								block_height: header.index,
+							}.into(),
+							epoch.index).await;
 					}
 					txs
 				}
@@ -101,30 +103,29 @@ where
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		.then(move |epoch, header| {
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			async move {
 				let (txs, monitored_tx_hashes) = header.data;
 
 				for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
-					state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
-								pallet_cf_broadcast::Call::transaction_succeeded {
-									tx_out_id: tx_hash,
-									signer_id: DepositAddress::new(
-										epoch.info.0.public_key.current,
-										CHANGE_ADDRESS_SALT,
-									)
-									.script_pubkey(),
-									// TODO: Ideally we can submit an empty type here. For
-									// Bitcoin and some other chains fee tracking is not
-									// necessary. PRO-370.
-									tx_fee: Default::default(),
-								},
-							)),
-							epoch_index: epoch.index,
-						})
-						.await;
+					process_call(
+						state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
+							pallet_cf_broadcast::Call::transaction_succeeded {
+								tx_out_id: tx_hash,
+								signer_id: DepositAddress::new(
+									epoch.info.0.public_key.current,
+									CHANGE_ADDRESS_SALT,
+								)
+								.script_pubkey(),
+								// TODO: Ideally we can submit an empty type here. For
+								// Bitcoin and some other chains fee tracking is not
+								// necessary. PRO-370.
+								tx_fee: Default::default(),
+							},
+						),
+						epoch.index,
+					)
+					.await;
 				}
 			}
 		})
@@ -195,6 +196,8 @@ mod tests {
 		btc::{deposit_address::DepositAddress, ScriptPubkey},
 		DepositChannel,
 	};
+	use pallet_cf_ingress_egress::ChannelAction;
+	use sp_runtime::AccountId32;
 
 	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
 		Transaction {
@@ -216,6 +219,9 @@ mod tests {
 				address,
 				asset: btc::Asset::Btc,
 				state: DepositAddress::new([0; 32], 1),
+			},
+			action: ChannelAction::<AccountId32>::LiquidityProvision {
+				lp_account: AccountId32::new([0xab; 32]),
 			},
 		}
 	}

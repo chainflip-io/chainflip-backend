@@ -389,3 +389,38 @@ fn test_safe_mode() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});
 }
+
+#[test]
+fn safe_mode_code_amber_can_filter_calls() {
+	new_test_ext().execute_with(|| {
+		// Block calls via SafeMode::CodeAmber
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CodeAmber(MockCallFilter {}),
+		});
+		AllowCall::set(false);
+
+		// Sign the call so its ready to be dispatched
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
+		for s in [ALISSA, BOBSON] {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(s),
+				call.clone(),
+				current_epoch
+			));
+		}
+		assert_eq!(WitnessedCallsScheduledForDispatch::<Test>::decode_len(), Some(1));
+
+		// Call is not dispatched because its blocked by the CallDispatchFilter
+		Witnesser::on_idle(1, Weight::zero().set_ref_time(1_000_000_000_000u64));
+		assert!(!WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		// Allow the call to pass the filter
+		AllowCall::set(true);
+
+		// Call should be dispatched now.
+		Witnesser::on_idle(2, Weight::zero().set_ref_time(1_000_000_000_000u64));
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
+	});
+}

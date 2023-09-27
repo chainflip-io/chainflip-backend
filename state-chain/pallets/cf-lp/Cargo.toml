@@ -17,6 +17,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 serde = { version = '1.0.126', default_features = false, features = [
   'alloc',
@@ -49,6 +50,7 @@ std = [
   'cf-chains/std',
   'cf-primitives/std',
   'cf-traits/std',
+  'cf-runtime-upgrade-utilities/std',
   'codec/std',
   'frame-benchmarking/std',
   'frame-support/std',
@@ -66,4 +68,7 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'pallet-cf-account-roles/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = [
+  'cf-runtime-upgrade-utilities/try-runtime',
+  'frame-support/try-runtime',
+]
