@@ -46,8 +46,8 @@ use sp_runtime::{
 };
 
 pub mod common;
-pub mod kitkat;
 pub mod devnet;
+pub mod kitkat;
 pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;

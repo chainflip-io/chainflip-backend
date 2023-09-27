@@ -1,10 +1,12 @@
-pub use super::common::*;
+pub use super::{
+	common::*,
+	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
+};
 use super::{parse_account, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::H256;
-use cf_chains::eth::CHAIN_ID_MAINNET;
 
 // *** Overrides from common
 pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
