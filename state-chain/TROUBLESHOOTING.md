@@ -23,7 +23,8 @@ SKIP_WASM_BUILD=1 cargo build --release --features=try-runtime
 Now you can run your tests like so (using an appropriate public rpc node):
 
 ```sh
-./target/release/chainflip-node try-runtime --execution native \
+./target/release/chainflip-node try-runtime \
+    --runtime ./path/to/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
 ```
 
@@ -47,8 +48,6 @@ Once the node has synced, in another terminal window, run the checks:
 ./target/release/chainflip-node try-runtime --execution native \
     on-runtime-upgrade live --uri ws://localhost:9944
 ```
-
-> *Note: Using `--execution native` ensures faster execution and also prevents log messages from being scrubbed.
 
 ### General tips and guidelines
 
