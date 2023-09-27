@@ -17,17 +17,17 @@ pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Testnet;
 pub const PROTOCOL_ID: &str = "flip-kitkat";
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!(""),
-	eth_usdc_address: hex_literal::hex!(""),
-	state_chain_gateway_address: hex_literal::hex!(""),
-	key_manager_address: hex_literal::hex!(""),
-	eth_vault_address: hex_literal::hex!(""),
-	eth_address_checker_address: hex_literal::hex!(""),
+	flip_token_address: hex_literal::hex!("6fA66Cb44dE97CaA1aE7742019DF6e7AFA3F9b51"),
+	eth_usdc_address: hex_literal::hex!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+	state_chain_gateway_address: hex_literal::hex!("B5E2C8fa04Ae426167490a0437c4F20556c9B07C"),
+	key_manager_address: hex_literal::hex!("697C9BCA7916305C1D9377AB0E985da1411Dd70b"),
+	eth_vault_address: hex_literal::hex!("806cDBA7E42AdDE2B6cb09b748943E4B9A9188E5"),
+	eth_address_checker_address: hex_literal::hex!("D2D873BCaE693C9Cb9F7757183012edD671d2216"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		""
+		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024"
 	),
-	ethereum_deployment_block: 9595582u64,
+	ethereum_deployment_block: 18227257u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
@@ -39,42 +39,41 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
 
-pub const BASHFUL_ACCOUNT_ID: &str = "cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo";
+pub const BASHFUL_ACCOUNT_ID: &str = "cFNBWrx4Wx68hVugPVX3KAtKwbsmHjw6ozAXE3d663bwtYF5R";
 pub const BASHFUL_SR25519: [u8; 32] =
-	hex_literal::hex!["789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"];
+	hex_literal::hex!["beb23228343fc71c913a10299f577cbc20ee0eb44dcf8a698ab861c76223495b"];
 pub const BASHFUL_ED25519: [u8; 32] =
-	hex_literal::hex!["7fdaaa9becf88f9f0a3590bd087ddce9f8d284ccf914c542e4c9f0c0e6440a6a"];
-pub const DOC_ACCOUNT_ID: &str = "cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa";
+	hex_literal::hex!["92e620fa4cc3736bbef778b5852309936c0ce640ad50c1f4f36fc15eba7f4ed8"];
+pub const DOC_ACCOUNT_ID: &str = "cFJHNnou7QwegcEEhL3xeD1aUrjeaL5Ydqtrfyd7ousKoiLPU";
 pub const DOC_SR25519: [u8; 32] =
-	hex_literal::hex!["7a467c9e1722b35408618a0cffc87c1e8433798e9c5a79339a10d71ede9e9d79"];
+	hex_literal::hex!["123990561086190def905deab1f5c3fe1f7dd08585e677ff4fe3196e1201a82e"];
 pub const DOC_ED25519: [u8; 32] =
-	hex_literal::hex!["3489d0b548c5de56c1f3bd679dbabe3b0bff44fb5e7a377931c1c54590de5de6"];
-pub const DOPEY_ACCOUNT_ID: &str = "cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4";
+	hex_literal::hex!["4a11427487645aade5f5134904668a9dcde93e493f668f0b347f23d3cd4d7c76"];
+pub const DOPEY_ACCOUNT_ID: &str = "cFJyZdYw1p9bkYNUuwDppkfKrGinn8r4ZWaPvSaxSvrpiSTa2";
 pub const DOPEY_SR25519: [u8; 32] =
-	hex_literal::hex!["7a4738071f16c71ef3e5d94504d472fdf73228cb6a36e744e0caaf13555c3c01"];
+	hex_literal::hex!["30dfdf38642c300105e2ac604b92d08f1e26f01459539bfd7f8c51cf60e0ce68"];
 pub const DOPEY_ED25519: [u8; 32] =
-	hex_literal::hex!["d9a7e774a58c50062caf081a69556736e62eb0c854461f4485f281f60c53160f"];
-pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFLsnoJA2YhAGt9815jPqmzK5esKVyhNAwPoeFmD3PEceE12a";
+	hex_literal::hex!["39df8c764fb991819aeb94bfb2e7809a2728660113e6ec0758e751d3c00f4fcd"];
+pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFKsNoWaviRPS5s4xPxHxEXWBwAm3Q4JGXoXY3HXcsfWgun1D";
 pub const SNOW_WHITE_SR25519: [u8; 32] =
-	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
+	hex_literal::hex!["58642e85c7889f9cda6e5d87249c6ab4c6d9b2f6bad8c5986cab81c6317d4e61"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	[
 		vec![
 			(
-				parse_account("cFMTNSQQVfBo2HqtekvhLPfZY764kuJDVFG1EvnnDGYxc3LRW"),
+				parse_account("cFHwQ2eJQqRLJWgcHhdgAVCXx2TNRaS3R4Zc98mU2SrkW6AMH"),
 				AccountRole::Broker,
 				1_000 * FLIPPERINOS_PER_FLIP,
 				Some(b"Chainflip Genesis Broker".to_vec()),
 			),
 			(
-				parse_account("cFN2sr3eDPoyp3G4CAg3EBRMo2VMoYJ7x3rBn51tmXsguYzMX"),
+				parse_account("cFNaeW7FBpjVxh5haxwmnnATCXriuThVJ8vcyQWKi6SfwWHni"),
 				AccountRole::LiquidityProvider,
 				1_000 * FLIPPERINOS_PER_FLIP,
 				Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
 			),
-		],
-		phoenix_accounts(),
+		]
 	]
 	.into_iter()
 	.flatten()
