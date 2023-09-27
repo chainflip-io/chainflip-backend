@@ -392,7 +392,7 @@ impl<T: Config> Pallet<T> {
 			let current_nonce = *nonce;
 
 			if reset_nonce {
-				PolkadotProxyAccountNonce::<T>::set(0);
+				*nonce = 0;
 			} else {
 				*nonce += 1;
 			}
