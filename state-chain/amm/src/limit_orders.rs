@@ -401,7 +401,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), (Collected, PositionInfo)>>,
 		SetFeesError,
 	> {
-		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
+		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
 
@@ -846,5 +846,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		} else {
 			Err(DepthError::InvalidTickRange)
 		}
+	}
+
+	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
+		fee_hundredth_pips <= MAX_LP_FEE
 	}
 }

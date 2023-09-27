@@ -475,7 +475,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok(())
 	}
 
-	fn validate_fees(fee_hundredth_pips: u32) -> bool {
+	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
 		fee_hundredth_pips <= MAX_LP_FEE
 	}
 

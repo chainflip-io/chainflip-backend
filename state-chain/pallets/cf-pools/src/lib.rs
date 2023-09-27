@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, Tick, MAX_LP_FEE},
+	common::{Amount, Order, Price, Side, SideMap, Tick},
 	limit_orders, range_orders,
 	range_orders::Liquidity,
 	PoolState,
@@ -954,7 +954,7 @@ pub mod pallet {
 			fee_hundredth_pips: u32,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(fee_hundredth_pips <= MAX_LP_FEE, Error::<T>::InvalidFeeAmount);
+			ensure!(PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips), Error::<T>::InvalidFeeAmount);
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				if pool.pool_state.limit_order_fee() == fee_hundredth_pips &&
 					pool.pool_state.range_order_fee() == fee_hundredth_pips
