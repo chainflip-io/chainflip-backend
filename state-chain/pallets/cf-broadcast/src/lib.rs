@@ -24,7 +24,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::DispatchResult,
 	sp_runtime::traits::Saturating,
-	traits::{Get, StorageVersion, UnfilteredDispatchable},
+	traits::{Get, OnRuntimeUpgrade, StorageVersion, UnfilteredDispatchable},
 	Twox64Concat,
 };
 
@@ -379,6 +379,20 @@ pub mod pallet {
 			} else {
 				Weight::zero()
 			}
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
