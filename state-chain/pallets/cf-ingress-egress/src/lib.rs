@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::sp_runtime::SaturatedConversion;
+use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade};
 pub use weights::WeightInfo;
 
 use cf_chains::{
@@ -450,6 +450,19 @@ pub mod pallet {
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
