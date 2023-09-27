@@ -45,6 +45,7 @@ use sp_runtime::{
 };
 
 pub mod common;
+pub mod kitkat;
 pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
@@ -416,6 +417,7 @@ network_spec!(testnet);
 network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
+network_spec!(kitkat);
 
 /// Configure initial storage state for FRAME modules.
 /// 150 authority limit

@@ -150,3 +150,18 @@ assets = [
     "644",
   ],
 ]
+
+[package.metadata.deb.variants.kitkat]
+maintainer-scripts = "package/kitkat"
+assets = [
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "chainspecs/kitkat.chainspec.raw.json",
+    "etc/chainflip/kitkat.chainspec.json",
+    "644",
+  ],
+]
