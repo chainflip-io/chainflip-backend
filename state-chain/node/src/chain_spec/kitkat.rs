@@ -31,7 +31,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3"  // Polkadot mainnet
+		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
@@ -59,22 +59,20 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["58642e85c7889f9cda6e5d87249c6ab4c6d9b2f6bad8c5986cab81c6317d4e61"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	[
-		vec![
-			(
-				parse_account("cFHwQ2eJQqRLJWgcHhdgAVCXx2TNRaS3R4Zc98mU2SrkW6AMH"),
-				AccountRole::Broker,
-				1_000 * FLIPPERINOS_PER_FLIP,
-				Some(b"Chainflip Genesis Broker".to_vec()),
-			),
-			(
-				parse_account("cFNaeW7FBpjVxh5haxwmnnATCXriuThVJ8vcyQWKi6SfwWHni"),
-				AccountRole::LiquidityProvider,
-				1_000 * FLIPPERINOS_PER_FLIP,
-				Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
-			),
-		]
-	]
+	[vec![
+		(
+			parse_account("cFHwQ2eJQqRLJWgcHhdgAVCXx2TNRaS3R4Zc98mU2SrkW6AMH"),
+			AccountRole::Broker,
+			1_000 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Genesis Broker".to_vec()),
+		),
+		(
+			parse_account("cFNaeW7FBpjVxh5haxwmnnATCXriuThVJ8vcyQWKi6SfwWHni"),
+			AccountRole::LiquidityProvider,
+			1_000 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
+		),
+	]]
 	.into_iter()
 	.flatten()
 	.collect()

@@ -45,11 +45,11 @@ use sp_runtime::{
 };
 
 pub mod common;
+pub mod kitkat;
 pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
-pub mod kitkat;
 
 /// Generate a crypto pair from seed.
 pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
