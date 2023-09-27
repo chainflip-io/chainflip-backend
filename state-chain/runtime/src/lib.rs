@@ -86,9 +86,8 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
-	BroadcastReadyProvider, BtcEnvironment, BtcVaultTransitionHandler, ChainAddressConverter,
-	ChainflipHeartbeat, DotEnvironment, DotVaultTransitionHandler, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
+	DotEnvironment, EthEnvironment, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -241,7 +240,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
-	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -259,7 +257,6 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
-	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -277,7 +274,6 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
-	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;

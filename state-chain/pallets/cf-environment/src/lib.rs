@@ -386,15 +386,17 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn next_polkadot_proxy_account_nonce() -> PolkadotIndex {
+	pub fn next_polkadot_proxy_account_nonce(reset_nonce: bool) -> PolkadotIndex {
 		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
-			*nonce += 1;
-			*nonce - 1
-		})
-	}
+			let current_nonce = *nonce;
 
-	pub fn reset_polkadot_proxy_account_nonce() {
-		PolkadotProxyAccountNonce::<T>::set(0);
+			if reset_nonce {
+				PolkadotProxyAccountNonce::<T>::set(0);
+			} else {
+				*nonce += 1;
+			}
+			current_nonce
+		})
 	}
 
 	pub fn add_bitcoin_utxo_to_list(
