@@ -848,7 +848,7 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 			PolkadotBroadcaster::clean_up_broadcast_storage(id);
 		}
 		// then the rotation
-		for (_id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
+		for (id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
 			match api_call {
 				cf_chains::dot::api::PolkadotApi::RotateVaultProxy(ref mut ext_builder) => {
 					ext_builder.force_nonce(nonce);
