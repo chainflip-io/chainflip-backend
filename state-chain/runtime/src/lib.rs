@@ -833,7 +833,7 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 
 		let mut nonce = 1;
 		// transfers first
-		for (_id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
+		for (id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
 			match api_call {
 				cf_chains::dot::api::PolkadotApi::BatchFetchAndTransfer(ref mut ext_builder) => {
 					ext_builder.force_nonce(nonce);
@@ -841,7 +841,11 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 				_ => continue,
 			}
 			nonce += 1;
-			PolkadotBroadcaster::threshold_sign_and_broadcast(api_call.clone(), None);
+			PolkadotBroadcaster::threshold_sign_and_broadcast(
+				api_call.clone(),
+				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(id),
+			);
+			PolkadotBroadcaster::clean_up_broadcast_storage(id);
 		}
 		// then the rotation
 		for (_id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
@@ -852,7 +856,11 @@ impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 				_ => continue,
 			}
 			nonce += 1;
-			PolkadotBroadcaster::threshold_sign_and_broadcast(api_call.clone(), None);
+			PolkadotBroadcaster::threshold_sign_and_broadcast(
+				api_call.clone(),
+				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(id),
+			);
+			PolkadotBroadcaster::clean_up_broadcast_storage(id);
 		}
 
 		Weight::zero()
