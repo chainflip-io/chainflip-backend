@@ -33,6 +33,8 @@ pub type Addresses<Inner> = Vec<
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
+
+#[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct IngressAddresses<Inner: ChunkedByVault>
 where
@@ -58,7 +60,11 @@ where
 	// FOr a given header we only witness addresses opened at or before the header, the set of
 	// addresses each engine attempts to witness at a given block is consistent
 	fn addresses_for_header(index: Inner::Index, addresses: &Addresses<Inner>) -> Addresses<Inner> {
-		addresses.iter().filter(|details| details.opened_at <= index).cloned().collect()
+		addresses
+			.iter()
+			.filter(|details| details.opened_at <= index && index <= details.expires_at)
+			.cloned()
+			.collect()
 	}
 
 	async fn get_chain_state_and_addresses<StateChainClient: StorageApi + Send + Sync + 'static>(

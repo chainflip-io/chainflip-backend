@@ -9,7 +9,8 @@ pub mod vault;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_primitives::chains::assets::eth;
+use cf_primitives::{chains::assets::eth, EpochIndex};
+use futures_core::Future;
 use sp_core::H160;
 use utilities::task_scope::Scope;
 
@@ -33,9 +34,18 @@ use anyhow::{Context, Result};
 
 const SAFETY_MARGIN: usize = 7;
 
-pub async fn start<StateChainClient, StateChainStream>(
+pub async fn start<
+	StateChainClient,
+	StateChainStream,
+	ProcessCall,
+	ProcessingFut,
+	PrewitnessCall,
+	PrewitnessFut,
+>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthersRetryRpcClient,
+	process_call: ProcessCall,
+	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -44,6 +54,18 @@ pub async fn start<StateChainClient, StateChainStream>(
 where
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
+	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
@@ -102,16 +124,86 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
+	let vaults = epoch_source.vaults().await;
+
+	// ===== Prewitnessing stream =====
+	let prewitness_source = eth_source
+		.clone()
+		.strictly_monotonic()
+		.shared(scope)
+		.chunk_by_vault(vaults.clone());
+
+	let prewitness_source_deposit_addresses = prewitness_source
+		.clone()
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await;
+
+	prewitness_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, UsdcEvents>(
+			prewitness_call.clone(),
+			eth_client.clone(),
+			cf_primitives::chains::assets::eth::Asset::Usdc,
+			usdc_contract_address,
+		)
+		.await?
+		.logging("pre-witnessing USDCDeposits")
+		.spawn(scope);
+
+	prewitness_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, FlipEvents>(
+			prewitness_call.clone(),
+			eth_client.clone(),
+			cf_primitives::chains::assets::eth::Asset::Flip,
+			flip_contract_address,
+		)
+		.await?
+		.logging("pre-witnessing FlipDeposits")
+		.spawn(scope);
+
+	prewitness_source_deposit_addresses
+		.clone()
+		.ethereum_deposits(
+			prewitness_call.clone(),
+			eth_client.clone(),
+			eth::Asset::Eth,
+			address_checker_address,
+			vault_address,
+		)
+		.await
+		.logging("pre-witnessing EthereumDeposits")
+		.spawn(scope);
+
+	prewitness_source
+		.vault_witnessing(
+			prewitness_call,
+			eth_client.clone(),
+			vault_address,
+			cf_primitives::Asset::Eth,
+			cf_primitives::ForeignChain::Ethereum,
+			supported_erc20_tokens.clone(),
+		)
+		.logging("pre-witnessing Vault")
+		.spawn(scope);
+
+	// ===== Full witnessing stream =====
+
 	let eth_safe_vault_source = eth_source
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await);
+		.chunk_by_vault(vaults);
+
+	let eth_safe_vault_source_deposit_addresses = eth_safe_vault_source
+		.clone()
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await;
 
 	eth_safe_vault_source
 		.clone()
-		.key_manager_witnessing(state_chain_client.clone(), eth_client.clone(), key_manager_address)
+		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
 		.continuous("KeyManager".to_string(), db.clone())
 		.logging("KeyManager")
 		.spawn(scope);
@@ -119,7 +211,7 @@ where
 	eth_safe_vault_source
 		.clone()
 		.state_chain_gateway_witnessing(
-			state_chain_client.clone(),
+			process_call.clone(),
 			eth_client.clone(),
 			state_chain_gateway_address,
 		)
@@ -127,12 +219,10 @@ where
 		.logging("StateChainGateway")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	eth_safe_vault_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.erc20_deposits::<_, _, UsdcEvents>(
-			state_chain_client.clone(),
+		.erc20_deposits::<_, _, _, UsdcEvents>(
+			process_call.clone(),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Usdc,
 			usdc_contract_address,
@@ -142,12 +232,10 @@ where
 		.logging("USDCDeposits")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	eth_safe_vault_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.erc20_deposits::<_, _, FlipEvents>(
-			state_chain_client.clone(),
+		.erc20_deposits::<_, _, _, FlipEvents>(
+			process_call.clone(),
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Flip,
 			flip_contract_address,
@@ -157,12 +245,10 @@ where
 		.logging("FlipDeposits")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	eth_safe_vault_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.ethereum_deposits(
-			state_chain_client.clone(),
+			process_call.clone(),
 			eth_client.clone(),
 			eth::Asset::Eth,
 			address_checker_address,
@@ -175,7 +261,7 @@ where
 
 	eth_safe_vault_source
 		.vault_witnessing(
-			state_chain_client.clone(),
+			process_call,
 			eth_client.clone(),
 			vault_address,
 			cf_primitives::Asset::Eth,

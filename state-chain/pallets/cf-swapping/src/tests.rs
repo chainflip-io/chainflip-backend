@@ -2,7 +2,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
 	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumSwapAmount, Pallet, PendingCcms,
-	Swap, SwapChannelExpiries, SwapOrigin, SwapQueue, SwapTTL, SwapType,
+	Swap, SwapOrigin, SwapQueue, SwapType,
 };
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -11,11 +11,10 @@ use cf_chains::{
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain, NetworkEnvironment};
-use cf_test_utilities::{assert_event_sequence, assert_events_match};
+use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		deposit_handler::{MockDepositHandler, SwapChannel},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
@@ -23,7 +22,6 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
 
 use frame_support::traits::Hooks;
-use sp_runtime::traits::BlockNumberProvider;
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -229,12 +227,11 @@ fn expect_swap_id_to_be_emitted() {
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				deposit_address: EncodedAddress::Eth(..),
 				destination_address: EncodedAddress::Eth(..),
-				expiry_block,
 				source_asset: Asset::Eth,
 				destination_asset: Asset::Usdc,
 				channel_id: 0,
 				..
-			}) if expiry_block == SwapTTL::<Test>::get() + System::current_block_number(),
+			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
 				source_asset: Asset::Eth,
@@ -246,7 +243,9 @@ fn expect_swap_id_to_be_emitted() {
 					channel_id: 1,
 					deposit_block_height: 0
 				},
-				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)), broker_commission: _ }),
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)),
+				broker_commission: _
+			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
@@ -312,78 +311,6 @@ fn can_swap_using_witness_origin() {
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			broker_commission: None,
 		}));
-	});
-}
-
-#[test]
-fn swap_expires() {
-	new_test_ext().execute_with(|| {
-		let expiry = SwapTTL::<Test>::get() + 1;
-		assert_eq!(expiry, 6); // Expiry = current(1) + TTL (5)
-		assert_ok!(Swapping::request_swap_deposit_address(
-			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			Asset::Usdc,
-			EncodedAddress::Eth(Default::default()),
-			0,
-			None
-		));
-
-		let deposit_address = assert_events_match!(Test, RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
-			deposit_address,
-			..
-		}) => deposit_address);
-		let swap_channel = SwapChannel {
-			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
-			source_asset: Asset::Eth,
-			destination_asset: Asset::Usdc,
-			destination_address: ForeignChainAddress::Eth(Default::default()),
-			broker_commission_bps: 0,
-			broker_id: ALICE,
-			channel_metadata: None,
-			expiry,
-		};
-
-		assert_eq!(
-			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChainAddress::Eth(Default::default()))]
-		);
-		assert_eq!(
-			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
-			vec![swap_channel.clone()]
-		);
-
-		// Does not expire until expiry block.
-		Swapping::on_initialize(expiry - 1);
-		assert_eq!(
-			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChainAddress::Eth(Default::default()))]
-		);
-		assert_eq!(
-			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
-			vec![swap_channel]
-		);
-
-		Swapping::on_initialize(6);
-		assert_eq!(SwapChannelExpiries::<Test>::get(6), vec![]);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			Event::<Test>::SwapDepositAddressExpired {
-				deposit_address: EncodedAddress::Eth(Default::default()),
-				channel_id: 0,
-			},
-		));
-		assert!(
-			MockDepositHandler::<AnyChain, Test>::get_swap_channels().is_empty()
-		);
-	});
-}
-
-#[test]
-fn can_set_swap_ttl() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(crate::SwapTTL::<Test>::get(), 5);
-		assert_ok!(Swapping::set_swap_ttl(RuntimeOrigin::root(), 10));
-		assert_eq!(crate::SwapTTL::<Test>::get(), 10);
 	});
 }
 

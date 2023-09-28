@@ -5,7 +5,7 @@ use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 benchmarks! {
@@ -40,38 +40,6 @@ benchmarks! {
 	verify {
 		assert_ok!(T::AccountRoleRegistry::ensure_liquidity_provider(RawOrigin::Signed(caller).into()));
 	}
-
-	on_initialize {
-		let a in 1..100;
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
-		let _ = Pallet::<T>::register_liquidity_refund_address(
-			RawOrigin::Signed(caller.clone()).into(),
-			EncodedAddress::Eth(Default::default()),
-		);
-		for i in 0..a {
-			assert_ok!(Pallet::<T>::request_liquidity_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
-		}
-		let expiry = LpTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
-		assert!(!LiquidityChannelExpiries::<T>::get(expiry).is_empty());
-	}: {
-		Pallet::<T>::on_initialize(expiry);
-	} verify {
-		assert!(LiquidityChannelExpiries::<T>::get(expiry).is_empty());
-	}
-
-	set_lp_ttl {
-		let ttl = BlockNumberFor::<T>::from(1_000u32);
-		let call = Call::<T>::set_lp_ttl {
-			ttl,
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert_eq!(crate::LpTTL::<T>::get(), ttl);
-	}
-
 	register_liquidity_refund_address {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);

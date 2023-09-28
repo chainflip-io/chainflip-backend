@@ -93,8 +93,7 @@ impl std::fmt::Display for PeerInfo {
 enum RegistrationStatus {
 	/// The node is not yet known to the network (its peer info
 	/// may not be known to the network yet)
-	/// (Stores future peers to connect to when then node is registered)
-	Pending(Vec<PeerInfo>),
+	Pending,
 	/// The node is registered, i.e. its peer info has been
 	/// recorded/updated
 	Registered,
@@ -209,6 +208,11 @@ struct P2PContext {
 	/// A handle to the authenticator thread that can be used to make changes to the
 	/// list of allowed peers
 	authenticator: Arc<Authenticator>,
+	/// Contains all existing ZMQ sockets for "client" connections. Note that ZMQ socket
+	/// exists even when there is no internal TCP connection (e.g. before the connection
+	/// is established for the first time, or when ZMQ it is reconnecting). Also, when
+	/// our own (independent from ZMQ) reconnection mechanism kicks in, the entry is removed
+	/// (because we don't want ZMQ's socket behaviour).
 	/// NOTE: The mapping is from AccountId because we want to optimise for message
 	/// sending, which uses AccountId
 	active_connections: ActiveConnectionWrapper,
@@ -277,7 +281,7 @@ pub(super) fn start(
 		incoming_message_sender,
 		own_peer_info_sender,
 		our_account_id,
-		status: RegistrationStatus::Pending(vec![]),
+		status: RegistrationStatus::Pending,
 	};
 
 	debug!("Registering peer info for {} peers", current_peers.len());
@@ -437,6 +441,14 @@ impl P2PContext {
 	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
 		if let Some(peer_info) = self.peer_infos.get(account_id) {
 			info!("Reconnecting to peer: {}", peer_info.account_id);
+
+			// It is possible that while we were waiting to reconnect,
+			// we received a peer info update and created a new "connection".
+			// This connection might be "healthy", but it is safer/easier to
+			// remove it and proceed with reconnecting.
+			if self.active_connections.remove(account_id).is_some() {
+				debug!("Reconnecting to a peer that's already connected: {}. Existing connection was removed.", account_id);
+			}
 			self.connect_to_peer(peer_info.clone());
 		} else {
 			error!("Failed to reconnect to peer {account_id}. (Peer info not found.)");
@@ -452,7 +464,13 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer);
 
-		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
+		if let Some(old_socket) = self.active_connections.insert(account_id, connected_socket) {
+			// This should not happen because we always remove existing connection/socket
+			// prior to connecting, but even if it does, it should be OK to replace the
+			// connection (this doesn't break any invariants and the new peer info is
+			// likely to be more up-to-date).
+			warn!("Replacing existing ZMQ socket: {:?}", old_socket.peer());
+		}
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
@@ -460,8 +478,8 @@ impl P2PContext {
 
 		self.own_peer_info_sender.send(own_info).unwrap();
 
-		if let RegistrationStatus::Pending(peers) = &mut self.status {
-			let peers = std::mem::take(peers);
+		if let RegistrationStatus::Pending = &mut self.status {
+			let peers: Vec<_> = self.peer_infos.values().cloned().collect();
 			// Connect to all outstanding peers
 			for peer in peers {
 				self.connect_to_peer(peer)
@@ -494,10 +512,10 @@ impl P2PContext {
 		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
 		match &mut self.status {
-			RegistrationStatus::Pending(peers) => {
-				// Not ready to start connecting to peers yet
+			RegistrationStatus::Pending => {
+				// We will connect to all peers in `self.peer_infos` once we receive our own
+				// registration
 				info!("Delaying connecting to {}", peer.account_id);
-				peers.push(peer);
 			},
 			RegistrationStatus::Registered => {
 				self.connect_to_peer(peer);

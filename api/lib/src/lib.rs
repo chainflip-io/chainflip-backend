@@ -195,6 +195,18 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		Ok(tx_hash)
 	}
 
+	async fn bind_executor_address(&self, executor_address: EthereumAddress) -> Result<H256> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_executor_address {
+				executor_address,
+			})
+			.await
+			.until_finalized()
+			.await?;
+
+		Ok(tx_hash)
+	}
+
 	async fn register_account_role(&self, role: AccountRole) -> Result<H256> {
 		let call = match role {
 			AccountRole::Validator =>
@@ -308,7 +320,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 
 pub struct SwapDepositAddress {
 	pub address: String,
-	pub expiry_block: state_chain_runtime::BlockNumber,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 }
@@ -337,10 +348,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::SwapDepositAddressReady {
-				deposit_address,
-				expiry_block,
-				channel_id,
-				..
+				deposit_address, channel_id, ..
 			},
 		)) = events.iter().find(|event| {
 			matches!(
@@ -352,7 +360,6 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		}) {
 			Ok(SwapDepositAddress {
 				address: deposit_address.to_string(),
-				expiry_block: *expiry_block,
 				issued_block: header.number,
 				channel_id: *channel_id,
 			})

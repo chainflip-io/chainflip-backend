@@ -147,7 +147,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 
 	fn set_pool_fees() -> Weight {
-		Default::default()
+		Weight::from_parts(17_000_000, 3883)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 }
 
@@ -255,6 +257,8 @@ impl WeightInfo for () {
 	}
 
 	fn set_pool_fees() -> Weight {
-		Default::default()
+		Weight::from_parts(17_000_000, 3883)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 }

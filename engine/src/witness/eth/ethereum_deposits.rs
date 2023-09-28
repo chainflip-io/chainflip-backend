@@ -1,15 +1,13 @@
 use crate::{
 	eth::retry_rpc::address_checker::*,
-	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	},
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 use anyhow::ensure;
+use cf_primitives::EpochIndex;
 use ethers::types::Bloom;
+use futures_core::Future;
 use sp_core::H256;
 use state_chain_runtime::PalletInstanceAlias;
-use std::sync::Arc;
 
 use crate::witness::{
 	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
@@ -40,9 +38,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	///   standard transfers since the `to` field would not be set
 	/// We do *not* officially support ETH deposited using Ethereum/Solidity's self-destruct.
 	/// See [below](`eth_ingresses_at_block`) for more details.
-	pub async fn ethereum_deposits<StateChainClient, EthRetryRpcClient>(
+	pub async fn ethereum_deposits<ProcessCall, ProcessingFut, EthRetryRpcClient>(
 		self,
-		state_chain_client: Arc<StateChainClient>,
+		process_call: ProcessCall,
 		eth_rpc: EthRetryRpcClient,
 		native_asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
 		address_checker_address: H160,
@@ -52,7 +50,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		Inner::Chain:
 			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
-		StateChainClient: SignedExtrinsicApi + StorageApi + ChainApi + Send + Sync + 'static,
+		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+			+ Send
+			+ Sync
+			+ Clone
+			+ 'static,
+		ProcessingFut: Future<Output = ()> + Send + 'static,
 		EthRetryRpcClient: EthersRetryRpcApi + AddressCheckerRetryRpcApi + Send + Sync + Clone,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
@@ -60,7 +63,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	{
 		self.then(move |epoch, header| {
 			let eth_rpc = eth_rpc.clone();
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			async move {
 				let (bloom, deposit_channels) = header.data;
 
@@ -104,40 +107,34 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						)?;
 
 						if !ingresses.is_empty() {
-							state_chain_client
-								.finalize_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: Box::new(
-											pallet_cf_ingress_egress::Call::<
-												_,
-												<Inner::Chain as PalletInstanceAlias>::Instance,
-											>::process_deposits {
-												deposit_witnesses: ingresses
-													.into_iter()
-													.map(|(to_addr, value)| {
-														pallet_cf_ingress_egress::DepositWitness {
-																deposit_address: to_addr,
-																asset: native_asset,
-																amount:
-																	value
-																	.try_into()
-																	.expect("Ingress witness transfer value should fit u128"),
-																deposit_details: (),
-															}
-													})
-													.collect(),
-												block_height: header.index,
+							process_call(
+								pallet_cf_ingress_egress::Call::<
+									_,
+									<Inner::Chain as PalletInstanceAlias>::Instance,
+								>::process_deposits {
+									deposit_witnesses: ingresses
+										.into_iter()
+										.map(|(to_addr, value)| {
+											pallet_cf_ingress_egress::DepositWitness {
+												deposit_address: to_addr,
+												asset: native_asset,
+												amount:
+													value
+													.try_into()
+													.expect("Ingress witness transfer value should fit u128"),
+												deposit_details: (),
 											}
-											.into(),
-										),
-										epoch_index: epoch.index,
-									},
-								)
-								.await;
+										})
+										.collect(),
+									block_height: header.index,
+								}
+								.into(),
+								epoch.index,
+							)
+							.await;
 						}
 					}
 				}
-
 				Ok::<_, anyhow::Error>(())
 			}
 		})

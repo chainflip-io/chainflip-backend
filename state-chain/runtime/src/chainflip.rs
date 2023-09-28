@@ -26,7 +26,7 @@ use cf_chains::{
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
-		PolkadotTransactionData, RuntimeVersion,
+		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
 	},
 	eth::{
 		self,
@@ -47,7 +47,6 @@ use cf_traits::{
 	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
 	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
 	KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -330,10 +329,10 @@ pub struct DotEnvironment;
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
-	fn replay_protection(_params: ()) -> PolkadotReplayProtection {
+	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
-			nonce: Environment::next_polkadot_proxy_account_nonce(),
+			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
 	}
 }
@@ -375,18 +374,6 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 			.map(|epoch_key| epoch_key.key)
 	}
 }
-
-pub struct EthVaultTransitionHandler;
-impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
-
-pub struct DotVaultTransitionHandler;
-impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
-	fn on_new_vault() {
-		Environment::reset_polkadot_proxy_account_nonce();
-	}
-}
-pub struct BtcVaultTransitionHandler;
-impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
 
 pub struct TokenholderGovernanceBroadcaster;
 
@@ -460,7 +447,6 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -468,7 +454,6 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-								expiry,
 							),
 					)+
 				}
@@ -481,7 +466,6 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -492,20 +476,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
-							expiry,
 						),
-					)+
-				}
-			}
-
-			fn expire_channel(address: ForeignChainAddress) {
-				match address.chain() {
-					$(
-						ForeignChain::$chain => {
-							<$pallet as DepositApi<$chain>>::expire_channel(
-								address.try_into().expect("Checked for address compatibility")
-							);
-						},
 					)+
 				}
 			}
