@@ -196,6 +196,11 @@ where
 		.shared(scope)
 		.chunk_by_vault(vaults);
 
+	let eth_safe_vault_source_deposit_addresses = eth_safe_vault_source
+		.clone()
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await;
+
 	eth_safe_vault_source
 		.clone()
 		.key_manager_witnessing(process_call.clone(), eth_client.clone(), key_manager_address)
@@ -214,10 +219,8 @@ where
 		.logging("StateChainGateway")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	eth_safe_vault_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			process_call.clone(),
 			eth_client.clone(),
@@ -229,10 +232,8 @@ where
 		.logging("USDCDeposits")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	eth_safe_vault_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.erc20_deposits::<_, _, _, FlipEvents>(
 			process_call.clone(),
 			eth_client.clone(),
@@ -244,10 +245,8 @@ where
 		.logging("FlipDeposits")
 		.spawn(scope);
 
-	eth_safe_vault_source
+	eth_safe_vault_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.ethereum_deposits(
 			process_call.clone(),
 			eth_client.clone(),
