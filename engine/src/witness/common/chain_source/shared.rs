@@ -54,8 +54,8 @@ where
 					if let Some(response_sender) = request_receiver.next() => {
 						let receiver = sender.receiver();
 						let _result = response_sender.send((receiver, inner_client.clone()));
-					},
-					let item = inner_stream.next_or_pending() => {
+					} else disable,
+					if let Some(item) = inner_stream.next() => {
 						let _result = sender.send(item).await;
 					},
 					let _ = sender.closed() => { break },

@@ -206,10 +206,9 @@ where
 						|(mut chain_stream, mut state)| async move {
 							loop_select!(
 								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), (chain_stream, state))),
-								if chain_stream.is_terminated() && state.pending_headers.is_empty() => break None,
-								let header = chain_stream.next_or_pending() => {
+								if let Some(header) = chain_stream.next() => {
 									state.add_headers(std::iter::once(header));
-								},
+								} else disable then if state.pending_headers.is_empty() => break None,
 								let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
 									let pending_headers = std::mem::take(&mut state.pending_headers);
 									state.add_headers(pending_headers);

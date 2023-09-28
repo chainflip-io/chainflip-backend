@@ -5,8 +5,10 @@ pub use tokio::select as internal_tokio_select;
 
 #[macro_export]
 macro_rules! inner_loop_select {
-    ({ $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+    ($disabled_mask:ident, $count:expr, { $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 x = $expression => {
@@ -17,8 +19,10 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+    ($disabled_mask:ident, $count:expr, { $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 x = $expression => {
@@ -30,8 +34,10 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
+    ($disabled_mask:ident, $count:expr, { $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 x = $expression => {
@@ -43,8 +49,32 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-	({ $($processed:tt)* } if $enable_expression:expr => let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+	($disabled_mask:ident, $count:expr, { $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else disable $(then if $disable_break_expression:expr => break $($extra:expr)?)?, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
+            {
+                $($processed)*
+                x = async { $expression.await }, if $disabled_mask & (1u64 << $count) != (1u64 << $count) => {
+					if let $pattern = x {
+						$body
+					} else {
+						$disabled_mask |= 1u64 << $count;
+					}
+				},
+				$(
+					_ = $crate::loop_select::internal_ready(()), if $disabled_mask & (1u64 << $count) == (1u64 << $count) && $disable_break_expression => {
+						break $($extra)?
+					},
+				)?
+            }
+            $($unprocessed)*
+		)
+    };
+	($disabled_mask:ident, $count:expr, { $($processed:tt)* } if $enable_expression:expr => let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 x = async { $expression.await }, if $enable_expression => {
@@ -55,8 +85,10 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-	({ $($processed:tt)* } if $enable_expression:expr => if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+	($disabled_mask:ident, $count:expr, { $($processed:tt)* } if $enable_expression:expr => if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 x = async { $expression.await }, if $enable_expression => {
@@ -68,8 +100,10 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-	({ $($processed:tt)* } if $enable_expression:expr => if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
+	($disabled_mask:ident, $count:expr, { $($processed:tt)* } if $enable_expression:expr => if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 x = async { $expression.await }, if $enable_expression => {
@@ -81,8 +115,10 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-	({ $($processed:tt)* } if $expression:expr => break $($extra:expr)?, $($unprocessed:tt)*) => {
+	($disabled_mask:ident, $count:expr, { $($processed:tt)* } if $expression:expr => break $($extra:expr)?, $($unprocessed:tt)*) => {
         $crate::inner_loop_select!(
+			$disabled_mask,
+			$count + 1u64,
             {
                 $($processed)*
                 _ = $crate::loop_select::internal_ready(()), if $expression => {
@@ -92,7 +128,7 @@ macro_rules! inner_loop_select {
             $($unprocessed)*
 		)
     };
-    ({ $($processed:tt)+ }) => {
+    ($disabled_mask:ident, $count:expr, { $($processed:tt)+ }) => {
 		loop {
 			$crate::loop_select::internal_tokio_select!(
 				$($processed)+
@@ -103,9 +139,11 @@ macro_rules! inner_loop_select {
 
 #[macro_export]
 macro_rules! loop_select {
-    ($($cases:tt)+) => {
-        $crate::inner_loop_select!({} $($cases)+)
-    }
+    ($($cases:tt)+) => {{
+		#[allow(unused, unused_mut)]
+		let mut disabled_mask = 0u64;
+        $crate::inner_loop_select!(disabled_mask, 0u64, {} $($cases)+)
+    }}
 }
 
 #[cfg(test)]
