@@ -730,9 +730,6 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	}
 }
 
-pub trait VaultTransitionHandler<C: Chain> {
-	fn on_new_vault() {}
-}
 pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
