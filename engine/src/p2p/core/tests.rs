@@ -130,12 +130,6 @@ async fn connect_two_nodes() {
 }
 
 async fn send_and_receive_message(from: &Node, to: &mut Node) -> Option<(AccountId, Vec<u8>)> {
-	println!(
-		"[{:?}] Sending from {:?} to {:?}",
-		std::time::Instant::now(),
-		from.account_id,
-		to.account_id,
-	);
 	from.msg_sender
 		.send(OutgoingMultisigStageMessages::Private(vec![(
 			to.account_id.clone(),
@@ -159,6 +153,11 @@ async fn can_connect_after_pubkey_change() {
 	let mut node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
 	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
 
+	// Since we no longer buffer messages until nodes connect, we
+	// need to explicitly wait for them to connect (this might take a
+	// while since one of them is likely to fail on the first try)
+	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
 	// Check that node 2 can communicate with node 1:
 	send_and_receive_message(&node2, &mut node1).await.unwrap();
 	send_and_receive_message(&node1, &mut node2).await.unwrap();
@@ -173,6 +172,10 @@ async fn can_connect_after_pubkey_change() {
 
 	// Node 1 learn about Node 2's new key:
 	node1.peer_update_sender.send(PeerUpdate::Registered(pi2.clone())).unwrap();
+
+	// Wait for Node 1 to connect (this shouldn't take long since
+	// Node 2 is already up and we should succeed on first try)
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
 	// Node 2 should be able to send messages again:
 	send_and_receive_message(&node2b, &mut node1).await.unwrap();
