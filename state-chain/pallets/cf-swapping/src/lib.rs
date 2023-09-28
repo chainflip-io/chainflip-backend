@@ -117,7 +117,7 @@ enum BatchExecutionError {
 	DispatchError { error: DispatchError },
 }
 
-/// This impl is never used. This is purely used to satisfy trait requirment
+/// This impl is never used. This is purely used to satisfy trait requirement
 impl From<DispatchError> for BatchExecutionError {
 	fn from(error: DispatchError) -> Self {
 		Self::DispatchError { error }

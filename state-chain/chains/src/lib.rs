@@ -152,7 +152,7 @@ pub trait ChainCrypto {
 	/// Uniquely identifies a transaction on the incoming direction.
 	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
 
-	/// Uniquely identifies a transaction on the outoing direction.
+	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
@@ -376,8 +376,8 @@ pub enum SwapOrigin {
 	},
 }
 
-pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
-pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 10_000;
+pub const MAX_CCM_MSG_LENGTH: u32 = 1_000;
+pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
 pub type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
@@ -420,7 +420,7 @@ pub struct CcmChannelMetadata {
 	/// User funds designated to be used for gas.
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
 	pub gas_budget: AssetAmount,
-	/// Additonal parameters for the cross chain message.
+	/// Additional parameters for the cross chain message.
 	#[cfg_attr(
 		feature = "std",
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
