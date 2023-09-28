@@ -90,6 +90,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(prewitness_call)
+		.logging("pre-witnessing")
 		.spawn(scope);
 
 	let btc_client = btc_client.clone();

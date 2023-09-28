@@ -144,6 +144,7 @@ where
 			usdc_contract_address,
 		)
 		.await?
+		.logging("pre-witnessing USDC deposits")
 		.spawn(scope);
 
 	pre_witness_source
@@ -157,6 +158,7 @@ where
 			flip_contract_address,
 		)
 		.await?
+		.logging("pre-witnessing FLIP deposits")
 		.spawn(scope);
 
 	pre_witness_source
@@ -171,6 +173,7 @@ where
 			vault_address,
 		)
 		.await
+		.logging("pre-witnessing ETH deposits")
 		.spawn(scope);
 
 	pre_witness_source
@@ -182,6 +185,7 @@ where
 			cf_primitives::ForeignChain::Ethereum,
 			supported_erc20_tokens.clone(),
 		)
+		.logging("pre-witnessing vault")
 		.spawn(scope);
 
 	// ===== Full witnessing stream =====
