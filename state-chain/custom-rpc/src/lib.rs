@@ -212,7 +212,7 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
+	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -227,7 +227,7 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Depth>, DispatchError>>>;
+	) -> RpcResult<Option<AssetsMap<Depth>>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
@@ -251,7 +251,7 @@ pub trait CustomApi {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
+	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "current_compatibility_version")]
@@ -287,6 +287,10 @@ where
 
 fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee::core::Error {
 	CallError::from_std_error(e).into()
+}
+
+fn map_dispatch_error(e: DispatchError) -> jsonrpsee::core::Error {
+	jsonrpsee::core::Error::from(anyhow::anyhow!("Dispatch error: {e:?}"))
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
@@ -586,11 +590,19 @@ where
 		pair_asset: Asset,
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Depth>, DispatchError>>> {
-		self.client
+	) -> RpcResult<Option<AssetsMap<Depth>>> {
+		match self
+			.client
 			.runtime_api()
 			.cf_pool_depth(self.unwrap_or_best(at), base_asset, pair_asset, tick_range)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+		{
+			Some(result) => match result {
+				Ok(map) => Ok(Some(map)),
+				Err(e) => Err(map_dispatch_error(e)),
+			},
+			None => Ok(None),
+		}
 	}
 
 	fn cf_pool_liquidity(
@@ -611,8 +623,9 @@ where
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>> {
-		self.client
+	) -> RpcResult<Option<AssetsMap<Amount>>> {
+		match self
+			.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
 				self.unwrap_or_best(at),
@@ -620,7 +633,14 @@ where
 				pair_asset,
 				tick_range,
 			)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+		{
+			Some(result) => match result {
+				Ok(map) => Ok(Some(map)),
+				Err(e) => Err(map_dispatch_error(e)),
+			},
+			None => Ok(None),
+		}
 	}
 
 	fn cf_pool_orders(
@@ -643,8 +663,9 @@ where
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>> {
-		self.client
+	) -> RpcResult<Option<AssetsMap<Amount>>> {
+		match self
+			.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
 				self.unwrap_or_best(at),
@@ -653,7 +674,14 @@ where
 				tick_range,
 				liquidity,
 			)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+		{
+			Some(result) => match result {
+				Ok(map) => Ok(Some(map)),
+				Err(e) => Err(map_dispatch_error(e)),
+			},
+			None => Ok(None),
+		}
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
