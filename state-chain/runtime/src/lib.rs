@@ -20,7 +20,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinNetwork},
-	dot::{self, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotHash, PolkadotReplayProtection},
+	dot::{self, PolkadotCrypto, PolkadotHash},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	Bitcoin, Polkadot,
@@ -85,11 +85,10 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	ChainAddressConverter, ChainflipHeartbeat, EthEnvironment, TokenholderGovernanceBroadcaster,
 };
 
-use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
+use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_vaults::Vault;
@@ -145,7 +144,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 19,
+	spec_version: 20,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 4,
@@ -230,7 +229,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
-	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -248,7 +246,6 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
-	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -266,7 +263,6 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
-	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -818,96 +814,8 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	CustomUpgrade,
+	(),
 >;
-
-// TODO: remove this after upgrade.
-pub struct CustomUpgrade;
-impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
-	fn on_runtime_upgrade() -> Weight {
-		use cf_chains::dot::*;
-		for (id, _discarded) in
-			pallet_cf_broadcast::ThresholdSignatureData::<Runtime, PolkadotInstance>::iter()
-				.drain() {
-					PolkadotBroadcaster::clean_up_broadcast_storage(id);
-				}
-
-		let mut nonce = 4;
-		let old_proxy = PolkadotAccountId::from_aliased(
-			[66, 52, 239, 247, 15, 170, 140, 224, 126, 117, 24, 124, 3, 146, 26, 109, 38, 38, 112, 182, 226, 95, 180, 180, 237, 187, 31, 44, 217, 190, 218, 88]
-		);
-		let new_proxy = PolkadotAccountId::from_aliased(
-			[30, 47, 51, 174, 46, 192, 211, 61, 122, 34, 244, 228, 86, 218, 109, 52, 72, 249, 1, 216, 73, 155, 4, 184, 121, 135, 150, 53, 16, 118, 159, 2]
-		);
-		let cf_whale = PolkadotAccountId::from_aliased(
-			[10, 215, 155, 16, 79, 18, 35, 75, 72, 76, 65, 42, 30, 61, 78, 212, 107, 37, 17, 249, 111, 178, 121, 26, 25, 102, 84, 15, 243, 53, 22, 101]
-		);
-		let vault = PolkadotAccountId::from_aliased(
-			[234, 136, 35, 1, 2, 28, 52, 107, 226, 223, 220, 129, 145, 37, 71, 75, 184, 47, 189, 128, 184, 178, 77, 120, 126, 1, 11, 94, 107, 172, 104, 138]
-		);
-		// transfers first
-		PolkadotBroadcaster::threshold_sign_and_broadcast(
-			cf_chains::dot::api::PolkadotApi::BatchFetchAndTransfer(PolkadotExtrinsicBuilder::new(
-				PolkadotReplayProtection {
-					nonce: 4,
-					genesis_hash: pallet_cf_environment::PolkadotGenesisHash::<Runtime>::get(),
-				},
-				PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
-					calls: vec![
-						PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
-							real: vault.into(),
-							force_proxy_type: Some(PolkadotProxyType::Any),
-							call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
-								calls: [
-									Some(PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
-										delegate: new_proxy.into(),
-										proxy_type: PolkadotProxyType::Any,
-										delay: 0,
-									})),
-									Some(PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
-										delegate: cf_whale.into(),
-										proxy_type: PolkadotProxyType::Any,
-										delay: 0,
-									})),
-									Some(PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
-										delegate: old_proxy.into(),
-										proxy_type: PolkadotProxyType::Any,
-										delay: 0,
-									})),
-								]
-								.into_iter()
-								.flatten()
-								.collect(),
-							})),
-						}),
-						PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
-							dest: new_proxy.into(),
-							keep_alive: false,
-						}),
-					],
-				}),
-			)),
-			None
-		);
-
-		Weight::zero()
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-		use codec::Encode;
-		Ok(pallet_cf_broadcast::BroadcastIdCounter::<Runtime, PolkadotInstance>::get().encode())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-		let pre = <u32 as codec::Decode>::decode(&mut &state[..])
-			.map_err(|_| DispatchError::Other("Invalid state"))?;
-		let post = pallet_cf_broadcast::BroadcastIdCounter::<Runtime, PolkadotInstance>::get();
-		assert_eq!(post, pre + 4);
-		Ok(())
-	}
-}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
