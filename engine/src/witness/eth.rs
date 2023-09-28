@@ -127,13 +127,13 @@ where
 	let vaults = epoch_source.vaults().await;
 
 	// ===== Prewitnessing stream =====
-	let pre_witness_source = eth_source
+	let prewitness_source = eth_source
 		.clone()
 		.strictly_monotonic()
 		.shared(scope)
 		.chunk_by_vault(vaults.clone());
 
-	pre_witness_source
+	prewitness_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -147,7 +147,7 @@ where
 		.logging("pre-witnessing USDCDeposits")
 		.spawn(scope);
 
-	pre_witness_source
+	prewitness_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -161,7 +161,7 @@ where
 		.logging("pre-witnessing FlipDeposits")
 		.spawn(scope);
 
-	pre_witness_source
+	prewitness_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -176,7 +176,7 @@ where
 		.logging("pre-witnessing EthereumDeposits")
 		.spawn(scope);
 
-	pre_witness_source
+	prewitness_source
 		.vault_witnessing(
 			prewitness_call,
 			eth_client.clone(),
