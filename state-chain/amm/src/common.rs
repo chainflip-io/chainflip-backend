@@ -388,7 +388,7 @@ pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 }
 
 /// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
-pub(super) fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
+pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 	assert!(is_sqrt_price_valid(sqrt_price));
 
 	let sqrt_price_q64f128 = sqrt_price << 32u128;

@@ -1,6 +1,7 @@
 use crate::{
-	mock::*, utilities, AssetAmounts, AssetsMap, CanonicalAssetPair, CollectedNetworkFee, Error,
-	FlipBuyInterval, FlipToBurn, PoolInfo, PoolOrders, Pools, RangeOrderSize, STABLE_ASSET,
+	mock::*, utilities, AssetAmounts, AssetPair, AssetsMap, CanonicalAssetPair,
+	CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, PoolInfo, PoolOrders, Pools,
+	RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -309,7 +310,7 @@ fn can_update_pool_liquidity_fee() {
 			Asset::Eth,
 			1,
 			Some(0),
-			5_000,
+			1_000,
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -332,7 +333,7 @@ fn can_update_pool_liquidity_fee() {
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
 					base: vec![(0, 0, 5000u128.into())],
-					pair: vec![(1, 0, 5000u128.into())]
+					pair: vec![(1, 0, 1000u128.into())]
 				},
 				range_orders: vec![]
 			})
@@ -355,7 +356,7 @@ fn can_update_pool_liquidity_fee() {
 		);
 		assert_eq!(
 			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 10_000).unwrap(),
-			SwapOutput { intermediary: None, output: 5_988u128 }
+			SwapOutput { intermediary: None, output: 5_987u128 }
 		);
 
 		// Updates the fees to the new value and collect any fees on current positions.
@@ -368,11 +369,9 @@ fn can_update_pool_liquidity_fee() {
 
 		// All Lpers' fees and bought amount are Collected and accredited.
 		// Fee and swaps are calculated proportional to the liquidity amount.
-		// Alice's amount = 4000 * 1/3 + 6000 * 1/3
-		// Bob's amount = 4000 * 2/3 + 6000 * 2/3
-		assert_eq!(AliceCollectedEth::get(), 3_333u128);
+		assert_eq!(AliceCollectedEth::get(), 908u128);
 		assert_eq!(AliceCollectedUsdc::get(), 3_333u128);
-		assert_eq!(BobCollectedEth::get(), 6_666u128);
+		assert_eq!(BobCollectedEth::get(), 9090u128);
 		assert_eq!(BobCollectedUsdc::get(), 6_666u128);
 
 		// New pool fee is set and event emitted.
@@ -397,7 +396,7 @@ fn can_update_pool_liquidity_fee() {
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
 					base: vec![(0, 0, 3_000u128.into())],
-					pair: vec![(1, 0, 3_000u128.into())]
+					pair: vec![(1, 0, 454u128.into())]
 				},
 				range_orders: vec![]
 			})
@@ -407,7 +406,7 @@ fn can_update_pool_liquidity_fee() {
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
 					base: vec![(0, 0, 6_000u128.into())],
-					pair: vec![(1, 0, 6_000u128.into())]
+					pair: vec![(1, 0, 4_545u128.into())]
 				},
 				range_orders: vec![]
 			})
@@ -434,9 +433,11 @@ fn can_update_pool_liquidity_fee() {
 }
 
 #[test]
-fn setting_the_same_pool_fee_does_nothing() {
+fn pallet_limit_order_is_in_sync_with_pool() {
 	new_test_ext().execute_with(|| {
-		let fee = 400_000u32;
+		let fee = 500_000u32;
+		let tick = 100;
+		let asset_pair = AssetPair::<Test>::new(Asset::Eth, STABLE_ASSET).unwrap();
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
@@ -446,64 +447,69 @@ fn setting_the_same_pool_fee_does_nothing() {
 			fee,
 			price_at_tick(0).unwrap(),
 		));
-		assert_eq!(
-			LiquidityPools::pool_info(Asset::Eth, STABLE_ASSET),
-			Some(PoolInfo {
-				limit_order_fee_hundredth_pips: fee,
-				range_order_fee_hundredth_pips: fee,
-			})
-		);
 
-		// Setup liquidity for the pool
+		// Setup liquidity for the pool with 2 LPer
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			STABLE_ASSET,
 			0,
 			Some(0),
-			5_000,
+			100,
 		));
-
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(tick),
+			100_000,
+		));
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(BOB),
+			STABLE_ASSET,
+			Asset::Eth,
+			1,
+			Some(tick),
+			10_000,
+		));
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
-				limit_orders: AssetsMap { base: vec![(0, 0, 5000u128.into())], pair: vec![] },
+				limit_orders: AssetsMap { base: vec![(0, 0, 100u128.into())], pair: vec![] },
 				range_orders: vec![]
 			})
 		);
 
+		let pallet_limit_orders =
+			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders;
+		assert_eq!(pallet_limit_orders.zero[&ALICE][&0], 0);
+		assert_eq!(pallet_limit_orders.zero[&BOB][&0], tick);
+		assert_eq!(pallet_limit_orders.one[&BOB][&1], tick);
+
 		// Do some swaps to collect fees.
 		assert_eq!(
-			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000).unwrap(),
-			SwapOutput { intermediary: None, output: 598u128 }
+			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 202_200).unwrap(),
+			SwapOutput { intermediary: None, output: 99_894u128 }
+		);
+		assert_eq!(
+			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 18_000).unwrap(),
+			SwapOutput { intermediary: None, output: 9_071 }
 		);
 
-		// Setting the fee as the same value do nothing. No fee is collected.
+		// Updates the fees to the new value and collect any fees on current positions.
 		assert_ok!(LiquidityPools::set_pool_fees(
 			RuntimeOrigin::root(),
 			Asset::Eth,
 			STABLE_ASSET,
-			fee
+			0u32
 		));
-		assert_eq!(AliceCollectedEth::get(), 0u128);
-		assert_eq!(AliceCollectedUsdc::get(), 0u128);
-		assert_eq!(BobCollectedEth::get(), 0u128);
-		assert_eq!(BobCollectedUsdc::get(), 0u128);
 
-		assert_eq!(
-			LiquidityPools::pool_info(Asset::Eth, STABLE_ASSET),
-			Some(PoolInfo {
-				limit_order_fee_hundredth_pips: fee,
-				range_order_fee_hundredth_pips: fee,
-			})
-		);
-
-		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
-			Some(PoolOrders {
-				limit_orders: AssetsMap { base: vec![(0, 0, 4_400u128.into())], pair: vec![] },
-				range_orders: vec![]
-			})
-		);
+		// 100 swapped + 100 fee. The position is fully consumed.
+		assert_eq!(AliceCollectedUsdc::get(), 200u128);
+		let pallet_limit_orders =
+			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders;
+		assert_eq!(pallet_limit_orders.zero.get(&ALICE), None);
+		assert_eq!(pallet_limit_orders.zero.get(&BOB).unwrap().get(&0), Some(&100));
 	});
 }

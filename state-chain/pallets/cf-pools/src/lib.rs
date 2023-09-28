@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, Tick},
+	common::{tick_at_sqrt_price, Amount, Order, Price, Side, SideMap, Tick},
 	limit_orders, range_orders,
 	range_orders::Liquidity,
 	PoolState,
@@ -227,6 +227,29 @@ pub mod pallet {
 		pub range_orders: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
 		pub limit_orders: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
+	}
+
+	impl<T: Config> Pool<T> {
+		pub fn update_limit_order_storage(
+			&mut self,
+			lp: &T::AccountId,
+			side: Side,
+			id: OrderId,
+			tick: cf_amm::common::Tick,
+			can_remove: bool,
+		) {
+			let limit_orders = &mut self.limit_orders[side];
+			if can_remove {
+				if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
+					lp_limit_orders.remove(&id);
+					if lp_limit_orders.is_empty() {
+						limit_orders.remove(lp);
+					}
+				}
+			} else {
+				limit_orders.entry(lp.clone()).or_default().insert(id, tick);
+			}
+		}
 	}
 
 	pub type OrderId = u64;
@@ -960,25 +983,25 @@ pub mod pallet {
 				Error::<T>::InvalidFeeAmount
 			);
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
-				if pool.pool_state.limit_order_fee() == fee_hundredth_pips &&
-					pool.pool_state.range_order_fee() == fee_hundredth_pips
-				{
-					return Ok(())
-				}
-
-				let SideMap { zero, one } = pool
-					.pool_state
+				pool.pool_state
 					.set_fees(fee_hundredth_pips)
-					.map_err(|_| Error::<T>::InvalidFeeAmount)?;
-				for (collected_fees, side) in [(zero, Side::Zero), (one, Side::One)].into_iter() {
-					for ((_, (lp, _order)), (collected, _position_info)) in
-						collected_fees.into_iter()
-					{
-						asset_pair.try_credit_asset(&lp, side, collected.fees)?;
-						asset_pair.try_credit_asset(&lp, side, collected.bought_amount)?;
-					}
-				}
-				Result::<(), DispatchError>::Ok(())
+					.map_err(|_| Error::<T>::InvalidFeeAmount)?
+					.try_map(|side, collected_fees| {
+						for ((sqrt_price, (lp, order)), (collected, position_info)) in
+							collected_fees.into_iter()
+						{
+							asset_pair.try_credit_asset(&lp, !side, collected.fees)?;
+							asset_pair.try_credit_asset(&lp, !side, collected.bought_amount)?;
+							pool.update_limit_order_storage(
+								&lp,
+								side,
+								order,
+								tick_at_sqrt_price(sqrt_price),
+								position_info.amount.is_zero(),
+							);
+						}
+						Result::<(), DispatchError>::Ok(())
+					})
 			})?;
 
 			Self::deposit_event(Event::<T>::PoolFeeSet {
@@ -1146,17 +1169,14 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		let limit_orders = &mut pool.limit_orders[asset_pair.base_side];
-		if position_info.amount.is_zero() {
-			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
-				lp_limit_orders.remove(&id);
-				if lp_limit_orders.is_empty() {
-					limit_orders.remove(lp);
-				}
-			}
-		} else {
-			limit_orders.entry(lp.clone()).or_default().insert(id, tick);
-		}
+		// Update pool's limit orders
+		pool.update_limit_order_storage(
+			lp,
+			asset_pair.base_side,
+			id,
+			tick,
+			position_info.amount.is_zero(),
+		);
 
 		let collected_fees =
 			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.fees)?;
