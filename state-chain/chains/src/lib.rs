@@ -152,7 +152,7 @@ pub trait ChainCrypto {
 	/// Uniquely identifies a transaction on the incoming direction.
 	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
 
-	/// Uniquely identifies a transaction on the outoing direction.
+	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
@@ -384,7 +384,7 @@ pub struct CcmChannelMetadata {
 	pub message: Vec<u8>,
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
-	/// Additonal parameters for the cross chain message.
+	/// Additional parameters for the cross chain message.
 	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
 	pub cf_parameters: Vec<u8>,
 }

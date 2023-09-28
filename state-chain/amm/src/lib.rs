@@ -349,10 +349,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<
-		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), (Collected, PositionInfo)>>,
-		SetFeesError,
-	> {
+	) -> Result<SideMap<BTreeMap<(Tick, LiquidityProvider), (Collected, PositionInfo)>>, SetFeesError>
+	{
 		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
 	}

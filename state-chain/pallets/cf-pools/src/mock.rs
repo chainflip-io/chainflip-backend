@@ -66,6 +66,10 @@ parameter_types! {
 	pub static AliceCollectedUsdc: AssetAmount = Default::default();
 	pub static BobCollectedEth: AssetAmount = Default::default();
 	pub static BobCollectedUsdc: AssetAmount = Default::default();
+	pub static AliceDebitedEth: AssetAmount = Default::default();
+	pub static AliceDebitedUsdc: AssetAmount = Default::default();
+	pub static BobDebitedEth: AssetAmount = Default::default();
+	pub static BobDebitedUsdc: AssetAmount = Default::default();
 }
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
@@ -87,10 +91,17 @@ impl LpBalanceApi for MockBalance {
 	}
 
 	fn try_debit_account(
-		_who: &Self::AccountId,
-		_asset: cf_primitives::Asset,
-		_amount: cf_primitives::AssetAmount,
+		who: &Self::AccountId,
+		asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
 	) -> sp_runtime::DispatchResult {
+		match (*who, asset) {
+			(ALICE, Asset::Eth) => AliceDebitedEth::set(AliceDebitedEth::get() + amount),
+			(ALICE, Asset::Usdc) => AliceDebitedUsdc::set(AliceDebitedUsdc::get() + amount),
+			(BOB, Asset::Eth) => BobDebitedEth::set(BobDebitedEth::get() + amount),
+			(BOB, Asset::Usdc) => BobDebitedUsdc::set(BobDebitedUsdc::get() + amount),
+			_ => (),
+		}
 		Ok(())
 	}
 }

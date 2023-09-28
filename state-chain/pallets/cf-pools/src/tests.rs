@@ -507,9 +507,119 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 
 		// 100 swapped + 100 fee. The position is fully consumed.
 		assert_eq!(AliceCollectedUsdc::get(), 200u128);
+		assert_eq!(AliceDebitedEth::get(), 100u128);
 		let pallet_limit_orders =
 			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders;
 		assert_eq!(pallet_limit_orders.zero.get(&ALICE), None);
 		assert_eq!(pallet_limit_orders.zero.get(&BOB).unwrap().get(&0), Some(&100));
+	});
+}
+
+#[test]
+fn update_pool_liquidity_fee_collects_fees_for_range_order() {
+	new_test_ext().execute_with(|| {
+		let range = -100..100;
+		let old_fee = 400_000u32;
+		let new_fee = 100_000u32;
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			old_fee,
+			price_at_tick(0).unwrap(),
+		));
+		assert_eq!(
+			LiquidityPools::pool_info(Asset::Eth, STABLE_ASSET),
+			Some(PoolInfo {
+				limit_order_fee_hundredth_pips: old_fee,
+				range_order_fee_hundredth_pips: old_fee,
+			})
+		);
+
+		// Setup liquidity for the pool with 2 LPer with range orders
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range.clone()),
+			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
+		));
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range.clone()),
+			RangeOrderSize::Liquidity { liquidity: 1_000_000 },
+		));
+
+		// Do some swaps to collect fees.
+		assert_eq!(
+			LiquidityPools::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 5_000).unwrap(),
+			SwapOutput { intermediary: None, output: 2_989u128 }
+		);
+		assert_eq!(
+			LiquidityPools::swap_with_network_fee(Asset::Eth, STABLE_ASSET, 5_000).unwrap(),
+			SwapOutput { intermediary: None, output: 2_998u128 }
+		);
+
+		// Updates the fees to the new value. No fee is collected for range orders.
+		assert_ok!(LiquidityPools::set_pool_fees(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			new_fee
+		));
+		assert_eq!(AliceCollectedEth::get(), 0u128);
+		assert_eq!(AliceCollectedUsdc::get(), 0u128);
+		assert_eq!(BobCollectedEth::get(), 0u128);
+		assert_eq!(BobCollectedUsdc::get(), 0u128);
+
+		assert_eq!(
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
+			Some(PoolOrders {
+				limit_orders: AssetsMap { base: vec![], pair: vec![] },
+				range_orders: vec![(0, range.clone(), 1_000_000)]
+			})
+		);
+		assert_eq!(
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
+			Some(PoolOrders {
+				limit_orders: AssetsMap { base: vec![], pair: vec![] },
+				range_orders: vec![(0, range.clone(), 1_000_000)]
+			})
+		);
+
+		// Cash out the liquidity will payout earned fee
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range.clone()),
+			RangeOrderSize::Liquidity { liquidity: 0 },
+		));
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(BOB),
+			Asset::Eth,
+			STABLE_ASSET,
+			0,
+			Some(range.clone()),
+			RangeOrderSize::Liquidity { liquidity: 0 },
+		));
+
+		// Earned liquidity pool fees are paid out.
+		// Total of ~ 4_000 fee were paid, evenly split between Alice and Bob.
+		assert_eq!(AliceCollectedEth::get(), 5_988u128);
+		assert_eq!(AliceCollectedUsdc::get(), 5_984u128);
+		assert_eq!(AliceDebitedEth::get(), 4_988u128);
+		assert_eq!(AliceDebitedUsdc::get(), 4_988u128);
+
+		assert_eq!(BobCollectedEth::get(), 5_988u128);
+		assert_eq!(BobCollectedUsdc::get(), 5_984u128);
+		assert_eq!(BobDebitedEth::get(), 4_988u128);
+		assert_eq!(BobDebitedUsdc::get(), 4_988u128);
 	});
 }

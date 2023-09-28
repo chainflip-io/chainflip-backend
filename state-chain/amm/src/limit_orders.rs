@@ -119,7 +119,7 @@ impl FloatBetweenZeroAndOne {
 			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than
 			// 256 bits, so we maintain at least 256 accurate bits in the result.
 			let (d, div_remainder) =
-				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has atleast one bit
+				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has at least one bit
 																 // set above the 256th bit.
 			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
 			let normalise_shift = d.leading_zeros();
@@ -397,10 +397,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<
-		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), (Collected, PositionInfo)>>,
-		SetFeesError,
-	> {
+	) -> Result<SideMap<BTreeMap<(Tick, LiquidityProvider), (Collected, PositionInfo)>>, SetFeesError>
+	{
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
@@ -415,7 +413,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					(
-						(sqrt_price, lp.clone()),
+						(tick_at_sqrt_price(sqrt_price), lp.clone()),
 						self.inner_collect::<OneToZero>(&lp, sqrt_price).unwrap(),
 					)
 				})
@@ -427,7 +425,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					(
-						(sqrt_price, lp.clone()),
+						(tick_at_sqrt_price(sqrt_price), lp.clone()),
 						self.inner_collect::<ZeroToOne>(&lp, sqrt_price).unwrap(),
 					)
 				})

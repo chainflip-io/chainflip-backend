@@ -2,8 +2,10 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{tick_at_sqrt_price, Amount, Order, Price, Side, SideMap, Tick},
-	limit_orders, range_orders,
+	common::{Amount, Order, Price, Side, SideMap, Tick},
+	limit_orders,
+	limit_orders::PositionInfo,
+	range_orders,
 	range_orders::Liquidity,
 	PoolState,
 };
@@ -236,10 +238,10 @@ pub mod pallet {
 			side: Side,
 			id: OrderId,
 			tick: cf_amm::common::Tick,
-			can_remove: bool,
+			position: &PositionInfo,
 		) {
 			let limit_orders = &mut self.limit_orders[side];
-			if can_remove {
+			if position.amount.is_zero() {
 				if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
 					lp_limit_orders.remove(&id);
 					if lp_limit_orders.is_empty() {
@@ -987,18 +989,12 @@ pub mod pallet {
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
 					.try_map(|side, collected_fees| {
-						for ((sqrt_price, (lp, order)), (collected, position_info)) in
+						for ((tick, (lp, order)), (collected, position_info)) in
 							collected_fees.into_iter()
 						{
 							asset_pair.try_credit_asset(&lp, !side, collected.fees)?;
 							asset_pair.try_credit_asset(&lp, !side, collected.bought_amount)?;
-							pool.update_limit_order_storage(
-								&lp,
-								side,
-								order,
-								tick_at_sqrt_price(sqrt_price),
-								position_info.amount.is_zero(),
-							);
+							pool.update_limit_order_storage(&lp, side, order, tick, &position_info);
 						}
 						Result::<(), DispatchError>::Ok(())
 					})
@@ -1170,13 +1166,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Update pool's limit orders
-		pool.update_limit_order_storage(
-			lp,
-			asset_pair.base_side,
-			id,
-			tick,
-			position_info.amount.is_zero(),
-		);
+		pool.update_limit_order_storage(lp, asset_pair.base_side, id, tick, &position_info);
 
 		let collected_fees =
 			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.fees)?;
