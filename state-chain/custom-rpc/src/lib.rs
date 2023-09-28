@@ -591,18 +591,12 @@ where
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Depth>>> {
-		match self
-			.client
+		self.client
 			.runtime_api()
 			.cf_pool_depth(self.unwrap_or_best(at), base_asset, pair_asset, tick_range)
 			.map_err(to_rpc_error)?
-		{
-			Some(result) => match result {
-				Ok(map) => Ok(Some(map)),
-				Err(e) => Err(map_dispatch_error(e)),
-			},
-			None => Ok(None),
-		}
+			.transpose()
+			.map_err(map_dispatch_error)
 	}
 
 	fn cf_pool_liquidity(
@@ -624,8 +618,7 @@ where
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>> {
-		match self
-			.client
+		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
 				self.unwrap_or_best(at),
@@ -634,13 +627,8 @@ where
 				tick_range,
 			)
 			.map_err(to_rpc_error)?
-		{
-			Some(result) => match result {
-				Ok(map) => Ok(Some(map)),
-				Err(e) => Err(map_dispatch_error(e)),
-			},
-			None => Ok(None),
-		}
+			.transpose()
+			.map_err(map_dispatch_error)
 	}
 
 	fn cf_pool_orders(
@@ -664,8 +652,7 @@ where
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>> {
-		match self
-			.client
+		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
 				self.unwrap_or_best(at),
@@ -675,13 +662,8 @@ where
 				liquidity,
 			)
 			.map_err(to_rpc_error)?
-		{
-			Some(result) => match result {
-				Ok(map) => Ok(Some(map)),
-				Err(e) => Err(map_dispatch_error(e)),
-			},
-			None => Ok(None),
-		}
+			.transpose()
+			.map_err(map_dispatch_error)
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
