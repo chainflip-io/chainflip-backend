@@ -290,7 +290,7 @@ fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee
 }
 
 fn map_dispatch_error(e: DispatchError) -> jsonrpsee::core::Error {
-	jsonrpsee::core::Error::from(anyhow::anyhow!("Dispatch error: {e:?}"))
+	jsonrpsee::core::Error::from(anyhow::anyhow!("Dispatch error: {}", <&'static str>::from(e)))
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
