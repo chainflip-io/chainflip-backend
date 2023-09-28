@@ -376,7 +376,7 @@ pub enum SwapOrigin {
 	},
 }
 
-pub const MAX_CCM_MSG_LENGTH: u32 = 1_000;
+pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
 pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
