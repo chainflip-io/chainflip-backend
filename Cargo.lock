@@ -7080,6 +7080,7 @@ dependencies = [
  "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "chainflip-node",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
