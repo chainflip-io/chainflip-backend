@@ -33,6 +33,8 @@ pub type Addresses<Inner> = Vec<
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
+
+#[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct IngressAddresses<Inner: ChunkedByVault>
 where

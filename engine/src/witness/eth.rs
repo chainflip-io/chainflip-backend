@@ -133,10 +133,13 @@ where
 		.shared(scope)
 		.chunk_by_vault(vaults.clone());
 
-	prewitness_source
+	let prewitness_source_deposit_addresses = prewitness_source
 		.clone()
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
+		.await;
+
+	prewitness_source_deposit_addresses
+		.clone()
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			prewitness_call.clone(),
 			eth_client.clone(),
@@ -147,10 +150,8 @@ where
 		.logging("pre-witnessing USDCDeposits")
 		.spawn(scope);
 
-	prewitness_source
+	prewitness_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.erc20_deposits::<_, _, _, FlipEvents>(
 			prewitness_call.clone(),
 			eth_client.clone(),
@@ -161,10 +162,8 @@ where
 		.logging("pre-witnessing FlipDeposits")
 		.spawn(scope);
 
-	prewitness_source
+	prewitness_source_deposit_addresses
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.ethereum_deposits(
 			prewitness_call.clone(),
 			eth_client.clone(),
