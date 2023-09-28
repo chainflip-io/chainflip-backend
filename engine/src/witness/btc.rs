@@ -71,10 +71,8 @@ where
 
 	let vaults = epoch_source.vaults().await;
 
-	// Pre-witnessing stream.
-	let strictly_monotonic_source = btc_source.strictly_monotonic().shared(scope);
-	strictly_monotonic_source
-		.clone()
+	let strictly_monotonic_source = btc_source
+		.strictly_monotonic()
 		.then({
 			let btc_client = btc_client.clone();
 			move |header| {
@@ -85,6 +83,11 @@ where
 				}
 			}
 		})
+		.shared(scope);
+
+	// Pre-witnessing stream.
+	strictly_monotonic_source
+		.clone()
 		.shared(scope)
 		.chunk_by_vault(vaults.clone())
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
@@ -93,19 +96,10 @@ where
 		.logging("pre-witnessing")
 		.spawn(scope);
 
-	let btc_client = btc_client.clone();
-
 	// Full witnessing stream.
 	strictly_monotonic_source
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
-		.then(move |header| {
-			let btc_client = btc_client.clone();
-			async move {
-				let block = btc_client.block(header.hash).await;
-				(header.data, block.txdata)
-			}
-		})
 		.shared(scope)
 		.chunk_by_vault(vaults)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
