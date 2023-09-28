@@ -65,7 +65,7 @@ where
 				let _ = state_chain_client
 					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(
-							pallet_cf_witnesser::Call::pre_witness { call: Box::new(call) }.into(),
+							pallet_cf_witnesser::Call::prewitness { call: Box::new(call) }.into(),
 						),
 						epoch_index,
 					})

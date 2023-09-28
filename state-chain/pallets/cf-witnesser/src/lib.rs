@@ -251,7 +251,7 @@ pub mod pallet {
 		/// A witness call has failed.
 		WitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
 		/// A an external event has been pre-witnessed.
-		PreWitnessed { call: <T as Config>::RuntimeCall },
+		Prewitnessed { call: <T as Config>::RuntimeCall },
 	}
 
 	#[pallet::error]
@@ -423,12 +423,12 @@ pub mod pallet {
 		/// that we expect the same call to be witnessed at a later block.
 		#[pallet::call_index(2)]
 		#[pallet::weight(call.get_dispatch_info().weight)]
-		pub fn pre_witness(
+		pub fn prewitness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::deposit_event(Event::<T>::PreWitnessed { call: *call });
+			Self::deposit_event(Event::<T>::Prewitnessed { call: *call });
 			Ok(())
 		}
 	}
