@@ -141,10 +141,12 @@ pub struct MockTransactionValidator;
 impl TransactionValidator for MockTransactionValidator {
 	type Transaction = MockTransaction;
 	type Signature = RawSignedTransaction;
+	type Hash = [u8; 4];
 
 	fn is_valid(
-		transaction: Self::Transaction,
-		signature: Self::Signature,
+		_transaction: Self::Transaction,
+		_signature: Self::Signature,
+		_hash: Self::Hash,
 	) -> Result<(), DispatchError> {
 		Ok(())
 	}

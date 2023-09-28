@@ -283,6 +283,8 @@ pub mod pallet {
 	pub type BroadcastValidated<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, (), OptionQuery>;
 
+	/// Saves the transaction payload to have it available when we try to verify the broadcast of
+	/// the transaction.
 	#[pallet::storage]
 	pub type Transaction<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionFor<T, I>, OptionQuery>;
@@ -319,6 +321,8 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
+		/// The transmission of a broadcast has been verified.
+		BroadcastTransmissionVerified { broadcast_id: BroadcastId },
 	}
 
 	#[pallet::error]
@@ -496,6 +500,8 @@ pub mod pallet {
 
 			let transaction = T::TransactionBuilder::build_transaction(&signed_api_call);
 
+			Transaction::<T, I>::insert(broadcast_id, transaction.clone());
+
 			Self::start_broadcast(
 				&signature,
 				transaction,
@@ -595,6 +601,18 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Confirm a broadcast attempt.
+		///
+		/// This is called by the nominator to confirm that the transaction was broadcasted.
+		///
+		/// ## Events
+		///
+		/// - [BroadcastTransmissionVerified](Event::BroadcastTransmissionVerified)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
+		/// - [InvalidPayload](Error::InvalidPayload)
 		#[pallet::weight(Weight::zero())]
 		#[pallet::call_index(4)]
 		pub fn confirm_broadcast_attempt(
@@ -622,6 +640,9 @@ pub mod pallet {
 			Transaction::<T, I>::remove(broadcast_attempt_id.broadcast_id);
 			// And mark the broadcast as validated
 			BroadcastValidated::<T, I>::insert(broadcast_attempt_id.broadcast_id, ());
+			Self::deposit_event(Event::<T, I>::BroadcastTransmissionVerified {
+				broadcast_id: broadcast_attempt_id.broadcast_id,
+			});
 			Ok(())
 		}
 	}

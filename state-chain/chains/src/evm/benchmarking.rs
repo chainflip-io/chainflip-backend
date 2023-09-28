@@ -1,6 +1,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::TransactionFee;
+use super::{RawSignedTransaction, TransactionFee};
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::api::EthereumApi,
@@ -83,5 +83,11 @@ impl BenchmarkValue for TransactionFee {
 impl BenchmarkValue for EthAmount {
 	fn benchmark_value() -> Self {
 		2000
+	}
+}
+
+impl BenchmarkValue for RawSignedTransaction {
+	fn benchmark_value() -> Self {
+		[0; 32].to_vec()
 	}
 }

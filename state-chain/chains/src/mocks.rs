@@ -170,7 +170,7 @@ impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 		&self,
 		_fee_paid: <MockEthereum as Chain>::TransactionFee,
 	) -> <MockEthereum as Chain>::ChainAmount {
-		<MockEthereum as Chain>::ChainAmount::default()
+		1
 	}
 }
 

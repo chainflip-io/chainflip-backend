@@ -149,4 +149,19 @@ benchmarks_instance_pallet! {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
 		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the transaction_succeeded extrinsic").event;
 	}
+	// TODO: This benchmark is failing at the moment. We have to provide some valid values to make the extrinsic pass for Ethereum.
+	confirm_broadcast_attempt {
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id: 1,
+			attempt_count: 1
+		};
+		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
+		let signature =  SignatureFor::<T, I>::benchmark_value();
+		let transaction_out_id =  TransactionOutIdFor::<T, I>::benchmark_value();
+		let hash = TransactionInIdFor::<T, I>::benchmark_value();
+		Transaction::<T, I>::insert(1, transaction_payload.clone());
+		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
+	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, transaction_payload, signature, hash)
 }

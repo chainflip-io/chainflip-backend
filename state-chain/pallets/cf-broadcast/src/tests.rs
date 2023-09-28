@@ -3,8 +3,8 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
-	TransactionOutIdToBroadcastId, WeightInfo,
+	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, Transaction,
+	TransactionFeeDeficit, TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -122,13 +122,15 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 fn start_mock_broadcast_tx_out_id(
 	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
 ) -> BroadcastAttemptId {
-	Broadcaster::start_broadcast(
+	let broadcast_attempt_id = Broadcaster::start_broadcast(
 		&MockThresholdSignature::default(),
 		MockTransaction,
 		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
 		Default::default(),
 		1,
-	)
+	);
+	Transaction::<Test, Instance1>::insert(broadcast_attempt_id.broadcast_id, MockTransaction);
+	broadcast_attempt_id
 }
 
 fn start_mock_broadcast() -> BroadcastAttemptId {
@@ -147,12 +149,23 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
 
+		// Signer is confirming the transaction was successful broadcasted.
+		assert_ok!(Broadcaster::confirm_broadcast_attempt(
+			RawOrigin::Signed(nominee).into(),
+			broadcast_attempt_id,
+			MockTransaction,
+			Vec::new(),
+			MOCK_TRANSACTION_OUT_ID,
+		));
+
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
 			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
 		));
+
+		assert!(TransactionFeeDeficit::<Test, Instance1>::get(nominee) > 0);
 
 		let expected_refund = tx_sig_request
 			.broadcast_attempt

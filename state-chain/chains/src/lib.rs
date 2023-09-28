@@ -157,7 +157,7 @@ pub trait ChainCrypto {
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
-	type NativeSignature: Member + Parameter;
+	type NativeSignature: Member + Parameter + BenchmarkValue;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
