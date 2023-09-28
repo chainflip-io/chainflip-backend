@@ -26,7 +26,7 @@ use cf_chains::{
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
-		PolkadotTransactionData, RuntimeVersion,
+		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
 	},
 	eth::{
 		self,
@@ -47,7 +47,7 @@ use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
 	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	RuntimeUpgrade,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -323,10 +323,10 @@ pub struct DotEnvironment;
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
-	fn replay_protection(_params: ()) -> PolkadotReplayProtection {
+	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
-			nonce: Environment::next_polkadot_proxy_account_nonce(),
+			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
 	}
 }
@@ -368,18 +368,6 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 			.map(|epoch_key| epoch_key.key)
 	}
 }
-
-pub struct EthVaultTransitionHandler;
-impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
-
-pub struct DotVaultTransitionHandler;
-impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
-	fn on_new_vault() {
-		Environment::reset_polkadot_proxy_account_nonce();
-	}
-}
-pub struct BtcVaultTransitionHandler;
-impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
 
 pub struct TokenholderGovernanceBroadcaster;
 

@@ -81,15 +81,13 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
-
 pub use chainflip::chain_instances::*;
-use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
-};
 
-use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
+use chainflip::{
+	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
+	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
+	DotEnvironment, EthEnvironment, TokenholderGovernanceBroadcaster,
+};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_vaults::Vault;
@@ -230,7 +228,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
-	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -248,7 +245,6 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
-	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -266,7 +262,6 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
-	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
