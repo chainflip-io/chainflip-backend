@@ -258,7 +258,7 @@ impl WeightInfo for () {
 
 	fn set_pool_fees() -> Weight {
 		Weight::from_parts(17_000_000, 3883)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
+			.saturating_add(RocksDbWeight::get().reads(1_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }
