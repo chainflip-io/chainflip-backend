@@ -26,10 +26,18 @@ use anyhow::Result;
 
 const SAFETY_MARGIN: usize = 6;
 
-pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
+pub async fn start<
+	StateChainClient,
+	StateChainStream,
+	ProcessCall,
+	ProcessingFut,
+	PrewitnessCall,
+	PrewitnessFut,
+>(
 	scope: &Scope<'_, anyhow::Error>,
 	btc_client: BtcRetryRpcClient,
 	process_call: ProcessCall,
+	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -44,6 +52,12 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
+	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 
@@ -55,9 +69,33 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
+	let vaults = epoch_source.vaults().await;
+
+	// Pre-witnessing stream.
+	let strictly_monotonic_source = btc_source.strictly_monotonic().shared(scope);
+	strictly_monotonic_source
+		.clone()
+		.then({
+			let btc_client = btc_client.clone();
+			move |header| {
+				let btc_client = btc_client.clone();
+				async move {
+					let block = btc_client.block(header.hash).await;
+					(header.data, block.txdata)
+				}
+			}
+		})
+		.shared(scope)
+		.chunk_by_vault(vaults.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.btc_deposits(prewitness_call)
+		.spawn(scope);
+
 	let btc_client = btc_client.clone();
-	btc_source
-		.strictly_monotonic()
+
+	// Full witnessing stream.
+	strictly_monotonic_source
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
 		.then(move |header| {
@@ -68,7 +106,7 @@ where
 			}
 		})
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await)
+		.chunk_by_vault(vaults)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(process_call.clone())
