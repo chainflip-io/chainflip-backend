@@ -107,8 +107,4 @@ impl ConnectedOutgoingSocket {
 			warn!("Failed to send a message to {}: {e}", self.peer.account_id,);
 		}
 	}
-
-	pub fn peer(&self) -> &PeerInfo {
-		&self.peer
-	}
 }
