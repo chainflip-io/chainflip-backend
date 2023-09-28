@@ -7,9 +7,10 @@ use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
 	EgressApi,
 };
-use frame_support::{
-	dispatch::Vec, pallet_prelude::*, sp_runtime::DispatchResult, traits::OnRuntimeUpgrade,
-};
+
+#[cfg(feature = "try-runtime")]
+use frame_support::dispatch::Vec;
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult, traits::OnRuntimeUpgrade};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
