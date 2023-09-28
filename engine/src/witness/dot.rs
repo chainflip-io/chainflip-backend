@@ -81,10 +81,18 @@ fn filter_map_events(
 	}
 }
 
-pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
+pub async fn start<
+	StateChainClient,
+	StateChainStream,
+	ProcessCall,
+	ProcessingFut,
+	PrewitnessCall,
+	PrewitnessFut,
+>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
+	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -99,10 +107,19 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
+	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
-	DotUnfinalisedSource::new(dot_client.clone())
+	let unfinalised_source = DotUnfinalisedSource::new(dot_client.clone())
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
-		.shared(scope)
+		.shared(scope);
+
+	unfinalised_source
+		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
 		.logging("chain tracking")
@@ -122,6 +139,20 @@ where
 		)
 		.await;
 
+	let vaults = epoch_source.vaults().await;
+
+	// Pre-witnessing
+	unfinalised_source
+		.strictly_monotonic()
+		.shared(scope)
+		.chunk_by_vault(vaults.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.dot_deposits(prewitness_call)
+		.logging("pre-witnessing")
+		.spawn(scope);
+
+	// Full witnessing
 	DotFinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
 		.logging("finalised block produced")
@@ -129,7 +160,7 @@ where
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await)
+		.chunk_by_vault(vaults)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing

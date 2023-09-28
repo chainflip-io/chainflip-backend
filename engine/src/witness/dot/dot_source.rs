@@ -68,6 +68,7 @@ macro_rules! polkadot_source {
 	}};
 }
 
+#[derive(Clone)]
 pub struct DotUnfinalisedSource<C> {
 	client: C,
 }

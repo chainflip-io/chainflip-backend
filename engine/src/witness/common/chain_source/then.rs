@@ -5,6 +5,7 @@ use futures_util::StreamExt;
 
 use crate::witness::common::{chain_source::ChainClient, ExternalChainSource};
 
+#[derive(Clone)]
 pub struct Then<InnerSource, F> {
 	inner_source: InnerSource,
 	f: F,
