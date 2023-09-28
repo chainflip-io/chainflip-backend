@@ -88,7 +88,6 @@ where
 	// Pre-witnessing stream.
 	strictly_monotonic_source
 		.clone()
-		.shared(scope)
 		.chunk_by_vault(vaults.clone())
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
