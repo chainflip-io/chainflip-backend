@@ -3,7 +3,7 @@ import { getBalance } from '../shared/get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapParams, requestNewSwap } from '../shared/perform_swap';
 import { sendErc20 } from '../shared/send_erc20';
-import { newAddress, getChainflipApi, observeEvent, observeSwapScheduled, observeCcmReceived, observeBalanceIncrease, getEthContractAddress } from '../shared/utils';
+import { newAddress, getChainflipApi, observeEvent, observeSwapScheduled, observeCcmReceived, observeBalanceIncrease, getEthContractAddress, observeBadEvents, sleep } from '../shared/utils';
 
 // This code is duplicated to allow us to specify a specific amount we want to swap
 // and to wait for some specific events  
@@ -35,6 +35,8 @@ export async function doPerformSwap(
 
     if(!balanceIncrease){
         const api = await getChainflipApi();
+        //1000s should be enough to observe the event!
+        observeBadEvents("polkadotBroadcaster:BroadcastFailure", () => { sleep(1000000); return true });
         await observeEvent("polkadotBroadcaster:BroadcastSuccess", api);
         
         const newBalance = await getBalance(destAsset, destAddress);
