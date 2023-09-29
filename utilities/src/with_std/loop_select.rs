@@ -4,7 +4,7 @@ pub use futures::future::ready as internal_ready;
 pub use tokio::select as internal_tokio_select;
 
 #[doc(hidden)]
-pub fn inner_is_bit_set(mask: u64, bit: u64) -> bool {
+pub fn is_bit_set(mask: u64, bit: u64) -> bool {
 	mask & (1u64 << bit) == (1u64 << bit)
 }
 
@@ -60,7 +60,7 @@ macro_rules! inner_loop_select {
 			$count + 1u64,
             {
                 $($processed)*
-                x = async { $expression.await } /* async await block ensures $expression is evaluated after condition */, if !$crate::loop_select::inner_is_bit_set($disabled_mask, $count) => {
+                x = async { $expression.await } /* async await block ensures $expression is evaluated after condition */, if !$crate::loop_select::is_bit_set($disabled_mask, $count) => {
 					if let $pattern = x {
 						$body
 					} else {
@@ -68,7 +68,7 @@ macro_rules! inner_loop_select {
 					}
 				},
 				$(
-					_ = $crate::loop_select::internal_ready(()), if $crate::loop_select::inner_is_bit_set($disabled_mask, $count) && $disable_break_expression => {
+					_ = $crate::loop_select::internal_ready(()), if $crate::loop_select::is_bit_set($disabled_mask, $count) && $disable_break_expression => {
 						break $($extra)?
 					},
 				)?
@@ -544,22 +544,6 @@ mod test_loop_select {
 
 		// Disabled branches don't run
 
-		{
-			let mut condition_run = false;
-
-			assert_eq!(
-				(),
-				loop_select!(
-					if let false = futures::future::ready(condition_run) => {
-						if condition_run {
-							panic!()
-						} else {
-							condition_run = true;
-						}
-					} else disable then if condition_run => break,
-				)
-			);
-		}
 		{
 			let mut condition_run = false;
 
