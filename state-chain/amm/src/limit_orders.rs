@@ -362,11 +362,11 @@ pub(super) struct PoolState<LiquidityProvider> {
 	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
-	/// selling asset `Zero` and all those that are selling asset `one` used the SideMap.
+	/// selling asset `Zero` and all those that are selling asset `One` used the SideMap.
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	/// All the Positions that either are providing liquidity currently, or were providing
 	/// liquidity directly after the last time they where updated. They are grouped into all those
-	/// that are selling asset `Zero` and all those that are selling asset `one` used the SideMap.
+	/// that are selling asset `Zero` and all those that are selling asset `One` used the SideMap.
 	/// Therefore there can be positions stored here that don't provide any liquidity.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
@@ -390,7 +390,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
-	/// higher than 50%. Also runs collect for all positions in the pool.
+	/// higher than 50%. Also runs collect for all positions in the pool. Returns a SideMap
+	/// containing the state and fees collected from every position as part of the set_fees
+	/// operation. The positions are grouped into a SideMap by the asset they sell.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]

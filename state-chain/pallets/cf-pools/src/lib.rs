@@ -226,8 +226,12 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		pub enabled: bool,
-		pub range_orders: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
-		pub limit_orders: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
+		/// A cache of all the range orders that exist in the pool. This must be kept upto date
+		/// with the underlying pool.
+		pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
+		/// A cache of all the limit orders that exist in the pool. This must be kept upto date
+		/// with the underlying pool. These are grouped by the asset the limit order is selling
+		pub limit_orders_cache: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
 
@@ -240,7 +244,7 @@ pub mod pallet {
 			tick: cf_amm::common::Tick,
 			position: &PositionInfo,
 		) {
-			let limit_orders = &mut self.limit_orders[side];
+			let limit_orders = &mut self.limit_orders_cache[side];
 			if position.amount.is_zero() {
 				if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
 					lp_limit_orders.remove(&id);
@@ -639,8 +643,8 @@ pub mod pallet {
 
 				*maybe_pool = Some(Pool {
 					enabled: true,
-					range_orders: Default::default(),
-					limit_orders: Default::default(),
+					range_orders_cache: Default::default(),
+					limit_orders_cache: Default::default(),
 					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
 						match e {
 							NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
@@ -691,7 +695,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
-					pool.range_orders
+					pool.range_orders_cache
 						.get(&lp)
 						.and_then(|range_orders| range_orders.get(&id))
 						.cloned(),
@@ -774,7 +778,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
-					pool.range_orders
+					pool.range_orders_cache
 						.get(&lp)
 						.and_then(|range_orders| range_orders.get(&id))
 						.cloned(),
@@ -846,7 +850,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders[asset_pair.base_side]
+					pool.limit_orders_cache[asset_pair.base_side]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -921,7 +925,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders[asset_pair.base_side]
+					pool.limit_orders_cache[asset_pair.base_side]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -1064,32 +1068,50 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	Serialize,
 )]
 pub struct PoolInfo {
+	/// The fee taken, when limit orders are used, from swap inputs that contributes to liquidity
+	/// provider earnings
 	pub limit_order_fee_hundredth_pips: u32,
+	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
+	/// provider earnings
 	pub range_order_fee_hundredth_pips: u32,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PoolOrders {
+	/// Limit orders are groups by which asset they are selling.
 	pub limit_orders: AssetsMap<Vec<(OrderId, Tick, Amount)>>,
+	/// Range orders can be both buy and/or sell therefore they not split. The current range order
+	/// price determines if they are buy and/or sell.
 	pub range_orders: Vec<(OrderId, Range<Tick>, Liquidity)>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PoolLiquidity {
+	/// An ordered lists of the amount of assets available at each tick, if a tick contains zero
+	/// liquidity it will not be included in the list. Note limit order liquidity is split by which
+	/// asset the liquidity is "selling".
 	pub limit_orders: AssetsMap<Vec<(Tick, Amount)>>,
+	/// An ordered list of the amount of range order liquidity available from a tick until the next
+	/// tick in the list. Note range orders can be both buy and/or sell therefore they not split by
+	/// sold asset. The current range order price determines if the liquidity can be used for
+	/// buying and/or selling,
 	pub range_orders: Vec<(Tick, Liquidity)>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
-pub struct SingleDepth {
+pub struct UnidirectionalSubPoolDepth {
+	/// The current price in this sub pool, in the given direction of swaps.
 	pub price: Option<Price>,
+	/// The approximate amount of assets available to be sold in the specified price range.
 	pub depth: Amount,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Depth {
-	pub limit_orders: SingleDepth,
-	pub range_orders: SingleDepth,
+pub struct UnidirectionalPoolDepth {
+	/// The depth of the limit order pool.
+	pub limit_orders: UnidirectionalSubPoolDepth,
+	/// The depth of the range order pool.
+	pub range_orders: UnidirectionalSubPoolDepth,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1264,14 +1286,14 @@ impl<T: Config> Pallet<T> {
 		let collected_fees = asset_pair.try_credit_assets(lp, collected.fees)?;
 
 		if position_info.liquidity == 0 {
-			if let Some(range_orders) = pool.range_orders.get_mut(lp) {
+			if let Some(range_orders) = pool.range_orders_cache.get_mut(lp) {
 				range_orders.remove(&id);
 				if range_orders.is_empty() {
-					pool.range_orders.remove(lp);
+					pool.range_orders_cache.remove(lp);
 				}
 			}
 		} else {
-			let range_orders = pool.range_orders.entry(lp.clone()).or_default();
+			let range_orders = pool.range_orders_cache.entry(lp.clone()).or_default();
 			range_orders.insert(id, tick_range.clone());
 		}
 
@@ -1374,7 +1396,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
-	) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+	) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
 		let mut pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 
@@ -1397,8 +1419,9 @@ impl<T: Config> Pallet<T> {
 		Some(limit_orders.and_then(|limit_orders| {
 			range_orders.map(|range_orders| {
 				asset_pair.side_map_to_assets_map(SideMap::<()>::default().map(|side, ()| {
-					let to_single_depth = |(price, depth)| SingleDepth { price, depth };
-					Depth {
+					let to_single_depth =
+						|(price, depth)| UnidirectionalSubPoolDepth { price, depth };
+					UnidirectionalPoolDepth {
 						limit_orders: to_single_depth(limit_orders[side]),
 						range_orders: to_single_depth(range_orders[side]),
 					}
@@ -1416,7 +1439,7 @@ impl<T: Config> Pallet<T> {
 			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 
 		Ok(Iterator::chain(
-			pool.limit_orders.as_ref().into_iter().flat_map(|(side, limit_orders)| {
+			pool.limit_orders_cache.as_ref().into_iter().flat_map(|(side, limit_orders)| {
 				let pool = &pool;
 				limit_orders
 					.iter()
@@ -1433,7 +1456,7 @@ impl<T: Config> Pallet<T> {
 					})
 					.map(|(lp, _positions)| lp.clone())
 			}),
-			pool.range_orders.keys().cloned(),
+			pool.range_orders_cache.keys().cloned(),
 		)
 		.collect())
 	}
@@ -1474,7 +1497,7 @@ impl<T: Config> Pallet<T> {
 		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 		Some(PoolOrders {
 			limit_orders: AssetsMap::<()>::default().map_with_side(&asset_pair, |side, ()| {
-				pool.limit_orders[side]
+				pool.limit_orders_cache[side]
 					.get(lp)
 					.into_iter()
 					.flat_map(|limit_orders| {
@@ -1489,7 +1512,7 @@ impl<T: Config> Pallet<T> {
 					.collect()
 			}),
 			range_orders: pool
-				.range_orders
+				.range_orders_cache
 				.get(lp)
 				.into_iter()
 				.flat_map(|range_orders| {

@@ -482,7 +482,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		);
 
 		let pallet_limit_orders =
-			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders;
+			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders_cache;
 		assert_eq!(pallet_limit_orders.zero[&ALICE][&0], 0);
 		assert_eq!(pallet_limit_orders.zero[&BOB][&0], tick);
 		assert_eq!(pallet_limit_orders.one[&BOB][&1], tick);
@@ -509,7 +509,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		assert_eq!(AliceCollectedUsdc::get(), 200u128);
 		assert_eq!(AliceDebitedEth::get(), 100u128);
 		let pallet_limit_orders =
-			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders;
+			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders_cache;
 		assert_eq!(pallet_limit_orders.zero.get(&ALICE), None);
 		assert_eq!(pallet_limit_orders.zero.get(&BOB).unwrap().get(&0), Some(&100));
 	});
