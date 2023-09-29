@@ -3,7 +3,6 @@ use std::sync::Arc;
 use cf_chains::ChainState;
 use frame_support::CloneNoBound;
 use futures::FutureExt;
-use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use state_chain_runtime::PalletInstanceAlias;
@@ -11,7 +10,6 @@ use tokio::sync::watch;
 use utilities::{
 	loop_select,
 	task_scope::{Scope, OR_CANCEL},
-	UnendingStream,
 };
 
 use crate::{

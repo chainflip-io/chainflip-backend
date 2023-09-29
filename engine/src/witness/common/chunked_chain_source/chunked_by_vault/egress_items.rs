@@ -3,10 +3,9 @@ use std::sync::Arc;
 use crate::witness::common::chain_source::{ChainClient, ChainStream};
 use cf_chains::{Chain, ChainCrypto};
 use frame_support::CloneNoBound;
-use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
-use utilities::{loop_select, task_scope::Scope, UnendingStream};
+use utilities::{loop_select, task_scope::Scope};
 
 use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},

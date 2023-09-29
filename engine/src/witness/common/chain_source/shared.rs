@@ -3,7 +3,6 @@ use tokio::sync::oneshot;
 use utilities::{
 	loop_select, spmc,
 	task_scope::{Scope, OR_CANCEL},
-	UnendingStream,
 };
 
 use crate::witness::common::ExternalChainSource;

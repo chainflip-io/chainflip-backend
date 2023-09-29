@@ -482,6 +482,7 @@ mod test_loop_select {
 		);
 	}
 
+	#[allow(clippy::unit_cmp)]
 	#[tokio::test]
 	async fn disabled_branches() {
 		// Break condition works
