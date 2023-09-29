@@ -3,6 +3,11 @@ pub use futures::future::ready as internal_ready;
 #[doc(hidden)]
 pub use tokio::select as internal_tokio_select;
 
+#[doc(hidden)]
+pub fn inner_is_bit_set(mask: u64, bit: u64) -> bool {
+	mask & (1u64 << bit) == (1u64 << bit)
+}
+
 #[macro_export]
 macro_rules! inner_loop_select {
     ($disabled_mask:ident, $count:expr, { $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
@@ -55,7 +60,7 @@ macro_rules! inner_loop_select {
 			$count + 1u64,
             {
                 $($processed)*
-                x = async { $expression.await }, if $disabled_mask & (1u64 << $count) != (1u64 << $count) => {
+                x = async { $expression.await } /* async await block ensures $expression is evaluated after condition */, if !$crate::loop_select::inner_is_bit_set($disabled_mask, $count) => {
 					if let $pattern = x {
 						$body
 					} else {
@@ -63,7 +68,7 @@ macro_rules! inner_loop_select {
 					}
 				},
 				$(
-					_ = $crate::loop_select::internal_ready(()), if $disabled_mask & (1u64 << $count) == (1u64 << $count) && $disable_break_expression => {
+					_ = $crate::loop_select::internal_ready(()), if $crate::loop_select::inner_is_bit_set($disabled_mask, $count) && $disable_break_expression => {
 						break $($extra)?
 					},
 				)?
@@ -77,7 +82,7 @@ macro_rules! inner_loop_select {
 			$count + 1u64,
             {
                 $($processed)*
-                x = async { $expression.await }, if $enable_expression => {
+                x = async { $expression.await } /* async await block ensures $expression is evaluated after condition */, if $enable_expression => {
 					let $pattern = x;
 					$body
 				},
@@ -91,7 +96,7 @@ macro_rules! inner_loop_select {
 			$count + 1u64,
             {
                 $($processed)*
-                x = async { $expression.await }, if $enable_expression => {
+                x = async { $expression.await } /* async await block ensures $expression is evaluated after condition */, if $enable_expression => {
 					if let $pattern = x {
 						$body
 					} else { break }
@@ -106,7 +111,7 @@ macro_rules! inner_loop_select {
 			$count + 1u64,
             {
                 $($processed)*
-                x = async { $expression.await }, if $enable_expression => {
+                x = async { $expression.await } /* async await block ensures $expression is evaluated after condition */, if $enable_expression => {
 					if let $pattern = x {
 						$body
 					} else { break $extra }
@@ -475,5 +480,128 @@ mod test_loop_select {
 				} => { branch_has_run(); break } else break unreachable!(),
 			}
 		);
+	}
+
+	#[tokio::test]
+	async fn disabled_branches() {
+		// Break condition works
+
+		assert_eq!(
+			'c',
+			loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else disable then if true => break 'c',
+			)
+		);
+		assert_eq!(
+			(),
+			loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else disable then if true => break,
+			)
+		);
+
+		// Disabled conditions don't run
+
+		{
+			let mut condition_run = false;
+
+			assert_eq!(
+				(),
+				loop_select!(
+					if let 2 = futures::future::ready({
+						if !condition_run {
+							condition_run = true;
+							1
+						} else {
+							panic!()
+						}
+					}) => {
+						panic!()
+					} else disable,
+					if condition_run => break,
+				)
+			);
+		}
+		{
+			let mut condition_run = false;
+
+			assert_eq!(
+				(),
+				loop_select!(
+					if let 2 = futures::future::ready({
+						if !condition_run {
+							condition_run = true;
+							1
+						} else {
+							panic!()
+						}
+					}) => {
+						panic!()
+					} else disable then if condition_run => break,
+				)
+			);
+		}
+
+		// Disabled branches don't run
+
+		{
+			let mut condition_run = false;
+
+			assert_eq!(
+				(),
+				loop_select!(
+					if let false = futures::future::ready(condition_run) => {
+						if condition_run {
+							panic!()
+						} else {
+							condition_run = true;
+						}
+					} else disable then if condition_run => break,
+				)
+			);
+		}
+		{
+			let mut condition_run = false;
+
+			assert_eq!(
+				(),
+				loop_select!(
+					if let false = futures::future::ready(condition_run) => {
+						if condition_run {
+							panic!()
+						} else {
+							condition_run = true;
+						}
+					} else disable then if condition_run => break,
+				)
+			);
+		}
+
+		// Branches run until disabled
+
+		{
+			let mut i = 0;
+			assert_eq!(
+				(),
+				loop_select!(
+					if let 0..=10 = futures::future::ready(i) => {
+						i += 1;
+					} else disable then if true => break,
+				)
+			);
+			assert_eq!(i, 11);
+		}
+		{
+			let mut i = 0;
+			assert_eq!(
+				(),
+				loop_select!(
+					if let 0..=10 = futures::future::ready(i) => {
+						i += 1;
+					} else disable,
+					if i == 11 => break,
+				)
+			);
+			assert_eq!(i, 11);
+		}
 	}
 }
