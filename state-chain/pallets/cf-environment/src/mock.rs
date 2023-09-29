@@ -2,7 +2,7 @@
 
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
-	btc::{BitcoinFeeInfo},
+	btc::BitcoinFeeInfo,
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
