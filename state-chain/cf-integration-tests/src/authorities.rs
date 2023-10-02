@@ -68,17 +68,13 @@ fn authority_rotates_with_correct_sequence() {
 
 			// Skip the first authority rotation, as key handover is guaranteed to succeed
 			// when rotating for the first time.
-			testnet.move_forward_blocks(EPOCH_BLOCKS);
-			testnet.submit_heartbeat_all_engines();
-
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			testnet.move_to_the_next_epoch();
 
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(AllVaults::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index());
 
-			testnet.move_forward_blocks(EPOCH_BLOCKS);
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 
 			// Start the Authority and Vault rotation
 			// idle -> Keygen
@@ -194,10 +190,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			// Start an auction
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
-			testnet.move_forward_blocks(1);
-
+			testnet.move_to_the_end_of_epoch();
 			assert_eq!(
 				GENESIS_EPOCH,
 				Validator::epoch_index(),
@@ -268,8 +261,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			// Resolve Auction
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 
 			// Run until key gen is completed.
 			testnet.move_forward_blocks(4);
@@ -303,7 +295,6 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 			));
 
 			// Authority rotation should be successful.
-			testnet.submit_heartbeat_all_engines();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 		});
@@ -321,8 +312,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_but_stalls_on_safe_mo
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			// Resolve Auction
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 
 			// Run until key handover starts
 			testnet.move_forward_blocks(5);
@@ -376,8 +366,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			});
 
 			// Begin the rotation, but make Keygen fail.
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 
 			testnet.move_forward_blocks(1);
 			assert!(matches!(
@@ -407,7 +396,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			backup_nodes.iter().for_each(|validator| {
 				testnet.set_active(validator, true);
 			});
-			testnet.submit_heartbeat_all_engines();
+
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 		});
@@ -424,14 +413,11 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 		.execute_with(|| {
 			let (mut testnet, _, backup_nodes) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			// Rotate authority at least once to ensure epoch keys are set.
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			testnet.move_to_the_next_epoch();
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
 			// Begin the second rotation.
-			testnet.move_forward_blocks(EPOCH_BLOCKS);
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(4);
 
 			// Make Key Handover fail. Only Bitcoin vault can fail during Key Handover.
@@ -479,7 +465,6 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			backup_nodes.iter().for_each(|validator| {
 				testnet.set_active(validator, true);
 			});
-			testnet.submit_heartbeat_all_engines();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in a new epoch");
 		});

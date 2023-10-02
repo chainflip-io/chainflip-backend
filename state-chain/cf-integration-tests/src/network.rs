@@ -2,7 +2,7 @@ use super::*;
 
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
-use cf_primitives::{AccountRole, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
+use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo, VaultRotator};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
@@ -431,12 +431,15 @@ pub struct Network {
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+
+	// Engines will automatically submit heartbeat
+	pub auto_submit_heartbeat: bool,
 }
 
 thread_local! {
-	// TODO: USE THIS IN WHEN HANDLING EVENTS INSTEAD OF DISPATCHING CALLS DIRECTLY
 	static PENDING_EXTRINSICS: RefCell<VecDeque<(state_chain_runtime::RuntimeCall, RuntimeOrigin)>> = RefCell::default();
 	static TIMESTAMP: RefCell<u64> = RefCell::new(SLOT_DURATION);
+	static LAST_HEARTBEAT: RefCell<BlockNumber> = RefCell::new(Default::default());
 }
 
 fn queue_dispatch_extrinsic(call: impl Into<RuntimeCall>, origin: RuntimeOrigin) {
@@ -511,12 +514,13 @@ impl Network {
 		number_of_backup_nodes: u8,
 		existing_nodes: &BTreeSet<NodeId>,
 	) -> (Self, BTreeSet<NodeId>) {
-		let mut network: Network = Default::default();
+		let mut network: Network = Network { auto_submit_heartbeat: true, ..Default::default() };
 
 		// Include any nodes already *created* to the test network
 		for node in existing_nodes {
 			network.add_engine(node);
 			setup_peer_mapping(node);
+			assert_ok!(Reputation::heartbeat(RuntimeOrigin::signed(node.clone())));
 		}
 
 		// Create the backup nodes
@@ -552,16 +556,26 @@ impl Network {
 		);
 	}
 
-	pub fn move_to_next_epoch(&mut self) {
-		let blocks_per_epoch = Validator::blocks_per_epoch();
-		let current_block_number = System::block_number();
-		self.move_forward_blocks(blocks_per_epoch - (current_block_number % blocks_per_epoch));
+	/// Move to the next epoch, to the block after the completion of Authority rotation.
+	pub fn move_to_the_next_epoch(&mut self) {
+		self.move_to_the_end_of_epoch();
+		self.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+	}
+
+	/// Move to the last block of the epoch - next block will start Authority rotation
+	pub fn move_to_the_end_of_epoch(&mut self) {
+		let current_block = System::block_number();
+		let target = Validator::current_epoch_started_at() + Validator::blocks_per_epoch();
+		if target > current_block {
+			self.move_forward_blocks(target - current_block - 1)
+		}
 	}
 
 	pub fn submit_heartbeat_all_engines(&self) {
 		for engine in self.engines.values() {
 			let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
 		}
+		LAST_HEARTBEAT.replace(System::block_number());
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
@@ -622,6 +636,13 @@ impl Network {
 				.collect::<Vec<RuntimeEvent>>();
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
+			}
+			if self.auto_submit_heartbeat &&
+				block_number + Validator::blocks_per_epoch() >=
+					LAST_HEARTBEAT.with_borrow(|v| *v)
+			{
+				// Automatically submit heartbeat
+				self.submit_heartbeat_all_engines();
 			}
 		}
 	}

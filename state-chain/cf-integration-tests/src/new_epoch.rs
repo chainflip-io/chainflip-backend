@@ -44,9 +44,10 @@ fn auction_repeats_after_failure_because_of_liveness() {
 				testnet.set_active(node, false);
 				pallet_cf_reputation::LastHeartbeat::<Runtime>::remove(node);
 			}
+			testnet.auto_submit_heartbeat = false;
 
 			// Run to the next epoch to start the auction
-			testnet.move_to_next_epoch();
+			testnet.move_forward_blocks(EPOCH_BLOCKS);
 
 			assert!(
 				matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
@@ -153,8 +154,7 @@ fn epoch_rotates() {
 				network::Cli::start_bidding(node);
 			}
 
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(1);
 
 			assert!(matches!(
