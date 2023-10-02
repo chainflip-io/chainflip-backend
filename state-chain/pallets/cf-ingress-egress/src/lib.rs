@@ -17,9 +17,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelLifecycleHooks,
-	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
-	TransferAssetParams,
+	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
+	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -63,18 +63,18 @@ impl<C: Chain> FetchOrTransfer<C> {
 }
 
 /// Cross-chain messaging requests.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
 	pub destination_address: C::ChainAccount,
-	pub message: Vec<u8>,
+	pub message: CcmMessage,
 	// The sender of the deposit transaction.
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
-	pub cf_parameters: Vec<u8>,
+	pub cf_parameters: CcmCfParameters,
 	pub gas_budget: C::ChainAmount,
 }
 
@@ -751,7 +751,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_chain,
 				ccm.source_address,
 				ccm.gas_budget,
-				ccm.message,
+				ccm.message.to_vec(),
 			) {
 				Ok(api_call) => {
 					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
