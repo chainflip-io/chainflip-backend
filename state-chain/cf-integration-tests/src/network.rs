@@ -143,6 +143,7 @@ pub struct Engine {
 	pub live: bool,
 	// Automatically submits heartbeat to keep alive.
 	pub auto_submit_heartbeat: bool,
+	pub last_heartbeat: BlockNumber,
 
 	// conveniently creates a threshold "signature" (not really)
 	// all engines have the same one, so they create the same sig
@@ -165,6 +166,7 @@ impl Engine {
 			dot_threshold_signer,
 			btc_threshold_signer,
 			auto_submit_heartbeat: true,
+			last_heartbeat: Default::default(),
 		}
 	}
 
@@ -441,7 +443,6 @@ pub struct Network {
 thread_local! {
 	static PENDING_EXTRINSICS: RefCell<VecDeque<(state_chain_runtime::RuntimeCall, RuntimeOrigin)>> = RefCell::default();
 	static TIMESTAMP: RefCell<u64> = RefCell::new(SLOT_DURATION);
-	static LAST_HEARTBEAT: RefCell<BlockNumber> = RefCell::new(Default::default());
 }
 
 fn queue_dispatch_extrinsic(call: impl Into<RuntimeCall>, origin: RuntimeOrigin) {
@@ -583,13 +584,22 @@ impl Network {
 		}
 	}
 
-	pub fn submit_heartbeat_all_engines(&self) {
-		for engine in self.engines.values() {
-			if engine.auto_submit_heartbeat {
+	// Submits heartbeat for keep alive.
+	// If `force_update`, submit heartbeat unconditionally.
+	// else, submit according to auto-heartbeat setting and current block_number.
+	pub fn submit_heartbeat_all_engines(&mut self, force_update: bool) {
+		let current_block = System::block_number();
+		self.engines.iter_mut().for_each(|(_, engine)| {
+			if match force_update {
+				true => true,
+				false =>
+					engine.auto_submit_heartbeat &&
+						current_block + Validator::blocks_per_epoch() >= engine.last_heartbeat,
+			} {
 				let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
+				engine.last_heartbeat = current_block;
 			}
-		}
-		LAST_HEARTBEAT.replace(System::block_number());
+		});
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
@@ -651,10 +661,7 @@ impl Network {
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
 			}
-			if block_number + Validator::blocks_per_epoch() >= LAST_HEARTBEAT.with_borrow(|v| *v) {
-				// Automatically submit heartbeat
-				self.submit_heartbeat_all_engines();
-			}
+			self.submit_heartbeat_all_engines(false);
 		}
 	}
 }

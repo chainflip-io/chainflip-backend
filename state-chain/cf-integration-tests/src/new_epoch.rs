@@ -65,12 +65,11 @@ fn auction_repeats_after_failure_because_of_liveness() {
 			);
 
 			testnet.set_active_all_nodes(true);
-			testnet.set_auto_heartbeat_all_nodes(true);
 
 			// Submit a heartbeat, for all the nodes. Given we were waiting for the nodes to
 			// come online to start the rotation, the rotation ought to start on the next
 			// block
-			testnet.submit_heartbeat_all_engines();
+			testnet.submit_heartbeat_all_engines(true);
 			testnet.move_forward_blocks(1);
 
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
