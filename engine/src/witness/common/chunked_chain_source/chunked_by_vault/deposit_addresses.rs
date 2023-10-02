@@ -3,7 +3,6 @@ use std::sync::Arc;
 use cf_chains::ChainState;
 use frame_support::CloneNoBound;
 use futures::FutureExt;
-use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use state_chain_runtime::PalletInstanceAlias;
@@ -11,7 +10,6 @@ use tokio::sync::watch;
 use utilities::{
 	loop_select,
 	task_scope::{Scope, OR_CANCEL},
-	UnendingStream,
 };
 
 use crate::{
@@ -33,6 +31,8 @@ pub type Addresses<Inner> = Vec<
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
+
+#[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct IngressAddresses<Inner: ChunkedByVault>
 where
@@ -204,10 +204,9 @@ where
 						|(mut chain_stream, mut state)| async move {
 							loop_select!(
 								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), (chain_stream, state))),
-								if chain_stream.is_terminated() && state.pending_headers.is_empty() => break None,
-								let header = chain_stream.next_or_pending() => {
+								if let Some(header) = chain_stream.next() => {
 									state.add_headers(std::iter::once(header));
-								},
+								} else disable then if state.pending_headers.is_empty() => break None,
 								let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
 									let pending_headers = std::mem::take(&mut state.pending_headers);
 									state.add_headers(pending_headers);

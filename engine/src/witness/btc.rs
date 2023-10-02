@@ -1,18 +1,14 @@
 mod btc_chain_tracking;
+mod btc_deposits;
 mod btc_source;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use bitcoin::Transaction;
-use cf_chains::{
-	btc::{deposit_address::DepositAddress, ScriptPubkey, UtxoId, CHANGE_ADDRESS_SALT},
-	Bitcoin,
-};
-use cf_primitives::{chains::assets::btc, EpochIndex};
+use cf_chains::btc::{deposit_address::DepositAddress, CHANGE_ADDRESS_SALT};
+use cf_primitives::EpochIndex;
 use futures_core::Future;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use secp256k1::hashes::Hash;
-use state_chain_runtime::BitcoinInstance;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -30,10 +26,18 @@ use anyhow::Result;
 
 const SAFETY_MARGIN: usize = 6;
 
-pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
+pub async fn start<
+	StateChainClient,
+	StateChainStream,
+	ProcessCall,
+	ProcessingFut,
+	PrewitnessCall,
+	PrewitnessFut,
+>(
 	scope: &Scope<'_, anyhow::Error>,
 	btc_client: BtcRetryRpcClient,
 	process_call: ProcessCall,
+	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -48,6 +52,12 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
+	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
 
@@ -59,47 +69,41 @@ where
 		.logging("chain tracking")
 		.spawn(scope);
 
-	let btc_client = btc_client.clone();
-	btc_source
+	let vaults = epoch_source.vaults().await;
+
+	let strictly_monotonic_source = btc_source
 		.strictly_monotonic()
-		.lag_safety(SAFETY_MARGIN)
-		.logging("safe block produced")
-		.then(move |header| {
-			let btc_client = btc_client.clone();
-			async move {
-				let block = btc_client.block(header.hash).await;
-				(header.data, block.txdata)
-			}
-		})
-		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await)
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
 		.then({
-			let process_call = process_call.clone();
-			move |epoch, header| {
-				let process_call = process_call.clone();
+			let btc_client = btc_client.clone();
+			move |header| {
+				let btc_client = btc_client.clone();
 				async move {
-					// TODO: Make addresses a Map of some kind?
-					let (((), txs), addresses) = header.data;
-
-					let script_addresses = script_addresses(addresses);
-
-					let deposit_witnesses = deposit_witnesses(&txs, script_addresses);
-
-					// Submit all deposit witnesses for the block.
-					if !deposit_witnesses.is_empty() {
-						process_call(
-							pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
-								deposit_witnesses,
-								block_height: header.index,
-							}.into(),
-							epoch.index).await;
-					}
-					txs
+					let block = btc_client.block(header.hash).await;
+					(header.data, block.txdata)
 				}
 			}
 		})
+		.shared(scope);
+
+	// Pre-witnessing stream.
+	strictly_monotonic_source
+		.clone()
+		.chunk_by_vault(vaults.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.btc_deposits(prewitness_call)
+		.logging("pre-witnessing")
+		.spawn(scope);
+
+	// Full witnessing stream.
+	strictly_monotonic_source
+		.lag_safety(SAFETY_MARGIN)
+		.logging("safe block produced")
+		.shared(scope)
+		.chunk_by_vault(vaults)
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.btc_deposits(process_call.clone())
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		.then(move |epoch, header| {
@@ -136,43 +140,6 @@ where
 	Ok(())
 }
 
-fn deposit_witnesses(
-	txs: &Vec<Transaction>,
-	script_addresses: HashMap<Vec<u8>, ScriptPubkey>,
-) -> Vec<DepositWitness<Bitcoin>> {
-	let mut deposit_witnesses = Vec::new();
-	for tx in txs {
-		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
-		for (vout, tx_out) in (0..).zip(&tx.output) {
-			if tx_out.value > 0 {
-				let tx_script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
-				if let Some(bitcoin_script) = script_addresses.get(&tx_script_pubkey_bytes) {
-					deposit_witnesses.push(DepositWitness {
-						deposit_address: bitcoin_script.clone(),
-						asset: btc::Asset::Btc,
-						amount: tx_out.value,
-						deposit_details: UtxoId { tx_id: tx_hash, vout },
-					});
-				}
-			}
-		}
-	}
-	deposit_witnesses
-}
-
-fn script_addresses(
-	addresses: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
-) -> HashMap<Vec<u8>, ScriptPubkey> {
-	addresses
-		.into_iter()
-		.map(|channel| {
-			assert_eq!(channel.deposit_channel.asset, btc::Asset::Btc);
-			let script_pubkey = channel.deposit_channel.address;
-			(script_pubkey.bytes(), script_pubkey)
-		})
-		.collect()
-}
-
 fn success_witnesses(monitored_tx_hashes: &[[u8; 32]], txs: &Vec<Transaction>) -> Vec<[u8; 32]> {
 	let mut successful_witnesses = Vec::new();
 	for tx in txs {
@@ -192,12 +159,6 @@ mod tests {
 		absolute::{Height, LockTime},
 		ScriptBuf, Transaction, TxOut,
 	};
-	use cf_chains::{
-		btc::{deposit_address::DepositAddress, ScriptPubkey},
-		DepositChannel,
-	};
-	use pallet_cf_ingress_egress::ChannelAction;
-	use sp_runtime::AccountId32;
 
 	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
 		Transaction {
@@ -206,100 +167,6 @@ mod tests {
 			input: vec![],
 			output: tx_outs,
 		}
-	}
-
-	fn fake_details(
-		address: ScriptPubkey,
-	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
-		DepositChannelDetails::<_, BitcoinInstance> {
-			opened_at: 1,
-			expires_at: 10,
-			deposit_channel: DepositChannel {
-				channel_id: 1,
-				address,
-				asset: btc::Asset::Btc,
-				state: DepositAddress::new([0; 32], 1),
-			},
-			action: ChannelAction::<AccountId32>::LiquidityProvision {
-				lp_account: AccountId32::new([0xab; 32]),
-			},
-		}
-	}
-
-	#[test]
-	fn deposit_witnesses_no_utxos_no_monitored() {
-		let txs = vec![fake_transaction(vec![]), fake_transaction(vec![])];
-		let deposit_witnesses = deposit_witnesses(&txs, HashMap::new());
-		assert!(deposit_witnesses.is_empty());
-	}
-
-	#[test]
-	fn filter_out_value_0() {
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
-
-		const UTXO_WITNESSED_1: u64 = 2324;
-		let txs = vec![fake_transaction(vec![
-			TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-			TxOut { value: 0, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-		])];
-
-		let deposit_witnesses =
-			deposit_witnesses(&txs, script_addresses(vec![(fake_details(btc_deposit_script))]));
-		assert_eq!(deposit_witnesses.len(), 1);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-	}
-
-	#[test]
-	fn deposit_witnesses_several_same_tx() {
-		const UTXO_WITNESSED_1: u64 = 2324;
-		const UTXO_WITNESSED_2: u64 = 1234;
-
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
-
-		let txs = vec![
-			fake_transaction(vec![
-				TxOut {
-					value: UTXO_WITNESSED_1,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-				TxOut {
-					value: UTXO_WITNESSED_2,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-			]),
-			fake_transaction(vec![]),
-		];
-
-		let deposit_witnesses =
-			deposit_witnesses(&txs, script_addresses(vec![fake_details(btc_deposit_script)]));
-		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
-	}
-
-	#[test]
-	fn deposit_witnesses_several_diff_tx() {
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
-
-		const UTXO_WITNESSED_1: u64 = 2324;
-		const UTXO_WITNESSED_2: u64 = 1234;
-		let txs = vec![
-			fake_transaction(vec![
-				TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-			]),
-			fake_transaction(vec![TxOut {
-				value: 1234,
-				script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-			}]),
-		];
-
-		let deposit_witnesses =
-			deposit_witnesses(&txs, script_addresses(vec![fake_details(btc_deposit_script)]));
-		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
 	}
 
 	#[test]

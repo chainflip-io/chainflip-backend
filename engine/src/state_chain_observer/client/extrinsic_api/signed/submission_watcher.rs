@@ -402,7 +402,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				.collect::<Vec<_>>();
 
 			if let Some(request) = requests.get_mut(&request_id) {
-				warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Request found in block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
+				info!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Request found in block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 				let until_in_block_sender = request.until_in_block_sender.take().unwrap();
 				let _result = until_in_block_sender.send(self.decide_extrinsic_success(
 					tx_hash,
