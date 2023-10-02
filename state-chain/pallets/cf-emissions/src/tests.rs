@@ -143,11 +143,13 @@ fn rewards_calculation_compounding() {
 	let mut total_issuance: u128 = INITIAL_ISSUANCE;
 	const TARGET_ANNUAL_INFLATION: f64 = 0.001; // 0.1%
 	const COMPOUNDING_INTERVAL: u64 = 150;
+	// Authority emissions per `COMPOUNDING_INTERVAL` blocks in parts per billion
+	const EMISSION_INFLATION_PERBILL: u64 = 28;
 
 	for _ in 0..(BLOCKS_PER_YEAR / COMPOUNDING_INTERVAL) {
 		let block_reward = crate::calculate_inflation_to_block_reward(
 			total_issuance,
-			chainflip_node::chain_spec::common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL.into(),
+			EMISSION_INFLATION_PERBILL as u128,
 			COMPOUNDING_INTERVAL as u128,
 		);
 
