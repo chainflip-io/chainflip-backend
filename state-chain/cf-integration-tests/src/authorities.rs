@@ -190,14 +190,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			// Start an auction
-			testnet.move_to_the_end_of_epoch();
-			assert_eq!(
-				GENESIS_EPOCH,
-				Validator::epoch_index(),
-				"We should still be in the genesis epoch"
-			);
-
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			testnet.move_to_the_next_epoch();
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
 			// assert list of authorities as being the new nodes
@@ -361,9 +354,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 		.execute_with(|| {
 			let (mut testnet, _, backup_nodes) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
-			backup_nodes.iter().for_each(|validator| {
-				testnet.set_active(validator, false);
-			});
+			testnet.set_active_all_nodes(false);
 
 			// Begin the rotation, but make Keygen fail.
 			testnet.move_to_the_end_of_epoch();
@@ -393,9 +384,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 			});
 
 			// Authority rotation can recover and succeed.
-			backup_nodes.iter().for_each(|validator| {
-				testnet.set_active(validator, true);
-			});
+			testnet.set_active_all_nodes(true);
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS + 1);
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
@@ -422,9 +411,8 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 
 			// Make Key Handover fail. Only Bitcoin vault can fail during Key Handover.
 			// Ethereum and Polkadot do not need to wait for Key Handover.
-			backup_nodes.iter().for_each(|validator| {
-				testnet.set_active(validator, false);
-			});
+			testnet.set_active_all_nodes(false);
+
 			testnet.move_forward_blocks(1);
 			backup_nodes.iter().for_each(|validator| {
 				assert_ok!(BitcoinVault::report_key_handover_outcome(
@@ -462,9 +450,8 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 
 			// Key handovers are retried after failure.
 			// Authority rotation can recover and succeed.
-			backup_nodes.iter().for_each(|validator| {
-				testnet.set_active(validator, true);
-			});
+			testnet.set_active_all_nodes(true);
+
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in a new epoch");
 		});

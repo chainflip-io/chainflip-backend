@@ -44,10 +44,10 @@ fn auction_repeats_after_failure_because_of_liveness() {
 				testnet.set_active(node, false);
 				pallet_cf_reputation::LastHeartbeat::<Runtime>::remove(node);
 			}
-			testnet.auto_submit_heartbeat = false;
+			testnet.set_auto_heartbeat_all_nodes(false);
 
 			// Run to the next epoch to start the auction
-			testnet.move_forward_blocks(EPOCH_BLOCKS);
+			testnet.move_to_the_end_of_epoch();
 
 			assert!(
 				matches!(Validator::current_rotation_phase(), RotationPhase::Idle),
@@ -64,9 +64,8 @@ fn auction_repeats_after_failure_because_of_liveness() {
 				Validator::current_rotation_phase(),
 			);
 
-			for node in &offline_nodes {
-				testnet.set_active(node, true);
-			}
+			testnet.set_active_all_nodes(true);
+			testnet.set_auto_heartbeat_all_nodes(true);
 
 			// Submit a heartbeat, for all the nodes. Given we were waiting for the nodes to
 			// come online to start the rotation, the rotation ought to start on the next

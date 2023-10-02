@@ -139,7 +139,11 @@ impl Cli {
 // Engine monitoring contract
 pub struct Engine {
 	pub node_id: NodeId,
+	// Automatically responds to events and responds with "OK".
 	pub live: bool,
+	// Automatically submits heartbeat to keep alive.
+	pub auto_submit_heartbeat: bool,
+
 	// conveniently creates a threshold "signature" (not really)
 	// all engines have the same one, so they create the same sig
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
@@ -160,6 +164,7 @@ impl Engine {
 			eth_threshold_signer,
 			dot_threshold_signer,
 			btc_threshold_signer,
+			auto_submit_heartbeat: true,
 		}
 	}
 
@@ -431,9 +436,6 @@ pub struct Network {
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
-
-	// Engines will automatically submit heartbeat
-	pub auto_submit_heartbeat: bool,
 }
 
 thread_local! {
@@ -508,13 +510,23 @@ impl Network {
 			.collect()
 	}
 
+	pub fn set_active_all_nodes(&mut self, active: bool) {
+		self.engines.iter_mut().for_each(|(_, e)| e.live = active);
+	}
+
+	pub fn set_auto_heartbeat_all_nodes(&mut self, auto_heartbeat: bool) {
+		self.engines
+			.iter_mut()
+			.for_each(|(_, e)| e.auto_submit_heartbeat = auto_heartbeat);
+	}
+
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
 	pub fn create(
 		number_of_backup_nodes: u8,
 		existing_nodes: &BTreeSet<NodeId>,
 	) -> (Self, BTreeSet<NodeId>) {
-		let mut network: Network = Network { auto_submit_heartbeat: true, ..Default::default() };
+		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
 		for node in existing_nodes {
@@ -573,7 +585,9 @@ impl Network {
 
 	pub fn submit_heartbeat_all_engines(&self) {
 		for engine in self.engines.values() {
-			let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
+			if engine.auto_submit_heartbeat {
+				let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
+			}
 		}
 		LAST_HEARTBEAT.replace(System::block_number());
 	}
@@ -637,10 +651,7 @@ impl Network {
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
 			}
-			if self.auto_submit_heartbeat &&
-				block_number + Validator::blocks_per_epoch() >=
-					LAST_HEARTBEAT.with_borrow(|v| *v)
-			{
+			if block_number + Validator::blocks_per_epoch() >= LAST_HEARTBEAT.with_borrow(|v| *v) {
 				// Automatically submit heartbeat
 				self.submit_heartbeat_all_engines();
 			}
