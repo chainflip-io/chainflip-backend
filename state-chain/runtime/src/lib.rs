@@ -20,7 +20,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinNetwork},
-	dot::{self, PolkadotCrypto, PolkadotHash},
+	dot::{self, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotHash, PolkadotReplayProtection},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	Bitcoin, Polkadot,
@@ -145,7 +145,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 17,
+	spec_version: 19,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 4,
@@ -825,43 +825,70 @@ pub type Executive = frame_executive::Executive<
 pub struct CustomUpgrade;
 impl frame_support::traits::OnRuntimeUpgrade for CustomUpgrade {
 	fn on_runtime_upgrade() -> Weight {
-		let mut api_calls =
+		use cf_chains::dot::*;
+		for (id, _discarded) in
 			pallet_cf_broadcast::ThresholdSignatureData::<Runtime, PolkadotInstance>::iter()
-				.drain()
-				.filter(|&(id, _)| id > 3)
-				.collect::<Vec<_>>();
+				.drain() {
+					PolkadotBroadcaster::clean_up_broadcast_storage(id);
+				}
 
-		let mut nonce = 1;
+		let mut nonce = 4;
+		let old_proxy = PolkadotAccountId::from_aliased(
+			[66, 52, 239, 247, 15, 170, 140, 224, 126, 117, 24, 124, 3, 146, 26, 109, 38, 38, 112, 182, 226, 95, 180, 180, 237, 187, 31, 44, 217, 190, 218, 88]
+		);
+		let new_proxy = PolkadotAccountId::from_aliased(
+			[30, 47, 51, 174, 46, 192, 211, 61, 122, 34, 244, 228, 86, 218, 109, 52, 72, 249, 1, 216, 73, 155, 4, 184, 121, 135, 150, 53, 16, 118, 159, 2]
+		);
+		let cf_whale = PolkadotAccountId::from_aliased(
+			[10, 215, 155, 16, 79, 18, 35, 75, 72, 76, 65, 42, 30, 61, 78, 212, 107, 37, 17, 249, 111, 178, 121, 26, 25, 102, 84, 15, 243, 53, 22, 101]
+		);
+		let vault = PolkadotAccountId::from_aliased(
+			[234, 136, 35, 1, 2, 28, 52, 107, 226, 223, 220, 129, 145, 37, 71, 75, 184, 47, 189, 128, 184, 178, 77, 120, 126, 1, 11, 94, 107, 172, 104, 138]
+		);
 		// transfers first
-		for (id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
-			match api_call {
-				cf_chains::dot::api::PolkadotApi::BatchFetchAndTransfer(ref mut ext_builder) => {
-					ext_builder.force_nonce(nonce);
+		PolkadotBroadcaster::threshold_sign_and_broadcast(
+			cf_chains::dot::api::PolkadotApi::BatchFetchAndTransfer(PolkadotExtrinsicBuilder::new(
+				PolkadotReplayProtection {
+					nonce: 4,
+					genesis_hash: pallet_cf_environment::PolkadotGenesisHash::<Runtime>::get(),
 				},
-				_ => continue,
-			}
-			nonce += 1;
-			PolkadotBroadcaster::threshold_sign_and_broadcast(
-				api_call.clone(),
-				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(*id),
-			);
-			PolkadotBroadcaster::clean_up_broadcast_storage(*id);
-		}
-		// then the rotation
-		for (id, (ref mut api_call, _signature)) in api_calls.iter_mut() {
-			match api_call {
-				cf_chains::dot::api::PolkadotApi::RotateVaultProxy(ref mut ext_builder) => {
-					ext_builder.force_nonce(nonce);
-				},
-				_ => continue,
-			}
-			nonce += 1;
-			PolkadotBroadcaster::threshold_sign_and_broadcast(
-				api_call.clone(),
-				pallet_cf_broadcast::RequestCallbacks::<Runtime, PolkadotInstance>::get(*id),
-			);
-			PolkadotBroadcaster::clean_up_broadcast_storage(*id);
-		}
+				PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
+					calls: vec![
+						PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
+							real: vault.into(),
+							force_proxy_type: Some(PolkadotProxyType::Any),
+							call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
+								calls: [
+									Some(PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
+										delegate: new_proxy.into(),
+										proxy_type: PolkadotProxyType::Any,
+										delay: 0,
+									})),
+									Some(PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
+										delegate: cf_whale.into(),
+										proxy_type: PolkadotProxyType::Any,
+										delay: 0,
+									})),
+									Some(PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
+										delegate: old_proxy.into(),
+										proxy_type: PolkadotProxyType::Any,
+										delay: 0,
+									})),
+								]
+								.into_iter()
+								.flatten()
+								.collect(),
+							})),
+						}),
+						PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
+							dest: new_proxy.into(),
+							keep_alive: false,
+						}),
+					],
+				}),
+			)),
+			None
+		);
 
 		Weight::zero()
 	}
