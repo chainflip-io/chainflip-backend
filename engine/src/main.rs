@@ -25,7 +25,10 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+	any::Any,
+	sync::{atomic::AtomicBool, Arc},
+};
 use tracing::info;
 use utilities::{
 	make_periodic_tick, metrics,
@@ -89,7 +92,25 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	task_scope(|scope| {
+	match run_main(settings).await {
+		Ok(result) => match result {
+			Ok(_) => {},
+			Err(error) => {
+				tracing::error!("Exiting chainflip-engine due to error: {error:?}");
+			},
+		},
+		Err(panic) => {
+			tracing::error!(
+				"Exiting chainflip-engine due to panic: {:#?}",
+				panic.downcast_ref::<&str>()
+			);
+		},
+	};
+	Ok(())
+}
+
+async fn run_main(settings: Settings) -> Result<anyhow::Result<()>, Box<dyn Any + Send>> {
+	std::panic::AssertUnwindSafe(task_scope(|scope| {
 		async move {
 			let mut start_logger_server_fn = Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
 
@@ -157,7 +178,8 @@ async fn main() -> anyhow::Result<()> {
 			}
 		}
 		.boxed()
-	})
+	}))
+	.catch_unwind()
 	.await
 }
 
