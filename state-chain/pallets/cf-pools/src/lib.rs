@@ -4,7 +4,7 @@ use core::ops::Range;
 use cf_amm::{
 	common::{Amount, Order, Price, Side, SideMap, Tick},
 	limit_orders,
-	limit_orders::PositionInfo,
+	limit_orders::{Collected, PositionInfo},
 	range_orders,
 	range_orders::Liquidity,
 	PoolState,
@@ -226,10 +226,10 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		pub enabled: bool,
-		/// A cache of all the range orders that exist in the pool. This must be kept upto date
+		/// A cache of all the range orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool.
 		pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
-		/// A cache of all the limit orders that exist in the pool. This must be kept upto date
+		/// A cache of all the limit orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool. These are grouped by the asset the limit order is selling
 		pub limit_orders_cache: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
@@ -999,31 +999,17 @@ pub mod pallet {
 							for ((tick, (lp, order)), (collected, position_info)) in
 								collected_fees.into_iter()
 							{
-								let collected_fees =
-									asset_pair.try_credit_asset(&lp, !side, collected.fees)?;
-								let bought_amount = asset_pair.try_credit_asset(
-									&lp,
-									!side,
-									collected.bought_amount,
-								)?;
-								pool.update_limit_order_storage(
+								Self::process_limit_order_update(
+									pool,
+									asset_pair,
 									&lp,
 									side,
 									order,
 									tick,
-									&position_info,
-								);
-								Self::deposit_event(Event::<T>::LimitOrderUpdated {
-									lp: lp.clone(),
-									sell_asset: asset_pair.canonical_asset_pair.side_to_asset(side),
-									buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!side),
-									id: order,
-									tick,
-									position_delta: None,
-									amount_total: position_info.amount.try_into()?,
-									collected_fees,
-									bought_amount,
-								});
+									collected,
+									position_info,
+									None,
+								)?;
 							}
 							Result::<(), DispatchError>::Ok(())
 						})
@@ -1213,25 +1199,18 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		// Update pool's limit orders
-		pool.update_limit_order_storage(lp, asset_pair.base_side, id, tick, &position_info);
-
-		let collected_fees =
-			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.fees)?;
-		let bought_amount =
-			asset_pair.try_credit_asset(lp, !asset_pair.base_side, collected.bought_amount)?;
-
-		Self::deposit_event(Event::<T>::LimitOrderUpdated {
-			lp: lp.clone(),
-			sell_asset: asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
-			buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
+		// Process the update
+		Self::process_limit_order_update(
+			pool,
+			asset_pair,
+			lp,
+			asset_pair.base_side,
 			id,
 			tick,
-			position_delta: Some((increase_or_decrease, amount_delta)),
-			amount_total: position_info.amount.try_into()?,
-			collected_fees,
-			bought_amount,
-		});
+			collected,
+			position_info,
+			Some((increase_or_decrease, amount_delta)),
+		)?;
 
 		Ok(amount_delta)
 	}
@@ -1575,6 +1554,39 @@ impl<T: Config> Pallet<T> {
 				})
 				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
 		)
+	}
+
+	/// Process changes to limit order:
+	/// - Payout collected `fee` and `bought_amount`
+	/// - Update cache storage for Pool
+	/// - Deposit the correct event.
+	#[allow(clippy::too_many_arguments)]
+	fn process_limit_order_update(
+		pool: &mut Pool<T>,
+		asset_pair: &AssetPair<T>,
+		lp: &T::AccountId,
+		side: Side,
+		order: OrderId,
+		tick: Tick,
+		collected: Collected,
+		position_info: PositionInfo,
+		position_delta: Option<(IncreaseOrDecrease, AssetAmount)>,
+	) -> DispatchResult {
+		let collected_fees = asset_pair.try_credit_asset(lp, !side, collected.fees)?;
+		let bought_amount = asset_pair.try_credit_asset(lp, !side, collected.bought_amount)?;
+		pool.update_limit_order_storage(lp, side, order, tick, &position_info);
+		Self::deposit_event(Event::<T>::LimitOrderUpdated {
+			lp: lp.clone(),
+			sell_asset: asset_pair.canonical_asset_pair.side_to_asset(side),
+			buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!side),
+			id: order,
+			tick,
+			position_delta,
+			amount_total: position_info.amount.try_into()?,
+			collected_fees,
+			bought_amount,
+		});
+		Ok(())
 	}
 }
 
