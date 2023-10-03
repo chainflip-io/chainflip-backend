@@ -155,9 +155,8 @@ async function testGasLimitSwap(
   const maxFeePerGas = ETHEREUM_BASE_FEE_MULTIPLIER * baseFee + priorityFee;
 
   // On the state chain the gasLimit is calculated from the egressBudget and the MaxFeePerGas
-  // TODO: We should could consider doing the following, potentially adjusting that multiplier depending on the
-  // total gas limit amount
-  // gasLimitBudget = egressBudgetAmount / (1.25 * baseFee + priorityFee)
+  // max_fee_per_gas = 2 * baseFee + priorityFee
+  // gasLimitBudget = egressBudgetAmount / (1 * baseFee + priorityFee)
   const gasLimitBudget = egressBudgetAmount / maxFeePerGas;
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
