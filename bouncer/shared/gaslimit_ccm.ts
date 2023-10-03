@@ -20,7 +20,7 @@ import { signAndSendTxEthSilent } from './send_eth';
 // on the lenght of the message.
 const MIN_BASE_GAS_OVERHEAD = 100000;
 const BASE_GAS_OVERHEAD_BUFFER = 20000;
-const ETHEREUM_BASE_FEE_MULTIPLIER = 2;
+const ETHEREUM_BASE_FEE_MULTIPLIER = 1;
 const CFE_GAS_LIMIT_CAP = 10000000;
 // Arbitrary gas consumption values for testing. The total default gas used is then ~360-380k depending on the parameters.
 let DEFAULT_GAS_CONSUMPTION = 260000;
