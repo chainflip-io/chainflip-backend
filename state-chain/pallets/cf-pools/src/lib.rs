@@ -236,6 +236,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pool<T> {
+		/// Updates the position information in the Pool's cache.
 		pub fn update_limit_order_storage(
 			&mut self,
 			lp: &T::AccountId,
@@ -534,8 +535,7 @@ pub mod pallet {
 			buy_asset: Asset,
 			id: OrderId,
 			tick: Tick,
-			increase_or_decrease: IncreaseOrDecrease,
-			amount_delta: AssetAmount,
+			position_delta: Option<(IncreaseOrDecrease, AssetAmount)>,
 			amount_total: AssetAmount,
 			collected_fees: AssetAmount,
 			bought_amount: AssetAmount,
@@ -988,21 +988,47 @@ pub mod pallet {
 				PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips),
 				Error::<T>::InvalidFeeAmount
 			);
-			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
-				pool.pool_state
-					.set_fees(fee_hundredth_pips)
-					.map_err(|_| Error::<T>::InvalidFeeAmount)?
-					.try_map(|side, collected_fees| {
-						for ((tick, (lp, order)), (collected, position_info)) in
-							collected_fees.into_iter()
-						{
-							asset_pair.try_credit_asset(&lp, !side, collected.fees)?;
-							asset_pair.try_credit_asset(&lp, !side, collected.bought_amount)?;
-							pool.update_limit_order_storage(&lp, side, order, tick, &position_info);
-						}
-						Result::<(), DispatchError>::Ok(())
-					})
-			})?;
+			Self::try_mutate_enabled_pool(
+				base_asset,
+				pair_asset,
+				|asset_pair: &AssetPair<T>, pool| {
+					pool.pool_state
+						.set_fees(fee_hundredth_pips)
+						.map_err(|_| Error::<T>::InvalidFeeAmount)?
+						.try_map(|side, collected_fees| {
+							for ((tick, (lp, order)), (collected, position_info)) in
+								collected_fees.into_iter()
+							{
+								let collected_fees =
+									asset_pair.try_credit_asset(&lp, !side, collected.fees)?;
+								let bought_amount = asset_pair.try_credit_asset(
+									&lp,
+									!side,
+									collected.bought_amount,
+								)?;
+								pool.update_limit_order_storage(
+									&lp,
+									side,
+									order,
+									tick,
+									&position_info,
+								);
+								Self::deposit_event(Event::<T>::LimitOrderUpdated {
+									lp: lp.clone(),
+									sell_asset: asset_pair.canonical_asset_pair.side_to_asset(side),
+									buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!side),
+									id: order,
+									tick,
+									position_delta: None,
+									amount_total: position_info.amount.try_into()?,
+									collected_fees,
+									bought_amount,
+								});
+							}
+							Result::<(), DispatchError>::Ok(())
+						})
+				},
+			)?;
 
 			Self::deposit_event(Event::<T>::PoolFeeSet {
 				base_asset,
@@ -1201,8 +1227,7 @@ impl<T: Config> Pallet<T> {
 			buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
 			id,
 			tick,
-			increase_or_decrease,
-			amount_delta,
+			position_delta: Some((increase_or_decrease, amount_delta)),
 			amount_total: position_info.amount.try_into()?,
 			collected_fees,
 			bought_amount,

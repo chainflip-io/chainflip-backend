@@ -1,11 +1,11 @@
 use crate::{
 	mock::*, utilities, AssetAmounts, AssetPair, AssetsMap, CanonicalAssetPair,
-	CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, PoolInfo, PoolOrders, Pools,
+	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, PoolInfo, PoolOrders, Pools,
 	RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
-use cf_test_utilities::assert_events_match;
+use cf_test_utilities::{assert_events_match, assert_has_event};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::Permill;
@@ -40,14 +40,12 @@ fn can_create_new_trading_pool() {
 			500_000u32,
 			default_price,
 		));
-		System::assert_last_event(RuntimeEvent::LiquidityPools(
-			crate::Event::<Test>::NewPoolCreated {
-				base_asset: unstable_asset,
-				pair_asset: STABLE_ASSET,
-				fee_hundredth_pips: 500_000u32,
-				initial_price: default_price,
-			},
-		));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::<Test>::NewPoolCreated {
+			base_asset: unstable_asset,
+			pair_asset: STABLE_ASSET,
+			fee_hundredth_pips: 500_000u32,
+			initial_price: default_price,
+		}));
 
 		// Cannot create duplicate pool
 		assert_noop!(
@@ -86,13 +84,11 @@ fn can_enable_disable_trading_pool() {
 			STABLE_ASSET,
 			false
 		));
-		System::assert_last_event(RuntimeEvent::LiquidityPools(
-			crate::Event::<Test>::PoolStateUpdated {
-				base_asset: unstable_asset,
-				pair_asset: STABLE_ASSET,
-				enabled: false,
-			},
-		));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolStateUpdated {
+			base_asset: unstable_asset,
+			pair_asset: STABLE_ASSET,
+			enabled: false,
+		}));
 
 		assert_noop!(
 			LiquidityPools::set_range_order(
@@ -113,13 +109,11 @@ fn can_enable_disable_trading_pool() {
 			STABLE_ASSET,
 			true
 		));
-		System::assert_last_event(RuntimeEvent::LiquidityPools(
-			crate::Event::<Test>::PoolStateUpdated {
-				base_asset: unstable_asset,
-				pair_asset: STABLE_ASSET,
-				enabled: true,
-			},
-		));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolStateUpdated {
+			base_asset: unstable_asset,
+			pair_asset: STABLE_ASSET,
+			enabled: true,
+		}));
 
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
@@ -182,7 +176,7 @@ fn test_buy_back_flip_2() {
 		assert_events_match!(
 			Test,
 			RuntimeEvent::LiquidityPools(
-				crate::Event::RangeOrderUpdated {
+				Event::RangeOrderUpdated {
 					..
 				},
 			) => ()
@@ -275,7 +269,7 @@ fn test_network_fee_calculation() {
 }
 
 #[test]
-fn can_update_pool_liquidity_fee() {
+fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 	new_test_ext().execute_with(|| {
 		let old_fee = 400_000u32;
 		let new_fee = 100_000u32;
@@ -382,7 +376,7 @@ fn can_update_pool_liquidity_fee() {
 				range_order_fee_hundredth_pips: new_fee,
 			})
 		);
-		System::assert_has_event(RuntimeEvent::LiquidityPools(crate::Event::<Test>::PoolFeeSet {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(Event::<Test>::PoolFeeSet {
 			base_asset: Asset::Eth,
 			pair_asset: STABLE_ASSET,
 			fee_hundredth_pips: new_fee,
@@ -512,6 +506,40 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			Pools::<Test>::get(asset_pair.canonical_asset_pair).unwrap().limit_orders_cache;
 		assert_eq!(pallet_limit_orders.zero.get(&ALICE), None);
 		assert_eq!(pallet_limit_orders.zero.get(&BOB).unwrap().get(&0), Some(&100));
+
+		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
+			lp: ALICE,
+			sell_asset: Asset::Eth,
+			buy_asset: STABLE_ASSET,
+			id: 0,
+			tick: 0,
+			position_delta: None,
+			amount_total: 0,
+			collected_fees: 100,
+			bought_amount: 100,
+		}));
+		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
+			lp: BOB,
+			sell_asset: Asset::Eth,
+			buy_asset: STABLE_ASSET,
+			id: 0,
+			tick: 100,
+			position_delta: None,
+			amount_total: 5,
+			collected_fees: 100998,
+			bought_amount: 100998,
+		}));
+		assert_has_event::<Test>(RuntimeEvent::LiquidityPools(Event::<Test>::LimitOrderUpdated {
+			lp: BOB,
+			sell_asset: STABLE_ASSET,
+			buy_asset: Asset::Eth,
+			id: 1,
+			tick: 100,
+			position_delta: None,
+			amount_total: 910,
+			collected_fees: 8998,
+			bought_amount: 8998,
+		}));
 	});
 }
 
