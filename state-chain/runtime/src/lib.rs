@@ -20,8 +20,8 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::{BitcoinCrypto, BitcoinNetwork},
-	dot::{self, PolkadotCrypto, PolkadotHash},
+	btc::BitcoinCrypto,
+	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	Bitcoin, Polkadot,
@@ -41,7 +41,7 @@ pub use frame_support::{
 	instances::{Instance1, Instance2},
 	parameter_types,
 	traits::{
-		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
+		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
 		Randomness, StorageInfo,
 	},
 	weights::{
@@ -61,7 +61,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
@@ -190,19 +190,6 @@ impl pallet_cf_validator::Config for Runtime {
 }
 
 parameter_types! {
-
-	// Polkadot
-	pub const PolkadotGenesisHash: PolkadotHash = H256(hex_literal::hex!(
-		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
-	));
-
-	// Westend
-	// hex_literal::hex!(
-	// 	"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
-	// )
-
-	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
-
 	pub CurrentCompatibilityVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
@@ -214,7 +201,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
-	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;

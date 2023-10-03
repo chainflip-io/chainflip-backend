@@ -7,7 +7,7 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		Bitcoin, BitcoinFeeInfo, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
@@ -70,9 +70,6 @@ pub mod pallet {
 
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
-
-		#[pallet::constant]
-		type BitcoinNetwork: Get<BitcoinNetwork>;
 
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
@@ -427,20 +424,24 @@ impl<T: Config> Pallet<T> {
 			T::BitcoinFeeInfo::bitcoin_fee_info();
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
-				let available_utxos = BitcoinAvailableUtxos::<T>::take();
-				(!available_utxos.is_empty()).then_some(available_utxos).and_then(
-					|available_utxos| {
-						available_utxos
-							.iter()
-							.map(|Utxo { amount, .. }| *amount)
-							.sum::<u64>()
-							.checked_sub(
-								((available_utxos.len() as u64) * fee_per_input_utxo) +
-									fee_per_output_utxo + min_fee_required_per_tx,
-							)
-							.map(|change_amount| (available_utxos, change_amount))
-					},
-				)
+				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
+					.into_iter()
+					.filter(|utxo| utxo.amount > fee_per_input_utxo)
+					.collect();
+
+				if spendable_utxos.is_empty() {
+					return None
+				}
+
+				let total_fee = spendable_utxos.len() as u64 * fee_per_input_utxo +
+					fee_per_output_utxo + min_fee_required_per_tx;
+
+				spendable_utxos
+					.iter()
+					.map(|utxo| utxo.amount)
+					.sum::<u64>()
+					.checked_sub(total_fee)
+					.map(|change_amount| (spendable_utxos, change_amount))
 			},
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {

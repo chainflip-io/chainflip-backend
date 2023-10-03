@@ -11,14 +11,14 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
-		DispatchError,
+		BoundedVec, DispatchError,
 	},
 	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
 	StorageHasher,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::U256;
+use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -376,17 +376,56 @@ pub enum SwapOrigin {
 	},
 }
 
+pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
+pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
+
+pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
+pub type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
+
+#[cfg(feature = "std")]
+mod bounded_hex {
+	use super::*;
+	use sp_core::Get;
+
+	pub fn serialize<S: serde::Serializer, Size>(
+		bounded: &BoundedVec<u8, Size>,
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
+		serializer.serialize_str(&hex::encode(bounded))
+	}
+
+	pub fn deserialize<'de, D: serde::Deserializer<'de>, Size: Get<u32>>(
+		deserializer: D,
+	) -> Result<BoundedVec<u8, Size>, D::Error> {
+		let hex_str = String::deserialize(deserializer)?;
+		let bytes =
+			hex::decode(hex_str.trim_start_matches("0x")).map_err(serde::de::Error::custom)?;
+		BoundedVec::try_from(bytes).map_err(|input| {
+			serde::de::Error::invalid_length(
+				input.len(),
+				&format!("{} bytes", Size::get()).as_str(),
+			)
+		})
+	}
+}
+
 /// Deposit channel Metadata for Cross-Chain-Message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, MaxEncodedLen,
+)]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
-	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
-	pub message: Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
+	pub message: CcmMessage,
 	/// User funds designated to be used for gas.
+	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
 	pub gas_budget: AssetAmount,
 	/// Additional parameters for the cross chain message.
-	#[cfg_attr(feature = "std", serde(with = "hex::serde"))]
-	pub cf_parameters: Vec<u8>,
+	#[cfg_attr(
+		feature = "std",
+		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
+	)]
+	pub cf_parameters: CcmCfParameters,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
