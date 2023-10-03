@@ -677,19 +677,19 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 			.unwrap()
 		};
 
-		// Each unit of gas costs 2 * 1_000_000 + 500_000 = 2_500_000
+		// Each unit of gas costs 1 * 1_000_000 + 500_000 = 1_500_000
 		assert_eq!(
-			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_499_999)),
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_499_999)),
 			Some(U256::from(0))
 		);
 		assert_eq!(
-			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_500_000)),
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_500_000)),
 			Some(U256::from(1))
 		);
-		// 1_000_000_000_000 / (2 * 1_000_000 + 500_000) = 400_000
+		// 1_000_000_000_000 / (1 * 1_000_000 + 500_000) = 666_666
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000_000u128)),
-			Some(U256::from(400_000))
+			Some(U256::from(666_666))
 		);
 
 		// Can handle divide by zero case. Practically this should never happen.

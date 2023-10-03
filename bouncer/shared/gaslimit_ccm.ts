@@ -20,7 +20,7 @@ import { signAndSendTxEthSilent } from './send_eth';
 // on the lenght of the message.
 const MIN_BASE_GAS_OVERHEAD = 100000;
 const BASE_GAS_OVERHEAD_BUFFER = 20000;
-const ETHEREUM_BASE_FEE_MULTIPLIER = 1;
+const ETHEREUM_BASE_FEE_MULTIPLIER = 2;
 const CFE_GAS_LIMIT_CAP = 10000000;
 // Arbitrary gas consumption values for testing. The total default gas used is then ~360-380k depending on the parameters.
 let DEFAULT_GAS_CONSUMPTION = 260000;
@@ -151,13 +151,12 @@ async function testGasLimitSwap(
   const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
   const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
 
-  // Standard gasLimitBudget estimation for now.
-  const maxFeePerGas = ETHEREUM_BASE_FEE_MULTIPLIER * baseFee + priorityFee;
-
   // On the state chain the gasLimit is calculated from the egressBudget and the MaxFeePerGas
   // max_fee_per_gas = 2 * baseFee + priorityFee
   // gasLimitBudget = egressBudgetAmount / (1 * baseFee + priorityFee)
-  const gasLimitBudget = egressBudgetAmount / maxFeePerGas;
+  const currentFeePerGas = baseFee + priorityFee;
+  const maxFeePerGas = ETHEREUM_BASE_FEE_MULTIPLIER * baseFee + priorityFee;
+  const gasLimitBudget = egressBudgetAmount / currentFeePerGas;
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
 
@@ -210,6 +209,12 @@ async function testGasLimitSwap(
     const gasUsed = receipt.gasUsed;
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
+    if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
+      console.log(`${tag} tx.maxFeePerGas: ${tx.maxFeePerGas} maxFeePerGas: ${maxFeePerGas}`);
+      throw new Error(
+        `${tag} Max fee per gas in the transaction is different than the one expected!`,
+      );
+    }
     if (Math.trunc(tx.gas) !== Math.min(Math.trunc(gasLimitBudget), CFE_GAS_LIMIT_CAP)) {
       throw new Error(`${tag} Gas limit in the transaction is different than the one expected!`);
     }
