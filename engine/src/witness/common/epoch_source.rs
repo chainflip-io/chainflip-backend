@@ -16,6 +16,7 @@ use utilities::task_scope::Scope;
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 
+/// https://linear.app/chainflip/issue/PRO-877/external-chain-sources-can-block-sc-observer
 const CHANNEL_BUFFER: usize = 128;
 
 #[derive(Clone)]
