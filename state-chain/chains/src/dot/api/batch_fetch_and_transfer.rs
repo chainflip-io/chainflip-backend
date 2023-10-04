@@ -164,4 +164,15 @@ mod test_batch_fetch {
 			})
 		);
 	}
+
+	#[test]
+	fn fetch_equivalence() {
+		let channel_id_1 = 0x0000_0000_0000_0001;
+		let channel_id_2 = 0x0000_0000_0001_0000;
+		let vault_account = PolkadotAccountId::from_aliased([1u8; 32]);
+		let call_1 = utility_fetch(channel_id_1, vault_account);
+		let call_2 = utility_fetch(channel_id_2, vault_account);
+
+		assert_ne!(call_1, call_2);
+	}
 }
