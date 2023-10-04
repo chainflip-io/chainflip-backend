@@ -52,7 +52,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	sp_runtime::{
-		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedU64,
 	},
 	traits::Get,
@@ -189,7 +189,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 					None
 				})?
 				.tracked_data
-				.max_fee_per_gas(1.into());
+				.max_fee_per_gas(One::one());
 			Some(gas_budget
 				.checked_div(current_fee_per_gas)
 				.unwrap_or_else(||{
