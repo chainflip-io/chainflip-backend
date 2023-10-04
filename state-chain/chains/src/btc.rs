@@ -888,6 +888,7 @@ impl SerializeBtc for BitcoinOp {
 			BitcoinOp::PushUint { value } => match value {
 				0 => buf.push(0),
 				1..=16 => buf.push(0x50 + *value as u8),
+				129 => buf.push(0x4f),
 				_ => {
 					let num_bytes =
 						sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
@@ -1230,6 +1231,9 @@ mod test {
 			(2, vec![82]),
 			(16, vec![96]),
 			(17, vec![1, 17]),
+			(128, vec![1, 128]),
+			(129, vec![79]),
+			(130, vec![1, 130]),
 			(255, vec![1, 255]),
 			(256, vec![2, 0, 1]),
 			(11394560, vec![3, 0, 0xDE, 0xAD]),
