@@ -16,6 +16,9 @@ use utilities::task_scope::Scope;
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 
+/// https://linear.app/chainflip/issue/PRO-877/external-chain-sources-can-block-sc-observer
+const CHANNEL_BUFFER: usize = 128;
+
 #[derive(Clone)]
 pub struct Epoch<Info, HistoricInfo> {
 	pub index: EpochIndex,
@@ -85,7 +88,8 @@ impl EpochSource<(), ()> {
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
 	) -> EpochSourceBuilder<'a, 'env, StateChainClient, (), ()> {
-		let (epoch_update_sender, epoch_update_receiver) = async_broadcast::broadcast(1);
+		let (epoch_update_sender, epoch_update_receiver) =
+			async_broadcast::broadcast(CHANNEL_BUFFER);
 
 		let initial_block_hash = state_chain_stream.cache().block_hash;
 
@@ -306,7 +310,8 @@ impl<
 			epoch_update_receiver: mut unmapped_epoch_update_receiver,
 		} = self;
 
-		let (epoch_update_sender, epoch_update_receiver) = async_broadcast::broadcast(1);
+		let (epoch_update_sender, epoch_update_receiver) =
+			async_broadcast::broadcast(CHANNEL_BUFFER);
 
 		let epochs: BTreeMap<_, _> = futures::stream::iter(unmapped_epochs)
 			.filter_map(|(epoch, (info, option_historic_info))| {
