@@ -2,6 +2,7 @@
 import { getBalance } from '../shared/get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapParams, requestNewSwap } from '../shared/perform_swap';
+import { sendDot } from '../shared/send_dot';
 import { sendErc20 } from '../shared/send_erc20';
 import {
   newAddress,
@@ -12,6 +13,7 @@ import {
   observeBalanceIncrease,
   getEthContractAddress,
   observeBadEvents,
+  runWithTimeout,
 } from '../shared/utils';
 
 // This code is duplicated to allow us to specify a specific amount we want to swap
@@ -44,7 +46,6 @@ export async function doPerformSwap(
 
   if (!balanceIncrease) {
     const api = await getChainflipApi();
-    observeBadEvents('polkadotBroadcaster:BroadcastFailure', () => false);
     await observeEvent('polkadotBroadcaster:BroadcastSuccess', api);
 
     const newBalance = await getBalance(destAsset, destAddress);
@@ -65,6 +66,11 @@ export async function doPerformSwap(
 }
 
 export async function swapLessThanED() {
+  console.log('=== Testing USDC -> DOT swaps obtaining less than ED ===');
+
+  let stopObserving = false;
+  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+
   // the initial price is 10USDC = 1DOT
   // we will swap only 5 USDC and check that the swap is completed succesfully
   const tag = `USDC -> DOT (less than ED)`;
@@ -74,18 +80,25 @@ export async function swapLessThanED() {
   const swapParams = await requestNewSwap('USDC', 'DOT', address, tag);
   await doPerformSwap(swapParams, '5', false, tag);
 
-  // We will then swap more to check that the swap completes succesfully
-  const tag2 = `USDC -> DOT`;
+  await sendDot(address, '50');
+  console.log('Account funded, new balance: ' + (await getBalance('DOT', address)));
+
+  // We will then send some dot to the address and perform another swap with less than ED
+  const tag2 = `USDC -> DOT (to active account)`;
   const swapParams2 = await requestNewSwap('USDC', 'DOT', address, tag2);
-  await doPerformSwap(swapParams2, '50', true, tag2);
+  await doPerformSwap(swapParams2, '5', true, tag2);
+
+  stopObserving = true;
+  await observingBadEvents;
+
+  console.log('=== Test complete ===');
 }
 
-try {
-  console.log('=== Testing USDC -> DOT swaps obtaining less than ED ===');
-  await swapLessThanED();
-  console.log('=== Test complete ===');
-  process.exit(0);
-} catch (e) {
-  console.error(e);
-  process.exit(-1);
-}
+runWithTimeout(swapLessThanED(), 300000)
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(-1);
+  });
