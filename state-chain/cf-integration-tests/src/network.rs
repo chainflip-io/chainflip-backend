@@ -590,13 +590,16 @@ impl Network {
 	pub fn submit_heartbeat_all_engines(&mut self, force_update: bool) {
 		let current_block = System::block_number();
 		self.engines.iter_mut().for_each(|(_, engine)| {
-			if match force_update {
-				true => true,
-				false =>
-					engine.auto_submit_heartbeat &&
-						current_block + Validator::blocks_per_epoch() >= engine.last_heartbeat,
-			} {
-				let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
+			// only validator roles are allowed to submit heartbeat.
+			if AccountRoles::has_account_role(&engine.node_id, AccountRole::Validator) &&
+				match force_update {
+					true => true,
+					false =>
+						engine.auto_submit_heartbeat &&
+							engine.last_heartbeat + Validator::blocks_per_epoch() - 1 <=
+								current_block,
+				} {
+				assert_ok!(Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone())));
 				engine.last_heartbeat = current_block;
 			}
 		});
@@ -644,6 +647,7 @@ impl Network {
 				.unwrap()
 				.dispatch_bypass_filter(RuntimeOrigin::none()));
 
+			self.submit_heartbeat_all_engines(false);
 			dispatch_all_pending_extrinsics();
 
 			// Provide very large weight to ensure all on_idle processing can occur
@@ -661,7 +665,6 @@ impl Network {
 			for engine in self.engines.values_mut() {
 				engine.handle_state_chain_events(&events);
 			}
-			self.submit_heartbeat_all_engines(false);
 		}
 	}
 }
