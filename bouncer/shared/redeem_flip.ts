@@ -51,12 +51,11 @@ export async function redeemFlip(
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
     flipWallet.publicKey,
   );
-  // If a redemption is already in progress, the request will fail. But try anyway.
-  if (pendingRedemption.toString().length !== 0) {
-    console.log(
-      `Warning: A redemption is already in progress for this account: ${accountIdHex}, amount: ${pendingRedemption}`,
-    );
-  }
+  // If a redemption is already in progress, the request will fail.
+  assert(
+    pendingRedemption.toString().length === 0,
+    `A redemption is already in progress for this account: ${accountIdHex}, amount: ${pendingRedemption}`,
+  );
 
   console.log('Requesting redemption');
   const redemptionRequestHandle = observeEvent(
