@@ -13,7 +13,9 @@ import { fundFlip } from '../shared/fund_flip';
 import { redeemFlip, RedeemAmount } from '../shared/redeem_flip';
 import { newStatechainAddress } from '../shared/new_statechain_address';
 
-const expectedFeesFlip = 0.000025;
+// Submitting the `redeem` extrinsic will cost a small amount of gas
+// TODO: Send the redeem extrinsic from a different account to avoid compensating for this fee in the test.
+const expectedRedeemGasFeeFlip = 0.0000125;
 
 /// Redeems the flip and observed the balance increase
 async function redeemAndObserve(
@@ -71,13 +73,13 @@ export async function testFundRedeem(providedSeed?: string) {
   // Test redeeming the rest of the flip with a 'Max' redeem amount
   console.log(`Testing redeem all`);
   const redeemedAll = await redeemAndObserve(seed, redeemEthAddress as HexString, 'Max');
-  // We expect to redeem the entire amount minus the exact amount redeemed above + tax & fees for both redemptions
+  // We expect to redeem the entire amount minus the exact amount redeemed above + tax & gas for both redemptions
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount * 2;
   assert(
-    redeemedAll >= expectedRedeemAllAmount - expectedFeesFlip &&
+    redeemedAll >= expectedRedeemAllAmount - expectedRedeemGasFeeFlip * 2 &&
       redeemedAll <= expectedRedeemAllAmount,
     `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${
-      expectedRedeemAllAmount - expectedFeesFlip
+      expectedRedeemAllAmount - expectedRedeemGasFeeFlip * 2
     } - ${expectedRedeemAllAmount}. Did fees change?`,
   );
 }
