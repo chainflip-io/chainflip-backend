@@ -1103,8 +1103,8 @@ impl_runtime_apis! {
 				filtered_swaps
 			}
 
-			fn ccm_swaps(watching_from_asset: Asset, watching_to_asset: Asset, source_asset: Asset, destination_asset: Asset, deposit_amount: AssetAmount, channel_metadata: CcmChannelMetadata) -> Vec<AssetAmount> {
-				if source_asset != watching_from_asset {
+			fn ccm_swaps(from: Asset, to: Asset, source_asset: Asset, destination_asset: Asset, deposit_amount: AssetAmount, channel_metadata: CcmChannelMetadata) -> Vec<AssetAmount> {
+				if source_asset != from {
 					return Vec::new();
 				}
 
@@ -1113,13 +1113,13 @@ impl_runtime_apis! {
 					Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata);
 
 				let mut ccm_swaps = Vec::new();
-				if destination_asset == watching_to_asset && principal_swap_amount > MinimumSwapAmount::<Runtime>::get(source_asset) {
+				if destination_asset == to && principal_swap_amount > MinimumSwapAmount::<Runtime>::get(source_asset) {
 					// the principal swap is in the requested direction.
 					ccm_swaps.push(principal_swap_amount);
 				}
 
 				let destination_chain: ForeignChain = destination_asset.into();
-				if destination_chain.gas_asset() == watching_to_asset && gas_budget > 0 {
+				if destination_chain.gas_asset() == to && gas_budget > 0 {
 					// the gas swap is in the requested direction
 					ccm_swaps.push(gas_budget);
 				}
