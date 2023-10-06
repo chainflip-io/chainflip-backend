@@ -684,6 +684,16 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		pub fn principal_and_gas_amounts(
+			deposit_amount: AssetAmount,
+			channel_metadata: &CcmChannelMetadata,
+		) -> (AssetAmount, AssetAmount) {
+			let gas_budget = channel_metadata.gas_budget;
+			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
+
+			(principal_swap_amount, gas_budget)
+		}
+
 		// The address and the asset being sent or withdrawn must be compatible.
 		fn validate_destination_address(
 			destination_address: &EncodedAddress,
@@ -971,13 +981,13 @@ pub mod pallet {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
-			let principal_swap_amount =
-				deposit_amount.saturating_sub(deposit_metadata.channel_metadata.gas_budget);
+			let (principal_swap_amount, gas_budget) =
+				Self::principal_and_gas_amounts(deposit_amount, &deposit_metadata.channel_metadata);
 
 			// Checks the validity of CCM.
 			let error = if ForeignChain::Ethereum != destination_asset.into() {
 				Some(CcmFailReason::UnsupportedForTargetChain)
-			} else if deposit_amount < deposit_metadata.channel_metadata.gas_budget {
+			} else if deposit_amount < gas_budget {
 				Some(CcmFailReason::InsufficientDepositAmount)
 			} else if source_asset != destination_asset &&
 				!principal_swap_amount.is_zero() &&
@@ -1036,23 +1046,21 @@ pub mod pallet {
 				};
 
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
-			let gas_swap_id = if source_asset == output_gas_asset ||
-				deposit_metadata.channel_metadata.gas_budget.is_zero()
-			{
+			let gas_swap_id = if source_asset == output_gas_asset || gas_budget.is_zero() {
 				// Deposit can be used as gas directly
-				swap_output.gas = Some(deposit_metadata.channel_metadata.gas_budget);
+				swap_output.gas = Some(gas_budget);
 				None
 			} else {
 				let swap_id = Self::schedule_swap_internal(
 					source_asset,
 					output_gas_asset,
-					deposit_metadata.channel_metadata.gas_budget,
+					gas_budget,
 					SwapType::CcmGas(ccm_id),
 				);
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset,
-					deposit_amount: deposit_metadata.channel_metadata.gas_budget,
+					deposit_amount: gas_budget,
 					destination_asset: output_gas_asset,
 					destination_address: encoded_destination_address.clone(),
 					origin,

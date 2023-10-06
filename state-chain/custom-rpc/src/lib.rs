@@ -260,6 +260,17 @@ pub trait CustomApi {
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 	#[subscription(name = "subscribe_pool_price", item = Price)]
 	fn cf_subscribe_pool_price(&self, from: Asset, to: Asset);
+
+	#[subscription(name = "subscribe_prewitness_swaps", item = Vec<AssetAmount>)]
+	fn cf_subscribe_prewitness_swaps(&self, from: Asset, to: Asset);
+
+	#[method(name = "prewitness_swaps")]
+	fn cf_prewitness_swaps(
+		&self,
+		from: Asset,
+		to: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<AssetAmount>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -694,7 +705,34 @@ where
 		from: Asset,
 		to: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
-		self.new_subscription(sink, move |api, hash| api.cf_pool_price(hash, from, to))
+		self.new_update_subscription(
+			sink,
+			move |api, hash| api.cf_pool_price(hash, from, to),
+		)
+	}
+
+	fn cf_subscribe_prewitness_swaps(
+		&self,
+		sink: SubscriptionSink,
+		from: Asset,
+		to: Asset,
+	) -> Result<(), SubscriptionEmptyError> {
+		self.new_stream_subscription(
+			sink,
+			move |api, hash| api.cf_prewitness_swaps(hash, from, to),
+		)
+	}
+
+	fn cf_prewitness_swaps(
+		&self,
+		from: Asset,
+		to: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<AssetAmount>>> {
+		self.client
+			.runtime_api()
+			.cf_prewitness_swaps(self.unwrap_or_best(at), from, to)
+			.map_err(to_rpc_error)
 	}
 }
 
@@ -709,7 +747,9 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	fn new_subscription<
+	/// Upon subscribing returns the first value immediately and then subscribes to updates. i.e. it will only return a value if it has changed
+	/// from the previous value it returned.
+	fn new_update_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
 		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
@@ -756,7 +796,44 @@ where
 			sink.pipe_from_stream(stream).await;
 		};
 
-		self.executor.spawn("cf-rpc-subscription", Some("rpc"), fut.boxed());
+		self.executor.spawn("cf-rpc-update-subscription", Some("rpc"), fut.boxed());
+
+		Ok(())
+	}
+
+	fn new_stream_subscription<
+		T: Serialize + Send + Clone + Eq + 'static,
+		E: std::error::Error + Send + Sync + 'static,
+		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<Option<T>, E> + Send + Clone + 'static,
+	>(
+		&self,
+		mut sink: SubscriptionSink,
+		f: F,
+	) -> Result<(), SubscriptionEmptyError> {
+		use futures::{future::FutureExt, stream::StreamExt};
+
+		let client = self.client.clone();
+
+		let stream = self
+			.client
+			.import_notification_stream()
+			.filter(|n| futures::future::ready(n.is_new_best))
+			.filter_map(move |n| {
+				let new = f(&client.runtime_api(), n.hash);
+
+				match new {
+					Ok(new) => {
+						futures::future::ready(new)
+					},
+					_ => futures::future::ready(None),
+				}
+			});
+
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
+
+		self.executor.spawn("cf-rpc-stream-subscription", Some("rpc"), fut.boxed());
 
 		Ok(())
 	}

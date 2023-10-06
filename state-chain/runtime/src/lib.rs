@@ -24,13 +24,16 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, Polkadot,
+	Bitcoin, CcmChannelMetadata, Polkadot,
 };
+use cf_primitives::ForeignChain;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
 use pallet_cf_reputation::ExclusionList;
+use pallet_cf_swapping::MinimumSwapAmount;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
@@ -1065,6 +1068,119 @@ impl_runtime_apis! {
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
 		}
+
+		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
+		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
+		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>> {
+
+			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
+				where Runtime: pallet_cf_ingress_egress::Config<I>,
+				C: cf_chains::Chain<ChainAccount = <<Runtime as pallet_cf_ingress_egress::Config<I>>::TargetChain as cf_chains::Chain>::ChainAccount>
+			{
+				let mut filtered_swaps = Vec::new();
+				for deposit in deposit_witnesses {
+					let Some(details) = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::get(
+						deposit.deposit_address,
+					) else {
+						continue
+					};
+					let channel_asset: Asset = details.deposit_channel.asset.into();
+
+					match details.action {
+						ChannelAction::Swap { destination_asset, .. }
+							if destination_asset == to && channel_asset == from =>
+						{
+							filtered_swaps.push(deposit.amount.into());
+						},
+						ChannelAction::CcmTransfer { destination_asset, channel_metadata, .. } => {
+							filtered_swaps.extend(ccm_swaps(from, to, channel_asset, destination_asset, deposit.amount.into(), channel_metadata));
+						}
+						_ => {
+							// ignore other deposit actions
+						}
+					}
+				}
+				filtered_swaps
+			}
+
+			fn ccm_swaps(watching_from_asset: Asset, watching_to_asset: Asset, source_asset: Asset, destination_asset: Asset, deposit_amount: AssetAmount, channel_metadata: CcmChannelMetadata) -> Vec<AssetAmount> {
+				if source_asset != watching_from_asset {
+					return Vec::new();
+				}
+
+				// There are two swaps for CCM, the principal swap, and the gas amount swap.
+				let (principal_swap_amount, gas_budget) =
+					Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata);
+
+				let mut ccm_swaps = Vec::new();
+				if destination_asset == watching_to_asset && principal_swap_amount > MinimumSwapAmount::<Runtime>::get(source_asset) {
+					// the principal swap is in the requested direction.
+					ccm_swaps.push(principal_swap_amount);
+				}
+
+				let destination_chain: ForeignChain = destination_asset.into();
+				if destination_chain.gas_asset() == watching_to_asset && gas_budget > 0 {
+					// the gas swap is in the requested direction
+					ccm_swaps.push(gas_budget);
+				}
+
+				ccm_swaps
+			}
+
+			let mut all_prewitnessed_swaps = Vec::new();
+			let current_block_events = System::read_events_no_consensus();
+
+			for event in current_block_events {
+				match *event {
+					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
+						match call {
+							RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
+								from: swap_from, to: swap_to, deposit_amount, ..
+							}) if from == swap_from && to == swap_to => {
+								all_prewitnessed_swaps.push(deposit_amount);
+							}
+							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses, ..
+							}) => {
+								let filtered_swaps = filter_deposit_swaps::<Ethereum, EthereumInstance>(from, to, deposit_witnesses);
+								all_prewitnessed_swaps.extend(filtered_swaps);
+							},
+							RuntimeCall::BitcoinIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses, ..
+							}) => {
+								let filtered_swaps = filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses);
+								all_prewitnessed_swaps.extend(filtered_swaps);
+							},
+							RuntimeCall::PolkadotIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses, ..
+							}) => {
+								let filtered_swaps = filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses);
+								all_prewitnessed_swaps.extend(filtered_swaps);
+							}
+							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
+							}) => {
+								// There are two swaps for CCM, the principal swap, and the gas amount swap.
+								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
+							}
+							_ => {
+								// ignore, we only care about calls that trigger swaps.
+							}
+						}
+					}
+					_ => {
+						// ignore, we only care about Prewitnessed calls
+					}
+				}
+			}
+
+			// We don't want to return anything from the websocket stream if there are no items
+			if all_prewitnessed_swaps.is_empty() {
+				None
+			} else {
+				Some(all_prewitnessed_swaps)
+			}
+		}
 	}
 
 	// END custom runtime APIs
@@ -1309,7 +1425,6 @@ impl_runtime_apis! {
 		}
 	}
 }
-
 #[cfg(test)]
 mod test {
 	use super::*;
