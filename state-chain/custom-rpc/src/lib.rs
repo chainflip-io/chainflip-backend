@@ -705,10 +705,7 @@ where
 		from: Asset,
 		to: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
-		self.new_update_subscription(
-			sink,
-			move |api, hash| api.cf_pool_price(hash, from, to),
-		)
+		self.new_update_subscription(sink, move |api, hash| api.cf_pool_price(hash, from, to))
 	}
 
 	fn cf_subscribe_prewitness_swaps(
@@ -717,10 +714,7 @@ where
 		from: Asset,
 		to: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
-		self.new_items_subscription(
-			sink,
-			move |api, hash| api.cf_prewitness_swaps(hash, from, to),
-		)
+		self.new_items_subscription(sink, move |api, hash| api.cf_prewitness_swaps(hash, from, to))
 	}
 
 	fn cf_prewitness_swaps(
@@ -747,8 +741,8 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	/// Upon subscribing returns the first value immediately and then subscribes to updates. i.e. it will only return a value if it has changed
-	/// from the previous value it returned.
+	/// Upon subscribing returns the first value immediately and then subscribes to updates. i.e. it
+	/// will only return a value if it has changed from the previous value it returned.
 	fn new_update_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
@@ -801,7 +795,8 @@ where
 		Ok(())
 	}
 
-	/// After creating the subscription it will return all the new prewitnessed swaps from this point onwards.
+	/// After creating the subscription it will return all the new prewitnessed swaps from this
+	/// point onwards.
 	fn new_items_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
@@ -823,9 +818,7 @@ where
 				let new = f(&client.runtime_api(), n.hash);
 
 				match new {
-					Ok(new) => {
-						futures::future::ready(new)
-					},
+					Ok(new) => futures::future::ready(new),
 					_ => futures::future::ready(None),
 				}
 			});

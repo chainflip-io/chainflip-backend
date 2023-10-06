@@ -694,7 +694,7 @@ pub mod pallet {
 			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
 			if ForeignChain::Ethereum != destination_asset.into() {
-				return Err(CcmFailReason::UnsupportedForTargetChain);
+				return Err(CcmFailReason::UnsupportedForTargetChain)
 			} else if deposit_amount < gas_budget {
 				return Err(CcmFailReason::InsufficientDepositAmount)
 			} else if source_asset != destination_asset &&
@@ -996,7 +996,12 @@ pub mod pallet {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
-			let (principal_swap_amount, gas_budget) = match Self::principal_and_gas_amounts(deposit_amount, &deposit_metadata.channel_metadata, source_asset, destination_asset) {
+			let (principal_swap_amount, gas_budget) = match Self::principal_and_gas_amounts(
+				deposit_amount,
+				&deposit_metadata.channel_metadata,
+				source_asset,
+				destination_asset,
+			) {
 				Ok(amounts) => amounts,
 				Err(reason) => {
 					// Confiscate the deposit and emit an event.
@@ -1010,7 +1015,7 @@ pub mod pallet {
 						deposit_metadata,
 					});
 					return
-				}
+				},
 			};
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
