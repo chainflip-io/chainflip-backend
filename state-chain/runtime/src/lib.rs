@@ -1119,9 +1119,11 @@ impl_runtime_apis! {
 					ccm_swaps.push(principal_swap_amount);
 				}
 
-				if other_gas_asset.is_some() {
-					// the gas swap is in the requested direction
-					ccm_swaps.push(gas_budget);
+				if let Some(gas_asset) = other_gas_asset {
+					if gas_asset == to {
+						// the gas swap is in the requested direction
+						ccm_swaps.push(gas_budget);
+					}
 				}
 
 				ccm_swaps
