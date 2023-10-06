@@ -5,10 +5,15 @@ use cf_amm::{
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
 use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
 use core::ops::Range;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
+use jsonrpsee::{
+	core::RpcResult,
+	proc_macros::rpc,
+	types::error::{CallError, SubscriptionEmptyError},
+	SubscriptionSink,
+};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders};
-use sc_client_api::HeaderBackend;
+use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
+use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
@@ -207,7 +212,7 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
+	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -215,6 +220,14 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolInfo>>;
+	#[method(name = "pool_depth")]
+	fn cf_pool_depth(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		tick_range: Range<cf_amm::common::Tick>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<AssetsMap<Depth>>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
@@ -238,25 +251,33 @@ pub trait CustomApi {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>>;
+	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
+	#[subscription(name = "subscribe_pool_price", item = Price)]
+	fn cf_subscribe_pool_price(&self, from: Asset, to: Asset);
 }
 
 /// An RPC extension for the state chain node.
 pub struct CustomRpc<C, B> {
 	pub client: Arc<C>,
 	pub _phantom: PhantomData<B>,
+	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
 }
 
 impl<C, B> CustomRpc<C, B>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
+	C: sp_api::ProvideRuntimeApi<B>
+		+ Send
+		+ Sync
+		+ 'static
+		+ HeaderBackend<B>
+		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
 	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
@@ -268,10 +289,19 @@ fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee
 	CallError::from_std_error(e).into()
 }
 
+fn map_dispatch_error(e: DispatchError) -> jsonrpsee::core::Error {
+	jsonrpsee::core::Error::from(anyhow::anyhow!("Dispatch error: {}", <&'static str>::from(e)))
+}
+
 impl<C, B> CustomApiServer for CustomRpc<C, B>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
+	C: sp_api::ProvideRuntimeApi<B>
+		+ Send
+		+ Sync
+		+ 'static
+		+ HeaderBackend<B>
+		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
 	fn cf_is_auction_phase(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<bool> {
@@ -554,6 +584,21 @@ where
 			.map_err(to_rpc_error)
 	}
 
+	fn cf_pool_depth(
+		&self,
+		base_asset: Asset,
+		pair_asset: Asset,
+		tick_range: Range<Tick>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<AssetsMap<Depth>>> {
+		self.client
+			.runtime_api()
+			.cf_pool_depth(self.unwrap_or_best(at), base_asset, pair_asset, tick_range)
+			.map_err(to_rpc_error)?
+			.transpose()
+			.map_err(map_dispatch_error)
+	}
+
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: Asset,
@@ -572,7 +617,7 @@ where
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>> {
+	) -> RpcResult<Option<AssetsMap<Amount>>> {
 		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
@@ -581,7 +626,9 @@ where
 				pair_asset,
 				tick_range,
 			)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+			.transpose()
+			.map_err(map_dispatch_error)
 	}
 
 	fn cf_pool_orders(
@@ -604,7 +651,7 @@ where
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Result<AssetsMap<Amount>, DispatchError>>> {
+	) -> RpcResult<Option<AssetsMap<Amount>>> {
 		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
@@ -614,7 +661,9 @@ where
 				tick_range,
 				liquidity,
 			)
-			.map_err(to_rpc_error)
+			.map_err(to_rpc_error)?
+			.transpose()
+			.map_err(map_dispatch_error)
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
@@ -637,5 +686,78 @@ where
 			.runtime_api()
 			.cf_min_swap_amount(self.unwrap_or_best(None), asset)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_subscribe_pool_price(
+		&self,
+		sink: SubscriptionSink,
+		from: Asset,
+		to: Asset,
+	) -> Result<(), SubscriptionEmptyError> {
+		self.new_subscription(sink, move |api, hash| api.cf_pool_price(hash, from, to))
+	}
+}
+
+impl<C, B> CustomRpc<C, B>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash>,
+	C: sp_api::ProvideRuntimeApi<B>
+		+ Send
+		+ Sync
+		+ 'static
+		+ HeaderBackend<B>
+		+ BlockchainEvents<B>,
+	C::Api: CustomRuntimeApi<B>,
+{
+	fn new_subscription<
+		T: Serialize + Send + Clone + Eq + 'static,
+		E: std::error::Error + Send + Sync + 'static,
+		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
+	>(
+		&self,
+		mut sink: SubscriptionSink,
+		f: F,
+	) -> Result<(), SubscriptionEmptyError> {
+		use futures::{future::FutureExt, stream::StreamExt};
+
+		let client = self.client.clone();
+
+		let initial = match f(&self.client.runtime_api(), self.client.info().best_hash) {
+			Ok(initial) => initial,
+			Err(e) => {
+				let _ = sink.reject(jsonrpsee::core::Error::from(
+					sc_rpc_api::state::error::Error::Client(Box::new(e)),
+				));
+				return Ok(())
+			},
+		};
+
+		let mut previous = initial.clone();
+
+		let stream = self
+			.client
+			.import_notification_stream()
+			.filter(|n| futures::future::ready(n.is_new_best))
+			.filter_map(move |n| {
+				let new = f(&client.runtime_api(), n.hash);
+
+				match new {
+					Ok(new) if new != previous => {
+						previous = new.clone();
+						futures::future::ready(Some(new))
+					},
+					_ => futures::future::ready(None),
+				}
+			});
+
+		let stream = futures::stream::once(futures::future::ready(initial)).chain(stream);
+
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
+
+		self.executor.spawn("cf-rpc-subscription", Some("rpc"), fut.boxed());
+
+		Ok(())
 	}
 }

@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -14,19 +15,49 @@ mod tests;
 
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
-use cf_traits::{impl_pallet_safe_mode, AccountRoleRegistry, Chainflip, EpochInfo};
+use cf_traits::{AccountRoleRegistry, CallDispatchFilter, Chainflip, EpochInfo, SafeMode};
 use cf_utilities::success_threshold_from_share_count;
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
 	pallet_prelude::Member,
 	storage::with_storage_layer,
 	traits::{EnsureOrigin, Get},
-	Hashable,
+	Hashable, RuntimeDebug,
 };
-use sp_std::{collections::vec_deque::VecDeque, prelude::*};
+use scale_info::TypeInfo;
+use sp_std::prelude::*;
 
-impl_pallet_safe_mode!(PalletSafeMode; witness_calls_enabled);
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum PalletSafeMode<CallPermission> {
+	CodeGreen,
+	CodeRed,
+	CodeAmber(CallPermission),
+}
+
+impl<C, CallPermission: CallDispatchFilter<C>> CallDispatchFilter<C>
+	for PalletSafeMode<CallPermission>
+{
+	fn should_dispatch(&self, call: &C) -> bool {
+		match self {
+			Self::CodeGreen => true,
+			Self::CodeRed => false,
+			Self::CodeAmber(permissions) => permissions.should_dispatch(call),
+		}
+	}
+}
+
+impl<CallPermission> Default for PalletSafeMode<CallPermission> {
+	fn default() -> Self {
+		<PalletSafeMode<CallPermission> as SafeMode>::CODE_GREEN
+	}
+}
+
+impl<CallPermission> SafeMode for PalletSafeMode<CallPermission> {
+	const CODE_RED: Self = PalletSafeMode::CodeRed;
+	const CODE_GREEN: Self = PalletSafeMode::CodeGreen;
+}
 
 pub trait WitnessDataExtraction {
 	/// Extracts some data from a call and encodes it so it can be stored for later.
@@ -63,7 +94,10 @@ pub mod pallet {
 			+ WitnessDataExtraction;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode<Self::CallDispatchPermission>>;
+
+		/// Filter for dispatching witnessed calls.
+		type CallDispatchPermission: Parameter + CallDispatchFilter<<Self as Config>::RuntimeCall>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -112,44 +146,36 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
-			if T::SafeMode::get().witness_calls_enabled {
-				let _ = WitnessedCallsScheduledForDispatch::<T>::try_mutate(
-					|witnessed_calls_storage| {
-						used_weight.saturating_accrue(T::DbWeight::get().reads(1));
-						if !witnessed_calls_storage.is_empty() {
-							let mut witnessed_calls =
-								VecDeque::from(sp_std::mem::take(witnessed_calls_storage));
-							while let Some((_, call, _)) = witnessed_calls.front() {
-								let next_weight =
-									used_weight.saturating_add(call.get_dispatch_info().weight);
-								if remaining_weight.all_gte(next_weight) {
-									used_weight = next_weight;
-									let (witnessed_at_epoch, call, call_hash) =
-										witnessed_calls.pop_front().unwrap();
-									Self::dispatch_call(
-										witnessed_at_epoch,
-										T::EpochInfo::epoch_index(),
-										call,
-										call_hash,
-									);
-								} else {
-									break
-								}
+
+			let safe_mode = T::SafeMode::get();
+			if safe_mode != SafeMode::CODE_RED {
+				WitnessedCallsScheduledForDispatch::<T>::mutate(|witnessed_calls_storage| {
+					witnessed_calls_storage
+						.extract_if(|(_, call, _)| {
+							let next_weight =
+								used_weight.saturating_add(call.get_dispatch_info().weight);
+							if remaining_weight.all_gte(next_weight) &&
+								safe_mode.should_dispatch(call)
+							{
+								used_weight = next_weight;
+								true
+							} else {
+								false
 							}
-							let _empty = sp_std::mem::replace(
-								witnessed_calls_storage,
-								witnessed_calls.make_contiguous().to_vec(),
+						})
+						.collect::<Vec<_>>()
+						.into_iter()
+						.for_each(|(witnessed_at_epoch, call, call_hash)| {
+							Self::dispatch_call(
+								witnessed_at_epoch,
+								T::EpochInfo::epoch_index(),
+								call,
+								call_hash,
 							);
-							used_weight.saturating_accrue(T::DbWeight::get().writes(1));
-							Ok(())
-						} else {
-							Err("no action needed when the scheduled witness calls list is empty")
-						}
-					},
-				);
+						});
+				});
 			}
 
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
@@ -224,6 +250,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A witness call has failed.
 		WitnessExecutionFailed { call_hash: CallHash, error: DispatchError },
+		/// A an external event has been pre-witnessed.
+		Prewitnessed { call: <T as Config>::RuntimeCall },
 	}
 
 	#[pallet::error]
@@ -352,7 +380,7 @@ pub mod pallet {
 				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
-				if T::SafeMode::get().witness_calls_enabled {
+				if T::SafeMode::get().should_dispatch(&call) {
 					Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
 				} else {
 					WitnessedCallsScheduledForDispatch::<T>::append((
@@ -388,6 +416,19 @@ pub mod pallet {
 			ensure!(Votes::<T>::contains_key(epoch_index, call_hash), Error::<T>::InvalidEpoch);
 
 			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
+			Ok(())
+		}
+
+		/// Simply emits an event to notify that this call has been witnessed. Implicitly signals
+		/// that we expect the same call to be witnessed at a later block.
+		#[pallet::call_index(2)]
+		#[pallet::weight(call.get_dispatch_info().weight)]
+		pub fn prewitness(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			Self::deposit_event(Event::<T>::Prewitnessed { call: *call });
 			Ok(())
 		}
 	}

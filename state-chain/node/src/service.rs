@@ -242,6 +242,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let rpc_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
+		let executor = Arc::new(task_manager.spawn_handle());
 
 		Box::new(move |deny_unsafe, subscription_executor| {
 			let build = || {
@@ -276,6 +277,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 				module.merge(CustomApiServer::into_rpc(CustomRpc {
 					client: client.clone(),
 					_phantom: PhantomData,
+					executor: executor.clone(),
 				}))?;
 
 				Ok(module)

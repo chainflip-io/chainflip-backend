@@ -86,13 +86,13 @@ benchmarks! {
 		call.dispatch_bypass_filter(gov_origin)?;
 
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let metadata = CcmDepositMetadata {
+		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::benchmark_value()),
 			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00],
+				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
-				cf_parameters: vec![],
+				cf_parameters: Default::default(),
 			}
 		};
 		let call = Call::<T>::ccm_deposit{
@@ -100,7 +100,7 @@ benchmarks! {
 			deposit_amount: 1_000,
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata: metadata,
+			deposit_metadata,
 			tx_hash: Default::default(),
 		};
 	}: {
@@ -121,41 +121,6 @@ benchmarks! {
 			1,
 			SwapType::CcmGas(1)
 		)]);
-	}
-
-	on_initialize {
-		let a in 1..100;
-		let caller: T::AccountId = whitelisted_caller();
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
-		let origin = RawOrigin::Signed(caller);
-		for i in 0..a {
-			let call = Call::<T>::request_swap_deposit_address{
-				source_asset: Asset::Usdc,
-				destination_asset: Asset::Eth,
-				destination_address: EncodedAddress::Eth(Default::default()),
-				broker_commission_bps: Default::default(),
-				channel_metadata: None,
-			};
-			call.dispatch_bypass_filter(origin.clone().into())?;
-		}
-		let expiry = SwapTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
-		assert!(!SwapChannelExpiries::<T>::get(expiry).is_empty());
-	}: {
-		Pallet::<T>::on_initialize(expiry);
-	} verify {
-		assert!(SwapChannelExpiries::<T>::get(expiry).is_empty());
-	}
-
-	set_swap_ttl {
-		let ttl = BlockNumberFor::<T>::from(1_000u32);
-		let call = Call::<T>::set_swap_ttl {
-			ttl
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
 	}
 
 	set_minimum_swap_amount {

@@ -1394,7 +1394,6 @@ name = "chainflip-broker-api"
 version = "0.9.0"
 dependencies = [
  "anyhow",
- "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
  "futures",
@@ -1504,6 +1503,7 @@ dependencies = [
  "rlp",
  "rocksdb",
  "sc-rpc-api",
+ "sc-transaction-pool-api",
  "scale-info",
  "secp256k1 0.27.0",
  "serde",
@@ -2319,13 +2319,16 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "futures",
  "hex",
  "jsonrpsee 0.16.2",
  "pallet-cf-governance",
  "pallet-cf-pools",
  "sc-client-api",
+ "sc-rpc-api",
  "serde",
  "sp-api",
+ "sp-core",
  "sp-rpc",
  "sp-runtime",
  "state-chain-runtime",
@@ -7181,6 +7184,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7204,6 +7208,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7270,6 +7275,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -11426,6 +11432,7 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",
  "cf-traits",
@@ -12186,18 +12193,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54319c93411147bced34cb5609a80e0a8e44c5999c93903a81cd866630ec0bfd"
-dependencies = [
- "futures-util",
- "log",
- "tokio",
- "tungstenite 0.18.0",
-]
-
-[[package]]
-name = "tokio-tungstenite"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec509ac96e9a0c43427c74f003127d953a265737636129424288d27cb5c4b12c"
@@ -12209,6 +12204,18 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tungstenite 0.19.0",
  "webpki-roots 0.23.1",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212d5dcb2a1ce06d81107c3d0ffa3121fe974b73f068c8282cb1c32328113b6c"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.20.1",
 ]
 
 [[package]]
@@ -12604,25 +12611,6 @@ checksum = "f4f195fd851901624eee5a58c4bb2b4f06399148fcd0ed336e6f1cb60a9881df"
 
 [[package]]
 name = "tungstenite"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
-dependencies = [
- "base64 0.13.1",
- "byteorder",
- "bytes",
- "http",
- "httparse",
- "log",
- "rand 0.8.5",
- "sha1",
- "thiserror",
- "url",
- "utf-8",
-]
-
-[[package]]
-name = "tungstenite"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15fba1a6d6bb030745759a9a2a588bfe8490fc8b4751a277db3a0be1c9ebbf67"
@@ -12640,6 +12628,25 @@ dependencies = [
  "url",
  "utf-8",
  "webpki 0.22.0",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e3dac10fd62eaf6617d3a904ae222845979aec67c615d1c842b4002c7666fb9"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "sha1",
+ "thiserror",
+ "url",
+ "utf-8",
 ]
 
 [[package]]
@@ -12910,9 +12917,9 @@ dependencies = [
 
 [[package]]
 name = "warp"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba431ef570df1287f7f8b07e376491ad54f84d26ac473489427231e1718e1f69"
+checksum = "c1e92e22e03ff1230c03a1a8ee37d2f89cd489e2e541b7550d6afad96faed169"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -12933,7 +12940,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite 0.18.0",
+ "tokio-tungstenite 0.20.1",
  "tokio-util",
  "tower-service",
  "tracing",

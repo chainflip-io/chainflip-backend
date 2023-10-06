@@ -2,7 +2,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
 	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumSwapAmount, Pallet, PendingCcms,
-	Swap, SwapChannelExpiries, SwapOrigin, SwapQueue, SwapTTL, SwapType,
+	Swap, SwapOrigin, SwapQueue, SwapType,
 };
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -11,11 +11,10 @@ use cf_chains::{
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain, NetworkEnvironment};
-use cf_test_utilities::{assert_event_sequence, assert_events_match};
+use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		deposit_handler::{MockDepositHandler, SwapChannel},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
@@ -23,7 +22,6 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
 
 use frame_support::traits::Hooks;
-use sp_runtime::traits::BlockNumberProvider;
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -101,6 +99,21 @@ fn insert_swaps(swaps: &[Swap]) {
 				1,
 			);
 		}
+	}
+}
+
+fn generate_ccm_channel() -> CcmChannelMetadata {
+	CcmChannelMetadata {
+		message: vec![0x01].try_into().unwrap(),
+		gas_budget: 1_000u128,
+		cf_parameters: Default::default(),
+	}
+}
+fn generate_ccm_deposit() -> CcmDepositMetadata {
+	CcmDepositMetadata {
+		source_chain: ForeignChain::Ethereum,
+		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		channel_metadata: generate_ccm_channel(),
 	}
 }
 
@@ -229,12 +242,11 @@ fn expect_swap_id_to_be_emitted() {
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				deposit_address: EncodedAddress::Eth(..),
 				destination_address: EncodedAddress::Eth(..),
-				expiry_block,
 				source_asset: Asset::Eth,
 				destination_asset: Asset::Usdc,
 				channel_id: 0,
 				..
-			}) if expiry_block == SwapTTL::<Test>::get() + System::current_block_number(),
+			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
 				source_asset: Asset::Eth,
@@ -246,7 +258,9 @@ fn expect_swap_id_to_be_emitted() {
 					channel_id: 1,
 					deposit_block_height: 0
 				},
-				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)), broker_commission: _ }),
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..)),
+				broker_commission: _
+			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
@@ -316,90 +330,10 @@ fn can_swap_using_witness_origin() {
 }
 
 #[test]
-fn swap_expires() {
-	new_test_ext().execute_with(|| {
-		let expiry = SwapTTL::<Test>::get() + 1;
-		assert_eq!(expiry, 6); // Expiry = current(1) + TTL (5)
-		assert_ok!(Swapping::request_swap_deposit_address(
-			RuntimeOrigin::signed(ALICE),
-			Asset::Eth,
-			Asset::Usdc,
-			EncodedAddress::Eth(Default::default()),
-			0,
-			None
-		));
-
-		let deposit_address = assert_events_match!(Test, RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
-			deposit_address,
-			..
-		}) => deposit_address);
-		let swap_channel = SwapChannel {
-			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
-			source_asset: Asset::Eth,
-			destination_asset: Asset::Usdc,
-			destination_address: ForeignChainAddress::Eth(Default::default()),
-			broker_commission_bps: 0,
-			broker_id: ALICE,
-			channel_metadata: None,
-			expiry,
-		};
-
-		assert_eq!(
-			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChainAddress::Eth(Default::default()))]
-		);
-		assert_eq!(
-			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
-			vec![swap_channel.clone()]
-		);
-
-		// Does not expire until expiry block.
-		Swapping::on_initialize(expiry - 1);
-		assert_eq!(
-			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChainAddress::Eth(Default::default()))]
-		);
-		assert_eq!(
-			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
-			vec![swap_channel]
-		);
-
-		Swapping::on_initialize(6);
-		assert_eq!(SwapChannelExpiries::<Test>::get(6), vec![]);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			Event::<Test>::SwapDepositAddressExpired {
-				deposit_address: EncodedAddress::Eth(Default::default()),
-				channel_id: 0,
-			},
-		));
-		assert!(
-			MockDepositHandler::<AnyChain, Test>::get_swap_channels().is_empty()
-		);
-	});
-}
-
-#[test]
-fn can_set_swap_ttl() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(crate::SwapTTL::<Test>::get(), 5);
-		assert_ok!(Swapping::set_swap_ttl(RuntimeOrigin::root(), 10));
-		assert_eq!(crate::SwapTTL::<Test>::get(), 10);
-	});
-}
-
-#[test]
 fn reject_invalid_ccm_deposit() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		assert_noop!(
 			Swapping::ccm_deposit(
@@ -458,8 +392,7 @@ fn reject_invalid_ccm_deposit() {
 #[test]
 fn rejects_invalid_swap_deposit() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
-		let ccm = CcmChannelMetadata { message: vec![0x00], gas_budget, cf_parameters: vec![] };
+		let ccm = generate_ccm_channel();
 
 		assert_noop!(
 			Swapping::request_swap_deposit_address(
@@ -533,13 +466,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let request_ccm =
-			CcmChannelMetadata { message: vec![0x01], gas_budget, cf_parameters: vec![] };
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: request_ccm.clone(),
-		};
+		let request_ccm = generate_ccm_channel();
+		let ccm = generate_ccm_deposit();
 
 		// Can process CCM via Swap deposit
 		assert_ok!(Swapping::request_swap_deposit_address(
@@ -598,8 +526,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 				asset: Asset::Eth,
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				message: vec![0x01],
-				cf_parameters: vec![],
+				message: vec![0x01].try_into().unwrap(),
+				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
 			},]
 		);
@@ -621,17 +549,9 @@ fn can_process_ccms_via_swap_deposit_address() {
 #[test]
 fn can_process_ccms_via_extrinsic() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 2_000;
+		let gas_budget = 1_000;
 		let deposit_amount = 1_000_000;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x02],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		// Can process CCM directly via Pallet Extrinsic.
 		assert_ok!(Swapping::ccm_deposit(
@@ -682,8 +602,8 @@ fn can_process_ccms_via_extrinsic() {
 				asset: Asset::Usdc,
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				message: vec![0x02],
-				cf_parameters: vec![],
+				message: vec![0x01].try_into().unwrap(),
+				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
 			},]
 		);
@@ -715,15 +635,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
 			Asset::Eth,
@@ -772,8 +684,8 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 				asset: Asset::Usdc,
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				message: vec![0x00],
-				cf_parameters: vec![],
+				message: vec![0x01].try_into().unwrap(),
+				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
 			},]
 		);
@@ -805,15 +717,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
@@ -857,8 +761,8 @@ fn can_handle_ccms_with_native_gas_asset() {
 				asset: Asset::Usdc,
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				message: vec![0x00],
-				cf_parameters: vec![],
+				message: vec![0x01].try_into().unwrap(),
+				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
 			},]
 		);
@@ -890,15 +794,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		// Ccm without need for swapping are egressed directly.
 		assert_ok!(Swapping::ccm_deposit(
@@ -927,8 +823,8 @@ fn can_handle_ccms_with_no_swaps_needed() {
 				asset: Asset::Eth,
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
-				message: vec![0x00],
-				cf_parameters: vec![],
+				message: vec![0x01].try_into().unwrap(),
+				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
 			},]
 		);
@@ -1129,13 +1025,8 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let request_ccm =
-			CcmChannelMetadata { message: vec![0x01], gas_budget, cf_parameters: vec![] };
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: request_ccm.clone(),
-		};
+		let request_ccm = generate_ccm_channel();
+		let ccm = generate_ccm_deposit();
 
 		// Set minimum gas budget to be above gas amount
 		assert_ok!(Swapping::set_minimum_swap_amount(
@@ -1205,15 +1096,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x01],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		// Set minimum gas budget to be above gas amount
 		assert_ok!(Swapping::set_minimum_swap_amount(
@@ -1281,15 +1164,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 		let principal_amount = 10_000;
 		let eth: Asset = Asset::Eth;
 		let flip: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x01],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		// Set minimum swap and gas budget.
 		assert_ok!(Swapping::set_minimum_swap_amount(
@@ -1372,15 +1247,7 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let flip: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x01],
-				gas_budget,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 
 		// Set minimum swap and gas budget.
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), flip, gas_budget + 1,));
@@ -1568,15 +1435,7 @@ fn cannot_withdraw_in_safe_mode() {
 #[test]
 fn ccm_swaps_emits_events() {
 	new_test_ext().execute_with(|| {
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x01],
-				gas_budget: 1_000,
-				cf_parameters: vec![],
-			},
-		};
+		let ccm = generate_ccm_deposit();
 		let destination_address = ForeignChainAddress::Eth(Default::default());
 
 		const ORIGIN: SwapOrigin = SwapOrigin::Vault { tx_hash: [0x11; 32] };
@@ -1691,19 +1550,11 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 	new_test_ext()
 		.then_execute_at_next_block(|_| {
 			let eth_address = ForeignChainAddress::Eth(Default::default());
-			let ccm = CcmDepositMetadata {
-				source_chain: ForeignChain::Ethereum,
-				source_address: Some(eth_address.clone()),
-				channel_metadata: CcmChannelMetadata {
-					message: vec![],
-					gas_budget: 1,
-					cf_parameters: vec![],
-				},
-			};
+			let ccm = generate_ccm_deposit();
 
 			Swapping::on_ccm_deposit(
 				Asset::Usdc,
-				101,
+				100_000,
 				Asset::Eth,
 				eth_address,
 				ccm,
@@ -1711,7 +1562,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			);
 
 			// Change the swap rate so swap output will be 0
-			SwapRate::set(0.01f64);
+			SwapRate::set(0.0001f64);
 			System::reset_events();
 		})
 		.then_execute_with(|_| {
@@ -1721,19 +1572,19 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 1,
 					source_asset: Asset::Usdc,
-					deposit_amount: 100,
 					destination_asset: Asset::Eth,
-					egress_amount: 0,
+					deposit_amount: 99_000,
+					egress_amount: 9,
 					intermediate_amount: None,
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					source_asset: Asset::Usdc,
+					deposit_amount: 1_000,
 					destination_asset: Asset::Eth,
-					deposit_amount: 1,
 					egress_amount: 0,
 					intermediate_amount: None,
-				})
+				}),
 			);
 
 			// CCM are processed and egressed even if principal output is zero.

@@ -9,7 +9,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult,
 	Broadcaster, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState,
 	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
-	VaultStatus, VaultTransitionHandler,
+	VaultStatus,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -173,8 +173,6 @@ pub mod pallet {
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<
 			<<Self as pallet::Config<I>>::Chain as Chain>::ChainCrypto,
 		>;
-
-		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
@@ -954,7 +952,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				active_from_block: block_number.saturating_add(One::one()),
 			},
 		);
-		T::VaultTransitionHandler::on_new_vault();
 		Self::deposit_event(Event::VaultRotationCompleted);
 	}
 }
@@ -991,23 +988,6 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 			rotation,
 			Error::<T, I>::InvalidRotationStatus
 		);
-
-		// Unlock the key that was used to authorise the activation, *if* this was triggered via
-		// broadcast (as opposed to governance, for example).
-		// TODO: use broadcast callbacks for this.
-		CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut Option<VaultEpochAndState>| {
-			state
-				.as_mut()
-				.map(|VaultEpochAndState { key_state, .. }| key_state.unlock())
-				.ok_or(())
-		})
-		.unwrap_or_else(|_| {
-			log::info!(
-				"No key to unlock for {}. This is expected if the rotation was triggered via governance.",
-				T::Chain::NAME,
-			);
-		});
-
 		Self::activate_new_key(new_public_key, block_number);
 
 		Ok(().into())

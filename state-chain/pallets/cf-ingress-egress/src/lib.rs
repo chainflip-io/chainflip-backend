@@ -5,23 +5,25 @@
 
 mod benchmarking;
 
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+use cf_runtime_utilities::log_or_panic;
+use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade};
 pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelLifecycleHooks,
-	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
-	TransferAssetParams,
+	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
+	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
 };
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
 	EgressApi, GetBlockHeight, SwapDepositHandler,
@@ -61,18 +63,18 @@ impl<C: Chain> FetchOrTransfer<C> {
 }
 
 /// Cross-chain messaging requests.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
 	pub destination_address: C::ChainAccount,
-	pub message: Vec<u8>,
+	pub message: CcmMessage,
 	// The sender of the deposit transaction.
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
-	pub cf_parameters: Vec<u8>,
+	pub cf_parameters: CcmCfParameters,
 	pub gas_budget: C::ChainAmount,
 }
 
@@ -89,6 +91,8 @@ pub struct VaultTransfer<C: Chain> {
 	destination_address: C::ChainAccount,
 }
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -102,10 +106,15 @@ pub mod pallet {
 	};
 	use sp_std::vec::Vec;
 
+	pub(crate) type ChannelRecycleQueue<T, I> =
+		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
+
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
+	pub(crate) type TargetChainBlockNumber<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub struct DepositWitness<C: Chain> {
@@ -123,12 +132,13 @@ pub mod pallet {
 		pub deposit_channel: DepositChannel<T::TargetChain>,
 		/// The block number at which the deposit channel was opened, expressed as a block number
 		/// on the external Chain.
-		pub opened_at: <T::TargetChain as Chain>::ChainBlockNumber,
-		/// The block number at which the deposit channel will be closed, expressed as a
-		/// Chainflip-native block number.
-		// TODO: We should consider changing this to also be an external block number and expire
-		// based on external block numbers. See PRO-689.
-		pub expires_at: BlockNumberFor<T>,
+		pub opened_at: TargetChainBlockNumber<T, I>,
+		/// The last block on the target chain that the witnessing will witness it in. If funds are
+		/// sent after this block, they will not be witnessed.
+		pub expires_at: TargetChainBlockNumber<T, I>,
+
+		/// The action to be taken when the DepositChannel is deposited to.
+		pub action: ChannelAction<T::AccountId>,
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
@@ -196,7 +206,26 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
+	}
+
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { deposit_channel_lifetime: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
+		fn build(&self) {
+			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
+		}
+	}
+
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -259,16 +288,6 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Stores the channel action against the address
-	#[pallet::storage]
-	pub type ChannelActions<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		TargetChainAccount<T, I>,
-		ChannelAction<T::AccountId>,
-		OptionQuery,
-	>;
-
 	/// Stores the latest channel id used to generate an address.
 	#[pallet::storage]
 	pub type ChannelIdCounter<T: Config<I>, I: 'static = ()> =
@@ -304,6 +323,10 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
+
 	/// Stores any failed transfers by the Vault contract.
 	/// Without dealing with the underlying reason for the failure, retrying is unlike to succeed.
 	/// Therefore these calls are stored here, until we can react to the reason for failure and
@@ -315,6 +338,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, DepositTracker<T, I>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -381,6 +408,39 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		/// Recycle addresses if we can
+		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let read_write_weight =
+				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 1);
+
+			let maximum_recycle_number = remaining_weight
+				.ref_time()
+				.checked_div(read_write_weight.ref_time())
+				.unwrap_or_default()
+				.saturated_into::<usize>();
+
+			let can_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+				Self::can_and_cannot_recycle(
+					recycle_queue,
+					maximum_recycle_number,
+					T::ChainTracking::get_block_height(),
+				)
+			});
+
+			for address in can_recycle.iter() {
+				if let Some(details) = DepositChannelLookup::<T, I>::take(address) {
+					if let Some(state) = details.deposit_channel.state.maybe_recycle() {
+						DepositChannelPool::<T, I>::insert(
+							details.deposit_channel.channel_id,
+							DepositChannel { state, ..details.deposit_channel },
+						);
+					}
+				}
+			}
+
+			read_write_weight.saturating_mul(can_recycle.len() as u64)
+		}
+
 		/// Take all scheduled Egress and send them out
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Send all fetch/transfer requests as a batch. Revert storage if failed.
@@ -390,6 +450,19 @@ pub mod pallet {
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
@@ -403,19 +476,13 @@ pub mod pallet {
 			addresses: Vec<TargetChainAccount<T, I>>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+
 			for deposit_address in addresses {
-				if let Some(mut deposit_details) =
-					DepositChannelLookup::<T, I>::get(&deposit_address)
-				{
-					if deposit_details.deposit_channel.on_fetch_completed() {
-						DepositChannelLookup::<T, I>::insert(&deposit_address, deposit_details);
-					}
-				} else {
-					log::error!(
-						"Deposit address {:?} not found in DepositChannelLookup",
-						deposit_address
-					);
-				}
+				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
+					deposit_channel_details
+						.as_mut()
+						.map(|details| details.deposit_channel.state.on_fetch_completed());
+				});
 			}
 			Ok(())
 		}
@@ -464,7 +531,7 @@ pub mod pallet {
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
-			block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+			block_height: TargetChainBlockNumber<T, I>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -536,6 +603,21 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn can_and_cannot_recycle(
+		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
+		maximum_recyclable_number: usize,
+		current_block_height: TargetChainBlockNumber<T, I>,
+	) -> Vec<TargetChainAccount<T, I>> {
+		let partition_point = sp_std::cmp::min(
+			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
+			maximum_recyclable_number,
+		);
+		channel_recycle_blocks
+			.drain(..partition_point)
+			.map(|(_, address)| address)
+			.collect()
+	}
+
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
@@ -551,34 +633,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} =>
-									if let Some(mut details) =
-										DepositChannelLookup::<T, I>::get(&*deposit_address)
-									{
-										if details.deposit_channel.can_fetch() {
-											deposit_fetch_id
-												.replace(details.deposit_channel.fetch_id());
-											if details.deposit_channel.on_fetch_scheduled() {
-												DepositChannelLookup::<T, I>::insert(
-													deposit_address,
-													details,
-												);
-											}
-											true
-										} else {
-											false
-										}
-									} else {
-										log::error!("Deposit address {:?} not found in DepositChannelLookup", deposit_address);
-										false
+								} => DepositChannelLookup::<T, I>::mutate(
+									deposit_address,
+									|details| {
+										details
+											.as_mut()
+											.map(|details| {
+												let can_fetch =
+													details.deposit_channel.state.can_fetch();
+
+												if can_fetch {
+													deposit_fetch_id.replace(
+														details.deposit_channel.fetch_id(),
+													);
+													details
+														.deposit_channel
+														.state
+														.on_fetch_scheduled();
+												}
+												can_fetch
+											})
+											.unwrap_or(false)
 									},
+								),
 								FetchOrTransfer::Transfer { .. } => true,
 							}
 					})
 					.collect()
 			});
 
-		// Returns Ok(()) if there's nothing to send.
 		if batch_to_send.is_empty() {
 			return TransactionOutcome::Commit(Ok(()))
 		}
@@ -668,7 +751,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_chain,
 				ccm.source_address,
 				ccm.gas_budget,
-				ccm.message,
+				ccm.message.to_vec(),
 			) {
 				Ok(api_call) => {
 					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
@@ -691,10 +774,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+		if DepositChannelPool::<T, I>::get(deposit_channel_details.deposit_channel.channel_id)
+			.is_some()
+		{
+			log_or_panic!(
+				"Deposit channel {} should not be in the recycled address pool if it's active",
+				deposit_channel_details.deposit_channel.channel_id
+			);
+			#[cfg(not(debug_assertions))]
+			return Err(Error::<T, I>::InvalidDepositAddress.into())
+		}
 
 		ensure!(
 			deposit_channel_details.deposit_channel.asset == asset,
@@ -722,12 +816,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		// NB: Don't take here. We should continue witnessing this address
-		// even after an deposit to it has occurred.
-		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-		match ChannelActions::<T, I>::get(&deposit_address)
-			.ok_or(Error::<T, I>::InvalidDepositAddress)?
-		{
+		match deposit_channel_details.action {
 			ChannelAction::LiquidityProvision { lp_account, .. } =>
 				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			ChannelAction::Swap {
@@ -789,13 +878,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	fn expiry_and_recycle_block_height(
+	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
+	{
+		let current_height = T::ChainTracking::get_block_height();
+		let lifetime = DepositChannelLifetime::<T, I>::get();
+		let expiry_height = current_height + lifetime;
+		let recycle_height = expiry_height + lifetime;
+
+		(current_height, expiry_height, recycle_height)
+	}
+
 	/// Opens a channel for the given asset and registers it with the given action.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
-		channel_action: ChannelAction<T::AccountId>,
-		expires_at: BlockNumberFor<T>,
+		action: ChannelAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
@@ -819,13 +918,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let deposit_address = deposit_channel.address.clone();
 
-		ChannelActions::<T, I>::insert(&deposit_address, channel_action);
+		let (current_height, expiry_height, recycle_height) =
+			Self::expiry_and_recycle_block_height();
+
+		DepositChannelRecycleBlocks::<T, I>::append((recycle_height, deposit_address.clone()));
+
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
 			DepositChannelDetails {
 				deposit_channel,
-				opened_at: T::ChainTracking::get_block_height(),
-				expires_at,
+				opened_at: current_height,
+				expires_at: expiry_height,
+				action,
 			},
 		);
 
@@ -888,13 +992,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-		expiry_block: BlockNumberFor<T>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) = Self::open_channel(
-			source_asset,
-			ChannelAction::LiquidityProvision { lp_account },
-			expiry_block,
-		)?;
+		let (channel_id, deposit_address) =
+			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
 		Ok((channel_id, deposit_address.into()))
 	}
@@ -907,7 +1007,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry_block: BlockNumberFor<T>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
@@ -924,22 +1023,8 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					broker_id,
 				},
 			},
-			expiry_block,
 		)?;
 
 		Ok((channel_id, deposit_address.into()))
-	}
-
-	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
-	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_channel(address: TargetChainAccount<T, I>) {
-		ChannelActions::<T, I>::remove(&address);
-		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
-			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
-			}
-		} else {
-			log_or_panic!("Tried to close an unknown channel.");
-		}
 	}
 }

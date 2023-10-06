@@ -26,7 +26,7 @@ use cf_chains::{
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
-		PolkadotTransactionData, RuntimeVersion,
+		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
 	},
 	eth::{
 		self,
@@ -44,16 +44,15 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
-	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
-	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
-	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
+	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
+	KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
 };
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	sp_runtime::{
-		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedU64,
 	},
 	traits::Get,
@@ -75,21 +74,6 @@ impl Chainflip for Runtime {
 	type EpochInfo = Validator;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
-}
-
-impl_runtime_safe_mode! {
-	RuntimeSafeMode,
-	pallet_cf_environment::RuntimeSafeMode<Runtime>,
-	emissions: pallet_cf_emissions::PalletSafeMode,
-	funding: pallet_cf_funding::PalletSafeMode,
-	swapping: pallet_cf_swapping::PalletSafeMode,
-	liquidity_provider: pallet_cf_lp::PalletSafeMode,
-	validator: pallet_cf_validator::PalletSafeMode,
-	pools: pallet_cf_pools::PalletSafeMode,
-	reputation: pallet_cf_reputation::PalletSafeMode,
-	vault: pallet_cf_vaults::PalletSafeMode,
-	witnesser: pallet_cf_witnesser::PalletSafeMode,
-	broadcast: pallet_cf_broadcast::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -195,18 +179,19 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	/// Calculate the gas limit for a Ethereum call, using the current gas price.
 	/// Currently for only CCM calls, the gas limit is calculated as:
 	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-	/// All other calls uses a default gas limit.
+	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
+	/// The max_fee_per_gas will still have the default ethereum base fee multiplier applied.
 	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> Option<U256> {
 		if let Some(gas_budget) = call.gas_budget() {
-			let max_fee_per_gas = EthereumChainTracking::chain_state()
+			let current_fee_per_gas = EthereumChainTracking::chain_state()
 				.or_else(||{
 					log::warn!("No chain data for Ethereum. This should never happen. Please check Chain Tracking data.");
 					None
 				})?
 				.tracked_data
-				.max_fee_per_gas(ETHEREUM_BASE_FEE_MULTIPLIER);
+				.max_fee_per_gas(One::one());
 			Some(gas_budget
-				.checked_div(max_fee_per_gas)
+				.checked_div(current_fee_per_gas)
 				.unwrap_or_else(||{
 					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
 					Default::default()
@@ -345,10 +330,10 @@ pub struct DotEnvironment;
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
-	fn replay_protection(_params: ()) -> PolkadotReplayProtection {
+	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
-			nonce: Environment::next_polkadot_proxy_account_nonce(),
+			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
 	}
 }
@@ -390,18 +375,6 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 			.map(|epoch_key| epoch_key.key)
 	}
 }
-
-pub struct EthVaultTransitionHandler;
-impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
-
-pub struct DotVaultTransitionHandler;
-impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
-	fn on_new_vault() {
-		Environment::reset_polkadot_proxy_account_nonce();
-	}
-}
-pub struct BtcVaultTransitionHandler;
-impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
 
 pub struct TokenholderGovernanceBroadcaster;
 
@@ -475,7 +448,6 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -483,7 +455,6 @@ macro_rules! impl_deposit_api_for_anychain {
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-								expiry,
 							),
 					)+
 				}
@@ -496,7 +467,6 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-				expiry: Self::BlockNumber,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -507,20 +477,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
-							expiry,
 						),
-					)+
-				}
-			}
-
-			fn expire_channel(address: ForeignChainAddress) {
-				match address.chain() {
-					$(
-						ForeignChain::$chain => {
-							<$pallet as DepositApi<$chain>>::expire_channel(
-								address.try_into().expect("Checked for address compatibility")
-							);
-						},
 					)+
 				}
 			}

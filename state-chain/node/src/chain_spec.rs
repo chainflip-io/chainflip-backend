@@ -22,12 +22,13 @@ use sp_core::{
 };
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinChainTrackingConfig, BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber,
-	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumThresholdSignerConfig,
+	BitcoinChainTrackingConfig, BitcoinIngressEgressConfig, BitcoinThresholdSignerConfig,
+	BitcoinVaultConfig, BlockNumber, EmissionsConfig, EnvironmentConfig,
+	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
 	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotChainTrackingConfig, PolkadotThresholdSignerConfig, PolkadotVaultConfig,
-	ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
-	ValidatorConfig, WASM_BINARY,
+	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
+	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature,
+	SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -45,6 +46,8 @@ use sp_runtime::{
 };
 
 pub mod common;
+pub mod devnet;
+pub mod kitkat;
 pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
@@ -236,7 +239,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				// Governance account - Snow White
 				snow_white.into(),
 				1,
-				common::MAX_AUTHORITIES,
+				devnet::MAX_AUTHORITIES,
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
 					eth_usdc_address: eth_usdc_address.into(),
@@ -252,24 +255,27 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
-				common::TOTAL_ISSUANCE,
+				devnet::TOTAL_ISSUANCE,
 				genesis_funding_amount,
 				min_funding,
-				common::REDEMPTION_TAX,
-				8 * common::HOURS,
-				common::REDEMPTION_DELAY_SECS,
-				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-				common::EXPIRY_SPAN_IN_SECONDS,
-				common::ACCRUAL_RATIO,
-				Percent::from_percent(common::REDEMPTION_PERIOD_AS_PERCENTAGE),
-				common::SUPPLY_UPDATE_INTERVAL,
-				common::PENALTIES.to_vec(),
-				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-				common::SWAP_TTL,
-				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
+				devnet::REDEMPTION_TAX,
+				8 * devnet::HOURS,
+				devnet::REDEMPTION_DELAY_SECS,
+				devnet::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+				devnet::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+				devnet::EXPIRY_SPAN_IN_SECONDS,
+				devnet::ACCRUAL_RATIO,
+				Percent::from_percent(devnet::REDEMPTION_PERIOD_AS_PERCENTAGE),
+				devnet::SUPPLY_UPDATE_INTERVAL,
+				devnet::PENALTIES.to_vec(),
+				devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+				devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+				devnet::MINIMUM_SWAP_AMOUNTS.to_vec(),
 				dot_runtime_version,
+				// Bitcoin block times on localnets are much faster, so we account for that here.
+				devnet::BITCOIN_EXPIRY_BLOCKS,
+				devnet::ETHEREUM_EXPIRY_BLOCKS,
+				devnet::POLKADOT_EXPIRY_BLOCKS,
 			)
 		},
 		// Bootnodes
@@ -390,9 +396,11 @@ macro_rules! network_spec {
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-							SWAP_TTL,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
 							dot_runtime_version,
+							BITCOIN_EXPIRY_BLOCKS,
+							ETHEREUM_EXPIRY_BLOCKS,
+							POLKADOT_EXPIRY_BLOCKS,
 						)
 					},
 					// Bootnodes
@@ -416,6 +424,7 @@ network_spec!(testnet);
 network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
+network_spec!(kitkat);
 
 /// Configure initial storage state for FRAME modules.
 /// 150 authority limit
@@ -445,9 +454,11 @@ fn testnet_genesis(
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
-	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 	dot_runtime_version: RuntimeVersion,
+	bitcoin_deposit_channel_lifetime: u32,
+	ethereum_deposit_channel_lifetime: u32,
+	polkadot_deposit_channel_lifetime: u32,
 ) -> RuntimeGenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -650,8 +661,17 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: SwappingConfig { swap_ttl, minimum_swap_amounts },
-		liquidity_provider: Default::default(),
+		swapping: SwappingConfig { minimum_swap_amounts, _phantom: PhantomData },
+		// These are set to ~2 hours at average block times.
+		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
+			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
+		},
+		ethereum_ingress_egress: EthereumIngressEgressConfig {
+			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
+		},
+		polkadot_ingress_egress: PolkadotIngressEgressConfig {
+			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
+		},
 	}
 }
 
