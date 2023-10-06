@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			let mut start_logger_server_fn = Some(utilities::init_json_logger(settings.logging.span_lifecycle).await);
+			let mut start_logger_server_fn = Some(utilities::init_json_logger(settings.logging.span_lifecycle, settings.logging.command_server_port).await);
 
 			let ws_rpc_client = jsonrpsee::ws_client::WsClientBuilder::default()
 				.build(&settings.state_chain.ws_endpoint)

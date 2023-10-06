@@ -334,6 +334,7 @@ macro_rules! print_starting {
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 pub async fn init_json_logger(
 	log_span_lifecycle: bool,
+	command_server_port: crate::Port,
 ) -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
@@ -356,11 +357,10 @@ pub async fn init_json_logger(
 		reload_handle
 	};
 
-	|scope| {
+	move |scope| {
 		scope.spawn_weak(async move {
 			const PATH: &str = "tracing";
 			const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
-			const PORT: u16 = 36079;
 
 			let change_filter = warp::post()
 				.and(warp::path(PATH))
@@ -410,7 +410,7 @@ pub async fn init_json_logger(
 				});
 
 			warp::serve(change_filter.or(get_filter))
-				.run((std::net::Ipv4Addr::LOCALHOST, PORT))
+				.run((std::net::Ipv4Addr::LOCALHOST, command_server_port))
 				.await;
 
 			Ok(())
