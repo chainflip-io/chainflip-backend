@@ -137,6 +137,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								},
 								signer_id: from,
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
+								tx_metadata: Default::default(),
 							}
 							.into()
 						},

@@ -78,6 +78,7 @@ impl Chain for MockEthereum {
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
 	type Transaction = MockTransaction;
+	type TransactionMetaData = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
 }
@@ -254,6 +255,8 @@ pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };
+
+pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetaData = ();
 
 #[derive(Encode, Decode, TypeInfo, CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
 #[scale_info(skip_type_params(C))]

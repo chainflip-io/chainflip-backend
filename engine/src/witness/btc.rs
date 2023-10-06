@@ -125,6 +125,7 @@ where
 								// Bitcoin and some other chains fee tracking is not
 								// necessary. PRO-370.
 								tx_fee: Default::default(),
+								tx_metadata: Default::default(),
 							},
 						),
 						epoch.index,

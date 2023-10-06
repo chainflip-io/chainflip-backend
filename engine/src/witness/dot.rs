@@ -217,6 +217,7 @@ where
 											tx_out_id: signature,
 											signer_id: epoch.info.1,
 											tx_fee,
+											tx_metadata: Default::default(),
 										}
 										.into(),
 										epoch.index,

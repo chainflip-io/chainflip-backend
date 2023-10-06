@@ -148,6 +148,7 @@ benchmarks_instance_pallet! {
 			tx_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
+			tx_metadata: TransactionMetaDataFor::<T, I>::benchmark_value(),
 		};
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
 		T::KeyProvider::set_key(valid_key);

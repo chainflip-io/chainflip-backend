@@ -19,6 +19,7 @@ impl Chain for AnyChain {
 	type DepositChannelState = ();
 	type DepositDetails = ();
 	type Transaction = ();
+	type TransactionMetaData = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 }

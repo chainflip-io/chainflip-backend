@@ -7,7 +7,7 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator};
+use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator, TransactionMetaDataHandler};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -187,9 +187,27 @@ impl Chain for Bitcoin {
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
 	type Transaction = BitcoinTransactionData;
+	type TransactionMetaData = ();
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
+}
+
+pub struct BitcoinTransactionMetaDataHandler;
+
+impl TransactionMetaDataHandler<Bitcoin> for BitcoinTransactionMetaDataHandler {
+	fn extract_metadata(
+		transaction: &<Bitcoin as Chain>::Transaction,
+	) -> <Bitcoin as Chain>::TransactionMetaData {
+		Default::default()
+	}
+
+	fn verify_metadata(
+		metadata: &<Bitcoin as Chain>::TransactionMetaData,
+		expected_metadata: &<Bitcoin as Chain>::TransactionMetaData,
+	) -> bool {
+		true
+	}
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]

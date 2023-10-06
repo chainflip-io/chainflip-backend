@@ -10,7 +10,7 @@ use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
 		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockThresholdSignature,
-		MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
+		MockTransaction, MockTransactionBuilder, ETH_TX_FEE, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -153,6 +153,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
+			MOCK_TX_METADATA,
 		));
 
 		let expected_refund = tx_sig_request
@@ -285,6 +286,7 @@ fn test_sigdata_with_no_match_is_noop() {
 				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
+				MOCK_TX_METADATA,
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -315,6 +317,7 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
+			MOCK_TX_METADATA,
 		));
 
 		MockOffenceReporter::assert_reported(
@@ -495,6 +498,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
+			MOCK_TX_METADATA,
 		));
 		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();

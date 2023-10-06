@@ -43,6 +43,7 @@ impl Chain for Ethereum {
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
 	type Transaction = Transaction;
+	type TransactionMetaData = ();
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 }
@@ -110,6 +111,23 @@ impl From<&DepositChannel<Ethereum>> for EvmFetchId {
 					EvmFetchId::Fetch(channel.address)
 				},
 		}
+	}
+}
+
+pub struct EthTransactionMetaDataHandler;
+
+impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
+	fn extract_metadata(
+		transaction: &<Ethereum as Chain>::Transaction,
+	) -> <Ethereum as Chain>::TransactionMetaData {
+		Default::default()
+	}
+
+	fn verify_metadata(
+		metadata: &<Ethereum as Chain>::TransactionMetaData,
+		expected_metadata: &<Ethereum as Chain>::TransactionMetaData,
+	) -> bool {
+		true
 	}
 }
 

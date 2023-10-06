@@ -72,7 +72,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::benchmarking_value::BenchmarkValue;
+	use cf_chains::{benchmarking_value::BenchmarkValue, TransactionMetaDataHandler};
 	use cf_traits::{AccountRoleRegistry, KeyProvider, OnBroadcastReady, SingleSignerNomination};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
@@ -93,6 +93,10 @@ pub mod pallet {
 	/// Type alias for the instance's configured Payload.
 	pub type PayloadFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload;
+
+	/// Type alias for the instance's configured transaction Metadata.
+	pub type TransactionMetaDataFor<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::TransactionMetaData;
 
 	pub type ChainBlockNumberFor<T, I> =
 		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainBlockNumber;
@@ -198,6 +202,8 @@ pub mod pallet {
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
 
+		type TransactionMetaDataHandler: TransactionMetaDataHandler<Self::TargetChain>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -274,6 +280,10 @@ pub mod pallet {
 		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
 		OptionQuery,
 	>;
+
+	#[pallet::storage]
+	pub type TransactionMetaData<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetaDataFor<T, I>>;
 
 	/// Tracks how much a signer id is owed for paying transaction fees.
 	#[pallet::storage]
@@ -497,9 +507,16 @@ pub mod pallet {
 
 			let signed_api_call = api_call.signed(&signature);
 
+			let transaction = T::TransactionBuilder::build_transaction(&signed_api_call);
+
+			TransactionMetaData::<T, I>::insert(
+				broadcast_id,
+				T::TransactionMetaDataHandler::extract_metadata(&transaction),
+			);
+
 			Self::start_broadcast(
 				&signature,
-				T::TransactionBuilder::build_transaction(&signed_api_call),
+				transaction,
 				signed_api_call,
 				threshold_signature_payload,
 				broadcast_id,
@@ -529,6 +546,7 @@ pub mod pallet {
 			tx_out_id: TransactionOutIdFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
+			tx_metadata: TransactionMetaDataFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
@@ -536,18 +554,32 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
-			let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
-				broadcast_id,
-				attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
-			})
-			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
-			.broadcast_attempt
-			.transaction_payload
-			.return_fee_refund(tx_fee);
+			if let Some(expected_tx_metadata) = TransactionMetaData::<T, I>::get(broadcast_id) {
+				if T::TransactionMetaDataHandler::verify_metadata(
+					&tx_metadata,
+					&expected_tx_metadata,
+				) {
+					let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+						broadcast_id,
+						attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+					})
+					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
+					.broadcast_attempt
+					.transaction_payload
+					.return_fee_refund(tx_fee);
 
-			TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
-				*fee_deficit = fee_deficit.saturating_add(to_refund);
-			});
+					TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
+						*fee_deficit = fee_deficit.saturating_add(to_refund);
+					});
+				} else {
+					log::warn!(
+						"Transaction metadata verification failed for broadcast {}. Validator can not get rufunded.",
+						broadcast_id
+					);
+				}
+			} else {
+				log::error!("Transaction metadata not found for broadcast {}. Validator can not get rufunded.", broadcast_id);
+			}
 
 			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {

@@ -19,6 +19,7 @@ impl Chain for NoneChain {
 	type DepositChannelState = ();
 	type DepositDetails = ();
 	type Transaction = ();
+	type TransactionMetaData = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 }
@@ -51,5 +52,22 @@ impl ChainCrypto for NoneChainCrypto {
 
 	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		unimplemented!()
+	}
+}
+
+pub struct NoneTransactionMetaDataHandler;
+
+impl TransactionMetaDataHandler<NoneChain> for NoneTransactionMetaDataHandler {
+	fn extract_metadata(
+		transaction: &<NoneChain as Chain>::Transaction,
+	) -> <NoneChain as Chain>::TransactionMetaData {
+		Default::default()
+	}
+
+	fn verify_metadata(
+		metadata: &<NoneChain as Chain>::TransactionMetaData,
+		expected_metadata: &<NoneChain as Chain>::TransactionMetaData,
+	) -> bool {
+		true
 	}
 }

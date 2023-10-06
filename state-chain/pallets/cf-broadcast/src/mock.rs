@@ -9,7 +9,7 @@ use cf_chains::{
 	mocks::{
 		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
 	},
-	Chain, ChainCrypto,
+	Chain, ChainCrypto, TransactionMetaDataHandler,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -134,6 +134,23 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+pub struct MockTransactionMetaDataHandler;
+
+impl TransactionMetaDataHandler<MockEthereum> for MockTransactionMetaDataHandler {
+	fn extract_metadata(
+		transaction: &<MockEthereum as Chain>::Transaction,
+	) -> <MockEthereum as Chain>::TransactionMetaData {
+		Default::default()
+	}
+
+	fn verify_metadata(
+		metadata: &<MockEthereum as Chain>::TransactionMetaData,
+		expected_metadata: &<MockEthereum as Chain>::TransactionMetaData,
+	) -> bool {
+		true
+	}
+}
+
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -155,6 +172,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
+	type TransactionMetaDataHandler = MockTransactionMetaDataHandler;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 }
 

@@ -129,6 +129,8 @@ pub trait Chain: Member + Parameter {
 	type DepositDetails: Member + Parameter + BenchmarkValue;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
+
+	type TransactionMetaData: Member + Parameter + BenchmarkValue + Default;
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
@@ -252,6 +254,14 @@ where
 	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
 		Default::default()
 	}
+}
+
+pub trait TransactionMetaDataHandler<C: Chain> {
+	fn extract_metadata(transaction: &C::Transaction) -> C::TransactionMetaData;
+	fn verify_metadata(
+		metadata: &C::TransactionMetaData,
+		expected_metadata: &C::TransactionMetaData,
+	) -> bool;
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
