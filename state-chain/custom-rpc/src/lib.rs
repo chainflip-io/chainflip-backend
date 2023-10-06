@@ -717,7 +717,7 @@ where
 		from: Asset,
 		to: Asset,
 	) -> Result<(), SubscriptionEmptyError> {
-		self.new_stream_subscription(
+		self.new_items_subscription(
 			sink,
 			move |api, hash| api.cf_prewitness_swaps(hash, from, to),
 		)
@@ -801,7 +801,8 @@ where
 		Ok(())
 	}
 
-	fn new_stream_subscription<
+	/// After creating the subscription it will return all the new prewitnessed swaps from this point onwards.
+	fn new_items_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
 		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<Option<T>, E> + Send + Clone + 'static,
