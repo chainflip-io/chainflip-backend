@@ -18,16 +18,19 @@ impl<T: Clone> Sender<T> {
 		async move {
 			match self.0.try_broadcast(msg) {
 				Ok(None) => true,
-				Ok(Some(_)) => unreachable!(),
+				Ok(Some(_)) => unreachable!("async_broadcast feature unused"),
 				Err(error) => match error {
 					async_broadcast::TrySendError::Full(msg) => {
 						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.0.capacity(), core::panic::Location::caller());
-						matches!(self.0.broadcast(msg).await, Ok(None))
+						match self.0.broadcast(msg).await {
+							Ok(None) => true,
+							Ok(Some(_)) => unreachable!("async_broadcast feature unused"),
+							Err(_) => false,
+						}
 					},
 					async_broadcast::TrySendError::Closed(_msg) => false,
-					async_broadcast::TrySendError::Inactive(_msg) => {
-						unreachable!();
-					},
+					async_broadcast::TrySendError::Inactive(_msg) =>
+						unreachable!("async_broadcast feature unused"),
 				},
 			}
 		}
