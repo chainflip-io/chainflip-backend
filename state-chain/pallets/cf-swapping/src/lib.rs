@@ -154,6 +154,13 @@ pub(crate) struct CcmSwap {
 	gas_swap_id: Option<u64>,
 }
 
+pub struct CcmSwapAmounts {
+	pub principal_swap_amount: AssetAmount,
+	pub gas_budget: AssetAmount,
+	// if the gas asset is different to the input asset, it will require a swap
+	pub other_gas_asset: Option<Asset>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
@@ -689,7 +696,7 @@ pub mod pallet {
 			channel_metadata: &CcmChannelMetadata,
 			source_asset: Asset,
 			destination_asset: Asset,
-		) -> Result<(AssetAmount, AssetAmount), CcmFailReason> {
+		) -> Result<CcmSwapAmounts, CcmFailReason> {
 			let gas_budget = channel_metadata.gas_budget;
 			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
@@ -706,7 +713,15 @@ pub mod pallet {
 				return Err(CcmFailReason::PrincipalSwapAmountTooLow)
 			}
 
-			Ok((principal_swap_amount, gas_budget))
+			// if the gas asset is different.
+			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
+			let other_gas_asset = if source_asset == output_gas_asset || gas_budget.is_zero() {
+				None
+			} else {
+				Some(output_gas_asset)
+			};
+
+			Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset })
 		}
 
 		// The address and the asset being sent or withdrawn must be compatible.
@@ -996,27 +1011,28 @@ pub mod pallet {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
-			let (principal_swap_amount, gas_budget) = match Self::principal_and_gas_amounts(
-				deposit_amount,
-				&deposit_metadata.channel_metadata,
-				source_asset,
-				destination_asset,
-			) {
-				Ok(amounts) => amounts,
-				Err(reason) => {
-					// Confiscate the deposit and emit an event.
-					CollectedRejectedFunds::<T>::mutate(source_asset, |fund| {
-						*fund = fund.saturating_add(deposit_amount)
-					});
+			let CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset } =
+				match Self::principal_and_gas_amounts(
+					deposit_amount,
+					&deposit_metadata.channel_metadata,
+					source_asset,
+					destination_asset,
+				) {
+					Ok(amounts) => amounts,
+					Err(reason) => {
+						// Confiscate the deposit and emit an event.
+						CollectedRejectedFunds::<T>::mutate(source_asset, |fund| {
+							*fund = fund.saturating_add(deposit_amount)
+						});
 
-					Self::deposit_event(Event::<T>::CcmFailed {
-						reason,
-						destination_address: encoded_destination_address,
-						deposit_metadata,
-					});
-					return
-				},
-			};
+						Self::deposit_event(Event::<T>::CcmFailed {
+							reason,
+							destination_address: encoded_destination_address,
+							deposit_metadata,
+						});
+						return
+					},
+				};
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
@@ -1049,15 +1065,10 @@ pub mod pallet {
 					Some(swap_id)
 				};
 
-			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
-			let gas_swap_id = if source_asset == output_gas_asset || gas_budget.is_zero() {
-				// Deposit can be used as gas directly
-				swap_output.gas = Some(gas_budget);
-				None
-			} else {
+			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
 				let swap_id = Self::schedule_swap_internal(
 					source_asset,
-					output_gas_asset,
+					other_gas_asset,
 					gas_budget,
 					SwapType::CcmGas(ccm_id),
 				);
@@ -1065,13 +1076,16 @@ pub mod pallet {
 					swap_id,
 					source_asset,
 					deposit_amount: gas_budget,
-					destination_asset: output_gas_asset,
+					destination_asset: other_gas_asset,
 					destination_address: encoded_destination_address.clone(),
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
 				});
 				Some(swap_id)
+			} else {
+				swap_output.gas = Some(gas_budget);
+				None
 			};
 
 			Self::deposit_event(Event::<T>::CcmDepositReceived {

@@ -26,14 +26,13 @@ use cf_chains::{
 	evm::EvmCrypto,
 	Bitcoin, CcmChannelMetadata, Polkadot,
 };
-use cf_primitives::ForeignChain;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
 use pallet_cf_reputation::ExclusionList;
-use pallet_cf_swapping::MinimumSwapAmount;
+use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
@@ -1109,19 +1108,18 @@ impl_runtime_apis! {
 				}
 
 				// There are two swaps for CCM, the principal swap, and the gas amount swap.
-				let Ok((principal_swap_amount, gas_budget)) = Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
+				let Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset }) = Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
 					// not a valid CCM
 					return Vec::new();
 				};
 
 				let mut ccm_swaps = Vec::new();
-				if destination_asset == to && principal_swap_amount > MinimumSwapAmount::<Runtime>::get(source_asset) {
+				if destination_asset == to {
 					// the principal swap is in the requested direction.
 					ccm_swaps.push(principal_swap_amount);
 				}
 
-				let destination_chain: ForeignChain = destination_asset.into();
-				if destination_chain.gas_asset() == to && gas_budget > 0 {
+				if other_gas_asset.is_some() {
 					// the gas swap is in the requested direction
 					ccm_swaps.push(gas_budget);
 				}
