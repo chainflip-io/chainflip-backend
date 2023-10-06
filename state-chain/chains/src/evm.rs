@@ -351,6 +351,15 @@ pub struct Transaction {
 	pub data: Vec<u8>,
 }
 
+#[derive(
+	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub struct TransactionMetadata {
+	pub gas_limit: Option<Uint>,
+	pub contract: Address,
+	pub value: Uint,
+}
+
 impl Transaction {
 	fn check_contract(
 		&self,

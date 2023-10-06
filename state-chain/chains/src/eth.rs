@@ -6,7 +6,7 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId, Transaction},
+	evm::{DeploymentStatus, EvmFetchId, Transaction, TransactionMetadata},
 	*,
 };
 use cf_primitives::chains::assets;
@@ -43,7 +43,7 @@ impl Chain for Ethereum {
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
 	type Transaction = Transaction;
-	type TransactionMetaData = ();
+	type TransactionMetaData = TransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 }
@@ -120,14 +120,20 @@ impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
 	fn extract_metadata(
 		transaction: &<Ethereum as Chain>::Transaction,
 	) -> <Ethereum as Chain>::TransactionMetaData {
-		Default::default()
+		TransactionMetadata {
+			gas_limit: transaction.gas_limit,
+			contract: transaction.contract,
+			value: transaction.value,
+		}
 	}
 
 	fn verify_metadata(
 		metadata: &<Ethereum as Chain>::TransactionMetaData,
 		expected_metadata: &<Ethereum as Chain>::TransactionMetaData,
 	) -> bool {
-		true
+		metadata.gas_limit == expected_metadata.gas_limit &&
+			metadata.contract == expected_metadata.contract &&
+			metadata.value == expected_metadata.value
 	}
 }
 

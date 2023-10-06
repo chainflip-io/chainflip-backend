@@ -3,6 +3,7 @@ use cf_primitives::{
 	chains::assets::{btc, dot, eth},
 	Asset,
 };
+use ethereum_types::{H160, U256};
 
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::EncodedAddress;
@@ -10,6 +11,7 @@ use crate::address::EncodedAddress;
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::evm::EvmFetchId;
+use crate::evm::TransactionMetadata;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -120,6 +122,14 @@ impl BenchmarkValueExtended for () {
 		Default::default()
 	}
 }
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for TransactionMetadata {
+	fn benchmark_value() -> Self {
+		TransactionMetadata { gas_limit: None, contract: H160::zero(), value: U256::zero() }
+	}
+}
+
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);

@@ -197,14 +197,14 @@ pub struct BitcoinTransactionMetaDataHandler;
 
 impl TransactionMetaDataHandler<Bitcoin> for BitcoinTransactionMetaDataHandler {
 	fn extract_metadata(
-		transaction: &<Bitcoin as Chain>::Transaction,
+		_transaction: &<Bitcoin as Chain>::Transaction,
 	) -> <Bitcoin as Chain>::TransactionMetaData {
 		Default::default()
 	}
 
 	fn verify_metadata(
-		metadata: &<Bitcoin as Chain>::TransactionMetaData,
-		expected_metadata: &<Bitcoin as Chain>::TransactionMetaData,
+		_metadata: &<Bitcoin as Chain>::TransactionMetaData,
+		_expected_metadata: &<Bitcoin as Chain>::TransactionMetaData,
 	) -> bool {
 		true
 	}

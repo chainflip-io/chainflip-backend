@@ -54,20 +54,3 @@ impl ChainCrypto for NoneChainCrypto {
 		unimplemented!()
 	}
 }
-
-pub struct NoneTransactionMetaDataHandler;
-
-impl TransactionMetaDataHandler<NoneChain> for NoneTransactionMetaDataHandler {
-	fn extract_metadata(
-		transaction: &<NoneChain as Chain>::Transaction,
-	) -> <NoneChain as Chain>::TransactionMetaData {
-		Default::default()
-	}
-
-	fn verify_metadata(
-		metadata: &<NoneChain as Chain>::TransactionMetaData,
-		expected_metadata: &<NoneChain as Chain>::TransactionMetaData,
-	) -> bool {
-		true
-	}
-}

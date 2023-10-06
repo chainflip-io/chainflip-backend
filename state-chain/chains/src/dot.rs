@@ -198,14 +198,14 @@ pub struct PolkadotTransactionMetaDataHandler;
 
 impl TransactionMetaDataHandler<Polkadot> for PolkadotTransactionMetaDataHandler {
 	fn extract_metadata(
-		transaction: &<Polkadot as Chain>::Transaction,
+		_transaction: &<Polkadot as Chain>::Transaction,
 	) -> <Polkadot as Chain>::TransactionMetaData {
 		Default::default()
 	}
 
 	fn verify_metadata(
-		metadata: &<Polkadot as Chain>::TransactionMetaData,
-		expected_metadata: &<Polkadot as Chain>::TransactionMetaData,
+		_metadata: &<Polkadot as Chain>::TransactionMetaData,
+		_expected_metadata: &<Polkadot as Chain>::TransactionMetaData,
 	) -> bool {
 		true
 	}
