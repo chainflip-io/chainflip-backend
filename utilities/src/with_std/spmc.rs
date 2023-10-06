@@ -1,4 +1,5 @@
 use futures::stream::{Stream, StreamExt};
+use tracing::warn;
 
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 	let (sender, receiver) = async_broadcast::broadcast(capacity);
@@ -11,11 +12,25 @@ pub struct Sender<T>(async_broadcast::Sender<T>, tokio::sync::watch::Sender<()>)
 
 impl<T: Clone> Sender<T> {
 	/// Sends an item to all receivers
-	pub async fn send(&self, t: T) -> Result<(), async_broadcast::SendError<T>> {
-		self.0
-			.broadcast(t)
-			.await
-			.map(|option| assert!(option.is_none(), "async_broadcast overflow is off"))
+	#[allow(clippy::manual_async_fn)]
+	#[track_caller]
+	pub fn send(&self, msg: T) -> impl futures::Future<Output = bool> + '_ {
+		async move {
+			match self.0.try_broadcast(msg) {
+				Ok(None) => true,
+				Ok(Some(_)) => unreachable!(),
+				Err(error) => match error {
+					async_broadcast::TrySendError::Full(msg) => {
+						warn!("Waiting for space in channel which is currently full with a capacity of {} items at {}", self.0.capacity(), core::panic::Location::caller());
+						matches!(self.0.broadcast(msg).await, Ok(None))
+					},
+					async_broadcast::TrySendError::Closed(_msg) => false,
+					async_broadcast::TrySendError::Inactive(_msg) => {
+						unreachable!();
+					},
+				},
+			}
+		}
 	}
 }
 impl<T> Sender<T> {
@@ -66,10 +81,10 @@ mod test {
 	async fn channel_allows_reconnection() {
 		let (mut sender, receiver) = channel(2);
 		drop(receiver);
-		assert!(sender.send(1).await.is_err());
+		assert!(!sender.send(1).await);
 		let mut receiver = sender.receiver();
-		sender.send(1).await.unwrap();
-		sender.send(1).await.unwrap();
+		assert!(sender.send(1).await);
+		assert!(sender.send(1).await);
 		drop(sender);
 		assert_eq!(receiver.next().await, Some(1));
 		assert_eq!(receiver.next().await, Some(1));
@@ -82,7 +97,7 @@ mod test {
 		let mut receiver_2 = sender.receiver();
 		let mut receiver_3 = receiver_1.clone();
 
-		sender.send(1).await.unwrap();
+		assert!(sender.send(1).await);
 
 		assert_eq!(receiver_1.next().await, Some(1));
 		assert_eq!(receiver_2.next().await, Some(1));
@@ -103,7 +118,7 @@ mod test {
 
 		assert!(sender.closed().now_or_never().is_none());
 
-		sender.send(1).await.unwrap();
+		assert!(sender.send(1).await);
 
 		join(
 			async move {
