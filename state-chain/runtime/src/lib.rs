@@ -1144,20 +1144,17 @@ impl_runtime_apis! {
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
 								deposit_witnesses, ..
 							}) => {
-								let filtered_swaps = filter_deposit_swaps::<Ethereum, EthereumInstance>(from, to, deposit_witnesses);
-								all_prewitnessed_swaps.extend(filtered_swaps);
+								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Ethereum, EthereumInstance>(from, to, deposit_witnesses));
 							},
 							RuntimeCall::BitcoinIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
 								deposit_witnesses, ..
 							}) => {
-								let filtered_swaps = filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses);
-								all_prewitnessed_swaps.extend(filtered_swaps);
+								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses));
 							},
 							RuntimeCall::PolkadotIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
 								deposit_witnesses, ..
 							}) => {
-								let filtered_swaps = filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses);
-								all_prewitnessed_swaps.extend(filtered_swaps);
+								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
 							}
 							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
