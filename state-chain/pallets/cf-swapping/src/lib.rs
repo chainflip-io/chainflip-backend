@@ -7,17 +7,14 @@ use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::{
-		traits::{BlockNumberProvider, Get, Saturating},
-		DispatchError, Permill,
-	},
-	storage::with_storage_layer,
-};
+use frame_support::{pallet_prelude::*, storage::with_storage_layer};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
+use sp_runtime::{
+	traits::{BlockNumberProvider, Get, Saturating},
+	DispatchError, Permill,
+};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 #[cfg(test)]
@@ -120,7 +117,7 @@ enum BatchExecutionError {
 	DispatchError { error: DispatchError },
 }
 
-/// This impl is never used. This is purely used to satisfy trait requirment
+/// This impl is never used. This is purely used to satisfy trait requirement
 impl From<DispatchError> for BatchExecutionError {
 	fn from(error: DispatchError) -> Self {
 		Self::DispatchError { error }
@@ -900,7 +897,7 @@ pub mod pallet {
 				ccm_swap.destination_asset,
 				ccm_output_principal,
 				ccm_swap.destination_address.clone(),
-				Some(ccm_swap.deposit_metadata),
+				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
 			);
 			if let Some(swap_id) = ccm_swap.principal_swap_id {
 				Self::deposit_event(Event::<T>::SwapEgressScheduled {

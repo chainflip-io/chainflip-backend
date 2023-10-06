@@ -7,15 +7,19 @@ allow_local_ip = true
 # 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = "./tests/test_keystore/alice_key"
 
-[eth]
-# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
-http_node_endpoint = "http://localhost:8545"
-ws_node_endpoint = "ws://localhost:8545"
+[eth.rpc]
+http_endpoint = "http://localhost:8545"
+ws_endpoint = "ws://localhost:8545"
 
-[dot]
+[dot.rpc]
 # NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
-ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
-http_node_endpoint = "http://my_fake_polkadot_rpc:443/<secret_key>"
+ws_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
+http_endpoint = "http://my_fake_polkadot_rpc:443/<secret_key>"
+
+[btc.rpc]
+http_endpoint = "http://localhost:18443"
+basic_auth_user = "username"
+basic_auth_password = "password"
 
 [health_check]
 hostname = "127.0.0.1"
@@ -24,8 +28,3 @@ port = 5555
 [prometheus]
 hostname = "127.0.0.1"
 port = 5566
-
-[btc]
-http_node_endpoint = "http://localhost:18443"
-rpc_user = "username"
-rpc_password = "password"

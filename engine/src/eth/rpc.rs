@@ -1,14 +1,13 @@
 pub mod address_checker;
 
+use anyhow::bail;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
+use utilities::redact_endpoint_secret::SecretUrl;
 
-use crate::{
-	constants::{ETH_AVERAGE_BLOCK_TIME, SYNC_POLL_INTERVAL},
-	settings,
-};
+use crate::constants::{RPC_RETRY_CONNECTION_INTERVAL, SYNC_POLL_INTERVAL};
 use anyhow::{anyhow, Context, Result};
-use std::{str::FromStr, sync::Arc, time::Instant};
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use utilities::make_periodic_tick;
 
@@ -27,16 +26,15 @@ pub struct EthRpcClient {
 
 impl EthRpcClient {
 	pub fn new(
-		eth_settings: settings::Eth,
+		private_key_file: PathBuf,
+		http_endpoint: SecretUrl,
 		expected_chain_id: u64,
 	) -> Result<impl Future<Output = Self>> {
-		let provider =
-			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
-		let wallet = read_clean_and_decode_hex_str_file(
-			&eth_settings.private_key_file,
-			"Ethereum Private Key",
-			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
-		)?;
+		let provider = Arc::new(Provider::<Http>::try_from(http_endpoint.as_ref())?);
+		let wallet =
+			read_clean_and_decode_hex_str_file(&private_key_file, "Ethereum Private Key", |key| {
+				ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new)
+			})?;
 
 		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(expected_chain_id));
 
@@ -46,24 +44,22 @@ impl EthRpcClient {
 			// We don't want to return an error here. Returning an error means that we'll exit the
 			// CFE. So on client creation we wait until we can be successfully connected to the ETH
 			// node. So the other chains are unaffected
-			let mut poll_interval = make_periodic_tick(ETH_AVERAGE_BLOCK_TIME, true);
+			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			loop {
 				poll_interval.tick().await;
 				match client.chain_id().await {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
-						tracing::warn!(
-						"Connected to Ethereum node but with chain_id {}, expected {}. Please check your CFE
-						configuration file...",
-						chain_id,
-						expected_chain_id
-					);
+						tracing::error!(
+								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. Please check your CFE
+								configuration file...",
+							);
 					},
 					Err(e) => tracing::error!(
-					"Cannot connect to an Ethereum node at {} with error: {e}. Please check your CFE
-					configuration file. Retrying...",
-					eth_settings.http_node_endpoint
-				),
+							"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. Please check your CFE
+							configuration file. Retrying in {:?}...",
+							poll_interval.period()
+						),
 				}
 			}
 		})
@@ -106,9 +102,9 @@ impl EthRpcClient {
 pub trait EthRpcApi: Send {
 	fn address(&self) -> H160;
 
-	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256>;
 
-	async fn send_transaction(&self, tx: TransactionRequest) -> Result<TxHash>;
+	async fn send_transaction(&self, tx: Eip1559TransactionRequest) -> Result<TxHash>;
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
@@ -137,11 +133,11 @@ impl EthRpcApi for EthRpcClient {
 		self.signer.address()
 	}
 
-	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256> {
-		Ok(self.signer.estimate_gas(req, None).await?)
+	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256> {
+		Ok(self.signer.estimate_gas(&TypedTransaction::Eip1559(req.clone()), None).await?)
 	}
 
-	async fn send_transaction(&self, mut tx: TransactionRequest) -> Result<TxHash> {
+	async fn send_transaction(&self, mut tx: Eip1559TransactionRequest) -> Result<TxHash> {
 		tx.nonce = Some(self.get_next_nonce().await?);
 
 		let res = self.signer.send_transaction(tx, None).await;
@@ -195,14 +191,14 @@ impl EthRpcApi for EthRpcClient {
 /// On each subscription this will create a new WS connection.
 #[derive(Clone)]
 pub struct ReconnectSubscriptionClient {
-	ws_node_endpoint: String,
+	ws_endpoint: SecretUrl,
 	// This value comes from the SC.
 	chain_id: web3::types::U256,
 }
 
 impl ReconnectSubscriptionClient {
-	pub fn new(ws_node_endpoint: String, chain_id: web3::types::U256) -> Self {
-		Self { ws_node_endpoint, chain_id }
+	pub fn new(ws_endpoint: SecretUrl, chain_id: web3::types::U256) -> Self {
+		Self { ws_endpoint, chain_id }
 	}
 }
 
@@ -216,7 +212,8 @@ use crate::eth::ConscientiousEthWebsocketBlockHeaderStream;
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
-		let web3 = web3::Web3::new(web3::transports::WebSocket::new(&self.ws_node_endpoint).await?);
+		let web3 =
+			web3::Web3::new(web3::transports::WebSocket::new(self.ws_endpoint.as_ref()).await?);
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
@@ -232,20 +229,17 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 
 		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
 		if self.chain_id != client_chain_id {
-			Err(anyhow!(
-				"Expected chain id {}, eth ws client returned {client_chain_id}.",
-				self.chain_id
-			))
-		} else {
-			Ok(ConscientiousEthWebsocketBlockHeaderStream {
-				stream: Some(
-					web3.eth_subscribe()
-						.subscribe_new_heads()
-						.await
-						.context("Failed to subscribe to new heads with WS Client")?,
-				),
-			})
+			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
+
+		Ok(ConscientiousEthWebsocketBlockHeaderStream {
+			stream: Some(
+				web3.eth_subscribe()
+					.subscribe_new_heads()
+					.await
+					.context("Failed to subscribe to new heads with WS Client")?,
+			),
+		})
 	}
 }
 
@@ -261,7 +255,13 @@ mod tests {
 	async fn eth_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let client = EthRpcClient::new(settings.eth, 2u64).unwrap().await;
+		let client = EthRpcClient::new(
+			settings.eth.private_key_file,
+			settings.eth.nodes.primary.http_endpoint,
+			2u64,
+		)
+		.unwrap()
+		.await;
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 

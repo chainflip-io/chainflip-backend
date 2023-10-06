@@ -9,7 +9,9 @@ use cf_chains::{
 	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
+use codec::Encode;
 use futures::FutureExt;
+use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -41,7 +43,8 @@ pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
-	base_rpc_api::BaseRpcClient, DefaultRpcClient, StateChainClient,
+	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
+	StateChainClient,
 };
 use utilities::{clean_hex_address, task_scope::Scope};
 
@@ -137,7 +140,24 @@ impl StateChainApi {
 }
 
 #[async_trait]
-impl OperatorApi for StateChainClient {}
+impl<
+		SignedExtrinsicClient: Send + Sync + 'static + SignedExtrinsicApi,
+		RawRpcClient: Send + Sync + 'static + RawRpcApi,
+	> OperatorApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	async fn dry_run(
+		&self,
+		call: RuntimeCall,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<Bytes> {
+		Ok(self
+			.base_rpc_client
+			.raw_rpc_client
+			.dry_run(Encode::encode(&call).into(), at)
+			.await?)
+	}
+}
+
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
@@ -159,7 +179,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(tx_hash)
@@ -168,6 +188,18 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	async fn bind_redeem_address(&self, address: EthereumAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_redeem_address { address })
+			.await
+			.until_in_block()
+			.await?;
+
+		Ok(tx_hash)
+	}
+
+	async fn bind_executor_address(&self, executor_address: EthereumAddress) -> Result<H256> {
+		let (tx_hash, ..) = self
+			.submit_signed_extrinsic(pallet_cf_funding::Call::bind_executor_address {
+				executor_address,
+			})
 			.await
 			.until_finalized()
 			.await?;
@@ -186,10 +218,12 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::None => bail!("Cannot register account role None"),
 		};
 
+		let _ = self.dry_run(call.clone(), None).await?;
+
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(call)
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not register account role for account")?;
 		Ok(tx_hash)
@@ -212,7 +246,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				proof: [0; 1].to_vec(),
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(tx_hash)
@@ -222,7 +256,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not stop bidding")?;
 		println!("Account stopped bidding, in tx {tx_hash:#x}.");
@@ -233,7 +267,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not start bidding")?;
 		println!("Account started bidding at tx {tx_hash:#x}.");
@@ -251,12 +285,18 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				name: name.as_bytes().to_vec(),
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
 			.context("Could not set vanity name for your account")?;
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
+
+	async fn dry_run(
+		&self,
+		call: RuntimeCall,
+		at: Option<state_chain_runtime::Hash>,
+	) -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -265,9 +305,10 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		println!("Submitting governance proposal for rotation.");
 		self.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
 			call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+			execution: ExecutionMode::Automatic,
 		})
 		.await
-		.until_finalized()
+		.until_in_block()
 		.await
 		.context("Failed to submit rotation governance proposal")?;
 
@@ -303,7 +344,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				channel_metadata,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(

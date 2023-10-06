@@ -14,7 +14,7 @@ pub struct ResponseStatus<T: Config<I>, SuccessVoters, FailureVoters, I: 'static
 	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
 	/// A map of the number of blame votes that each keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
-
+	#[codec(skip)]
 	_voters: PhantomData<(SuccessVoters, FailureVoters)>,
 }
 

@@ -2,11 +2,11 @@ use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
 	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultTransfer,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, evm::EvmFetchId, CcmChannelMetadata, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
+	DepositChannel, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
@@ -14,6 +14,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockAllBatch, MockEthEnvironment, MockEthereumApiCall},
+		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
 	DepositApi, EgressApi, GetBlockHeight,
@@ -87,13 +88,14 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 fn blacklisted_asset_will_not_egress_via_ccm() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
+		let gas_budget = 1000u128;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00, 0x01, 0x02],
+				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				cf_parameters: vec![],
+				cf_parameters: vec![].try_into().unwrap(),
 			},
 		};
 
@@ -101,8 +103,18 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 
 		// Eth should be blocked while Flip can be sent
-		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS, Some(ccm.clone()));
-		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS, Some(ccm.clone()));
+		IngressEgress::schedule_egress(
+			asset,
+			1_000,
+			ALICE_ETH_ADDRESS,
+			Some((ccm.clone(), gas_budget)),
+		);
+		IngressEgress::schedule_egress(
+			ETH_FLIP,
+			1_000,
+			ALICE_ETH_ADDRESS,
+			Some((ccm.clone(), gas_budget)),
+		);
 
 		IngressEgress::on_finalize(1);
 
@@ -118,6 +130,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 				source_chain: ForeignChain::Ethereum,
 				source_address: ccm.source_address.clone(),
 				cf_parameters: ccm.channel_metadata.cf_parameters,
+				gas_budget,
 			}]
 		);
 
@@ -351,10 +364,9 @@ fn addresses_are_getting_reused() {
 			}
 			channels
 		})
-		// Close the channels.
 		.then_execute_at_next_block(|channels| {
 			for (_request, _id, address) in &channels {
-				IngressEgress::close_channel(*address);
+				IngressEgress::expire_channel(*address);
 			}
 			channels[0].clone()
 		})
@@ -387,7 +399,7 @@ fn proof_address_pool_integrity() {
 		IngressEgress::on_finalize(1);
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::close_channel(address);
+			IngressEgress::expire_channel(address);
 		}
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
@@ -406,7 +418,7 @@ fn create_new_address_while_pool_is_empty() {
 		IngressEgress::on_finalize(1);
 		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::close_channel(address);
+			IngressEgress::expire_channel(address);
 		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
@@ -446,9 +458,9 @@ fn can_process_ccm_deposit() {
 		let to_asset = Asset::Eth;
 		let destination_address = ForeignChainAddress::Eth(Default::default());
 		let channel_metadata = CcmChannelMetadata {
-			message: vec![0x00, 0x01, 0x02],
+			message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 			gas_budget: 1_000,
-			cf_parameters: vec![],
+			cf_parameters: vec![].try_into().unwrap(),
 		};
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
@@ -458,7 +470,8 @@ fn can_process_ccm_deposit() {
 		let amount = 5_000;
 
 		// Register swap deposit with CCM
-		assert_ok!(IngressEgress::request_swap_deposit_address(
+
+		let (_, deposit_address) = IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
 			destination_address.clone(),
@@ -466,16 +479,14 @@ fn can_process_ccm_deposit() {
 			1,
 			Some(channel_metadata),
 			1_000u64,
-		));
+		)
+		.unwrap();
 
-		// CCM action is stored.
-		let deposit_address = cf_test_utilities::assert_events_match!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test>::StartWitnessing {
-				deposit_address,
-				opened_at,
-				..
-			}) if opened_at == BlockNumberProvider::get_block_height() => deposit_address
+		let deposit_address: TargetChainAccount<Test, _> = deposit_address.try_into().unwrap();
+
+		assert_eq!(
+			DepositChannelLookup::<Test>::get(deposit_address).unwrap().opened_at,
+			BlockHeightProvider::<MockEthereum>::get_block_height()
 		);
 
 		// Making a deposit should trigger CcmHandler.
@@ -511,13 +522,14 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
+		let gas_budget = 1_000u128;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00, 0x01, 0x02],
-				gas_budget: 1_000,
-				cf_parameters: vec![],
+				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
+				gas_budget,
+				cf_parameters: vec![].try_into().unwrap(),
 			}
 		};
 		let amount = 5_000;
@@ -525,7 +537,7 @@ fn can_egress_ccm() {
 			destination_asset,
 			amount,
 			destination_address,
-			Some(ccm.clone())
+			Some((ccm.clone(), gas_budget))
 		);
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test>::get().is_empty());
@@ -536,9 +548,10 @@ fn can_egress_ccm() {
 				amount,
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
-				cf_parameters: vec![],
+				cf_parameters: vec![].try_into().unwrap(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+				gas_budget,
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -563,7 +576,8 @@ fn can_egress_ccm() {
 			},
 			ccm.source_chain,
 			ccm.source_address,
-			ccm.channel_metadata.message,
+			gas_budget,
+			ccm.channel_metadata.message.to_vec(),
 		).unwrap()]);
 
 		// Storage should be cleared
@@ -591,7 +605,7 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		.then_execute_at_next_block(|(_, deposit_address)| {
 			// Closing the channel should invalidate the deposit address.
-			IngressEgress::close_channel(deposit_address);
+			IngressEgress::expire_channel(deposit_address);
 			assert_noop!(
 				IngressEgress::process_deposits(
 					RuntimeOrigin::root(),
@@ -881,8 +895,7 @@ fn channel_reuse_with_different_assets() {
 			);
 		})
 		.then_execute_at_next_block(|(_, channel_id, channel_address)| {
-			// Close the channel.
-			IngressEgress::close_channel(channel_address);
+			IngressEgress::expire_channel(channel_address);
 			channel_id
 		})
 		.inspect_storage(|channel_id| {

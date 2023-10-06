@@ -1,3 +1,22 @@
+//! This code implements a single liquidity pool pair, that allows LPs to specify particular prices
+//! at with they want to sell one of the two assets in the pair. The price an LP wants to sell at
+//! is specified using `Tick`s.
+//!
+//! This type of pool doesn't do automated market making, as in the price of the pool is purely
+//! determined be the best priced position currently in the pool.
+//!
+//! Swaps in this pool will execute on the best priced positions first. Note if two positions
+//! have the same price, both positions will be partially executed, and neither will receive
+//! "priority" regardless of when they were created, i.e. an equal percentage of all positions at
+//! the same price will be executed. So larger positions will earn more fees (and the absolute
+//! amount of the position that is executed will be greater, but the same percentage-wise) as they
+//! contribute more to the swap.
+//!
+//! To track fees earned and remaining liquidity in each position, the pool records the big product
+//! of the "percent_remaining" of each swap. Using two of these values you can calculate the
+//! percentage of liquidity swapped in a position between the two points in time at which those
+//! percent_remaining values were recorded.
+
 #[cfg(test)]
 mod tests;
 
@@ -16,17 +35,35 @@ use crate::common::{
 	ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
-const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
+// This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
+// LP attempts to add more liquidity that would increase the total at the tick past this value, the
+// minting operation will error. Note this maximum is for all lps combined, and not a single lp,
+// therefore it is possible for an LP to "consume" a tick by filling it up to the maximum, and
+// thereby not allowing other LPs to mint at that price (But the maximum is high enough that this is
+// not feasible).
+const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
 
 /// Represents a number exclusively between 0 and 1.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Default))]
 struct FloatBetweenZeroAndOne {
+	/// A fixed point number where the msb has a value of `0.5`,
+	/// therefore it cannot represent 1.0, only numbers inside
+	/// `0.0..1.0`, although note the mantissa will never be zero, and
+	/// this is enforced by the public functions of the type. We also
+	/// enforce that the top bit of the mantissa is always set, i.e.
+	/// the float point number is `normalised`. Therefore the mantissa
+	/// always has a value between `0.5..1.0`.
 	normalised_mantissa: U256,
+	/// As we are only interested in representing real numbers below 1,
+	/// the exponent is either 0 or negative.                                   
 	negative_exponent: U256,
 }
 impl Ord for FloatBetweenZeroAndOne {
 	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		// Because the float is normalised we can get away with comparing only the exponents (unless
+		// they are the same). Also note the exponent comparison is reversed, as the exponent is
+		// implicitly negative.
 		other
 			.negative_exponent
 			.cmp(&self.negative_exponent)
@@ -39,13 +76,14 @@ impl PartialOrd for FloatBetweenZeroAndOne {
 	}
 }
 impl FloatBetweenZeroAndOne {
-	/// Returns the largest possible value.
+	/// Returns the largest possible value i.e. `1.0 - (2^-256)`.
 	fn max() -> Self {
 		Self { normalised_mantissa: U256::max_value(), negative_exponent: U256::zero() }
 	}
 
 	/// Rights shifts x by shift_bits bits, returning the result and the bits that were shifted
-	/// out/remainder.
+	/// out/the remainder. You can think of this as a div_mod, but we are always dividing by powers
+	/// of 2.
 	fn right_shift_mod(x: U512, shift_bits: U256) -> (U512, U512) {
 		if shift_bits >= U256::from(512) {
 			(U512::zero(), x)
@@ -56,6 +94,8 @@ impl FloatBetweenZeroAndOne {
 	}
 
 	/// Returns the result of `self * numerator / denominator` with the result rounded up.
+	///
+	/// This function will panic if the numerator is zero, or if numerator > denominator
 	fn mul_div_ceil(&self, numerator: U256, denominator: U256) -> Self {
 		// We cannot use the `mul_div_ceil` function here (and then right-shift the result) to
 		// calculate the normalised_mantissa as the low zero bits (where we shifted) could be wrong.
@@ -64,6 +104,8 @@ impl FloatBetweenZeroAndOne {
 		assert!(numerator <= denominator);
 		self.assert_valid();
 
+		// We do the mul first to avoid losing precision as in the division bits will possibly get
+		// shifted off the "bottom" of the mantissa.
 		let (mul_normalised_mantissa, mul_normalise_shift) = {
 			let unnormalised_mantissa = U256::full_mul(self.normalised_mantissa, numerator);
 			let normalize_shift = unnormalised_mantissa.leading_zeros();
@@ -75,11 +117,13 @@ impl FloatBetweenZeroAndOne {
 
 		let (mul_div_normalised_mantissa, div_normalise_shift) = {
 			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than
-			// 256 bits, so we maintain atleast 256 accurate bits in the result.
+			// 256 bits, so we maintain at least 256 accurate bits in the result.
 			let (d, div_remainder) =
-				U512::div_mod(mul_normalised_mantissa, U512::from(denominator));
+				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has atleast one bit
+																 // set above the 256th bit.
 			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
 			let normalise_shift = d.leading_zeros();
+			// We right shift and use the lower 256 bits for the mantissa
 			let shift_bits = 256 - normalise_shift;
 			let (d, shift_remainder) = Self::right_shift_mod(d, shift_bits.into());
 			let d = U256::try_from(d).unwrap();
@@ -96,16 +140,18 @@ impl FloatBetweenZeroAndOne {
 			Self { normalised_mantissa: mul_div_normalised_mantissa, negative_exponent }
 		} else {
 			// This bounding will cause swaps to get bad prices, but this case will effectively
-			// never happen, as atleast (U256::MAX / 256) (~10^74) swaps would have to happen to get
-			// into this situation. TODO: A possible solution is disabling minting for pools "close"
-			// to this minimum. With a small change to the swapping logic it would be possible to
-			// guarantee that the pool would be emptied before percent_remaining could reach this
-			// min bound.
+			// never happen, as at least (U256::MAX / 256) (~10^74) swaps would have to happen to
+			// get into this situation. TODO: A possible solution is disabling minting for pools
+			// "close" to this minimum. With a small change to the swapping logic it would be
+			// possible to guarantee that the pool would be emptied before percent_remaining could
+			// reach this min bound.
 			Self { normalised_mantissa: U256::one() << 255, negative_exponent: U256::MAX }
 		}
 	}
 
-	/// Returns both floor and ceil of `x * numerator / denominator`
+	/// Returns both floor and ceil of `y = x * numerator / denominator`.
+	///
+	/// This will panic if the numerator is more than the denominator.
 	fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> (U256, U256) {
 		// Note this does not imply numerator.normalised_mantissa <= denominator.normalised_mantissa
 		assert!(numerator <= denominator);
@@ -117,19 +163,21 @@ impl FloatBetweenZeroAndOne {
 			denominator.normalised_mantissa.into(),
 		);
 
+		// Unwrap safe as numerator is smaller than denominator, so its negative_exponent must be
+		// greater than or equal to the denominator's
 		let negative_exponent =
 			numerator.negative_exponent.checked_sub(denominator.negative_exponent).unwrap();
 
 		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
 
-		let y_floor = y_floor.try_into().unwrap();
+		let y_floor = y_floor.try_into().unwrap(); // Unwrap safe as numerator <= demoninator and therefore y cannot be greater than x
 
 		(
 			y_floor,
 			if div_remainder.is_zero() && shift_remainder.is_zero() {
 				y_floor
 			} else {
-				y_floor + 1
+				y_floor + 1 // Safe as for there to be a remainder y_floor must be atleast 1 less than x
 			},
 		)
 	}
@@ -206,6 +254,14 @@ pub enum SetFeesError {
 }
 
 #[derive(Debug)]
+pub enum DepthError {
+	/// Invalid Price
+	InvalidTick,
+	/// Start tick must be less than or equal to the end tick
+	InvalidTickRange,
+}
+
+#[derive(Debug)]
 pub enum MintError {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumLiquidity,
@@ -239,12 +295,16 @@ pub enum CollectError {}
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Collected {
+	/// The amount of fees earned by this position since the last collect.
 	pub fees: Amount,
+	/// The amount of assets purchased by the LP using the liquidity in this position since the
+	/// last collect.
 	pub bought_amount: Amount,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct PositionInfo {
+	/// The amount of liquidity in the position after the operation.
 	pub amount: Amount,
 }
 impl PositionInfo {
@@ -258,30 +318,68 @@ impl<'a> From<&'a Position> for PositionInfo {
 	}
 }
 
+/// Represents a single LP position
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct Position {
+	/// Used to identify when the position was created and thereby determine if all the liquidity
+	/// in the position has been used or not. As once all the liquidity at a tick has been used,
+	/// the internal record of that tick/fixed pool is deleted, and if liquidity is added back
+	/// later the record will have a different pool_instance. Therefore a position can tell if all
+	/// its liquidity has been used, by seeing if there is not a fixed pool at the same tick, or if
+	/// that fixed pool has a different pool_instance.
 	pool_instance: u128,
+	/// The total amount of liquidity provided by this position as of the last operation on the
+	/// position. I.e. This value is not updated when swaps occur, only when the LP updates their
+	/// position in some way.
 	amount: Amount,
+	/// This value is used in combination with the FixedPool's `percent_remaining` to determine how
+	/// much liquidity/amount is remaining in a position when an LP does a collect/update of the
+	/// position. It is the percent_remaining of the FixedPool when the position was last
+	/// updated/collected from.
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
+/// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
+/// single fixed pool will contain the liquidity/assets for all limit orders at that specific price.
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub(super) struct FixedPool {
+	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
+	/// used, a new value for pool_instance is used, and the previously used value will never be
+	/// used again. This is used to determine whether a position was created during the current
+	/// FixedPool's lifetime and therefore that FixedPool's `percent_remaining` is meaningful for
+	/// the position, or if the position was created before the current FixedPool's lifetime.
 	pool_instance: u128,
+	/// This is the total liquidity/amount available for swaps at this price. This value is greater
+	/// than or equal to the amount provided currently by all positions at the same tick. It is not
+	/// always equal due to rounding, and therefore it is possible for a FixedPool to have no
+	/// associated position but have some liquidity available, but this would likely be a very
+	/// small amount.
 	available: Amount,
+	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have occured
+	/// since this FixedPool instance was created and used liquidity from it.
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub(super) struct PoolState<LiquidityProvider> {
+	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
+	/// I.e. 5000 means 0.5%.
 	pub(super) fee_hundredth_pips: u32,
+	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
+	/// All the FixedPools that have some liquidity. They are grouped into all those that are
+	/// selling asset `Zero` and all those that are selling asset `one` used the SideMap.
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+	/// All the Positions that either are providing liquidity currently, or were providing
+	/// liquidity directly after the last time they where updated. They are grouped into all those
+	/// that are selling asset `Zero` and all those that are selling asset `one` used the SideMap.
+	/// Therefore there can be positions stored here that don't provide any liquidity.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
-	/// Creates a new pool state with the given fee. The pool is created with no liquidity.
+	/// Creates a new pool state with the given fee. The pool is created with no liquidity. The pool
+	/// may not be created with a fee higher than 50%.
 	///
 	/// This function never panics.
 	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
@@ -297,8 +395,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
-	/// Sets the fee for the pool. This will apply to future swaps. This function will fail if the
-	/// fee is greater than 50%. Also runs collect for all positions in the pool.
+	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
+	/// higher than 50%. Also runs collect for all positions in the pool.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
@@ -348,7 +446,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok(SideMap::from_array(collected_amounts))
 	}
 
-	/// Returns the current price of the pool, if some liquidity exists.
+	/// Returns the current price of the pool for a given swap direction, if some liquidity exists.
 	///
 	/// This function never panics.
 	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
@@ -729,11 +827,31 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns all the assets available for swaps in a given direction
 	///
 	/// This function never panics.
-	#[allow(dead_code)]
 	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
 		self.fixed_pools[!SD::INPUT_SIDE]
 			.iter()
 			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
 			.collect()
+	}
+
+	/// Returns all the assets available for swaps between two prices (inclusive..exclusive)
+	///
+	/// This function never panics.
+	pub(super) fn depth<SD: SwapDirection>(
+		&self,
+		range: core::ops::Range<Tick>,
+	) -> Result<Amount, DepthError> {
+		let start =
+			Self::validate_tick::<Infallible>(range.start).map_err(|_| DepthError::InvalidTick)?;
+		let end =
+			Self::validate_tick::<Infallible>(range.end).map_err(|_| DepthError::InvalidTick)?;
+		if start <= end {
+			Ok(self.fixed_pools[!SD::INPUT_SIDE]
+				.range(start..end)
+				.map(|(_, fixed_pool)| fixed_pool.available)
+				.fold(Default::default(), |acc, x| acc + x))
+		} else {
+			Err(DepthError::InvalidTickRange)
+		}
 	}
 }

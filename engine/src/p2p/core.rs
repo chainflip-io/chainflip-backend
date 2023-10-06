@@ -17,7 +17,12 @@ use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use utilities::Port;
+use utilities::{
+	metrics::{
+		P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
+	},
+	Port,
+};
 use x25519_dalek::StaticSecret;
 
 use crate::p2p::{pk_to_string, OutgoingMultisigStageMessages};
@@ -88,8 +93,7 @@ impl std::fmt::Display for PeerInfo {
 enum RegistrationStatus {
 	/// The node is not yet known to the network (its peer info
 	/// may not be known to the network yet)
-	/// (Stores future peers to connect to when then node is registered)
-	Pending(Vec<PeerInfo>),
+	Pending,
 	/// The node is registered, i.e. its peer info has been
 	/// recorded/updated
 	Registered,
@@ -151,7 +155,7 @@ impl ReconnectContext {
 		let delay = self.get_delay_for(&account_id);
 
 		tracing::debug!("Will reconnect to {} in {:?}", account_id, delay);
-
+		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len());
 		tokio::spawn({
 			let sender = self.reconnect_sender.clone();
 			async move {
@@ -161,10 +165,52 @@ impl ReconnectContext {
 		});
 	}
 
+	// NOTE: we might already have a reconnection scheduled for
+	// this (e.g. if we reset/cancel reconnection due to receiving
+	// new peer info), but instead of trying to cancel it now, we
+	// rely on the fact that we ignore any reconnection attempts
+	// for peers not in `ReconnectionScheduled` state.
 	fn reset(&mut self, account_id: &AccountId) {
 		if self.reconnect_delays.remove(account_id).is_some() {
 			tracing::debug!("Reconnection delay for {} is reset", account_id);
 		}
+		P2P_RECONNECT_PEERS.set(self.reconnect_delays.len());
+	}
+}
+
+enum ConnectionState {
+	// There is a ZMQ socket for this peer (which might or might
+	// not be connected, but reconnection is handled by ZMQ).
+	Connected(ConnectedOutgoingSocket),
+	// There is no ZMQ socket for this peer (because we don't
+	// want ZMQ's default behavior yet), but we have arranged
+	// for a ZMQ socket to be created again in the future.
+	ReconnectionScheduled,
+}
+
+struct ActiveConnectionWrapper {
+	metric: &'static P2P_ACTIVE_CONNECTIONS,
+	/// NOTE: The mapping is from AccountId because we want to optimise for message
+	/// sending, which uses AccountId
+	map: BTreeMap<AccountId, ConnectionState>,
+}
+
+impl ActiveConnectionWrapper {
+	fn new() -> ActiveConnectionWrapper {
+		ActiveConnectionWrapper { metric: &P2P_ACTIVE_CONNECTIONS, map: Default::default() }
+	}
+	fn get(&self, account_id: &AccountId) -> Option<&ConnectionState> {
+		self.map.get(account_id)
+	}
+	fn insert(&mut self, key: AccountId, value: ConnectionState) -> Option<ConnectionState> {
+		let result = self.map.insert(key, value);
+		self.metric.set(self.map.len());
+		result
+	}
+	fn remove(&mut self, key: &AccountId) -> Option<ConnectionState> {
+		let result = self.map.remove(key);
+		self.metric.set(self.map.len());
+		result
 	}
 }
 
@@ -175,9 +221,9 @@ struct P2PContext {
 	/// A handle to the authenticator thread that can be used to make changes to the
 	/// list of allowed peers
 	authenticator: Arc<Authenticator>,
-	/// NOTE: The mapping is from AccountId because we want to optimise for message
-	/// sending, which uses AccountId
-	active_connections: BTreeMap<AccountId, ConnectedOutgoingSocket>,
+	/// Contain entries for all nodes that we *should* be connected to (i.e. all registered
+	/// nodes), which are either connected or scheduled for reconnection
+	active_connections: ActiveConnectionWrapper,
 	/// NOTE: this is used for incoming messages when we want to map them to account_id
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
@@ -236,14 +282,14 @@ pub(super) fn start(
 		key: p2p_key.encryption_key.clone(),
 		monitor_handle,
 		authenticator,
-		active_connections: Default::default(),
+		active_connections: ActiveConnectionWrapper::new(),
 		x25519_to_account_id: Default::default(),
 		peer_infos: Default::default(),
 		reconnect_context: ReconnectContext::new(reconnect_sender),
 		incoming_message_sender,
 		own_peer_info_sender,
 		our_account_id,
-		status: RegistrationStatus::Pending(vec![]),
+		status: RegistrationStatus::Pending,
 	};
 
 	debug!("Registering peer info for {} peers", current_peers.len());
@@ -267,6 +313,10 @@ pub(super) fn start(
 		.instrument(info_span!("p2p"));
 
 	(out_msg_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, fut)
+}
+
+fn disconnect_socket(_socket: ConnectedOutgoingSocket) {
+	// Simply dropping the socket is enough
 }
 
 impl P2PContext {
@@ -320,8 +370,13 @@ impl P2PContext {
 
 	fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
 		match self.active_connections.get(&account_id) {
-			Some(socket) => {
+			Some(ConnectionState::Connected(socket)) => {
 				socket.send(payload);
+				P2P_MSG_SENT.inc();
+			},
+			Some(ConnectionState::ReconnectionScheduled) => {
+				// TODO: buffer the messages and send them later?
+				warn!("Failed to send message. Peer is scheduled for reconnection: {account_id}");
 			},
 			None => {
 				warn!("Failed to send message. Peer not registered: {account_id}")
@@ -332,7 +387,8 @@ impl P2PContext {
 	fn on_peer_update(&mut self, update: PeerUpdate) {
 		match update {
 			PeerUpdate::Registered(peer_info) => self.handle_peer_update(peer_info),
-			PeerUpdate::Deregistered(account_id, _pubkey) => self.remove_peer(account_id),
+			PeerUpdate::Deregistered(account_id, _pubkey) =>
+				self.handle_peer_deregistration(account_id),
 		}
 	}
 
@@ -341,23 +397,23 @@ impl P2PContext {
 			trace!("Received a message from {acc_id}");
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
+			P2P_BAD_MSG.inc(&["unknown_x25519_key"]);
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
 		}
 	}
 
-	fn remove_peer_and_disconnect_socket(&mut self, socket: ConnectedOutgoingSocket) {
-		let pubkey = &socket.peer().pubkey;
+	fn clean_up_for_peer_pubkey(&mut self, pubkey: &XPublicKey) {
 		self.authenticator.remove_peer(pubkey);
-		assert!(
-			self.x25519_to_account_id.remove(pubkey).is_some(),
-			"Invariant violation: pubkey must be present"
-		);
+		if self.x25519_to_account_id.remove(pubkey).is_none() {
+			error!("Invariant violation: pubkey must be present");
+			debug_assert!(false, "Invariant violation: pubkey must be present");
+		}
 	}
 
 	/// Removing a peer means: (1) removing it from the list of allowed nodes,
 	/// (2) disconnecting our "client" socket with that node, (3) removing
 	/// any references to it in local state (mappings)
-	fn remove_peer(&mut self, account_id: AccountId) {
+	fn handle_peer_deregistration(&mut self, account_id: AccountId) {
 		// NOTE: There is no (trivial) way to disconnect peers that are
 		// already connected to our listening ZMQ socket, we can only
 		// prevent future connections from being established and rely
@@ -365,12 +421,21 @@ impl P2PContext {
 		// TODO: ensure that stale/inactive connections are terminated
 
 		if let Some(existing_socket) = self.active_connections.remove(&account_id) {
-			self.remove_peer_and_disconnect_socket(existing_socket);
+			match existing_socket {
+				ConnectionState::Connected(existing_socket) => {
+					disconnect_socket(existing_socket);
+				},
+				ConnectionState::ReconnectionScheduled => {
+					self.reconnect_context.reset(&account_id);
+				},
+			}
 		} else {
 			error!("Failed remove unknown peer: {account_id}");
 		}
 
-		if self.peer_infos.remove(&account_id).is_none() {
+		if let Some(existing_info) = self.peer_infos.remove(&account_id) {
+			self.clean_up_for_peer_pubkey(&existing_info.pubkey);
+		} else {
 			error!("Failed to remove peer info for unknown peer: {account_id}");
 		}
 
@@ -383,14 +448,16 @@ impl P2PContext {
 	fn handle_monitor_event(&mut self, event: MonitorEvent) {
 		match event {
 			MonitorEvent::ConnectionFailure(account_id) => {
-				let Some(_existing_socket) = self.active_connections.remove(&account_id) else {
+				self.reconnect_context.schedule_reconnect(account_id.clone());
+				if self
+					.active_connections
+					.insert(account_id.clone(), ConnectionState::ReconnectionScheduled)
+					.is_none()
+				{
 					// NOTE: this should not happen, but this guards against any surprising ZMQ
 					// behaviour
-					error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
-					return
+					error!("Unexpected attempt to reconnect to an unknown peer: {account_id}");
 				};
-
-				self.reconnect_context.schedule_reconnect(account_id);
 			},
 			MonitorEvent::ConnectionSuccess(account_id) => {
 				self.reconnect_context.reset(&account_id);
@@ -400,8 +467,28 @@ impl P2PContext {
 
 	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
 		if let Some(peer_info) = self.peer_infos.get(account_id) {
-			info!("Reconnecting to peer: {}", peer_info.account_id);
-			self.connect_to_peer(peer_info.clone());
+			match self.active_connections.remove(account_id) {
+				Some(ConnectionState::ReconnectionScheduled) => {
+					info!("Reconnecting to peer: {}", account_id);
+					self.connect_to_peer(peer_info.clone());
+				},
+				Some(ConnectionState::Connected(_)) => {
+					// It is possible that while we were waiting to reconnect,
+					// we received a peer info update and created a new "connection".
+					// It is safe to drop the reconnection attempt even if this
+					// ZMQ connection is not "healthy" since reconnecting
+					// is now in ZMQ's hands, and it shouldn't be possible that we
+					// have missed any new `ConnectionFailure` event since we wouldn't
+					// be in `Connected` state now.
+					debug!(
+						"Reconnection attempt to {} cancelled: ZMQ socket already exists.",
+						account_id
+					);
+				},
+				None => {
+					debug!("Will not reconnect to now deregistered peer: {}", account_id);
+				},
+			}
 		} else {
 			error!("Failed to reconnect to peer {account_id}. (Peer info not found.)");
 		}
@@ -416,7 +503,17 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer);
 
-		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
+		if self
+			.active_connections
+			.insert(account_id.clone(), ConnectionState::Connected(connected_socket))
+			.is_some()
+		{
+			// This should not happen because we always remove existing connection/socket
+			// prior to connecting, but even if it does, it should be OK to replace the
+			// connection (this doesn't break any invariants and the new peer info is
+			// likely to be more up-to-date).
+			error!("Unexpected existing connection while connecting to {account_id}");
+		}
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
@@ -424,8 +521,8 @@ impl P2PContext {
 
 		self.own_peer_info_sender.send(own_info).unwrap();
 
-		if let RegistrationStatus::Pending(peers) = &mut self.status {
-			let peers = std::mem::take(peers);
+		if let RegistrationStatus::Pending = &mut self.status {
+			let peers: Vec<_> = self.peer_infos.values().cloned().collect();
 			// Connect to all outstanding peers
 			for peer in peers {
 				self.connect_to_peer(peer)
@@ -435,20 +532,32 @@ impl P2PContext {
 	}
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
-		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
+		if let Some(existing_state) = self.active_connections.remove(&peer.account_id) {
 			debug!(
 				peer_info = peer.to_string(),
 				"Received info for known peer with account id {}, updating info and reconnecting",
 				&peer.account_id
 			);
 
-			self.remove_peer_and_disconnect_socket(existing_socket);
+			match existing_state {
+				ConnectionState::Connected(socket) => {
+					disconnect_socket(socket);
+				},
+				ConnectionState::ReconnectionScheduled => {
+					self.reconnect_context.reset(&peer.account_id);
+				},
+			}
 		} else {
 			debug!(
 				peer_info = peer.to_string(),
 				"Received info for new peer with account id {}, adding to allowed peers and id mapping",
 				&peer.account_id
 			);
+		}
+
+		// Remove any state from previous peer info in case of update:
+		if let Some(existing_info) = self.peer_infos.remove(&peer.account_id) {
+			self.clean_up_for_peer_pubkey(&existing_info.pubkey);
 		}
 
 		self.authenticator.add_peer(&peer);
@@ -458,10 +567,10 @@ impl P2PContext {
 		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
 		match &mut self.status {
-			RegistrationStatus::Pending(peers) => {
-				// Not ready to start connecting to peers yet
+			RegistrationStatus::Pending => {
+				// We will connect to all peers in `self.peer_infos` once we receive our own
+				// registration
 				info!("Delaying connecting to {}", peer.account_id);
-				peers.push(peer);
 			},
 			RegistrationStatus::Registered => {
 				self.connect_to_peer(peer);
@@ -500,7 +609,7 @@ impl P2PContext {
 		// TODO: combine this with the authentication thread?
 		std::thread::spawn(move || loop {
 			let mut parts = receive_multipart(&socket).unwrap();
-
+			P2P_MSG_RECEIVED.inc();
 			// We require that all messages exchanged between
 			// peers only consist of one part. ZMQ dealer
 			// sockets automatically prepend a sender id
@@ -519,6 +628,7 @@ impl P2PContext {
 
 				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
 			} else {
+				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 				warn!(
 					"Ignoring a multipart message with unexpected number of parts ({})",
 					parts.len()

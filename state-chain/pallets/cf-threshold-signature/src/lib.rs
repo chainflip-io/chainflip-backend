@@ -25,6 +25,7 @@ use cf_traits::{
 	EpochKey, KeyProvider, ThresholdSignerNomination,
 };
 
+use cf_runtime_utilities::log_or_panic;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
@@ -842,11 +843,19 @@ where
 		participants: BTreeSet<Self::ValidatorId>,
 		key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		epoch_index: EpochIndex,
+		on_signature_ready: impl FnOnce(cf_primitives::ThresholdSignatureRequestId) -> Self::Callback,
 	) -> RequestId {
-		Self::inner_request_signature(
+		let request_id = Self::inner_request_signature(
 			payload,
 			RequestType::KeygenVerification { key, participants, epoch_index },
-		)
+		);
+
+		if Self::register_callback(request_id, on_signature_ready(request_id)).is_err() {
+			// We should never fail to register a callback for a request that we just created.
+			log_or_panic!("Failed to register callback for request {}", request_id);
+		}
+
+		request_id
 	}
 
 	fn register_callback(

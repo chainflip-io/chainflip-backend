@@ -12,7 +12,11 @@ async function main(): Promise<void> {
   console.log('Requesting ETH deposit address');
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
   const ethIngressKey = (
-    await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip)
+    await observeEvent(
+      'liquidityProvider:LiquidityDepositAddressReady',
+      chainflip,
+      (event) => event.data.depositAddress.Eth,
+    )
   ).data.depositAddress.Eth as string;
   console.log(`Found ETH address: ${ethIngressKey}`);
 

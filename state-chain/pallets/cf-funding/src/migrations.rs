@@ -1,4 +1,5 @@
 pub mod v1;
+pub mod v2;
 
 use cf_runtime_upgrade_utilities::VersionedMigration;
 

@@ -1,6 +1,6 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
-use cf_chains::{CcmDepositMetadata, Chain};
+use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -23,8 +23,9 @@ pub enum MockEgressParameter<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		message: Vec<u8>,
-		cf_parameters: Vec<u8>,
+		message: CcmMessage,
+		cf_parameters: CcmCfParameters,
+		gas_budget: C::ChainAmount,
 	},
 }
 
@@ -60,20 +61,21 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
-		maybe_message: Option<CcmDepositMetadata>,
+		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
 	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {
 				*storage = Some(vec![]);
 			}
 			storage.as_mut().map(|v| {
-				v.push(match maybe_message {
-					Some(message) => MockEgressParameter::<C>::Ccm {
+				v.push(match maybe_ccm_with_gas_budget {
+					Some((message, gas_budget)) => MockEgressParameter::<C>::Ccm {
 						asset,
 						amount,
 						destination_address,
 						message: message.channel_metadata.message,
 						cf_parameters: message.channel_metadata.cf_parameters,
+						gas_budget,
 					},
 					None => MockEgressParameter::<C>::Swap { asset, amount, destination_address },
 				});

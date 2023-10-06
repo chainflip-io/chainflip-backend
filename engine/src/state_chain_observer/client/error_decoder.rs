@@ -94,7 +94,7 @@ impl ErrorDecoder {
 	}
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum DispatchError {
 	#[error("{0:?}")]
 	DispatchError(sp_runtime::DispatchError),

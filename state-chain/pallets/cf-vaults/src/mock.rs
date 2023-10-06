@@ -13,7 +13,8 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, GetBlockHeight,
+	mocks::{block_height_provider::BlockHeightProvider, threshold_signer::MockThresholdSigner},
+	AccountRoleRegistry,
 };
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
@@ -197,16 +198,6 @@ impl Slashing for MockSlasher {
 	}
 }
 
-pub struct BlockHeightProvider;
-
-pub const HANDOVER_ACTIVATION_BLOCK: u64 = 1337;
-
-impl GetBlockHeight<MockEthereum> for BlockHeightProvider {
-	fn get_block_height() -> u64 {
-		HANDOVER_ACTIVATION_BLOCK
-	}
-}
-
 impl_mock_runtime_safe_mode! { vault: PalletSafeMode }
 
 impl pallet_cf_vaults::Config for Test {
@@ -222,7 +213,7 @@ impl pallet_cf_vaults::Config for Test {
 	type Broadcaster = MockBroadcaster;
 	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
-	type ChainTracking = BlockHeightProvider;
+	type ChainTracking = BlockHeightProvider<MockEthereum>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

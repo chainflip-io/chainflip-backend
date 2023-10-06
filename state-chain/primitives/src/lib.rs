@@ -170,6 +170,13 @@ impl SemVer {
 	pub fn is_compatible_with(&self, target: SemVer) -> bool {
 		self.major == target.major && self.minor == target.minor
 	}
+
+	pub fn is_more_recent_than(&self, other: SemVer) -> bool {
+		// This is wrapped into a function to guard against us
+		// accidentally reordering the fields, for example (which
+		// would be caught by tests).
+		self > &other
+	}
 }
 
 /// The network environment, used to determine which chains the Chainflip network is connected to.
@@ -195,4 +202,27 @@ impl core::fmt::Display for NetworkEnvironment {
 			NetworkEnvironment::Development => write!(f, "Development"),
 		}
 	}
+}
+
+#[test]
+fn is_more_recent_semver() {
+	fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
+		SemVer { major, minor, patch }
+	}
+
+	fn ensure_left_is_more_recent(left: SemVer, right: SemVer) {
+		assert!(left.is_more_recent_than(right));
+		// Additionally check that the inverse is false:
+		assert!(!right.is_more_recent_than(left));
+	}
+
+	assert!(!ver(0, 1, 0).is_more_recent_than(ver(0, 1, 0)));
+
+	ensure_left_is_more_recent(ver(0, 0, 2), ver(0, 0, 1));
+	ensure_left_is_more_recent(ver(0, 1, 0), ver(0, 0, 2));
+	ensure_left_is_more_recent(ver(0, 1, 1), ver(0, 1, 0));
+	ensure_left_is_more_recent(ver(0, 1, 2), ver(0, 1, 1));
+	ensure_left_is_more_recent(ver(0, 2, 0), ver(0, 1, 0));
+	ensure_left_is_more_recent(ver(1, 0, 0), ver(0, 2, 2));
+	ensure_left_is_more_recent(ver(1, 1, 0), ver(1, 0, 2));
 }

@@ -9,7 +9,7 @@ pub use cf_amm::{
 use cf_chains::address::EncodedAddress;
 use cf_primitives::{Asset, AssetAmount, EgressId};
 use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
 use pallet_cf_pools::{AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderSize};
@@ -99,15 +99,15 @@ impl LpApi for StateChainClient {}
 
 #[async_trait]
 pub trait LpApi: SignedExtrinsicApi {
-	async fn register_emergency_withdrawal_address(&self, address: EncodedAddress) -> Result<H256> {
+	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
-				pallet_cf_lp::Call::register_emergency_withdrawal_address { address },
+				pallet_cf_lp::Call::register_liquidity_refund_address { address },
 			))
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await
-			.context("Registration for Emergency Withdrawal address failed.")?;
+			.context("Registration for Liquidity Refund Address failed.")?;
 		Ok(tx_hash)
 	}
 
@@ -117,7 +117,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				asset,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(events
@@ -144,7 +144,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				destination_address,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(events
@@ -178,7 +178,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				size,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(collect_range_order_returns(events))
@@ -202,7 +202,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				size,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(collect_range_order_returns(events))
@@ -228,7 +228,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				amount,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(collect_limit_order_returns(events))
@@ -252,7 +252,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				sell_amount,
 			})
 			.await
-			.until_finalized()
+			.until_in_block()
 			.await?;
 
 		Ok(collect_limit_order_returns(events))

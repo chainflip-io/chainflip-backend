@@ -63,7 +63,7 @@ pub type KeyHandoverResponseStatus<T, I> =
 impl_pallet_safe_mode!(PalletSafeMode; slashing_enabled);
 
 /// The current status of a vault rotation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant)]
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
@@ -891,15 +891,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			participants,
 			new_agg_key,
 			next_epoch,
+			signature_callback_fn,
 		);
-
-		T::ThresholdSigner::register_callback(request_id, signature_callback_fn(request_id))
-			.unwrap_or_else(|e| {
-				log::error!(
-				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
-				e.into()
-			);
-			});
 
 		PendingVaultRotation::<T, I>::put(status_to_set);
 
