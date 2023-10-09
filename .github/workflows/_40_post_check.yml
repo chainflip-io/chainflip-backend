@@ -70,6 +70,7 @@ jobs:
           BINARY_ROOT_PATH: .
         run: |
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
+          touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
