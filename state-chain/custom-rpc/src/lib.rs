@@ -2,8 +2,10 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
-use cf_primitives::{Asset, AssetAmount, SemVer, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
+};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
 use core::ops::Range;
 use jsonrpsee::{
 	core::RpcResult,
@@ -23,7 +25,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -85,6 +87,12 @@ impl From<SwapOutput> for RpcSwapOutput {
 			output: NumberOrHex::from(swap_output.output),
 		}
 	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcLiquidityProviderInfo {
+	balances: HashMap<ForeignChain, HashMap<Asset, AssetAmount>>,
+	refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddress>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -162,12 +170,6 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, String)>>;
-	#[method(name = "account_info")]
-	fn cf_account_info(
-		&self,
-		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcAccountInfo>;
 	#[method(name = "account_info_v2")]
 	fn cf_account_info_v2(
 		&self,
@@ -271,6 +273,12 @@ pub trait CustomApi {
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>>;
+	#[method(name = "liquidity_provider_info")]
+	fn cf_liquidity_provider_info(
+		&self,
+		lp: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcLiquidityProviderInfo>;
 }
 
 /// An RPC extension for the state chain node.
@@ -439,28 +447,6 @@ where
 				(account_id, String::from_utf8_lossy(&vanity_name_bytes).into_owned())
 			})
 			.collect())
-	}
-	fn cf_account_info(
-		&self,
-		account_id: state_chain_runtime::AccountId,
-		at: Option<<B as BlockT>::Hash>,
-	) -> RpcResult<RpcAccountInfo> {
-		let account_info = self
-			.client
-			.runtime_api()
-			.cf_account_info(self.unwrap_or_best(at), account_id)
-			.map_err(to_rpc_error)?;
-
-		Ok(RpcAccountInfo {
-			balance: account_info.balance.into(),
-			bond: account_info.bond.into(),
-			last_heartbeat: account_info.last_heartbeat,
-			is_live: account_info.is_live,
-			is_activated: account_info.is_activated,
-			online_credits: account_info.online_credits,
-			reputation_points: account_info.reputation_points,
-			state: account_info.state,
-		})
 	}
 	fn cf_account_info_v2(
 		&self,
@@ -697,6 +683,36 @@ where
 			.runtime_api()
 			.cf_min_swap_amount(self.unwrap_or_best(None), asset)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_liquidity_provider_info(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcLiquidityProviderInfo> {
+		let info = self
+			.client
+			.runtime_api()
+			.cf_liquidity_provider_info(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)?
+			.ok_or_else(|| {
+				jsonrpsee::core::Error::from(anyhow::anyhow!(
+					"Account does not hold liquidity provider role"
+				))
+			})?;
+
+		let mut balances = HashMap::new();
+
+		for (asset, balance) in info.balances {
+			let chain: ForeignChain = asset.into();
+			let sub_map = balances.entry(chain).or_insert_with(HashMap::new);
+			sub_map.insert(asset, balance);
+		}
+
+		Ok(RpcLiquidityProviderInfo {
+			balances,
+			refund_addresses: info.refund_addresses.into_iter().collect(),
+		})
 	}
 
 	fn cf_subscribe_pool_price(
