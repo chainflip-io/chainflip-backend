@@ -31,9 +31,9 @@ use state_chain_runtime::{
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 pub struct RpcAccountRole(pub AccountRole);
 
-impl Into<RpcAccountRole> for AccountRole {
-	fn into(self) -> RpcAccountRole {
-		RpcAccountRole(self)
+impl From<AccountRole> for RpcAccountRole {
+	fn from(role: AccountRole) -> Self {
+		Self(role)
 	}
 }
 
