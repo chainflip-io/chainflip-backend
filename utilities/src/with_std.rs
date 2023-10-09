@@ -358,7 +358,7 @@ pub async fn init_json_logger(
 		scope.spawn_weak(async move {
 			const PATH: &str = "tracing";
 			const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
-			let port: u16 = std::env::var("LOG_PORT").unwrap().parse::<u16>().unwrap();
+			const PORT: u16 = 36079;
 
 
 			let change_filter = warp::post()
