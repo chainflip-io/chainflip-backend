@@ -6,7 +6,9 @@ use cf_amm::{
 use cf_chains::{
 	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
 };
-use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
+};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
@@ -33,19 +35,7 @@ pub enum ChainflipAccountStateWithPassive {
 	BackupOrPassive(BackupOrPassive),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct RuntimeApiAccountInfo {
-	pub balance: u128,
-	pub bond: u128,
-	pub last_heartbeat: u32,
-	pub is_live: bool,
-	pub is_activated: bool,
-	pub online_credits: u32,
-	pub reputation_points: i32,
-	pub state: ChainflipAccountStateWithPassive,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
@@ -143,5 +133,6 @@ decl_runtime_apis!(
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
+		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 	}
 );

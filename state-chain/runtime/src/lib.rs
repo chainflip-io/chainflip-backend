@@ -1046,7 +1046,7 @@ impl_runtime_apis! {
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
 		) -> Option<LiquidityProviderInfo> {
-			let role = pallet_cf_account_roles::AccountRoles::<Runtime>::get(&account_id)?;
+			let role = Self::cf_account_role(account_id.clone())?;
 			if role != AccountRole::LiquidityProvider {
 				return None;
 			}
@@ -1063,6 +1063,10 @@ impl_runtime_apis! {
 				refund_addresses,
 				balances,
 			})
+		}
+
+		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&account_id)
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.

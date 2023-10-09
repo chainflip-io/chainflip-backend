@@ -3,9 +3,10 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
+	address::AddressConverter, btc::BitcoinNetwork, dot::PolkadotHash,
+	eth::Address as EthereumAddress,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
+use cf_primitives::{AccountRole, Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
 use core::ops::Range;
 use jsonrpsee::{
 	core::RpcResult,
@@ -17,11 +18,12 @@ use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
-	chainflip::Offence,
+	chainflip::{ChainAddressConverter, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
@@ -87,12 +89,6 @@ impl From<SwapOutput> for RpcSwapOutput {
 			output: NumberOrHex::from(swap_output.output),
 		}
 	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RpcLiquidityProviderInfo {
-	balances: HashMap<ForeignChain, HashMap<Asset, AssetAmount>>,
-	refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddress>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -170,6 +166,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(state_chain_runtime::AccountId, String)>>;
+	#[method(name = "account_info")]
+	fn cf_account_info(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<serde_json::Value>;
 	#[method(name = "account_info_v2")]
 	fn cf_account_info_v2(
 		&self,
@@ -273,12 +275,6 @@ pub trait CustomApi {
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>>;
-	#[method(name = "liquidity_provider_info")]
-	fn cf_liquidity_provider_info(
-		&self,
-		lp: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcLiquidityProviderInfo>;
 }
 
 /// An RPC extension for the state chain node.
@@ -448,6 +444,71 @@ where
 			})
 			.collect())
 	}
+
+	fn cf_account_info(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<serde_json::Value> {
+		let api = self.client.runtime_api();
+
+		Ok(
+			match api
+				.cf_account_role(self.unwrap_or_best(at), account_id.clone())
+				.map_err(to_rpc_error)?
+				.unwrap_or(AccountRole::None)
+			{
+				AccountRole::None => json!({ "role": null }),
+				AccountRole::Broker => json!({ "role": "broker" }),
+				AccountRole::LiquidityProvider => {
+					let info = api
+						.cf_liquidity_provider_info(self.unwrap_or_best(at), account_id)
+						.map_err(to_rpc_error)?
+						.expect("role already validated");
+
+					let mut balances: HashMap<ForeignChain, HashMap<Asset, AssetAmount>> =
+						Default::default();
+
+					for (asset, balance) in info.balances {
+						balances
+							.entry(asset.into())
+							.or_insert_with(HashMap::new)
+							.insert(asset, balance);
+					}
+
+					json!({
+						"role": "liquidity_provider",
+						"balances": balances,
+						"refund_addresses": info.refund_addresses.into_iter().map(|(chain, address)| {
+								match address {
+									Some(address) => {
+										let encoded_address = ChainAddressConverter::to_encoded_address(address);
+										(chain, json!(format!("{}", encoded_address)))
+									}
+									None => (chain, json!(null)),
+								}
+							})
+							.collect::<HashMap<ForeignChain, serde_json::Value>>(),
+					})
+				},
+				AccountRole::Validator => {
+					let info = api
+						.cf_account_info_v2(self.unwrap_or_best(at), account_id)
+						.map_err(to_rpc_error)?;
+
+					let mut info =
+						serde_json::to_value(info).expect("serializing this struct works");
+
+					info.as_object_mut()
+						.expect("serializing this struct returns an object")
+						.insert("role".to_string(), json!("validator"));
+
+					info
+				},
+			},
+		)
+	}
+
 	fn cf_account_info_v2(
 		&self,
 		account_id: state_chain_runtime::AccountId,
@@ -474,6 +535,7 @@ where
 			bound_redeem_address: account_info.bound_redeem_address,
 		})
 	}
+
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
@@ -683,34 +745,6 @@ where
 			.runtime_api()
 			.cf_min_swap_amount(self.unwrap_or_best(None), asset)
 			.map_err(to_rpc_error)
-	}
-
-	fn cf_liquidity_provider_info(
-		&self,
-		account_id: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcLiquidityProviderInfo> {
-		let info = self
-			.client
-			.runtime_api()
-			.cf_liquidity_provider_info(self.unwrap_or_best(at), account_id)
-			.map_err(to_rpc_error)?
-			.ok_or_else(|| {
-				jsonrpsee::core::Error::from(anyhow::anyhow!(
-					"Account does not hold liquidity provider role"
-				))
-			})?;
-
-		let mut balances = HashMap::new();
-
-		for (asset, balance) in info.balances {
-			balances.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, balance);
-		}
-
-		Ok(RpcLiquidityProviderInfo {
-			balances,
-			refund_addresses: info.refund_addresses.into_iter().collect(),
-		})
 	}
 
 	fn cf_subscribe_pool_price(
