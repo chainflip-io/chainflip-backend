@@ -4,6 +4,7 @@ use futures::{stream, Stream};
 use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
+use serde::Deserialize;
 use sp_rpc::number::NumberOrHex;
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{Filter, Reply};
@@ -22,6 +23,8 @@ pub mod serde_helpers;
 
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
+
+use crate::Port;
 
 /// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
 /// including context and source.
@@ -317,6 +320,12 @@ macro_rules! print_starting {
 	}
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct LoggingSettings {
+	pub span_lifecycle: bool,
+	pub command_server_port: Port,
+}
+
 /// Install a tracing subscriber that uses json formatting for the logs. The initial filtering
 /// directives can be set using the RUST_LOG environment variable, if it is not set the subscriber
 /// will default to INFO, meaning all INFO, WARN, or ERROR logs will be output, all the other logs
@@ -333,13 +342,12 @@ macro_rules! print_starting {
 ///
 /// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 pub async fn init_json_logger(
-	log_span_lifecycle: bool,
-	command_server_port: crate::Port,
+	settings: LoggingSettings,
 ) -> impl FnOnce(&task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
-	let format_span = if log_span_lifecycle { FmtSpan::FULL } else { FmtSpan::NONE };
+	let format_span = if settings.span_lifecycle { FmtSpan::FULL } else { FmtSpan::NONE };
 
 	let reload_handle = {
 		let builder = tracing_subscriber::fmt()
@@ -410,7 +418,7 @@ pub async fn init_json_logger(
 				});
 
 			warp::serve(change_filter.or(get_filter))
-				.run((std::net::Ipv4Addr::LOCALHOST, command_server_port))
+				.run((std::net::Ipv4Addr::LOCALHOST, settings.command_server_port))
 				.await;
 
 			Ok(())

@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
+use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, LoggingSettings, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -142,12 +142,6 @@ pub struct HealthCheck {
 	pub port: Port,
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Logging {
-	pub span_lifecycle: bool,
-	pub command_server_port: u16,
-}
-
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
@@ -166,7 +160,7 @@ pub struct Settings {
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,
 	pub signing: Signing,
-	pub logging: Logging,
+	pub logging: LoggingSettings,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
