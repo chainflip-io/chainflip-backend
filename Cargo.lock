@@ -2327,7 +2327,6 @@ dependencies = [
  "sc-client-api",
  "sc-rpc-api",
  "serde",
- "serde_json",
  "sp-api",
  "sp-core",
  "sp-rpc",
