@@ -12,27 +12,21 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 First, build the runtime node with `try-runtime` enabled.
 
-The `try-runtime` features for the Chainflip runtime upgrade utilities are currently incompatible with WASM builds, so use `SKIP_WASM_BUILD` to avoid compiler errors.
-
-> *Note: you need to tweak the `spec_version` of the local runtime to match that of the remote chain.*
-
-```sh
-SKIP_WASM_BUILD=1 cargo build --release --features=try-runtime
+```bash copy
+cargo build --release --features=try-runtime
 ```
 
-Now you can run your tests like so (using an appropriate public rpc node):
+Now you can run your tests aginst using an appropriate public rpc node. For example for perseverance:
 
-```sh
+```bash copy
 ./target/release/chainflip-node try-runtime \
-    --runtime ./path/to/state_chain_runtime.wasm \
+    --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
 ```
 
-Sometimes this doesn't work. In this case you run a local rpc node and connect to that instead.
+If you have trouble connecting to the remote rpc node, you can run a local rpc node and connect to that instead. First connect a local node to the network with some rpc optimisations:
 
-First connect a local node to the network with some rpc optimisations:
-
-```sh
+```bash copy
 ./target/release/chainflip-node \
     --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json 
     --sync warp \
@@ -42,10 +36,11 @@ First connect a local node to the network with some rpc optimisations:
     --rpc-cors all
 ```
 
-Once the node has synced, in another terminal window, run the checks:
+Once the node has synced, in another terminal window, run the checks as above:
 
-```sh
-./target/release/chainflip-node try-runtime --execution native \
+```bash copy
+./target/release/chainflip-node try-runtime \
+    --runtime ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm \
     on-runtime-upgrade live --uri ws://localhost:9944
 ```
 
