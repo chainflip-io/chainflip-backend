@@ -126,6 +126,7 @@ services:
     restart: unless-stopped
     ports:
       - 8332:8332
+      - 3002:3002
     stop_signal: SIGINT
     stop_grace_period: 5s
     healthcheck:
