@@ -21,6 +21,7 @@ use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
+use sp_core::H160;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
@@ -29,47 +30,18 @@ use state_chain_runtime::{
 	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
-pub struct RpcAccountRole(pub AccountRole);
-
-impl From<AccountRole> for RpcAccountRole {
-	fn from(role: AccountRole) -> Self {
-		Self(role)
-	}
-}
-
-impl Serialize for RpcAccountRole {
-	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		match self.0 {
-			AccountRole::Broker => serializer.serialize_str("broker"),
-			AccountRole::LiquidityProvider => serializer.serialize_str("liquidity_provider"),
-			AccountRole::Validator => serializer.serialize_str("validator"),
-			AccountRole::None => serializer.serialize_none(),
-		}
-	}
-}
-
-impl<'de> Deserialize<'de> for RpcAccountRole {
-	fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
-		unimplemented!("this is only an output type")
-	}
-}
 
 #[derive(Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "role")]
+#[serde(rename_all = "snake_case")]
 pub enum RpcAccountInfo {
-	None {
-		role: RpcAccountRole,
-	},
-	Broker {
-		role: RpcAccountRole,
-	},
+	None,
+	Broker,
 	LiquidityProvider {
-		role: RpcAccountRole,
-		balances: HashMap<ForeignChain, HashMap<Asset, AssetAmount>>,
+		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 		refund_addresses: HashMap<ForeignChain, Option<EncodedAddress>>,
 	},
 	Validator {
-		role: RpcAccountRole,
 		balance: NumberOrHex,
 		bond: NumberOrHex,
 		last_heartbeat: u32,
@@ -85,24 +57,48 @@ pub enum RpcAccountInfo {
 	},
 }
 
+#[test]
+fn test_account_info_serialization() {
+	assert_eq!(serde_json::to_string(&RpcAccountInfo::none()).unwrap(), r#"{"role":"none"}"#);
+	assert_eq!(serde_json::to_string(&RpcAccountInfo::broker()).unwrap(), r#"{"role":"broker"}"#);
+
+	let lp = RpcAccountInfo::lp(LiquidityProviderInfo {
+		refund_addresses: vec![
+			(
+				ForeignChain::Ethereum,
+				Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
+			),
+			(ForeignChain::Bitcoin, None),
+		],
+		balances: vec![(Asset::Eth, u128::MAX), (Asset::Btc, 0)],
+	});
+
+	assert_eq!(
+		serde_json::to_string(&lp).unwrap(),
+		r#"{"role":"liquidity_provider","balances":{"Bitcoin":{"Btc":"0xffffffffffffffffffffffffffffffff"}},"refund_addresses":{"Bitcoin":null}}"#
+	);
+}
+
 impl RpcAccountInfo {
 	fn none() -> Self {
-		Self::None { role: AccountRole::None.into() }
+		Self::None
 	}
 
 	fn broker() -> Self {
-		Self::Broker { role: AccountRole::Broker.into() }
+		Self::Broker
 	}
 
 	fn lp(info: LiquidityProviderInfo) -> Self {
 		let mut balances = HashMap::new();
 
 		for (asset, balance) in info.balances {
-			balances.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, balance);
+			balances
+				.entry(asset.into())
+				.or_insert_with(HashMap::new)
+				.insert(asset, balance.into());
 		}
 
 		Self::LiquidityProvider {
-			role: AccountRole::Validator.into(),
 			balances,
 			refund_addresses: info
 				.refund_addresses
@@ -116,7 +112,6 @@ impl RpcAccountInfo {
 
 	fn validator(info: RuntimeApiAccountInfoV2) -> Self {
 		Self::Validator {
-			role: AccountRole::Validator.into(),
 			balance: info.balance.into(),
 			bond: info.bond.into(),
 			last_heartbeat: info.last_heartbeat,
