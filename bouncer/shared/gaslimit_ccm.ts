@@ -144,12 +144,7 @@ async function testGasLimitSwap(
       ? Number(swapIdToEgressAmount[swapId].replace(/,/g, ''))
       : messageMetadata.gasBudget;
 
-  const ethTrackedData = (
-    await observeEvent('ethereumChainTracking:ChainStateUpdated', chainflipApi)
-  ).data.newChainState.trackedData;
-
-  const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
-  const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
+  const { baseFee, priorityFee } = await getChainFees();
 
   // On the state chain the gasLimit is calculated from the egressBudget and the MaxFeePerGas
   // max_fee_per_gas = 2 * baseFee + priorityFee
@@ -228,6 +223,19 @@ async function testGasLimitSwap(
 
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
 let spam = true;
+
+async function getChainFees() {
+  const chainflipApi = await getChainflipApi();
+
+  const ethTrackedData = (
+    await observeEvent('ethereumChainTracking:ChainStateUpdated', chainflipApi)
+  ).data.newChainState.trackedData;
+
+  const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
+  const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
+  return { baseFee, priorityFee };
+}
+
 async function spamEthereum() {
   while (spam) {
     signAndSendTxEthSilent('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
@@ -252,6 +260,11 @@ export async function testGasLimitCcmSwaps() {
 
   // Spam ethereum with transfers to increase the gasLimitBudget price
   const spamming = spamEthereum();
+
+  // Wait for the fees to increase to the stable expected amount
+  while ((await getChainFees()).priorityFee!=1000000000) {
+    await sleep(500);
+  }
 
   // The default gas budgets should allow for almost any reasonable gas consumption
   const gasLimitSwapsDefault = [
