@@ -171,16 +171,10 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
-		// Are we in a current auction phase
-		if self.is_auction_phase().await? {
-			bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
-		}
+		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
+		self.dry_run(call.clone(), None).await?;
 
-		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
-			.await
-			.until_in_block()
-			.await?;
+		let (tx_hash, ..) = self.submit_signed_extrinsic(call).await.until_in_block().await?;
 
 		Ok(tx_hash)
 	}
