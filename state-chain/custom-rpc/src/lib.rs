@@ -704,9 +704,7 @@ where
 		let mut balances = HashMap::new();
 
 		for (asset, balance) in info.balances {
-			let chain: ForeignChain = asset.into();
-			let sub_map = balances.entry(chain).or_insert_with(HashMap::new);
-			sub_map.insert(asset, balance);
+			balances.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, balance);
 		}
 
 		Ok(RpcLiquidityProviderInfo {
