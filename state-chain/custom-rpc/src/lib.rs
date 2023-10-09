@@ -118,11 +118,11 @@ mod test {
 	#[test]
 	fn test_account_info_serialization() {
 		assert_eq!(
-			serde_json::to_value(&RpcAccountInfo::none()).unwrap(),
+			serde_json::to_value(RpcAccountInfo::none()).unwrap(),
 			json!({ "role": "none" })
 		);
 		assert_eq!(
-			serde_json::to_value(&RpcAccountInfo::broker()).unwrap(),
+			serde_json::to_value(RpcAccountInfo::broker()).unwrap(),
 			json!({ "role":"broker" })
 		);
 
@@ -142,7 +142,7 @@ mod test {
 		});
 
 		assert_eq!(
-			serde_json::to_value(&lp).unwrap(),
+			serde_json::to_value(lp).unwrap(),
 			json!({
 				"role": "liquidity_provider",
 				"balances": {
@@ -175,7 +175,7 @@ mod test {
 			bound_redeem_address: Some(H160::from([1; 20])),
 		});
 		assert_eq!(
-			serde_json::to_value(&validator).unwrap(),
+			serde_json::to_value(validator).unwrap(),
 			json!({
 				"balance": "0xde0b6b3a7640000",
 				"bond": "0xde0b6b3a7640000",
