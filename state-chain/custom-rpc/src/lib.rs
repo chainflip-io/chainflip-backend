@@ -108,93 +108,6 @@ impl RpcAccountInfo {
 	}
 }
 
-#[cfg(test)]
-
-mod test {
-	use super::*;
-	use serde_json::json;
-	use sp_core::H160;
-
-	#[test]
-	fn test_account_info_serialization() {
-		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::none()).unwrap(),
-			json!({ "role": "none" })
-		);
-		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::broker()).unwrap(),
-			json!({ "role":"broker" })
-		);
-
-		let lp = RpcAccountInfo::lp(LiquidityProviderInfo {
-			refund_addresses: vec![
-				(
-					ForeignChain::Ethereum,
-					Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
-				),
-				(
-					ForeignChain::Polkadot,
-					Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
-				),
-				(ForeignChain::Bitcoin, None),
-			],
-			balances: vec![(Asset::Eth, u128::MAX), (Asset::Btc, 0), (Asset::Flip, u128::MAX / 2)],
-		});
-
-		assert_eq!(
-			serde_json::to_value(lp).unwrap(),
-			json!({
-				"role": "liquidity_provider",
-				"balances": {
-					"Ethereum": {
-						"Flip": "0x7fffffffffffffffffffffffffffffff",
-						"Eth": "0xffffffffffffffffffffffffffffffff"
-					},
-					"Bitcoin": { "Btc": "0x0" },
-				},
-				"refund_addresses": {
-					"Ethereum": "0x0101010101010101010101010101010101010101",
-					"Bitcoin": null,
-					"Polkadot": "0x0000000000000000000000000000000000000000000000000000000000000000"
-				}
-			})
-		);
-
-		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
-			balance: 10u128.pow(18),
-			bond: 10u128.pow(18),
-			last_heartbeat: 0,
-			online_credits: 0,
-			reputation_points: 0,
-			keyholder_epochs: vec![123],
-			is_current_authority: true,
-			is_bidding: false,
-			is_current_backup: false,
-			is_online: true,
-			is_qualified: true,
-			bound_redeem_address: Some(H160::from([1; 20])),
-		});
-		assert_eq!(
-			serde_json::to_value(validator).unwrap(),
-			json!({
-				"balance": "0xde0b6b3a7640000",
-				"bond": "0xde0b6b3a7640000",
-				"bound_redeem_address": "0x0101010101010101010101010101010101010101",
-				"is_bidding": false,
-				"is_current_authority": true,
-				"is_current_backup": false,
-				"is_online": true,
-				"is_qualified": true,
-				"keyholder_epochs": [123],
-				"last_heartbeat": 0,
-				"online_credits": 0,
-				"reputation_points": 0,
-				"role": "validator"
-			})
-		);
-	}
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfoV2 {
 	pub balance: NumberOrHex,
@@ -1002,5 +915,92 @@ where
 		self.executor.spawn("cf-rpc-stream-subscription", Some("rpc"), fut.boxed());
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+
+mod test {
+	use super::*;
+	use serde_json::json;
+	use sp_core::H160;
+
+	#[test]
+	fn test_account_info_serialization() {
+		assert_eq!(
+			serde_json::to_value(RpcAccountInfo::none()).unwrap(),
+			json!({ "role": "none" })
+		);
+		assert_eq!(
+			serde_json::to_value(RpcAccountInfo::broker()).unwrap(),
+			json!({ "role":"broker" })
+		);
+
+		let lp = RpcAccountInfo::lp(LiquidityProviderInfo {
+			refund_addresses: vec![
+				(
+					ForeignChain::Ethereum,
+					Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
+				),
+				(
+					ForeignChain::Polkadot,
+					Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
+				),
+				(ForeignChain::Bitcoin, None),
+			],
+			balances: vec![(Asset::Eth, u128::MAX), (Asset::Btc, 0), (Asset::Flip, u128::MAX / 2)],
+		});
+
+		assert_eq!(
+			serde_json::to_value(lp).unwrap(),
+			json!({
+				"role": "liquidity_provider",
+				"balances": {
+					"Ethereum": {
+						"Flip": "0x7fffffffffffffffffffffffffffffff",
+						"Eth": "0xffffffffffffffffffffffffffffffff"
+					},
+					"Bitcoin": { "Btc": "0x0" },
+				},
+				"refund_addresses": {
+					"Ethereum": "0x0101010101010101010101010101010101010101",
+					"Bitcoin": null,
+					"Polkadot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+				}
+			})
+		);
+
+		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
+			balance: 10u128.pow(18),
+			bond: 10u128.pow(18),
+			last_heartbeat: 0,
+			online_credits: 0,
+			reputation_points: 0,
+			keyholder_epochs: vec![123],
+			is_current_authority: true,
+			is_bidding: false,
+			is_current_backup: false,
+			is_online: true,
+			is_qualified: true,
+			bound_redeem_address: Some(H160::from([1; 20])),
+		});
+		assert_eq!(
+			serde_json::to_value(validator).unwrap(),
+			json!({
+				"balance": "0xde0b6b3a7640000",
+				"bond": "0xde0b6b3a7640000",
+				"bound_redeem_address": "0x0101010101010101010101010101010101010101",
+				"is_bidding": false,
+				"is_current_authority": true,
+				"is_current_backup": false,
+				"is_online": true,
+				"is_qualified": true,
+				"keyholder_epochs": [123],
+				"last_heartbeat": 0,
+				"online_credits": 0,
+				"reputation_points": 0,
+				"role": "validator"
+			})
+		);
 	}
 }
