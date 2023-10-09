@@ -110,6 +110,7 @@ build-localnet() {
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
+  set -x
   P2P_PORT=30333
   RPC_PORT=9944
   for NODE in "${SELECTED_NODES[@]}"; do
