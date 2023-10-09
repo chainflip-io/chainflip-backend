@@ -8,6 +8,7 @@ use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE
 use sc_cli::SubstrateCli;
 use sc_service::PartialComponents;
 use state_chain_runtime::Block;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[cfg(feature = "try-runtime")]
 use try_runtime_cli::block_building_info::timestamp_with_aura_info;
@@ -203,11 +204,18 @@ pub fn run() -> sc_cli::Result<()> {
         You can enable it with `--features try-runtime`."
 			.into()),
 		None => {
-			utilities::print_starting!();
-			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_exit(|config| async move {
-				service::new_full(config).map_err(sc_cli::Error::Service)
-			})
+			// utilities::print_starting!();
+			utilities::print_start_and_end!({
+				
+				let result = catch_unwind(AssertUnwindSafe( || {
+					let runner = cli.create_runner(&cli.run)?;
+					runner.run_node_until_exit(|config| async move {
+					service::new_full(config).map_err(sc_cli::Error::Service)
+					})
+				}));
+				result
+			});
+			Ok(())
 		},
 	}
 }
