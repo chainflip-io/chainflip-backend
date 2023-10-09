@@ -2,10 +2,13 @@
 
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
+GENESIS_NODES=("bashful" "doc" "dopey")
+SELECTED_NODES=("bashful" "doc" "dopey")
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
 INITIAL_CONTAINERS="init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
+export NODE_COUNT=3-node
 
 source ./localnet/helper.sh
 
@@ -50,35 +53,42 @@ get-workflow() {
     echo "You have chosen $WORKFLOW"
     break
   done
+  if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
+    echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 2)"
+    select NODE_COUNT in 1-node 3-node; do
+      echo "You have chosen $NODE_COUNT node(s) network"
+      break
+    done
+    if [[ $NODE_COUNT == "1-node" ]]; then
+     SELECTED_NODES=("${GENESIS_NODES[0]}")
+    elif [[ $NODE_COUNT == "3-node" ]]; then
+     SELECTED_NODES=("${GENESIS_NODES[@]}")
+    else
+      echo "Invalid NODE_COUNT value: $NODE_COUNT"
+      exit 1
+    fi
+  fi
 }
-build-localnet() {
-  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
-  echo
 
-  if [[ -z "${BINARIES_LOCATION}" ]]; then
+build-localnet() {
+  if [[ -z "${BINARY_ROOT_PATH}" ]]; then
       echo "💻 Please provide the location to the binaries you would like to use."
-      read -p "(default: ./target/debug/) " BINARIES_LOCATION
+      read -p "(default: ./target/debug/) " BINARY_ROOT_PATH
       echo
-      export BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug"}
+      export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}
   fi
 
-  if [[ ! -d $BINARIES_LOCATION ]]; then
-    echo "❌  Couldn't find directory at $BINARIES_LOCATION"
+  if [[ ! -d $BINARY_ROOT_PATH ]]; then
+    echo "❌  Couldn't find directory at $BINARY_ROOT_PATH"
     exit 1
   fi
   for binary in $REQUIRED_BINARIES; do
-    if [[ ! -f $BINARIES_LOCATION/$binary ]]; then
-      echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
+    if [[ ! -f $BINARY_ROOT_PATH/$binary ]]; then
+      echo "❌ Couldn't find $binary at $BINARY_ROOT_PATH"
       exit 1
     fi
   done
 
-  if ! which wscat > /dev/null; then
-      echo "wscat is not installed. Installing now..."
-      npm install -g wscat
-  else
-      echo "wscat is already installed."
-  fi
   echo "🔮 Initializing Network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
 
@@ -93,92 +103,68 @@ build-localnet() {
   wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
-  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
 
   echo "🦑 Starting Arbitrum ..."
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
-  echo "🚧 Waiting for chainflip-node to start"
-  DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9944' > /dev/null
+  P2P_PORT=30333
+  RPC_PORT=9944
+  for NODE in "${SELECTED_NODES[@]}"; do
+    echo "🚧 Starting chainflip-node of $NODE ..."
+    DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARY_ROOT_PATH $NODE $P2P_PORT $RPC_PORT $NODE_COUNT
+    ((P2P_PORT++))
+    ((RPC_PORT++))
+  done
+
+  RPC_PORT=9944
+  for NODE in "${SELECTED_NODES[@]}"; do
+    check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" > /dev/null
+    echo "✅ $NODE's chainflip-node is running!"
+    ((RPC_PORT++))
+  done
+
+  P2P_PORT=30333
+  RPC_PORT=9944
+  ENGINE_PORT=8078
+  HEALTH_PORT=5555
+  LOG_PORT=30687
+  for NODE in "${SELECTED_NODES[@]}"; do
+    cp -R $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/$NODE.db /tmp/chainflip/$NODE
+    ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARY_ROOT_PATH $NODE $ENGINE_PORT $HEALTH_PORT $RPC_PORT $LOG_PORT &
+    echo "🚗 Starting chainflip-engine of $NODE ..."
+    ((P2P_PORT++))
+    ((RPC_PORT++))
+    ((ENGINE_PORT++))
+    ((LOG_PORT++))
+    ((HEALTH_PORT++))
+  done
+
+  HEALTH_PORT=5555
+  for NODE in "${SELECTED_NODES[@]}"; do
+    while true; do
+        output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
+        if [[ $output == "RUNNING" ]]; then
+            echo "✅ $NODE's chainflip-engine is running!"
+            break
+        fi
+        sleep 1
+    done
+    ((HEALTH_PORT++))
+  done
+
+  wait
 
   echo "🕺 Starting Broker API ..."
-  ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARIES_LOCATION
+  ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
 
   echo "🤑 Starting LP API ..."
-  ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARIES_LOCATION
+  ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
-  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  echo "🚗 Waiting for chainflip-engine to start"
-  while true; do
-      output=$(check_endpoint_health 'http://localhost:5555/health')
-      if [[ $output == "RUNNING" ]]; then
-          echo "Engine is running!"
-          break
-      fi
-      sleep 1
-  done
 
   print_success
-}
-
-build-localnet-in-ci() {
-  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
-  echo
-  if [[ ! -d $BINARIES_LOCATION ]]; then
-    echo "❌  Couldn't find directory at $BINARIES_LOCATION"
-    exit 1
-  fi
-  for binary in $REQUIRED_BINARIES; do
-    if [[ ! -f $BINARIES_LOCATION/$binary ]]; then
-      echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
-      exit 1
-    fi
-  done
-
-  echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
-
-  echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
-
-  echo "🪙 Waiting for Bitcoin node to start"
-  check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
-
-  echo "💎 Waiting for ETH node to start"
-  check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null
-  wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' > /dev/null
-
-  echo "🚦 Waiting for polkadot node to start"
-  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
-
-  echo "🦑 Starting Arbitrum ..."
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
-
-  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
-  DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  echo "🚧 Waiting for chainflip-node to start"
-  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9944' > /dev/null
-
-  echo "🕺 Starting Broker API ..."
-  ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARIES_LOCATION
-
-  echo "🤑 Starting LP API ..."
-  ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARIES_LOCATION
-
-  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  echo "🚗 Waiting for chainflip-engine to start"
-  while true; do
-      output=$(check_endpoint_health 'http://localhost:5555/health')
-      if [[ $output == "RUNNING" ]]; then
-          echo "Engine is running!"
-          break
-      fi
-      sleep 1
-  done
-
 }
 
 destroy() {
@@ -280,32 +266,49 @@ bouncer() {
   )
 }
 
-if [[ $CI == true ]]; then
-  echo "CI detected, bypassing setup"
-  build-localnet-in-ci
-  exit 0
-fi
+main() {
+    if ! which wscat > /dev/null; then
+        echo "wscat is not installed. Installing now..."
+        npm install -g wscat
+    else
+        echo "wscat is already installed."
+    fi
+    if [[ ! -f ./localnet/.setup_complete ]]; then
+        setup
+    else
+        echo "✅ Set up already complete"
+    fi
 
-if [[ ! -f ./localnet/.setup_complete ]]; then
-  setup
-else
-  echo "✅ Set up already complete"
-fi
+    if [ -z $CI ]; then
+      get-workflow
+    fi
 
-get-workflow
+    case "$WORKFLOW" in
+        build-localnet)
+            build-localnet
+            ;;
+        recreate)
+            destroy
+            sleep 5
+            build-localnet
+            ;;
+        destroy)
+            destroy
+            ;;
+        logs)
+            logs
+            ;;
+        yeet)
+            yeet
+            ;;
+        bouncer)
+            bouncer
+            ;;
+        *)
+            echo "Invalid option: $WORKFLOW"
+            exit 1
+            ;;
+    esac
+}
 
-if [[ $WORKFLOW == "build-localnet" ]]; then
-  build-localnet
-elif [[ $WORKFLOW == "recreate" ]]; then
-  destroy
-  sleep 5
-  build-localnet
-elif [[ $WORKFLOW == "destroy" ]]; then
-  destroy
-elif [[ $WORKFLOW == "logs" ]]; then
-  logs
-elif [[ $WORKFLOW == "yeet" ]]; then
-  yeet
-elif [[ $WORKFLOW == "bouncer" ]]; then
-  bouncer
-fi
+main "$@"

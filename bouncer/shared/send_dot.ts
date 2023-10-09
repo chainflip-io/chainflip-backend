@@ -6,7 +6,7 @@ import { polkadotSigningMutex, sleep, amountToFineAmount } from './utils';
 
 export async function sendDot(address: string, amount: string) {
   const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
-  const polkadotEndpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
+  const polkadotEndpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9947';
 
   const planckAmount = amountToFineAmount(amount, assetDecimals.DOT);
   await cryptoWaitReady();

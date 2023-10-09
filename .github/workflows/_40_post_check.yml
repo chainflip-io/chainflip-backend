@@ -67,9 +67,9 @@ jobs:
 
       - name: Start a localnet
         env:
-          BINARIES_LOCATION: .
+          BINARY_ROOT_PATH: .
         run: |
-          chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
+          chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
@@ -88,12 +88,12 @@ jobs:
       - name: Print chainflip-engine logs
         if: failure()
         run: |
-          cat /tmp/chainflip/chainflip-engine.log
+          cat /tmp/chainflip/*/chainflip-engine.log
 
       - name: Print chainflip-node logs
         if: failure()
         run: |
-          cat /tmp/chainflip/chainflip-node.log
+          cat /tmp/chainflip/*/chainflip-node.log
 
       - name: Upload Localnet Logs 💾
         if: always()
@@ -102,7 +102,7 @@ jobs:
         with:
           name: localnet-logs
           path: |
-            /tmp/chainflip/chainflip-*.log
+            /tmp/chainflip/*/chainflip-*.log
 
       - name: Clean Up docker containers 🧹
         if: always()
