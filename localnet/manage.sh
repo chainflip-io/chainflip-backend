@@ -115,7 +115,7 @@ build-localnet() {
   RPC_PORT=9944
   for NODE in "${SELECTED_NODES[@]}"; do
     echo "🚧 Starting chainflip-node of $NODE ..."
-    mkdir /tmp/chainflip/$NODE
+    sudo mkdir -p /tmp/chainflip/$NODE
     DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARY_ROOT_PATH $NODE $P2P_PORT $RPC_PORT $NODE_COUNT
     ((P2P_PORT++))
     ((RPC_PORT++))
