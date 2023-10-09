@@ -104,8 +104,31 @@ pub struct Dot {
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.nodes.validate()
+		self.nodes.validate()?;
+
+		// Check that all endpoints have a port number
+		const CONTEXT_MESSAGE: &str = "Polkadot node endpoints must include a port number";
+		validate_port_exists(&self.nodes.primary.ws_endpoint)
+			.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
+		validate_port_exists(&self.nodes.primary.http_endpoint)
+			.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
+		if let Some(backup) = &self.nodes.backup {
+			validate_port_exists(&backup.ws_endpoint)
+				.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
+			validate_port_exists(&backup.http_endpoint)
+				.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
+		}
+		Ok(())
 	}
+}
+
+fn validate_port_exists(url: &SecretUrl) -> Result<()> {
+	let parsed_url =
+		Url::parse(url.as_ref()).context(format!("Error parsing url: {url}").to_string())?;
+	if parsed_url.port().is_none() {
+		bail!("No port found in url: {url}");
+	}
+	Ok(())
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
