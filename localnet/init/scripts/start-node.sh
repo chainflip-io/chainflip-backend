@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-sudo BINARY_ROOT_PATH=$1
+BINARY_ROOT_PATH=$1
 NODE_NAME=$2
 PORT=$3
 RPC_PORT=$4
