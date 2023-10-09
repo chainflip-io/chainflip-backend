@@ -3,9 +3,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress},
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
+	address::AddressConverter, btc::BitcoinNetwork, dot::PolkadotHash,
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{AccountRole, Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
@@ -21,7 +19,6 @@ use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
-use sp_core::H160;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
@@ -39,7 +36,7 @@ pub enum RpcAccountInfo {
 	Broker,
 	LiquidityProvider {
 		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-		refund_addresses: HashMap<ForeignChain, Option<EncodedAddress>>,
+		refund_addresses: HashMap<ForeignChain, Option<String>>,
 	},
 	Validator {
 		balance: NumberOrHex,
@@ -55,28 +52,6 @@ pub enum RpcAccountInfo {
 		is_bidding: bool,
 		bound_redeem_address: Option<EthereumAddress>,
 	},
-}
-
-#[test]
-fn test_account_info_serialization() {
-	assert_eq!(serde_json::to_string(&RpcAccountInfo::none()).unwrap(), r#"{"role":"none"}"#);
-	assert_eq!(serde_json::to_string(&RpcAccountInfo::broker()).unwrap(), r#"{"role":"broker"}"#);
-
-	let lp = RpcAccountInfo::lp(LiquidityProviderInfo {
-		refund_addresses: vec![
-			(
-				ForeignChain::Ethereum,
-				Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
-			),
-			(ForeignChain::Bitcoin, None),
-		],
-		balances: vec![(Asset::Eth, u128::MAX), (Asset::Btc, 0)],
-	});
-
-	assert_eq!(
-		serde_json::to_string(&lp).unwrap(),
-		r#"{"role":"liquidity_provider","balances":{"Bitcoin":{"Btc":"0xffffffffffffffffffffffffffffffff"}},"refund_addresses":{"Bitcoin":null}}"#
-	);
 }
 
 impl RpcAccountInfo {
@@ -104,7 +79,12 @@ impl RpcAccountInfo {
 				.refund_addresses
 				.into_iter()
 				.map(|(chain, address)| {
-					(chain, address.map(ChainAddressConverter::to_encoded_address))
+					(
+						chain,
+						address
+							.map(ChainAddressConverter::to_encoded_address)
+							.map(|a| format!("{}", a)),
+					)
 				})
 				.collect(),
 		}
@@ -125,6 +105,93 @@ impl RpcAccountInfo {
 			is_bidding: info.is_bidding,
 			bound_redeem_address: info.bound_redeem_address,
 		}
+	}
+}
+
+#[cfg(test)]
+
+mod test {
+	use super::*;
+	use serde_json::json;
+	use sp_core::H160;
+
+	#[test]
+	fn test_account_info_serialization() {
+		assert_eq!(
+			serde_json::to_value(&RpcAccountInfo::none()).unwrap(),
+			json!({ "role": "none" })
+		);
+		assert_eq!(
+			serde_json::to_value(&RpcAccountInfo::broker()).unwrap(),
+			json!({ "role":"broker" })
+		);
+
+		let lp = RpcAccountInfo::lp(LiquidityProviderInfo {
+			refund_addresses: vec![
+				(
+					ForeignChain::Ethereum,
+					Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
+				),
+				(
+					ForeignChain::Polkadot,
+					Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
+				),
+				(ForeignChain::Bitcoin, None),
+			],
+			balances: vec![(Asset::Eth, u128::MAX), (Asset::Btc, 0), (Asset::Flip, u128::MAX / 2)],
+		});
+
+		assert_eq!(
+			serde_json::to_value(&lp).unwrap(),
+			json!({
+				"role": "liquidity_provider",
+				"balances": {
+					"Ethereum": {
+						"Flip": "0x7fffffffffffffffffffffffffffffff",
+						"Eth": "0xffffffffffffffffffffffffffffffff"
+					},
+					"Bitcoin": { "Btc": "0x0" },
+				},
+				"refund_addresses": {
+					"Ethereum": "0x0101010101010101010101010101010101010101",
+					"Bitcoin": null,
+					"Polkadot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+				}
+			})
+		);
+
+		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
+			balance: 10u128.pow(18),
+			bond: 10u128.pow(18),
+			last_heartbeat: 0,
+			online_credits: 0,
+			reputation_points: 0,
+			keyholder_epochs: vec![123],
+			is_current_authority: true,
+			is_bidding: false,
+			is_current_backup: false,
+			is_online: true,
+			is_qualified: true,
+			bound_redeem_address: Some(H160::from([1; 20])),
+		});
+		assert_eq!(
+			serde_json::to_value(&validator).unwrap(),
+			json!({
+				"balance": "0xde0b6b3a7640000",
+				"bond": "0xde0b6b3a7640000",
+				"bound_redeem_address": "0x0101010101010101010101010101010101010101",
+				"is_bidding": false,
+				"is_current_authority": true,
+				"is_current_backup": false,
+				"is_online": true,
+				"is_qualified": true,
+				"keyholder_epochs": [123],
+				"last_heartbeat": 0,
+				"online_credits": 0,
+				"reputation_points": 0,
+				"role": "validator"
+			})
+		);
 	}
 }
 
