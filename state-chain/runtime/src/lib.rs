@@ -1066,7 +1066,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
-			pallet_cf_account_roles::AccountRoles::<Runtime>::get(&account_id)
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
