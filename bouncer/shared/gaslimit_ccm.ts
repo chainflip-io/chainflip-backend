@@ -167,6 +167,10 @@ async function testGasLimitSwap(
 
   const minGasLimitRequired = gasConsumption + MIN_BASE_GAS_OVERHEAD + byteLength * GAS_PER_BYTE;
 
+  console.log(
+    `${tag} baseFee: ${baseFee}, priorityFee: ${priorityFee}, maxFeePerGas: ${maxFeePerGas}`,
+  );
+
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER >= gasLimitBudget) {
     observeCcmReceived(
