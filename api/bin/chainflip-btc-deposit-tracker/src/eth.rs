@@ -96,7 +96,7 @@ async fn start_eth_witnessing(
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			witness_call.clone(),
 			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdc,
+			Asset::Usdc,
 			usdc_contract_address,
 		)
 		.await?
@@ -121,13 +121,6 @@ async fn start_eth_witnessing(
 		)
 		.await
 		.context("Failed to get Vault contract address from SC")?;
-
-	let state_chain_gateway_address = state_chain_client
-        .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-            state_chain_client.latest_finalized_hash(),
-        )
-        .await
-        .context("Failed to get StateChainGateway address from SC")?;
 
 	let address_checker_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
@@ -160,15 +153,6 @@ async fn start_eth_witnessing(
 			supported_erc20_tokens.clone(),
 		)
 		.logging("witnessing Vault")
-		.spawn(scope);
-
-	eth_source
-		.state_chain_gateway_witnessing(
-			witness_call.clone(),
-			eth_client,
-			state_chain_gateway_address,
-		)
-		.logging("StateChainGateway")
 		.spawn(scope);
 
 	Ok(())

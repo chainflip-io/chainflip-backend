@@ -356,24 +356,22 @@ async fn main() -> anyhow::Result<()> {
 
 	eth::start_witnesser(settings, witness_event_sender.clone());
 
-	module
-		.register_subscription(
-			"subscribe_eth",
-			"s_eth",
-			"unsubscribe_eth",
-			move |_params, mut sink, _context| {
-				let mut event_receiver = witness_event_sender.subscribe();
+	module.register_subscription(
+		"subscribe_eth",
+		"s_eth",
+		"unsubscribe_eth",
+		move |_params, mut sink, _context| {
+			let mut event_receiver = witness_event_sender.subscribe();
 
-				tokio::spawn(async move {
-					while let Ok(event) = event_receiver.recv().await {
-						use codec::Encode;
-						let _ = sink.send(&event.encode());
-					}
-				});
-				Ok(())
-			},
-		)
-		.unwrap();
+			tokio::spawn(async move {
+				while let Ok(event) = event_receiver.recv().await {
+					use codec::Encode;
+					let _ = sink.send(&event.encode());
+				}
+			});
+			Ok(())
+		},
+	)?;
 
 	let addr = server.local_addr()?;
 	log::info!("Listening on http://{}", addr);
