@@ -803,7 +803,7 @@ pub trait CompatibleCfeVersions {
 
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
-	fn precent_authorities_at_version(version: SemVer) -> Percent;
+	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {

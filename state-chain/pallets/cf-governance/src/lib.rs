@@ -312,8 +312,9 @@ pub mod pallet {
 
 			if let Some((required_version, percent)) = cfe_version_restriction {
 				ensure!(
-					T::AuthoritiesCfeVersions::precent_authorities_at_version(required_version) >=
-						percent,
+					T::AuthoritiesCfeVersions::percent_authorities_compatible_with_version(
+						required_version
+					) >= percent,
 					Error::<T>::NotEnoughAuthoritiesCfesAtTargetVersion,
 				);
 			}
