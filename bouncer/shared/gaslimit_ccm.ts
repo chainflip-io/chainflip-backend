@@ -27,7 +27,9 @@ let DEFAULT_GAS_CONSUMPTION = 260000;
 const MIN_TEST_GAS_CONSUMPTION = 200000;
 const MAX_TEST_GAS_CONSUMPTION = 4000000;
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
-const GAS_PER_BYTE = 16;
+// EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
+const GAS_PER_BYTE = 17;
+const EXPECTED_PRIORITY_FEE = 1000000000;
 
 let stopObservingCcmReceived = false;
 
@@ -39,6 +41,18 @@ function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetF
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
     gasBudgetFraction,
   );
+}
+
+async function getChainFees() {
+  const chainflipApi = await getChainflipApi();
+
+  const ethTrackedData = (
+    await observeEvent('ethereumChainTracking:ChainStateUpdated', chainflipApi)
+  ).data.newChainState.trackedData;
+
+  const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
+  const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
+  return { baseFee, priorityFee };
 }
 
 async function testGasLimitSwap(
@@ -135,21 +149,12 @@ async function testGasLimitSwap(
   swapScheduledObserved = true;
   await Promise.all([swapExecutedHandle, swapEgressHandle, ccmBroadcastHandle]);
 
-  console.log(
-    `${tag} swapId: ${swapId} broadcastId: ${egressIdToBroadcastId[swapIdToEgressId[swapId]]}`,
-  );
-
   const egressBudgetAmount =
     sourceAsset !== Assets.ETH
       ? Number(swapIdToEgressAmount[swapId].replace(/,/g, ''))
       : messageMetadata.gasBudget;
 
-  const ethTrackedData = (
-    await observeEvent('ethereumChainTracking:ChainStateUpdated', chainflipApi)
-  ).data.newChainState.trackedData;
-
-  const baseFee = Number(ethTrackedData.baseFee.replace(/,/g, ''));
-  const priorityFee = Number(ethTrackedData.priorityFee.replace(/,/g, ''));
+  const { baseFee, priorityFee } = await getChainFees();
 
   // On the state chain the gasLimit is calculated from the egressBudget and the MaxFeePerGas
   // max_fee_per_gas = 2 * baseFee + priorityFee
@@ -160,11 +165,11 @@ async function testGasLimitSwap(
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
 
-  console.log(
-    `${tag} egressBudgetAmount: ${egressBudgetAmount}, baseFee: ${baseFee}, priorityFee: ${priorityFee}, gasLimitBudget: ${gasLimitBudget}`,
-  );
-
   const minGasLimitRequired = gasConsumption + MIN_BASE_GAS_OVERHEAD + byteLength * GAS_PER_BYTE;
+
+  console.log(
+    `${tag} baseFee: ${baseFee}, priorityFee: ${priorityFee}, maxFeePerGas: ${maxFeePerGas}`,
+  );
 
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER >= gasLimitBudget) {
@@ -210,9 +215,8 @@ async function testGasLimitSwap(
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
     if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
-      console.log(`${tag} tx.maxFeePerGas: ${tx.maxFeePerGas} maxFeePerGas: ${maxFeePerGas}`);
       throw new Error(
-        `${tag} Max fee per gas in the transaction is different than the one expected!`,
+        `${tag} Max fee per gas in the transaction ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
       );
     }
     if (Math.trunc(tx.gas) !== Math.min(Math.trunc(gasLimitBudget), CFE_GAS_LIMIT_CAP)) {
@@ -228,6 +232,7 @@ async function testGasLimitSwap(
 
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
 let spam = true;
+
 async function spamEthereum() {
   while (spam) {
     signAndSendTxEthSilent('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
@@ -252,6 +257,11 @@ export async function testGasLimitCcmSwaps() {
 
   // Spam ethereum with transfers to increase the gasLimitBudget price
   const spamming = spamEthereum();
+
+  // Wait for the fees to increase to the stable expected amount
+  while ((await getChainFees()).priorityFee !== EXPECTED_PRIORITY_FEE) {
+    await sleep(500);
+  }
 
   // The default gas budgets should allow for almost any reasonable gas consumption
   const gasLimitSwapsDefault = [
