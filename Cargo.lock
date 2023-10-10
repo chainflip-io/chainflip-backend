@@ -2319,7 +2319,6 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-traits",
  "futures",
  "hex",
  "jsonrpsee 0.16.2",
