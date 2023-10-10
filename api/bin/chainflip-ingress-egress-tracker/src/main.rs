@@ -20,7 +20,7 @@ type TxHash = String;
 type BlockHash = String;
 type Address = String;
 
-mod eth;
+mod witnessing;
 
 #[derive(Deserialize)]
 struct BestBlockResult {
@@ -283,7 +283,7 @@ fn lookup_transactions(
 	}
 }
 
-struct DepositTrackerSettings {
+pub struct DepositTrackerSettings {
 	eth_node: WsHttpEndpoints,
 	// The key shouldn't be necessary, but the current witnesser wants this
 	eth_key_path: PathBuf,
@@ -354,7 +354,7 @@ async fn main() -> anyhow::Result<()> {
 		state_chain_ws_endpoint: "ws://localhost:9944".into(),
 	};
 
-	eth::start_witnesser(settings, witness_sender.clone());
+	witnessing::eth::start(settings, witness_sender.clone());
 
 	module.register_subscription(
 		"subscribe_eth",

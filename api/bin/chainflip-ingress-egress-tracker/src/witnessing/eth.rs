@@ -158,7 +158,7 @@ async fn start_eth_witnessing(
 	Ok(())
 }
 
-pub(super) fn start_witnesser(
+pub fn start(
 	settings: DepositTrackerSettings,
 	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
 ) {
