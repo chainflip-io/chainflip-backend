@@ -680,7 +680,6 @@ pub mod pallet {
 
 			// pending rotation tasks
 
-			// We don't need self, we can get our own data.
 			if Self::status() == AsyncResult::Pending {
 				match PendingVaultRotation::<T, I>::get() {
 					Some(VaultRotationStatus::<T, I>::AwaitingKeygen {

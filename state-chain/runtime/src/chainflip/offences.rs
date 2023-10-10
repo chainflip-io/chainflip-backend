@@ -76,12 +76,6 @@ impl From<pallet_cf_threshold_signature::PalletOffence> for Offence {
 	}
 }
 
-// impl From<pallet_cf_vaults::PalletOffence> for Offence {
-// 	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
-// 		match offences {}
-// 	}
-// }
-
 impl From<pallet_cf_validator::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_validator::PalletOffence) -> Self {
 		match offences {

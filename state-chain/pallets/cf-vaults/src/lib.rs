@@ -245,10 +245,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		block_number: ChainBlockNumberFor<T, I>,
 	) {
 		VaultStartBlockNumbers::<T, I>::insert(epoch_index, block_number);
-		// CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-		// 	epoch_index,
-		// 	key_state: KeyState::Unlocked,
-		// });
 	}
 }
 
