@@ -800,7 +800,6 @@ pub trait GetBlockHeight<C: Chain> {
 }
 pub trait CompatibleCfeVersions {
 	fn current_compatibility_version() -> SemVer;
-	fn next_compatibility_version() -> Option<SemVer>;
 }
 
 pub trait AuthoritiesCfeVersions {
