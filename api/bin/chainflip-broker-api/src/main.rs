@@ -12,6 +12,7 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use serde::{Deserialize, Serialize};
+use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -23,7 +24,7 @@ pub struct BrokerSwapDepositAddress {
 	pub address: String,
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
-	// pub deposit_chain_expiry_block: BlockNumber,
+	pub source_chain_expiry_block: NumberOrHex,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -32,7 +33,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			address: value.address,
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
-			// deposit_chain_expiry_block: value.
+			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
 		}
 	}
 }
