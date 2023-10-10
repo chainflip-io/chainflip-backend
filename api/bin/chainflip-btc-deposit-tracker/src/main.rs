@@ -334,7 +334,7 @@ async fn main() -> anyhow::Result<()> {
 	// Broadcast channel will drop old messages when the buffer if full to
 	// avoid "memory leaks" due to slow receivers.
 	const EVENT_BUFFER_SIZE: usize = 1024;
-	let (witness_event_sender, _) =
+	let (witness_sender, _) =
 		tokio::sync::broadcast::channel::<state_chain_runtime::RuntimeCall>(EVENT_BUFFER_SIZE);
 
 	// Temporary hack: we don't actually use eth key, but the current witnesser is
@@ -354,17 +354,17 @@ async fn main() -> anyhow::Result<()> {
 		state_chain_ws_endpoint: "ws://localhost:9944".into(),
 	};
 
-	eth::start_witnesser(settings, witness_event_sender.clone());
+	eth::start_witnesser(settings, witness_sender.clone());
 
 	module.register_subscription(
 		"subscribe_eth",
 		"s_eth",
 		"unsubscribe_eth",
 		move |_params, mut sink, _context| {
-			let mut event_receiver = witness_event_sender.subscribe();
+			let mut witness_receiver = witness_sender.subscribe();
 
 			tokio::spawn(async move {
-				while let Ok(event) = event_receiver.recv().await {
+				while let Ok(event) = witness_receiver.recv().await {
 					use codec::Encode;
 					let _ = sink.send(&event.encode());
 				}

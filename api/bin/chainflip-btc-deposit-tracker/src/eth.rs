@@ -30,7 +30,7 @@ async fn start_eth_witnessing(
 	state_chain_client: Arc<state_chain_observer::client::StateChainClient<()>>,
 	state_chain_stream: impl StateChainStreamApi + Clone,
 	settings: DepositTrackerSettings,
-	event_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
+	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
 ) -> anyhow::Result<()> {
 	let eth_client = {
 		let nodes = NodeContainer { primary: settings.eth_node.clone(), backup: None };
@@ -82,11 +82,11 @@ async fn start_eth_witnessing(
 		.collect();
 
 	let witness_call = {
-		let event_sender = event_sender.clone();
+		let witness_sender = witness_sender.clone();
 		move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
-			let event_sender = event_sender.clone();
+			let witness_sender = witness_sender.clone();
 			async move {
-				event_sender.send(call).unwrap();
+				witness_sender.send(call).unwrap();
 			}
 		}
 	};
@@ -160,7 +160,7 @@ async fn start_eth_witnessing(
 
 pub(super) fn start_witnesser(
 	settings: DepositTrackerSettings,
-	event_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
+	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
 ) {
 	tokio::spawn(async move {
 		task_scope(|scope| {
@@ -178,7 +178,7 @@ pub(super) fn start_witnesser(
 					state_chain_client.clone(),
 					state_chain_stream.clone(),
 					settings,
-					event_sender.clone(),
+					witness_sender.clone(),
 				)
 				.await
 			}
