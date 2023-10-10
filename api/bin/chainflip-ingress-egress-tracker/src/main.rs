@@ -359,7 +359,7 @@ async fn main() -> anyhow::Result<()> {
 			http_endpoint: eth_http_endpoint.into(),
 		},
 		eth_key_path: eth_key_path.into(),
-		state_chain_ws_endpoint: sc_ws_endpoint.into(),
+		state_chain_ws_endpoint: sc_ws_endpoint,
 	};
 
 	witnessing::start(settings, witness_sender.clone());
