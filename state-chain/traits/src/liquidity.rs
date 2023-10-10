@@ -22,6 +22,12 @@ pub trait SwapDepositHandler {
 pub trait LpBalanceApi {
 	type AccountId;
 
+	fn ensure_has_refund_address_for_pair(
+		who: &Self::AccountId,
+		base_asset: Asset,
+		pair_asset: Asset,
+	) -> DispatchResult;
+
 	/// Attempt to credit the account with the given asset and amount.
 	fn try_credit_account(
 		who: &Self::AccountId,
@@ -66,6 +72,15 @@ impl<T: frame_system::Config> SwappingApi for T {
 
 impl<T: frame_system::Config> LpBalanceApi for T {
 	type AccountId = T::AccountId;
+
+	fn ensure_has_refund_address_for_pair(
+		_who: &Self::AccountId,
+		_base_asset: Asset,
+		_pair_asset: Asset,
+	) -> DispatchResult {
+		// TODO
+		Ok(())
+	}
 
 	fn try_credit_account(
 		_who: &Self::AccountId,
