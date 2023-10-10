@@ -354,7 +354,7 @@ async fn main() -> anyhow::Result<()> {
 		state_chain_ws_endpoint: "ws://localhost:9944".into(),
 	};
 
-	witnessing::eth::start(settings, witness_sender.clone());
+	witnessing::start(settings, witness_sender.clone());
 
 	module.register_subscription(
 		"subscribe_eth",
