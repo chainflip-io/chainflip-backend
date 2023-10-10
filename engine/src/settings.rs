@@ -108,14 +108,14 @@ impl Dot {
 
 		// Check that all endpoints have a port number
 		const CONTEXT_MESSAGE: &str = "Polkadot node endpoints must include a port number";
-		validate_port_exists(&self.nodes.primary.ws_endpoint)
-			.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
-		validate_port_exists(&self.nodes.primary.http_endpoint)
+		let validate_dot_endpoints = |endpoints: &WsHttpEndpoints| -> Result<(), anyhow::Error> {
+			validate_port_exists(&endpoints.ws_endpoint)?;
+			validate_port_exists(&endpoints.http_endpoint)
+		};
+		validate_dot_endpoints(&self.nodes.primary)
 			.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
 		if let Some(backup) = &self.nodes.backup {
-			validate_port_exists(&backup.ws_endpoint)
-				.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
-			validate_port_exists(&backup.http_endpoint)
+			validate_dot_endpoints(backup)
 				.map_err(|e| ConfigError::Message(format!("{CONTEXT_MESSAGE}: {e}")))?;
 		}
 		Ok(())
