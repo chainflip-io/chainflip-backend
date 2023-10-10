@@ -27,7 +27,9 @@ let DEFAULT_GAS_CONSUMPTION = 260000;
 const MIN_TEST_GAS_CONSUMPTION = 200000;
 const MAX_TEST_GAS_CONSUMPTION = 4000000;
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
-const GAS_PER_BYTE = 16;
+// EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
+const GAS_PER_BYTE = 17;
+const EXPECTED_PRIORITY_FEE = 1000000000;
 
 let stopObservingCcmReceived = false;
 
@@ -147,10 +149,6 @@ async function testGasLimitSwap(
   swapScheduledObserved = true;
   await Promise.all([swapExecutedHandle, swapEgressHandle, ccmBroadcastHandle]);
 
-  console.log(
-    `${tag} swapId: ${swapId} broadcastId: ${egressIdToBroadcastId[swapIdToEgressId[swapId]]}`,
-  );
-
   const egressBudgetAmount =
     sourceAsset !== Assets.ETH
       ? Number(swapIdToEgressAmount[swapId].replace(/,/g, ''))
@@ -166,10 +164,6 @@ async function testGasLimitSwap(
   const gasLimitBudget = egressBudgetAmount / currentFeePerGas;
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
-
-  console.log(
-    `${tag} egressBudgetAmount: ${egressBudgetAmount}, baseFee: ${baseFee}, priorityFee: ${priorityFee}, gasLimitBudget: ${gasLimitBudget}`,
-  );
 
   const minGasLimitRequired = gasConsumption + MIN_BASE_GAS_OVERHEAD + byteLength * GAS_PER_BYTE;
 
@@ -217,9 +211,8 @@ async function testGasLimitSwap(
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
     if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
-      console.log(`${tag} tx.maxFeePerGas: ${tx.maxFeePerGas} maxFeePerGas: ${maxFeePerGas}`);
       throw new Error(
-        `${tag} Max fee per gas in the transaction is different than the one expected!`,
+        `${tag} Max fee per gas in the transaction ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
       );
     }
     if (Math.trunc(tx.gas) !== Math.min(Math.trunc(gasLimitBudget), CFE_GAS_LIMIT_CAP)) {
@@ -262,7 +255,7 @@ export async function testGasLimitCcmSwaps() {
   const spamming = spamEthereum();
 
   // Wait for the fees to increase to the stable expected amount
-  while ((await getChainFees()).priorityFee !== 1000000000) {
+  while ((await getChainFees()).priorityFee !== EXPECTED_PRIORITY_FEE) {
     await sleep(500);
   }
 
