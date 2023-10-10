@@ -895,7 +895,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
-	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
+	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
+	{
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
 		{
@@ -933,7 +934,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		Ok((channel_id, deposit_address))
+		Ok((channel_id, deposit_address, expiry_height))
 	}
 }
 
@@ -987,13 +988,12 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
-	type BlockNumber = BlockNumberFor<T>;
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) =
+		let (channel_id, deposit_address, ..) =
 			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
 		Ok((channel_id, deposit_address.into()))
@@ -1007,8 +1007,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) = Self::open_channel(
+	) -> Result<
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		DispatchError,
+	> {
+		let (channel_id, deposit_address, expiry_height) = Self::open_channel(
 			source_asset,
 			match channel_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
@@ -1025,6 +1028,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			},
 		)?;
 
-		Ok((channel_id, deposit_address.into()))
+		Ok((channel_id, deposit_address.into(), expiry_height))
 	}
 }

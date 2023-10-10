@@ -23,6 +23,7 @@ pub struct BrokerSwapDepositAddress {
 	pub address: String,
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
+	// pub deposit_chain_expiry_block: BlockNumber,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -31,6 +32,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			address: value.address,
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
+			// deposit_chain_expiry_block: value.
 		}
 	}
 }
