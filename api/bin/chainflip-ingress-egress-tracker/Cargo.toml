@@ -1,5 +1,5 @@
 [package]
-name = "chainflip-btc-deposit-tracker"
+name = "chainflip-ingress-egress-tracker"
 version = "0.1.0"
 edition = "2021"
 

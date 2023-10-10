@@ -1408,29 +1408,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chainflip-btc-deposit-tracker"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "cf-primitives",
- "chainflip-engine",
- "futures",
- "jsonrpsee 0.16.2",
- "pallet-cf-environment",
- "parity-scale-codec",
- "reqwest",
- "serde",
- "sp-core",
- "state-chain-runtime",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.17",
- "utilities",
-]
-
-[[package]]
 name = "chainflip-cli"
 version = "0.9.0"
 dependencies = [
@@ -1538,6 +1515,29 @@ dependencies = [
  "x25519-dalek 1.1.1",
  "zeroize",
  "zmq",
+]
+
+[[package]]
+name = "chainflip-ingress-egress-tracker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cf-primitives",
+ "chainflip-engine",
+ "futures",
+ "jsonrpsee 0.16.2",
+ "pallet-cf-environment",
+ "parity-scale-codec",
+ "reqwest",
+ "serde",
+ "sp-core",
+ "state-chain-runtime",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.17",
+ "utilities",
 ]
 
 [[package]]
