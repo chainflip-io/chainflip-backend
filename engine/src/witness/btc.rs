@@ -24,7 +24,8 @@ use super::common::{chain_source::extension::ChainSourceExt, epoch_source::Epoch
 
 use anyhow::Result;
 
-const SAFETY_MARGIN: usize = 6;
+// safety margin of 5 implies 6 block confirmations
+const SAFETY_MARGIN: usize = 5;
 
 pub async fn start<
 	StateChainClient,
