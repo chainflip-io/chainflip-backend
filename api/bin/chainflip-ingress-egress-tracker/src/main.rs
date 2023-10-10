@@ -121,9 +121,12 @@ impl BtcRpc {
 			})
 			.collect::<Vec<String>>()
 			.join(",");
+
+		let username = env::var("BTC_USERNAME").unwrap_or("flip".to_string());
+		let password = env::var("BTC_PASSWORD").unwrap_or("flip".to_string());
 		reqwest::Client::new()
 			.post(url)
-			.basic_auth("flip", Some("flip"))
+			.basic_auth(username, Some(password))
 			.header("Content-Type", "text/plain")
 			.body(format!("[{}]", body))
 			.send()
@@ -345,13 +348,18 @@ async fn main() -> anyhow::Result<()> {
 		.unwrap();
 	let eth_key_path = eth_key_temp_file.path();
 
+	let eth_ws_endpoint = env::var("ETH_WS_ENDPOINT").unwrap_or("ws://localhost:8546".to_string());
+	let eth_http_endpoint =
+		env::var("ETH_HTTP_ENDPOINT").unwrap_or("http://localhost:8545".to_string());
+	let sc_ws_endpoint = env::var("SC_WS_ENDPOINT").unwrap_or("ws://localhost:9944".to_string());
+
 	let settings = DepositTrackerSettings {
 		eth_node: WsHttpEndpoints {
-			ws_endpoint: "ws://localhost:8546".into(),
-			http_endpoint: "http://localhost:8545".into(),
+			ws_endpoint: eth_ws_endpoint.into(),
+			http_endpoint: eth_http_endpoint.into(),
 		},
 		eth_key_path: eth_key_path.into(),
-		state_chain_ws_endpoint: "ws://localhost:9944".into(),
+		state_chain_ws_endpoint: sc_ws_endpoint.into(),
 	};
 
 	witnessing::start(settings, witness_sender.clone());
