@@ -122,6 +122,8 @@ impl Dot {
 	}
 }
 
+// Checks that the url has a port number. NB: Will also return a "No port found" error if a
+// non-default port is present with wss/https schemes.
 fn validate_port_exists(url: &SecretUrl) -> Result<()> {
 	let parsed_url =
 		Url::parse(url.as_ref()).context(format!("Error parsing url: {url}").to_string())?;
@@ -735,12 +737,12 @@ pub mod tests {
 		BTC_BACKUP_RPC_USER => "second.user",
 		BTC_BACKUP_RPC_PASSWORD => "second.password",
 
-		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
-		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_WS_ENDPOINT => "ws://my_fake_polkadot_rpc:443/<secret_key>",
+		DOT_HTTP_ENDPOINT => "http://my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_BACKUP_WS_ENDPOINT =>
-		"wss://second.my_fake_polkadot_rpc:443/<secret_key>",
+		"ws://second.my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_BACKUP_HTTP_ENDPOINT =>
-		"https://second.my_fake_polkadot_rpc:443/<secret_key>"
+		"http://second.my_fake_polkadot_rpc:443/<secret_key>"
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -765,7 +767,7 @@ pub mod tests {
 		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(
 			settings.dot.nodes.primary.ws_endpoint.as_ref(),
-			"wss://my_fake_polkadot_rpc:443/<secret_key>"
+			"ws://my_fake_polkadot_rpc:443/<secret_key>"
 		);
 		assert_eq!(
 			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
@@ -773,7 +775,7 @@ pub mod tests {
 		);
 		assert_eq!(
 			settings.dot.nodes.backup.unwrap().ws_endpoint.as_ref(),
-			"wss://second.my_fake_polkadot_rpc:443/<secret_key>"
+			"ws://second.my_fake_polkadot_rpc:443/<secret_key>"
 		);
 	}
 
@@ -1004,5 +1006,34 @@ pub mod tests {
 		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
 		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
 		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
+	}
+
+	#[test]
+	fn test_dot_port_validation() {
+		let valid_settings = Dot {
+			nodes: NodeContainer {
+				primary: WsHttpEndpoints {
+					ws_endpoint: "wss://valid.endpoint_with_default_port:8080/secret_key".into(),
+					http_endpoint: "https://valid.endpoint_with_default_port:80/secret_key".into(),
+				},
+				backup: Some(WsHttpEndpoints {
+					ws_endpoint: "ws://valid.endpoint_with_port:1234".into(),
+					http_endpoint: "http://valid.endpoint_with_port:6969".into(),
+				}),
+			},
+		};
+		assert_ok!(valid_settings.validate_settings());
+
+		let mut invalid_primary_settings = valid_settings.clone();
+		invalid_primary_settings.nodes.primary.ws_endpoint =
+			"ws://invalid.no_port_in_url/secret_key".into();
+		assert!(invalid_primary_settings.validate_settings().is_err());
+
+		let mut invalid_backup_settings = valid_settings.clone();
+		invalid_backup_settings.nodes.backup = Some(WsHttpEndpoints {
+			ws_endpoint: "ws://valid.endpoint_with_port:443".into(),
+			http_endpoint: "http://invalid.no_port_in_url/secret_key".into(),
+		});
+		assert!(invalid_backup_settings.validate_settings().is_err());
 	}
 }
