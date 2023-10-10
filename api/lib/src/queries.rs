@@ -5,6 +5,7 @@ use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use pallet_cf_ingress_egress::DepositChannelDetails;
+use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
 use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, sync::Arc};
@@ -142,5 +143,39 @@ impl QueryApi {
 				&account_id,
 			)
 			.await?)
+	}
+
+	pub async fn get_update_state(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<bool, anyhow::Error> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		if self
+			.state_chain_client
+			.storage_value::<pallet_cf_validator::CurrentRotationPhase<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await? == RotationPhase::Idle
+		{
+			return Ok(true)
+		}
+
+		let current_validators = self
+			.state_chain_client
+			.storage_value::<pallet_cf_validator::CurrentAuthorities<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		for validator in current_validators.iter() {
+			if account_id == *validator {
+				return Ok(false)
+			}
+		}
+
+		Ok(true)
 	}
 }

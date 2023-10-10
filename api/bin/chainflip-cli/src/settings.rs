@@ -150,6 +150,8 @@ pub enum CliCommand {
 		#[clap(help = "Name in UTF-8 (max length 64)")]
 		name: String,
 	},
+	#[clap(about = "Check if it is safe to update your node/engine")]
+	CheckUpdate {},
 	#[clap(
         // This is only useful for testing. No need to show to the end user.
         hide = true,

@@ -124,6 +124,7 @@ async fn run_cli() -> Result<()> {
 				VanityName { name } => {
 					api.operator_api().set_vanity_name(name).await?;
 				},
+				CheckUpdate {} => get_update_state(api.query_api()).await?,
 				ForceRotation {} => {
 					api.governance_api().force_rotation().await?;
 				},
@@ -286,6 +287,17 @@ async fn get_bound_executor_address(api: QueryApi) -> Result<()> {
 		println!("Your account is bound to executor address: {bound_address:?}");
 	} else {
 		println!("Your account is not bound to any executor address.");
+	}
+
+	Ok(())
+}
+
+async fn get_update_state(api: QueryApi) -> Result<()> {
+	let can_update = api.get_update_state(None, None).await?;
+	if can_update {
+		println!("You can safely update your node/engine");
+	} else {
+		println!("A rotation is in progress and you are an Authority, please wait till the end of the rotation to update your node/engine");
 	}
 
 	Ok(())
