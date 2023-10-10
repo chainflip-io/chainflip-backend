@@ -127,10 +127,9 @@ impl BenchmarkValueExtended for () {
 impl BenchmarkValue for TransactionMetadata {
 	fn benchmark_value() -> Self {
 		TransactionMetadata {
-			gas_limit: None,
 			contract: H160::zero(),
-			max_fee_per_gas: todo!(),
-			max_priority_fee_per_gas: todo!(),
+			max_fee_per_gas: Some(U256::zero()),
+			max_priority_fee_per_gas: Some(U256::zero()),
 		}
 	}
 }

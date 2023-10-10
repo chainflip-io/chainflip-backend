@@ -1,5 +1,5 @@
 use cf_chains::evm::{
-	EvmCrypto, SchnorrVerificationComponents, TransactionFee, TransactionMetadata, U256,
+	EvmCrypto, SchnorrVerificationComponents, TransactionFee, TransactionMetadata,
 };
 use cf_primitives::EpochIndex;
 use ethers::{
@@ -131,13 +131,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								})?
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
-							// TODO: check the metadata is correct
-							// let tx_metadata = TransactionMetadata {
-							// 	gas_limit: gas_used,
-							// 	contract: to.expect("To have an contract"),
-							// 	max_fee_per_gas: effective_gas_price,
-							// 	max_priority_fee_per_gas: Some(U256::zero()),
-							// };
+
+							let transaction = eth_rpc.get_transaction(event.tx_hash).await;
+							let tx_metadata = TransactionMetadata {
+								contract: to.expect("To have an contract"),
+								max_fee_per_gas: transaction.max_fee_per_gas,
+								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+							};
 							pallet_cf_broadcast::Call::<
 								_,
 								<Inner::Chain as PalletInstanceAlias>::Instance,
@@ -148,7 +148,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								},
 								signer_id: from,
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
-								tx_metadata: Default::default(),
+								tx_metadata,
 							}
 							.into()
 						},

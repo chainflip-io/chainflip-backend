@@ -125,6 +125,8 @@ pub trait EthRpcApi: Send {
 		newest_block: BlockNumber,
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory>;
+
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
 }
 
 #[async_trait::async_trait]
@@ -185,6 +187,13 @@ impl EthRpcApi for EthRpcClient {
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory> {
 		Ok(self.signer.fee_history(block_count, last_block, reward_percentiles).await?)
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
+		self.signer
+			.get_transaction(tx_hash)
+			.await?
+			.ok_or_else(|| anyhow!("Getting ETH transaction for tx hash {} returned None", tx_hash))
 	}
 }
 

@@ -355,14 +355,9 @@ pub struct Transaction {
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub struct TransactionMetadata {
-	// maxFeePerGas = baseFeePerGas + maxPriorityFeePerGas // effective_gas_price
 	pub max_fee_per_gas: Option<Uint>,
-	// Tip
 	pub max_priority_fee_per_gas: Option<Uint>,
-	// contract
 	pub contract: Address,
-	// gas used
-	pub gas_limit: Option<Uint>,
 }
 
 impl Transaction {
