@@ -892,6 +892,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Opens a channel for the given asset and registers it with the given action.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
+	#[allow(clippy::type_complexity)]
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
