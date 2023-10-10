@@ -126,7 +126,12 @@ impl BenchmarkValueExtended for () {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for TransactionMetadata {
 	fn benchmark_value() -> Self {
-		TransactionMetadata { gas_limit: None, contract: H160::zero(), value: U256::zero() }
+		TransactionMetadata {
+			gas_limit: None,
+			contract: H160::zero(),
+			max_fee_per_gas: todo!(),
+			max_priority_fee_per_gas: todo!(),
+		}
 	}
 }
 

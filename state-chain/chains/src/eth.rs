@@ -123,7 +123,8 @@ impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
 		TransactionMetadata {
 			gas_limit: transaction.gas_limit,
 			contract: transaction.contract,
-			value: transaction.value,
+			max_fee_per_gas: transaction.max_fee_per_gas,
+			max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
 		}
 	}
 
@@ -133,7 +134,8 @@ impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
 	) -> bool {
 		metadata.gas_limit == expected_metadata.gas_limit &&
 			metadata.contract == expected_metadata.contract &&
-			metadata.value == expected_metadata.value
+			metadata.max_fee_per_gas == expected_metadata.max_fee_per_gas &&
+			metadata.max_priority_fee_per_gas == expected_metadata.max_priority_fee_per_gas
 	}
 }
 

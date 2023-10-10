@@ -1,4 +1,6 @@
-use cf_chains::evm::{EvmCrypto, SchnorrVerificationComponents, TransactionFee};
+use cf_chains::evm::{
+	EvmCrypto, SchnorrVerificationComponents, TransactionFee, TransactionMetadata, U256,
+};
 use cf_primitives::EpochIndex;
 use ethers::{
 	prelude::abigen,
@@ -60,6 +62,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainCrypto = EvmCrypto,
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
+			TransactionMetaData = TransactionMetadata,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -107,8 +110,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							sig_data,
 							..
 						}) => {
-							let TransactionReceipt { gas_used, effective_gas_price, from, .. } =
-								eth_rpc.transaction_receipt(event.tx_hash).await;
+							let TransactionReceipt {
+								gas_used, effective_gas_price, from, to, ..
+							} = eth_rpc.transaction_receipt(event.tx_hash).await;
 
 							let gas_used = gas_used
 								.ok_or_else(|| {
@@ -127,6 +131,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								})?
 								.try_into()
 								.map_err(anyhow::Error::msg)?;
+							// TODO: check the metadata is correct
+							// let tx_metadata = TransactionMetadata {
+							// 	gas_limit: gas_used,
+							// 	contract: to.expect("To have an contract"),
+							// 	max_fee_per_gas: effective_gas_price,
+							// 	max_priority_fee_per_gas: Some(U256::zero()),
+							// };
 							pallet_cf_broadcast::Call::<
 								_,
 								<Inner::Chain as PalletInstanceAlias>::Instance,
