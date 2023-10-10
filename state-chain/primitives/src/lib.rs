@@ -59,6 +59,16 @@ pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;
 pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
 pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
 
+/// This determines the average expected block time that we are targeting.
+/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
+/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
+/// up by `pallet_aura` to implement `fn slot_duration()`.
+///
+/// Change this to adjust the block time.
+pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
+
+pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
+
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>

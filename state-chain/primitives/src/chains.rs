@@ -29,13 +29,21 @@ macro_rules! chains {
 			}
 		)+
 
-		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
 		#[derive(Serialize, Deserialize)]
 		#[repr(u32)]
 		pub enum ForeignChain {
 			$(
 				$chain = $index,
 			)+
+		}
+
+		impl ForeignChain {
+			pub fn iter() -> impl Iterator<Item = Self> {
+				[
+					$( ForeignChain::$chain, )+
+				].into_iter()
+			}
 		}
 
 		impl TryFrom<u32> for ForeignChain {

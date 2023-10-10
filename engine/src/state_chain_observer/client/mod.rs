@@ -16,7 +16,7 @@ use std::{sync::Arc, time::Duration};
 use tracing::info;
 
 use utilities::{
-	make_periodic_tick, read_clean_and_decode_hex_str_file,
+	make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
 	task_scope::{Scope, ScopedJoinHandle},
 	CachedStream, MakeCachedStream,
 };
@@ -283,7 +283,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			};
 
 			const BLOCK_CAPACITY: usize = 10;
-			let (block_sender, block_receiver) = async_broadcast::broadcast::<(
+			let (block_sender, block_receiver) = spmc::channel::<(
 				state_chain_runtime::Hash,
 				state_chain_runtime::Header,
 			)>(BLOCK_CAPACITY);
@@ -309,7 +309,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							let block_header =
 								finalized_block_header_stream.next().await.unwrap()?;
 							let block_hash = block_header.hash();
-							if block_sender.broadcast((block_hash, block_header)).await.is_err() {
+							if !block_sender.send((block_hash, block_header)).await {
 								break Ok(())
 							}
 							if latest_block_hash_sender.send(block_hash).is_err() {

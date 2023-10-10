@@ -55,7 +55,7 @@ where
 						let _result = response_sender.send((receiver, inner_client.clone()));
 					} else disable,
 					if let Some(item) = inner_stream.next() => { // This branch failing causes `sender` to be dropped, this causes the proxy/duplicate streams to also end.
-						let _result = sender.send(item).await;
+						sender.send(item).await;
 					},
 					let _ = sender.closed() => { break },
 				)
