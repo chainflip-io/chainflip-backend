@@ -151,7 +151,7 @@ pub enum CliCommand {
 		name: String,
 	},
 	#[clap(about = "Check if it is safe to update your node/engine")]
-	CheckUpdate {},
+	PreUpdateCheck {},
 	#[clap(
         // This is only useful for testing. No need to show to the end user.
         hide = true,

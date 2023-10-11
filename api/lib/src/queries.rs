@@ -145,14 +145,13 @@ impl QueryApi {
 			.await?)
 	}
 
-	pub async fn get_update_state(
+	pub async fn pre_update_check(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<bool, anyhow::Error> {
-		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
-		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+		let block_hash = block_hash.unwrap_or(self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or(self.state_chain_client.account_id());
 
 		if self
 			.state_chain_client
@@ -170,10 +169,9 @@ impl QueryApi {
 				block_hash,
 			)
 			.await?;
-		for validator in current_validators.iter() {
-			if account_id == *validator {
-				return Ok(false)
-			}
+
+		if current_validators.contains(&account_id) {
+			return Ok(false)
 		}
 
 		Ok(true)
