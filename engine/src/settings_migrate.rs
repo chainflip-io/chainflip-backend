@@ -35,7 +35,7 @@ const RPC: &str = "rpc";
 
 const MIGRATED_SETTINGS_DIR: &str = "config-migrated";
 
-// Returns the path to the "config root" where the Settings.toml file to be used is located.
+// Returns the directory inside the config_root where the Settings.toml file to be used is located.
 pub fn migrate_settings0_9_3_to_0_10_0(config_root: String) -> Result<&'static str> {
 	let config_root = PathBuf::from(config_root);
 	let settings_file = config_root.join(DEFAULT_SETTINGS_DIR).join("Settings.toml");
