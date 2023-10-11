@@ -452,10 +452,7 @@ pub mod pallet {
 						.broadcast_id,
 				});
 			} else {
-				BroadcastRetryQueue::<T, I>::append(&signing_attempt.broadcast_attempt);
-				Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
-					broadcast_attempt_id: signing_attempt.broadcast_attempt.broadcast_attempt_id,
-				});
+				Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
 			}
 
 			Ok(().into())
@@ -796,8 +793,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				"Failed to select a signer for broadcast {:?}. Scheduling Retry",
 				broadcast_attempt.broadcast_attempt_id
 			);
-			BroadcastRetryQueue::<T, I>::append(&broadcast_attempt);
+			Self::schedule_for_retry(&broadcast_attempt);
 		}
+	}
+
+	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>) {
+		BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
+		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+			broadcast_attempt_id: broadcast_attempt.broadcast_attempt_id,
+		});
 	}
 }
 
