@@ -90,13 +90,13 @@ jobs:
 
       - name: Set environment
         run: |
-          if [[ '${{ inputs.network }}' == 'mainnet' ]]; then
+          if [[ '${{ inputs.environment }}' == 'prod' && '${{ inputs.network }}' == 'mainnet' ]]; then
             echo "REPO_BUCKET=pkgs.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_mainnet.outputs.keyid }}" >> $GITHUB_ENV
             echo "APTLY_CONFIG_FILE=aptly_mainnet_s3.json" >> $GITHUB_ENV
-          elif [[ '${{ inputs.environment }}' == 'prod' ]]; then
+          elif [[ '${{ inputs.environment }}' == 'prod' && '${{ inputs.network }}' != 'mainnet' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
