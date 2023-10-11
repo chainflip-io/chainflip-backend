@@ -15,7 +15,7 @@ ws_endpoint = "ws://localhost:8545"
 
 [dot.rpc]
 # NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
-ws_endpoint = "ws://my_polkadot_rpc:443/<secret_key>"
+ws_endpoint = "wss://my_polkadot_rpc:443/<secret_key>"
 http_endpoint = "http://my_polkadot_rpc:443/<secret_key>"
 
 [btc.rpc]

@@ -1499,6 +1499,7 @@ dependencies = [
  "parity-scale-codec",
  "pin-project",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "rlp",
  "rocksdb",

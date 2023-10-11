@@ -85,6 +85,7 @@ zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v
   "vendored",
 ] }
 warp = { version = "0.3.6" }
+regex = { version = "1"}
 
 # Local deps
 cf-chains = { path = "../state-chain/chains" }
