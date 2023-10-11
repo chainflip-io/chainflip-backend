@@ -8,7 +8,7 @@ use chainflip_engine::{
 	eth::retry_rpc::EthersRetryRpcClient,
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
-	settings_migrate::migrate_settings0_9_2_to_0_9_3,
+	settings_migrate::migrate_settings0_9_3_to_0_10_0,
 	state_chain_observer::{
 		self,
 		client::{
@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let opts = CommandLineOptions::parse();
 
-	migrate_settings0_9_2_to_0_9_3(opts.config_root.clone())?;
+	migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
 
 	let settings = Settings::new(opts).context("Error reading settings")?;
 

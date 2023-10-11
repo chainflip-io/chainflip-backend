@@ -31,7 +31,7 @@ const WS_NODE_ENDPOINT: &str = "ws_node_endpoint";
 const HTTP_NODE_ENDPOINT: &str = "http_node_endpoint";
 const RPC: &str = "rpc";
 
-pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
+pub fn migrate_settings0_9_3_to_0_10_0(config_root: String) -> Result<()> {
 	let settings_file = PathBuf::from(config_root).join("config/Settings.toml");
 
 	if !settings_file.is_file() {
