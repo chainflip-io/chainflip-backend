@@ -12,7 +12,9 @@ pub(super) async fn send_request<Request, F: FnOnce(oneshot::Sender<Result>) -> 
 	result_receiver
 }
 
-pub(super) fn invalid_err_obj(invalid_reason: InvalidTransaction) -> jsonrpsee::types::ErrorObjectOwned {
+pub(super) fn invalid_err_obj(
+	invalid_reason: InvalidTransaction,
+) -> jsonrpsee::types::ErrorObjectOwned {
 	jsonrpsee::types::ErrorObject::owned(
 		1010,
 		"Invalid Transaction",
