@@ -277,196 +277,219 @@ fn lookup_transactions(
 }
 
 #[cfg(test)]
-#[derive(Clone)]
-struct MockBtcRpc {
-	mempool: Vec<RawTx>,
-	latest_block_hash: String,
-	blocks: HashMap<String, Block>,
-}
+mod tests {
 
-#[cfg(test)]
-#[async_trait]
-impl BtcNode for MockBtcRpc {
-	async fn getrawmempool(&self) -> anyhow::Result<Vec<String>> {
-		Ok(self.mempool.iter().map(|x| x.txid.clone()).collect())
+	use super::*;
+
+	#[derive(Clone)]
+	struct MockBtcRpc {
+		mempool: Vec<RawTx>,
+		latest_block_hash: String,
+		blocks: HashMap<String, Block>,
 	}
-	async fn getrawtransactions(
-		&self,
-		tx_hashes: Vec<String>,
-	) -> anyhow::Result<Vec<Option<RawTx>>> {
-		let mut result: Vec<Option<RawTx>> = Default::default();
-		for hash in tx_hashes {
-			for tx in self.mempool.clone() {
-				if tx.txid == hash {
-					result.push(Some(tx))
-				} else {
-					result.push(None)
+
+	#[async_trait]
+	impl BtcNode for MockBtcRpc {
+		async fn getrawmempool(&self) -> anyhow::Result<Vec<String>> {
+			Ok(self.mempool.iter().map(|x| x.txid.clone()).collect())
+		}
+		async fn getrawtransactions(
+			&self,
+			tx_hashes: Vec<String>,
+		) -> anyhow::Result<Vec<Option<RawTx>>> {
+			let mut result: Vec<Option<RawTx>> = Default::default();
+			for hash in tx_hashes {
+				for tx in self.mempool.clone() {
+					if tx.txid == hash {
+						result.push(Some(tx))
+					} else {
+						result.push(None)
+					}
 				}
 			}
+			Ok(result)
 		}
-		Ok(result)
+		async fn getbestblockhash(&self) -> anyhow::Result<String> {
+			Ok(self.latest_block_hash.clone())
+		}
+		async fn getblock(&self, block_hash: String) -> anyhow::Result<Block> {
+			self.blocks.get(&block_hash).cloned().ok_or(anyhow!("Block missing"))
+		}
 	}
-	async fn getbestblockhash(&self) -> anyhow::Result<String> {
-		Ok(self.latest_block_hash.clone())
-	}
-	async fn getblock(&self, block_hash: String) -> anyhow::Result<Block> {
-		self.blocks.get(&block_hash).cloned().ok_or(anyhow!("Block missing"))
-	}
-}
 
-#[tokio::test]
-async fn multiple_outputs_in_one_tx() {
-	let mempool = vec![RawTx {
-		txid: "tx1".into(),
-		vout: vec![
-			Vout { value: 0.8, script_pub_key: ScriptPubKey { address: Some("address1".into()) } },
-			Vout { value: 1.2, script_pub_key: ScriptPubKey { address: Some("address2".into()) } },
-		],
-	}];
-	let latest_block_hash = "15".to_string();
-	let mut blocks: HashMap<String, Block> = Default::default();
-	for i in 1..16 {
-		blocks.insert(i.to_string(), Block { previousblockhash: (i - 1).to_string(), tx: vec![] });
-	}
-	let btc = MockBtcRpc { mempool, latest_block_hash, blocks };
-	let cache: Cache = Default::default();
-	let cache = get_updated_cache(btc, cache).await.unwrap();
-	let result = lookup_transactions(cache, vec!["address1".into(), "address2".into()]).unwrap();
-	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-	assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
-}
-
-#[tokio::test]
-async fn mempool_updates() {
-	let mempool = vec![
-		RawTx {
+	#[tokio::test]
+	async fn multiple_outputs_in_one_tx() {
+		let mempool = vec![RawTx {
 			txid: "tx1".into(),
+			vout: vec![
+				Vout {
+					value: 0.8,
+					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+				},
+				Vout {
+					value: 1.2,
+					script_pub_key: ScriptPubKey { address: Some("address2".into()) },
+				},
+			],
+		}];
+		let latest_block_hash = "15".to_string();
+		let mut blocks: HashMap<String, Block> = Default::default();
+		for i in 1..16 {
+			blocks.insert(
+				i.to_string(),
+				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
+			);
+		}
+		let btc = MockBtcRpc { mempool, latest_block_hash, blocks };
+		let cache: Cache = Default::default();
+		let cache = get_updated_cache(btc, cache).await.unwrap();
+		let result =
+			lookup_transactions(cache, vec!["address1".into(), "address2".into()]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
+	}
+
+	#[tokio::test]
+	async fn mempool_updates() {
+		let mempool = vec![
+			RawTx {
+				txid: "tx1".into(),
+				vout: vec![Vout {
+					value: 0.8,
+					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+				}],
+			},
+			RawTx {
+				txid: "tx2".into(),
+				vout: vec![Vout {
+					value: 0.8,
+					script_pub_key: ScriptPubKey { address: Some("address2".into()) },
+				}],
+			},
+		];
+		let latest_block_hash = "15".to_string();
+		let mut blocks: HashMap<String, Block> = Default::default();
+		for i in 1..16 {
+			blocks.insert(
+				i.to_string(),
+				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
+			);
+		}
+		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+		let cache: Cache = Default::default();
+		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+		let result = lookup_transactions(
+			cache.clone(),
+			vec!["address1".into(), "address2".into(), "address3".into()],
+		)
+		.unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
+		assert!(result[2].is_none());
+
+		btc.mempool.append(&mut vec![RawTx {
+			txid: "tx3".into(),
+			vout: vec![Vout {
+				value: 0.8,
+				script_pub_key: ScriptPubKey { address: Some("address3".into()) },
+			}],
+		}]);
+		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
+		let result = lookup_transactions(
+			cache.clone(),
+			vec!["address1".into(), "address2".into(), "address3".into()],
+		)
+		.unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
+		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
+
+		btc.mempool.remove(0);
+		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
+		let result = lookup_transactions(
+			cache.clone(),
+			vec!["address1".into(), "address2".into(), "address3".into()],
+		)
+		.unwrap();
+		assert!(result[0].is_none());
+		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
+		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
+	}
+
+	#[tokio::test]
+	async fn blocks() {
+		let mempool = vec![];
+		let latest_block_hash = "15".to_string();
+		let mut blocks: HashMap<String, Block> = Default::default();
+		for i in 1..19 {
+			blocks.insert(
+				i.to_string(),
+				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
+			);
+		}
+		blocks.insert(
+			"15".to_string(),
+			Block {
+				previousblockhash: "14".to_string(),
+				tx: vec![RawTx {
+					txid: "tx1".into(),
+					vout: vec![Vout {
+						value: 12.5,
+						script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+					}],
+				}],
+			},
+		);
+		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+		let cache: Cache = Default::default();
+		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+		let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		assert_eq!(result[0].as_ref().unwrap().confirmations, 1);
+
+		btc.latest_block_hash = "16".to_string();
+		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
+		let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		assert_eq!(result[0].as_ref().unwrap().confirmations, 2);
+	}
+
+	#[tokio::test]
+	async fn report_oldest_tx_only() {
+		let mempool = vec![RawTx {
+			txid: "tx2".into(),
 			vout: vec![Vout {
 				value: 0.8,
 				script_pub_key: ScriptPubKey { address: Some("address1".into()) },
 			}],
-		},
-		RawTx {
-			txid: "tx2".into(),
-			vout: vec![Vout {
-				value: 0.8,
-				script_pub_key: ScriptPubKey { address: Some("address2".into()) },
-			}],
-		},
-	];
-	let latest_block_hash = "15".to_string();
-	let mut blocks: HashMap<String, Block> = Default::default();
-	for i in 1..16 {
-		blocks.insert(i.to_string(), Block { previousblockhash: (i - 1).to_string(), tx: vec![] });
-	}
-	let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
-	let cache: Cache = Default::default();
-	let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
-	let result = lookup_transactions(
-		cache.clone(),
-		vec!["address1".into(), "address2".into(), "address3".into()],
-	)
-	.unwrap();
-	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-	assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
-	assert!(result[2].is_none());
-
-	btc.mempool.append(&mut vec![RawTx {
-		txid: "tx3".into(),
-		vout: vec![Vout {
-			value: 0.8,
-			script_pub_key: ScriptPubKey { address: Some("address3".into()) },
-		}],
-	}]);
-	let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
-	let result = lookup_transactions(
-		cache.clone(),
-		vec!["address1".into(), "address2".into(), "address3".into()],
-	)
-	.unwrap();
-	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-	assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
-	assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
-
-	btc.mempool.remove(0);
-	let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
-	let result = lookup_transactions(
-		cache.clone(),
-		vec!["address1".into(), "address2".into(), "address3".into()],
-	)
-	.unwrap();
-	assert!(result[0].is_none());
-	assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
-	assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
-}
-
-#[tokio::test]
-async fn blocks() {
-	let mempool = vec![];
-	let latest_block_hash = "15".to_string();
-	let mut blocks: HashMap<String, Block> = Default::default();
-	for i in 1..19 {
-		blocks.insert(i.to_string(), Block { previousblockhash: (i - 1).to_string(), tx: vec![] });
-	}
-	blocks.insert(
-		"15".to_string(),
-		Block {
-			previousblockhash: "14".to_string(),
-			tx: vec![RawTx {
-				txid: "tx1".into(),
-				vout: vec![Vout {
-					value: 12.5,
-					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+		}];
+		let latest_block_hash = "15".to_string();
+		let mut blocks: HashMap<String, Block> = Default::default();
+		for i in 1..16 {
+			blocks.insert(
+				i.to_string(),
+				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
+			);
+		}
+		blocks.insert(
+			"13".to_string(),
+			Block {
+				previousblockhash: "12".to_string(),
+				tx: vec![RawTx {
+					txid: "tx1".into(),
+					vout: vec![Vout {
+						value: 12.5,
+						script_pub_key: ScriptPubKey { address: Some("address1".into()) },
+					}],
 				}],
-			}],
-		},
-	);
-	let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
-	let cache: Cache = Default::default();
-	let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
-	let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
-	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-	assert_eq!(result[0].as_ref().unwrap().confirmations, 1);
-
-	btc.latest_block_hash = "16".to_string();
-	let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
-	let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
-	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-	assert_eq!(result[0].as_ref().unwrap().confirmations, 2);
-}
-
-#[tokio::test]
-async fn report_oldest_tx_only() {
-	let mempool = vec![RawTx {
-		txid: "tx2".into(),
-		vout: vec![Vout {
-			value: 0.8,
-			script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-		}],
-	}];
-	let latest_block_hash = "15".to_string();
-	let mut blocks: HashMap<String, Block> = Default::default();
-	for i in 1..16 {
-		blocks.insert(i.to_string(), Block { previousblockhash: (i - 1).to_string(), tx: vec![] });
+			},
+		);
+		let btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+		let cache: Cache = Default::default();
+		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+		let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		assert_eq!(result[0].as_ref().unwrap().confirmations, 3);
+		assert_eq!(result[0].as_ref().unwrap().value, 12.5);
 	}
-	blocks.insert(
-		"13".to_string(),
-		Block {
-			previousblockhash: "12".to_string(),
-			tx: vec![RawTx {
-				txid: "tx1".into(),
-				vout: vec![Vout {
-					value: 12.5,
-					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-				}],
-			}],
-		},
-	);
-	let btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
-	let cache: Cache = Default::default();
-	let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
-	let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
-	assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-	assert_eq!(result[0].as_ref().unwrap().confirmations, 3);
-	assert_eq!(result[0].as_ref().unwrap().value, 12.5);
 }
