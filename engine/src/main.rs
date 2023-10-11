@@ -12,10 +12,7 @@ use chainflip_engine::{
 	state_chain_observer::{
 		self,
 		client::{
-			chain_api::ChainApi,
-			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
-			storage_api::StorageApi,
-			StateChainClient, StateChainStreamApi,
+			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		},
 	},
 	witness::{self, common::STATE_CHAIN_CONNECTION},
@@ -33,6 +30,7 @@ use tracing::info;
 use utilities::{
 	make_periodic_tick, metrics,
 	task_scope::{self, task_scope, ScopedJoinHandle},
+	CachedStream,
 };
 
 lazy_static::lazy_static! {
@@ -48,16 +46,38 @@ enum CfeStatus {
 	Idle,
 }
 
-async fn ensure_cfe_version_record_up_to_date(
-	state_chain_client: &Arc<StateChainClient>,
-	state_chain_stream: &impl StateChainStreamApi,
-) -> anyhow::Result<()> {
-	let recorded_version = state_chain_client
-		.storage_map_entry::<pallet_cf_validator::NodeCFEVersion<state_chain_runtime::Runtime>>(
-			state_chain_stream.cache().block_hash,
-			&state_chain_client.account_id(),
-		)
-		.await?;
+async fn ensure_cfe_version_record_up_to_date(settings: &Settings) -> anyhow::Result<()> {
+	use subxt::{ext::sp_core::Pair, SubstrateConfig};
+	// We subxt because it is capable of dynamic decoding of values and we can't be sure that
+	// we can decode all types statically.
+	let subxt_client =
+		subxt::OnlineClient::<SubstrateConfig>::from_url(&settings.state_chain.ws_endpoint).await?;
+	let signer = subxt::tx::PairSigner::new(subxt::ext::sp_core::sr25519::Pair::from_seed(
+		&utilities::read_clean_and_decode_hex_str_file(
+			&settings.state_chain.signing_key_file,
+			"Signing Key",
+			|str| {
+				<[u8; 32]>::try_from(hex::decode(str)?).map_err(|e| {
+					anyhow::anyhow!("Failed to decode signing key: Wrong length. {e:?}")
+				})
+			},
+		)?,
+	));
+
+	let recorded_version = <SemVer as codec::Decode>::decode(
+		&mut subxt_client
+			.storage()
+			.at_latest()
+			.await?
+			.fetch_or_default(&subxt::storage::dynamic(
+				"Validator",
+				"NodeCFEVersion",
+				vec![signer.account_id()],
+			))
+			.await?
+			.encoded(),
+	)
+	.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
 
 	// Note that around CFE upgrade period, the less recent version might still be running (and
 	// can even be *the* "active" instance), so it is important that it doesn't downgrade the
@@ -65,14 +85,26 @@ async fn ensure_cfe_version_record_up_to_date(
 	if CFE_VERSION.is_more_recent_than(recorded_version) {
 		info!("Updating CFE version record from {:?} to {:?}", recorded_version, *CFE_VERSION);
 
-		state_chain_client
-			.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
-				new_version: *CFE_VERSION,
-			})
-			.await
-			.until_finalized()
-			.await
-			.context("Failed to submit version to state chain")?;
+		subxt_client
+			.tx()
+			.sign_and_submit_then_watch_default(
+				&subxt::dynamic::tx(
+					"Validator",
+					"cfe_version",
+					vec![(
+						"new_version",
+						vec![
+							("major", CFE_VERSION.major),
+							("minor", CFE_VERSION.minor),
+							("patch", CFE_VERSION.patch),
+						],
+					)],
+				),
+				&signer,
+			)
+			.await?
+			.wait_for_in_block()
+			.await?;
 	}
 
 	Ok(())
@@ -106,20 +138,7 @@ async fn main() -> anyhow::Result<()> {
 
 			let mut cfe_status = CfeStatus::Idle;
 
-			let (state_chain_stream, state_chain_client) =
-				state_chain_observer::client::StateChainClient::connect_with_account(
-					scope,
-					&settings.state_chain.ws_endpoint,
-					&settings.state_chain.signing_key_file,
-					AccountRole::Validator,
-					true,
-				)
-				.await?;
-
-			ensure_cfe_version_record_up_to_date(&state_chain_client, &state_chain_stream).await?;
-
-			// Use Option so we can take it out later without cloning (while inside a loop)
-			let mut stream_container = Some(state_chain_stream);
+			ensure_cfe_version_record_up_to_date(&settings).await?;
 
 			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
 			loop {
@@ -150,10 +169,8 @@ async fn main() -> anyhow::Result<()> {
 
 							let settings = settings.clone();
 
-							let state_chain_stream = stream_container.take().expect("only called once");
-							let state_chain_client = state_chain_client.clone();
 							let handle = scope.spawn_with_handle(
-								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
+								task_scope(|scope| start(scope, settings).boxed())
 							);
 
 							// Effectively, we want to move the files from the temp-migrated location, to the standard location
@@ -177,8 +194,6 @@ async fn main() -> anyhow::Result<()> {
 async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: Settings,
-	state_chain_stream: impl StateChainStreamApi + Clone,
-	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()> {
 	let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
@@ -189,6 +204,16 @@ async fn start(
 	if let Some(prometheus_settings) = &settings.prometheus {
 		metrics::start(scope, prometheus_settings).await?;
 	}
+
+	let (state_chain_stream, state_chain_client) =
+		state_chain_observer::client::StateChainClient::connect_with_account(
+			scope,
+			&settings.state_chain.ws_endpoint,
+			&settings.state_chain.signing_key_file,
+			AccountRole::Validator,
+			true,
+		)
+		.await?;
 
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
