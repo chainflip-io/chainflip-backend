@@ -1001,11 +1001,11 @@ fn can_calculate_percentage_cfe_at_target_version() {
 		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
 
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(initial_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
 			Percent::from_percent(100)
 		);
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(next_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(next_version),
 			Percent::from_percent(0)
 		);
 
@@ -1015,29 +1015,29 @@ fn can_calculate_percentage_cfe_at_target_version() {
 			assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(*id), next_version,));
 		});
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(initial_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
 			Percent::from_percent(40)
 		);
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(next_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(next_version),
 			Percent::from_percent(60)
 		);
 
 		// Change authorities
 		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(initial_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(initial_version),
 			Percent::from_percent(0)
 		);
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(next_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(next_version),
 			Percent::from_percent(100)
 		);
 
 		// Version checking ignores `patch`.
 		let compatible_version = SemVer { major: 6, minor: 0, patch: 6 };
 		assert_eq!(
-			ValidatorPallet::precent_authorities_at_version(compatible_version),
+			ValidatorPallet::percent_authorities_compatible_with_version(compatible_version),
 			Percent::from_percent(100)
 		);
 	});

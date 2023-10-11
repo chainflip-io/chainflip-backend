@@ -104,7 +104,7 @@ parameter_types! {
 
 pub struct MockAuthoritiesCfeVersions;
 impl AuthoritiesCfeVersions for MockAuthoritiesCfeVersions {
-	fn precent_authorities_at_version(_version: SemVer) -> Percent {
+	fn percent_authorities_compatible_with_version(_version: SemVer) -> Percent {
 		PercentCfeAtTargetVersion::get()
 	}
 }
