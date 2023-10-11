@@ -335,6 +335,8 @@ where
 	deserializer.deserialize_any(PathVisitor)
 }
 
+pub const SETTINGS_IN_CONFIG_ROOT: &str = "config/Settings.toml";
+
 /// Describes behaviour required by a struct to be used for as settings/configuration
 pub trait CfSettings
 where
@@ -358,7 +360,7 @@ where
 		// If the file does not exist we will try and continue anyway.
 		// Because if all of the settings are covered in the environment, cli options and defaults,
 		// then we don't need it.
-		let settings_file = PathBuf::from(config_root.clone()).join("config/Settings.toml");
+		let settings_file = PathBuf::from(config_root.clone()).join(SETTINGS_IN_CONFIG_ROOT);
 		let file_present = settings_file.is_file();
 		if file_present {
 			builder = builder.add_source(File::from(settings_file.clone()));

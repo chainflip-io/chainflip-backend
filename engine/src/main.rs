@@ -25,7 +25,10 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+	path::PathBuf,
+	sync::{atomic::AtomicBool, Arc},
+};
 use tracing::info;
 use utilities::{
 	make_periodic_tick, metrics,
@@ -79,9 +82,12 @@ async fn ensure_cfe_version_record_up_to_date(
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 
-	let opts = CommandLineOptions::parse();
+	let mut opts = CommandLineOptions::parse();
+	let provided_config_root = PathBuf::from(opts.config_root.clone());
 
-	migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
+	let used_config_root = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
+	opts.config_root =
+		used_config_root.to_str().context("Invalid config-root provided")?.to_string();
 
 	let settings = Settings::new(opts).context("Error reading settings")?;
 
@@ -148,6 +154,12 @@ async fn main() -> anyhow::Result<()> {
 							let handle = scope.spawn_with_handle(
 								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
 							);
+
+							// Effectively, we want to move the files from the temp-migrated location, to the location
+							// that the user has specified they want the file to be - updating it in-place.
+							// Note: the backup was already created and is in this folder too.
+							std::fs::rename(&used_config_root, &provided_config_root)
+								.context("Unable to replace old settings with temp settings")?;
 
 							cfe_status = CfeStatus::Active(handle);
 						} else {
