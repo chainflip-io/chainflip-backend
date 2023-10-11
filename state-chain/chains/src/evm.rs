@@ -358,6 +358,7 @@ pub struct TransactionMetadata {
 	pub max_fee_per_gas: Option<Uint>,
 	pub max_priority_fee_per_gas: Option<Uint>,
 	pub contract: Address,
+	pub gas_limit: Option<Uint>,
 }
 
 impl Transaction {

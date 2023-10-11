@@ -124,6 +124,7 @@ impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
 			contract: transaction.contract,
 			max_fee_per_gas: transaction.max_fee_per_gas,
 			max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+			gas_limit: transaction.gas_limit,
 		}
 	}
 
@@ -143,7 +144,14 @@ impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
 				(None, None) => true,
 				_ => false,
 			};
-		contracts && max_fee_per_gas && max_priority_fee_per_gas
+		// TODO: I don't think there is a reason to have gas_limit optional - maybe we should change
+		// that?
+		let gas_limit = match (metadata.gas_limit, expected_metadata.gas_limit) {
+			(Some(a), Some(b)) => a == b,
+			(None, None) => true,
+			_ => false,
+		};
+		contracts && max_fee_per_gas && max_priority_fee_per_gas && gas_limit
 	}
 }
 

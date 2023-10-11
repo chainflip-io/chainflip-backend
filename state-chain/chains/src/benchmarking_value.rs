@@ -130,6 +130,7 @@ impl BenchmarkValue for TransactionMetadata {
 			contract: H160::zero(),
 			max_fee_per_gas: Some(U256::zero()),
 			max_priority_fee_per_gas: Some(U256::zero()),
+			gas_limit: None,
 		}
 	}
 }

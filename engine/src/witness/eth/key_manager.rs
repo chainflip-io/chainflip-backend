@@ -137,6 +137,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								contract: to.expect("To have an contract"),
 								max_fee_per_gas: transaction.max_fee_per_gas,
 								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+								gas_limit: Some(transaction.gas),
 							};
 							pallet_cf_broadcast::Call::<
 								_,
