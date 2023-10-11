@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{error, info};
+use utilities::task_scope;
 
 type TxHash = String;
 type BlockHash = String;
@@ -292,10 +293,9 @@ impl BtcTracker {
 	}
 }
 
-pub async fn start() -> BtcTracker {
+pub async fn start(scope: &task_scope::Scope<'_, anyhow::Error>) -> BtcTracker {
 	let cache: Arc<Mutex<Cache>> = Default::default();
-	// TODO: spawn using task_scope
-	tokio::task::spawn({
+	scope.spawn({
 		let cache = cache.clone();
 		async move {
 			let mut interval = tokio::time::interval(Duration::from_secs(REFRESH_INTERVAL));

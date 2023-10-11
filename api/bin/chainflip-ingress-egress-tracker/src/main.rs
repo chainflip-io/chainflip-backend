@@ -1,7 +1,9 @@
 use chainflip_engine::settings::WsHttpEndpoints;
+use futures::FutureExt;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
 use std::{env, io::Write, net::SocketAddr, path::PathBuf};
 use tracing::log;
+use utilities::task_scope;
 
 mod witnessing;
 
@@ -12,8 +14,10 @@ pub struct DepositTrackerSettings {
 	state_chain_ws_endpoint: String,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn start(
+	scope: &task_scope::Scope<'_, anyhow::Error>,
+	settings: DepositTrackerSettings,
+) -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
@@ -21,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 	let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 
-	let btc_tracker = witnessing::btc::start().await;
+	let btc_tracker = witnessing::btc::start(scope).await;
 
 	module.register_async_method("status", move |arguments, _context| {
 		let btc_tracker = btc_tracker.clone();
@@ -40,29 +44,7 @@ async fn main() -> anyhow::Result<()> {
 	let (witness_sender, _) =
 		tokio::sync::broadcast::channel::<state_chain_runtime::RuntimeCall>(EVENT_BUFFER_SIZE);
 
-	// Temporary hack: we don't actually use eth key, but the current witnesser is
-	// expecting a path with a valid key, so we create a temporary dummy key file here:
-	let mut eth_key_temp_file = tempfile::NamedTempFile::new()?;
-	eth_key_temp_file
-		.write_all(b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-		.unwrap();
-	let eth_key_path = eth_key_temp_file.path();
-
-	let eth_ws_endpoint = env::var("ETH_WS_ENDPOINT").unwrap_or("ws://localhost:8546".to_string());
-	let eth_http_endpoint =
-		env::var("ETH_HTTP_ENDPOINT").unwrap_or("http://localhost:8545".to_string());
-	let sc_ws_endpoint = env::var("SC_WS_ENDPOINT").unwrap_or("ws://localhost:9944".to_string());
-
-	let settings = DepositTrackerSettings {
-		eth_node: WsHttpEndpoints {
-			ws_endpoint: eth_ws_endpoint.into(),
-			http_endpoint: eth_http_endpoint.into(),
-		},
-		eth_key_path: eth_key_path.into(),
-		state_chain_ws_endpoint: sc_ws_endpoint,
-	};
-
-	witnessing::start(settings, witness_sender.clone());
+	witnessing::start(scope, settings, witness_sender.clone()).await?;
 
 	module.register_subscription(
 		"subscribe_witnessing",
@@ -86,7 +68,40 @@ async fn main() -> anyhow::Result<()> {
 
 	let addr = server.local_addr()?;
 	log::info!("Listening on http://{}", addr);
-	let serverhandle = Box::pin(server.start(module)?.stopped());
-	let _ = serverhandle.await;
+
+	scope.spawn(async {
+		server.start(module)?.stopped().await;
+		// If the server stops for some reason, we return
+		// error to terminate other tasks and the process.
+		Err(anyhow::anyhow!("RPC server stopped"))
+	});
+
 	Ok(())
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+	// Temporary hack: we don't actually use eth key, but the current witnesser is
+	// expecting a path with a valid key, so we create a temporary dummy key file here:
+	let mut eth_key_temp_file = tempfile::NamedTempFile::new()?;
+	eth_key_temp_file
+		.write_all(b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+		.unwrap();
+	let eth_key_path = eth_key_temp_file.path();
+
+	let eth_ws_endpoint = env::var("ETH_WS_ENDPOINT").unwrap_or("ws://localhost:8546".to_string());
+	let eth_http_endpoint =
+		env::var("ETH_HTTP_ENDPOINT").unwrap_or("http://localhost:8545".to_string());
+	let sc_ws_endpoint = env::var("SC_WS_ENDPOINT").unwrap_or("ws://localhost:9944".to_string());
+
+	let settings = DepositTrackerSettings {
+		eth_node: WsHttpEndpoints {
+			ws_endpoint: eth_ws_endpoint.into(),
+			http_endpoint: eth_http_endpoint.into(),
+		},
+		eth_key_path: eth_key_path.into(),
+		state_chain_ws_endpoint: sc_ws_endpoint,
+	};
+
+	task_scope::task_scope(|scope| async move { start(scope, settings).await }.boxed()).await
 }
