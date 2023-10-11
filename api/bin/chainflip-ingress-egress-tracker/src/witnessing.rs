@@ -1,3 +1,4 @@
+mod btc;
 mod eth;
 
 use std::collections::HashMap;
