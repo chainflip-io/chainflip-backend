@@ -22,8 +22,9 @@ use utilities::{
 use crate::state_chain_observer::client::{
 	base_rpc_api,
 	error_decoder::{DispatchError, ErrorDecoder},
+	extrinsic_api::common::invalid_err_obj,
 	storage_api::StorageApi,
-	SUBSTRATE_BEHAVIOUR, extrinsic_api::common::invalid_err_obj,
+	SUBSTRATE_BEHAVIOUR,
 };
 
 use super::signer;

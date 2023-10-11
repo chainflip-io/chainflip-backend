@@ -31,7 +31,10 @@ pub trait UnsignedExtrinsicApi {
 }
 
 pub struct UnsignedExtrinsicClient {
-	request_sender: mpsc::Sender<(state_chain_runtime::RuntimeCall, oneshot::Sender<Result<H256, ExtrinsicError>>)>,
+	request_sender: mpsc::Sender<(
+		state_chain_runtime::RuntimeCall,
+		oneshot::Sender<Result<H256, ExtrinsicError>>,
+	)>,
 	_task_handle: ScopedJoinHandle<()>,
 }
 impl UnsignedExtrinsicClient {

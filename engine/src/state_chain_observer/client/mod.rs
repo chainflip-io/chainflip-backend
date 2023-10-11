@@ -24,7 +24,10 @@ use utilities::{
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
-	extrinsic_api::{signed::{signer, SignedExtrinsicApi}, unsigned},
+	extrinsic_api::{
+		signed::{signer, SignedExtrinsicApi},
+		unsigned,
+	},
 };
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
@@ -479,11 +482,13 @@ impl<
 impl<
 		BaseRpcApi: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 		SignedExtrinsicClient: Send + Sync + 'static,
-	> unsigned::UnsignedExtrinsicApi
-	for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
+	> unsigned::UnsignedExtrinsicApi for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
 {
 	/// Submit an unsigned extrinsic.
-	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> Result<H256, unsigned::ExtrinsicError>
+	async fn submit_unsigned_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> Result<H256, unsigned::ExtrinsicError>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ std::fmt::Debug
@@ -521,7 +526,10 @@ pub mod mocks {
 	use sp_core::{storage::StorageKey, H256};
 	use state_chain_runtime::AccountId;
 
-	use super::{extrinsic_api::{self, unsigned}, storage_api};
+	use super::{
+		extrinsic_api::{self, unsigned},
+		storage_api,
+	};
 
 	mock! {
 		pub StateChainClient {}
