@@ -1,12 +1,14 @@
 use std::{
 	collections::{HashMap, HashSet},
 	env,
+	sync::{Arc, Mutex},
+	time::Duration,
 };
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tracing::info;
+use tracing::{error, info};
 
 type TxHash = String;
 type BlockHash = String;
@@ -57,7 +59,7 @@ struct BlockResult {
 }
 
 #[derive(Clone, Serialize)]
-struct QueryResult {
+pub struct QueryResult {
 	confirmations: u32,
 	destination: Address,
 	value: f64,
@@ -263,8 +265,8 @@ async fn get_updated_cache<T: BtcNode>(btc: T, previous_cache: Cache) -> anyhow:
 }
 
 fn lookup_transactions(
-	cache: Cache,
-	addresses: Vec<String>,
+	cache: &Cache,
+	addresses: &[String],
 ) -> anyhow::Result<Vec<Option<QueryResult>>> {
 	match cache.status {
 		CacheStatus::Ready => Ok(addresses
@@ -274,6 +276,49 @@ fn lookup_transactions(
 		CacheStatus::Init => Err(anyhow!("Address cache is not initialised.").into()),
 		CacheStatus::Down => Err(anyhow!("Address cache is down - check btc connection.").into()),
 	}
+}
+
+#[derive(Clone)]
+pub struct BtcTracker {
+	cache: Arc<Mutex<Cache>>,
+}
+
+impl BtcTracker {
+	pub fn lookup_transactions(
+		&self,
+		addresses: &[String],
+	) -> anyhow::Result<Vec<Option<QueryResult>>> {
+		lookup_transactions(&self.cache.lock().unwrap(), addresses)
+	}
+}
+
+pub async fn start() -> BtcTracker {
+	let cache: Arc<Mutex<Cache>> = Default::default();
+	// TODO: spawn using task_scope
+	tokio::task::spawn({
+		let cache = cache.clone();
+		async move {
+			let mut interval = tokio::time::interval(Duration::from_secs(REFRESH_INTERVAL));
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+			loop {
+				interval.tick().await;
+				let cache_copy = cache.lock().unwrap().clone();
+				match get_updated_cache(BtcRpc, cache_copy).await {
+					Ok(updated_cache) => {
+						let mut cache = cache.lock().unwrap();
+						*cache = updated_cache;
+					},
+					Err(err) => {
+						error!("Error when querying Bitcoin chain: {}", err);
+						let mut cache = cache.lock().unwrap();
+						cache.status = CacheStatus::Down;
+					},
+				}
+			}
+		}
+	});
+
+	BtcTracker { cache }
 }
 
 #[cfg(test)]
@@ -343,8 +388,7 @@ mod tests {
 		let btc = MockBtcRpc { mempool, latest_block_hash, blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(btc, cache).await.unwrap();
-		let result =
-			lookup_transactions(cache, vec!["address1".into(), "address2".into()]).unwrap();
+		let result = lookup_transactions(&cache, &["address1".into(), "address2".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
 	}
@@ -378,11 +422,9 @@ mod tests {
 		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
-		let result = lookup_transactions(
-			cache.clone(),
-			vec!["address1".into(), "address2".into(), "address3".into()],
-		)
-		.unwrap();
+		let result =
+			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
+				.unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
 		assert!(result[2].is_none());
@@ -395,22 +437,18 @@ mod tests {
 			}],
 		}]);
 		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
-		let result = lookup_transactions(
-			cache.clone(),
-			vec!["address1".into(), "address2".into(), "address3".into()],
-		)
-		.unwrap();
+		let result =
+			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
+				.unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
 		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
 
 		btc.mempool.remove(0);
 		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
-		let result = lookup_transactions(
-			cache.clone(),
-			vec!["address1".into(), "address2".into(), "address3".into()],
-		)
-		.unwrap();
+		let result =
+			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
+				.unwrap();
 		assert!(result[0].is_none());
 		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
 		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
@@ -443,13 +481,13 @@ mod tests {
 		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
-		let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 1);
 
 		btc.latest_block_hash = "16".to_string();
 		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
-		let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 2);
 	}
@@ -487,7 +525,7 @@ mod tests {
 		let btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
-		let result = lookup_transactions(cache.clone(), vec!["address1".into()]).unwrap();
+		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 3);
 		assert_eq!(result[0].as_ref().unwrap().value, 12.5);

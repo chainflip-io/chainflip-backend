@@ -1,17 +1,6 @@
 use chainflip_engine::settings::WsHttpEndpoints;
-use futures::future;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{
-	collections::{HashMap, HashSet},
-	env,
-	io::Write,
-	net::SocketAddr,
-	path::PathBuf,
-	sync::{Arc, Mutex},
-	time::Duration,
-};
-use tokio::{task, time};
+use std::{env, io::Write, net::SocketAddr, path::PathBuf};
 use tracing::log;
 
 mod witnessing;
@@ -29,29 +18,6 @@ async fn main() -> anyhow::Result<()> {
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
-	let cache: Arc<Mutex<Cache>> = Default::default();
-	let updater = task::spawn({
-		let cache = cache.clone();
-		async move {
-			let mut interval = time::interval(Duration::from_secs(REFRESH_INTERVAL));
-			interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-			loop {
-				interval.tick().await;
-				let cache_copy = cache.lock().unwrap().clone();
-				match get_updated_cache(BtcRpc, cache_copy).await {
-					Ok(updated_cache) => {
-						let mut cache = cache.lock().unwrap();
-						*cache = updated_cache;
-					},
-					Err(err) => {
-						log::error!("Error when querying Bitcoin chain: {}", err);
-						let mut cache = cache.lock().unwrap();
-						cache.status = CacheStatus::Down;
-					},
-				}
-			}
-		}
-	});
 	let server = ServerBuilder::default()
 		// It seems that if the client doesn't unsubscribe correctly, a "connection"
 		// won't be released, and we will eventually reach the limit, so we increase
@@ -60,13 +26,17 @@ async fn main() -> anyhow::Result<()> {
 		.build("0.0.0.0:13337".parse::<SocketAddr>()?)
 		.await?;
 	let mut module = RpcModule::new(());
+
+	let btc_tracker = witnessing::btc::start().await;
+
 	module.register_async_method("status", move |arguments, _context| {
-		let cache = cache.clone();
+		let btc_tracker = btc_tracker.clone();
 		async move {
-			arguments
-				.parse::<Vec<String>>()
-				.map_err(Error::Call)
-				.and_then(|addresses| lookup_transactions(cache.lock().unwrap().clone(), addresses))
+			arguments.parse::<Vec<String>>().map_err(Error::Call).and_then(|addresses| {
+				btc_tracker
+					.lookup_transactions(&addresses)
+					.map_err(|err| jsonrpsee::core::Error::Custom(err.to_string()))
+			})
 		}
 	})?;
 
@@ -123,6 +93,6 @@ async fn main() -> anyhow::Result<()> {
 	let addr = server.local_addr()?;
 	log::info!("Listening on http://{}", addr);
 	let serverhandle = Box::pin(server.start(module)?.stopped());
-	let _ = future::select(serverhandle, updater).await;
+	let _ = serverhandle.await;
 	Ok(())
 }
