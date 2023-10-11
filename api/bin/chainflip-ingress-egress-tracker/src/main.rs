@@ -372,9 +372,9 @@ async fn main() -> anyhow::Result<()> {
 	witnessing::start(settings, witness_sender.clone());
 
 	module.register_subscription(
-		"subscribe_eth",
-		"s_eth",
-		"unsubscribe_eth",
+		"subscribe_witnessing",
+		"s_witnessing",
+		"unsubscribe_witnessing",
 		move |_params, mut sink, _context| {
 			let mut witness_receiver = witness_sender.subscribe();
 
