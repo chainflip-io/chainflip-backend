@@ -7,7 +7,7 @@ use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	eth::retry_rpc::EthersRetryRpcClient,
 	health, p2p,
-	settings::{CommandLineOptions, Settings},
+	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	settings_migrate::migrate_settings0_9_3_to_0_10_0,
 	state_chain_observer::{
 		self,
@@ -82,14 +82,15 @@ async fn ensure_cfe_version_record_up_to_date(
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 
-	let mut opts = CommandLineOptions::parse();
-	let provided_config_root = PathBuf::from(opts.config_root.clone());
+	let opts = CommandLineOptions::parse();
 
-	let used_config_root = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
-	opts.config_root =
-		used_config_root.to_str().context("Invalid config-root provided")?.to_string();
+	let config_root_path = PathBuf::from(&opts.config_root);
 
-	let settings = Settings::new(opts).context("Error reading settings")?;
+	// the settings directory from opts.config_root that we'll use to read the settings file
+	let settings_dir = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
+
+	let settings =
+		Settings::new_with_settings_dir(settings_dir, opts).context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
@@ -155,10 +156,10 @@ async fn main() -> anyhow::Result<()> {
 								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
 							);
 
-							// Effectively, we want to move the files from the temp-migrated location, to the location
-							// that the user has specified they want the file to be - updating it in-place.
-							// Note: the backup was already created and is in this folder too.
-							std::fs::rename(&used_config_root, &provided_config_root)
+							// Effectively, we want to move the files from the temp-migrated location, to the standard location
+							// - updating it in-place.
+							// Note: the backup was already created and is in the temp folder (which will become the new standard folder) too
+							std::fs::rename(&config_root_path.join(settings_dir), &config_root_path.join(DEFAULT_SETTINGS_DIR))
 								.context("Unable to replace old settings with temp settings")?;
 
 							cfe_status = CfeStatus::Active(handle);
