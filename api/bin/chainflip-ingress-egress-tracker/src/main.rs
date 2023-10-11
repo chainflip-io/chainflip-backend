@@ -327,7 +327,6 @@ async fn main() -> anyhow::Result<()> {
 		// won't be released, and we will eventually reach the limit, so we increase
 		// as a way to mitigate this issue.
 		// TODO: ensure that connections are always released
-		.max_connections(1000)
 		.build("0.0.0.0:13337".parse::<SocketAddr>()?)
 		.await?;
 	let mut module = RpcModule::new(());
@@ -381,7 +380,10 @@ async fn main() -> anyhow::Result<()> {
 			tokio::spawn(async move {
 				while let Ok(event) = witness_receiver.recv().await {
 					use codec::Encode;
-					let _ = sink.send(&event.encode());
+					if let Ok(false) = sink.send(&event.encode()) {
+						log::debug!("Subscription is closed");
+						break
+					}
 				}
 			});
 			Ok(())
