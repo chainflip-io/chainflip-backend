@@ -18,13 +18,7 @@ async fn main() -> anyhow::Result<()> {
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
-	let server = ServerBuilder::default()
-		// It seems that if the client doesn't unsubscribe correctly, a "connection"
-		// won't be released, and we will eventually reach the limit, so we increase
-		// as a way to mitigate this issue.
-		// TODO: ensure that connections are always released
-		.build("0.0.0.0:13337".parse::<SocketAddr>()?)
-		.await?;
+	let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 
 	let btc_tracker = witnessing::btc::start().await;
