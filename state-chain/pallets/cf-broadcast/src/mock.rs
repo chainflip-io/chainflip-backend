@@ -138,14 +138,14 @@ pub struct MockTransactionMetaDataHandler;
 
 impl TransactionMetaDataHandler<MockEthereum> for MockTransactionMetaDataHandler {
 	fn extract_metadata(
-		transaction: &<MockEthereum as Chain>::Transaction,
+		_transaction: &<MockEthereum as Chain>::Transaction,
 	) -> <MockEthereum as Chain>::TransactionMetaData {
 		Default::default()
 	}
 
 	fn verify_metadata(
-		metadata: &<MockEthereum as Chain>::TransactionMetaData,
-		expected_metadata: &<MockEthereum as Chain>::TransactionMetaData,
+		_metadata: &<MockEthereum as Chain>::TransactionMetaData,
+		_expected_metadata: &<MockEthereum as Chain>::TransactionMetaData,
 	) -> bool {
 		true
 	}
