@@ -131,9 +131,19 @@ impl TransactionMetaDataHandler<Ethereum> for EthTransactionMetaDataHandler {
 		metadata: &<Ethereum as Chain>::TransactionMetaData,
 		expected_metadata: &<Ethereum as Chain>::TransactionMetaData,
 	) -> bool {
-		metadata.contract == expected_metadata.contract &&
-			metadata.max_fee_per_gas == expected_metadata.max_fee_per_gas &&
-			metadata.max_priority_fee_per_gas == expected_metadata.max_priority_fee_per_gas
+		let contracts = metadata.contract == expected_metadata.contract;
+		let max_fee_per_gas = match (metadata.max_fee_per_gas, expected_metadata.max_fee_per_gas) {
+			(Some(a), Some(b)) => a == b,
+			(None, None) => true,
+			_ => false,
+		};
+		let max_priority_fee_per_gas =
+			match (metadata.max_priority_fee_per_gas, expected_metadata.max_priority_fee_per_gas) {
+				(Some(a), Some(b)) => a == b,
+				(None, None) => true,
+				_ => false,
+			};
+		contracts && max_fee_per_gas && max_priority_fee_per_gas
 	}
 }
 

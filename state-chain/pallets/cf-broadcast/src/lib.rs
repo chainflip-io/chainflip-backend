@@ -14,7 +14,10 @@ pub use weights::WeightInfo;
 
 impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
 
-use cf_chains::{ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
+use cf_chains::{
+	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder,
+	TransactionMetaDataHandler,
+};
 use cf_traits::{
 	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, EpochKey,
 	OnBroadcastReady, SingleSignerNomination, ThresholdSigner,
@@ -317,6 +320,8 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
+		/// An validator has been refounded.
+		ValidatorHasBeenReFounded { validator_id: SignerIdFor<T, I>, amount: ChainAmountFor<T, I> },
 	}
 
 	#[pallet::error]
@@ -507,16 +512,9 @@ pub mod pallet {
 
 			let signed_api_call = api_call.signed(&signature);
 
-			let transaction = T::TransactionBuilder::build_transaction(&signed_api_call);
-
-			TransactionMetaData::<T, I>::insert(
-				broadcast_id,
-				T::TransactionMetaDataHandler::extract_metadata(&transaction),
-			);
-
 			Self::start_broadcast(
 				&signature,
-				transaction,
+				T::TransactionBuilder::build_transaction(&signed_api_call),
 				signed_api_call,
 				threshold_signature_payload,
 				broadcast_id,
@@ -568,8 +566,13 @@ pub mod pallet {
 					.transaction_payload
 					.return_fee_refund(tx_fee);
 
-					TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
+					TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
 						*fee_deficit = fee_deficit.saturating_add(to_refund);
+					});
+
+					Self::deposit_event(Event::<T, I>::ValidatorHasBeenReFounded {
+						validator_id: signer_id,
+						amount: to_refund,
 					});
 				} else {
 					log::warn!(
@@ -788,6 +791,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_attempt.transaction_payload);
+		TransactionMetaData::<T, I>::insert(
+			broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			T::TransactionMetaDataHandler::extract_metadata(&broadcast_attempt.transaction_payload),
+		);
 
 		let seed =
 			(broadcast_attempt.broadcast_attempt_id, broadcast_attempt.transaction_payload.clone())
