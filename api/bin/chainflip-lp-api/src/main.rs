@@ -66,23 +66,23 @@ pub mod rpc_types {
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
-	#[method(name = "registerAccount")]
+	#[method(name = "register_account")]
 	async fn register_account(&self) -> Result<Hash, AnyhowRpcError>;
 
-	#[method(name = "liquidityDeposit")]
+	#[method(name = "liquidity_deposit")]
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: Asset,
 	) -> Result<String, AnyhowRpcError>;
 
-	#[method(name = "registerLiquidityRefundAddress")]
+	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
 		address: &str,
 	) -> Result<Hash, AnyhowRpcError>;
 
-	#[method(name = "withdrawAsset")]
+	#[method(name = "withdraw_asset")]
 	async fn withdraw_asset(
 		&self,
 		amount: NumberOrHex,
@@ -90,7 +90,7 @@ pub trait Rpc {
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
 
-	#[method(name = "updateRangeOrder")]
+	#[method(name = "update_range_order")]
 	async fn update_range_order(
 		&self,
 		base_asset: Asset,
@@ -101,7 +101,7 @@ pub trait Rpc {
 		size: RangeOrderSize,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
-	#[method(name = "setRangeOrder")]
+	#[method(name = "set_range_order")]
 	async fn set_range_order(
 		&self,
 		base_asset: Asset,
@@ -111,7 +111,7 @@ pub trait Rpc {
 		size: RangeOrderSize,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
-	#[method(name = "updateLimitOrder")]
+	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
 		&self,
 		sell_asset: Asset,
@@ -122,7 +122,7 @@ pub trait Rpc {
 		amount: AssetAmount,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
-	#[method(name = "setLimitOrder")]
+	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
 		&self,
 		sell_asset: Asset,
@@ -132,10 +132,10 @@ pub trait Rpc {
 		amount: AssetAmount,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
-	#[method(name = "assetBalances")]
+	#[method(name = "asset_balances")]
 	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError>;
 
-	#[method(name = "getOpenSwapChannels")]
+	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
 }
 
