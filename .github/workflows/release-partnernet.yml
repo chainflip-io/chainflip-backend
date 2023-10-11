@@ -45,4 +45,5 @@ jobs:
     with:
       version: "partnernet/"
       environment: prod
+      network: partnernet
     secrets: inherit

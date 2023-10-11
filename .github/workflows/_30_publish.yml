@@ -6,6 +6,10 @@ on:
         description: Release version
         required: true
         type: string
+      network:
+        description: mainnet or testnet
+        required: true
+        type: string
       environment:
         description: prod or dev repo
         required: true
@@ -50,19 +54,29 @@ jobs:
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
 
       - name: Configure AWS credentials using OIDC
+        if: inputs.network != 'mainnet'
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Configure aptly
-        run: |
-          aptly config show
-          jq --argjson S3PublishEndpoints "$(<.github/aptly_${{ inputs.environment }}_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
+      - name: Configure Mainnet AWS credentials using OIDC
+        if: inputs.network == 'mainnet'
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::875562862093:role/chainflip-github-bot
+
+      - name: Import mainnet GPG package signing key
+        id: import_gpg_prod
+        if: inputs.network == 'mainnet'
+        uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.CF_MAINNET_PGP_KEY }}
 
       - name: Import prod GPG package signing key
-        id: import_gpg_prod
-        if: inputs.environment == 'prod'
+        id: import_gpg_mainnet
+        if: inputs.environment == 'prod' && inputs.network != 'mainnet'
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
@@ -76,17 +90,30 @@ jobs:
 
       - name: Set environment
         run: |
-          if [[ '${{ inputs.environment }}' == 'prod' ]]; then
+          if [[ '${{ inputs.network }}' == 'mainnet' ]]; then
+            echo "REPO_BUCKET=pkgs.chainflip.io" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
+            echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
+            echo "GPG_KEY_ID=${{ steps.import_gpg_mainnet.outputs.keyid }}" >> $GITHUB_ENV
+            echo "APTLY_CONFIG_FILE=aptly_mainnet_s3.json" >> $GITHUB_ENV
+          elif [[ '${{ inputs.environment }}' == 'prod' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
+            echo "APTLY_CONFIG_FILE=aptly_prod_s3.json" >> $GITHUB_ENV
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX={user}:{pass}@" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=flip:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
+            echo "APTLY_CONFIG_FILE=aptly_dev_s3.json" >> $GITHUB_ENV
           fi
+
+      - name: Configure aptly
+        run: |
+          aptly config show
+          jq --argjson S3PublishEndpoints "$(<.github/${APTLY_CONFIG_FILE})" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
 
       - name: List keys
         run: gpg -K

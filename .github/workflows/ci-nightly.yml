@@ -43,4 +43,5 @@ jobs:
     with:
       version: nightly/
       environment: dev
+      network: development
     secrets: inherit

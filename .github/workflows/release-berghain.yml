@@ -1,10 +1,9 @@
-name: Release Chainflip Perseverance
+name: Release Chainflip Mainnet
 on:
-  push:
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+
 concurrency:
-  group: ${{ github.ref }}-release-perseverance
+  group: ${{ github.ref }}-release-mainnet
   cancel-in-progress: true
 
 jobs:
@@ -18,7 +17,7 @@ jobs:
     needs: [bins]
     uses: ./.github/workflows/_24_docker.yml
     with:
-      network: perseverance
+      network: berghain
       environment: prod
       publish_public_images: true
     secrets: inherit
@@ -26,20 +25,14 @@ jobs:
     needs: [bins]
     uses: ./.github/workflows/_25_package.yml
     with:
-      network: "perseverance"
+      network: "berghain"
       environment: prod
     secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: "perseverance/"
+      version: "mainnet/"
       environment: prod
-      network: perseverance
+      network: berghain
     secrets: inherit
-  release:
-    needs: [publish]
-    uses: ./.github/workflows/_50_release.yml
-    secrets: inherit
-    with:
-      network: perseverance

@@ -34,4 +34,5 @@ jobs:
     with:
       version: "kitkat/"
       environment: prod
+      network: kitkat
     secrets: inherit

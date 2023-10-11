@@ -45,4 +45,5 @@ jobs:
     with:
       version: "sisyphos/"
       environment: dev
+      network: sisyphos
     secrets: inherit

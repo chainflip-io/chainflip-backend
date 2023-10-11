@@ -44,4 +44,5 @@ jobs:
     with:
       version: ci/${{ github.sha }}/
       environment: dev
+      network: development
     secrets: inherit
