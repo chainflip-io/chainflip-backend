@@ -322,7 +322,14 @@ async fn main() -> anyhow::Result<()> {
 			}
 		}
 	});
-	let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
+	let server = ServerBuilder::default()
+		// It seems that if the client doesn't unsubscribe correctly, a "connection"
+		// won't be released, and we will eventually reach the limit, so we increase
+		// as a way to mitigate this issue.
+		// TODO: ensure that connections are always released
+		.max_connections(1000)
+		.build("0.0.0.0:13337".parse::<SocketAddr>()?)
+		.await?;
 	let mut module = RpcModule::new(());
 	module.register_async_method("status", move |arguments, _context| {
 		let cache = cache.clone();

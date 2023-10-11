@@ -103,7 +103,11 @@ pub(super) fn start(
 					move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
 						let witness_sender = witness_sender.clone();
 						async move {
-							witness_sender.send(call).unwrap();
+							// Send may fail if there aren't any subscribers,
+							// but it is safe to ignore the error.
+							if let Ok(n) = witness_sender.send(call) {
+								tracing::info!("Broadcasting witnesser call to {} subscribers", n);
+							}
 						}
 					}
 				};
