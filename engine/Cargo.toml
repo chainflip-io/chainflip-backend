@@ -14,8 +14,11 @@ maintainer-scripts = "package/"
 name = "chainflip-engine"
 priority = "required"
 section = "rust"
-systemd-units = { unit-name = "chainflip-engine", enable = false }
-assets = [["target/release/chainflip-engine", "usr/bin/", "755"]]
+systemd-units = [
+  { unit-name = "chainflip-engine", enable = false },
+  { unit-name = "chainflip-engine-lsr", enable = false }
+]
+assets = [["target/release/chainflip-engine", "usr/bin/chainflip-engine-lsr", "755"]]
 
 [package.metadata.deb.variants.development]
 maintainer-scripts = "package/development"
