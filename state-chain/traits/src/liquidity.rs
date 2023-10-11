@@ -22,6 +22,9 @@ pub trait SwapDepositHandler {
 pub trait LpBalanceApi {
 	type AccountId;
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress);
+
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
 		base_asset: Asset,
@@ -72,6 +75,11 @@ impl<T: frame_system::Config> SwappingApi for T {
 
 impl<T: frame_system::Config> LpBalanceApi for T {
 	type AccountId = T::AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {
+		// TODO
+	}
 
 	fn ensure_has_refund_address_for_pair(
 		_who: &Self::AccountId,

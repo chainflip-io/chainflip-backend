@@ -284,14 +284,25 @@ pub mod pallet {
 impl<T: Config> LpBalanceApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(
+		account_id: &Self::AccountId,
+		address: ForeignChainAddress,
+	) {
+		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
+	}
+
 	fn ensure_has_refund_address_for_pair(
-		who: &Self::AccountId,
+		account_id: &Self::AccountId,
 		base_asset: Asset,
 		pair_asset: Asset,
 	) -> DispatchResult {
 		ensure!(
-			LiquidityRefundAddress::<T>::contains_key(who, ForeignChain::from(base_asset)) &&
-				LiquidityRefundAddress::<T>::contains_key(who, ForeignChain::from(pair_asset)),
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
+				LiquidityRefundAddress::<T>::contains_key(
+					account_id,
+					ForeignChain::from(pair_asset)
+				),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())
