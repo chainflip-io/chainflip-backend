@@ -790,10 +790,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				transaction_out_id: broadcast_attempt.transaction_out_id,
 			});
 		} else {
-			const FAILED_SIGNER_SELECTION: &str = "Failed to select signer: We should either: a) have a signer eligible for nomination b) already have aborted this broadcast when scheduling the retry";
-			log::error!("{FAILED_SIGNER_SELECTION}");
-			#[cfg(test)]
-			panic!("{FAILED_SIGNER_SELECTION}");
+			log::warn!(
+				"Failed to select a signer for broadcast {:?}. Scheduling Retry",
+				broadcast_attempt.broadcast_attempt_id
+			);
+			BroadcastRetryQueue::<T, I>::append(&broadcast_attempt);
 		}
 	}
 }
