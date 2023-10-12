@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           if [[ -f "../${{ matrix.variant }}/preinst" ]]; then
-            bats tests/test_preinst.bats
+            bats tests/test_preinst_${{ matrix.variant }}.bats
           else
             echo "No preinst script found. Skipping preinst tests."
           fi
