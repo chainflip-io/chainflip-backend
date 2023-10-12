@@ -47,11 +47,12 @@ enum CfeStatus {
 }
 
 async fn ensure_cfe_version_record_up_to_date(settings: &Settings) -> anyhow::Result<()> {
-	use subxt::{ext::sp_core::Pair, SubstrateConfig};
-	// We subxt because it is capable of dynamic decoding of values and we can't be sure that
-	// we can decode all types statically.
+	use subxt::{ext::sp_core::Pair, PolkadotConfig};
+	// We use subxt because it is capable of dynamic decoding of values, which is important because
+	// the SC Client might be incompatible with the current runtime version.
 	let subxt_client =
-		subxt::OnlineClient::<SubstrateConfig>::from_url(&settings.state_chain.ws_endpoint).await?;
+		subxt::OnlineClient::<PolkadotConfig>::from_url(&settings.state_chain.ws_endpoint).await?;
+
 	let signer = subxt::tx::PairSigner::new(subxt::ext::sp_core::sr25519::Pair::from_seed(
 		&utilities::read_clean_and_decode_hex_str_file(
 			&settings.state_chain.signing_key_file,
