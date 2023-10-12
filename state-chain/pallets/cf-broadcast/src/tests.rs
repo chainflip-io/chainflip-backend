@@ -165,6 +165,14 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
 
+		assert_eq!(
+			System::events().get(1).expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::ValidatorHasBeenCredited {
+				validator_id: Default::default(),
+				amount: expected_refund
+			})
+		);
+
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	});
 }

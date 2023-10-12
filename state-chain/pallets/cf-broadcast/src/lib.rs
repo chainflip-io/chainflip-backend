@@ -284,6 +284,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores metadata related to a transaction.
 	#[pallet::storage]
 	pub type TransactionMetaData<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetaDataFor<T, I>>;
@@ -320,8 +321,8 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
-		/// An validator has been refounded.
-		ValidatorHasBeenReFounded { validator_id: SignerIdFor<T, I>, amount: ChainAmountFor<T, I> },
+		/// An validator refund has been credited on his account.
+		ValidatorHasBeenCredited { validator_id: SignerIdFor<T, I>, amount: ChainAmountFor<T, I> },
 	}
 
 	#[pallet::error]
@@ -570,18 +571,18 @@ pub mod pallet {
 						*fee_deficit = fee_deficit.saturating_add(to_refund);
 					});
 
-					Self::deposit_event(Event::<T, I>::ValidatorHasBeenReFounded {
+					Self::deposit_event(Event::<T, I>::ValidatorHasBeenCredited {
 						validator_id: signer_id,
 						amount: to_refund,
 					});
 				} else {
 					log::warn!(
-						"Transaction metadata verification failed for broadcast {}. Validator can not get rufunded.",
+						"Transaction metadata verification failed for broadcast {}. Validator can not get refunded.",
 						broadcast_id
 					);
 				}
 			} else {
-				log::error!("Transaction metadata not found for broadcast {}. Validator can not get rufunded.", broadcast_id);
+				log::error!("Transaction metadata not found for broadcast {}. Validator can not get refunded.", broadcast_id);
 			}
 
 			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
