@@ -2,7 +2,7 @@ use super::*;
 
 use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
 
-use cf_primitives::{AccountRole, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
+use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo, VaultRotator};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
@@ -139,7 +139,12 @@ impl Cli {
 // Engine monitoring contract
 pub struct Engine {
 	pub node_id: NodeId,
+	// Automatically responds to events and responds with "OK".
 	pub live: bool,
+	// Automatically submits heartbeat to keep alive.
+	pub auto_submit_heartbeat: bool,
+	pub last_heartbeat: BlockNumber,
+
 	// conveniently creates a threshold "signature" (not really)
 	// all engines have the same one, so they create the same sig
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
@@ -160,6 +165,8 @@ impl Engine {
 			eth_threshold_signer,
 			dot_threshold_signer,
 			btc_threshold_signer,
+			auto_submit_heartbeat: true,
+			last_heartbeat: Default::default(),
 		}
 	}
 
@@ -434,7 +441,6 @@ pub struct Network {
 }
 
 thread_local! {
-	// TODO: USE THIS IN WHEN HANDLING EVENTS INSTEAD OF DISPATCHING CALLS DIRECTLY
 	static PENDING_EXTRINSICS: RefCell<VecDeque<(state_chain_runtime::RuntimeCall, RuntimeOrigin)>> = RefCell::default();
 	static TIMESTAMP: RefCell<u64> = RefCell::new(SLOT_DURATION);
 }
@@ -505,6 +511,16 @@ impl Network {
 			.collect()
 	}
 
+	pub fn set_active_all_nodes(&mut self, active: bool) {
+		self.engines.iter_mut().for_each(|(_, e)| e.live = active);
+	}
+
+	pub fn set_auto_heartbeat_all_nodes(&mut self, auto_heartbeat: bool) {
+		self.engines
+			.iter_mut()
+			.for_each(|(_, e)| e.auto_submit_heartbeat = auto_heartbeat);
+	}
+
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
 	pub fn create(
@@ -517,6 +533,7 @@ impl Network {
 		for node in existing_nodes {
 			network.add_engine(node);
 			setup_peer_mapping(node);
+			assert_ok!(Reputation::heartbeat(RuntimeOrigin::signed(node.clone())));
 		}
 
 		// Create the backup nodes
@@ -552,16 +569,40 @@ impl Network {
 		);
 	}
 
-	pub fn move_to_next_epoch(&mut self) {
-		let blocks_per_epoch = Validator::blocks_per_epoch();
-		let current_block_number = System::block_number();
-		self.move_forward_blocks(blocks_per_epoch - (current_block_number % blocks_per_epoch));
+	/// Move to the next epoch, to the block after the completion of Authority rotation.
+	pub fn move_to_the_next_epoch(&mut self) {
+		self.move_to_the_end_of_epoch();
+		self.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 	}
 
-	pub fn submit_heartbeat_all_engines(&self) {
-		for engine in self.engines.values() {
-			let _result = Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone()));
+	/// Move to the last block of the epoch - next block will start Authority rotation
+	pub fn move_to_the_end_of_epoch(&mut self) {
+		let current_block = System::block_number();
+		let target = Validator::current_epoch_started_at() + Validator::blocks_per_epoch();
+		if target > current_block {
+			self.move_forward_blocks(target - current_block - 1)
 		}
+	}
+
+	// Submits heartbeat for keep alive.
+	// If `force_update`, submit heartbeat unconditionally.
+	// else, submit according to auto-heartbeat setting and current block_number.
+	pub fn submit_heartbeat_all_engines(&mut self, force_update: bool) {
+		let current_block = System::block_number();
+		self.engines.iter_mut().for_each(|(_, engine)| {
+			// only validator roles are allowed to submit heartbeat.
+			if AccountRoles::has_account_role(&engine.node_id, AccountRole::Validator) &&
+				match force_update {
+					true => true,
+					false =>
+						engine.auto_submit_heartbeat &&
+							engine.last_heartbeat + Validator::blocks_per_epoch() - 1 <=
+								current_block,
+				} {
+				assert_ok!(Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone())));
+				engine.last_heartbeat = current_block;
+			}
+		});
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
@@ -606,6 +647,7 @@ impl Network {
 				.unwrap()
 				.dispatch_bypass_filter(RuntimeOrigin::none()));
 
+			self.submit_heartbeat_all_engines(false);
 			dispatch_all_pending_extrinsics();
 
 			// Provide very large weight to ensure all on_idle processing can occur

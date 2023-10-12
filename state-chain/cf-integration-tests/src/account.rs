@@ -39,7 +39,7 @@ fn account_deletion_removes_relevant_storage_items() {
 			.unwrap();
 		assert!(Reputations::<Runtime>::get(backup_node.clone()).online_credits > 0);
 
-		let elon_vanity_name = "ElonShibMoonInu";
+		let elon_vanity_name = "ElonShibaMoonInu";
 		network::Cli::set_vanity_name(&backup_node, elon_vanity_name);
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert_eq!(*vanity_names.get(&backup_node).unwrap(), elon_vanity_name.as_bytes().to_vec());
