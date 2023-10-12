@@ -150,8 +150,9 @@ impl QueryApi {
 		block_hash: Option<state_chain_runtime::Hash>,
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<bool, anyhow::Error> {
-		let block_hash = block_hash.unwrap_or(self.state_chain_client.latest_finalized_hash());
-		let account_id = account_id.unwrap_or(self.state_chain_client.account_id());
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		if self
 			.state_chain_client
