@@ -31,7 +31,7 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::address::EncodedAddress;
+	use cf_chains::{address::EncodedAddress, Chain};
 	use cf_primitives::{ChannelId, EgressId};
 
 	use super::*;
@@ -103,6 +103,7 @@ pub mod pallet {
 			deposit_address: EncodedAddress,
 			// account the funds will be credited to upon deposit
 			account_id: T::AccountId,
+			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -174,7 +175,7 @@ pub mod pallet {
 				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
-			let (channel_id, deposit_address) =
+			let (channel_id, deposit_address, expiry_block) =
 				T::DepositHandler::request_liquidity_deposit_address(account_id.clone(), asset)?;
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
@@ -182,6 +183,7 @@ pub mod pallet {
 				asset,
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				account_id,
+				deposit_chain_expiry_block: expiry_block,
 			});
 
 			Ok(())
@@ -282,6 +284,30 @@ pub mod pallet {
 
 impl<T: Config> LpBalanceApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(
+		account_id: &Self::AccountId,
+		address: ForeignChainAddress,
+	) {
+		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
+	}
+
+	fn ensure_has_refund_address_for_pair(
+		account_id: &Self::AccountId,
+		base_asset: Asset,
+		pair_asset: Asset,
+	) -> DispatchResult {
+		ensure!(
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
+				LiquidityRefundAddress::<T>::contains_key(
+					account_id,
+					ForeignChain::from(pair_asset)
+				),
+			Error::<T>::NoLiquidityRefundAddressRegistered
+		);
+		Ok(())
+	}
 
 	fn try_credit_account(
 		account_id: &Self::AccountId,

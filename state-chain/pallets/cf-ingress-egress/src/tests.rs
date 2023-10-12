@@ -201,7 +201,7 @@ fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
+	let (id, address, ..) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,

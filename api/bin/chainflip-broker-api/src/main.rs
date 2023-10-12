@@ -40,10 +40,10 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
-	#[method(name = "registerAccount")]
+	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
 	async fn register_account(&self) -> Result<String, AnyhowRpcError>;
 
-	#[method(name = "requestSwapDepositAddress")]
+	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,

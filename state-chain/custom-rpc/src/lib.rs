@@ -26,7 +26,11 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{
+	collections::{BTreeMap, HashMap},
+	marker::PhantomData,
+	sync::Arc,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -50,6 +54,7 @@ pub enum RpcAccountInfo {
 		is_online: bool,
 		is_bidding: bool,
 		bound_redeem_address: Option<EthereumAddress>,
+		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 	},
 }
 
@@ -103,6 +108,11 @@ impl RpcAccountInfo {
 			is_online: info.is_online,
 			is_bidding: info.is_bidding,
 			bound_redeem_address: info.bound_redeem_address,
+			restricted_balances: info
+				.restricted_balances
+				.into_iter()
+				.map(|(address, balance)| (address, balance.into()))
+				.collect(),
 		}
 	}
 }
@@ -121,6 +131,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -569,6 +580,7 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
+			restricted_balances: account_info.restricted_balances,
 		})
 	}
 
@@ -982,6 +994,7 @@ mod test {
 			is_online: true,
 			is_qualified: true,
 			bound_redeem_address: Some(H160::from([1; 20])),
+			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
 		assert_eq!(
 			serde_json::to_value(validator).unwrap(),
@@ -998,7 +1011,10 @@ mod test {
 				"last_heartbeat": 0,
 				"online_credits": 0,
 				"reputation_points": 0,
-				"role": "validator"
+				"role": "validator",
+				"restricted_balances": {
+					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
+				}
 			})
 		);
 	}

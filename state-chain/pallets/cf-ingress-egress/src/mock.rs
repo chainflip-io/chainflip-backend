@@ -211,7 +211,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 				.map(|request| match request {
 					DepositRequest::Liquidity { lp_account, asset } =>
 						IngressEgress::request_liquidity_deposit_address(lp_account, asset)
-							.map(|(id, addr)| {
+							.map(|(id, addr, ..)| {
 								(request, id, TestChainAccount::try_from(addr).unwrap())
 							})
 							.unwrap(),
