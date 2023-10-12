@@ -39,9 +39,7 @@ start_service() {
 # Main entry point
 main() {
     check_upgrade "$1"
-    enable_service "chainflip-engine"
     enable_service "chainflip-engine-prev"
-    start_service "chainflip-engine"
     start_service "chainflip-engine-prev"
 }
 

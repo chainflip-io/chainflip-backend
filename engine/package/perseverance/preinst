@@ -76,7 +76,7 @@ check_version() {
     fi
 }
 
-move_binary() {
+copy_binary() {
     echo "chainflip-engine: Moving binary"
     mv /usr/bin/chainflip-engine /usr/bin/chainflip-engine-prev
 }
@@ -87,8 +87,7 @@ main() {
     check_upgrade "$1"
     check_version
     # stop_service "chainflip-engine-prev" #TODO: for next release, stop chainflip-engine-prev too
-    stop_service "chainflip-engine"
-    move_binary
+    copy_binary
 }
 
 # Only run the main function if the script is not being sourced
