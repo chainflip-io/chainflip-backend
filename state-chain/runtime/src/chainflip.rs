@@ -52,7 +52,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	sp_runtime::{
-		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
+		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedU64,
 	},
 	traits::Get,
@@ -179,18 +179,19 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	/// Calculate the gas limit for a Ethereum call, using the current gas price.
 	/// Currently for only CCM calls, the gas limit is calculated as:
 	/// Gas limit = gas_budget / (multiplier * base_gas_price + priority_fee)
-	/// All other calls uses a default gas limit.
+	/// All other calls uses a default gas limit. Multiplier=1 to avoid user overpaying for gas.
+	/// The max_fee_per_gas will still have the default ethereum base fee multiplier applied.
 	fn calculate_gas_limit(call: &EthereumApi<EthEnvironment>) -> Option<U256> {
 		if let Some(gas_budget) = call.gas_budget() {
-			let max_fee_per_gas = EthereumChainTracking::chain_state()
+			let current_fee_per_gas = EthereumChainTracking::chain_state()
 				.or_else(||{
 					log::warn!("No chain data for Ethereum. This should never happen. Please check Chain Tracking data.");
 					None
 				})?
 				.tracked_data
-				.max_fee_per_gas(ETHEREUM_BASE_FEE_MULTIPLIER);
+				.max_fee_per_gas(One::one());
 			Some(gas_budget
-				.checked_div(max_fee_per_gas)
+				.checked_div(current_fee_per_gas)
 				.unwrap_or_else(||{
 					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
 					Default::default()
@@ -442,19 +443,18 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
-			type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Runtime>;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-							),
+							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}
@@ -466,7 +466,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain => $pallet::request_swap_deposit_address(
@@ -476,7 +476,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
-						),
+						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}

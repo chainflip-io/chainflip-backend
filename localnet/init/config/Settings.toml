@@ -55,3 +55,6 @@ port = 5566
 
 [signing]
 db_file = "/tmp/chainflip/bashful.db"
+
+[logging]
+command_server_port = 4321
