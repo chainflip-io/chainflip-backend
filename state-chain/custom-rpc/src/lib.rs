@@ -580,7 +580,7 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
-			restricted_balances: account_info.restricted_balances.into(),
+			restricted_balances: account_info.restricted_balances,
 		})
 	}
 
