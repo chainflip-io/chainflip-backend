@@ -78,7 +78,6 @@ impl LpBalanceApi for MockBalance {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {
-		unimplemented!()
 	}
 
 	fn ensure_has_refund_address_for_pair(
@@ -86,7 +85,7 @@ impl LpBalanceApi for MockBalance {
 		_base_asset: Asset,
 		_pair_asset: Asset,
 	) -> DispatchResult {
-		unimplemented!()
+		Ok(())
 	}
 
 	fn try_credit_account(
