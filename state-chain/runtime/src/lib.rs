@@ -936,6 +936,7 @@ impl_runtime_apis! {
 				is_online: Reputation::is_qualified(&account_id),
 				is_bidding,
 				bound_redeem_address,
+				restricted_balances,
 			}
 		}
 
