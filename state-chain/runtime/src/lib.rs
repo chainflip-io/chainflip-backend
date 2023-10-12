@@ -922,6 +922,7 @@ impl_runtime_apis! {
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info.total(),
 				bond: account_info.bond(),
@@ -935,6 +936,7 @@ impl_runtime_apis! {
 				is_online: Reputation::is_qualified(&account_id),
 				is_bidding,
 				bound_redeem_address,
+				restricted_balances,
 			}
 		}
 

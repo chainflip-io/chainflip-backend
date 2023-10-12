@@ -214,8 +214,8 @@ pub trait OnAccountFunded {
 	type ValidatorId;
 	type Amount;
 
-	/// A callback that is triggered after some validator's balance has changed signigicantly,
-	/// either by funding it with more Flip, or by executing a redemption.
+	/// A callback that is triggered after some validator's balance has changed significantly,
+	/// either by funding it with more Flip, or by initiating/reverting a redemption.
 	///
 	/// Note this does not trigger on small changes like transaction fees.
 	///
