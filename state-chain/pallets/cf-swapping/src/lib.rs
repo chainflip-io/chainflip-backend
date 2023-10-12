@@ -602,6 +602,13 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
+			// LIMIT USDC SWAP DEPOSITS TO 1000 USDC
+			let deposit_amount = if from == Asset::Usdc {
+				sp_std::cmp::min(deposit_amount, 1_000 * 1_000_000)
+			} else {
+				deposit_amount
+			};
+
 			if let Some(swap_id) = Self::schedule_swap_with_check(
 				from,
 				to,
