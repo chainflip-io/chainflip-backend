@@ -7,16 +7,19 @@ use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
 };
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
-use frame_support::{pallet_prelude::*, storage::with_storage_layer};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{
+		traits::{Get, Saturating},
+		DispatchError, Permill,
+	},
+	storage::with_storage_layer,
+	traits::OnRuntimeUpgrade,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
-use sp_runtime::{
-	traits::{BlockNumberProvider, Get, Saturating},
-	DispatchError, Permill,
-};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
-
 #[cfg(test)]
 mod mock;
 
@@ -25,8 +28,11 @@ mod tests;
 
 mod benchmarking;
 
+pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
@@ -117,7 +123,7 @@ enum BatchExecutionError {
 	DispatchError { error: DispatchError },
 }
 
-/// This impl is never used. This is purely used to satisfy trait requirment
+/// This impl is never used. This is purely used to satisfy trait requirement
 impl From<DispatchError> for BatchExecutionError {
 	fn from(error: DispatchError) -> Self {
 		Self::DispatchError { error }
@@ -146,6 +152,13 @@ pub(crate) struct CcmSwap {
 	deposit_metadata: CcmDepositMetadata,
 	principal_swap_id: Option<u64>,
 	gas_swap_id: Option<u64>,
+}
+
+pub struct CcmSwapAmounts {
+	pub principal_swap_amount: AssetAmount,
+	pub gas_budget: AssetAmount,
+	// if the gas asset is different to the input asset, it will require a swap
+	pub other_gas_asset: Option<Asset>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -199,6 +212,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -223,23 +237,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, u64, (Asset, AssetAmount)>;
 
-	/// Stores the swap TTL in blocks.
-	#[pallet::storage]
-	pub type SwapTTL<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
 	pub(crate) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
 
-	/// For a given block number, stores the list of swap channels that expire at that block.
-	#[pallet::storage]
-	pub type SwapChannelExpiries<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		BlockNumberFor<T>,
-		Vec<(ChannelId, ForeignChainAddress)>,
-		ValueQuery,
-	>;
 	/// Tracks the outputs of Ccm swaps.
 	#[pallet::storage]
 	pub(crate) type CcmOutputs<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwapOutput>;
@@ -262,7 +263,6 @@ pub mod pallet {
 		SwapDepositAddressReady {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
-			expiry_block: BlockNumberFor<T>,
 			source_asset: Asset,
 			destination_asset: Asset,
 			channel_id: ChannelId,
@@ -312,13 +312,6 @@ pub mod pallet {
 		CcmEgressScheduled {
 			ccm_id: u64,
 			egress_id: EgressId,
-		},
-		SwapDepositAddressExpired {
-			deposit_address: EncodedAddress,
-			channel_id: ChannelId,
-		},
-		SwapTtlSet {
-			ttl: BlockNumberFor<T>,
 		},
 		CcmDepositReceived {
 			ccm_id: u64,
@@ -370,14 +363,13 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub swap_ttl: BlockNumberFor<T>,
 		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
+		pub _phantom: PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			SwapTTL::<T>::put(self.swap_ttl);
 			for (asset, min) in &self.minimum_swap_amounts {
 				MinimumSwapAmount::<T>::insert(asset, min);
 			}
@@ -386,27 +378,12 @@ pub mod pallet {
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			// 1200 = 2 hours (6 sec per block)
-			Self { swap_ttl: BlockNumberFor::<T>::from(1_200u32), minimum_swap_amounts: vec![] }
+			Self { minimum_swap_amounts: vec![], _phantom: PhantomData }
 		}
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Clean up expired deposit channels
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = SwapChannelExpiries::<T>::take(n);
-			let expired_count = expired.len();
-			for (channel_id, address) in expired {
-				T::DepositHandler::expire_channel(address.clone());
-				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
-					deposit_address: T::AddressConverter::to_encoded_address(address),
-					channel_id,
-				});
-			}
-			T::WeightInfo::on_initialize(expired_count as u32)
-		}
-
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			if !T::SafeMode::get().swaps_enabled {
@@ -495,6 +472,20 @@ pub mod pallet {
 				}
 			}
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
+		}
 	}
 
 	#[pallet::call]
@@ -528,9 +519,6 @@ pub mod pallet {
 				);
 			}
 
-			let expiry_block = frame_system::Pallet::<T>::current_block_number()
-				.saturating_add(SwapTTL::<T>::get());
-
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
 				destination_asset,
@@ -538,15 +526,11 @@ pub mod pallet {
 				broker_commission_bps,
 				broker,
 				channel_metadata.clone(),
-				expiry_block,
 			)?;
-
-			SwapChannelExpiries::<T>::append(expiry_block, (channel_id, deposit_address.clone()));
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
-				expiry_block,
 				source_asset,
 				destination_asset,
 				channel_id,
@@ -684,23 +668,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the lifetime of swap channels.
-		///
-		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::SwapTtlSet)
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
-		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: BlockNumberFor<T>) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			SwapTTL::<T>::set(ttl);
-
-			Self::deposit_event(Event::<T>::SwapTtlSet { ttl });
-			Ok(())
-		}
-
 		/// Sets the Minimum swap amount allowed for an asset.
 		///
 		/// Requires Governance.
@@ -724,6 +691,39 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		pub fn principal_and_gas_amounts(
+			deposit_amount: AssetAmount,
+			channel_metadata: &CcmChannelMetadata,
+			source_asset: Asset,
+			destination_asset: Asset,
+		) -> Result<CcmSwapAmounts, CcmFailReason> {
+			let gas_budget = channel_metadata.gas_budget;
+			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
+
+			if ForeignChain::Ethereum != destination_asset.into() {
+				return Err(CcmFailReason::UnsupportedForTargetChain)
+			} else if deposit_amount < gas_budget {
+				return Err(CcmFailReason::InsufficientDepositAmount)
+			} else if source_asset != destination_asset &&
+				!principal_swap_amount.is_zero() &&
+				principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
+			{
+				// If the CCM's principal requires a swap and is non-zero,
+				// then the principal swap amount must be above minimum swap amount required.
+				return Err(CcmFailReason::PrincipalSwapAmountTooLow)
+			}
+
+			// if the gas asset is different.
+			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
+			let other_gas_asset = if source_asset == output_gas_asset || gas_budget.is_zero() {
+				None
+			} else {
+				Some(output_gas_asset)
+			};
+
+			Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset })
+		}
+
 		// The address and the asset being sent or withdrawn must be compatible.
 		fn validate_destination_address(
 			destination_address: &EncodedAddress,
@@ -1011,38 +1011,28 @@ pub mod pallet {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
-			let principal_swap_amount =
-				deposit_amount.saturating_sub(deposit_metadata.channel_metadata.gas_budget);
+			let CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset } =
+				match Self::principal_and_gas_amounts(
+					deposit_amount,
+					&deposit_metadata.channel_metadata,
+					source_asset,
+					destination_asset,
+				) {
+					Ok(amounts) => amounts,
+					Err(reason) => {
+						// Confiscate the deposit and emit an event.
+						CollectedRejectedFunds::<T>::mutate(source_asset, |fund| {
+							*fund = fund.saturating_add(deposit_amount)
+						});
 
-			// Checks the validity of CCM.
-			let error = if ForeignChain::Ethereum != destination_asset.into() {
-				Some(CcmFailReason::UnsupportedForTargetChain)
-			} else if deposit_amount < deposit_metadata.channel_metadata.gas_budget {
-				Some(CcmFailReason::InsufficientDepositAmount)
-			} else if source_asset != destination_asset &&
-				!principal_swap_amount.is_zero() &&
-				principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
-			{
-				// If the CCM's principal requires a swap and is non-zero,
-				// then the principal swap amount must be above minimum swap amount required.
-				Some(CcmFailReason::PrincipalSwapAmountTooLow)
-			} else {
-				None
-			};
-
-			if let Some(reason) = error {
-				// Confiscate the deposit and emit an event.
-				CollectedRejectedFunds::<T>::mutate(source_asset, |fund| {
-					*fund = fund.saturating_add(deposit_amount)
-				});
-
-				Self::deposit_event(Event::<T>::CcmFailed {
-					reason,
-					destination_address: encoded_destination_address,
-					deposit_metadata,
-				});
-				return
-			}
+						Self::deposit_event(Event::<T>::CcmFailed {
+							reason,
+							destination_address: encoded_destination_address,
+							deposit_metadata,
+						});
+						return
+					},
+				};
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
@@ -1075,31 +1065,27 @@ pub mod pallet {
 					Some(swap_id)
 				};
 
-			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
-			let gas_swap_id = if source_asset == output_gas_asset ||
-				deposit_metadata.channel_metadata.gas_budget.is_zero()
-			{
-				// Deposit can be used as gas directly
-				swap_output.gas = Some(deposit_metadata.channel_metadata.gas_budget);
-				None
-			} else {
+			let gas_swap_id = if let Some(other_gas_asset) = other_gas_asset {
 				let swap_id = Self::schedule_swap_internal(
 					source_asset,
-					output_gas_asset,
-					deposit_metadata.channel_metadata.gas_budget,
+					other_gas_asset,
+					gas_budget,
 					SwapType::CcmGas(ccm_id),
 				);
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset,
-					deposit_amount: deposit_metadata.channel_metadata.gas_budget,
-					destination_asset: output_gas_asset,
+					deposit_amount: gas_budget,
+					destination_asset: other_gas_asset,
 					destination_address: encoded_destination_address.clone(),
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
 					broker_commission: None,
 				});
 				Some(swap_id)
+			} else {
+				swap_output.gas = Some(gas_budget);
+				None
 			};
 
 			Self::deposit_event(Event::<T>::CcmDepositReceived {

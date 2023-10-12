@@ -33,14 +33,25 @@ use crate::common::{
 	MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
+/// This is the invariant wrt xy = k. It represents / is proportional to the depth of the
+/// pool/position.
 pub type Liquidity = u128;
 type FeeGrowthQ128F128 = U256;
 
+/// This is the maximum Liquidity that can be associated with a given tick. Note this doesn't mean
+/// the maximum amount of Liquidity a tick can have, but is the maximum allowed value of the sum of
+/// the liquidity associated with all range orders that start or end at this tick.
+/// This does indirectly limit the maximum liquidity at any price/tick, due to the fact there is
+/// also a finite number of ticks i.e. all those in MIN_TICK..MAX_TICK. This limit exists to ensure
+/// the output amount of a swap will never overflow a U256, even if the swap used all the liquidity
+/// in the pool.
 pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
 	Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Position {
+	/// The `depth` of this range order, this value is proportional to the value of the order i.e.
+	/// the amount of assets that make up the order.
 	liquidity: Liquidity,
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
@@ -99,6 +110,9 @@ impl Position {
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
 	) -> (Collected, PositionInfo) {
+		// Before you can change the liquidity of a Position you must collect_fees, as the
+		// `last_fee_growth_inside` member (which is used to calculate earned fees) is only
+		// meaningful while liquidity is constant.
 		let collected_fees =
 			self.collect_fees(pool_state, lower_tick, lower_delta, upper_tick, upper_delta);
 		self.liquidity = new_liquidity;
@@ -108,19 +122,42 @@ impl Position {
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct TickDelta {
+	/// This is the change in the total amount of liquidity in the pool at this price, i.e. if the
+	/// price moves from a lower price to a higher one, above this tick (higher/lower in literal
+	/// integer value), the liquidity will increase by `liquidity_delta` and therefore swaps (In
+	/// both directions) will experience less slippage (Assuming liquidity_delta is positive).
 	liquidity_delta: i128,
+	/// This is the sum of the liquidity of all the orders that start or end at this tick. Note
+	/// this is the value that MAX_TICK_GROSS_LIQUIDITY applies to.
 	liquidity_gross: u128,
+	/// This is the fees per unit liquidity earned over all time while the current/swapping price
+	/// was on the opposite side of this tick than it is at the moment. This can be used to
+	/// calculate the fees earned by an order. It is stored this way as this value will only change
+	/// when the price moves across this tick, thereby limiting the computation/state changes
+	/// needed during a swap.
 	fee_growth_outside: SideMap<FeeGrowthQ128F128>,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState<LiquidityProvider> {
+	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
+	/// I.e. 5000 means 0.5%.
 	pub(super) fee_hundredth_pips: u32,
-	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
+	/// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
+	/// This is the highest tick that represents a strictly lower price than the
+	/// current_sqrt_price. `current_tick` is the tick that when you swap ZeroToOne the
+	/// `current_sqrt_price` is moving towards (going down in literal value), and will cross when
+	/// `current_sqrt_price` reachs it. `current_tick + 1` is the tick the price is moving towards
+	/// (going up in literal value) when you swap OneToZero and will cross when
+	/// `current_sqrt_price` reaches it,
 	current_tick: Tick,
+	/// The total liquidity/depth at the `current_sqrt_price`
 	current_liquidity: Liquidity,
+	/// The total fees earned over all time per unit liquidity
 	global_fee_growth: SideMap<FeeGrowthQ128F128>,
+	/// All the ticks that have at least one range order that starts or ends at it, i.e. those
+	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
@@ -849,6 +886,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.0)
 	}
 
+	/// Returns the value of a range order with a given amount of liquidity, i.e. the assets that
+	/// you would need to create such as position, or that you would get if such a position was
+	/// burned.
+	///
+	/// This function never panics
 	pub(super) fn liquidity_to_amounts<const ROUND_UP: bool>(
 		&self,
 		liquidity: Liquidity,
@@ -984,6 +1026,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
 	}
 
+	/// Returns the current value of a position i.e. the assets you would receive by burning the
+	/// position, and the fees earned by the position since the last time it was updated/collected.
+	///
+	/// This function never panics
 	pub(super) fn position(
 		&self,
 		lp: &LiquidityProvider,
@@ -1008,6 +1054,13 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		))
 	}
 
+	/// Returns a histogram of all the liquidity in the pool. Each entry in the returned vec is the
+	/// "start" tick, and the amount of liquidity in the pool from that tick, until the next tick,
+	/// i.e. the next tick in the pool. The first element will always be the MIN_TICK with some
+	/// amount of liquidity, and the last element will always be the MAX_TICK with a zero amount of
+	/// liquidity.
+	///
+	/// This function never panics
 	pub(super) fn liquidity(&self) -> Vec<(Tick, Liquidity)> {
 		let mut liquidity = 0u128;
 		self.liquidity_map

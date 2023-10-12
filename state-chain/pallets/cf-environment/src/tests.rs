@@ -46,6 +46,12 @@ fn test_btc_utxo_selection() {
 		add_utxo_amount(100000);
 		add_utxo_amount(5000000);
 		add_utxo_amount(25000);
+		// dust amount should be ignored in all cases
+		let dust_amount = {
+			use cf_traits::GetBitcoinFeeInfo;
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+		};
+		add_utxo_amount(dust_amount);
 
 		// select some utxos for a tx
 		assert_eq!(

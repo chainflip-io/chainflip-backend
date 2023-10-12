@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip-io/cli':
-    specifier: ^0.1.3
-    version: 0.1.3
+    specifier: ^0.1.4
+    version: 0.1.4
   '@polkadot/api':
     specifier: 10.7.2
     version: 10.7.2
@@ -95,8 +95,8 @@ packages:
     resolution: {integrity: sha512-0h+FrQDqe2Wn+IIGFkTCd4aAwTJ+7834Ek1COohCyV26AXhwQ7WQaz+4F/nLOeVl/3BtWHOHLPsq46V8YB46Eg==}
     dev: false
 
-  /@chainflip-io/cli@0.1.3:
-    resolution: {integrity: sha512-bCd9xMUy1VghAMjPB3hMNzNk59OOF9nLvS/gO6O9CBhohwlzOO2hf08mui0u36SerQBOYfCsRuM4OjuwzlefnQ==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.1.3/60e786fbf686f278bd78b531b7675de9ca671558}
+  /@chainflip-io/cli@0.1.4:
+    resolution: {integrity: sha512-c91GIZvyBWYYzARuJpJZzKnw00n+i++kNl3GLSyorUuMsFLEz5qkyMf0i1bFTIp/No0nvWI0MAOgnofP0zTOrQ==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.1.4/52273fa90fdea2826c552689fe54e909b57e39a5}
     hasBin: true
     dependencies:
       ethers: 6.7.1

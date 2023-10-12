@@ -33,13 +33,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup ngrok
-        run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update
-          sudo apt install ngrok
-
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
@@ -78,20 +71,6 @@ jobs:
         run: |
           chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
-
-      - name: Expose endpoints for Polkadot and Chainflip
-        env:
-          NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
-        continue-on-error: true
-        run: |
-          ngrok http http://localhost:9944 --log-format=logfmt --log=/tmp/ngrok-chainflip-node.log &
-          ngrok http http://localhost:9945 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
-          sleep 10
-
-      - name: Get ngrok URLs
-        continue-on-error: true
-        id: ngrok-urls
-        run: python3 ./ci/scripts/get_ngrok_urls.py
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer

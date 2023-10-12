@@ -16,7 +16,7 @@ use std::{sync::Arc, time::Duration};
 use tracing::info;
 
 use utilities::{
-	make_periodic_tick, read_clean_and_decode_hex_str_file,
+	make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
 	task_scope::{Scope, ScopedJoinHandle},
 	CachedStream, MakeCachedStream,
 };
@@ -283,7 +283,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			};
 
 			const BLOCK_CAPACITY: usize = 10;
-			let (block_sender, block_receiver) = async_broadcast::broadcast::<(
+			let (block_sender, block_receiver) = spmc::channel::<(
 				state_chain_runtime::Hash,
 				state_chain_runtime::Header,
 			)>(BLOCK_CAPACITY);
@@ -309,7 +309,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							let block_header =
 								finalized_block_header_stream.next().await.unwrap()?;
 							let block_hash = block_header.hash();
-							if block_sender.broadcast((block_hash, block_header)).await.is_err() {
+							if !block_sender.send((block_hash, block_header)).await {
 								break Ok(())
 							}
 							if latest_block_hash_sender.send(block_hash).is_err() {
@@ -436,13 +436,17 @@ impl<
 	for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
 {
 	type UntilFinalizedFuture = SignedExtrinsicClient::UntilFinalizedFuture;
+	type UntilInBlockFuture = SignedExtrinsicClient::UntilInBlockFuture;
 
 	fn account_id(&self) -> AccountId {
 		self.signed_extrinsic_client.account_id()
 	}
 
 	/// Submit an signed extrinsic, returning the hash of the submission
-	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, Self::UntilFinalizedFuture)
+	async fn submit_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -455,7 +459,10 @@ impl<
 	}
 
 	/// Sign, submit, and watch an extrinsic retrying if submissions fail be to finalized
-	async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> Self::UntilFinalizedFuture
+	async fn finalize_signed_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> (Self::UntilInBlockFuture, Self::UntilFinalizedFuture)
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -521,10 +528,11 @@ pub mod mocks {
 		#[async_trait]
 		impl SignedExtrinsicApi for StateChainClient {
 			type UntilFinalizedFuture = extrinsic_api::signed::MockUntilFinalized;
+			type UntilInBlockFuture = extrinsic_api::signed::MockUntilInBlock;
 
 			fn account_id(&self) -> AccountId;
 
-			async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, <Self as SignedExtrinsicApi>::UntilFinalizedFuture)
+			async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, (<Self as SignedExtrinsicApi>::UntilInBlockFuture, <Self as SignedExtrinsicApi>::UntilFinalizedFuture))
 			where
 				Call: Into<state_chain_runtime::RuntimeCall>
 					+ Clone
@@ -533,7 +541,7 @@ pub mod mocks {
 					+ Sync
 					+ 'static;
 
-			async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> <Self as SignedExtrinsicApi>::UntilFinalizedFuture
+			async fn finalize_signed_extrinsic<Call>(&self, call: Call) -> (<Self as SignedExtrinsicApi>::UntilInBlockFuture, <Self as SignedExtrinsicApi>::UntilFinalizedFuture)
 			where
 				Call: Into<state_chain_runtime::RuntimeCall>
 					+ Clone

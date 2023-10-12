@@ -33,11 +33,16 @@ mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
 
+/// For referring to either the stable or unstable asset of a particular pool
 enum Stability {
 	Stable,
 	Unstable,
 }
 
+// TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
+// nature.
+/// Represents a pair of assets in a canonical ordering, so given two different assets they are
+/// always the same way around. In this case the unstable asset is `zero` and the stable is `one`.
 #[derive(
 	Clone, DebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEqNoBound, EqNoBound,
 )]
@@ -104,6 +109,8 @@ impl<T: Config> AssetPair<T> {
 		})
 	}
 
+	/// Remaps the amounts into a SideMap, assuming the base and pair are the same way around as the
+	/// assets when this AssetPair was created.
 	pub fn asset_amounts_to_side_map(
 		&self,
 		asset_amounts: AssetAmounts,
@@ -114,6 +121,8 @@ impl<T: Config> AssetPair<T> {
 		})
 	}
 
+	/// Remaps the amounts into an AssetsMap, assuming the base and pair should be the same way
+	/// around as the assets when this AssetPair was created.
 	pub fn side_map_to_asset_amounts(
 		&self,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
@@ -121,6 +130,8 @@ impl<T: Config> AssetPair<T> {
 		Ok(self.side_map_to_assets_map(side_map.try_map(|_, amount| amount.try_into())?))
 	}
 
+	/// Remaps a SideMap into an AssetsMap, assuming the base and pair should be the same way around
+	/// as the assets when this AssetPair was created.
 	pub fn side_map_to_assets_map<R>(&self, side_map: cf_amm::common::SideMap<R>) -> AssetsMap<R> {
 		match self.base_side {
 			Side::Zero => AssetsMap { base: side_map.zero, pair: side_map.one },
@@ -140,6 +151,8 @@ impl<T: Config> AssetPair<T> {
 			})
 	}
 
+	/// Debits the specified amounts, and returns the amounts debited. If the requested amounts
+	/// couldn't be debited this is a noop and returns an error.
 	fn try_debit_assets(
 		&self,
 		lp: &T::AccountId,
@@ -148,6 +161,8 @@ impl<T: Config> AssetPair<T> {
 		self.try_xxx_assets(lp, side_map, T::LpBalance::try_debit_account)
 	}
 
+	/// Credits the specified amounts, and returns the amounts credited. If the requested amounts
+	/// couldn't be credited this is a noop and returns an error.
 	fn try_credit_assets(
 		&self,
 		lp: &T::AccountId,
@@ -168,6 +183,8 @@ impl<T: Config> AssetPair<T> {
 		Ok(asset_amount)
 	}
 
+	/// Debits the specified amount, and returns the amount debited. If the requested amount
+	/// couldn't be debited this is a noop and returns an error.
 	fn try_debit_asset(
 		&self,
 		lp: &T::AccountId,
@@ -177,6 +194,8 @@ impl<T: Config> AssetPair<T> {
 		self.try_xxx_asset(lp, side, amount, T::LpBalance::try_debit_account)
 	}
 
+	/// Credits the specified amount, and returns the amount credited. If the requested amount
+	/// couldn't be credited this is a noop and returns an error.
 	fn try_credit_asset(
 		&self,
 		lp: &T::AccountId,
@@ -273,6 +292,9 @@ pub mod pallet {
 
 	pub type AssetAmounts = AssetsMap<AssetAmount>;
 
+	/// Represents an amount of liquidity, either as an exact amount, or through maximum and minimum
+	/// amounts of both assets. Internally those max/min are converted into exact liquidity amounts,
+	/// that is if the appropiate asset ratio can be achieved while maintaining the max/min bounds.
 	#[derive(
 		Copy,
 		Clone,
@@ -291,6 +313,7 @@ pub mod pallet {
 		Liquidity { liquidity: Liquidity },
 	}
 
+	/// Indicates if an LP wishs to increase or decreease the size of an order.
 	#[derive(
 		Copy,
 		Clone,
@@ -332,7 +355,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Pools are indexed by single asset since USDC is implicit.
+	/// All the available pools.
 	#[pallet::storage]
 	pub type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, CanonicalAssetPair<T>, Pool<T>, OptionQuery>;
@@ -458,6 +481,9 @@ pub mod pallet {
 			fee_hundredth_pips: u32,
 			initial_price: Price,
 		},
+		/// Indicates the details of a change made to a range order. A single update extrinsic may
+		/// produce multiple of these events, particularly for example if the update changes the
+		/// price/range of the order.
 		RangeOrderUpdated {
 			lp: T::AccountId,
 			base_asset: Asset,
@@ -470,6 +496,9 @@ pub mod pallet {
 			assets_delta: AssetAmounts,
 			collected_fees: AssetAmounts,
 		},
+		/// Indicates the details of a change made to a limit order. A single update extrinsic may
+		/// produce multiple of these events, particularly for example if the update changes the
+		/// price of the order.
 		LimitOrderUpdated {
 			lp: T::AccountId,
 			sell_asset: Asset,
@@ -612,7 +641,8 @@ pub mod pallet {
 		/// optionally moving the order it may not be possible to allocate all the assets previously
 		/// associated with the order to the new range; If so the unused assets will be returned to
 		/// your balance. The appropriate assets will be debited or credited from your balance as
-		/// needed.
+		/// needed. If the order_id isn't being used at the moment you must specify a tick_range,
+		/// otherwise it will not know what range you want the order to be over.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::update_range_order())]
 		pub fn update_range_order(
@@ -694,7 +724,9 @@ pub mod pallet {
 		}
 
 		/// Optionally move the order to a different range and then set its amount of liquidity. The
-		/// appropriate assets will be debited or credited from your balance as needed.
+		/// appropriate assets will be debited or credited from your balance as needed. If the
+		/// order_id isn't being used at the moment you must specify a tick_range, otherwise it will
+		/// not know what range you want the order to be over.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::set_range_order())]
 		pub fn set_range_order(
@@ -760,7 +792,12 @@ pub mod pallet {
 
 		/// Optionally move the order to a different tick and then increase or decrease its amount
 		/// of liquidity. The appropiate assets will be debited or credited from your balance as
-		/// needed.
+		/// needed. If the order_id isn't being used at the moment you must specify a tick,
+		/// otherwise it will not know what tick you want the order to be over. Note limit order
+		/// order_id's are independent of range order order_id's. In addition to that, order_id's
+		/// for buy and sell limit orders i.e. those in different directions are independent.
+		/// Therefore you may have two limit orders with the same order_id in the same pool, one to
+		/// buy Eth and one to sell Eth for example.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::update_limit_order())]
 		pub fn update_limit_order(
@@ -830,7 +867,13 @@ pub mod pallet {
 		}
 
 		/// Optionally move the order to a different tick and then set its amount of liquidity. The
-		/// appropiate assets will be debited or credited from your balance as needed.
+		/// appropiate assets will be debited or credited from your balance as needed. If the
+		/// order_id isn't being used at the moment you must specify a tick, otherwise it will not
+		/// know what tick you want the order to be over. Note limit order order_id's are
+		/// independent of range order order_id's. In addition to that, order_id's for buy and sell
+		/// limit orders i.e. those in different directions are independent. Therefore you may have
+		/// two limit orders with the same order_id in the same pool, one to buy Eth and one to sell
+		/// Eth for example.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_limit_order())]
 		pub fn set_limit_order(

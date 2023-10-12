@@ -1,5 +1,8 @@
-pub use super::common::*;
 use super::StateChainEnvironment;
+pub use super::{
+	common::*,
+	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
+};
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;

@@ -5,9 +5,17 @@ use sp_core::{U256, U512};
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
 
+/// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
+/// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
+/// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
+/// in units of asset One.
 pub type Tick = i32;
+/// The square root of the price, represented as a fixed point integer with 96 fractional bits and
+/// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPriceQ64F96] is always in sqrt
+/// units of asset one.
 pub type SqrtPriceQ64F96 = U256;
+/// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
 #[derive(
@@ -149,13 +157,16 @@ pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	)
 }
 
+/// A marker type to represent a swap that buys asset One, and sells asset Zero
 pub(super) struct ZeroToOne {}
+/// A marker type to represent a swap that buys asset Zero, and sells asset One
 pub(super) struct OneToZero {}
 
 pub(super) trait SwapDirection {
+	/// The asset this type of swap sells, i.e. the asset the swapper provides
 	const INPUT_SIDE: Side;
 
-	/// Determines if a given sqrt_price is more than another
+	/// Determines if a given sqrt_price is more than another for this direction of swap.
 	fn sqrt_price_op_more_than(
 		sqrt_price: SqrtPriceQ64F96,
 		sqrt_price_other: SqrtPriceQ64F96,
@@ -215,9 +226,16 @@ impl SwapDirection for OneToZero {
 // TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
 // price representation), as at low ticks the precision in the price is VERY LOW, but this does not
 // cause any problems for the AMM code in terms of correctness
+/// This is the ratio of equivalently valued amounts of asset One and asset Zero. The price is
+/// always measured in amount of asset One per unit of asset Zero. Therefore as asset zero becomes
+/// more valuable relative to asset one the price's literal value goes up, and vice versa. This
+/// ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional bits.
 pub type Price = U256;
 pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
+/// Converts from a [SqrtPriceQ64F96] to a [Price].
+///
+/// Will panic for `sqrt_price`'s outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`
 pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
 
@@ -231,6 +249,9 @@ pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	)
 }
 
+/// Converts from a `price` to a `sqrt_price`
+///
+/// This function never panics.
 pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
 	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
 		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
@@ -238,6 +259,9 @@ pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
 		.unwrap_or(SqrtPriceQ64F96::MAX)
 }
 
+/// Converts a `tick` to a `price`. Will return `None` for ticks outside MIN_TICK..=MAX_TICK
+///
+/// This function never panics.
 pub fn price_at_tick(tick: Tick) -> Option<Price> {
 	if is_tick_valid(tick) {
 		Some(sqrt_price_to_price(sqrt_price_at_tick(tick)))
@@ -246,6 +270,10 @@ pub fn price_at_tick(tick: Tick) -> Option<Price> {
 	}
 }
 
+/// Converts a `price` to a `tick`. Will return `None` is the price is too high or low to be
+/// represented by a valid tick i.e. one inside MIN_TICK..=MAX_TICK.
+///
+/// This function never panics.
 pub fn tick_at_price(price: Price) -> Option<Tick> {
 	let sqrt_price = price_to_sqrt_price(price);
 	if is_sqrt_price_valid(sqrt_price) {

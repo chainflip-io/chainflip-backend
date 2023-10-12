@@ -1,21 +1,21 @@
 use std::{
 	collections::{btree_map, BTreeMap},
 	fmt::Display,
+	time::Instant,
 };
 
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
+use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
-
-use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+use utilities::metrics::CeremonyMetrics;
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
-use utilities::metrics::CeremonyMetrics;
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone
@@ -61,6 +61,7 @@ where
 	/// Determines the actual computations before/after
 	/// the data is collected
 	processor: Stage,
+	stage_started: Option<Instant>,
 }
 
 impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
@@ -68,7 +69,7 @@ where
 	Stage: BroadcastStageProcessor<C>,
 {
 	pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
-		BroadcastStage { common, messages: BTreeMap::new(), processor }
+		BroadcastStage { common, messages: BTreeMap::new(), processor, stage_started: None }
 	}
 }
 
@@ -99,9 +100,9 @@ impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
 	Stage: BroadcastStageProcessor<C> + Send,
 {
-	fn init(&mut self, metrics: &CeremonyMetrics) -> ProcessMessageResult {
+	fn init(&mut self, metrics: &mut CeremonyMetrics) -> ProcessMessageResult {
 		let common = &self.common;
-
+		self.stage_started = Some(Instant::now());
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
 
 		let (own_message, outgoing_messages) = match self.processor.init() {
@@ -158,7 +159,7 @@ where
 		&mut self,
 		signer_idx: AuthorityCount,
 		m: C::Data,
-		metrics: &CeremonyMetrics,
+		metrics: &mut CeremonyMetrics,
 	) -> ProcessMessageResult {
 		metrics.processed_messages.inc();
 		let m: Stage::Message = match m.try_into() {
@@ -209,11 +210,18 @@ where
 		}
 	}
 
-	async fn finalize(mut self: Box<Self>) -> StageResult<C> {
+	async fn finalize(mut self: Box<Self>, metrics: &mut CeremonyMetrics) -> StageResult<C> {
 		// Because we might want to finalize the stage before
 		// all data has been received (e.g. due to a timeout),
 		// we insert None for any missing data
+		let stage_name = self.get_stage_name().to_string();
+		if let Some(start_instant) = self.stage_started {
+			metrics
+				.stage_duration
+				.set(&[&stage_name, "receiving"], start_instant.elapsed().as_millis());
+		}
 
+		let process_msg_instant = Instant::now();
 		let mut received_messages = std::mem::take(&mut self.messages);
 
 		// Turns values T into Option<T>, inserting `None` where
@@ -225,7 +233,11 @@ where
 			.map(|idx| (*idx, received_messages.remove(idx)))
 			.collect();
 
-		self.processor.process(messages).await
+		let result = self.processor.process(messages).await;
+		metrics
+			.stage_duration
+			.set(&[&stage_name, "processing"], process_msg_instant.elapsed().as_millis());
+		result
 	}
 
 	fn awaited_parties(&self) -> std::collections::BTreeSet<AuthorityCount> {

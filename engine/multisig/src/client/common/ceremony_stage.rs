@@ -1,16 +1,15 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use async_trait::async_trait;
-use cf_primitives::{AuthorityCount, CeremonyId};
-use tokio::sync::mpsc::UnboundedSender;
-use utilities::metrics::CeremonyMetrics;
-
 use crate::{
 	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
 	crypto::Rng,
 	p2p::OutgoingMultisigStageMessages,
 	ChainSigning,
 };
+use async_trait::async_trait;
+use cf_primitives::{AuthorityCount, CeremonyId};
+use tokio::sync::mpsc::UnboundedSender;
+use utilities::metrics::CeremonyMetrics;
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<C: CeremonyTrait> {
@@ -36,7 +35,7 @@ pub enum ProcessMessageResult {
 #[async_trait]
 pub trait CeremonyStage<C: CeremonyTrait> {
 	/// Perform initial computation for this stage (and initiate communication with other parties)
-	fn init(&mut self, metrics: &CeremonyMetrics) -> ProcessMessageResult;
+	fn init(&mut self, metrics: &mut CeremonyMetrics) -> ProcessMessageResult;
 
 	/// Process message from signer at index `signer_idx`. Precondition: the signer is a valid
 	/// holder of the key and selected to participate in this ceremony (TODO: also check that
@@ -45,12 +44,12 @@ pub trait CeremonyStage<C: CeremonyTrait> {
 		&mut self,
 		signer_idx: AuthorityCount,
 		m: C::Data,
-		metrics: &CeremonyMetrics,
+		metrics: &mut CeremonyMetrics,
 	) -> ProcessMessageResult;
 
 	/// Verify data for this stage after it is received from all other parties,
 	/// either abort or proceed to the next stage based on the result
-	async fn finalize(self: Box<Self>) -> StageResult<C>;
+	async fn finalize(self: Box<Self>, metrics: &mut CeremonyMetrics) -> StageResult<C>;
 
 	/// Parties we haven't heard from for the current stage
 	fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;

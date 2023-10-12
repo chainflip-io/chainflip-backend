@@ -7,7 +7,7 @@ use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
 	AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex, GetBlockHeight, SafeMode, SetSafeMode,
-	VaultKeyWitnessedHandler, VaultTransitionHandler,
+	VaultKeyWitnessedHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -76,8 +76,6 @@ pub mod pallet {
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<
 			<<Self as pallet::Config<I>>::Chain as Chain>::ChainCrypto,
 		>;
-
-		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetAggKeyWithAggKey>;
@@ -236,7 +234,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CurrentEpochIndex::<T>::get().saturating_add(1),
 			block_number.saturating_add(One::one()),
 		);
-		T::VaultTransitionHandler::on_new_vault();
 		Self::deposit_event(Event::VaultActivationCompleted);
 	}
 
