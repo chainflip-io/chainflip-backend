@@ -117,7 +117,7 @@ fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 		// Try send a broadcast to update the total supply
 		Emissions::on_initialize((SUPPLY_UPDATE_INTERVAL * 2).into());
-		// Expect the broadcast to be sendt
+		// Expect the broadcast to be sent
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()
@@ -126,7 +126,7 @@ fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 }
 
 #[test]
-fn test_example_block_reward_calcaulation() {
+fn test_example_block_reward_calculation() {
 	use crate::calculate_inflation_to_block_reward;
 	let issuance: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip
 	let inflation: u128 = 2720; // perbill
@@ -135,7 +135,6 @@ fn test_example_block_reward_calcaulation() {
 }
 
 const BLOCKS_PER_YEAR: u64 = (365 * 24 + 6) * 60 * 60 / SECONDS_PER_BLOCK;
-
 #[test]
 fn rewards_calculation_compounding() {
 	const INITIAL_ISSUANCE: u128 = 100_000_000_000_000_000_000_000_000; // 100m Flip

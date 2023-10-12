@@ -57,6 +57,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]

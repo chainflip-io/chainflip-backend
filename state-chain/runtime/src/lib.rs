@@ -9,7 +9,7 @@ pub mod safe_mode;
 pub mod test_runner;
 mod weights;
 use crate::{
-	chainflip::Offence,
+	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{
 		AuctionState, BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
 		RuntimeApiPenalty,
@@ -83,7 +83,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
-pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
+pub use cf_traits::{AccountInfo, EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -922,6 +922,8 @@ impl_runtime_apis! {
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
 			let account_info_v1 = Self::cf_account_info(account_id.clone());
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
+			let apy_bp = calculate_account_apy(&account_id);
+
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
@@ -935,6 +937,7 @@ impl_runtime_apis! {
 				is_online: account_info_v1.is_live,
 				is_bidding,
 				bound_redeem_address,
+				apy_bp,
 			}
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {

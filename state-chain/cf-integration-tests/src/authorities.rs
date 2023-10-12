@@ -17,13 +17,13 @@ use state_chain_runtime::{
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
-fn fund_authorities_and_join_auction(
+pub fn fund_authorities_and_join_auction(
 	max_authorities: AuthorityCount,
 ) -> (network::Network, BTreeSet<NodeId>, BTreeSet<NodeId>) {
 	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 	// authorities The result will be our newly created nodes will be authorities
 	// and the genesis authorities will become backup nodes
-	let genesis_authorities = Validator::current_authorities();
+	let genesis_authorities: BTreeSet<AccountId32> = Validator::current_authorities();
 	let (mut testnet, init_backup_nodes) =
 		network::Network::create(max_authorities as u8, &genesis_authorities);
 
