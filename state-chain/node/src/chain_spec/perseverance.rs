@@ -1,4 +1,7 @@
-pub use super::common::*;
+pub use super::{
+	common::*,
+	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
+};
 use super::{parse_account, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};

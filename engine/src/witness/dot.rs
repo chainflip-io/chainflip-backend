@@ -1,12 +1,12 @@
 mod dot_chain_tracking;
+mod dot_deposits;
 mod dot_source;
 
-use cf_chains::{
-	dot::{PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotUncheckedExtrinsic},
-	Polkadot,
+use cf_chains::dot::{
+	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotUncheckedExtrinsic,
 };
-use cf_primitives::{chains::assets, PolkadotBlockNumber, TxId};
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use cf_primitives::{EpochIndex, PolkadotBlockNumber, TxId};
+use futures_core::Future;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
 	config::PolkadotConfig,
@@ -81,9 +81,18 @@ fn filter_map_events(
 	}
 }
 
-pub async fn start<StateChainClient, StateChainStream>(
+pub async fn start<
+	StateChainClient,
+	StateChainStream,
+	ProcessCall,
+	ProcessingFut,
+	PrewitnessCall,
+	PrewitnessFut,
+>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
+	process_call: ProcessCall,
+	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
@@ -92,10 +101,25 @@ pub async fn start<StateChainClient, StateChainStream>(
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	StateChainStream: StateChainStreamApi + Clone,
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
+	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
-	DotUnfinalisedSource::new(dot_client.clone())
+	let unfinalised_source = DotUnfinalisedSource::new(dot_client.clone())
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
-		.shared(scope)
+		.shared(scope);
+
+	unfinalised_source
+		.clone()
 		.chunk_by_time(epoch_source.clone())
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
 		.logging("chain tracking")
@@ -115,6 +139,20 @@ where
 		)
 		.await;
 
+	let vaults = epoch_source.vaults().await;
+
+	// Pre-witnessing
+	unfinalised_source
+		.strictly_monotonic()
+		.shared(scope)
+		.chunk_by_vault(vaults.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.dot_deposits(prewitness_call)
+		.logging("pre-witnessing")
+		.spawn(scope);
+
+	// Full witnessing
 	DotFinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
 		.logging("finalised block produced")
@@ -122,46 +160,16 @@ where
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
 		.shared(scope)
-		.chunk_by_vault(epoch_source.vaults().await)
+		.chunk_by_vault(vaults)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing
-		.then({
-			let state_chain_client = state_chain_client.clone();
-			move |epoch, header| {
-				let state_chain_client = state_chain_client.clone();
-				async move {
-					let (events, addresses_and_details) = header.data;
-
-					let addresses = address_and_details_to_addresses(addresses_and_details);
-
-					let (deposit_witnesses, broadcast_indices) =
-						deposit_witnesses(header.index, addresses, &events, &epoch.info.1);
-
-					if !deposit_witnesses.is_empty() {
-						state_chain_client
-						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(
-								pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
-									deposit_witnesses,
-									block_height: header.index,
-								}
-								.into(),
-							),
-							epoch_index: epoch.index,
-						})
-						.await;
-					}
-
-					(events, broadcast_indices)
-				}
-			}
-		})
+		.dot_deposits(process_call.clone())
 		// Proxy added witnessing
 		.then({
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			move |epoch, header| {
-				let state_chain_client = state_chain_client.clone();
+				let process_call = process_call.clone();
 				async move {
 					let (events, mut broadcast_indices) = header.data;
 
@@ -169,12 +177,7 @@ where
 					broadcast_indices.append(&mut proxy_added_broadcasts);
 
 					for call in vault_key_rotated_calls {
-						state_chain_client
-							.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-								call,
-								epoch_index: epoch.index,
-							})
-							.await;
+						process_call(call, epoch.index).await;
 					}
 
 					(events, broadcast_indices)
@@ -185,10 +188,10 @@ where
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
-			let state_chain_client = state_chain_client.clone();
+			let process_call = process_call.clone();
 			let dot_client = dot_client.clone();
 			move |epoch, header| {
-				let state_chain_client = state_chain_client.clone();
+				let process_call = process_call.clone();
 				let dot_client = dot_client.clone();
 				async move {
 					let ((events, broadcast_indices), monitored_egress_ids) = header.data;
@@ -206,25 +209,18 @@ where
 							if let Some(signature) = unchecked.signature() {
 								if monitored_egress_ids.contains(&signature) {
 									tracing::info!("Witnessing transaction_succeeded. signature: {signature:?}");
-									state_chain_client
-										.finalize_signed_extrinsic(
-											pallet_cf_witnesser::Call::witness_at_epoch {
-												call:
-													Box::new(
-														pallet_cf_broadcast::Call::<
-															_,
-															PolkadotInstance,
-														>::transaction_succeeded {
-															tx_out_id: signature,
-															signer_id: epoch.info.1,
-															tx_fee,
-														}
-														.into(),
-													),
-												epoch_index: epoch.index,
-											},
-										)
-										.await;
+									process_call(
+										pallet_cf_broadcast::Call::<
+											_,
+											PolkadotInstance,
+										>::transaction_succeeded {
+											tx_out_id: signature,
+											signer_id: epoch.info.1,
+											tx_fee,
+										}
+										.into(),
+										epoch.index,
+									).await;
 								}
 							}
 						} else {
@@ -245,56 +241,6 @@ where
 	Ok(())
 }
 
-fn address_and_details_to_addresses(
-	address_and_details: Vec<DepositChannelDetails<state_chain_runtime::Runtime, PolkadotInstance>>,
-) -> Vec<PolkadotAccountId> {
-	address_and_details
-		.into_iter()
-		.map(|deposit_channel_details| {
-			assert_eq!(deposit_channel_details.deposit_channel.asset, assets::dot::Asset::Dot);
-			deposit_channel_details.deposit_channel.address
-		})
-		.collect()
-}
-
-// Return the deposit witnesses and the extrinsic indices of transfers we want
-// to confirm the broadcast of.
-fn deposit_witnesses(
-	block_number: PolkadotBlockNumber,
-	monitored_addresses: Vec<PolkadotAccountId>,
-	events: &Vec<(Phase, EventWrapper)>,
-	our_vault: &PolkadotAccountId,
-) -> (Vec<DepositWitness<Polkadot>>, BTreeSet<PolkadotExtrinsicIndex>) {
-	let mut deposit_witnesses = vec![];
-	let mut extrinsic_indices = BTreeSet::new();
-	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			if let EventWrapper::Transfer { to, amount, from } = wrapped_event {
-				let deposit_address = PolkadotAccountId::from_aliased(to.0);
-				if monitored_addresses.contains(&deposit_address) {
-					deposit_witnesses.push(DepositWitness {
-						deposit_address,
-						asset: assets::dot::Asset::Dot,
-						amount: *amount,
-						deposit_details: (),
-					});
-				}
-				// It's possible a transfer to one of the monitored addresses comes from our_vault,
-				// so this cannot be an else if
-				if &PolkadotAccountId::from_aliased(from.0) == our_vault ||
-					&deposit_address == our_vault
-				{
-					tracing::info!(
-						"Interesting transfer at block: {block_number}, extrinsic index: {extrinsic_index} from: {from:?} to: {to:?}", 
-					);
-					extrinsic_indices.insert(*extrinsic_index);
-				}
-			}
-		}
-	}
-	(deposit_witnesses, extrinsic_indices)
-}
-
 fn transaction_fee_paids(
 	indices: &BTreeSet<PolkadotExtrinsicIndex>,
 	events: &Vec<(Phase, EventWrapper)>,
@@ -312,12 +258,11 @@ fn transaction_fee_paids(
 	indices_with_fees
 }
 
-#[allow(clippy::vec_box)]
 fn proxy_addeds(
 	block_number: PolkadotBlockNumber,
 	events: &Vec<(Phase, EventWrapper)>,
 	our_vault: &PolkadotAccountId,
-) -> (Vec<Box<state_chain_runtime::RuntimeCall>>, BTreeSet<PolkadotExtrinsicIndex>) {
+) -> (Vec<state_chain_runtime::RuntimeCall>, BTreeSet<PolkadotExtrinsicIndex>) {
 	let mut vault_key_rotated_calls = vec![];
 	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
@@ -329,13 +274,13 @@ fn proxy_addeds(
 
 				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
-				vault_key_rotated_calls.push(Box::new(
+				vault_key_rotated_calls.push(
 					pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
 						block_number,
 						tx_id: TxId { block_number, extrinsic_index },
 					}
 					.into(),
-				));
+				);
 
 				extrinsic_indices.insert(extrinsic_index);
 			}
@@ -345,22 +290,10 @@ fn proxy_addeds(
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
 	use super::*;
 
-	fn mock_transfer(
-		from: &PolkadotAccountId,
-		to: &PolkadotAccountId,
-		amount: PolkadotBalance,
-	) -> EventWrapper {
-		EventWrapper::Transfer {
-			from: from.aliased_ref().to_owned().into(),
-			to: to.aliased_ref().to_owned().into(),
-			amount,
-		}
-	}
-
-	fn phase_and_events(
+	pub fn phase_and_events(
 		events: Vec<(PolkadotExtrinsicIndex, EventWrapper)>,
 	) -> Vec<(Phase, EventWrapper)> {
 		events
@@ -381,90 +314,6 @@ mod test {
 
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid { actual_fee, tip: Default::default() }
-	}
-
-	#[test]
-	fn witness_deposits_for_addresses_we_monitor() {
-		let our_vault = PolkadotAccountId::from_aliased([0; 32]);
-
-		// we want two monitors, one sent through at start, and one sent through channel
-		const TRANSFER_1_INDEX: u32 = 1;
-		let transfer_1_deposit_address = PolkadotAccountId::from_aliased([1; 32]);
-		const TRANSFER_1_AMOUNT: PolkadotBalance = 10000;
-
-		const TRANSFER_2_INDEX: u32 = 2;
-		let transfer_2_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
-		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
-
-		const TRANSFER_FROM_OUR_VAULT_INDEX: u32 = 7;
-		const TRANFER_TO_OUR_VAULT_INDEX: u32 = 8;
-
-		const TRANSFER_TO_SELF_INDEX: u32 = 9;
-		const TRANSFER_TO_SELF_AMOUNT: PolkadotBalance = 30000;
-
-		let block_event_details = phase_and_events(vec![
-			// we'll be witnessing this from the start
-			(
-				TRANSFER_1_INDEX,
-				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
-					&transfer_1_deposit_address,
-					TRANSFER_1_AMOUNT,
-				),
-			),
-			// we'll receive this address from the channel
-			(
-				TRANSFER_2_INDEX,
-				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
-					&transfer_2_deposit_address,
-					TRANSFER_2_AMOUNT,
-				),
-			),
-			// this one is not for us
-			(
-				19,
-				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
-					&PolkadotAccountId::from_aliased([9; 32]),
-					93232,
-				),
-			),
-			(
-				TRANSFER_FROM_OUR_VAULT_INDEX,
-				mock_transfer(&our_vault, &PolkadotAccountId::from_aliased([9; 32]), 93232),
-			),
-			(
-				TRANFER_TO_OUR_VAULT_INDEX,
-				mock_transfer(&PolkadotAccountId::from_aliased([9; 32]), &our_vault, 93232),
-			),
-			// Example: Someone generates a DOT -> ETH swap, getting the DOT address that we're now
-			// monitoring for inputs. They now generate a BTC -> DOT swap, and set the destination
-			// address of the DOT to the address they generated earlier.
-			// Now our Polakdot vault is sending to an address we're monitoring for deposits.
-			(
-				TRANSFER_TO_SELF_INDEX,
-				mock_transfer(&our_vault, &transfer_2_deposit_address, TRANSFER_TO_SELF_AMOUNT),
-			),
-		]);
-
-		let (deposit_witnesses, broadcast_indices) = deposit_witnesses(
-			32,
-			vec![transfer_1_deposit_address, transfer_2_deposit_address],
-			&block_event_details,
-			&our_vault,
-		);
-
-		assert_eq!(deposit_witnesses.len(), 3);
-		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
-		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
-		assert_eq!(deposit_witnesses.get(2).unwrap().amount, TRANSFER_TO_SELF_AMOUNT);
-
-		// Check the egress and ingress fetch
-		assert_eq!(broadcast_indices.len(), 3);
-		assert!(broadcast_indices.contains(&TRANSFER_FROM_OUR_VAULT_INDEX));
-		assert!(broadcast_indices.contains(&TRANFER_TO_OUR_VAULT_INDEX));
-		assert!(broadcast_indices.contains(&TRANSFER_TO_SELF_INDEX));
 	}
 
 	#[test]

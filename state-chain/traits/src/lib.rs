@@ -634,13 +634,11 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
-	type BlockNumber;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
-		expiry: Self::BlockNumber,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -651,11 +649,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-		expiry: Self::BlockNumber,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
-
-	/// Expires a channel.
-	fn expire_channel(address: C::ChainAccount);
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -730,9 +724,6 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	}
 }
 
-pub trait VaultTransitionHandler<C: Chain> {
-	fn on_new_vault() {}
-}
 pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
@@ -808,12 +799,11 @@ pub trait GetBlockHeight<C: Chain> {
 }
 pub trait CompatibleCfeVersions {
 	fn current_compatibility_version() -> SemVer;
-	fn next_compatibility_version() -> Option<SemVer>;
 }
 
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
-	fn precent_authorities_at_version(version: SemVer) -> Percent;
+	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {

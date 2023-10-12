@@ -7,7 +7,7 @@ use cf_chains::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
 		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		Bitcoin, BitcoinFeeInfo, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EthereumAddress,
@@ -70,9 +70,6 @@ pub mod pallet {
 
 		/// The runtime's safe mode is stored in this pallet.
 		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
-
-		#[pallet::constant]
-		type BitcoinNetwork: Get<BitcoinNetwork>;
 
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
@@ -157,11 +154,6 @@ pub mod pallet {
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn next_compatibility_version)]
-	/// If this storage is set, a new version of Chainflip is available for upgrade.
-	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn network_environment)]
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
@@ -179,27 +171,16 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-		/// A new Chainflip runtime will soon be deployed at this version.
-		NextCompatibilityVersionSet { version: Option<SemVer> },
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
-			NextCompatibilityVersion::<T>::kill();
-			weight
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
-				if next_version != T::CurrentCompatibilityVersion::get() {
-					return Err("NextCompatibilityVersion does not match the current runtime".into())
-				}
-			} else {
-				return Err("NextCompatibilityVersion is not set".into())
-			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
@@ -307,35 +288,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-		/// Sets the next Chainflip compatiblity version.
-		///
-		/// This is used to signal to CFE operators that a new version of the runtime will soon be
-		/// deployed.
-		///
-		/// Requires governance origin.
-		///
-		/// ## Events
-		///
-		/// - [Success](Event::NextCompatibilityVersionSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
-		pub fn set_next_compatibility_version(
-			origin: OriginFor<T>,
-			version: Option<SemVer>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			NextCompatibilityVersion::<T>::put(version);
-
-			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version });
-
-			Ok(())
-		}
 	}
 
 	#[pallet::genesis_config]
@@ -386,15 +338,17 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn next_polkadot_proxy_account_nonce() -> PolkadotIndex {
+	pub fn next_polkadot_proxy_account_nonce(reset_nonce: bool) -> PolkadotIndex {
 		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
-			*nonce += 1;
-			*nonce - 1
-		})
-	}
+			let current_nonce = *nonce;
 
-	pub fn reset_polkadot_proxy_account_nonce() {
-		PolkadotProxyAccountNonce::<T>::set(0);
+			if reset_nonce {
+				*nonce = 0;
+			} else {
+				*nonce += 1;
+			}
+			current_nonce
+		})
 	}
 
 	pub fn add_bitcoin_utxo_to_list(
@@ -425,20 +379,24 @@ impl<T: Config> Pallet<T> {
 			T::BitcoinFeeInfo::bitcoin_fee_info();
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
-				let available_utxos = BitcoinAvailableUtxos::<T>::take();
-				(!available_utxos.is_empty()).then_some(available_utxos).and_then(
-					|available_utxos| {
-						available_utxos
-							.iter()
-							.map(|Utxo { amount, .. }| *amount)
-							.sum::<u64>()
-							.checked_sub(
-								((available_utxos.len() as u64) * fee_per_input_utxo) +
-									fee_per_output_utxo + min_fee_required_per_tx,
-							)
-							.map(|change_amount| (available_utxos, change_amount))
-					},
-				)
+				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()
+					.into_iter()
+					.filter(|utxo| utxo.amount > fee_per_input_utxo)
+					.collect();
+
+				if spendable_utxos.is_empty() {
+					return None
+				}
+
+				let total_fee = spendable_utxos.len() as u64 * fee_per_input_utxo +
+					fee_per_output_utxo + min_fee_required_per_tx;
+
+				spendable_utxos
+					.iter()
+					.map(|utxo| utxo.amount)
+					.sum::<u64>()
+					.checked_sub(total_fee)
+					.map(|change_amount| (spendable_utxos, change_amount))
 			},
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
@@ -469,8 +427,5 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	fn current_compatibility_version() -> SemVer {
 		<T as Config>::CurrentCompatibilityVersion::get()
-	}
-	fn next_compatibility_version() -> Option<SemVer> {
-		NextCompatibilityVersion::<T>::get()
 	}
 }

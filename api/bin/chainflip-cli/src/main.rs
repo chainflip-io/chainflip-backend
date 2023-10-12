@@ -57,7 +57,7 @@ async fn run_cli() -> Result<()> {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
 				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
-					let SwapDepositAddress { address, expiry_block, .. } = api
+					let SwapDepositAddress { address, .. } = api
 						.broker_api()
 						.request_swap_deposit_address(
 							params.source_asset,
@@ -71,7 +71,6 @@ async fn run_cli() -> Result<()> {
 						)
 						.await?;
 					println!("Deposit Address: {address}");
-					println!("Address expires at block {expiry_block}");
 				},
 				LiquidityProvider(
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset },

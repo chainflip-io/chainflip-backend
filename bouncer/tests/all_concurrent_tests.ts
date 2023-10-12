@@ -1,5 +1,4 @@
 #!/usr/bin/env -S pnpm tsx
-import { testLpDepositExpiry } from '../shared/lp_deposit_expiry';
 import { testAllSwaps } from '../shared/swapping';
 import { testEthereumDeposits } from '../shared/ethereum_deposits';
 import { runWithTimeout, observeBadEvents } from '../shared/utils';
@@ -13,7 +12,6 @@ async function runAllConcurrentTests() {
 
   await Promise.all([
     testAllSwaps(),
-    testLpDepositExpiry(),
     testEthereumDeposits(),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),

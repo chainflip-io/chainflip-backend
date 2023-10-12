@@ -16,7 +16,7 @@ use std::{sync::Arc, time::Duration};
 use tracing::info;
 
 use utilities::{
-	make_periodic_tick, read_clean_and_decode_hex_str_file,
+	make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
 	task_scope::{Scope, ScopedJoinHandle},
 	CachedStream, MakeCachedStream,
 };
@@ -24,7 +24,10 @@ use utilities::{
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
-	extrinsic_api::signed::{signer, SignedExtrinsicApi},
+	extrinsic_api::{
+		signed::{signer, SignedExtrinsicApi},
+		unsigned,
+	},
 };
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
@@ -81,7 +84,7 @@ pub struct StateChainClient<
 > {
 	genesis_hash: state_chain_runtime::Hash,
 	signed_extrinsic_client: SignedExtrinsicClient,
-	unsigned_extrinsic_client: extrinsic_api::unsigned::UnsignedExtrinsicClient,
+	unsigned_extrinsic_client: unsigned::UnsignedExtrinsicClient,
 	_block_producer: ScopedJoinHandle<()>,
 	pub base_rpc_client: Arc<BaseRpcClient>,
 	latest_block_hash_watcher: tokio::sync::watch::Receiver<state_chain_runtime::Hash>,
@@ -283,7 +286,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			};
 
 			const BLOCK_CAPACITY: usize = 10;
-			let (block_sender, block_receiver) = async_broadcast::broadcast::<(
+			let (block_sender, block_receiver) = spmc::channel::<(
 				state_chain_runtime::Hash,
 				state_chain_runtime::Header,
 			)>(BLOCK_CAPACITY);
@@ -309,7 +312,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							let block_header =
 								finalized_block_header_stream.next().await.unwrap()?;
 							let block_hash = block_header.hash();
-							if block_sender.broadcast((block_hash, block_header)).await.is_err() {
+							if !block_sender.send((block_hash, block_header)).await {
 								break Ok(())
 							}
 							if latest_block_hash_sender.send(block_hash).is_err() {
@@ -326,7 +329,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			signed_extrinsic_client: signed_extrinsic_client_builder
 				.build(scope, base_rpc_client.clone(), genesis_hash, &mut state_chain_stream)
 				.await?,
-			unsigned_extrinsic_client: extrinsic_api::unsigned::UnsignedExtrinsicClient::new(
+			unsigned_extrinsic_client: unsigned::UnsignedExtrinsicClient::new(
 				scope,
 				base_rpc_client.clone(),
 			),
@@ -479,11 +482,13 @@ impl<
 impl<
 		BaseRpcApi: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 		SignedExtrinsicClient: Send + Sync + 'static,
-	> extrinsic_api::unsigned::UnsignedExtrinsicApi
-	for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
+	> unsigned::UnsignedExtrinsicApi for StateChainClient<SignedExtrinsicClient, BaseRpcApi>
 {
 	/// Submit an unsigned extrinsic.
-	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> H256
+	async fn submit_unsigned_extrinsic<Call>(
+		&self,
+		call: Call,
+	) -> Result<H256, unsigned::ExtrinsicError>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ std::fmt::Debug
@@ -521,7 +526,10 @@ pub mod mocks {
 	use sp_core::{storage::StorageKey, H256};
 	use state_chain_runtime::AccountId;
 
-	use super::{extrinsic_api, storage_api};
+	use super::{
+		extrinsic_api::{self, unsigned},
+		storage_api,
+	};
 
 	mock! {
 		pub StateChainClient {}
@@ -555,7 +563,7 @@ pub mod mocks {
 			async fn submit_unsigned_extrinsic<Call>(
 				&self,
 				call: Call,
-			) -> H256
+			) -> Result<H256, unsigned::ExtrinsicError>
 			where
 				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
 		}
