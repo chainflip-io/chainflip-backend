@@ -81,7 +81,10 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
-	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
+	) -> Result<
+		(cf_primitives::ChannelId, ForeignChainAddress, <C as cf_chains::Chain>::ChainBlockNumber),
+		sp_runtime::DispatchError,
+	> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Lp, source_asset);
 		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_CHANNELS", |lp_channels| {
@@ -96,7 +99,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 				});
 			}
 		});
-		Ok((channel_id, deposit_address))
+		Ok((channel_id, deposit_address, 0u32.into()))
 	}
 
 	fn request_swap_deposit_address(

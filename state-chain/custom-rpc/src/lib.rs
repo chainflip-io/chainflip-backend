@@ -15,7 +15,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -26,7 +26,11 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{
+	collections::{BTreeMap, HashMap},
+	marker::PhantomData,
+	sync::Arc,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -51,6 +55,7 @@ pub enum RpcAccountInfo {
 		is_bidding: bool,
 		bound_redeem_address: Option<EthereumAddress>,
 		apy_bp: Option<u32>,
+		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 	},
 }
 
@@ -105,6 +110,11 @@ impl RpcAccountInfo {
 			is_bidding: info.is_bidding,
 			bound_redeem_address: info.bound_redeem_address,
 			apy_bp: info.apy_bp,
+			restricted_balances: info
+				.restricted_balances
+				.into_iter()
+				.map(|(address, balance)| (address, balance.into()))
+				.collect(),
 		}
 	}
 }
@@ -124,6 +134,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
 	pub apy_bp: Option<u32>,
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -300,7 +311,7 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Depth>>>;
+	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
@@ -573,6 +584,7 @@ where
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
 			apy_bp: account_info.apy_bp,
+			restricted_balances: account_info.restricted_balances,
 		})
 	}
 
@@ -689,7 +701,7 @@ where
 		pair_asset: Asset,
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Depth>>> {
+	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>> {
 		self.client
 			.runtime_api()
 			.cf_pool_depth(self.unwrap_or_best(at), base_asset, pair_asset, tick_range)
@@ -987,6 +999,7 @@ mod test {
 			is_qualified: true,
 			bound_redeem_address: Some(H160::from([1; 20])),
 			apy_bp: Some(100u32),
+			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
 		assert_eq!(
 			serde_json::to_value(validator).unwrap(),
@@ -1005,6 +1018,9 @@ mod test {
 				"reputation_points": 0,
 				"role": "validator",
 				"apy_bp": 100,
+				"restricted_balances": {
+					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
+				}
 			})
 		);
 	}

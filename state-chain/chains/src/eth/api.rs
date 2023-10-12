@@ -225,25 +225,32 @@ where
 				return Err(AllBatchError::Other)
 			}
 		}
-		Ok(Self::AllBatch(EvmTransactionBuilder::new_unsigned(
-			E::replay_protection(E::contract_address(EthereumContract::Vault)),
-			all_batch::AllBatch::new(
-				fetch_deploy_params,
-				fetch_only_params,
-				transfer_params
-					.into_iter()
-					.map(|TransferAssetParams { asset, to, amount }| {
-						E::token_address(asset)
-							.map(|address| EncodableTransferAssetParams {
-								to,
-								amount,
-								asset: address,
-							})
-							.ok_or(AllBatchError::Other)
-					})
-					.collect::<Result<Vec<_>, _>>()?,
-			),
-		)))
+		if fetch_only_params.is_empty() &&
+			fetch_deploy_params.is_empty() &&
+			transfer_params.is_empty()
+		{
+			Err(AllBatchError::NotRequired)
+		} else {
+			Ok(Self::AllBatch(EvmTransactionBuilder::new_unsigned(
+				E::replay_protection(E::contract_address(EthereumContract::Vault)),
+				all_batch::AllBatch::new(
+					fetch_deploy_params,
+					fetch_only_params,
+					transfer_params
+						.into_iter()
+						.map(|TransferAssetParams { asset, to, amount }| {
+							E::token_address(asset)
+								.map(|address| EncodableTransferAssetParams {
+									to,
+									amount,
+									asset: address,
+								})
+								.ok_or(AllBatchError::Other)
+						})
+						.collect::<Result<Vec<_>, _>>()?,
+				),
+			)))
+		}
 	}
 }
 

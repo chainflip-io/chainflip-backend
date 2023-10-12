@@ -447,14 +447,14 @@ macro_rules! impl_deposit_api_for_anychain {
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-							),
+							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}

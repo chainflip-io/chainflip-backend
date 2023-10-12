@@ -27,7 +27,7 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -923,6 +923,7 @@ impl_runtime_apis! {
 			let apy_bp = calculate_account_apy(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info.total(),
 				bond: account_info.bond(),
@@ -937,6 +938,7 @@ impl_runtime_apis! {
 				is_bidding,
 				bound_redeem_address,
 				apy_bp,
+				restricted_balances,
 			}
 		}
 
@@ -1000,7 +1002,7 @@ impl_runtime_apis! {
 			LiquidityPools::pool_info(base_asset, pair_asset)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
 			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
 		}
 
