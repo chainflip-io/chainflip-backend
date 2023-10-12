@@ -1004,7 +1004,7 @@ mod test {
 				"online_credits": 0,
 				"reputation_points": 0,
 				"role": "validator",
-				"apy_bp": Number(100),
+				"apy_bp": 100,
 			})
 		);
 	}
