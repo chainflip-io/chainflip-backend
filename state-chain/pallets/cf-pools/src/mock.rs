@@ -77,8 +77,7 @@ impl LpBalanceApi for MockBalance {
 	type AccountId = AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {
-	}
+	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {}
 
 	fn ensure_has_refund_address_for_pair(
 		_who: &Self::AccountId,
