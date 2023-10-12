@@ -38,7 +38,7 @@ pub struct DotRetryRpcClient {
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 20;
 
-const MAX_BROADCAST_RETRIES: Attempt = 5;
+const MAX_BROADCAST_RETRIES: Attempt = 2;
 
 impl DotRetryRpcClient {
 	pub fn new(

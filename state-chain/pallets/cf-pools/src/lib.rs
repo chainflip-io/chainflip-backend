@@ -668,6 +668,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -751,6 +752,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -823,6 +825,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
@@ -898,6 +901,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]

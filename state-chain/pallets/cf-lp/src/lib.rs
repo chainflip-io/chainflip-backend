@@ -47,7 +47,6 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
-			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// API for handling asset egress.
@@ -283,6 +282,30 @@ pub mod pallet {
 
 impl<T: Config> LpBalanceApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(
+		account_id: &Self::AccountId,
+		address: ForeignChainAddress,
+	) {
+		LiquidityRefundAddress::<T>::insert(account_id, address.chain(), address);
+	}
+
+	fn ensure_has_refund_address_for_pair(
+		account_id: &Self::AccountId,
+		base_asset: Asset,
+		pair_asset: Asset,
+	) -> DispatchResult {
+		ensure!(
+			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
+				LiquidityRefundAddress::<T>::contains_key(
+					account_id,
+					ForeignChain::from(pair_asset)
+				),
+			Error::<T>::NoLiquidityRefundAddressRegistered
+		);
+		Ok(())
+	}
 
 	fn try_credit_account(
 		account_id: &Self::AccountId,

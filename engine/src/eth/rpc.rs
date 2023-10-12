@@ -272,7 +272,7 @@ mod tests {
 		println!("{:?}", block_with_txs);
 
 		let fee_history = client
-			.fee_history(10.into(), BlockNumber::Latest, &[0.1, 0.5, 0.9])
+			.fee_history(10.into(), BlockNumber::Latest, &[10.0, 50.0, 90.0])
 			.await
 			.unwrap();
 		println!("{:?}", fee_history);

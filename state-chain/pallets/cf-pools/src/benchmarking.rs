@@ -2,6 +2,7 @@
 
 use super::*;
 use cf_amm::common::price_at_tick;
+use cf_chains::ForeignChainAddress;
 use cf_primitives::Asset;
 use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -13,10 +14,17 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
-fn new_lp_account<T: Chainflip>() -> T::AccountId {
+fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	let caller: T::AccountId = whitelisted_caller();
 	<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 	T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+	for address in [
+		ForeignChainAddress::Eth(Default::default()),
+		ForeignChainAddress::Dot(Default::default()),
+		ForeignChainAddress::Btc(cf_chains::btc::ScriptPubkey::P2PKH(Default::default())),
+	] {
+		T::LpBalance::register_liquidity_refund_address(&caller, address);
+	}
 	caller
 }
 
