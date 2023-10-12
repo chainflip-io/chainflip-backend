@@ -22,6 +22,7 @@ use utilities::{
 use crate::state_chain_observer::client::{
 	base_rpc_api,
 	error_decoder::{DispatchError, ErrorDecoder},
+	extrinsic_api::common::invalid_err_obj,
 	storage_api::StorageApi,
 	SUBSTRATE_BEHAVIOUR,
 };
@@ -210,16 +211,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
-					fn invalid_err_obj(
-						invalid_reason: InvalidTransaction,
-					) -> jsonrpsee::types::ErrorObjectOwned {
-						jsonrpsee::types::ErrorObject::owned(
-							1010,
-							"Invalid Transaction",
-							Some(<&'static str>::from(invalid_reason)),
-						)
-					}
-
 					match rpc_err {
 						// This occurs when a transaction with the same nonce is in the
 						// transaction pool (and the priority is <= priority of that

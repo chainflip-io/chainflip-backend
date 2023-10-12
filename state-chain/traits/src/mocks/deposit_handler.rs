@@ -4,7 +4,6 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
-use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
@@ -78,7 +77,6 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 
 impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type AccountId = T::AccountId;
-	type BlockNumber = BlockNumberFor<T>;
 
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
@@ -108,7 +106,10 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
+	) -> Result<
+		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber),
+		sp_runtime::DispatchError,
+	> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Swap, source_asset);
 		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_CHANNELS", |swap_channels| {
@@ -127,6 +128,6 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 				});
 			};
 		});
-		Ok((channel_id, deposit_address))
+		Ok((channel_id, deposit_address, 0u32.into()))
 	}
 }

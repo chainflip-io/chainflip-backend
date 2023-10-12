@@ -3,8 +3,12 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
-use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
+};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
+};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
@@ -31,19 +35,7 @@ pub enum ChainflipAccountStateWithPassive {
 	BackupOrPassive(BackupOrPassive),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct RuntimeApiAccountInfo {
-	pub balance: u128,
-	pub bond: u128,
-	pub last_heartbeat: u32,
-	pub is_live: bool,
-	pub is_activated: bool,
-	pub online_credits: u32,
-	pub reputation_points: i32,
-	pub state: ChainflipAccountStateWithPassive,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
@@ -82,6 +74,12 @@ pub struct Environment {
 	pub polkadot_genesis_hash: PolkadotHash,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderInfo {
+	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+	pub balances: Vec<(Asset, AssetAmount)>,
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -105,7 +103,6 @@ decl_runtime_apis!(
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
-		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
 		fn cf_account_info_v2(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
@@ -136,5 +133,7 @@ decl_runtime_apis!(
 		fn cf_environment() -> Environment;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
+		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
+		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 	}
 );
