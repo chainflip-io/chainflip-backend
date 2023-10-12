@@ -78,7 +78,7 @@ check_version() {
 
 copy_binary() {
     echo "chainflip-engine: Moving binary"
-    mv /usr/bin/chainflip-engine /usr/bin/chainflip-engine-prev
+    cp /usr/bin/chainflip-engine /usr/bin/chainflip-engine-prev
 }
 
 
