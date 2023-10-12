@@ -321,8 +321,8 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
-		/// An validator refund has been credited on his account.
-		ValidatorHasBeenCredited { validator_id: SignerIdFor<T, I>, amount: ChainAmountFor<T, I> },
+		/// The refund for broadcasting an transaction has been recorded.
+		ValidatorRefundRecorded { validator_id: SignerIdFor<T, I>, amount: ChainAmountFor<T, I> },
 	}
 
 	#[pallet::error]
@@ -571,7 +571,7 @@ pub mod pallet {
 						*fee_deficit = fee_deficit.saturating_add(to_refund);
 					});
 
-					Self::deposit_event(Event::<T, I>::ValidatorHasBeenCredited {
+					Self::deposit_event(Event::<T, I>::ValidatorRefundRecorded {
 						validator_id: signer_id,
 						amount: to_refund,
 					});

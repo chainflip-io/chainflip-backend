@@ -167,7 +167,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::ValidatorHasBeenCredited {
+			RuntimeEvent::Broadcaster(crate::Event::ValidatorRefundRecorded {
 				validator_id: Default::default(),
 				amount: expected_refund
 			})
