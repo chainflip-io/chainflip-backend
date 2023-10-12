@@ -35,8 +35,7 @@ fn collect_range_order_returns(
 		.filter_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::RangeOrderUpdated {
-					increase_or_decrease,
-					liquidity_delta,
+					position_delta: Some((increase_or_decrease, liquidity_delta)),
 					liquidity_total,
 					assets_delta,
 					collected_fees,

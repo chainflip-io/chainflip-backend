@@ -235,30 +235,6 @@ pub mod pallet {
 		pub pool_state: PoolState<(T::AccountId, OrderId)>,
 	}
 
-	impl<T: Config> Pool<T> {
-		/// Updates the position information in the Pool's cache.
-		pub fn update_limit_order_storage(
-			&mut self,
-			lp: &T::AccountId,
-			side: Side,
-			id: OrderId,
-			tick: cf_amm::common::Tick,
-			position: &PositionInfo,
-		) {
-			let limit_orders = &mut self.limit_orders_cache[side];
-			if position.amount.is_zero() {
-				if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
-					lp_limit_orders.remove(&id);
-					if lp_limit_orders.is_empty() {
-						limit_orders.remove(lp);
-					}
-				}
-			} else {
-				limit_orders.entry(lp.clone()).or_default().insert(id, tick);
-			}
-		}
-	}
-
 	pub type OrderId = u64;
 
 	#[derive(
@@ -520,8 +496,7 @@ pub mod pallet {
 			pair_asset: Asset,
 			id: OrderId,
 			tick_range: core::ops::Range<Tick>,
-			increase_or_decrease: IncreaseOrDecrease,
-			liquidity_delta: Liquidity,
+			position_delta: Option<(IncreaseOrDecrease, Liquidity)>,
 			liquidity_total: Liquidity,
 			assets_delta: AssetAmounts,
 			collected_fees: AssetAmounts,
@@ -1307,8 +1282,7 @@ impl<T: Config> Pallet<T> {
 			pair_asset: asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
 			id,
 			tick_range,
-			increase_or_decrease,
-			liquidity_delta,
+			position_delta: Some((increase_or_decrease, liquidity_delta)),
 			liquidity_total: position_info.liquidity,
 			assets_delta,
 			collected_fees,
@@ -1574,7 +1548,17 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let collected_fees = asset_pair.try_credit_asset(lp, !side, collected.fees)?;
 		let bought_amount = asset_pair.try_credit_asset(lp, !side, collected.bought_amount)?;
-		pool.update_limit_order_storage(lp, side, order, tick, &position_info);
+		let limit_orders = &mut pool.limit_orders_cache[side];
+		if position_info.amount.is_zero() {
+			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {
+				lp_limit_orders.remove(&order);
+				if lp_limit_orders.is_empty() {
+					limit_orders.remove(lp);
+				}
+			}
+		} else {
+			limit_orders.entry(lp.clone()).or_default().insert(order, tick);
+		}
 		Self::deposit_event(Event::<T>::LimitOrderUpdated {
 			lp: lp.clone(),
 			sell_asset: asset_pair.canonical_asset_pair.side_to_asset(side),
