@@ -993,11 +993,14 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address, ..) =
+	) -> Result<
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		DispatchError,
+	> {
+		let (channel_id, deposit_address, expiry_block) =
 			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
-		Ok((channel_id, deposit_address.into()))
+		Ok((channel_id, deposit_address.into(), expiry_block))
 	}
 
 	// This should only be callable by the broker.
