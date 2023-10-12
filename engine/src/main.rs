@@ -130,11 +130,10 @@ async fn main() -> anyhow::Result<()> {
 					CfeStatus::Active(_) =>
 						if !compatible {
 							tracing::info!(
-								"Runtime version ({runtime_compatibility_version:?}) is no longer compatible, shutting down the engine!"
+								"Runtime version ({runtime_compatibility_version:?}) is no longer compatible, moving to idle state. It is now safe to stop this process."
 							);
-							// This will exit the scope, dropping the handle and thus terminating
-							// the main task
-							break Err(anyhow::anyhow!("Incompatible runtime version"))
+							// This will drop the handle and terminate the main task.
+							cfe_status = CfeStatus::Idle;
 						},
 					CfeStatus::Idle =>
 						if compatible {
