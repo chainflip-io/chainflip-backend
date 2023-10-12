@@ -67,6 +67,9 @@ jobs:
         tests_path:
           - state-chain/node/package/preinst-tests
           - engine/package/preinst-tests
+        variant:
+          - perseverance
+          - sisyphos
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -79,5 +82,9 @@ jobs:
       - name: Test 🧪
         shell: bash
         run: |
-          bats tests/test_preinst.bats
+          if [[ -f "../${{ matrix.variant }}/preinst" ]]; then
+            bats tests/test_preinst.bats
+          else
+            echo "No preinst script found. Skipping preinst tests."
+          fi
         working-directory: ${{ matrix.tests_path }}

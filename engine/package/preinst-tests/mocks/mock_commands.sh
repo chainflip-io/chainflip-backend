@@ -2,7 +2,7 @@
 SERVICE_STATUS="active"
 
 systemctl() {
-    if [ "$1" = "is-active" ] && [ "$3" = "chainflip-engine" ]; then
+    if [ "$1" = "is-active" ]; then
         if [ "$SERVICE_STATUS" = "active" ]; then
             return 0
         else
@@ -10,7 +10,7 @@ systemctl() {
         fi
     fi
 
-    if [ "$1" = "stop" ] && [ "$2" = "chainflip-engine" ]; then
+    if [ "$1" = "stop" ]; then
         return 0  # assume it's successful
     fi
 

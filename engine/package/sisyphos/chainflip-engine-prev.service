@@ -7,8 +7,8 @@ Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/usr/bin/chainflip-engine-lsr --config-root /etc/chainflip/
-Environment=RUST_LOG="chainflip_engine=debug,multisig=debug,warn,chainflip_engine::p2p=error"
+ExecStart=/usr/bin/chainflip-engine-prev --config-root /etc/chainflip/
+
 LimitNOFILE=16000
 LimitNOFILESoft=16000
 

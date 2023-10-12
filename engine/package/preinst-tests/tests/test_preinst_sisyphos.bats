@@ -6,10 +6,10 @@ source 'tests/setup.bats'
     # Set the mock to behave as if the service is active
     SERVICE_STATUS="active"
 
-    source ../perseverance/preinst
+    source ../sisyphos/preinst
 
     # Run the function
-    result=$(stop_service)
+    result=$(stop_service "chainflip-engine")
     # Assert on the result
     [ "$result" = "chainflip-engine stopped" ]
 }
@@ -18,16 +18,16 @@ source 'tests/setup.bats'
     # Set the mock to behave as if the service is inactive
     SERVICE_STATUS="inactive"
 
-    source ../perseverance/preinst
+    source ../sisyphos/preinst
 
     # Run the function
-    result=$(stop_service 2>&1)
+    result=$(stop_service "chainflip-engine" 2>&1)
     # Assert on the result
     [ "$result" = "chainflip-engine is already stopped" ]
 }
 
 @test "Preinstall script doesn't run on fresh install" {
-    source ../perseverance/preinst
+    source ../sisyphos/preinst
 
     result=$(check_upgrade)
 
@@ -35,36 +35,36 @@ source 'tests/setup.bats'
 }
 
 @test "Preinstall script runs on upgrade" {
-    source ../perseverance/preinst
+    source ../sisyphos/preinst
 
     result=$(check_upgrade "upgrade")
 
     [ "$result" = "chainflip-engine: Upgrade detected, migrating" ]
 }
 
-@test "Migration runs if local minor version doesn't match target" {
-    VERSION_OUTPUT="chainflip-engine 0.8.1-7989b2cb5e4"
+@test "Migration runs if current version is less than target" {
+    VERSION_OUTPUT="chainflip-engine 0.9.3-7989b2cb5e4"
 
-    source ../perseverance/preinst
+    source ../sisyphos/preinst
     result=$(check_version)
 
-    [ "$result" = "chainflip-engine: Detected older version, migrating" ]
+    [ "$result" = "Current version is less than target version, migrating" ]
 }
 
-@test "Migration doesn't run if local minor version matchs target" {
-    VERSION_OUTPUT="chainflip-engine 0.9.1-7989b2cb5e4"
+@test "Migration doesn't run if current version is greater than target" {
+    VERSION_OUTPUT="chainflip-engine 0.11.0-7989b2cb5e4"
 
-    source ../perseverance/preinst
+    source ../sisyphos/preinst
     result=$(check_version)
     echo $result
-    [ "$result" = "chainflip-engine: skipping migration" ]
+    [ "$result" = "Current version is greater than target version, skipping migration" ]
 }
 
-@test "Update Engine Config does what it is supposed to do" {
-    # TODO: Add real test once we add functionality to update engine config.
-    source ../perseverance/preinst
+@test "Migration doesn't run if current version is equal to target" {
+    VERSION_OUTPUT="chainflip-engine 0.10.0-7989b2cb5e4"
 
-    result=$(update_engine_config)
+    source ../sisyphos/preinst
+    result=$(check_version)
 
-    [ "$result" = "chainflip-engine: Updating engine config" ]
+    [ "$result" = "Both versions are equal. Skipping migration" ]
 }

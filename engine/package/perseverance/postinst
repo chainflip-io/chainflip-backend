@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+
+check_upgrade() {
+    if [ "$1" != "upgrade" ]; then
+        echo "chainflip-engine: Fresh install detected, skipping migration"
+        exit 0
+    else
+        echo "chainflip-engine: Upgrade detected, migrating"
+    fi
+}
+
+enable_service() {
+    if systemctl is-enabled --quiet "$1"; then
+        echo "$1 is already enabled"
+    else
+        if systemctl enable "$1"; then
+            echo "$1 enabled"
+        else
+            echo "Error enabling $1"
+            exit 1
+        fi
+    fi
+}
+
+start_service() {
+    if systemctl is-active --quiet $1; then
+        echo "$1 is already running"
+    else
+        if systemctl start $1; then
+            echo "$1 started"
+        else
+            echo "Error starting $1"
+            exit 1
+        fi
+    fi
+}
+
+# Main entry point
+main() {
+    check_upgrade "$1"
+    enable_service "chainflip-engine"
+    enable_service "chainflip-engine-prev"
+    start_service "chainflip-engine"
+    start_service "chainflip-engine-prev"
+}
+
+# Only run the main function if the script is not being sourced
+# This allows you to source the script in your tests without running main
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@"
+fi
+
+# #DEBHELPER#
