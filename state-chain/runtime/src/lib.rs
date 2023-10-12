@@ -27,7 +27,7 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -1000,7 +1000,7 @@ impl_runtime_apis! {
 			LiquidityPools::pool_info(base_asset, pair_asset)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
 			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
 		}
 
