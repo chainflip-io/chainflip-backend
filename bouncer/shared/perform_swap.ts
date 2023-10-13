@@ -99,7 +99,7 @@ export async function doPerformSwap(
   tag = '',
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
-  amount?: string
+  amount?: string,
 ) {
   const oldBalance = await getBalance(destAsset, destAddress);
 

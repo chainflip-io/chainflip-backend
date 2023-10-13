@@ -73,34 +73,21 @@ function price2tick(price: number): number {
 }
 
 async function playLp(asset: string, price: number, liquidity: number) {
-  let offset = 0;
   const spread = 0.01 * price;
   const liquidityFine = liquidity * 1e6;
   for (;;) {
+    const offset = (price * (Math.random() - 0.5)) / 20;
     const buyTick = price2tick(price + offset + spread);
     const sellTick = price2tick(price + offset - spread);
-    const newOffset = (price * (Math.random() - 0.5)) / 20;
-    const newBuyTick = price2tick(price + newOffset + spread);
-    const newSellTick = price2tick(price + newOffset - spread);
     const result = await Promise.all([
       call(
         'lp_setLimitOrder',
-        ['Usdc', asset, 1, buyTick, 0],
-        `Burn Buy ${asset}`,
-      ),
-      call(
-        'lp_setLimitOrder',
-        [asset, 'Usdc', 1, sellTick, 0],
-        `Burn Sell ${asset}`,
-      ),
-      call(
-        'lp_setLimitOrder',
-        ['Usdc', asset, 1, newBuyTick, liquidityFine],
+        ['Usdc', asset, 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
         `Mint Buy ${asset}`,
       ),
       call(
         'lp_setLimitOrder',
-        [asset, 'Usdc', 1, newSellTick, (liquidityFine / price)],
+        [asset, 'Usdc', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
         `Mint Sell ${asset}`,
       ),
     ]);
@@ -111,8 +98,7 @@ async function playLp(asset: string, price: number, liquidity: number) {
         console.log(`Swapped ${r.data.result.swapped_liquidity} ${r.data.id}`);
       }
     });
-    offset = newOffset;
-    await sleep(5000);
+    await sleep(12000);
   }
 }
 
@@ -147,7 +133,7 @@ async function launchTornado() {
 const swapAmount = new Map<Asset, string>([
   ['DOT', '3'],
   ['ETH', '0.03'],
-  ['BTC', '0.003'],
+  ['BTC', '0.006'],
   ['USDC', '30'],
   ['FLIP', '3'],
 ]);
@@ -160,7 +146,7 @@ async function playSwapper() {
       .filter((x) => x !== src)
       .at(Math.floor(Math.random() * (assets.length - 1)))!;
     testSwap(src, dest, undefined, undefined, undefined, swapAmount.get(src));
-    await sleep(10000);
+    await sleep(3000);
   }
 }
 
@@ -173,7 +159,7 @@ const price = new Map<Asset, number>([
 ]);
 
 async function bananas() {
-  const liquidityUsdc = 100000;
+  const liquidityUsdc = 10000;
 
   await Promise.all([
     createLpPool('ETH', price.get('ETH')!),
@@ -192,8 +178,8 @@ async function bananas() {
   await Promise.all([
     playLp('Eth', price.get('ETH')! * 10 ** (6 - 18), liquidityUsdc),
     playLp('Btc', price.get('BTC')! * 10 ** (6 - 8), liquidityUsdc),
-    playLp('Dot', price.get('DOT')! * 10 ** (6 - 8), liquidityUsdc),
-    playLp('Flip', price.get('FLIP')! * 10 ** (6 - 8), liquidityUsdc),
+    playLp('Dot', price.get('DOT')! * 10 ** (6 - 10), liquidityUsdc),
+    playLp('Flip', price.get('FLIP')! * 10 ** (6 - 18), liquidityUsdc),
     playSwapper(),
     launchTornado(),
   ]);
