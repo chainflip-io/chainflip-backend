@@ -137,7 +137,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if T::SafeMode::get().reporting_enabled &&
-				Self::blocks_since_new_interval(current_block) == Zero::zero()
+				current_block % T::HeartbeatBlockInterval::get() == Zero::zero()
 			{
 				// Reputation depends on heartbeats
 				Self::penalise_offline_authorities(Self::current_network_state().offline);
@@ -228,7 +228,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			reputation_points: ReputationPoints,
 			online_credits: BlockNumberFor<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ensure!(
@@ -240,7 +240,7 @@ pub mod pallet {
 			AccrualRatio::<T>::set((reputation_points, online_credits));
 			Self::deposit_event(Event::AccrualRateUpdated { reputation_points, online_credits });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Updates the penalty for missing a heartbeat.
@@ -253,7 +253,7 @@ pub mod pallet {
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
 			new_reputation_penalty: ReputationPoints,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			Penalties::<T>::insert(
@@ -265,7 +265,7 @@ pub mod pallet {
 			);
 
 			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated { new_reputation_penalty });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the [Penalty] for an [Offence].
@@ -275,7 +275,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			offence: T::Offence,
 			new_penalty: Penalty<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let old_penalty = Penalties::<T>::mutate(offence, |penalty| {
@@ -286,7 +286,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::PenaltyUpdated { offence, old_penalty, new_penalty });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// A heartbeat is used to measure the liveness of a node. It is measured in blocks.
@@ -304,29 +304,22 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::heartbeat())]
-		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResult {
 			let validator_id: T::ValidatorId =
 				T::AccountRoleRegistry::ensure_validator(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
-			let start_of_this_interval =
-				current_block_number - Self::blocks_since_new_interval(current_block_number);
+			Reputations::<T>::mutate(&validator_id, |rep| {
+				rep.boost_reputation(sp_std::cmp::min(
+					T::HeartbeatBlockInterval::get(),
+					current_block_number -
+						LastHeartbeat::<T>::mutate(&validator_id, |last_heartbeat| {
+							last_heartbeat.replace(current_block_number).unwrap_or_default()
+						}),
+				));
+			});
 
-			// Heartbeat intervals range is (start, end]
-			match LastHeartbeat::<T>::get(&validator_id) {
-				Some(last_heartbeat) if last_heartbeat > start_of_this_interval => {
-					// we have already submitted a heartbeat for this interval
-				},
-				_ => {
-					Reputations::<T>::mutate(&validator_id, |rep| {
-						rep.boost_reputation(T::HeartbeatBlockInterval::get());
-					});
-				},
-			};
-
-			LastHeartbeat::<T>::insert(&validator_id, current_block_number);
-
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -345,11 +338,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Returns the number of blocks that have elapsed since the new HeartbeatBlockInterval
-		pub fn blocks_since_new_interval(block_number: BlockNumberFor<T>) -> BlockNumberFor<T> {
-			block_number % T::HeartbeatBlockInterval::get()
-		}
-
 		/// Partitions the authorities based on whether they are considered online or offline.
 		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
 			let (online, offline) =
