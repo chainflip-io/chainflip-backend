@@ -913,27 +913,32 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
-			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
-			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
-			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(&account_id);
-			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
-			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
-			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(&account_id);
+
+		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
+			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
+		}
+
+		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
+			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
+			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
+			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
+			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info.total(),
 				bond: account_info.bond(),
-				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online: Reputation::is_qualified(&account_id),
+				is_online: Reputation::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
 				restricted_balances,
