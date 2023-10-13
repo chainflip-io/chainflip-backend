@@ -90,10 +90,10 @@ build-localnet() {
   done
 
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args > /dev/null 2>&1
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args > /dev/null 2>&1
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
@@ -106,16 +106,14 @@ build-localnet() {
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
 
   echo "🦑 Starting Arbitrum ..."
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args > /dev/null 2>&1
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
-  set -x
   P2P_PORT=30333
   RPC_PORT=9944
   for NODE in "${SELECTED_NODES[@]}"; do
     echo "🚧 Starting chainflip-node of $NODE ..."
-    sudo mkdir -p /tmp/chainflip/$NODE
     DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARY_ROOT_PATH $NODE $P2P_PORT $RPC_PORT $NODE_COUNT
     ((P2P_PORT++))
     ((RPC_PORT++))
@@ -124,7 +122,7 @@ build-localnet() {
   RPC_PORT=9944
   for NODE in "${SELECTED_NODES[@]}"; do
     check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" > /dev/null
-    echo "✅ $NODE's chainflip-node is running!"
+    echo "💚 $NODE's chainflip-node is running!"
     ((RPC_PORT++))
   done
 
@@ -149,7 +147,7 @@ build-localnet() {
     while true; do
         output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
         if [[ $output == "RUNNING" ]]; then
-            echo "✅ $NODE's chainflip-engine is running!"
+            echo "💚 $NODE's chainflip-engine is running!"
             break
         fi
         sleep 1
@@ -170,10 +168,11 @@ build-localnet() {
 }
 
 destroy() {
-  echo "💣 Destroying network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args
+  echo -n "💣 Destroying network..."
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args > /dev/null 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
+  echo "done"
 }
 
 yeet() {
@@ -263,7 +262,7 @@ logs() {
 bouncer() {
   (
     cd ./bouncer
-    pnpm install
+    pnpm install > /dev/null 2>&1
     ./run.sh
   )
 }
@@ -272,15 +271,10 @@ main() {
     if ! which wscat > /dev/null; then
         echo "wscat is not installed. Installing now..."
         npm install -g wscat
-    else
-        echo "wscat is already installed."
     fi
     if [[ ! -f ./localnet/.setup_complete ]]; then
         setup
-    else
-        echo "✅ Set up already complete"
     fi
-
     if [ -z $CI ]; then
       get-workflow
     fi

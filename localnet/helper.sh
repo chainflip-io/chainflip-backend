@@ -20,6 +20,7 @@ function check_endpoint_health() {
 
 function print_success() {
   logs=$(cat <<EOM
+---------------------------------------------------------------------------------------
 🚀 Network is live
 🪵 To get logs run: ./localnet/manage.sh
 👆 Then select logs (4)
