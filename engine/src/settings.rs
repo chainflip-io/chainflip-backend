@@ -19,6 +19,8 @@ use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
+pub const DEFAULT_SETTINGS_DIR: &str = "config";
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct P2P {
 	#[serde(deserialize_with = "deser_path")]
@@ -350,6 +352,9 @@ where
 	/// 4 - Default value
 	fn load_settings_from_all_sources(
 		config_root: String,
+		// <config_root>/<settings_dir>/Settings.toml is the location of the settings that we'll
+		// read.
+		settings_dir: &str,
 		opts: Self::CommandLineOptions,
 	) -> Result<Self, ConfigError> {
 		// Set the default settings
@@ -358,7 +363,8 @@ where
 		// If the file does not exist we will try and continue anyway.
 		// Because if all of the settings are covered in the environment, cli options and defaults,
 		// then we don't need it.
-		let settings_file = PathBuf::from(config_root.clone()).join("config/Settings.toml");
+		let settings_file =
+			PathBuf::from(config_root.clone()).join(settings_dir).join("Settings.toml");
 		let file_present = settings_file.is_file();
 		if file_present {
 			builder = builder.add_source(File::from(settings_file.clone()));
@@ -611,13 +617,21 @@ impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
 	pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources(opts.config_root.clone(), opts)
+		Self::new_with_settings_dir(DEFAULT_SETTINGS_DIR, opts)
+	}
+
+	pub fn new_with_settings_dir(
+		settings_dir: &str,
+		opts: CommandLineOptions,
+	) -> Result<Self, ConfigError> {
+		Self::load_settings_from_all_sources(opts.config_root.clone(), settings_dir, opts)
 	}
 
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
 		Settings::load_settings_from_all_sources(
 			"config/testing/".to_owned(),
+			DEFAULT_SETTINGS_DIR,
 			CommandLineOptions::default(),
 		)
 	}

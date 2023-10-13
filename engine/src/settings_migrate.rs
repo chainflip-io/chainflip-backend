@@ -26,21 +26,24 @@ use toml::{map::Map, Table, Value};
 
 use anyhow::{Context, Result};
 
+use crate::settings::DEFAULT_SETTINGS_DIR;
+
 const PRIVATE_KEY_FILE: &str = "private_key_file";
 const WS_NODE_ENDPOINT: &str = "ws_node_endpoint";
 const HTTP_NODE_ENDPOINT: &str = "http_node_endpoint";
 const RPC: &str = "rpc";
 
-pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
-	let settings_file = PathBuf::from(config_root).join("config/Settings.toml");
+const MIGRATED_SETTINGS_DIR: &str = "config-migrated";
+
+// Returns the directory inside the config_root where the Settings.toml file to be used is located.
+pub fn migrate_settings0_9_3_to_0_10_0(config_root: String) -> Result<&'static str> {
+	let config_root = PathBuf::from(config_root);
+	let settings_file = config_root.join(DEFAULT_SETTINGS_DIR).join("Settings.toml");
 
 	if !settings_file.is_file() {
 		tracing::warn!("Please check that the Settings.toml file exists at {settings_file:?}");
-		return Ok(())
+		return Ok(DEFAULT_SETTINGS_DIR)
 	}
-
-	std::fs::copy(settings_file.clone(), settings_file.with_extension("toml.0_9_2.backup"))
-		.context("Unable to create backup of Settings.toml")?;
 
 	let old_settings_table = std::fs::read_to_string(&settings_file)
 		.context("Unable to read Settings.toml for migration")?
@@ -67,7 +70,7 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 		};
 
 	if !migrate {
-		return Ok(())
+		return Ok(DEFAULT_SETTINGS_DIR)
 	}
 
 	tracing::info!("Migrating settings to 0.9.3");
@@ -116,13 +119,19 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 
 	rename_btc_rpc_user_and_rpc_password(&mut new_settings_table);
 
+	let tmp_settings = config_root.join(MIGRATED_SETTINGS_DIR).join("Settings.toml");
+
+	// backup the old settings into the temp location
+	std::fs::copy(settings_file.clone(), tmp_settings.with_extension("toml.0_9_3.backup"))
+		.context("Unable to create backup of Settings.toml")?;
+
 	fs::write(
-		settings_file,
+		&tmp_settings,
 		toml::to_string(&new_settings_table).context("Unable to serialize new Settings to TOML")?,
 	)
 	.context("Unable to write to {settings_file} for migration")?;
 
-	Ok(())
+	Ok(MIGRATED_SETTINGS_DIR)
 }
 
 fn remove_node_from_endpoint_names(settings_table: &mut Map<String, Value>) {

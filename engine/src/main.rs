@@ -7,8 +7,8 @@ use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	eth::retry_rpc::EthersRetryRpcClient,
 	health, p2p,
-	settings::{CommandLineOptions, Settings},
-	settings_migrate::migrate_settings0_9_2_to_0_9_3,
+	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
+	settings_migrate::migrate_settings0_9_3_to_0_10_0,
 	state_chain_observer::{
 		self,
 		client::{
@@ -25,7 +25,10 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+	path::PathBuf,
+	sync::{atomic::AtomicBool, Arc},
+};
 use tracing::info;
 use utilities::{
 	make_periodic_tick, metrics,
@@ -81,9 +84,13 @@ async fn main() -> anyhow::Result<()> {
 
 	let opts = CommandLineOptions::parse();
 
-	migrate_settings0_9_2_to_0_9_3(opts.config_root.clone())?;
+	let config_root_path = PathBuf::from(&opts.config_root);
 
-	let settings = Settings::new(opts).context("Error reading settings")?;
+	// the settings directory from opts.config_root that we'll use to read the settings file
+	let settings_dir = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
+
+	let settings =
+		Settings::new_with_settings_dir(settings_dir, opts).context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
@@ -148,6 +155,12 @@ async fn main() -> anyhow::Result<()> {
 							let handle = scope.spawn_with_handle(
 								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
 							);
+
+							// Effectively, we want to move the files from the temp-migrated location, to the standard location
+							// - updating it in-place.
+							// Note: the backup was already created and is in the temp folder (which will become the new standard folder) too
+							std::fs::rename(&config_root_path.join(settings_dir), &config_root_path.join(DEFAULT_SETTINGS_DIR))
+								.context("Unable to replace old settings with temp settings")?;
 
 							cfe_status = CfeStatus::Active(handle);
 						} else {
