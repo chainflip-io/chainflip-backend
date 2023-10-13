@@ -65,11 +65,13 @@ fn eligible_authorities(
 /// excluded from being nominated.
 pub struct RandomSignerNomination;
 
-impl cf_traits::SingleSignerNomination for RandomSignerNomination {
-	type SignerId = <Runtime as Chainflip>::ValidatorId;
+impl cf_traits::BroadcastNomination for RandomSignerNomination {
+	type BroadcasterId = <Runtime as Chainflip>::ValidatorId;
 
-	fn nomination_with_seed<H: Hashable>(
+	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
+		exclude_ids: &[Self::BroadcasterId],
+	) -> Option<Self::BroadcasterId> {
 		let mut all_excludes = Reputation::validators_suspended_for(&[
 			Offence::FailedToBroadcastTransaction,
 			Offence::MissedHeartbeat,
