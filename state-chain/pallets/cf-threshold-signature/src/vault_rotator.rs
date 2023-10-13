@@ -134,7 +134,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						Some(VaultRotationStatus::AwaitingActivation { new_public_key }) =>
 							new_public_key,
 						_ => unreachable!(
-							"Unreachable because we are in the branch for the Failed variant."
+							"Unreachable because we are in the branch for the AwaitingActivation variant."
 						),
 					};
 
