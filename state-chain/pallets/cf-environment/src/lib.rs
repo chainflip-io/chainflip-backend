@@ -31,7 +31,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 type SignatureNonce = u64;
 
