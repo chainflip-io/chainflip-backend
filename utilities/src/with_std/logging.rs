@@ -10,8 +10,8 @@ pub struct LoggingSettings {
 }
 
 #[macro_export]
-macro_rules! print_starting {
-	() => {
+macro_rules! print_start_and_end {
+	(async $e:expr) => {
 		println!(
 			"Starting {} v{} ({})",
 			env!("CARGO_PKG_NAME"),
@@ -28,6 +28,61 @@ macro_rules! print_starting {
 			 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
 			"
 		);
+
+		match $e {
+			Ok(result) => match result {
+				Ok(_) => {},
+				Err(error) => {
+					println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
+				},
+			},
+			Err(panic) => {
+				println!(
+					"Exiting {} due to panic: {:#?}",
+					env!("CARGO_PKG_NAME"),
+					panic.downcast_ref::<&str>()
+				);
+			},
+		};
+		()
+	};
+	($e:expr) => {
+		println!(
+			"Starting {} v{} ({})",
+			env!("CARGO_PKG_NAME"),
+			env!("CARGO_PKG_VERSION"),
+			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
+		);
+		println!(
+			"
+			 ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗
+			██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗
+			██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝
+			██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝
+			╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║
+			 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
+			"
+		);
+
+		match $e {
+			Ok(result) => match result {
+				Ok(_) => {
+					println!("TESTTTTTAAAABBBB");
+				},
+				Err(error) => {
+					println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
+				},
+			},
+			Err(panic) => {
+				println!("TESTTTTT");
+				println!(
+					"Exiting {} due to panic: {:#?}",
+					env!("CARGO_PKG_NAME"),
+					panic.downcast_ref::<&str>()
+				);
+			},
+		};
+		
 	}
 }
 
