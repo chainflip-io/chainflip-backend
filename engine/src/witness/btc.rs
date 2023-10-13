@@ -21,10 +21,7 @@ use crate::{
 };
 use btc_source::BtcSource;
 
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
-};
+use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 
 use anyhow::Result;
 
@@ -113,16 +110,6 @@ where
 		.await
 		.then(move |epoch, header| {
 			let process_call = process_call.clone();
-			let pubkey_for_epoch = state_chain_client
-				.clone()
-				.storage_map_entry::<pallet_cf_threshold_signature::VaultKeys<
-					state_chain_runtime::Runtime,
-					state_chain_runtime::BitcoinInstance,
-				>>(state_chain_client.clone().latest_finalized_hash(), &epoch.index)
-				.await
-				.expect(STATE_CHAIN_CONNECTION)
-				.expect("") //todo
-				.current;
 			async move {
 				let (txs, monitored_tx_hashes) = header.data;
 				for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
@@ -131,7 +118,7 @@ where
 							pallet_cf_broadcast::Call::transaction_succeeded {
 								tx_out_id: tx_hash,
 								signer_id: DepositAddress::new(
-									pubkey_for_epoch,
+									epoch.info.0.current,
 									CHANGE_ADDRESS_SALT,
 								)
 								.script_pubkey(),

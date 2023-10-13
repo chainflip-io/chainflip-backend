@@ -9,7 +9,7 @@ use crate::witness::common::{
 };
 
 use crate::witness::common::BoxActiveAndFuture;
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 
 use super::ChunkedByVault;
 
@@ -98,8 +98,16 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 pub struct Generic<T>(pub T);
 #[async_trait::async_trait]
 impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
-	type Info = (<T::Chain as Chain>::ChainBlockNumber, T::ExtraInfo);
-	type HistoricInfo = (<T::Chain as Chain>::ChainBlockNumber, T::ExtraHistoricInfo);
+	type Info = (
+		<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		<T::Chain as Chain>::ChainBlockNumber,
+		T::ExtraInfo,
+	);
+	type HistoricInfo = (
+		<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		<T::Chain as Chain>::ChainBlockNumber,
+		T::ExtraHistoricInfo,
+	);
 
 	type Index = T::Index;
 	type Hash = T::Hash;

@@ -10,10 +10,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	impl_mock_chainflip,
-	mocks::{
-		, key_provider::MockKeyProvider,
-		signer_nomination::MockNominator,
-	},
+	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
 	AccountRoleRegistry, AsyncResult, KeyProvider, ThresholdSigner,
 };
 use codec::{Decode, Encode};

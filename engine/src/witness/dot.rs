@@ -173,7 +173,7 @@ where
 				async move {
 					let (events, mut broadcast_indices) = header.data;
 
-					let (vault_key_rotated_calls, mut proxy_added_broadcasts) = proxy_addeds(header.index, &events, &epoch.info.1);
+					let (vault_key_rotated_calls, mut proxy_added_broadcasts) = proxy_addeds(header.index, &events, &epoch.info.2);
 					broadcast_indices.append(&mut proxy_added_broadcasts);
 
 					for call in vault_key_rotated_calls {
@@ -215,7 +215,7 @@ where
 											PolkadotInstance,
 										>::transaction_succeeded {
 											tx_out_id: signature,
-											signer_id: epoch.info.1,
+											signer_id: epoch.info.2,
 											tx_fee,
 										}
 										.into(),

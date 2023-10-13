@@ -61,7 +61,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				let addresses = address_and_details_to_addresses(addresses_and_details);
 
 				let (deposit_witnesses, broadcast_indices) =
-					deposit_witnesses(header.index, addresses, &events, &epoch.info.1);
+					deposit_witnesses(header.index, addresses, &events, &epoch.info.2);
 
 				if !deposit_witnesses.is_empty() {
 					process_call(

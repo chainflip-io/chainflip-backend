@@ -6,7 +6,7 @@ use std::{
 use crate::{
 	common::Signal, state_chain_observer::client, witness::common::STATE_CHAIN_CONNECTION,
 };
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainCrypto};
 use cf_primitives::{AccountId, EpochIndex};
 use futures::StreamExt;
 use futures_core::{Future, Stream};
@@ -384,13 +384,29 @@ impl<
 }
 
 pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> = Epoch<
-	(<TChain as Chain>::ChainBlockNumber, ExtraInfo),
-	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
+	(
+		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		<TChain as Chain>::ChainBlockNumber,
+		ExtraInfo,
+	),
+	(
+		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		<TChain as Chain>::ChainBlockNumber,
+		ExtraHistoricInfo,
+	),
 >;
 
 pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
-	(<TChain as Chain>::ChainBlockNumber, ExtraInfo),
-	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
+	(
+		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		<TChain as Chain>::ChainBlockNumber,
+		ExtraInfo,
+	),
+	(
+		<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		<TChain as Chain>::ChainBlockNumber,
+		ExtraHistoricInfo,
+	),
 >;
 
 impl<
@@ -410,8 +426,16 @@ impl<
 		'a,
 		'env,
 		StateChainClient,
-		(<TChain as Chain>::ChainBlockNumber, Info),
-		(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+		(
+			<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			<TChain as Chain>::ChainBlockNumber,
+			Info,
+		),
+		(
+			<<TChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			<TChain as Chain>::ChainBlockNumber,
+			HistoricInfo,
+		),
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
@@ -420,17 +444,39 @@ impl<
 	{
 		self.filter_map(
 			|state_chain_client, epoch, block_hash, info| async move {
-				state_chain_client
+				match state_chain_client
 					.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 						state_chain_runtime::Runtime,
 						<TChain as PalletInstanceAlias>::Instance,
 					>>(block_hash, &epoch)
 					.await
 					.expect(STATE_CHAIN_CONNECTION)
-					.map(|vault| (vault, info))
+				{
+					Some(vault_start_block_number) => {
+						Some((
+						state_chain_client
+						.storage_map_entry::<pallet_cf_threshold_signature::VaultKeys<
+							state_chain_runtime::Runtime,
+							<TChain as PalletInstanceAlias>::Instance,
+						>>(block_hash, &epoch)
+						.await
+						.expect(STATE_CHAIN_CONNECTION)
+						.expect("since the block start number for this epoch exists, the vaulkt key for this epoch should also exist"),
+						vault_start_block_number, info))
+					}
+					None => None,
+				}
 			},
 			|state_chain_client, epoch, block_hash, historic_info| async move {
 				(
+					state_chain_client
+						.storage_map_entry::<pallet_cf_threshold_signature::VaultKeys<
+							state_chain_runtime::Runtime,
+							<TChain as PalletInstanceAlias>::Instance,
+						>>(block_hash, &(epoch + 1))
+						.await
+						.expect(STATE_CHAIN_CONNECTION)
+						.expect("We know the epoch ended, so the next vault must exist."),
 					state_chain_client
 						.storage_map_entry::<pallet_cf_vaults::VaultStartBlockNumbers<
 							state_chain_runtime::Runtime,
