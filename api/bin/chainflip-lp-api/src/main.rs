@@ -1,4 +1,3 @@
-use cf_primitives::AssetAmount;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	try_parse_number_or_hex, AnyhowRpcError,
@@ -119,7 +118,7 @@ pub trait Rpc {
 		id: OrderId,
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "setLimitOrder")]
@@ -129,7 +128,7 @@ pub trait Rpc {
 		buy_asset: Asset,
 		id: OrderId,
 		tick: Option<Tick>,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "assetBalances")]
@@ -239,12 +238,19 @@ impl RpcServer for RpcServerImpl {
 		id: OrderId,
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.update_limit_order(sell_asset, buy_asset, id, tick, increase_or_decrease, amount)
+			.update_limit_order(
+				sell_asset,
+				buy_asset,
+				id,
+				tick,
+				increase_or_decrease,
+				try_parse_number_or_hex(amount)?,
+			)
 			.await?)
 	}
 
@@ -254,12 +260,12 @@ impl RpcServer for RpcServerImpl {
 		buy_asset: Asset,
 		id: OrderId,
 		tick: Option<Tick>,
-		sell_amount: AssetAmount,
+		sell_amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.set_limit_order(sell_asset, buy_asset, id, tick, sell_amount)
+			.set_limit_order(sell_asset, buy_asset, id, tick, try_parse_number_or_hex(sell_amount)?)
 			.await?)
 	}
 
