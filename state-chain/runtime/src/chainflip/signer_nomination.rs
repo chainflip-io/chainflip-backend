@@ -70,10 +70,8 @@ impl cf_traits::SingleSignerNomination for RandomSignerNomination {
 
 	fn nomination_with_seed<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId> {
 		let mut all_excludes = Reputation::validators_suspended_for(&[
-			Offence::MissedAuthorshipSlot,
+			Offence::FailedToBroadcastTransaction,
 			Offence::MissedHeartbeat,
 		]);
 		all_excludes.extend(exclude_ids.iter().cloned());
@@ -99,9 +97,10 @@ impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 			eligible_authorities(
 				epoch_index,
 				&Reputation::validators_suspended_for(&[
-					Offence::ParticipateSigningFailed,
-					Offence::MissedAuthorshipSlot,
 					Offence::MissedHeartbeat,
+					Offence::ParticipateSigningFailed,
+					Offence::ParticipateKeygenFailed,
+					Offence::ParticipateKeyHandoverFailed,
 				]),
 			),
 		)
