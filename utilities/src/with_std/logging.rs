@@ -66,15 +66,12 @@ macro_rules! print_start_and_end {
 
 		match $e {
 			Ok(result) => match result {
-				Ok(_) => {
-					println!("TESTTTTTAAAABBBB");
-				},
+				Ok(_) => {},
 				Err(error) => {
 					println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
 				},
 			},
 			Err(panic) => {
-				println!("TESTTTTT");
 				println!(
 					"Exiting {} due to panic: {:#?}",
 					env!("CARGO_PKG_NAME"),
@@ -82,7 +79,7 @@ macro_rules! print_start_and_end {
 				);
 			},
 		};
-		
+
 	}
 }
 
