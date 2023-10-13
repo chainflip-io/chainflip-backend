@@ -165,10 +165,6 @@ async fn main() -> anyhow::Result<()> {
 						},
 					CfeStatus::Idle =>
 						if compatible {
-							// Wait an extra poll interval so that the old CFE has enough time to shut down and release all resources
-							// like the ports for the health check endpoint etc.
-							poll_interval.tick().await;
-
 							start_logger_server_fn.take().expect("only called once")(scope);
 							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
 
