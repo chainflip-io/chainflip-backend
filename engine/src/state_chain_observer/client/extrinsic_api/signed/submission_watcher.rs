@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use cf_primitives::SemVer;
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
@@ -115,6 +116,7 @@ pub struct SubmissionWatcher<
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: ErrorDecoder,
+	check_unfinalized_version: Option<SemVer>,
 }
 
 pub enum SubmissionLogicError {
@@ -134,6 +136,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
 		base_rpc_client: Arc<BaseRpcClient>,
+		check_unfinalized_version: Option<SemVer>,
 	) -> (Self, BTreeMap<RequestID, Request>) {
 		(
 			Self {
@@ -150,6 +153,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
+				check_unfinalized_version,
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -357,7 +361,19 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			{
 				Some((header, extrinsics, events))
 			} else if let (Some(block), events) = (
-				self.base_rpc_client.block(block_hash).await?,
+				{
+					if if let Some(check_unfinalized_version) = self.check_unfinalized_version {
+						check_unfinalized_version.is_compatible_with(
+							self.base_rpc_client.release_version(block_hash).await?,
+						)
+					} else {
+						true
+					} {
+						self.base_rpc_client.block(block_hash).await?
+					} else {
+						None
+					}
+				},
 				self.base_rpc_client
 					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
 					.await?,

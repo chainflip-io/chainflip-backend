@@ -196,6 +196,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		storage_key: StorageKey,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
+		// Check assumption about Option meaning
 		Ok(QueryKind::from_optional_value_to_query(
 			self.storage(block_hash, storage_key.clone())
 				.await?

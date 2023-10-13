@@ -131,7 +131,8 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			let mut start_logger_server_fn = Some(utilities::init_json_logger(settings.logging.span_lifecycle).await);
+			let mut start_logger_server_fn =
+				Some(utilities::init_json_logger(settings.logging.span_lifecycle).await);
 
 			let ws_rpc_client = jsonrpsee::ws_client::WsClientBuilder::default()
 				.build(&settings.state_chain.ws_endpoint)
@@ -150,8 +151,7 @@ async fn main() -> anyhow::Result<()> {
 					.await
 					.unwrap();
 
-				let compatible =
-					CFE_VERSION.is_compatible_with(current_release_version);
+				let compatible = CFE_VERSION.is_compatible_with(current_release_version);
 
 				match cfe_status {
 					CfeStatus::Active(_) =>
@@ -170,9 +170,9 @@ async fn main() -> anyhow::Result<()> {
 
 							let settings = settings.clone();
 
-							let handle = scope.spawn_with_handle(
-								task_scope(|scope| start(scope, settings).boxed())
-							);
+							let handle = scope.spawn_with_handle(task_scope(|scope| {
+								start(scope, settings).boxed()
+							}));
 
 							// Effectively, we want to move the files from the temp-migrated location, to the standard location
 							// - updating it in-place.
@@ -182,8 +182,11 @@ async fn main() -> anyhow::Result<()> {
 
 							cfe_status = CfeStatus::Active(handle);
 						} else {
-							tracing::info!("Current runtime is not compatible with this CFE version ({:?})", *CFE_VERSION);
-						}
+							tracing::info!(
+								"Current runtime is not compatible with this CFE version ({:?})",
+								*CFE_VERSION
+							);
+						},
 				}
 			}
 		}
@@ -212,6 +215,8 @@ async fn start(
 			&settings.state_chain.ws_endpoint,
 			&settings.state_chain.signing_key_file,
 			AccountRole::Validator,
+			true,
+			Some(*CFE_VERSION),
 			true,
 		)
 		.await?;

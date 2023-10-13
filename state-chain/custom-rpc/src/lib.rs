@@ -677,6 +677,7 @@ where
 			.map(RpcEnvironment::from)
 	}
 
+	// handle block not existing
 	fn cf_current_release_version(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
