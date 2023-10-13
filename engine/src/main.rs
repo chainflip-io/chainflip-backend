@@ -22,6 +22,7 @@ use clap::Parser;
 use futures::FutureExt;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::{
+	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
@@ -146,6 +147,21 @@ async fn main() -> anyhow::Result<()> {
 
 			// Wait until SCC has started, to ensure old engine has stopped
 			start_logger_server_fn.take().expect("only called once")(scope);
+
+			if *CFE_VERSION == (SemVer { major: 0, minor: 10, patch: 0 }) &&
+				settings_dir != DEFAULT_SETTINGS_DIR
+			{
+				// Effectively, we want to move the files from the temp-migrated location, to
+				// the standard location
+				// - updating it in-place.
+				// Note: the backup was already created and is in the temp folder (which will
+				// become the new standard folder) too
+				std::fs::rename(
+					config_root_path.join(settings_dir),
+					config_root_path.join(DEFAULT_SETTINGS_DIR),
+				)
+				.context("Unable to replace old settings with temp settings")?;
+			}
 
 			if let Some(health_check_settings) = &settings.health_check {
 				health::start(scope, health_check_settings, has_completed_initialising.clone())
