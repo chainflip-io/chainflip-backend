@@ -4,11 +4,14 @@ use cf_primitives::{chains::assets::any, AssetAmount};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
+use codec::Decode;
+use frame_support::sp_runtime::DigestItem;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
+use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
 use state_chain_runtime::PalletInstanceAlias;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 use utilities::task_scope;
 
@@ -17,6 +20,12 @@ pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
 	source_asset: any::Asset,
 	destination_asset: any::Asset,
+}
+
+pub struct PreUpdate {
+	pub rotation: bool,
+	pub is_authority: bool,
+	pub next_block_in: Option<usize>,
 }
 
 pub struct QueryApi {
@@ -149,19 +158,21 @@ impl QueryApi {
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 		account_id: Option<state_chain_runtime::AccountId>,
-	) -> Result<bool, anyhow::Error> {
+	) -> Result<PreUpdate, anyhow::Error> {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		let mut result = PreUpdate { rotation: false, is_authority: false, next_block_in: None };
 
 		if self
 			.state_chain_client
 			.storage_value::<pallet_cf_validator::CurrentRotationPhase<state_chain_runtime::Runtime>>(
 				block_hash,
 			)
-			.await? == RotationPhase::Idle
+			.await? != RotationPhase::Idle
 		{
-			return Ok(true)
+			result.rotation = true;
 		}
 
 		let current_validators = self
@@ -172,9 +183,35 @@ impl QueryApi {
 			.await?;
 
 		if current_validators.contains(&account_id) {
-			return Ok(false)
+			result.is_authority = true;
+		} else {
+			return Ok(result)
 		}
 
-		Ok(true)
+		let header = self.state_chain_client.base_rpc_client.block_header(block_hash).await?;
+
+		let slot: usize =
+			*extract_slot_from_digest_item(&header.digest.logs[0]).unwrap().deref() as usize;
+
+		let validator_len = current_validators.len();
+		let current_relative_slot = slot % validator_len;
+		let index = current_validators.iter().position(|account| account == &account_id).unwrap();
+		if index >= current_relative_slot {
+			result.next_block_in = Some(index - current_relative_slot);
+		} else {
+			result.next_block_in = Some(validator_len - 1 - current_relative_slot + index);
+		}
+
+		Ok(result)
 	}
+}
+
+fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
+	item.as_pre_runtime().and_then(|(id, mut data)| {
+		if id == AURA_ENGINE_ID {
+			Slot::decode(&mut data).ok()
+		} else {
+			None
+		}
+	})
 }

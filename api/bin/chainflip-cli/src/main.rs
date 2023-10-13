@@ -294,10 +294,11 @@ async fn get_bound_executor_address(api: QueryApi) -> Result<()> {
 
 async fn pre_update_check(api: QueryApi) -> Result<()> {
 	let can_update = api.pre_update_check(None, None).await?;
-	if can_update {
-		println!("You can safely update your node/engine");
-	} else {
-		println!("A rotation is in progress and you are an Authority, please wait till the end of the rotation to update your node/engine");
+
+	println!("Your node is an authority: {}", can_update.is_authority);
+	println!("A rotation is occurring: {}", can_update.rotation);
+	if let Some(blocks) = can_update.next_block_in {
+		println!("Your validator will produce a block in {} blocks", blocks);
 	}
 
 	Ok(())

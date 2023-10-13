@@ -1359,6 +1359,7 @@ dependencies = [
  "chainflip-node",
  "custom-rpc",
  "ed25519-dalek",
+ "frame-support",
  "frame-system",
  "futures",
  "hex",
