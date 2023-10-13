@@ -76,7 +76,7 @@ pub mod pallet {
 
 		/// Used to determine compatibility between the runtime and the CFE.
 		#[pallet::constant]
-		type CurrentCompatibilityVersion: Get<SemVer>;
+		type CurrentReleaseVersion: Get<SemVer>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -192,7 +192,7 @@ pub mod pallet {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
 			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
-				if next_version != T::CurrentCompatibilityVersion::get() {
+				if next_version != T::CurrentReleaseVersion::get() {
 					log::warn!("NextCompatibilityVersion does not match the current runtime");
 				}
 			} else {
@@ -471,8 +471,8 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
-	fn current_compatibility_version() -> SemVer {
-		<T as Config>::CurrentCompatibilityVersion::get()
+	fn current_release_version() -> SemVer {
+		<T as Config>::CurrentReleaseVersion::get()
 	}
 	fn next_compatibility_version() -> Option<SemVer> {
 		NextCompatibilityVersion::<T>::get()

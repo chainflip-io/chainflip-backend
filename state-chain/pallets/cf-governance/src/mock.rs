@@ -112,7 +112,7 @@ impl AuthoritiesCfeVersions for MockAuthoritiesCfeVersions {
 
 pub struct MockCompatibleCfeVersions;
 impl CompatibleCfeVersions for MockCompatibleCfeVersions {
-	fn current_compatibility_version() -> SemVer {
+	fn current_release_version() -> SemVer {
 		SemVer { major: 1, minor: 0, patch: 0 }
 	}
 	fn next_compatibility_version() -> Option<SemVer> {

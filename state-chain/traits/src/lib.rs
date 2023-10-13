@@ -804,7 +804,7 @@ pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
 pub trait CompatibleCfeVersions {
-	fn current_compatibility_version() -> SemVer;
+	fn current_release_version() -> SemVer;
 	fn next_compatibility_version() -> Option<SemVer>;
 }
 

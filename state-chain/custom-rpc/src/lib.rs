@@ -254,8 +254,8 @@ pub trait CustomApi {
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
-	#[method(name = "current_compatibility_version")]
-	fn cf_current_compatibility_version(
+	#[method(name = "current_release_version")]
+	fn cf_current_release_version(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SemVer>;
@@ -677,13 +677,13 @@ where
 			.map(RpcEnvironment::from)
 	}
 
-	fn cf_current_compatibility_version(
+	fn cf_current_release_version(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SemVer> {
 		self.client
 			.runtime_api()
-			.cf_current_compatibility_version(self.unwrap_or_best(at))
+			.cf_current_release_version(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
 
