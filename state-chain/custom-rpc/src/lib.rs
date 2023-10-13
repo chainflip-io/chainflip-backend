@@ -948,11 +948,11 @@ mod test {
 	fn test_account_info_serialization() {
 		assert_eq!(
 			serde_json::to_value(RpcAccountInfo::none(0)).unwrap(),
-			json!({ "role": "none", "flip_balance": 0 })
+			json!({ "role": "none", "flip_balance": "0x0" })
 		);
 		assert_eq!(
 			serde_json::to_value(RpcAccountInfo::broker(0)).unwrap(),
-			json!({ "role":"broker", "flip_balance": 0 })
+			json!({ "role":"broker", "flip_balance": "0x0" })
 		);
 
 		let lp = RpcAccountInfo::lp(
@@ -981,7 +981,7 @@ mod test {
 			serde_json::to_value(lp).unwrap(),
 			json!({
 				"role": "liquidity_provider",
-				"flip_balance": 0,
+				"flip_balance": "0x0",
 				"balances": {
 					"Ethereum": {
 						"Flip": "0x7fffffffffffffffffffffffffffffff",
