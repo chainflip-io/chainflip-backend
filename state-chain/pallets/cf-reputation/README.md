@@ -4,7 +4,7 @@ A module to manage offences, reputation and suspensions of our nodes for the Sta
 
 ## Overview
 
-Nodes earn reputations points for remaining online. For every block of online time, they receive an online credit. At regular intervals dictated by the heartbeat duration, these credits are exchanged for reputation points according to an *accrual rate*.
+Nodes earn reputation points for remaining online. We count the number of blocks between heartbeat submissions and, at regular intervals dictated by the heartbeat duration, these are converted to reputation points according to an *accrual rate*.
 
 If a node is reported for committing an offence, the matching penalty is resolved. A penalty consists of a reputation penalty and a suspension duration measured in blocks. Note both the penalty and suspension can be zero.
 
@@ -22,9 +22,9 @@ Once every heartbeat interval, this pallet divides nodes into nodes that are 'on
 - Heartbeat interval: The duration, measured in blocks, after which we consider a node to be offline if no heartbeat is received.
 - Online: A node is considered online if its most recent hearbeat was at most `heartbeat_interval` blocks ago.
 - Offline: A node is considered offline if its most recent heartbeat was more than `heartbeat_interval` blocks ago.
-- Online credits: Online credits increase for every heartbeat interval in which a node submitted their heartbeat.
+- Online Blocks: We count the number of blocks for which a validator has been online, based on heartbeat submissions.
 - Reputation points: A measure of how diligently a node has been fulfilling its duties.
 - Suspension: A suspension is served for a given offence and lasts for a number of blocks. The consequences of suspensions are not defined by this pallet - rather the currently suspended nodes for any collection of offences can be queried in order to act
 - Offences: any event that can be reported and might incur a reputation penalty and/or suspension.
 - Slashing: The process of confiscating and burning FLIP tokens from an authority.
-- Accrual Ratio: A ratio of reputation points earned per number of offline credits
+- Accrual Ratio: A ratio of reputation points earned per number of online blocks.

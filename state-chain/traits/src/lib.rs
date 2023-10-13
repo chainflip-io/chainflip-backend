@@ -187,7 +187,6 @@ pub trait EpochTransitionHandler {
 	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
-/// Resetter for Reputation Points and Online Credits of a Validator
 pub trait ReputationResetter {
 	type ValidatorId;
 

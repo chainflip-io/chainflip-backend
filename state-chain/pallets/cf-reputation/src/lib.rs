@@ -38,13 +38,13 @@ use sp_std::{
 impl_pallet_safe_mode!(PalletSafeMode; reporting_enabled);
 
 impl<T: Config> ReputationParameters for T {
-	type OnlineCredits = BlockNumberFor<T>;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn bounds() -> (ReputationPoints, ReputationPoints) {
 		T::ReputationPointFloorAndCeiling::get()
 	}
 
-	fn accrual_rate() -> (ReputationPoints, Self::OnlineCredits) {
+	fn accrual_rate() -> (ReputationPoints, Self::BlockNumber) {
 		AccrualRatio::<T>::get()
 	}
 }
@@ -148,7 +148,7 @@ pub mod pallet {
 		}
 	}
 
-	/// The ratio at which one accrues Reputation points in exchange for online credits
+	/// The ratio at which one accrues Reputation points for online blocks.
 	#[pallet::storage]
 	#[pallet::getter(fn accrual_ratio)]
 	pub type AccrualRatio<T: Config> =
@@ -196,7 +196,7 @@ pub mod pallet {
 		/// The accrual rate for our reputation points has been updated.
 		AccrualRateUpdated {
 			reputation_points: ReputationPoints,
-			online_credits: BlockNumberFor<T>,
+			number_of_blocks: BlockNumberFor<T>,
 		},
 		/// The penalty for missing a heartbeat has been updated.
 		MissedHeartbeatPenaltyUpdated { new_reputation_penalty: ReputationPoints },
@@ -212,8 +212,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// The accrual ratio can be updated and would come into play in the current heartbeat
-		/// interval. This is gated with governance.
+		/// Updates the rate at which reputation points are accrued.
+		///
+		/// For every `number_of_blocks` blocks, `reputation_points` points are accrued.
 		///
 		/// ## Events
 		///
@@ -227,18 +228,18 @@ pub mod pallet {
 		pub fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			reputation_points: ReputationPoints,
-			online_credits: BlockNumberFor<T>,
+			number_of_blocks: BlockNumberFor<T>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ensure!(
 				reputation_points <= T::MaximumAccruableReputation::get() &&
-					online_credits > Zero::zero(),
+					number_of_blocks > Zero::zero(),
 				Error::<T>::InvalidAccrualRatio
 			);
 
-			AccrualRatio::<T>::set((reputation_points, online_credits));
-			Self::deposit_event(Event::AccrualRateUpdated { reputation_points, online_credits });
+			AccrualRatio::<T>::set((reputation_points, number_of_blocks));
+			Self::deposit_event(Event::AccrualRateUpdated { reputation_points, number_of_blocks });
 
 			Ok(())
 		}
@@ -448,7 +449,7 @@ impl<T: Config> Pallet<T> {
 		);
 		for validator_id in offline_authorities {
 			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
-				rep.reset_online_credits();
+				rep.online_blocks = Zero::zero();
 				rep.reputation_points
 			});
 
@@ -502,11 +503,10 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> ReputationResetter for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
-	/// Reset both the online credits and the reputation points of a validator to zero.
+	/// Reset both the reputation of a validator to the default.
 	fn reset_reputation(validator: &Self::ValidatorId) {
-		Reputations::<T>::mutate(validator, |rep| {
-			rep.reset_reputation();
-			rep.reset_online_credits();
+		Reputations::<T>::mutate(validator, |rep: &mut RuntimeReputationTracker<_>| {
+			*rep = Default::default()
 		});
 	}
 }

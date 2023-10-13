@@ -40,7 +40,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
