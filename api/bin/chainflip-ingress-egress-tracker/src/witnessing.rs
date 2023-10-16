@@ -1,3 +1,4 @@
+pub mod btc;
 mod eth;
 
 use std::collections::HashMap;
@@ -10,7 +11,6 @@ use chainflip_engine::{
 	},
 	witness::common::epoch_source::EpochSource,
 };
-use futures::FutureExt;
 use sp_core::H160;
 use utilities::task_scope;
 
@@ -72,62 +72,48 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 	}
 }
 
-pub(super) fn start(
+pub(super) async fn start(
+	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: DepositTrackerSettings,
 	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
-) {
-	tokio::spawn(async {
-		// TODO: ensure that if this panics, the whole process exists (probably by moving
-		// task scope to main)
-		task_scope::task_scope(|scope| {
+) -> anyhow::Result<()> {
+	let (state_chain_stream, state_chain_client) = {
+		state_chain_observer::client::StateChainClient::connect_without_account(
+			scope,
+			&settings.state_chain_ws_endpoint,
+		)
+		.await?
+	};
+
+	let env_params = get_env_parameters(&state_chain_client).await;
+
+	let epoch_source =
+		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone()).await;
+
+	let witness_call = {
+		let witness_sender = witness_sender.clone();
+		move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
+			let witness_sender = witness_sender.clone();
 			async move {
-				let (state_chain_stream, state_chain_client) = {
-					state_chain_observer::client::StateChainClient::connect_without_account(
-						scope,
-						&settings.state_chain_ws_endpoint,
-					)
-					.await?
-				};
-
-				let env_params = get_env_parameters(&state_chain_client).await;
-
-				let epoch_source = EpochSource::builder(
-					scope,
-					state_chain_stream.clone(),
-					state_chain_client.clone(),
-				)
-				.await;
-
-				let witness_call = {
-					let witness_sender = witness_sender.clone();
-					move |call: state_chain_runtime::RuntimeCall, _epoch_index| {
-						let witness_sender = witness_sender.clone();
-						async move {
-							// Send may fail if there aren't any subscribers,
-							// but it is safe to ignore the error.
-							if let Ok(n) = witness_sender.send(call) {
-								tracing::info!("Broadcasting witnesser call to {} subscribers", n);
-							}
-						}
-					}
-				};
-
-				eth::start(
-					scope,
-					state_chain_client.clone(),
-					state_chain_stream.clone(),
-					settings,
-					env_params,
-					epoch_source.clone(),
-					witness_call,
-				)
-				.await?;
-
-				Ok(())
+				// Send may fail if there aren't any subscribers,
+				// but it is safe to ignore the error.
+				if let Ok(n) = witness_sender.send(call.clone()) {
+					tracing::info!("Broadcasting witnesser call {:?} to {} subscribers", call, n);
+				}
 			}
-			.boxed()
-		})
-		.await
-		.unwrap()
-	});
+		}
+	};
+
+	eth::start(
+		scope,
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		settings,
+		env_params,
+		epoch_source.clone(),
+		witness_call,
+	)
+	.await?;
+
+	Ok(())
 }
