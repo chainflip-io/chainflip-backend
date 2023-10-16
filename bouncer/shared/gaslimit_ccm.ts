@@ -20,7 +20,6 @@ import { signAndSendTxEthSilent } from './send_eth';
 // on the lenght of the message.
 const MIN_BASE_GAS_OVERHEAD = 100000;
 const BASE_GAS_OVERHEAD_BUFFER = 20000;
-const ETHEREUM_BASE_FEE_MULTIPLIER = 2;
 const CFE_GAS_LIMIT_CAP = 10000000;
 // Arbitrary gas consumption values for testing. The total default gas used is then ~360-380k depending on the parameters.
 let DEFAULT_GAS_CONSUMPTION = 260000;
@@ -131,6 +130,18 @@ async function testGasLimitSwap(
     },
     () => swapScheduledObserved,
   );
+  const broadcastIdToTxPayload: { [key: string]: any } = {};
+  const broadcastRequesthandle = observeEvent(
+    'ethereumBroadcaster:TransactionBroadcastRequest',
+    chainflipApi,
+    (event) => {
+      broadcastIdToTxPayload[event.data.broadcastAttemptId.broadcastId] =
+        event.data.transactionPayload;
+      return false;
+    },
+    () => swapScheduledObserved,
+  );
+
   await send(sourceAsset, depositAddress);
 
   const {
@@ -141,37 +152,39 @@ async function testGasLimitSwap(
     !(
       swapId in swapIdToEgressAmount &&
       swapId in swapIdToEgressId &&
-      swapIdToEgressId[swapId] in egressIdToBroadcastId
+      swapIdToEgressId[swapId] in egressIdToBroadcastId &&
+      egressIdToBroadcastId[swapIdToEgressId[swapId]] in broadcastIdToTxPayload
     )
   ) {
     await sleep(3000);
   }
   swapScheduledObserved = true;
-  await Promise.all([swapExecutedHandle, swapEgressHandle, ccmBroadcastHandle]);
+  await Promise.all([
+    swapExecutedHandle,
+    swapEgressHandle,
+    ccmBroadcastHandle,
+    broadcastRequesthandle,
+  ]);
 
   const egressBudgetAmount =
     sourceAsset !== Assets.ETH
       ? Number(swapIdToEgressAmount[swapId].replace(/,/g, ''))
       : messageMetadata.gasBudget;
 
-  const { baseFee, priorityFee } = await getChainFees();
-
-  // On the state chain the gasLimit is calculated from the egressBudget and the MaxFeePerGas
-  // max_fee_per_gas = 2 * baseFee + priorityFee
-  // gasLimitBudget = egressBudgetAmount / (1 * baseFee + priorityFee)
-  const currentFeePerGas = baseFee + priorityFee;
-  const maxFeePerGas = ETHEREUM_BASE_FEE_MULTIPLIER * baseFee + priorityFee;
-  const gasLimitBudget = egressBudgetAmount / currentFeePerGas;
+  const txPayload = broadcastIdToTxPayload[egressIdToBroadcastId[swapIdToEgressId[swapId]]];
+  const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
+  const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
   const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
 
   const minGasLimitRequired = gasConsumption + MIN_BASE_GAS_OVERHEAD + byteLength * GAS_PER_BYTE;
 
-  console.log(
-    `${tag} baseFee: ${baseFee}, priorityFee: ${priorityFee}, maxFeePerGas: ${maxFeePerGas}`,
-  );
-
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
+  console.log(
+    `${tag} Gas budget of ${gasLimitBudget}. minGasLimitRequired ${minGasLimitRequired}, total ${
+      minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER
+    }`,
+  );
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER >= gasLimitBudget) {
     observeCcmReceived(
       sourceAsset,
@@ -186,7 +199,9 @@ async function testGasLimitSwap(
       }
     });
     // Expect Broadcast Aborted
-    console.log(`${tag} Gas budget is too low. Expecting BroadcastAborted event.`);
+    console.log(
+      `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
+    );
     await observeEvent(
       'ethereumBroadcaster:BroadcastAborted',
       await getChainflipApi(),
@@ -199,6 +214,8 @@ async function testGasLimitSwap(
       }`,
     );
   } else if (minGasLimitRequired < gasLimitBudget) {
+    console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
+
     const ccmReceived = await observeCcmReceived(
       sourceAsset,
       destAsset,
@@ -217,18 +234,20 @@ async function testGasLimitSwap(
 
     // Priority fee is not fully deterministic so we just log it for now
     if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
-      console.log(
-        `${tag} Max fee per gas in the transaction ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
+      throw new Error(
+        `${tag} Tx Max fee per gas ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
       );
     }
-    if (Math.trunc(tx.gas) !== Math.min(Math.trunc(gasLimitBudget), CFE_GAS_LIMIT_CAP)) {
-      throw new Error(`${tag} Gas limit in the transaction is different than the one expected!`);
+    if (tx.gas !== Math.min(gasLimitBudget, CFE_GAS_LIMIT_CAP)) {
+      throw new Error(`${tag} Tx gas limit ${tx.gas} different than expected ${gasLimitBudget}`);
     }
     // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
     if (totalFee > egressBudgetAmount) {
       throw new Error(`${tag} Transaction fee paid is higher than the budget paid by the user!`);
     }
     console.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash as string}!`);
+  } else {
+    console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
 }
 
