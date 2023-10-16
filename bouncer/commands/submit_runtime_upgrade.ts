@@ -13,19 +13,19 @@ import { submitRuntimeUpgrade } from '../shared/submit_runtime_upgrade';
 import { runWithTimeout } from '../shared/utils';
 
 async function main() {
-    const wasmPath = process.argv[2];
+  const wasmPath = process.argv[2];
 
-    const arg3 = process.argv[3].trim();
-    const semverRestriction = arg3 ? JSON.parse(arg3) : undefined;
+  const arg3 = process.argv[3].trim();
+  const semverRestriction = arg3 ? JSON.parse(arg3) : undefined;
 
-    const arg4 = process.argv[4].trim();
-    const percentNodesUpgraded = arg4 ? Number(arg4) : undefined;
+  const arg4 = process.argv[4].trim();
+  const percentNodesUpgraded = arg4 ? Number(arg4) : undefined;
 
-    await submitRuntimeUpgrade(wasmPath, semverRestriction, percentNodesUpgraded);
-    process.exit(0);
+  await submitRuntimeUpgrade(wasmPath, semverRestriction, percentNodesUpgraded);
+  process.exit(0);
 }
 
 runWithTimeout(main(), 20000).catch((error) => {
-    console.error(error);
-    process.exit(-1);
+  console.error(error);
+  process.exit(-1);
 });
