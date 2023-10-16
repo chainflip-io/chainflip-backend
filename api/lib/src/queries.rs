@@ -163,7 +163,8 @@ impl QueryApi {
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
-		let mut result = PreUpdateStatus { rotation: false, is_authority: false, next_block_in: None };
+		let mut result =
+			PreUpdateStatus { rotation: false, is_authority: false, next_block_in: None };
 
 		if self
 			.state_chain_client
@@ -231,8 +232,5 @@ fn test_slot_extraction() {
 		None,
 		extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
 	);
-	assert_eq!(
-		None,
-		extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec()))
-	);
+	assert_eq!(None, extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec())));
 }
