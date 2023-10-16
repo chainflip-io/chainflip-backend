@@ -29,7 +29,7 @@ macro_rules! print_start_and_end {
 			"
 		);
 
-		match $e {
+		match std::panic::AssertUnwindSafe($e).catch_unwind().await {
 			Ok(result) => match result {
 				Ok(_) => {},
 				Err(error) => {
@@ -64,7 +64,7 @@ macro_rules! print_start_and_end {
 			"
 		);
 
-		match $e {
+		match catch_unwind(AssertUnwindSafe(|| $e)) {
 			Ok(result) => match result {
 				Ok(_) => {},
 				Err(error) => {

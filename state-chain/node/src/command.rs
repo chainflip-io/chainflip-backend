@@ -204,15 +204,11 @@ pub fn run() -> sc_cli::Result<()> {
         You can enable it with `--features try-runtime`."
 			.into()),
 		None => {
-			// utilities::print_starting!();
 			utilities::print_start_and_end!({
-				let result = catch_unwind(AssertUnwindSafe(|| {
-					let runner = cli.create_runner(&cli.run)?;
-					runner.run_node_until_exit(|config| async move {
-						service::new_full(config).map_err(sc_cli::Error::Service)
-					})
-				}));
-				result
+				let runner = cli.create_runner(&cli.run)?;
+				runner.run_node_until_exit(|config| async move {
+					service::new_full(config).map_err(sc_cli::Error::Service)
+				})
 			});
 			Ok(())
 		},
