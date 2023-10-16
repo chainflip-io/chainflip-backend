@@ -147,15 +147,15 @@ impl<
 {
 	async fn dry_run(
 		&self,
-		_call: RuntimeCall,
-		_at: Option<state_chain_runtime::Hash>,
+		call: RuntimeCall,
+		at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
+		let _ = self
+			.base_rpc_client
+			.raw_rpc_client
+			.dry_run(Encode::encode(&call).into(), at)
+			.await;
 		Ok(Bytes::from(vec![]))
-		// Ok(self
-		// 	.base_rpc_client
-		// 	.raw_rpc_client
-		// 	.dry_run(Encode::encode(&call).into(), at)
-		// 	.await?)
 	}
 }
 
