@@ -259,6 +259,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SemVer>;
+	#[deprecated(note = "Use `cf_current_release_version` instead.")]
+	#[method(name = "current_compatibility_version")]
+	fn cf_current_compatibility_version(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 	#[subscription(name = "subscribe_pool_price", item = Price)]
@@ -677,7 +683,6 @@ where
 			.map(RpcEnvironment::from)
 	}
 
-	// handle block not existing
 	fn cf_current_release_version(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
@@ -686,6 +691,13 @@ where
 			.runtime_api()
 			.cf_current_release_version(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_current_compatibility_version(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SemVer> {
+		self.cf_current_release_version(at)
 	}
 
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {

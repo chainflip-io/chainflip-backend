@@ -239,7 +239,13 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 	}
 
 	async fn release_version(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<SemVer> {
-		self.raw_rpc_client.cf_current_release_version(Some(block_hash)).await
+		let (version, _success_fut) = futures::future::select_ok([
+			self.raw_rpc_client.cf_current_release_version(Some(block_hash)),
+			#[allow(deprecated)]
+			self.raw_rpc_client.cf_current_compatibility_version(Some(block_hash)),
+		])
+		.await?;
+		Ok(version)
 	}
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {
