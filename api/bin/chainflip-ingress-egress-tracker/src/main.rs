@@ -7,10 +7,12 @@ use utilities::task_scope;
 
 mod witnessing;
 
+#[derive(Clone)]
 pub struct DepositTrackerSettings {
 	eth_node: WsHttpEndpoints,
 	// The key shouldn't be necessary, but the current witnesser wants this
 	eth_key_path: PathBuf,
+	dot_node: WsHttpEndpoints,
 	state_chain_ws_endpoint: String,
 }
 
@@ -86,20 +88,27 @@ async fn main() -> anyhow::Result<()> {
 	eth_key_temp_file
 		.write_all(b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 		.unwrap();
-	let eth_key_path = eth_key_temp_file.path();
-
-	let eth_ws_endpoint = env::var("ETH_WS_ENDPOINT").unwrap_or("ws://localhost:8546".to_string());
-	let eth_http_endpoint =
-		env::var("ETH_HTTP_ENDPOINT").unwrap_or("http://localhost:8545".to_string());
-	let sc_ws_endpoint = env::var("SC_WS_ENDPOINT").unwrap_or("ws://localhost:9944".to_string());
 
 	let settings = DepositTrackerSettings {
 		eth_node: WsHttpEndpoints {
-			ws_endpoint: eth_ws_endpoint.into(),
-			http_endpoint: eth_http_endpoint.into(),
+			ws_endpoint: env::var("ETH_WS_ENDPOINT")
+				.unwrap_or("ws://localhost:8546".to_string())
+				.into(),
+			http_endpoint: env::var("ETH_HTTP_ENDPOINT")
+				.unwrap_or("http://localhost:8545".to_string())
+				.into(),
 		},
-		eth_key_path: eth_key_path.into(),
-		state_chain_ws_endpoint: sc_ws_endpoint,
+		eth_key_path: eth_key_temp_file.path().into(),
+		dot_node: WsHttpEndpoints {
+			ws_endpoint: env::var("DOT_WS_ENDPOINT")
+				.unwrap_or("ws://localhost:9945".to_string())
+				.into(),
+			http_endpoint: env::var("DOT_HTTP_ENDPOINT")
+				.unwrap_or("http://localhost:9945".to_string())
+				.into(),
+		},
+		state_chain_ws_endpoint: env::var("SC_WS_ENDPOINT")
+			.unwrap_or("ws://localhost:9944".to_string()),
 	};
 
 	task_scope::task_scope(|scope| async move { start(scope, settings).await }.boxed()).await
