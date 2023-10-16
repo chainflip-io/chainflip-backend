@@ -112,6 +112,7 @@ where
 	(events, broadcast_indices)
 }
 
+#[allow(clippy::type_complexity)]
 pub async fn process_egress<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
 	header: Header<
