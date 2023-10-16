@@ -364,7 +364,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				{
 					if if let Some(check_unfinalized_version) = self.check_unfinalized_version {
 						check_unfinalized_version.is_compatible_with(
-							self.base_rpc_client.release_version(block_hash).await?,
+							self.base_rpc_client
+								.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
+									state_chain_runtime::Runtime,
+								>>(block_hash)
+								.await?,
 						)
 					} else {
 						true

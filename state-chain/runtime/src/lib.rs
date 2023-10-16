@@ -887,9 +887,6 @@ impl_runtime_apis! {
 		fn cf_current_compatibility_version() -> SemVer {
 			Environment::current_release_version()
 		}
-		fn cf_current_release_version() -> SemVer {
-			Environment::current_release_version()
-		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()
 		}

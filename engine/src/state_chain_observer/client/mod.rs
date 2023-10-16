@@ -25,6 +25,7 @@ use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
 	extrinsic_api::signed::{signer, SignedExtrinsicApi},
+	storage_api::StorageApi,
 };
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
@@ -339,7 +340,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 							async move {
 								Ok::<_, anyhow::Error>((
 									block_hash,
-									base_rpc_client.release_version(block_hash).await?,
+									base_rpc_client
+										.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
+											state_chain_runtime::Runtime,
+										>>(block_hash)
+										.await?,
 								))
 							}
 						})
@@ -357,8 +362,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						Ok::<_, anyhow::Error>(())
 					})).await?;
 				} else {
-					let current_release_version =
-						base_rpc_client.release_version(latest_block_hash).await?;
+					let current_release_version = base_rpc_client
+						.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+							latest_block_hash,
+						)
+						.await?;
 					if !required_version.is_compatible_with(current_release_version) {
 						bail!(
 							"This version '{}' is incompatible with the current release '{}' at block: {}.",
@@ -399,7 +407,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 								finalized_block_header_stream.next().await.unwrap()?;
 							let block_hash = block_header.hash();
 							if let Some(required_version) = required_version {
-								let current_release_version = base_rpc_client.release_version(block_hash).await?;
+								let current_release_version = base_rpc_client.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(block_hash).await?;
 								if !required_version.is_compatible_with(current_release_version) {
 									break Err(anyhow!("This version '{}' is no longer compatible with the release version '{}' at block: {}", required_version, current_release_version, block_hash))
 								}

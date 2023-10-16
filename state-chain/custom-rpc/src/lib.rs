@@ -254,17 +254,9 @@ pub trait CustomApi {
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
-	#[method(name = "current_release_version")]
-	fn cf_current_release_version(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SemVer>;
-	#[deprecated(note = "Use `cf_current_release_version` instead.")]
+	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 	#[method(name = "current_compatibility_version")]
-	fn cf_current_compatibility_version(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SemVer>;
+	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
 	#[subscription(name = "subscribe_pool_price", item = Price)]
@@ -683,21 +675,12 @@ where
 			.map(RpcEnvironment::from)
 	}
 
-	fn cf_current_release_version(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SemVer> {
+	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
+		#[allow(deprecated)]
 		self.client
 			.runtime_api()
-			.cf_current_release_version(self.unwrap_or_best(at))
+			.cf_current_compatibility_version(self.unwrap_or_best(None))
 			.map_err(to_rpc_error)
-	}
-
-	fn cf_current_compatibility_version(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SemVer> {
-		self.cf_current_release_version(at)
 	}
 
 	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {

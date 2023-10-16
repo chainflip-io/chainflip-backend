@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use cf_amm::{common::Tick, range_orders::Liquidity};
-use cf_primitives::{Asset, SemVer};
+use cf_primitives::Asset;
 use jsonrpsee::core::{
 	client::{ClientT, Subscription, SubscriptionClientT},
 	RpcResult,
@@ -128,8 +128,6 @@ pub trait BaseRpcApi {
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
 
-	async fn release_version(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<SemVer>;
-
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
 
 	async fn pool_minted_positions(
@@ -236,16 +234,6 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
 		self.raw_rpc_client.subscribe_finalized_heads().await
-	}
-
-	async fn release_version(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<SemVer> {
-		let (version, _success_fut) = futures::future::select_ok([
-			self.raw_rpc_client.cf_current_release_version(Some(block_hash)),
-			#[allow(deprecated)]
-			self.raw_rpc_client.cf_current_compatibility_version(Some(block_hash)),
-		])
-		.await?;
-		Ok(version)
 	}
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {
