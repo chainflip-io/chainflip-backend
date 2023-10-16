@@ -128,15 +128,6 @@ async fn main() -> anyhow::Result<()> {
 
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
-			if let Some(health_check_settings) = &settings.health_check {
-				health::start(scope, health_check_settings, has_completed_initialising.clone())
-					.await?;
-			}
-
-			if let Some(prometheus_settings) = &settings.prometheus {
-				metrics::start(scope, prometheus_settings).await?;
-			}
-
 			let (state_chain_stream, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
@@ -151,6 +142,15 @@ async fn main() -> anyhow::Result<()> {
 
 			// Wait until SCC has started, to ensure old engine has stopped
 			start_logger_server_fn.take().expect("only called once")(scope);
+
+			if let Some(health_check_settings) = &settings.health_check {
+				health::start(scope, health_check_settings, has_completed_initialising.clone())
+					.await?;
+			}
+
+			if let Some(prometheus_settings) = &settings.prometheus {
+				metrics::start(scope, prometheus_settings).await?;
+			}
 
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
