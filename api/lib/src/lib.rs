@@ -9,7 +9,6 @@ use cf_chains::{
 	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
-use codec::Encode;
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -147,14 +146,9 @@ impl<
 {
 	async fn dry_run(
 		&self,
-		call: RuntimeCall,
-		at: Option<state_chain_runtime::Hash>,
+		_call: RuntimeCall,
+		_at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
-		let _ = self
-			.base_rpc_client
-			.raw_rpc_client
-			.dry_run(Encode::encode(&call).into(), at)
-			.await;
 		Ok(Bytes::from(vec![]))
 	}
 }
