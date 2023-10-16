@@ -22,7 +22,7 @@ pub struct SwapChannelInfo<C: Chain> {
 	destination_asset: any::Asset,
 }
 
-pub struct PreUpdate {
+pub struct PreUpdateStatus {
 	pub rotation: bool,
 	pub is_authority: bool,
 	pub next_block_in: Option<usize>,
@@ -158,12 +158,12 @@ impl QueryApi {
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 		account_id: Option<state_chain_runtime::AccountId>,
-	) -> Result<PreUpdate, anyhow::Error> {
+	) -> Result<PreUpdateStatus, anyhow::Error> {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
-		let mut result = PreUpdate { rotation: false, is_authority: false, next_block_in: None };
+		let mut result = PreUpdateStatus { rotation: false, is_authority: false, next_block_in: None };
 
 		if self
 			.state_chain_client
@@ -199,13 +199,14 @@ impl QueryApi {
 		if index >= current_relative_slot {
 			result.next_block_in = Some(index - current_relative_slot);
 		} else {
-			result.next_block_in = Some(validator_len - 1 - current_relative_slot + index);
+			result.next_block_in = Some(validator_len - current_relative_slot + index);
 		}
 
 		Ok(result)
 	}
 }
 
+// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L179
 fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 	item.as_pre_runtime().and_then(|(id, mut data)| {
 		if id == AURA_ENGINE_ID {
@@ -214,4 +215,24 @@ fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 			None
 		}
 	})
+}
+
+#[test]
+fn test_slot_extraction() {
+	let slot = Slot::from(42);
+	assert_eq!(
+		Some(slot),
+		extract_slot_from_digest_item(&DigestItem::PreRuntime(
+			AURA_ENGINE_ID,
+			Encode::encode(&slot)
+		))
+	);
+	assert_eq!(
+		None,
+		extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
+	);
+	assert_eq!(
+		None,
+		extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec()))
+	);
 }
