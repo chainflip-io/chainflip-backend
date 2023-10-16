@@ -405,7 +405,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 								}
 							}
 
-							// fix
 							if block_sender.broadcast((block_hash, block_header)).await.is_err() {
 								break Ok(())
 							}

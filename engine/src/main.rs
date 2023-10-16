@@ -26,11 +26,7 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::info;
-use utilities::{
-	metrics,
-	task_scope::{self, task_scope},
-	CachedStream,
-};
+use utilities::{metrics, task_scope::task_scope, CachedStream};
 
 lazy_static::lazy_static! {
 	static ref CFE_VERSION: SemVer = SemVer {
