@@ -147,14 +147,15 @@ impl<
 {
 	async fn dry_run(
 		&self,
-		call: RuntimeCall,
-		at: Option<state_chain_runtime::Hash>,
+		_call: RuntimeCall,
+		_at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
-		Ok(self
-			.base_rpc_client
-			.raw_rpc_client
-			.dry_run(Encode::encode(&call).into(), at)
-			.await?)
+		Ok(Bytes::from(vec![]))
+		// Ok(self
+		// 	.base_rpc_client
+		// 	.raw_rpc_client
+		// 	.dry_run(Encode::encode(&call).into(), at)
+		// 	.await?)
 	}
 }
 
@@ -171,11 +172,6 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
-		// Are we in a current auction phase
-		if self.is_auction_phase().await? {
-			bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
-		}
-
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
 			.await
