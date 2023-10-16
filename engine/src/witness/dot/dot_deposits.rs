@@ -33,6 +33,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			Data = (Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
 			Chain = Polkadot,
 			ExtraInfo = PolkadotAccountId,
+			ExtraHistoricInfo = (),
 		>,
 	>
 	where
@@ -42,6 +43,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			Data = (Vec<(Phase, EventWrapper)>, Addresses<Inner>),
 			Chain = Polkadot,
 			ExtraInfo = PolkadotAccountId,
+			ExtraHistoricInfo = (),
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
