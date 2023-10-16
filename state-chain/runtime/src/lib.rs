@@ -885,11 +885,9 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_current_compatibility_version() -> SemVer {
-			use cf_traits::CompatibleCfeVersions;
 			Environment::current_release_version()
 		}
 		fn cf_current_release_version() -> SemVer {
-			use cf_traits::CompatibleCfeVersions;
 			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {

@@ -74,7 +74,8 @@ pub mod pallet {
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
-		/// Used to determine compatibility between the runtime and the CFE.
+		/// Used to access the current Chainflip runtime's release version (distinct from the
+		/// substrate RuntimeVersion)
 		#[pallet::constant]
 		type CurrentReleaseVersion: Get<SemVer>;
 
@@ -148,6 +149,7 @@ pub mod pallet {
 	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
+	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
 	/// Stores the current safe mode state for the runtime.
@@ -157,6 +159,12 @@ pub mod pallet {
 	#[pallet::getter(fn next_compatibility_version)]
 	/// If this storage is set, a new version of Chainflip is available for upgrade.
 	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn current_release_version)]
+	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
+	/// constant to allow querying the value by block hash.
+	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn network_environment)]
@@ -184,6 +192,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
 			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
+			Self::update_current_release_version();
 			NextCompatibilityVersion::<T>::kill();
 			RuntimeSafeMode::<T>::set(SafeMode::CODE_GREEN);
 			weight
@@ -372,11 +381,17 @@ pub mod pallet {
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+
+			Pallet::<T>::update_current_release_version();
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn update_current_release_version() {
+		CurrentReleaseVersion::<T>::set(T::CurrentReleaseVersion::get());
+	}
+
 	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
 		EthereumSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
@@ -472,7 +487,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	fn current_release_version() -> SemVer {
-		<T as Config>::CurrentReleaseVersion::get()
+		Self::current_release_version()
 	}
 	fn next_compatibility_version() -> Option<SemVer> {
 		NextCompatibilityVersion::<T>::get()
