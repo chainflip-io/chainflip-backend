@@ -130,6 +130,8 @@ async function testGasLimitSwap(
     },
     () => swapScheduledObserved,
   );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const broadcastIdToTxPayload: { [key: string]: any } = {};
   const broadcastRequesthandle = observeEvent(
     'ethereumBroadcaster:TransactionBroadcastRequest',
@@ -180,11 +182,6 @@ async function testGasLimitSwap(
   const minGasLimitRequired = gasConsumption + MIN_BASE_GAS_OVERHEAD + byteLength * GAS_PER_BYTE;
 
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
-  console.log(
-    `${tag} Gas budget of ${gasLimitBudget}. minGasLimitRequired ${minGasLimitRequired}, total ${
-      minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER
-    }`,
-  );
   if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER >= gasLimitBudget) {
     observeCcmReceived(
       sourceAsset,
