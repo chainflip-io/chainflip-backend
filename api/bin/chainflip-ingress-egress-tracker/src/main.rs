@@ -22,7 +22,6 @@ async fn start(
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
-	let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 
 	let btc_tracker = witnessing::btc::start(scope).await;
@@ -38,7 +37,7 @@ async fn start(
 		}
 	})?;
 
-	// Broadcast channel will drop old messages when the buffer if full to
+	// Broadcast channel will drop old messages when the buffer is full to
 	// avoid "memory leaks" due to slow receivers.
 	const EVENT_BUFFER_SIZE: usize = 1024;
 	let (witness_sender, _) =
@@ -66,10 +65,10 @@ async fn start(
 		},
 	)?;
 
-	let addr = server.local_addr()?;
-	log::info!("Listening on http://{}", addr);
-
 	scope.spawn(async {
+		let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
+		let addr = server.local_addr()?;
+		log::info!("Listening on http://{}", addr);
 		server.start(module)?.stopped().await;
 		// If the server stops for some reason, we return
 		// error to terminate other tasks and the process.

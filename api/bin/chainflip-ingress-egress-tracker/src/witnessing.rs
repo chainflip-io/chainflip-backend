@@ -97,8 +97,8 @@ pub(super) async fn start(
 			async move {
 				// Send may fail if there aren't any subscribers,
 				// but it is safe to ignore the error.
-				if let Ok(n) = witness_sender.send(call) {
-					tracing::info!("Broadcasting witnesser call to {} subscribers", n);
+				if let Ok(n) = witness_sender.send(call.clone()) {
+					tracing::info!("Broadcasting witnesser call {:?} to {} subscribers", call, n);
 				}
 			}
 		}
