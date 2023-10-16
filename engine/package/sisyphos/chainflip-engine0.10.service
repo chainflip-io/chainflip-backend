@@ -1,5 +1,5 @@
 [Unit]
-Description=Chainflip Validator Engine (LSR)
+Description=Chainflip Validator Engine
 After=chainflip-node.service
 
 [Service]
@@ -7,7 +7,7 @@ Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/usr/bin/chainflip-engine-lsr --config-root /etc/chainflip/
+ExecStart=/usr/bin/chainflip-engine0.10 --config-root /etc/chainflip/
 
 LimitNOFILE=16000
 LimitNOFILESoft=16000
