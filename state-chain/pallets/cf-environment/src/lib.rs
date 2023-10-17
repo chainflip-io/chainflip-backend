@@ -31,7 +31,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 type SignatureNonce = u64;
 
@@ -154,11 +154,6 @@ pub mod pallet {
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn next_compatibility_version)]
-	/// If this storage is set, a new version of Chainflip is available for upgrade.
-	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn network_environment)]
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
@@ -176,27 +171,16 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-		/// A new Chainflip runtime will soon be deployed at this version.
-		NextCompatibilityVersionSet { version: Option<SemVer> },
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
-			NextCompatibilityVersion::<T>::kill();
-			weight
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
-				if next_version != T::CurrentCompatibilityVersion::get() {
-					log::warn!("NextCompatibilityVersion does not match the current runtime");
-				}
-			} else {
-				log::warn!("NextCompatibilityVersion is not set");
-			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
@@ -301,35 +285,6 @@ pub mod pallet {
 			});
 
 			Self::deposit_event(Event::<T>::RuntimeSafeModeUpdated { safe_mode: update });
-
-			Ok(())
-		}
-
-		/// Sets the next Chainflip compatiblity version.
-		///
-		/// This is used to signal to CFE operators that a new version of the runtime will soon be
-		/// deployed.
-		///
-		/// Requires governance origin.
-		///
-		/// ## Events
-		///
-		/// - [Success](Event::NextCompatibilityVersionSet)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
-		pub fn set_next_compatibility_version(
-			origin: OriginFor<T>,
-			version: Option<SemVer>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			NextCompatibilityVersion::<T>::put(version);
-
-			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version });
 
 			Ok(())
 		}
@@ -472,8 +427,5 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	fn current_compatibility_version() -> SemVer {
 		<T as Config>::CurrentCompatibilityVersion::get()
-	}
-	fn next_compatibility_version() -> Option<SemVer> {
-		NextCompatibilityVersion::<T>::get()
 	}
 }

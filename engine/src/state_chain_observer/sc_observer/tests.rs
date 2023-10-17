@@ -242,7 +242,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			signature: signatures.to_threshold_signature(),
 		}))
 		.once()
-		.return_once(|_: pallet_cf_threshold_signature::Call<Runtime, I>| H256::default());
+		.return_once(|_: pallet_cf_threshold_signature::Call<Runtime, I>| Ok(H256::default()));
 
 	let state_chain_client = Arc::new(state_chain_client);
 	task_scope(|scope| {

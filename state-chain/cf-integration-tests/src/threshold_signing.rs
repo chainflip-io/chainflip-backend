@@ -86,8 +86,8 @@ where
 	KeyComponents: KeyUtils<SigVerification = SigVerification, AggKey = AggKey> + Clone,
 {
 	pub fn sign_with_key(&self, key: AggKey, message: &KeyComponents::Message) -> SigVerification {
-		let curr_key = self.key_components.agg_key();
-		if key == curr_key {
+		let current_key = self.key_components.agg_key();
+		if key == current_key {
 			return self.key_components.sign(message)
 		}
 		let next_key = self.proposed_key_components.as_ref().unwrap().agg_key();

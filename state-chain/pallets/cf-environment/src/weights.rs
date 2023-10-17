@@ -34,7 +34,6 @@ pub trait WeightInfo {
 	fn update_supported_eth_assets() -> Weight;
 	fn update_polkadot_runtime_version() -> Weight;
 	fn update_safe_mode() -> Weight;
-	fn set_next_compatibility_version() -> Weight;
 }
 
 /// Weights for pallet_cf_environment using the Substrate node and recommended hardware.
@@ -67,9 +66,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
-	fn set_next_compatibility_version() -> Weight {
-		Weight::from_parts(1_000, 0)
-	}
 }
 
 // For backwards compatibility and tests
@@ -100,9 +96,5 @@ impl WeightInfo for () {
 		Weight::from_parts(20_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))
-	}
-
-	fn set_next_compatibility_version() -> Weight {
-		Weight::from_parts(1_000, 0)
 	}
 }

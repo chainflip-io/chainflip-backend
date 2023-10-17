@@ -443,19 +443,18 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
-			type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Runtime>;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-							),
+							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}
@@ -467,7 +466,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain => $pallet::request_swap_deposit_address(
@@ -477,7 +476,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
-						),
+						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}
