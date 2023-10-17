@@ -80,7 +80,7 @@ jobs:
         run: |
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
-          ./localnet/manage.sh
+          sudo ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
