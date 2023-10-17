@@ -59,6 +59,7 @@ pub enum RpcAccountInfo {
 		is_online: bool,
 		is_bidding: bool,
 		bound_redeem_address: Option<EthereumAddress>,
+		apy_bp: Option<u32>,
 		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 	},
 }
@@ -114,6 +115,7 @@ impl RpcAccountInfo {
 			is_online: info.is_online,
 			is_bidding: info.is_bidding,
 			bound_redeem_address: info.bound_redeem_address,
+			apy_bp: info.apy_bp,
 			restricted_balances: info
 				.restricted_balances
 				.into_iter()
@@ -137,6 +139,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub apy_bp: Option<u32>,
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
@@ -588,6 +591,7 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
+			apy_bp: account_info.apy_bp,
 			restricted_balances: account_info.restricted_balances,
 		})
 	}
@@ -1010,6 +1014,7 @@ mod test {
 			is_online: true,
 			is_qualified: true,
 			bound_redeem_address: Some(H160::from([1; 20])),
+			apy_bp: Some(100u32),
 			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
 		assert_eq!(
@@ -1028,6 +1033,7 @@ mod test {
 				"online_credits": 0,
 				"reputation_points": 0,
 				"role": "validator",
+				"apy_bp": 100,
 				"restricted_balances": {
 					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
 				}

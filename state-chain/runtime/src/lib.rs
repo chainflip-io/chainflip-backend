@@ -9,7 +9,7 @@ pub mod safe_mode;
 pub mod test_runner;
 mod weights;
 use crate::{
-	chainflip::Offence,
+	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
 };
 use cf_amm::{
@@ -82,7 +82,7 @@ use sp_version::RuntimeVersion;
 pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
-pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
+pub use cf_traits::{AccountInfo, EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -913,11 +913,9 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
 		}
-
 		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
@@ -925,6 +923,7 @@ impl_runtime_apis! {
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
 			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
+			let apy_bp = calculate_account_apy(account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
@@ -941,6 +940,7 @@ impl_runtime_apis! {
 				is_online: Reputation::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
+				apy_bp,
 				restricted_balances,
 			}
 		}
