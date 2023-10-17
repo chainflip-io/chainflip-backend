@@ -6,7 +6,7 @@ use cf_chains::{
 	address::EncodedAddress,
 	dot::PolkadotAccountId,
 	evm::{to_evm_address, Address as EthereumAddress},
-	CcmChannelMetadata, ForeignChain,
+	AnyChain, CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use codec::Encode;
@@ -171,16 +171,10 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
-		// Are we in a current auction phase
-		if self.is_auction_phase().await? {
-			bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
-		}
+		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
+		self.dry_run(call.clone(), None).await?;
 
-		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
-			.await
-			.until_in_block()
-			.await?;
+		let (tx_hash, ..) = self.submit_signed_extrinsic(call).await.until_in_block().await?;
 
 		Ok(tx_hash)
 	}
@@ -322,6 +316,7 @@ pub struct SwapDepositAddress {
 	pub address: String,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
+	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
 }
 
 #[async_trait]
@@ -348,7 +343,10 @@ pub trait BrokerApi: SignedExtrinsicApi {
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::SwapDepositAddressReady {
-				deposit_address, channel_id, ..
+				deposit_address,
+				channel_id,
+				source_chain_expiry_block,
+				..
 			},
 		)) = events.iter().find(|event| {
 			matches!(
@@ -362,6 +360,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				address: deposit_address.to_string(),
 				issued_block: header.number,
 				channel_id: *channel_id,
+				source_chain_expiry_block: *source_chain_expiry_block,
 			})
 		} else {
 			panic!("SwapDepositAddressReady must have been generated");

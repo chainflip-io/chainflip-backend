@@ -93,9 +93,9 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00, 0x01, 0x02],
+				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				cf_parameters: vec![],
+				cf_parameters: vec![].try_into().unwrap(),
 			},
 		};
 
@@ -201,7 +201,7 @@ fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
+	let (id, address, ..) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
@@ -430,7 +430,7 @@ fn reused_address_channel_id_matches() {
 		>(CHANNEL_ID, eth::Asset::Eth)
 		.unwrap();
 		DepositChannelPool::<Test, _>::insert(CHANNEL_ID, new_channel.clone());
-		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
+		let (reused_channel_id, reused_address, ..) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
 		)
@@ -448,9 +448,9 @@ fn can_process_ccm_deposit() {
 		let to_asset = Asset::Eth;
 		let destination_address = ForeignChainAddress::Eth(Default::default());
 		let channel_metadata = CcmChannelMetadata {
-			message: vec![0x00, 0x01, 0x02],
+			message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 			gas_budget: 1_000,
-			cf_parameters: vec![],
+			cf_parameters: vec![].try_into().unwrap(),
 		};
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
@@ -461,7 +461,7 @@ fn can_process_ccm_deposit() {
 
 		// Register swap deposit with CCM
 
-		let (_, deposit_address) = IngressEgress::request_swap_deposit_address(
+		let (_, deposit_address, ..) = IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
 			destination_address.clone(),
@@ -516,9 +516,9 @@ fn can_egress_ccm() {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00, 0x01, 0x02],
+				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget,
-				cf_parameters: vec![],
+				cf_parameters: vec![].try_into().unwrap(),
 			}
 		};
 		let amount = 5_000;
@@ -537,7 +537,7 @@ fn can_egress_ccm() {
 				amount,
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
-				cf_parameters: vec![],
+				cf_parameters: vec![].try_into().unwrap(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget,
@@ -566,7 +566,7 @@ fn can_egress_ccm() {
 			ccm.source_chain,
 			ccm.source_address,
 			gas_budget,
-			ccm.channel_metadata.message,
+			ccm.channel_metadata.message.to_vec(),
 		).unwrap()]);
 
 		// Storage should be cleared

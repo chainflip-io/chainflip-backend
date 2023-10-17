@@ -96,25 +96,31 @@ pub fn call_from_event(
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: native_asset,
-			destination_asset: try_into_primitive(dst_token)?,
-			deposit_amount: try_into_primitive(amount)?,
-			destination_address: try_into_encoded_address(
-				try_into_primitive(dst_chain)?,
-				dst_address.to_vec(),
-			)?,
-			deposit_metadata: CcmDepositMetadata {
-				source_chain,
-				source_address: Some(sender.into()),
-				channel_metadata: CcmChannelMetadata {
-					message: message.to_vec(),
-					gas_budget: try_into_primitive(gas_amount)?,
-					cf_parameters: cf_parameters.0.to_vec(),
+		}) =>
+			Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+				source_asset: native_asset,
+				destination_asset: try_into_primitive(dst_token)?,
+				deposit_amount: try_into_primitive(amount)?,
+				destination_address: try_into_encoded_address(
+					try_into_primitive(dst_chain)?,
+					dst_address.to_vec(),
+				)?,
+				deposit_metadata: CcmDepositMetadata {
+					source_chain,
+					source_address: Some(sender.into()),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
+							anyhow!("Failed to deposit CCM: `cf_parameters` too long.")
+						})?,
+					},
 				},
-			},
-			tx_hash: event.tx_hash.into(),
-		})),
+				tx_hash: event.tx_hash.into(),
+			})),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -125,27 +131,33 @@ pub fn call_from_event(
 			message,
 			gas_amount,
 			cf_parameters,
-		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: *(supported_assets
-				.get(&src_token)
-				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-			destination_asset: try_into_primitive(dst_token)?,
-			deposit_amount: try_into_primitive(amount)?,
-			destination_address: try_into_encoded_address(
-				try_into_primitive(dst_chain)?,
-				dst_address.to_vec(),
-			)?,
-			deposit_metadata: CcmDepositMetadata {
-				source_chain,
-				source_address: Some(sender.into()),
-				channel_metadata: CcmChannelMetadata {
-					message: message.to_vec(),
-					gas_budget: try_into_primitive(gas_amount)?,
-					cf_parameters: cf_parameters.0.to_vec(),
+		}) =>
+			Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+				source_asset: *(supported_assets
+					.get(&src_token)
+					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
+				destination_asset: try_into_primitive(dst_token)?,
+				deposit_amount: try_into_primitive(amount)?,
+				destination_address: try_into_encoded_address(
+					try_into_primitive(dst_chain)?,
+					dst_address.to_vec(),
+				)?,
+				deposit_metadata: CcmDepositMetadata {
+					source_chain,
+					source_address: Some(sender.into()),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
+							anyhow!("Failed to deposit CCM. cf_parameter too long.")
+						})?,
+					},
 				},
-			},
-			tx_hash: event.tx_hash.into(),
-		})),
+				tx_hash: event.tx_hash.into(),
+			})),
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,

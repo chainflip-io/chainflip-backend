@@ -17,9 +17,9 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelLifecycleHooks,
-	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
-	TransferAssetParams,
+	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
+	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
@@ -63,18 +63,18 @@ impl<C: Chain> FetchOrTransfer<C> {
 }
 
 /// Cross-chain messaging requests.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
 	pub destination_address: C::ChainAccount,
-	pub message: Vec<u8>,
+	pub message: CcmMessage,
 	// The sender of the deposit transaction.
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
-	pub cf_parameters: Vec<u8>,
+	pub cf_parameters: CcmCfParameters,
 	pub gas_budget: C::ChainAmount,
 }
 
@@ -751,7 +751,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_chain,
 				ccm.source_address,
 				ccm.gas_budget,
-				ccm.message,
+				ccm.message.to_vec(),
 			) {
 				Ok(api_call) => {
 					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
@@ -892,10 +892,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Opens a channel for the given asset and registers it with the given action.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
+	#[allow(clippy::type_complexity)]
 	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
 		action: ChannelAction<T::AccountId>,
-	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
+	) -> Result<(ChannelId, TargetChainAccount<T, I>, TargetChainBlockNumber<T, I>), DispatchError>
+	{
 		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
 			DepositChannelPool::<T, I>::drain().next()
 		{
@@ -933,7 +935,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		Ok((channel_id, deposit_address))
+		Ok((channel_id, deposit_address, expiry_height))
 	}
 }
 
@@ -987,16 +989,18 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = T::AccountId;
-	type BlockNumber = BlockNumberFor<T>;
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) =
+	) -> Result<
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		DispatchError,
+	> {
+		let (channel_id, deposit_address, expiry_block) =
 			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
-		Ok((channel_id, deposit_address.into()))
+		Ok((channel_id, deposit_address.into(), expiry_block))
 	}
 
 	// This should only be callable by the broker.
@@ -1007,8 +1011,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) = Self::open_channel(
+	) -> Result<
+		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber),
+		DispatchError,
+	> {
+		let (channel_id, deposit_address, expiry_height) = Self::open_channel(
 			source_asset,
 			match channel_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
@@ -1025,6 +1032,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			},
 		)?;
 
-		Ok((channel_id, deposit_address.into()))
+		Ok((channel_id, deposit_address.into(), expiry_height))
 	}
 }

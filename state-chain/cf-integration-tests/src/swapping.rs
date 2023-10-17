@@ -67,6 +67,19 @@ fn new_account(account_id: &AccountId, role: AccountRole) {
 	System::reset_events();
 }
 
+fn register_refund_addressses(account_id: &AccountId) {
+	for encoded_address in [
+		EncodedAddress::Eth(Default::default()),
+		EncodedAddress::Dot(Default::default()),
+		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
+	] {
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(account_id.clone()),
+			encoded_address
+		));
+	}
+}
+
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	let original_amount =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default();
@@ -173,6 +186,8 @@ fn set_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
+	register_refund_addressses(&DORIS);
+
 	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
@@ -190,6 +205,7 @@ fn basic_pool_setup_provision_and_swap() {
 		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
 
 		new_account(&DORIS, AccountRole::LiquidityProvider);
+		register_refund_addressses(&DORIS);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
@@ -301,9 +317,9 @@ fn can_process_ccm_via_swap_deposit_address() {
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
 		let message = CcmChannelMetadata {
-			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
+			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 			gas_budget,
-			cf_parameters: vec![],
+			cf_parameters: Default::default(),
 		};
 
 		assert_ok!(Swapping::request_swap_deposit_address(
@@ -409,13 +425,13 @@ fn can_process_ccm_via_direct_deposit() {
 
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
-		let message = CcmDepositMetadata {
+		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			channel_metadata: CcmChannelMetadata {
-				message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
+				message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 				gas_budget,
-				cf_parameters: vec![],
+				cf_parameters: Default::default(),
 			},
 		};
 
@@ -424,7 +440,7 @@ fn can_process_ccm_via_direct_deposit() {
 			deposit_amount,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::Eth([0x02; 20]),
-			deposit_metadata: message,
+			deposit_metadata,
 			tx_hash: Default::default(),
 		}));
 		let current_epoch = Validator::current_epoch();
@@ -677,19 +693,19 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 			.unwrap()
 		};
 
-		// Each unit of gas costs 2 * 1_000_000 + 500_000 = 2_500_000
+		// Each unit of gas costs 1 * 1_000_000 + 500_000 = 1_500_000
 		assert_eq!(
-			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_499_999)),
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_499_999)),
 			Some(U256::from(0))
 		);
 		assert_eq!(
-			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(2_500_000)),
+			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_500_000)),
 			Some(U256::from(1))
 		);
-		// 1_000_000_000_000 / (2 * 1_000_000 + 500_000) = 400_000
+		// 1_000_000_000_000 / (1 * 1_000_000 + 500_000) = 666_666
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000_000u128)),
-			Some(U256::from(400_000))
+			Some(U256::from(666_666))
 		);
 
 		// Can handle divide by zero case. Practically this should never happen.

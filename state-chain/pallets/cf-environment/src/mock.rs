@@ -2,7 +2,7 @@
 
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
-	btc::{BitcoinFeeInfo, BitcoinNetwork},
+	btc::BitcoinFeeInfo,
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
@@ -134,7 +134,6 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 }
 
 parameter_types! {
-	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 	pub CurrentCompatibilityVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
@@ -158,7 +157,6 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;

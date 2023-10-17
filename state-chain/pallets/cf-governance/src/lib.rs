@@ -39,6 +39,7 @@ pub mod pallet {
 
 	use super::*;
 
+	use cf_primitives::SemVer;
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use codec::Encode;
 	use frame_support::{
@@ -230,8 +231,6 @@ pub mod pallet {
 		CallHashNotWhitelisted,
 		/// Insufficient number of CFEs are at the target version to receive the runtime upgrade.
 		NotEnoughAuthoritiesCfesAtTargetVersion,
-		/// The target CFE version required for the runtime upgrade is not set.
-		TargetCfeVersionNotSet,
 	}
 
 	#[pallet::call]
@@ -303,18 +302,19 @@ pub mod pallet {
 		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
 		pub fn chainflip_runtime_upgrade(
 			origin: OriginFor<T>,
-			required_up_to_date_cfes: Option<Percent>,
+			// The version that the percent of nodes need to be compatible with in order for the
+			// runtime upgrade to go through.
+			cfe_version_restriction: Option<(SemVer, Percent)>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
 
-			if let Some(percent) = required_up_to_date_cfes {
-				let next_version = T::CompatibleCfeVersions::next_compatibility_version()
-					.ok_or(Error::<T>::TargetCfeVersionNotSet)?;
+			if let Some((required_version, percent)) = cfe_version_restriction {
 				ensure!(
-					T::AuthoritiesCfeVersions::precent_authorities_at_version(next_version) >=
-						percent,
+					T::AuthoritiesCfeVersions::percent_authorities_compatible_with_version(
+						required_version
+					) >= percent,
 					Error::<T>::NotEnoughAuthoritiesCfesAtTargetVersion,
 				);
 			}

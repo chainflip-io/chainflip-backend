@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Internal dependencies
 cf-amm = { path = '../../amm', default-features = false }
+cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
@@ -48,6 +49,7 @@ cf-test-utilities = { path = '../../test-utilities' }
 default = ['std']
 std = [
   'cf-amm/std',
+  'cf-chains/std',
   'cf-primitives/std',
   'cf-traits/std',
   'codec/std',
@@ -61,6 +63,7 @@ std = [
   'serde/std',
 ]
 runtime-benchmarks = [
+  'cf-chains/runtime-benchmarks',
   'cf-primitives/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',

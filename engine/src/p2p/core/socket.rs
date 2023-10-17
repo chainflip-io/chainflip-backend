@@ -26,6 +26,9 @@ const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 /// socket
 pub const DO_NOT_LINGER: i32 = 0;
 
+/// How many messages to keep in a "resend" buffer per peer
+const OUTGOING_MESSAGES_BUFFER_SIZE: i32 = 10;
+
 /// Socket to be used for connecting to peer on the network
 pub struct OutgoingSocket {
 	socket: zmq::Socket,
@@ -37,6 +40,17 @@ impl OutgoingSocket {
 
 		// Discard any pending messages when disconnecting a socket
 		socket.set_linger(DO_NOT_LINGER).unwrap();
+
+		// Do not buffer outgoing messages before a connection is
+		// established (this means the messages will be lost, but
+		// this prevents us from buffering messages to peers that
+		// are misconfigured, for example).
+		socket.set_immediate(true).unwrap();
+
+		// Buffer at most OUTGOING_MESSAGES_BUFFER_SIZE messages
+		// per peer (this minimises how much memory we might "leak"
+		// if they never come online again).
+		socket.set_sndhwm(OUTGOING_MESSAGES_BUFFER_SIZE).unwrap();
 
 		socket.set_ipv6(true).unwrap();
 		socket.set_reconnect_ivl(RECONNECT_INTERVAL.as_millis() as i32).unwrap();
@@ -92,9 +106,5 @@ impl ConnectedOutgoingSocket {
 		if let Err(e) = self.socket.send(payload, zmq::DONTWAIT) {
 			warn!("Failed to send a message to {}: {e}", self.peer.account_id,);
 		}
-	}
-
-	pub fn peer(&self) -> &PeerInfo {
-		&self.peer
 	}
 }

@@ -1,5 +1,7 @@
 pub mod common {
-	use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
+	use cf_primitives::{
+		AuthorityCount, BlockNumber, FlipBalance, MILLISECONDS_PER_BLOCK, SECONDS_PER_BLOCK,
+	};
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
@@ -18,16 +20,6 @@ pub mod common {
 	// Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
 	const ACCRUAL_REPUTATION_POINTS: i32 = 1;
 	pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE_CREDITS);
-
-	/// This determines the average expected block time that we are targeting.
-	/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
-	/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
-	/// up by `pallet_aura` to implement `fn slot_duration()`.
-	///
-	/// Change this to adjust the block time.
-	pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
-
-	pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 	// ======= Keygen and signing =======
 

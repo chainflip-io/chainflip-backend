@@ -3,10 +3,9 @@ use std::sync::Arc;
 use crate::witness::common::chain_source::{ChainClient, ChainStream};
 use cf_chains::{Chain, ChainCrypto};
 use frame_support::CloneNoBound;
-use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
-use utilities::{loop_select, task_scope::Scope, UnendingStream};
+use utilities::{loop_select, task_scope::Scope};
 
 use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
@@ -138,15 +137,14 @@ where
 						(chain_stream.fuse(), self.receiver.clone()),
 						|(mut chain_stream, receiver)| async move {
 							loop_select!(
-								if chain_stream.is_terminated() => break None,
-								let header = chain_stream.next_or_pending() => {
+								if let Some(header) = chain_stream.next() => {
 									// Always get the latest tx out ids.
 									// NB: There is a race condition here. If we're not watching for a particular egress id (because our state chain is slow for some reason) at the time
 									// it arrives on external chain, we won't witness it. This is pretty unlikely since the time between the egress id being set on the SC and the tx
 									// being confirmed on the external chain is quite large. We should fix this eventually though. PRO-689
 									let tx_out_ids = receiver.borrow().clone();
 									break Some((header.map_data(|header| (header.data, tx_out_ids)), (chain_stream, receiver)))
-								},
+								} else break None,
 							)
 						},
 					)

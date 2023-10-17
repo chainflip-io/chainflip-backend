@@ -81,8 +81,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			assert_eq!(1, Validator::epoch_index(), "We should still be in the first epoch");
 
 			// Move to new epoch
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_next_epoch();
 			// TODO: figure out how to avoid this.
 			<pallet_cf_reputation::Pallet<Runtime> as OffenceReporter>::forgive_all(
 				Offence::MissedAuthorshipSlot,
@@ -90,8 +89,6 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			<pallet_cf_reputation::Pallet<Runtime> as OffenceReporter>::forgive_all(
 				Offence::GrandpaEquivocation,
 			);
-			// Run things to a successful vault rotation
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 			assert_eq!(
 				2,

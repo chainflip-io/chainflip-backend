@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	AnyhowRpcError,
@@ -11,7 +10,6 @@ use chainflip_api::{
 };
 use clap::Parser;
 use futures::FutureExt;
-use hex::FromHexError;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use serde::{Deserialize, Serialize};
 use sp_rpc::number::NumberOrHex;
@@ -26,6 +24,7 @@ pub struct BrokerSwapDepositAddress {
 	pub address: String,
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
+	pub source_chain_expiry_block: NumberOrHex,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -34,56 +33,24 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			address: value.address,
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
+			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
 		}
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct BrokerCcmChannelMetadata {
-	gas_budget: NumberOrHex,
-	message: String,
-	cf_parameters: Option<String>,
-}
-
-fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
-	hex::decode(string.strip_prefix("0x").unwrap_or(string))
-}
-
-impl TryInto<CcmChannelMetadata> for BrokerCcmChannelMetadata {
-	type Error = anyhow::Error;
-
-	fn try_into(self) -> Result<CcmChannelMetadata, Self::Error> {
-		let gas_budget = self
-			.gas_budget
-			.try_into()
-			.map_err(|_| anyhow!("Failed to parse {:?} as gas budget", self.gas_budget))?;
-		let message =
-			parse_hex_bytes(&self.message).map_err(|e| anyhow!("Failed to parse message: {e}"))?;
-
-		let cf_parameters = self
-			.cf_parameters
-			.map(|parameters| parse_hex_bytes(&parameters))
-			.transpose()
-			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
-			.unwrap_or_default();
-
-		Ok(CcmChannelMetadata { gas_budget, message, cf_parameters })
 	}
 }
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
-	#[method(name = "registerAccount")]
+	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
 	async fn register_account(&self) -> Result<String, AnyhowRpcError>;
 
-	#[method(name = "requestSwapDepositAddress")]
+	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		channel_metadata: Option<BrokerCcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError>;
 }
 
@@ -120,10 +87,8 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		channel_metadata: Option<BrokerCcmChannelMetadata>,
+		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError> {
-		let channel_metadata = channel_metadata.map(TryInto::try_into).transpose()?;
-
 		Ok(self
 			.api
 			.broker_api()
@@ -185,25 +150,4 @@ async fn main() -> anyhow::Result<()> {
 		.boxed()
 	})
 	.await
-}
-
-#[cfg(test)]
-mod test {
-	use super::*;
-	use cf_utilities::assert_err;
-
-	#[test]
-	fn test_decoding() {
-		assert_eq!(parse_hex_bytes("0x00").unwrap(), vec![0]);
-		assert_eq!(parse_hex_bytes("cf").unwrap(), vec![0xcf]);
-		assert_eq!(
-			parse_hex_bytes("0x00112233445566778899aabbccddeeff").unwrap(),
-			vec![
-				0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
-				0xee, 0xff
-			]
-		);
-		assert_eq!(parse_hex_bytes("").unwrap(), b"");
-		assert_err!(parse_hex_bytes("abc"));
-	}
 }

@@ -267,9 +267,11 @@ impl Chain for Polkadot {
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
 	type Transaction = PolkadotTransactionData;
-	type ReplayProtectionParams = ();
+	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 }
+
+pub type ResetProxyAccountNonce = bool;
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
 pub struct PolkadotChannelState;

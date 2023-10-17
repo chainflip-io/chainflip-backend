@@ -35,8 +35,7 @@ fn collect_range_order_returns(
 		.filter_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::RangeOrderUpdated {
-					increase_or_decrease,
-					liquidity_delta,
+					position_delta: Some((increase_or_decrease, liquidity_delta)),
 					liquidity_total,
 					assets_delta,
 					collected_fees,
@@ -62,8 +61,7 @@ pub struct LimitOrderReturn {
 	amount_total: AssetAmount,
 	collected_fees: AssetAmount,
 	bought_amount: AssetAmount,
-	increase_or_decrease: IncreaseOrDecrease,
-	amount_delta: AssetAmount,
+	position_delta: Option<(IncreaseOrDecrease, AssetAmount)>,
 }
 
 fn collect_limit_order_returns(
@@ -74,8 +72,7 @@ fn collect_limit_order_returns(
 		.filter_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::LimitOrderUpdated {
-					increase_or_decrease,
-					amount_delta,
+					position_delta,
 					amount_total,
 					collected_fees,
 					bought_amount,
@@ -87,8 +84,7 @@ fn collect_limit_order_returns(
 				amount_total,
 				collected_fees,
 				bought_amount,
-				increase_or_decrease,
-				amount_delta,
+				position_delta,
 			}),
 			_ => None,
 		})

@@ -39,9 +39,6 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 		return Ok(())
 	}
 
-	std::fs::copy(settings_file.clone(), settings_file.with_extension("toml.0_9_2.backup"))
-		.context("Unable to create backup of Settings.toml")?;
-
 	let old_settings_table = std::fs::read_to_string(&settings_file)
 		.context("Unable to read Settings.toml for migration")?
 		.parse::<Table>()?;
@@ -69,6 +66,9 @@ pub fn migrate_settings0_9_2_to_0_9_3(config_root: String) -> Result<()> {
 	if !migrate {
 		return Ok(())
 	}
+
+	std::fs::copy(settings_file.clone(), settings_file.with_extension("toml.0_9_2.backup"))
+		.context("Unable to create backup of Settings.toml")?;
 
 	tracing::info!("Migrating settings to 0.9.3");
 

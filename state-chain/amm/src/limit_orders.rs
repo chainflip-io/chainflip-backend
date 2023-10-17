@@ -31,8 +31,8 @@ use sp_std::vec::Vec;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
-	tick_at_sqrt_price, Amount, OneToZero, Price, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
-	ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
+	tick_at_sqrt_price, Amount, OneToZero, Price, SetFeesError, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
 };
 
 // This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
@@ -119,7 +119,7 @@ impl FloatBetweenZeroAndOne {
 			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than
 			// 256 bits, so we maintain at least 256 accurate bits in the result.
 			let (d, div_remainder) =
-				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has atleast one bit
+				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has at least one bit
 																 // set above the 256th bit.
 			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
 			let normalise_shift = d.leading_zeros();
@@ -170,14 +170,14 @@ impl FloatBetweenZeroAndOne {
 
 		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
 
-		let y_floor = y_floor.try_into().unwrap(); // Unwrap safe as numerator <= demoninator and therefore y cannot be greater than x
+		let y_floor = y_floor.try_into().unwrap(); // Unwrap safe as numerator <= denominator and therefore y cannot be greater than x
 
 		(
 			y_floor,
 			if div_remainder.is_zero() && shift_remainder.is_zero() {
 				y_floor
 			} else {
-				y_floor + 1 // Safe as for there to be a remainder y_floor must be atleast 1 less than x
+				y_floor + 1 // Safe as for there to be a remainder y_floor must be at least 1 less than x
 			},
 		)
 	}
@@ -243,12 +243,6 @@ impl SwapDirection for OneToZero {
 
 #[derive(Debug)]
 pub enum NewError {
-	/// Fee must be between 0 - 50%
-	InvalidFeeAmount,
-}
-
-#[derive(Debug)]
-pub enum SetFeesError {
 	/// Fee must be between 0 - 50%
 	InvalidFeeAmount,
 }
@@ -355,8 +349,8 @@ pub(super) struct FixedPool {
 	/// associated position but have some liquidity available, but this would likely be a very
 	/// small amount.
 	available: Amount,
-	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have occured
-	/// since this FixedPool instance was created and used liquidity from it.
+	/// This is the big product of all `1.0 - percent_used_by_swap` for all swaps that have
+	/// occurred since this FixedPool instance was created and used liquidity from it.
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
@@ -368,11 +362,11 @@ pub(super) struct PoolState<LiquidityProvider> {
 	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
-	/// selling asset `Zero` and all those that are selling asset `one` used the SideMap.
+	/// selling asset `Zero` and all those that are selling asset `One` used the SideMap.
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	/// All the Positions that either are providing liquidity currently, or were providing
 	/// liquidity directly after the last time they where updated. They are grouped into all those
-	/// that are selling asset `Zero` and all those that are selling asset `one` used the SideMap.
+	/// that are selling asset `Zero` and all those that are selling asset `One` used the SideMap.
 	/// Therefore there can be positions stored here that don't provide any liquidity.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
@@ -383,7 +377,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	///
 	/// This function never panics.
 	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
-		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
+		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(NewError::InvalidFeeAmount)?;
 
@@ -396,19 +390,18 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
-	/// higher than 50%. Also runs collect for all positions in the pool.
+	/// higher than 50%. Also runs collect for all positions in the pool. Returns a SideMap
+	/// containing the state and fees collected from every position as part of the set_fees
+	/// operation. The positions are grouped into a SideMap by the asset they sell.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]
-	#[allow(dead_code)]
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<
-		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), (Collected, PositionInfo)>>,
-		SetFeesError,
-	> {
-		(fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2)
+	) -> Result<SideMap<BTreeMap<(Tick, LiquidityProvider), (Collected, PositionInfo)>>, SetFeesError>
+	{
+		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
 
@@ -422,7 +415,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					(
-						(sqrt_price, lp.clone()),
+						(tick_at_sqrt_price(sqrt_price), lp.clone()),
 						self.inner_collect::<OneToZero>(&lp, sqrt_price).unwrap(),
 					)
 				})
@@ -434,7 +427,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					(
-						(sqrt_price, lp.clone()),
+						(tick_at_sqrt_price(sqrt_price), lp.clone()),
 						self.inner_collect::<ZeroToOne>(&lp, sqrt_price).unwrap(),
 					)
 				})
@@ -563,7 +556,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				// bought_amount and fees than may exist in the pool
 				position.amount - remaining_amount_ceil,
 				// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
-				// than truely exists in the pool
+				// than truly exists in the pool
 				if remaining_amount_floor.is_zero() {
 					None
 				} else {
@@ -749,7 +742,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Collects any earnings from the specified position. The SwapDirection determines which
-	/// direction of swaps the liquidity/position you're refering to is for.
+	/// direction of swaps the liquidity/position you're referring to is for.
 	///
 	/// This function never panics.
 	pub(super) fn collect<SD: SwapDirection>(
@@ -853,5 +846,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		} else {
 			Err(DepthError::InvalidTickRange)
 		}
+	}
+
+	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
+		fee_hundredth_pips <= MAX_LP_FEE
 	}
 }

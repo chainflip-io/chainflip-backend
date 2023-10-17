@@ -1,6 +1,5 @@
 #![cfg(test)]
 use cf_chains::btc::{api::UtxoSelectionType, deposit_address::DepositAddress, Utxo};
-use cf_primitives::SemVer;
 use cf_traits::SafeMode;
 use frame_support::{assert_ok, traits::OriginTrait};
 
@@ -46,6 +45,12 @@ fn test_btc_utxo_selection() {
 		add_utxo_amount(100000);
 		add_utxo_amount(5000000);
 		add_utxo_amount(25000);
+		// dust amount should be ignored in all cases
+		let dust_amount = {
+			use cf_traits::GetBitcoinFeeInfo;
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+		};
+		add_utxo_amount(dust_amount);
 
 		// select some utxos for a tx
 		assert_eq!(
@@ -114,28 +119,6 @@ fn update_safe_mode() {
 			crate::Event::<Test>::RuntimeSafeModeUpdated {
 				safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
 			},
-		));
-	});
-}
-
-#[test]
-fn can_set_next_compatibility_version() {
-	new_test_ext().execute_with(|| {
-		assert!(Environment::next_compatibility_version().is_none());
-
-		// Set the next cfe version
-		let version = Some(SemVer { major: 1u8, minor: 3u8, patch: 10u8 });
-		assert_ok!(Environment::set_next_compatibility_version(RuntimeOrigin::root(), version));
-		assert_eq!(Environment::next_compatibility_version(), version);
-		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::NextCompatibilityVersionSet { version },
-		));
-
-		// Unset the net cfe version
-		assert_ok!(Environment::set_next_compatibility_version(RuntimeOrigin::root(), None));
-		assert!(Environment::next_compatibility_version().is_none());
-		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::NextCompatibilityVersionSet { version: None },
 		));
 	});
 }

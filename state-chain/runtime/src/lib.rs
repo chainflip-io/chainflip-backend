@@ -10,27 +10,26 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::Offence,
-	runtime_apis::{
-		AuctionState, BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
-		RuntimeApiPenalty,
-	},
+	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
 };
 use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::{BitcoinCrypto, BitcoinNetwork},
-	dot::{self, PolkadotCrypto, PolkadotHash},
+	btc::BitcoinCrypto,
+	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, Polkadot,
+	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
 };
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
+use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
+use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
@@ -41,7 +40,7 @@ pub use frame_support::{
 	instances::{Instance1, Instance2},
 	parameter_types,
 	traits::{
-		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
+		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
 		Randomness, StorageInfo,
 	},
 	weights::{
@@ -61,7 +60,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
@@ -80,15 +79,16 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
+pub use cf_primitives::{
+	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
+};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
-	BroadcastReadyProvider, BtcEnvironment, BtcVaultTransitionHandler, ChainAddressConverter,
-	ChainflipHeartbeat, DotEnvironment, DotVaultTransitionHandler, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
+	DotEnvironment, EthEnvironment, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -191,19 +191,6 @@ impl pallet_cf_validator::Config for Runtime {
 }
 
 parameter_types! {
-
-	// Polkadot
-	pub const PolkadotGenesisHash: PolkadotHash = H256(hex_literal::hex!(
-		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
-	));
-
-	// Westend
-	// hex_literal::hex!(
-	// 	"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
-	// )
-
-	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
-
 	pub CurrentCompatibilityVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
@@ -215,7 +202,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
-	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = RuntimeSafeMode;
 	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
@@ -241,7 +227,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
-	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -259,7 +244,6 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
-	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -277,7 +261,6 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
-	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -930,52 +913,35 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
-			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
-			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
-			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(&account_id);
-			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
-			let account_info_v1 = Self::cf_account_info(account_id.clone());
-			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
+
+		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
+			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
+		}
+
+		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
+			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
+			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
+			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
+			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
 			RuntimeApiAccountInfoV2 {
-				balance: account_info_v1.balance,
-				bond: account_info_v1.bond,
-				last_heartbeat: account_info_v1.last_heartbeat,
-				online_credits: account_info_v1.online_credits,
-				reputation_points: account_info_v1.reputation_points,
+				balance: account_info.total(),
+				bond: account_info.bond(),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
+				online_credits: reputation_info.online_credits,
+				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online: account_info_v1.is_live,
+				is_online: Reputation::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
-			}
-		}
-		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
-			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-
-			let get_validator_state = |account_id: &AccountId| -> ChainflipAccountStateWithPassive {
-				if Validator::current_authorities().contains(account_id) {
-					return ChainflipAccountStateWithPassive::CurrentAuthority;
-				}
-				if Validator::highest_funded_qualified_backup_nodes_lookup().contains(account_id) {
-					return ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup);
-				}
-				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)
-			};
-
-			RuntimeApiAccountInfo {
-				balance: account_info.total(),
-				bond: account_info.bond(),
-				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
-				is_live: Reputation::is_qualified(&account_id),
-				is_activated: pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id),
-				online_credits: reputation_info.online_credits,
-				reputation_points: reputation_info.reputation_points,
-				state: get_validator_state(&account_id),
+				restricted_balances,
 			}
 		}
 
@@ -1039,7 +1005,7 @@ impl_runtime_apis! {
 			LiquidityPools::pool_info(base_asset, pair_asset)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
 			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
 		}
 
@@ -1082,6 +1048,145 @@ impl_runtime_apis! {
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
+		}
+
+		fn cf_liquidity_provider_info(
+			account_id: AccountId,
+		) -> Option<LiquidityProviderInfo> {
+			let role = Self::cf_account_role(account_id.clone())?;
+			if role != AccountRole::LiquidityProvider {
+				return None;
+			}
+
+			let refund_addresses = ForeignChain::iter().map(|chain| {
+				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
+			}).collect();
+
+			let balances = Asset::all().iter().map(|&asset|
+				(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
+			).collect();
+
+			Some(LiquidityProviderInfo {
+				refund_addresses,
+				balances,
+			})
+		}
+
+		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
+		}
+
+		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
+		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
+		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>> {
+
+			fn filter_deposit_swaps<C, I: 'static>(from: Asset, to: Asset, deposit_witnesses: Vec<DepositWitness<C>>) -> Vec<AssetAmount>
+				where Runtime: pallet_cf_ingress_egress::Config<I>,
+				C: cf_chains::Chain<ChainAccount = <<Runtime as pallet_cf_ingress_egress::Config<I>>::TargetChain as cf_chains::Chain>::ChainAccount>
+			{
+				let mut filtered_swaps = Vec::new();
+				for deposit in deposit_witnesses {
+					let Some(details) = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::get(
+						deposit.deposit_address,
+					) else {
+						continue
+					};
+					let channel_asset: Asset = details.deposit_channel.asset.into();
+
+					match details.action {
+						ChannelAction::Swap { destination_asset, .. }
+							if destination_asset == to && channel_asset == from =>
+						{
+							filtered_swaps.push(deposit.amount.into());
+						},
+						ChannelAction::CcmTransfer { destination_asset, channel_metadata, .. } => {
+							filtered_swaps.extend(ccm_swaps(from, to, channel_asset, destination_asset, deposit.amount.into(), channel_metadata));
+						}
+						_ => {
+							// ignore other deposit actions
+						}
+					}
+				}
+				filtered_swaps
+			}
+
+			fn ccm_swaps(from: Asset, to: Asset, source_asset: Asset, destination_asset: Asset, deposit_amount: AssetAmount, channel_metadata: CcmChannelMetadata) -> Vec<AssetAmount> {
+				if source_asset != from {
+					return Vec::new();
+				}
+
+				// There are two swaps for CCM, the principal swap, and the gas amount swap.
+				let Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset }) = Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
+					// not a valid CCM
+					return Vec::new();
+				};
+
+				let mut ccm_swaps = Vec::new();
+				if destination_asset == to {
+					// the principal swap is in the requested direction.
+					ccm_swaps.push(principal_swap_amount);
+				}
+
+				if let Some(gas_asset) = other_gas_asset {
+					if gas_asset == to {
+						// the gas swap is in the requested direction
+						ccm_swaps.push(gas_budget);
+					}
+				}
+
+				ccm_swaps
+			}
+
+			let mut all_prewitnessed_swaps = Vec::new();
+			let current_block_events = System::read_events_no_consensus();
+
+			for event in current_block_events {
+				match *event {
+					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
+						match call {
+							RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
+								from: swap_from, to: swap_to, deposit_amount, ..
+							}) if from == swap_from && to == swap_to => {
+								all_prewitnessed_swaps.push(deposit_amount);
+							}
+							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses, ..
+							}) => {
+								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Ethereum, EthereumInstance>(from, to, deposit_witnesses));
+							},
+							RuntimeCall::BitcoinIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses, ..
+							}) => {
+								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Bitcoin, BitcoinInstance>(from, to, deposit_witnesses));
+							},
+							RuntimeCall::PolkadotIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses, ..
+							}) => {
+								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
+							}
+							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
+							}) => {
+								// There are two swaps for CCM, the principal swap, and the gas amount swap.
+								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
+							}
+							_ => {
+								// ignore, we only care about calls that trigger swaps.
+							}
+						}
+					}
+					_ => {
+						// ignore, we only care about Prewitnessed calls
+					}
+				}
+			}
+
+			// We don't want to return anything from the websocket stream if there are no items
+			if all_prewitnessed_swaps.is_empty() {
+				None
+			} else {
+				Some(all_prewitnessed_swaps)
+			}
 		}
 	}
 
@@ -1327,7 +1432,6 @@ impl_runtime_apis! {
 		}
 	}
 }
-
 #[cfg(test)]
 mod test {
 	use super::*;
