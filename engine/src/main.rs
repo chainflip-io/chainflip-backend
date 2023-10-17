@@ -22,8 +22,8 @@ use clap::Parser;
 use futures::FutureExt;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::{
-	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
+	time::Duration,
 };
 use tracing::info;
 use utilities::{metrics, task_scope::task_scope, CachedStream};
@@ -139,6 +139,10 @@ async fn main() -> anyhow::Result<()> {
 					true,
 				)
 				.await?;
+
+			// In case we are upgrading, this gives the old CFE more time to release system
+			// resources.
+			tokio::time::sleep(Duration::from_secs(3)).await;
 
 			// Wait until SCC has started, to ensure old engine has stopped
 			start_logger_server_fn.take().expect("only called once")(scope);
