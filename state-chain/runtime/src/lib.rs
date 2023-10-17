@@ -930,7 +930,7 @@ impl_runtime_apis! {
 			RuntimeApiAccountInfoV2 {
 				balance: account_info.total(),
 				bond: account_info.bond(),
-				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
