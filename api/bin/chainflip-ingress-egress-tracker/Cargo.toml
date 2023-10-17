@@ -29,3 +29,4 @@ utilities = { path = "../../../utilities" }
 cf-primitives = { path = "../../../state-chain/primitives" }
 pallet-cf-environment = { path = "../../../state-chain/pallets/cf-environment" }
 state-chain-runtime = { path = "../../../state-chain/runtime" }
+cf-chains = { path = "../../../state-chain/chains" }
