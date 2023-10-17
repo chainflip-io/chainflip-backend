@@ -229,10 +229,6 @@ fn upgrade_runtime_successfully() {
 			None,
 			DUMMY_WASM_BLOB
 		));
-		assert_eq!(
-			last_event::<Test>(),
-			crate::mock::RuntimeEvent::Governance(crate::Event::UpgradeConditionsSatisfied),
-		);
 	});
 }
 

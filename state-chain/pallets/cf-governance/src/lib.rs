@@ -203,8 +203,6 @@ pub mod pallet {
 		FailedExecution(DispatchError),
 		/// The decode of call failed \[proposal_id\]
 		DecodeOfCallFailed(ProposalId),
-		/// The upgrade conditions for a runtime upgrade were satisfied
-		UpgradeConditionsSatisfied,
 		/// Call executed by GovKey
 		GovKeyCallExecuted { call_hash: GovCallHash },
 		/// CallHash whitelisted by the GovKey
@@ -319,7 +317,6 @@ pub mod pallet {
 				);
 			}
 
-			Self::deposit_event(Event::UpgradeConditionsSatisfied);
 			T::RuntimeUpgrade::do_upgrade(code)
 		}
 
