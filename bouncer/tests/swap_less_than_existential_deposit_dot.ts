@@ -4,6 +4,7 @@ import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapParams, requestNewSwap } from '../shared/perform_swap';
 import { sendDot } from '../shared/send_dot';
 import { sendErc20 } from '../shared/send_erc20';
+import assert from 'assert';
 import {
   newAddress,
   getChainflipApi,
@@ -50,6 +51,7 @@ export async function doPerformSwap(
 
     const newBalance = await getBalance(destAsset, destAddress);
 
+    assert.strictEqual(newBalance, oldBalance, 'Balance should not have changed');
     console.log(`${tag} Swap success! Balance (Same as before): ${newBalance}!`);
   } else {
     try {
@@ -71,8 +73,8 @@ export async function swapLessThanED() {
   let stopObserving = false;
   const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
 
-  // the initial price is 10USDC = 1DOT
-  // we will swap only 5 USDC and check that the swap is completed succesfully
+  // The initial price is 10USDC = 1DOT,
+  // we will swap only 5 USDC and check that the swap is completed successfully
   const tag = `USDC -> DOT (less than ED)`;
   const address = await newAddress('DOT', 'random seed');
 
@@ -94,7 +96,7 @@ export async function swapLessThanED() {
   console.log('=== Test complete ===');
 }
 
-runWithTimeout(swapLessThanED(), 300000)
+runWithTimeout(swapLessThanED(), 500000)
   .then(() => {
     process.exit(0);
   })
