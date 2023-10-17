@@ -78,9 +78,10 @@ jobs:
         env:
           BINARY_ROOT_PATH: .
         run: |
+          set -x
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
-          sudo ./localnet/manage.sh
+          ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
