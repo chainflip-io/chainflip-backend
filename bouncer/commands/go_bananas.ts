@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import axios from 'axios';
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset, assetDecimals } from '@chainflip-io/cli/.';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
 import { blake2AsHex } from '@polkadot/util-crypto';
@@ -83,19 +83,31 @@ async function playLp(asset: string, price: number, liquidity: number) {
       call(
         'lp_setLimitOrder',
         ['Usdc', asset, 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
-        `Mint Buy ${asset}`,
+        `Buy ${asset}`,
       ),
       call(
         'lp_setLimitOrder',
         [asset, 'Usdc', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
-        `Mint Sell ${asset}`,
+        `Sell ${asset}`,
       ),
     ]);
     result.forEach((r) => {
       if (r.data.error) {
         console.log(`Error [${r.data.id}]: ${JSON.stringify(r.data.error)}`);
-      } else if (r.data.result.swapped_liquidity > 0) {
-        console.log(`Swapped ${r.data.result.swapped_liquidity} ${r.data.id}`);
+      }
+      if (r.data.result[0].collected_fees > 0) {
+        console.log(`Collected ${r.data.result[0].collected_fees / 10 ** 6} USDC in fees`);
+      }
+      if (r.data.result[0].bought_amount > 0) {
+        if (r.data.id === `Buy ${asset}`) {
+          console.log(
+            `Bought ${
+              r.data.result[0].bought_amount / 10 ** assetDecimals[asset.toUpperCase() as Asset]
+            } ${asset} for Usdc`,
+          );
+        } else {
+          console.log(`Bought ${r.data.result[0].bought_amount / 10 ** 6} Usdc for ${asset}`);
+        }
       }
     });
     await sleep(12000);
@@ -126,7 +138,7 @@ async function launchTornado() {
     swap = await requestNewSwap(assets[i + 1], assets[i], swap.depositAddress);
   }
   await requestNewSwap('BTC', assets[assets.length - 1], swap.depositAddress);
-  await sendBtc(btcAddress, 1);
+  await sendBtc(btcAddress, 0.01);
   console.log(btcAddress);
 }
 
