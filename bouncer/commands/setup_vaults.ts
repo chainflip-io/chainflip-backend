@@ -38,13 +38,13 @@ async function main(): Promise<void> {
   // Step 2
   console.log('Waiting for new keys');
 
-  const btcActivationRequest = observeEvent(
+  const dotActivationRequest = observeEvent(
     'polkadotVault:AwaitingGovernanceActivation',
     chainflip,
   );
-  const dotActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
-  const dotKey = (await btcActivationRequest).data.newPublicKey;
-  const btcKey = (await dotActivationRequest).data.newPublicKey;
+  const btcActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  const dotKey = (await dotActivationRequest).data.newPublicKey;
+  const btcKey = (await btcActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');

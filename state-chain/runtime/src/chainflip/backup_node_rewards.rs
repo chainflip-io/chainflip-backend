@@ -2,7 +2,7 @@ use cf_traits::Bid;
 use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 use sp_std::{cmp::min, prelude::*};
 
-//TODO: The u128 is not big enough for some calculations (for example this one) which involve
+// TODO: The u128 is not big enough for some calculations (for example this one) which involve
 // intermediate steps of the calculation create values that saturate the u128. In this and in
 // similar cases we might have to convert the values to BigInt for calculation and then convert it
 // back to u128 after calculation. In this case, the saturation problem can lead to upto 0.03 - 0.05

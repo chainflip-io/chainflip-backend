@@ -49,6 +49,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
@@ -103,7 +104,8 @@ decl_runtime_apis!(
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
-		fn cf_account_info_v2(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
+		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
+		fn cf_account_info_v2(account_id: &AccountId32) -> RuntimeApiAccountInfoV2;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;

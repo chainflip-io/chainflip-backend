@@ -1524,6 +1524,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cf-chains",
  "cf-primitives",
  "chainflip-engine",
  "futures",

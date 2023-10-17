@@ -1,4 +1,3 @@
-use cf_primitives::AssetAmount;
 use cf_utilities::{
 	task_scope::{task_scope, Scope},
 	try_parse_number_or_hex, AnyhowRpcError,
@@ -17,7 +16,7 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
-use rpc_types::OpenSwapChannels;
+use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_rpc::number::NumberOrHex;
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
@@ -25,35 +24,48 @@ use tracing::log;
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
 	use super::*;
-	use chainflip_api::{lp, primitives::AssetAmount, queries::SwapChannelInfo};
+	use anyhow::anyhow;
+	use chainflip_api::queries::SwapChannelInfo;
+	use pallet_cf_pools::AssetsMap;
 	use serde::{Deserialize, Serialize};
 	use sp_rpc::number::NumberOrHex;
 
-	#[derive(Serialize, Deserialize)]
-	pub struct AssetAmounts {
-		/// The amount of the unstable asset.
-		///
-		/// This is side `zero` in the AMM.
-		unstable: NumberOrHex,
-		/// The amount of the stable asset (USDC).
-		///
-		/// This is side `one` in the AMM.
-		stable: NumberOrHex,
-	}
+	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+	pub struct OrderIdJson(NumberOrHex);
+	impl TryFrom<OrderIdJson> for OrderId {
+		type Error = anyhow::Error;
 
-	impl TryFrom<AssetAmounts> for lp::SideMap<AssetAmount> {
-		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
-
-		fn try_from(value: AssetAmounts) -> Result<Self, Self::Error> {
-			Ok(lp::SideMap::from_array([value.unstable.try_into()?, value.stable.try_into()?]))
+		fn try_from(value: OrderIdJson) -> Result<Self, Self::Error> {
+			value.0.try_into().map_err(|_| anyhow!("Failed to convert order id to u64"))
 		}
 	}
 
-	#[derive(Serialize, Deserialize)]
-	pub struct RangeOrder {
-		pub lower_tick: i32,
-		pub upper_tick: i32,
-		pub liquidity: u128,
+	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+	pub enum RangeOrderSizeJson {
+		AssetAmounts { maximum: AssetsMap<NumberOrHex>, minimum: AssetsMap<NumberOrHex> },
+		Liquidity { liquidity: NumberOrHex },
+	}
+	impl TryFrom<RangeOrderSizeJson> for RangeOrderSize {
+		type Error = anyhow::Error;
+
+		fn try_from(value: RangeOrderSizeJson) -> Result<Self, Self::Error> {
+			Ok(match value {
+				RangeOrderSizeJson::AssetAmounts { maximum, minimum } =>
+					RangeOrderSize::AssetAmounts {
+						maximum: maximum
+							.try_map(TryInto::try_into)
+							.map_err(|_| anyhow!("Failed to convert maximums to u128"))?,
+						minimum: minimum
+							.try_map(TryInto::try_into)
+							.map_err(|_| anyhow!("Failed to convert minimums to u128"))?,
+					},
+				RangeOrderSizeJson::Liquidity { liquidity } => RangeOrderSize::Liquidity {
+					liquidity: liquidity
+						.try_into()
+						.map_err(|_| anyhow!("Failed to convert liquidity to u128"))?,
+				},
+			})
+		}
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
@@ -95,10 +107,10 @@ pub trait Rpc {
 		&self,
 		base_asset: Asset,
 		pair_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
-		size: RangeOrderSize,
+		size: RangeOrderSizeJson,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_range_order")]
@@ -106,9 +118,9 @@ pub trait Rpc {
 		&self,
 		base_asset: Asset,
 		pair_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSize,
+		size: RangeOrderSizeJson,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "update_limit_order")]
@@ -116,10 +128,10 @@ pub trait Rpc {
 		&self,
 		sell_asset: Asset,
 		buy_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
@@ -127,9 +139,9 @@ pub trait Rpc {
 		&self,
 		sell_asset: Asset,
 		buy_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick: Option<Tick>,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
@@ -205,15 +217,22 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: Asset,
 		pair_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		increase_or_decrease: IncreaseOrDecrease,
-		size: RangeOrderSize,
+		size: RangeOrderSizeJson,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.update_range_order(base_asset, pair_asset, id, tick_range, increase_or_decrease, size)
+			.update_range_order(
+				base_asset,
+				pair_asset,
+				id.try_into()?,
+				tick_range,
+				increase_or_decrease,
+				size.try_into()?,
+			)
 			.await?)
 	}
 
@@ -221,14 +240,14 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: Asset,
 		pair_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		size: RangeOrderSize,
+		size: RangeOrderSizeJson,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.set_range_order(base_asset, pair_asset, id, tick_range, size)
+			.set_range_order(base_asset, pair_asset, id.try_into()?, tick_range, size.try_into()?)
 			.await?)
 	}
 
@@ -236,15 +255,22 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		sell_asset: Asset,
 		buy_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick: Option<Tick>,
 		increase_or_decrease: IncreaseOrDecrease,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.update_limit_order(sell_asset, buy_asset, id, tick, increase_or_decrease, amount)
+			.update_limit_order(
+				sell_asset,
+				buy_asset,
+				id.try_into()?,
+				tick,
+				increase_or_decrease,
+				try_parse_number_or_hex(amount)?,
+			)
 			.await?)
 	}
 
@@ -252,14 +278,20 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		sell_asset: Asset,
 		buy_asset: Asset,
-		id: OrderId,
+		id: OrderIdJson,
 		tick: Option<Tick>,
-		sell_amount: AssetAmount,
+		sell_amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.set_limit_order(sell_asset, buy_asset, id, tick, sell_amount)
+			.set_limit_order(
+				sell_asset,
+				buy_asset,
+				id.try_into()?,
+				tick,
+				try_parse_number_or_hex(sell_amount)?,
+			)
 			.await?)
 	}
 

@@ -123,6 +123,7 @@ export async function testSwap(
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   tagSuffix?: string,
+  amount?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
@@ -131,7 +132,7 @@ export async function testSwap(
     messageMetadata,
     tagSuffix,
   );
-  return performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
+  return performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata, undefined, amount);
 }
 async function testSwapViaContract(
   sourceAsset: Asset,
