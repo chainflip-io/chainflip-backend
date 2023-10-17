@@ -613,21 +613,26 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
 					.expect("Current authorities must exists and non-empty.") as u128,
 		)
-	} else if Validator::backups().contains_key(account_id) {
-		// Calculate backup validator reward for the current block, then scaled linearly into YEAR.
-		calculate_backup_rewards::<AccountId, FlipBalance>(
-			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
-			Validator::bond(),
-			One::one(),
-			Emissions::backup_node_emission_per_block(),
-			Emissions::current_authority_emission_per_block(),
-			u128::from(Validator::current_authority_count()),
-		)
-		.into_iter()
-		.find(|(id, _reward)| *id == *account_id)
-		.map(|(_id, reward)| reward * YEAR as u128)
 	} else {
-		None
+		let backups_earning_rewards =
+			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
+		if backups_earning_rewards.iter().any(|bid| bid.bidder_id == *account_id) {
+			// Calculate backup validator reward for the current block, then scaled linearly into
+			// YEAR.
+			calculate_backup_rewards::<AccountId, FlipBalance>(
+				backups_earning_rewards,
+				Validator::bond(),
+				One::one(),
+				Emissions::backup_node_emission_per_block(),
+				Emissions::current_authority_emission_per_block(),
+				u128::from(Validator::current_authority_count()),
+			)
+			.into_iter()
+			.find(|(id, _reward)| *id == *account_id)
+			.map(|(_id, reward)| reward * YEAR as u128)
+		} else {
+			None
+		}
 	}
 	.map(|reward_pa| {
 		// Convert Permill to Basis Point.
