@@ -39,7 +39,7 @@ use super::common::{
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
-// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment --url
+// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment,System --url
 // wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.json.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
@@ -49,10 +49,11 @@ pub enum EventWrapper {
 	ProxyAdded { delegator: AccountId32, delegatee: AccountId32 },
 	Transfer { to: AccountId32, from: AccountId32, amount: PolkadotBalance },
 	TransactionFeePaid { actual_fee: PolkadotBalance, tip: PolkadotBalance },
+	ExtrinsicSuccess,
 }
 
 use polkadot::{
-	balances::events::Transfer, proxy::events::ProxyAdded,
+	balances::events::Transfer, proxy::events::ProxyAdded, system::events::ExtrinsicSuccess,
 	transaction_payment::events::TransactionFeePaid,
 };
 
@@ -75,6 +76,11 @@ pub fn filter_map_events(
 				let TransactionFeePaid { actual_fee, tip, .. } =
 					event_details.as_event::<TransactionFeePaid>().unwrap().unwrap();
 				Some(EventWrapper::TransactionFeePaid { actual_fee, tip })
+			},
+			(ExtrinsicSuccess::PALLET, ExtrinsicSuccess::EVENT) => {
+				let ExtrinsicSuccess { .. } =
+					event_details.as_event::<ExtrinsicSuccess>().unwrap().unwrap();
+				Some(EventWrapper::ExtrinsicSuccess)
 			},
 			_ => None,
 		}
@@ -277,17 +283,16 @@ fn transaction_fee_paids(
 	indices: &BTreeSet<PolkadotExtrinsicIndex>,
 	events: &Vec<(Phase, EventWrapper)>,
 ) -> BTreeSet<(PolkadotExtrinsicIndex, PolkadotBalance)> {
-	let mut indices_with_fees = BTreeSet::new();
-	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			if indices.contains(extrinsic_index) {
-				if let EventWrapper::TransactionFeePaid { actual_fee, .. } = wrapped_event {
-					indices_with_fees.insert((*extrinsic_index, *actual_fee));
-				}
-			}
-		}
-	}
-	indices_with_fees
+	events
+		.iter()
+		.filter_map(|(phase, wrapped_event)| match (phase, wrapped_event) {
+			(
+				Phase::ApplyExtrinsic(extrinsic_index),
+				EventWrapper::TransactionFeePaid { actual_fee, .. },
+			) if indices.contains(extrinsic_index) => Some((*extrinsic_index, *actual_fee)),
+			_ => None,
+		})
+		.collect()
 }
 
 fn proxy_addeds(
