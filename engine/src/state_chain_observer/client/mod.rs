@@ -13,7 +13,7 @@ use futures::{StreamExt, TryStreamExt};
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{sync::Arc, time::Duration};
-use tracing::{info, warn};
+use tracing::info;
 
 use utilities::{
 	make_periodic_tick, read_clean_and_decode_hex_str_file,
@@ -358,7 +358,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 						.boxed();
 
 					incompatible_blocks.try_for_each(move |(block_hash, current_release_version)| futures::future::ready({
-						warn!("This version '{}' is incompatible with the current release '{}' at block: {}. WAITING for a compatible release version.", required_version, current_release_version, block_hash);
+						info!("This version '{}' is incompatible with the current release '{}' at block: {}. WAITING for a compatible release version.", required_version, current_release_version, block_hash);
 						Ok::<_, anyhow::Error>(())
 					})).await?;
 				} else {

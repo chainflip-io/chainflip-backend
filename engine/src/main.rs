@@ -111,10 +111,13 @@ async fn main() -> anyhow::Result<()> {
 	let config_root_path = PathBuf::from(&opts.config_root);
 
 	// the settings directory from opts.config_root that we'll use to read the settings file
-	let settings_dir = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
+	let migrated_settings_dir = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
 
-	let settings =
-		Settings::new_with_settings_dir(settings_dir, opts).context("Error reading settings")?;
+	let settings = Settings::new_with_settings_dir(
+		migrated_settings_dir.unwrap_or(DEFAULT_SETTINGS_DIR),
+		opts,
+	)
+	.context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
@@ -148,19 +151,32 @@ async fn main() -> anyhow::Result<()> {
 			// Wait until SCC has started, to ensure old engine has stopped
 			start_logger_server_fn.take().expect("only called once")(scope);
 
-			if *CFE_VERSION == (SemVer { major: 0, minor: 10, patch: 0 }) &&
-				settings_dir != DEFAULT_SETTINGS_DIR
+			if *CFE_VERSION == (SemVer { major: 0, minor: 10, patch: 0 })
 			{
-				// Effectively, we want to move the files from the temp-migrated location, to
-				// the standard location
-				// - updating it in-place.
-				// Note: the backup was already created and is in the temp folder (which will
-				// become the new standard folder) too
-				std::fs::rename(
-					config_root_path.join(settings_dir),
-					config_root_path.join(DEFAULT_SETTINGS_DIR),
-				)
-				.context("Unable to replace old settings with temp settings")?;
+				if let Some(migrated_settings_dir) = migrated_settings_dir {
+					// Back up the old settings.
+					std::fs::copy(
+						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.toml"),
+						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.backup-0.9.3.toml"),
+					)
+					.context("Unable to back up old settings. Please ensure the chainflip-engine has write permissions in the config directories.")?;
+
+					// Replace with the migrated settings.
+					std::fs::rename(
+						config_root_path.join(migrated_settings_dir).join("Settings.toml"),
+						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.toml"),
+					)
+					.context("Unable to replace old settings with migrated settings. Please ensure the chainflip-engine has write permissions in the config directories.")?;
+
+					// Remove the migration dir.
+					std::fs::remove_dir_all(config_root_path.join(migrated_settings_dir))
+						.unwrap_or_else(|e| {
+							tracing::warn!(
+								"Unable to remove migration dir: {e:?}. Please remove it manually.",
+								e = e
+							)
+						});
+				}
 			}
 
 			if let Some(health_check_settings) = &settings.health_check {
