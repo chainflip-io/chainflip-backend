@@ -46,6 +46,14 @@ pub trait LpBalanceApi {
 	) -> DispatchResult;
 }
 
+pub trait PoolApi {
+	type AccountId;
+
+	/// Sweep all earnings of an LP into their free balance (Should be called before any assets are
+	/// debited from their free balance)
+	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
+}
+
 pub trait SwappingApi {
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
 	/// and return the remaining value

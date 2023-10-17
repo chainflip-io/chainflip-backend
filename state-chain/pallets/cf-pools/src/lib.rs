@@ -10,7 +10,7 @@ use cf_amm::{
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, SwappingApi};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
@@ -669,6 +669,7 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
+			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -753,6 +754,7 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
+			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
@@ -826,6 +828,7 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
+			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
@@ -902,6 +905,7 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
+			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
@@ -1039,6 +1043,14 @@ impl<T: Config> SwappingApi for Pallet<T> {
 	}
 }
 
+impl<T: Config> PoolApi for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn sweep(who: &T::AccountId) -> DispatchResult {
+		Self::inner_sweep(who)
+	}
+}
+
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
@@ -1106,6 +1118,62 @@ pub struct UnidirectionalPoolDepth {
 }
 
 impl<T: Config> Pallet<T> {
+	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
+		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
+		for canonical_asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
+			let mut pool = Pools::<T>::get(canonical_asset_pair).unwrap();
+
+			if let Some(range_orders_cache) = pool.range_orders_cache.get(lp).cloned() {
+				let asset_pair = AssetPair { canonical_asset_pair, base_side: Side::Zero };
+
+				for (id, range) in range_orders_cache.iter() {
+					Self::inner_update_range_order(
+						&mut pool,
+						lp,
+						&asset_pair,
+						*id,
+						range.clone(),
+						IncreaseOrDecrease::Decrease,
+						range_orders::Size::Liquidity { liquidity: 0 },
+						false,
+					)?;
+				}
+			}
+
+			for (side, limit_orders_cache) in pool
+				.limit_orders_cache
+				.as_ref()
+				.into_iter()
+				.filter_map(|(side, limit_orders_cache)| {
+					limit_orders_cache
+						.get(lp)
+						.cloned()
+						.map(|limit_orders_cache| (side, limit_orders_cache))
+				})
+				.collect::<Vec<_>>()
+			{
+				let asset_pair = AssetPair { canonical_asset_pair, base_side: side };
+
+				for (id, tick) in limit_orders_cache {
+					Self::inner_update_limit_order(
+						&mut pool,
+						lp,
+						&asset_pair,
+						id,
+						tick,
+						IncreaseOrDecrease::Decrease,
+						Default::default(),
+						false,
+					)?;
+				}
+			}
+
+			Pools::<T>::insert(canonical_asset_pair, pool);
+		}
+
+		Ok(())
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	fn inner_update_limit_order(
 		pool: &mut Pool<T>,
