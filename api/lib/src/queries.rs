@@ -197,12 +197,8 @@ impl QueryApi {
 		let validator_len = current_validators.len();
 		let current_relative_slot = slot % validator_len;
 		let index = current_validators.iter().position(|account| account == &account_id).unwrap();
-		if index >= current_relative_slot {
-			result.next_block_in = Some(index - current_relative_slot);
-		} else {
-			result.next_block_in = Some(validator_len - current_relative_slot + index);
-		}
 
+		result.next_block_in = Some(compute_distance(index, current_relative_slot, validator_len));
 		Ok(result)
 	}
 }
@@ -216,6 +212,14 @@ fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 			None
 		}
 	})
+}
+
+fn compute_distance(index: usize, slot: usize, len: usize) -> usize {
+	if index >= slot {
+		index - slot
+	} else {
+		len - slot + index
+	}
 }
 
 #[test]
@@ -233,4 +237,19 @@ fn test_slot_extraction() {
 		extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
 	);
 	assert_eq!(None, extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec())));
+}
+
+#[test]
+fn test_compute_distance() {
+	let index: usize = 5;
+	let slot: usize = 7;
+	let len: usize = 15;
+
+	assert_eq!(compute_distance(index, slot, len), 13);
+
+	let index: usize = 18;
+	let slot: usize = 7;
+	let len: usize = 24;
+
+	assert_eq!(compute_distance(index, slot, len), 11);
 }
