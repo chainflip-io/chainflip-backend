@@ -9,7 +9,7 @@ use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo}
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
-use sp_runtime::Permill;
+use sp_runtime::{FixedPointNumber, FixedU64};
 use state_chain_runtime::chainflip::{
 	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence,
 };
@@ -223,7 +223,8 @@ fn can_calculate_account_apy() {
 			// APY rate is correct for current Authority
 			let total = Flip::balance(&validator);
 			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128 / 10u128;
-			let apy_basis_point = Permill::from_rational(reward, total) * 10_000u32;
+			let apy_basis_point =
+				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
 			assert_eq!(apy_basis_point, 49u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
 
@@ -231,8 +232,44 @@ fn can_calculate_account_apy() {
 			// Since all 3 backup validators has the same staked amount, and the award is capped by
 			// Emission rewards are split evenly between 3 validators.
 			let reward = Emissions::backup_node_emission_per_block() / 3u128 * YEAR as u128;
-			let apy_basis_point = Permill::from_rational(reward, backup_staked) * 10_000u32;
+			let apy_basis_point = FixedU64::from_rational(reward, backup_staked)
+				.checked_mul_int(10_000u32)
+				.unwrap();
 			assert_eq!(apy_basis_point, 35u32);
 			assert_eq!(calculate_account_apy(&backup), Some(apy_basis_point));
+		});
+}
+
+#[test]
+fn apy_can_be_above_100_percent() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const MAX_AUTHORITIES: u32 = 1;
+	const NUM_BACKUPS: u32 = 1;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut network, _, _) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			network.move_to_the_next_epoch();
+
+			let validator = Validator::current_authorities().into_iter().next().unwrap();
+
+			// Set the validator yield to very high
+			assert_ok!(Emissions::update_current_authority_emission_inflation(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				1_000_000_000u32
+			));
+
+			network.move_to_the_next_epoch();
+
+			// APY rate of > 100% can be calculated correctly.
+			let total = Flip::balance(&validator);
+			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128;
+			let apy_basis_point =
+				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
+			assert_eq!(apy_basis_point, 242_543_802u32);
+			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
 		});
 }

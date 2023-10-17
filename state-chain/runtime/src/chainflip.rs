@@ -53,7 +53,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
-		FixedU64, Permill,
+		FixedPointNumber, FixedU64,
 	},
 	traits::Get,
 };
@@ -636,6 +636,8 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 	}
 	.map(|reward_pa| {
 		// Convert Permill to Basis Point.
-		Permill::from_rational(reward_pa, Flip::balance(account_id)) * 10_000u32
+		FixedU64::from_rational(reward_pa, Flip::balance(account_id))
+			.checked_mul_int(10_000u32)
+			.unwrap_or_default()
 	})
 }
