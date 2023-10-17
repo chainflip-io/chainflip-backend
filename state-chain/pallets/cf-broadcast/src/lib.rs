@@ -468,10 +468,7 @@ pub mod pallet {
 						.broadcast_id,
 				});
 			} else {
-				BroadcastRetryQueue::<T, I>::append(&signing_attempt.broadcast_attempt);
-				Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
-					broadcast_attempt_id: signing_attempt.broadcast_attempt.broadcast_attempt_id,
-				});
+				Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
 			}
 
 			Ok(().into())
@@ -757,10 +754,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
 
-				BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
-					*attempt_count += 1;
-					*attempt_count
-				});
+				BroadcastAttemptCount::<T, I>::mutate(
+					broadcast_id,
+					|attempt_count: &mut AttemptCount| {
+						*attempt_count += 1;
+					},
+				);
 				debug_assert_eq!(
 					BroadcastAttemptCount::<T, I>::get(broadcast_id),
 					next_broadcast_attempt_id.attempt_count,
@@ -830,11 +829,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				transaction_out_id: broadcast_attempt.transaction_out_id,
 			});
 		} else {
-			const FAILED_SIGNER_SELECTION: &str = "Failed to select signer: We should either: a) have a signer eligible for nomination b) already have aborted this broadcast when scheduling the retry";
-			log::error!("{FAILED_SIGNER_SELECTION}");
-			#[cfg(test)]
-			panic!("{FAILED_SIGNER_SELECTION}");
+			log::warn!(
+				"Failed to select a signer for broadcast {:?}. Scheduling Retry",
+				broadcast_attempt.broadcast_attempt_id
+			);
+			Self::schedule_for_retry(&broadcast_attempt);
 		}
+	}
+
+	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>) {
+		BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
+		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+			broadcast_attempt_id: broadcast_attempt.broadcast_attempt_id,
+		});
 	}
 }
 

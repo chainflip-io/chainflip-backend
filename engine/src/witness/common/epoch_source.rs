@@ -12,7 +12,7 @@ use futures::StreamExt;
 use futures_core::{Future, Stream};
 use futures_util::stream;
 use state_chain_runtime::PalletInstanceAlias;
-use utilities::task_scope::Scope;
+use utilities::{spmc, task_scope::Scope};
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 
@@ -37,11 +37,8 @@ enum EpochUpdate<Info, HistoricInfo> {
 #[derive(Clone)]
 pub struct EpochSource<Info, HistoricInfo> {
 	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
-	epoch_update_receiver: async_broadcast::Receiver<(
-		EpochIndex,
-		state_chain_runtime::Hash,
-		EpochUpdate<Info, HistoricInfo>,
-	)>,
+	epoch_update_receiver:
+		spmc::Receiver<(EpochIndex, state_chain_runtime::Hash, EpochUpdate<Info, HistoricInfo>)>,
 }
 
 impl<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -58,11 +55,8 @@ pub struct EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	state_chain_client: Arc<StateChainClient>,
 	initial_block_hash: state_chain_runtime::Hash,
 	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
-	epoch_update_receiver: async_broadcast::Receiver<(
-		EpochIndex,
-		state_chain_runtime::Hash,
-		EpochUpdate<Info, HistoricInfo>,
-	)>,
+	epoch_update_receiver:
+		spmc::Receiver<(EpochIndex, state_chain_runtime::Hash, EpochUpdate<Info, HistoricInfo>)>,
 }
 impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
 	for EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -88,8 +82,7 @@ impl EpochSource<(), ()> {
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
 	) -> EpochSourceBuilder<'a, 'env, StateChainClient, (), ()> {
-		let (epoch_update_sender, epoch_update_receiver) =
-			async_broadcast::broadcast(CHANNEL_BUFFER);
+		let (epoch_update_sender, epoch_update_receiver) = spmc::channel(CHANNEL_BUFFER);
 
 		let initial_block_hash = state_chain_stream.cache().block_hash;
 
@@ -121,7 +114,7 @@ impl EpochSource<(), ()> {
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				utilities::loop_select! {
-					if epoch_update_sender.is_closed() => break Ok(()),
+					let _ = epoch_update_sender.closed() => { break Ok(()) },
 					if let Some((block_hash, _block_header)) = state_chain_stream.next() => {
 						let old_current_epoch = std::mem::replace(&mut current_epoch, state_chain_client
 							.storage_value::<pallet_cf_validator::CurrentEpoch<
@@ -130,8 +123,8 @@ impl EpochSource<(), ()> {
 							.await
 							.expect(STATE_CHAIN_CONNECTION));
 						if old_current_epoch != current_epoch {
-							let _result = epoch_update_sender.broadcast((old_current_epoch, block_hash, EpochUpdate::Historic(()))).await;
-							let _result = epoch_update_sender.broadcast((current_epoch, block_hash, EpochUpdate::NewCurrent(()))).await;
+							epoch_update_sender.send((old_current_epoch, block_hash, EpochUpdate::Historic(()))).await;
+							epoch_update_sender.send((current_epoch, block_hash, EpochUpdate::NewCurrent(()))).await;
 							historic_epochs.insert(old_current_epoch);
 						}
 
@@ -143,7 +136,7 @@ impl EpochSource<(), ()> {
 						assert!(!historic_epochs.contains(&current_epoch));
 						assert!(old_historic_epochs.is_superset(&historic_epochs));
 						for expired_epoch in old_historic_epochs.difference(&historic_epochs) {
-							let _result = epoch_update_sender.broadcast((*expired_epoch, block_hash, EpochUpdate::Expired)).await;
+							epoch_update_sender.send((*expired_epoch, block_hash, EpochUpdate::Expired)).await;
 						}
 					} else break Ok(()),
 				}
@@ -310,8 +303,7 @@ impl<
 			epoch_update_receiver: mut unmapped_epoch_update_receiver,
 		} = self;
 
-		let (epoch_update_sender, epoch_update_receiver) =
-			async_broadcast::broadcast(CHANNEL_BUFFER);
+		let (epoch_update_sender, epoch_update_receiver) = spmc::channel(CHANNEL_BUFFER);
 
 		let epochs: BTreeMap<_, _> = futures::stream::iter(unmapped_epochs)
 			.filter_map(|(epoch, (info, option_historic_info))| {
@@ -354,18 +346,18 @@ impl<
 			let mut epochs = epochs.keys().cloned().collect::<BTreeSet<_>>();
 			async move {
 				utilities::loop_select! {
-					if epoch_update_sender.is_closed() => break Ok(()),
+					let _ = epoch_update_sender.closed() => { break Ok(()) },
 					if let Some((epoch, block_hash, update)) = unmapped_epoch_update_receiver.next() => {
 						match update {
 							EpochUpdate::NewCurrent(info) => {
 								if let Some(mapped_info) = filter_map(state_chain_client.clone(), epoch, block_hash, info).await {
 									epochs.insert(epoch);
-									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info))).await;
+									epoch_update_sender.send((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info))).await;
 								}
 							},
 							EpochUpdate::Historic(historic_info) => {
 								if epochs.contains(&epoch) {
-									let _result = epoch_update_sender.broadcast((
+									epoch_update_sender.send((
 										epoch,
 										block_hash,
 										EpochUpdate::Historic(map_historic_info(state_chain_client.clone(), epoch, block_hash, historic_info).await),

@@ -2,6 +2,7 @@ use crate::{
 	mock::*, ActiveProposals, Error, ExecutionMode, ExecutionPipeline, ExpiryTime, Members,
 	PreAuthorisedGovCalls, ProposalIdCounter,
 };
+use cf_primitives::SemVer;
 use cf_test_utilities::last_event;
 use cf_traits::mocks::time_source;
 use frame_support::{assert_err, assert_noop, assert_ok};
@@ -228,10 +229,6 @@ fn upgrade_runtime_successfully() {
 			None,
 			DUMMY_WASM_BLOB
 		));
-		assert_eq!(
-			last_event::<Test>(),
-			crate::mock::RuntimeEvent::Governance(crate::Event::UpgradeConditionsSatisfied),
-		);
 	});
 }
 
@@ -271,31 +268,23 @@ fn error_during_runtime_upgrade() {
 fn runtime_upgrade_requires_up_to_date_authorities_cfes() {
 	RuntimeUpgradeMock::upgrade_success(true);
 	UpgradeConditionMock::set(true);
+	const DESIRED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 2, patch: 3 };
 	new_test_ext().execute_with(|| {
+		// This is how many nodes are *at* the required version.
 		PercentCfeAtTargetVersion::set(Percent::from_percent(50));
 		assert_ok!(Governance::chainflip_runtime_upgrade(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-			Some(Percent::from_percent(50)),
+			Some((DESIRED_CFE_VERSION, Percent::from_percent(50))),
 			DUMMY_WASM_BLOB,
 		));
 
 		assert_noop!(
 			Governance::chainflip_runtime_upgrade(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				Some(Percent::from_percent(51)),
+				Some((DESIRED_CFE_VERSION, Percent::from_percent(51))),
 				DUMMY_WASM_BLOB,
 			),
 			crate::Error::<Test>::NotEnoughAuthoritiesCfesAtTargetVersion
-		);
-
-		NextCfeVersion::set(None);
-		assert_noop!(
-			Governance::chainflip_runtime_upgrade(
-				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-				Some(Percent::from_percent(50)),
-				DUMMY_WASM_BLOB,
-			),
-			crate::Error::<Test>::TargetCfeVersionNotSet
 		);
 	});
 }
@@ -307,13 +296,6 @@ fn runtime_upgrade_can_have_no_cfes_version_requirement() {
 	new_test_ext().execute_with(|| {
 		PercentCfeAtTargetVersion::set(Percent::from_percent(0));
 
-		assert_ok!(Governance::chainflip_runtime_upgrade(
-			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
-			None,
-			DUMMY_WASM_BLOB,
-		));
-
-		NextCfeVersion::set(None);
 		assert_ok!(Governance::chainflip_runtime_upgrade(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			None,

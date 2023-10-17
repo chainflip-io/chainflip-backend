@@ -7,12 +7,13 @@ use core::convert::Infallible;
 
 use codec::{Decode, Encode};
 use common::{
-	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, Side, SideMap,
-	SqrtPriceQ64F96, Tick, ZeroToOne,
+	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, SetFeesError, Side,
+	SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
 };
+use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod common;
 pub mod limit_orders;
@@ -342,5 +343,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				assets[Side::One],
 			),
 		})
+	}
+
+	#[allow(clippy::type_complexity)]
+	pub fn set_fees(
+		&mut self,
+		fee_hundredth_pips: u32,
+	) -> Result<SideMap<BTreeMap<(Tick, LiquidityProvider), (Collected, PositionInfo)>>, SetFeesError>
+	{
+		self.range_orders.set_fees(fee_hundredth_pips)?;
+		self.limit_orders.set_fees(fee_hundredth_pips)
+	}
+
+	// Returns if the pool fee is valid.
+	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
+		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
+			range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
 	}
 }

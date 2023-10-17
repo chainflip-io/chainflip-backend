@@ -87,11 +87,15 @@ async fn main() -> anyhow::Result<()> {
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
-	utilities::print_starting!();
+	utilities::print_start_and_end!(async run_main(settings));
 
+	Ok(())
+}
+
+async fn run_main(settings: Settings) -> anyhow::Result<()> {
 	task_scope(|scope| {
 		async move {
-			let mut start_logger_server_fn = Some(utilities::init_json_logger(settings.logging.span_lifecycle).await);
+			let mut start_logger_server_fn = Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
 
 			let ws_rpc_client = jsonrpsee::ws_client::WsClientBuilder::default()
 				.build(&settings.state_chain.ws_endpoint)

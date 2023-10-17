@@ -91,7 +91,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type CompoundingInterval: Get<BlockNumberFor<Self>>;
 
-		/// Something that can provide the state chain gatweay address.
+		/// Something that can provide the state chain gateway address.
 		type EthEnvironment: EthEnvironmentProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.

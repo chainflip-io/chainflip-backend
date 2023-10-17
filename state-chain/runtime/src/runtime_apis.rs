@@ -3,18 +3,22 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
-use cf_primitives::{Asset, AssetAmount, EpochIndex, SemVer, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
+};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
+};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_runtime::DispatchError;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 type VanityName = Vec<u8>;
 
@@ -31,19 +35,7 @@ pub enum ChainflipAccountStateWithPassive {
 	BackupOrPassive(BackupOrPassive),
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct RuntimeApiAccountInfo {
-	pub balance: u128,
-	pub bond: u128,
-	pub last_heartbeat: u32,
-	pub is_live: bool,
-	pub is_activated: bool,
-	pub online_credits: u32,
-	pub reputation_points: i32,
-	pub state: ChainflipAccountStateWithPassive,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
@@ -57,6 +49,8 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -79,6 +73,12 @@ pub struct Environment {
 	pub bitcoin_network: BitcoinNetwork,
 	pub ethereum_chain_id: cf_chains::evm::api::EvmChainId,
 	pub polkadot_genesis_hash: PolkadotHash,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderInfo {
+	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+	pub balances: Vec<(Asset, AssetAmount)>,
 }
 
 decl_runtime_apis!(
@@ -104,8 +104,8 @@ decl_runtime_apis!(
 		/// Returns the flip supply in the form [total_issuance, offchain_funds]
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
-		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
-		fn cf_account_info_v2(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
+		fn cf_account_flip_balance(account_id: &AccountId32) -> u128;
+		fn cf_account_info_v2(account_id: &AccountId32) -> RuntimeApiAccountInfoV2;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
@@ -118,7 +118,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			pair_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Option<Result<AssetsMap<Depth>, DispatchError>>;
+		) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>>;
 		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity>;
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
@@ -134,5 +134,8 @@ decl_runtime_apis!(
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
 		fn cf_environment() -> Environment;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
+		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
+		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
+		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 	}
 );

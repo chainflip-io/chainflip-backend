@@ -11,11 +11,14 @@ use config::{Config, ConfigBuilder, ConfigError, Environment, File, Map, Source,
 use serde::{de, Deserialize, Deserializer};
 
 pub use anyhow::Result;
+use regex::Regex;
 use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::{metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port};
+use utilities::{
+	logging::LoggingSettings, metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port,
+};
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -104,8 +107,35 @@ pub struct Dot {
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.nodes.validate()
+		self.nodes.validate()?;
+
+		// Check that all endpoints have a port number
+		let validate_dot_endpoints = |endpoints: &WsHttpEndpoints| -> Result<(), ConfigError> {
+			validate_port_exists(&endpoints.ws_endpoint)
+				.and_then(|_| validate_port_exists(&endpoints.http_endpoint))
+				.map_err(|e| {
+					ConfigError::Message(format!(
+						"Polkadot node endpoints must include a port number: {e}"
+					))
+				})
+		};
+		validate_dot_endpoints(&self.nodes.primary)?;
+		if let Some(backup) = &self.nodes.backup {
+			validate_dot_endpoints(backup)?;
+		}
+		Ok(())
 	}
+}
+
+// Checks that the url has a port number
+fn validate_port_exists(url: &SecretUrl) -> Result<()> {
+	// NB: We are using regex instead of Url because Url.port() returns None for wss/https urls with
+	// default ports.
+	let re = Regex::new(r":([0-9]+)").unwrap();
+	if re.captures(url.as_ref()).is_none() {
+		bail!("No port found in url: {url}");
+	}
+	Ok(())
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -142,11 +172,6 @@ pub struct HealthCheck {
 	pub port: Port,
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Logging {
-	pub span_lifecycle: bool,
-}
-
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
@@ -165,7 +190,7 @@ pub struct Settings {
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,
 	pub signing: Signing,
-	pub logging: Logging,
+	pub logging: LoggingSettings,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -275,6 +300,9 @@ pub struct CommandLineOptions {
 	// Logging settings
 	#[clap(long = "logging.span_lifecycle")]
 	pub logging_span_lifecycle: bool,
+
+	#[clap(long = "logging.command_server_port")]
+	pub logging_command_server_port: Option<Port>,
 }
 
 impl Default for CommandLineOptions {
@@ -292,6 +320,7 @@ impl Default for CommandLineOptions {
 			prometheus_port: None,
 			signing_db_file: None,
 			logging_span_lifecycle: false,
+			logging_command_server_port: None,
 		}
 	}
 }
@@ -308,6 +337,7 @@ const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
 const SIGNING_DB_FILE: &str = "signing.db_file";
 
 const LOGGING_SPAN_LIFECYCLE: &str = "logging.span_lifecycle";
+const LOGGING_COMMAND_SERVER_PORT: &str = "logging.command_server_port";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
 fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
@@ -428,6 +458,7 @@ impl CfSettings for Settings {
 		config_builder
 			.set_default(NODE_P2P_ALLOW_LOCAL_IP, false)?
 			.set_default(LOGGING_SPAN_LIFECYCLE, false)?
+			.set_default(LOGGING_COMMAND_SERVER_PORT, 36079)?
 			.set_default(
 				NODE_P2P_KEY_FILE,
 				PathBuf::from(config_root)
@@ -490,6 +521,11 @@ impl Source for CommandLineOptions {
 			&mut map,
 			LOGGING_SPAN_LIFECYCLE,
 			&Some(self.logging_span_lifecycle),
+		);
+		insert_command_line_option(
+			&mut map,
+			LOGGING_COMMAND_SERVER_PORT,
+			&self.logging_command_server_port,
 		);
 
 		Ok(map)
@@ -846,6 +882,7 @@ pub mod tests {
 			prometheus_port: Some(9999),
 			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
 			logging_span_lifecycle: true,
+			logging_command_server_port: Some(6969),
 		};
 
 		// Load the test opts into the settings
@@ -853,6 +890,7 @@ pub mod tests {
 
 		// Compare the opts and the settings
 		assert_eq!(opts.logging_span_lifecycle, settings.logging.span_lifecycle);
+		assert_eq!(opts.logging_command_server_port.unwrap(), settings.logging.command_server_port);
 		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
 		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
 		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
@@ -981,5 +1019,34 @@ pub mod tests {
 		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
 		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
 		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
+	}
+
+	#[test]
+	fn test_dot_port_validation() {
+		let valid_settings = Dot {
+			nodes: NodeContainer {
+				primary: WsHttpEndpoints {
+					ws_endpoint: "wss://valid.endpoint_with_port:443/secret_key".into(),
+					http_endpoint: "https://valid.endpoint_with_port:443/secret_key".into(),
+				},
+				backup: Some(WsHttpEndpoints {
+					ws_endpoint: "ws://valid.endpoint_with_port:1234".into(),
+					http_endpoint: "http://valid.endpoint_with_port:6969".into(),
+				}),
+			},
+		};
+		assert_ok!(valid_settings.validate_settings());
+
+		let mut invalid_primary_settings = valid_settings.clone();
+		invalid_primary_settings.nodes.primary.ws_endpoint =
+			"ws://invalid.no_port_in_url/secret_key".into();
+		assert!(invalid_primary_settings.validate_settings().is_err());
+
+		let mut invalid_backup_settings = valid_settings.clone();
+		invalid_backup_settings.nodes.backup = Some(WsHttpEndpoints {
+			ws_endpoint: "ws://valid.endpoint_with_port:443".into(),
+			http_endpoint: "http://invalid.no_port_in_url/secret_key".into(),
+		});
+		assert!(invalid_backup_settings.validate_settings().is_err());
 	}
 }
