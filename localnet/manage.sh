@@ -8,7 +8,7 @@ REQUIRED_BINARIES="chainflip-engine chainflip-node"
 INITIAL_CONTAINERS="init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
-export NODE_COUNT=3-node
+export NODE_COUNT=1-node
 
 source ./localnet/helper.sh
 
