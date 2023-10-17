@@ -39,13 +39,11 @@ where
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let dot_client = {
-		DotRetryRpcClient::new(
-			scope,
-			NodeContainer { primary: settings.dot_node, backup: None },
-			env_params.dot_genesis_hash,
-		)?
-	};
+	let dot_client = DotRetryRpcClient::new(
+		scope,
+		NodeContainer { primary: settings.dot_node, backup: None },
+		env_params.dot_genesis_hash,
+	)?;
 
 	let epoch_source = epoch_source
 		.filter_map(
@@ -82,13 +80,13 @@ where
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
-			let process_call = witness_call.clone();
+			let witness_call = witness_call.clone();
 			let dot_client = dot_client.clone();
 			move |epoch, header| {
-				process_egress(epoch, header, process_call.clone(), dot_client.clone())
+				process_egress(epoch, header, witness_call.clone(), dot_client.clone())
 			}
 		})
-		.logging("DOT Witnessing")
+		.logging("witnessing")
 		.spawn(scope);
 
 	Ok(())
