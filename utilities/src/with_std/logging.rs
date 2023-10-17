@@ -72,6 +72,7 @@ macro_rules! print_start_and_end {
 				},
 			},
 			Err(panic) => {
+				// We'll never catch a panic since we use sp-panic-handler which set up a panic hook and abort the process
 				println!(
 					"Exiting {} due to panic: {:#?}",
 					env!("CARGO_PKG_NAME"),
