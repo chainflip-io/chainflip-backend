@@ -67,6 +67,19 @@ fn new_account(account_id: &AccountId, role: AccountRole) {
 	System::reset_events();
 }
 
+fn register_refund_addressses(account_id: &AccountId) {
+	for encoded_address in [
+		EncodedAddress::Eth(Default::default()),
+		EncodedAddress::Dot(Default::default()),
+		EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
+	] {
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			RuntimeOrigin::signed(account_id.clone()),
+			encoded_address
+		));
+	}
+}
+
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	let original_amount =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default();
@@ -173,6 +186,8 @@ fn set_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
+	register_refund_addressses(&DORIS);
+
 	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
@@ -190,6 +205,7 @@ fn basic_pool_setup_provision_and_swap() {
 		new_pool(Asset::Flip, 0u32, price_at_tick(0).unwrap());
 
 		new_account(&DORIS, AccountRole::LiquidityProvider);
+		register_refund_addressses(&DORIS);
 		credit_account(&DORIS, Asset::Eth, 1_000_000);
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);

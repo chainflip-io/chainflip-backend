@@ -201,7 +201,7 @@ fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
+	let (id, address, ..) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
@@ -430,7 +430,7 @@ fn reused_address_channel_id_matches() {
 		>(CHANNEL_ID, eth::Asset::Eth)
 		.unwrap();
 		DepositChannelPool::<Test, _>::insert(CHANNEL_ID, new_channel.clone());
-		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
+		let (reused_channel_id, reused_address, ..) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
 		)
@@ -461,7 +461,7 @@ fn can_process_ccm_deposit() {
 
 		// Register swap deposit with CCM
 
-		let (_, deposit_address) = IngressEgress::request_swap_deposit_address(
+		let (_, deposit_address, ..) = IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
 			destination_address.clone(),

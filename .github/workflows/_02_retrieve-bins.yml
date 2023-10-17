@@ -56,7 +56,7 @@ jobs:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             chainflip-broker-api
-            chainflip-btc-deposit-tracker
+            chainflip-ingress-egress-tracker
             chainflip-cli
             chainflip-engine
             chainflip-lp-api

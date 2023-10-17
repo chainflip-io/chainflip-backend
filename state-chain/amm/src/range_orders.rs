@@ -29,8 +29,8 @@ use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
-	MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	tick_at_sqrt_price, Amount, OneToZero, SetFeesError, Side, SideMap, SqrtPriceQ64F96, Tick,
+	ZeroToOne, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 /// This is the invariant wrt xy = k. It represents / is proportional to the depth of the
@@ -87,7 +87,7 @@ impl Position {
 
 				/*
 					Proof that `mul_div_floor` does not overflow:
-					Note position.liqiudity: u128
+					Note position.liquidity: u128
 					U512::one() << 128 > u128::MAX
 				*/
 				mul_div_floor(
@@ -148,7 +148,7 @@ pub struct PoolState<LiquidityProvider> {
 	/// This is the highest tick that represents a strictly lower price than the
 	/// current_sqrt_price. `current_tick` is the tick that when you swap ZeroToOne the
 	/// `current_sqrt_price` is moving towards (going down in literal value), and will cross when
-	/// `current_sqrt_price` reachs it. `current_tick + 1` is the tick the price is moving towards
+	/// `current_sqrt_price` reaches it. `current_tick + 1` is the tick the price is moving towards
 	/// (going up in literal value) when you swap OneToZero and will cross when
 	/// `current_sqrt_price` reaches it,
 	current_tick: Tick,
@@ -339,12 +339,6 @@ pub enum NewError {
 }
 
 #[derive(Debug)]
-pub enum SetFeesError {
-	/// Fee must be between 0 - 50%
-	InvalidFeeAmount,
-}
-
-#[derive(Debug)]
 pub enum MintError<E> {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
@@ -473,7 +467,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// fee is greater than 50%.
 	///
 	/// This function never panics
-	#[allow(dead_code)]
 	pub(super) fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
@@ -482,8 +475,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		Ok(())
 	}
 
-	fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2
+	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
+		fee_hundredth_pips <= MAX_LP_FEE
 	}
 
 	/// Returns the current sqrt price of the pool. None if the pool has no more liquidity and the
@@ -653,7 +646,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let (amounts_owed, current_liquidity_delta) =
 				self.inner_liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
 			// Will not underflow as current_liquidity_delta must have previously been added to
-			// current_liquidity for it to need to be substrated now
+			// current_liquidity for it to need to be subtracted now
 			self.current_liquidity -= current_liquidity_delta;
 
 			if lower_delta.liquidity_gross == 0 &&

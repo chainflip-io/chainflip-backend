@@ -99,13 +99,12 @@ impl RuntimeUpgradeMock {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 parameter_types! {
-	pub static NextCfeVersion: Option<SemVer> = Some(SemVer{major: 1, minor: 2, patch: 3});
 	pub static PercentCfeAtTargetVersion: Percent = Percent::from_percent(100);
 }
 
 pub struct MockAuthoritiesCfeVersions;
 impl AuthoritiesCfeVersions for MockAuthoritiesCfeVersions {
-	fn precent_authorities_at_version(_version: SemVer) -> Percent {
+	fn percent_authorities_compatible_with_version(_version: SemVer) -> Percent {
 		PercentCfeAtTargetVersion::get()
 	}
 }
@@ -114,9 +113,6 @@ pub struct MockCompatibleCfeVersions;
 impl CompatibleCfeVersions for MockCompatibleCfeVersions {
 	fn current_compatibility_version() -> SemVer {
 		SemVer { major: 1, minor: 0, patch: 0 }
-	}
-	fn next_compatibility_version() -> Option<SemVer> {
-		NextCfeVersion::get()
 	}
 }
 

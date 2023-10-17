@@ -214,8 +214,8 @@ pub trait OnAccountFunded {
 	type ValidatorId;
 	type Amount;
 
-	/// A callback that is triggered after some validator's balance has changed signigicantly,
-	/// either by funding it with more Flip, or by executing a redemption.
+	/// A callback that is triggered after some validator's balance has changed significantly,
+	/// either by funding it with more Flip, or by initiating/reverting a redemption.
 	///
 	/// Note this does not trigger on small changes like transaction fees.
 	///
@@ -634,13 +634,12 @@ pub trait FundingInfo {
 /// Allow pallets to open and expire deposit addresses.
 pub trait DepositApi<C: Chain> {
 	type AccountId;
-	type BlockNumber;
 
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
 	fn request_swap_deposit_address(
@@ -650,7 +649,7 @@ pub trait DepositApi<C: Chain> {
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
-	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber), DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -800,12 +799,11 @@ pub trait GetBlockHeight<C: Chain> {
 }
 pub trait CompatibleCfeVersions {
 	fn current_compatibility_version() -> SemVer;
-	fn next_compatibility_version() -> Option<SemVer>;
 }
 
 pub trait AuthoritiesCfeVersions {
 	/// Returns the percentage of current authorities with their CFEs at the given version.
-	fn precent_authorities_at_version(version: SemVer) -> Percent;
+	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent;
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {

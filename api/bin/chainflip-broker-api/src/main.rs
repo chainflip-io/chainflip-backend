@@ -12,6 +12,7 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use serde::{Deserialize, Serialize};
+use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -23,6 +24,7 @@ pub struct BrokerSwapDepositAddress {
 	pub address: String,
 	pub issued_block: BlockNumber,
 	pub channel_id: ChannelId,
+	pub source_chain_expiry_block: NumberOrHex,
 }
 
 impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
@@ -31,16 +33,17 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			address: value.address,
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
+			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
 		}
 	}
 }
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
-	#[method(name = "registerAccount")]
+	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
 	async fn register_account(&self) -> Result<String, AnyhowRpcError>;
 
-	#[method(name = "requestSwapDepositAddress")]
+	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,

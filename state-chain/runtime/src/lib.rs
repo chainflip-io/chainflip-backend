@@ -10,10 +10,7 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::Offence,
-	runtime_apis::{
-		AuctionState, BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
-		RuntimeApiPenalty,
-	},
+	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
 };
 use cf_amm::{
 	common::{Amount, Price, Tick},
@@ -24,13 +21,13 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, Polkadot,
+	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
 };
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -82,7 +79,9 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
+pub use cf_primitives::{
+	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
+};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
@@ -914,52 +913,35 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
-			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
-			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
-			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(&account_id);
-			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
-			let account_info_v1 = Self::cf_account_info(account_id.clone());
-			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
+
+		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
+			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
+		}
+
+		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
+			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
+			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
+			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
+			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
 			RuntimeApiAccountInfoV2 {
-				balance: account_info_v1.balance,
-				bond: account_info_v1.bond,
-				last_heartbeat: account_info_v1.last_heartbeat,
-				online_credits: account_info_v1.online_credits,
-				reputation_points: account_info_v1.reputation_points,
+				balance: account_info.total(),
+				bond: account_info.bond(),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
+				online_credits: reputation_info.online_credits,
+				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online: account_info_v1.is_live,
+				is_online: Reputation::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
-			}
-		}
-		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
-			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-
-			let get_validator_state = |account_id: &AccountId| -> ChainflipAccountStateWithPassive {
-				if Validator::current_authorities().contains(account_id) {
-					return ChainflipAccountStateWithPassive::CurrentAuthority;
-				}
-				if Validator::highest_funded_qualified_backup_nodes_lookup().contains(account_id) {
-					return ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup);
-				}
-				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)
-			};
-
-			RuntimeApiAccountInfo {
-				balance: account_info.total(),
-				bond: account_info.bond(),
-				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
-				is_live: Reputation::is_qualified(&account_id),
-				is_activated: pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id),
-				online_credits: reputation_info.online_credits,
-				reputation_points: reputation_info.reputation_points,
-				state: get_validator_state(&account_id),
+				restricted_balances,
 			}
 		}
 
@@ -1023,7 +1005,7 @@ impl_runtime_apis! {
 			LiquidityPools::pool_info(base_asset, pair_asset)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
 			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
 		}
 
@@ -1066,6 +1048,32 @@ impl_runtime_apis! {
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
+		}
+
+		fn cf_liquidity_provider_info(
+			account_id: AccountId,
+		) -> Option<LiquidityProviderInfo> {
+			let role = Self::cf_account_role(account_id.clone())?;
+			if role != AccountRole::LiquidityProvider {
+				return None;
+			}
+
+			let refund_addresses = ForeignChain::iter().map(|chain| {
+				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
+			}).collect();
+
+			let balances = Asset::all().iter().map(|&asset|
+				(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
+			).collect();
+
+			Some(LiquidityProviderInfo {
+				refund_addresses,
+				balances,
+			})
+		}
+
+		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
+			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
