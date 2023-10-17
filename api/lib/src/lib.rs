@@ -149,6 +149,7 @@ impl<
 		_call: RuntimeCall,
 		_at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
+		// TODO: PRO-917 fix dry run
 		Ok(Bytes::from(vec![]))
 	}
 }
