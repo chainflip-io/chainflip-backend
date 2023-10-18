@@ -7,8 +7,8 @@ use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	eth::retry_rpc::EthersRetryRpcClient,
 	health, p2p,
-	settings::{CommandLineOptions, Settings},
-	settings_migrate::migrate_settings0_9_2_to_0_9_3,
+	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
+	settings_migrate::migrate_settings0_9_3_to_0_10_0,
 	state_chain_observer::{
 		self,
 		client::{
@@ -25,7 +25,10 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+	path::PathBuf,
+	sync::{atomic::AtomicBool, Arc},
+};
 use tracing::info;
 use utilities::{
 	make_periodic_tick, metrics,
@@ -81,18 +84,28 @@ async fn main() -> anyhow::Result<()> {
 
 	let opts = CommandLineOptions::parse();
 
-	migrate_settings0_9_2_to_0_9_3(opts.config_root.clone())?;
+	let config_root_path = PathBuf::from(&opts.config_root);
 
-	let settings = Settings::new(opts).context("Error reading settings")?;
+	// the settings directory from opts.config_root that we'll use to read the settings file
+	let migrated_settings_dir = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
+
+	let settings = Settings::new_with_settings_dir(
+		migrated_settings_dir.unwrap_or(DEFAULT_SETTINGS_DIR),
+		opts,
+	)
+	.context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
-	utilities::print_start_and_end!(async run_main(settings));
+	utilities::print_start_and_end!(async run_main(settings, config_root_path, migrated_settings_dir));
 
 	Ok(())
 }
 
-async fn run_main(settings: Settings) -> anyhow::Result<()> {
+async fn run_main(
+	settings: Settings,
+	config_root_path: PathBuf,
+	migrated_settings_dir: Option<&str>,
 	task_scope(|scope| {
 		async move {
 			let mut start_logger_server_fn = Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
@@ -113,65 +126,34 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				)
 				.await?;
 
-			ensure_cfe_version_record_up_to_date(&state_chain_client, &state_chain_stream).await?;
 
-			// Use Option so we can take it out later without cloning (while inside a loop)
-			let mut stream_container = Some(state_chain_stream);
+			if *CFE_VERSION == (SemVer { major: 0, minor: 10, patch: 0 })
+			{
+				if let Some(migrated_settings_dir) = migrated_settings_dir {
+					// Back up the old settings.
+					std::fs::copy(
+						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.toml"),
+						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.backup-0.9.3.toml"),
+					)
+					.context("Unable to back up old settings. Please ensure the chainflip-engine has write permissions in the config directories.")?;
 
-			let mut poll_interval = make_periodic_tick(std::time::Duration::from_secs(6), true);
-			loop {
-				poll_interval.tick().await;
+					// Replace with the migrated settings.
+					std::fs::rename(
+						config_root_path.join(migrated_settings_dir).join("Settings.toml"),
+						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.toml"),
+					)
+					.context("Unable to replace old settings with migrated settings. Please ensure the chainflip-engine has write permissions in the config directories.")?;
 
-				let runtime_compatibility_version: SemVer = ws_rpc_client
-					.request("cf_current_compatibility_version", Vec::<()>::new())
-					.await
-					.unwrap();
-
-				let compatible =
-					CFE_VERSION.is_compatible_with(runtime_compatibility_version);
-
-				match cfe_status {
-					CfeStatus::Active(_) =>
-						if !compatible {
-							tracing::info!(
-								"Runtime version ({runtime_compatibility_version:?}) is no longer compatible, shutting down the engine!"
-							);
-							// This will exit the scope, dropping the handle and thus terminating
-							// the main task
-							break Err(anyhow::anyhow!("Incompatible runtime version"))
-						},
-					CfeStatus::Idle =>
-						if compatible {
-							start_logger_server_fn.take().expect("only called once")(scope);
-							tracing::info!("Runtime version ({runtime_compatibility_version:?}) is compatible, starting the engine!");
-
-							let settings = settings.clone();
-
-							let state_chain_stream = stream_container.take().expect("only called once");
-							let state_chain_client = state_chain_client.clone();
-							let handle = scope.spawn_with_handle(
-								task_scope(|scope| start(scope, settings, state_chain_stream, state_chain_client).boxed())
-							);
-
-							cfe_status = CfeStatus::Active(handle);
-						} else {
-							tracing::info!("Current runtime is not compatible with this CFE version ({:?})", *CFE_VERSION);
-						}
+					// Remove the migration dir.
+					std::fs::remove_dir_all(config_root_path.join(migrated_settings_dir))
+						.unwrap_or_else(|e| {
+							tracing::warn!(
+								"Unable to remove migration dir: {e:?}. Please remove it manually.",
+								e = e
+							)
+						});
 				}
 			}
-		}
-		.boxed()
-	})
-	.await
-}
-
-async fn start(
-	scope: &task_scope::Scope<'_, anyhow::Error>,
-	settings: Settings,
-	state_chain_stream: impl StateChainStreamApi + Clone,
-	state_chain_client: Arc<StateChainClient>,
-) -> anyhow::Result<()> {
-	let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
 	if let Some(health_check_settings) = &settings.health_check {
 		health::start(scope, health_check_settings, has_completed_initialising.clone()).await?;
