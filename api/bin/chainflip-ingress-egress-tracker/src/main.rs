@@ -27,7 +27,7 @@ async fn start(
 		.expect("setting default subscriber failed");
 	let mut module = RpcModule::new(());
 
-	let btc_tracker = witnessing::btc_mempool::start(scope).await;
+	let btc_tracker = witnessing::btc_mempool::start(scope, settings.btc.clone()).await;
 
 	module.register_async_method("status", move |arguments, _context| {
 		let btc_tracker = btc_tracker.clone();

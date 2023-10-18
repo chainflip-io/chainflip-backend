@@ -1,12 +1,12 @@
 use std::{
 	collections::{HashMap, HashSet},
-	env,
 	sync::{Arc, Mutex},
 	time::Duration,
 };
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use chainflip_engine::settings::HttpBasicAuthEndpoint;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tracing::{error, info};
 use utilities::task_scope;
@@ -97,7 +97,9 @@ trait BtcNode {
 	async fn getblock(&self, block_hash: BlockHash) -> anyhow::Result<Block>;
 }
 
-struct BtcRpc;
+struct BtcRpc {
+	settings: HttpBasicAuthEndpoint,
+}
 
 impl BtcRpc {
 	async fn call<T: DeserializeOwned>(
@@ -106,7 +108,6 @@ impl BtcRpc {
 		params: Vec<&str>,
 	) -> anyhow::Result<Vec<T>> {
 		info!("Calling {} with batch size of {}", method, params.len());
-		let url = env::var("BTC_ENDPOINT").unwrap_or("http://127.0.0.1:8332".to_string());
 		let body = params
 			.iter()
 			.map(|param| {
@@ -115,11 +116,9 @@ impl BtcRpc {
 			.collect::<Vec<String>>()
 			.join(",");
 
-		let username = env::var("BTC_USERNAME").unwrap_or("flip".to_string());
-		let password = env::var("BTC_PASSWORD").unwrap_or("flip".to_string());
 		reqwest::Client::new()
-			.post(url)
-			.basic_auth(username, Some(password))
+			.post(self.settings.http_endpoint.as_ref())
+			.basic_auth(&self.settings.basic_auth_user, Some(&self.settings.basic_auth_password))
 			.header("Content-Type", "text/plain")
 			.body(format!("[{}]", body))
 			.send()
@@ -174,7 +173,7 @@ impl BtcNode for BtcRpc {
 	}
 }
 
-async fn get_updated_cache<T: BtcNode>(btc: T, previous_cache: Cache) -> anyhow::Result<Cache> {
+async fn get_updated_cache<T: BtcNode>(btc: &T, previous_cache: Cache) -> anyhow::Result<Cache> {
 	let all_mempool_transactions: Vec<TxHash> = btc.getrawmempool().await?;
 	let mut new_transactions: HashMap<Address, QueryResult> = Default::default();
 	let mut new_known_tx_hashes: HashSet<TxHash> = Default::default();
@@ -293,17 +292,21 @@ impl BtcTracker {
 	}
 }
 
-pub async fn start(scope: &task_scope::Scope<'_, anyhow::Error>) -> BtcTracker {
+pub async fn start(
+	scope: &task_scope::Scope<'_, anyhow::Error>,
+	endpoint: HttpBasicAuthEndpoint,
+) -> BtcTracker {
 	let cache: Arc<Mutex<Cache>> = Default::default();
 	scope.spawn({
 		let cache = cache.clone();
 		async move {
+			let btc_rpc = BtcRpc { settings: endpoint };
 			let mut interval = tokio::time::interval(Duration::from_secs(REFRESH_INTERVAL));
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 			loop {
 				interval.tick().await;
 				let cache_copy = cache.lock().unwrap().clone();
-				match get_updated_cache(BtcRpc, cache_copy).await {
+				match get_updated_cache(&btc_rpc, cache_copy).await {
 					Ok(updated_cache) => {
 						let mut cache = cache.lock().unwrap();
 						*cache = updated_cache;
@@ -387,7 +390,7 @@ mod tests {
 		}
 		let btc = MockBtcRpc { mempool, latest_block_hash, blocks };
 		let cache: Cache = Default::default();
-		let cache = get_updated_cache(btc, cache).await.unwrap();
+		let cache = get_updated_cache(&btc, cache).await.unwrap();
 		let result = lookup_transactions(&cache, &["address1".into(), "address2".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
@@ -421,7 +424,7 @@ mod tests {
 		}
 		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
 		let cache: Cache = Default::default();
-		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+		let cache = get_updated_cache(&btc, cache).await.unwrap();
 		let result =
 			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
 				.unwrap();
@@ -436,7 +439,7 @@ mod tests {
 				script_pub_key: ScriptPubKey { address: Some("address3".into()) },
 			}],
 		}]);
-		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
+		let cache = get_updated_cache(&btc, cache.clone()).await.unwrap();
 		let result =
 			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
 				.unwrap();
@@ -445,7 +448,7 @@ mod tests {
 		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
 
 		btc.mempool.remove(0);
-		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
+		let cache = get_updated_cache(&btc, cache.clone()).await.unwrap();
 		let result =
 			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
 				.unwrap();
@@ -480,13 +483,13 @@ mod tests {
 		);
 		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
 		let cache: Cache = Default::default();
-		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+		let cache = get_updated_cache(&btc, cache).await.unwrap();
 		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 1);
 
 		btc.latest_block_hash = "16".to_string();
-		let cache = get_updated_cache(btc.clone(), cache.clone()).await.unwrap();
+		let cache = get_updated_cache(&btc, cache.clone()).await.unwrap();
 		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 2);
@@ -524,7 +527,7 @@ mod tests {
 		);
 		let btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
 		let cache: Cache = Default::default();
-		let cache = get_updated_cache(btc.clone(), cache).await.unwrap();
+		let cache = get_updated_cache(&btc, cache).await.unwrap();
 		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
 		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 3);
