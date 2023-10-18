@@ -323,6 +323,8 @@ pub mod pallet {
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 		/// The refund for broadcasting an transaction has been recorded.
 		ValidatorRefundRecorded { validator_id: SignerIdFor<T, I>, amount: ChainAmountFor<T, I> },
+		/// The refund for broadcasting an transaction has been refused.
+		ValidatorRefundRefused { validator_id: SignerIdFor<T, I> },
 	}
 
 	#[pallet::error]
@@ -461,6 +463,9 @@ pub mod pallet {
 				FailedBroadcasters::<T, I>::remove(
 					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
 				);
+				TransactionMetaData::<T, I>::remove(
+					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				);
 				Self::deposit_event(Event::<T, I>::BroadcastAborted {
 					broadcast_id: signing_attempt
 						.broadcast_attempt
@@ -550,7 +555,7 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
-			if let Some(expected_tx_metadata) = TransactionMetaData::<T, I>::get(broadcast_id) {
+			if let Some(expected_tx_metadata) = TransactionMetaData::<T, I>::take(broadcast_id) {
 				if T::TransactionMetaDataHandler::verify_metadata(
 					&tx_metadata,
 					&expected_tx_metadata,
@@ -573,6 +578,9 @@ pub mod pallet {
 						amount: to_refund,
 					});
 				} else {
+					Self::deposit_event(Event::<T, I>::ValidatorRefundRefused {
+						validator_id: signer_id,
+					});
 					log::warn!(
 						"Transaction metadata verification failed for broadcast {}. Validator can not get refunded.",
 						broadcast_id

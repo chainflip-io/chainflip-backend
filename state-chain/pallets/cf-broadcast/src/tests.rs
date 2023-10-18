@@ -552,3 +552,29 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
 	});
 }
+
+#[test]
+fn transaction_succeeded_results_in_refund_refuse_for_signer() {
+	new_test_ext().execute_with(|| {
+		MockTransactionMetaDataHandler::set_valid(false);
+		let _ = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
+		let nominee = MockNominator::get_last_nominee().unwrap();
+
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			MOCK_TRANSACTION_OUT_ID,
+			nominee,
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+		));
+
+		assert_eq!(
+			System::events().get(1).expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::ValidatorRefundRefused {
+				validator_id: Default::default(),
+			})
+		);
+	});
+}

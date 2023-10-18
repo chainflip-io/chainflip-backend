@@ -86,6 +86,7 @@ pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
+	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
 
 pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
@@ -147,7 +148,13 @@ impl TransactionMetaDataHandler<MockEthereum> for MockTransactionMetaDataHandler
 		_metadata: &<MockEthereum as Chain>::TransactionMetaData,
 		_expected_metadata: &<MockEthereum as Chain>::TransactionMetaData,
 	) -> bool {
-		true
+		VALID_METADATA.with(|cell| *cell.borrow())
+	}
+}
+
+impl MockTransactionMetaDataHandler {
+	pub fn set_valid(valid: bool) {
+		VALID_METADATA.with(|cell| *cell.borrow_mut() = valid);
 	}
 }
 

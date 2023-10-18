@@ -134,7 +134,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 							let transaction = eth_rpc.get_transaction(event.tx_hash).await;
 							let tx_metadata = TransactionMetadata {
-								contract: to.expect("To have an contract"),
+								contract: to.expect("To have a contract"),
 								max_fee_per_gas: transaction.max_fee_per_gas,
 								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
 								gas_limit: Some(transaction.gas),
