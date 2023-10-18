@@ -289,6 +289,12 @@ checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
 name = "array-bytes"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f52f63c5c1316a16a4b35eaac8b76a98248961a533f061684cb2a7cb0eafb6c6"
+
+[[package]]
+name = "array-bytes"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9b1c5a481ec30a5abd8dfbd94ab5cf1bb4e9a66be7f1b3b322f2f1170c200fd"
@@ -1112,7 +1118,7 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "serde",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "utilities",
 ]
@@ -1141,8 +1147,8 @@ dependencies = [
  "rlp",
  "scale-info",
  "serde",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "ss58-registry",
  "utilities",
@@ -1196,10 +1202,10 @@ dependencies = [
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
  "sp-offchain",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-session",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-timestamp",
@@ -1218,8 +1224,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -1239,7 +1245,7 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "log",
- "sp-io",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -1251,8 +1257,8 @@ dependencies = [
  "frame-support",
  "log",
  "parity-scale-codec",
- "sp-io",
- "sp-runtime",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -1265,7 +1271,7 @@ dependencies = [
  "frame-system",
  "pallet-session",
  "rand 0.8.5",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -1277,9 +1283,9 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -1294,8 +1300,8 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-io",
- "sp-runtime",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -1380,7 +1386,7 @@ dependencies = [
  "serde",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "state-chain-runtime",
  "tiny-bip39",
  "tokio",
@@ -1509,9 +1515,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.7",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-rpc",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
  "state-chain-runtime",
  "substrate-build-script-utils",
@@ -1593,11 +1599,11 @@ dependencies = [
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-io",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-keyring",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-timestamp",
  "state-chain-runtime",
  "substrate-build-script-utils",
@@ -2328,9 +2334,9 @@ dependencies = [
  "sc-rpc-api",
  "serde",
  "sp-api",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-rpc",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "state-chain-runtime",
  "utilities",
 ]
@@ -3657,13 +3663,13 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-runtime-interface",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime-interface 17.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-storage",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "static_assertions",
 ]
 
@@ -3673,7 +3679,7 @@ version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "Inflector",
- "array-bytes",
+ "array-bytes 6.1.0",
  "chrono",
  "clap 4.3.21",
  "comfy-table",
@@ -3700,17 +3706,17 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-database",
- "sp-externalities",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-io",
- "sp-keystore",
- "sp-runtime",
- "sp-state-machine",
- "sp-storage",
- "sp-trie",
- "sp-wasm-interface",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-wasm-interface 14.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "thousands",
 ]
@@ -3725,11 +3731,11 @@ dependencies = [
  "frame-try-runtime",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-tracing",
+ "sp-tracing 10.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -3767,9 +3773,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "spinners",
  "substrate-rpc-client",
  "tokio",
@@ -3797,19 +3803,19 @@ dependencies = [
  "serde_json",
  "smallvec",
  "sp-api",
- "sp-arithmetic",
- "sp-core",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-core-hashing-proc-macro",
- "sp-debug-derive",
+ "sp-debug-derive 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-genesis-builder",
  "sp-inherents",
- "sp-io",
- "sp-runtime",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-staking",
- "sp-state-machine",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-tracing",
- "sp-weights",
+ "sp-tracing 10.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-weights 20.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "tt-call",
 ]
 
@@ -3864,12 +3870,12 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
- "sp-weights",
+ "sp-weights 20.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -3882,8 +3888,8 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -3904,7 +3910,7 @@ dependencies = [
  "frame-support",
  "parity-scale-codec",
  "sp-api",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -6453,8 +6459,8 @@ dependencies = [
  "secp256k1 0.27.0",
  "serde",
  "sha2 0.9.9",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "state-chain-runtime",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -6988,9 +6994,9 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-consensus-aura",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7004,7 +7010,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7022,9 +7028,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7043,9 +7049,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7064,9 +7070,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7086,10 +7092,10 @@ dependencies = [
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7110,9 +7116,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7131,9 +7137,9 @@ dependencies = [
  "quickcheck",
  "quickcheck_macros",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7153,9 +7159,9 @@ dependencies = [
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7172,9 +7178,9 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
 ]
@@ -7196,9 +7202,9 @@ dependencies = [
  "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7218,9 +7224,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7239,10 +7245,10 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7262,9 +7268,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-staking",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
@@ -7284,10 +7290,10 @@ dependencies = [
  "pallet-cf-account-roles",
  "parity-scale-codec",
  "scale-info",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7310,9 +7316,9 @@ dependencies = [
  "pallet-cf-validator",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7331,9 +7337,9 @@ dependencies = [
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7357,10 +7363,10 @@ dependencies = [
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "utilities",
 ]
@@ -7382,9 +7388,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "utilities",
 ]
@@ -7403,9 +7409,9 @@ dependencies = [
  "hex",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "utilities",
 ]
@@ -7423,11 +7429,11 @@ dependencies = [
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-consensus-grandpa",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-session",
  "sp-staking",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
@@ -7445,13 +7451,13 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-session",
  "sp-staking",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-trie",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -7466,8 +7472,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-inherents",
- "sp-io",
- "sp-runtime",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-timestamp",
 ]
@@ -7482,9 +7488,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -7498,10 +7504,10 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-blockchain",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-rpc",
- "sp-runtime",
- "sp-weights",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-weights 20.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -7512,8 +7518,8 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sp-api",
- "sp-runtime",
- "sp-weights",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-weights 20.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9026,8 +9032,8 @@ version = "4.1.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "log",
- "sp-core",
- "sp-wasm-interface",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-wasm-interface 14.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -9048,9 +9054,9 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
 ]
 
@@ -9064,9 +9070,9 @@ dependencies = [
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9083,9 +9089,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
- "sp-state-machine",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9104,7 +9110,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "chrono",
  "clap 4.3.21",
  "fdlimit",
@@ -9127,11 +9133,11 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-blockchain",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-keyring",
- "sp-keystore",
- "sp-panic-handler",
- "sp-runtime",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-panic-handler 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
  "thiserror",
  "tiny-bip39",
@@ -9154,13 +9160,13 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-database",
- "sp-externalities",
- "sp-runtime",
- "sp-state-machine",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-statement-store",
- "sp-storage",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
 ]
 
@@ -9181,13 +9187,13 @@ dependencies = [
  "sc-client-api",
  "sc-state-db",
  "schnellru",
- "sp-arithmetic",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-blockchain",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-database",
- "sp-runtime",
- "sp-state-machine",
- "sp-trie",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9208,9 +9214,9 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
- "sp-core",
- "sp-runtime",
- "sp-state-machine",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -9230,16 +9236,16 @@ dependencies = [
  "sc-consensus-slots",
  "sc-telemetry",
  "sp-api",
- "sp-application-crypto",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-slots",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-keystore",
- "sp-runtime",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -9250,7 +9256,7 @@ version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "ahash 0.8.3",
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-trait",
  "dyn-clone",
  "finality-grandpa",
@@ -9273,14 +9279,14 @@ dependencies = [
  "sc-utils",
  "serde_json",
  "sp-api",
- "sp-application-crypto",
- "sp-arithmetic",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-core",
- "sp-keystore",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -9300,8 +9306,8 @@ dependencies = [
  "sc-rpc",
  "serde",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -9318,14 +9324,14 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-telemetry",
- "sp-arithmetic",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-runtime",
- "sp-state-machine",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9339,14 +9345,14 @@ dependencies = [
  "sc-executor-wasmtime",
  "schnellru",
  "sp-api",
- "sp-core",
- "sp-externalities",
- "sp-io",
- "sp-panic-handler",
- "sp-runtime-interface",
- "sp-trie",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-panic-handler 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime-interface 17.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
- "sp-wasm-interface",
+ "sp-wasm-interface 14.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "tracing",
 ]
 
@@ -9357,7 +9363,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 dependencies = [
  "sc-allocator",
  "sp-maybe-compressed-blob",
- "sp-wasm-interface",
+ "sp-wasm-interface 14.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "wasm-instrument",
 ]
@@ -9374,8 +9380,8 @@ dependencies = [
  "rustix 0.36.15",
  "sc-allocator",
  "sc-executor-common",
- "sp-runtime-interface",
- "sp-wasm-interface",
+ "sp-runtime-interface 17.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-wasm-interface 14.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "wasmtime",
 ]
 
@@ -9392,7 +9398,7 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "sp-blockchain",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9400,12 +9406,12 @@ name = "sc-keystore"
 version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "parking_lot 0.12.1",
  "serde_json",
- "sp-application-crypto",
- "sp-core",
- "sp-keystore",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -9414,7 +9420,7 @@ name = "sc-network"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "async-trait",
  "asynchronous-codec",
@@ -9439,10 +9445,10 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
- "sp-arithmetic",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
  "thiserror",
  "unsigned-varint",
@@ -9465,7 +9471,7 @@ dependencies = [
  "sc-client-api",
  "sc-network",
  "sp-blockchain",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "unsigned-varint",
 ]
@@ -9484,7 +9490,7 @@ dependencies = [
  "sc-consensus",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9500,7 +9506,7 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "schnellru",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
  "tracing",
 ]
@@ -9510,7 +9516,7 @@ name = "sc-network-light"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "futures",
  "libp2p-identity",
@@ -9521,8 +9527,8 @@ dependencies = [
  "sc-client-api",
  "sc-network",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -9531,7 +9537,7 @@ name = "sc-network-sync"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "async-channel",
  "async-trait",
  "fork-tree",
@@ -9550,12 +9556,12 @@ dependencies = [
  "sc-utils",
  "schnellru",
  "smallvec",
- "sp-arithmetic",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -9565,7 +9571,7 @@ name = "sc-network-transactions"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "futures",
  "libp2p",
  "log",
@@ -9574,7 +9580,7 @@ dependencies = [
  "sc-network-common",
  "sc-utils",
  "sp-consensus",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-prometheus-endpoint",
 ]
 
@@ -9583,7 +9589,7 @@ name = "sc-offchain"
 version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "bytes",
  "fnv",
  "futures",
@@ -9603,11 +9609,11 @@ dependencies = [
  "sc-transaction-pool-api",
  "sc-utils",
  "sp-api",
- "sp-core",
- "sp-externalities",
- "sp-keystore",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-offchain",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "threadpool",
  "tracing",
 ]
@@ -9641,11 +9647,11 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
- "sp-core",
- "sp-keystore",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-offchain",
  "sp-rpc",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-session",
  "sp-statement-store",
  "sp-version",
@@ -9664,9 +9670,9 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-rpc",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
  "thiserror",
 ]
@@ -9691,7 +9697,7 @@ name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "futures",
  "futures-util",
  "hex",
@@ -9705,8 +9711,8 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
  "thiserror",
  "tokio-stream",
@@ -9756,16 +9762,16 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
- "sp-core",
- "sp-externalities",
- "sp-keystore",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-session",
- "sp-state-machine",
- "sp-storage",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
- "sp-trie",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
  "static_init",
  "substrate-prometheus-endpoint",
@@ -9784,7 +9790,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -9801,8 +9807,8 @@ dependencies = [
  "sc-telemetry",
  "serde",
  "serde_json",
- "sp-core",
- "sp-io",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -9844,10 +9850,10 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-blockchain",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-rpc",
- "sp-runtime",
- "sp-tracing",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-tracing 10.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "tracing",
  "tracing-log",
@@ -9883,9 +9889,9 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
- "sp-tracing",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-tracing 10.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-transaction-pool",
  "substrate-prometheus-endpoint",
  "thiserror",
@@ -9902,8 +9908,8 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -9919,7 +9925,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "prometheus",
- "sp-arithmetic",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -10684,13 +10690,13 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-api-proc-macro",
- "sp-core",
- "sp-externalities",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-metadata-ir",
- "sp-runtime",
- "sp-state-machine",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-trie",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version",
  "thiserror",
 ]
@@ -10712,14 +10718,43 @@ dependencies = [
 [[package]]
 name = "sp-application-crypto"
 version = "23.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "899492ea547816d5dfe9a5a2ecc32f65a7110805af6da3380aa4902371b31dc2"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-io 23.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sp-application-crypto"
+version = "23.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-io",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+]
+
+[[package]]
+name = "sp-arithmetic"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb6020576e544c6824a51d651bc8df8e6ab67cd59f1c9ac09868bb81a5199ded"
+dependencies = [
+ "integer-sqrt",
+ "num-traits",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "static_assertions",
 ]
 
 [[package]]
@@ -10743,7 +10778,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 dependencies = [
  "sp-api",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -10760,8 +10795,8 @@ dependencies = [
  "sp-api",
  "sp-consensus",
  "sp-database",
- "sp-runtime",
- "sp-state-machine",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -10773,10 +10808,10 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-runtime",
- "sp-state-machine",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -10789,10 +10824,10 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-api",
- "sp-application-crypto",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-consensus-slots",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-timestamp",
 ]
@@ -10807,11 +10842,11 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-api",
- "sp-application-crypto",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-consensus-slots",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-timestamp",
 ]
@@ -10827,10 +10862,10 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-keystore",
- "sp-runtime",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -10849,9 +10884,54 @@ dependencies = [
 [[package]]
 name = "sp-core"
 version = "21.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f18d9e2f67d8661f9729f35347069ac29d92758b59135176799db966947a7336"
+dependencies = [
+ "array-bytes 4.2.0",
+ "bitflags 1.3.2",
+ "blake2",
+ "bounded-collections",
+ "bs58 0.4.0",
+ "dyn-clonable",
+ "ed25519-zebra",
+ "futures",
+ "hash-db 0.16.0",
+ "hash256-std-hasher",
+ "impl-serde",
+ "lazy_static",
+ "libsecp256k1",
+ "log",
+ "merlin 2.0.1",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "paste",
+ "primitive-types",
+ "rand 0.8.5",
+ "regex",
+ "scale-info",
+ "schnorrkel 0.9.1",
+ "secp256k1 0.24.3",
+ "secrecy",
+ "serde",
+ "sp-core-hashing 9.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-debug-derive 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-externalities 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime-interface 17.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-storage 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ss58-registry",
+ "substrate-bip39",
+ "thiserror",
+ "tiny-bip39",
+ "zeroize",
+]
+
+[[package]]
+name = "sp-core"
+version = "21.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
- "array-bytes",
+ "array-bytes 6.1.0",
  "bitflags 1.3.2",
  "blake2",
  "bounded-collections",
@@ -10878,11 +10958,11 @@ dependencies = [
  "secrecy",
  "serde",
  "sp-core-hashing 9.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-debug-derive",
- "sp-externalities",
- "sp-runtime-interface",
+ "sp-debug-derive 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime-interface 17.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-storage",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "ss58-registry",
  "substrate-bip39",
  "thiserror",
@@ -10941,6 +11021,17 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f531814d2f16995144c74428830ccf7d94ff4a7749632b83ad8199b181140c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "sp-debug-derive"
+version = "8.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "proc-macro2",
@@ -10951,12 +11042,24 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0f71c671e01a8ca60da925d43a1b351b69626e268b8837f8371e320cf1dd100"
+dependencies = [
+ "environmental",
+ "parity-scale-codec",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-storage 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sp-externalities"
+version = "0.19.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "environmental",
  "parity-scale-codec",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-storage",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -10966,7 +11069,7 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 dependencies = [
  "serde_json",
  "sp-api",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -10979,9 +11082,36 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
+]
+
+[[package]]
+name = "sp-io"
+version = "23.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d597e35a9628fe7454b08965b2442e3ec0f264b0a90d41328e87422cec02e99"
+dependencies = [
+ "bytes",
+ "ed25519",
+ "ed25519-dalek",
+ "futures",
+ "libsecp256k1",
+ "log",
+ "parity-scale-codec",
+ "rustversion",
+ "secp256k1 0.24.3",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-externalities 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-keystore 0.27.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime-interface 17.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-state-machine 0.28.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-tracing 10.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-trie 22.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "tracing-core",
 ]
 
 [[package]]
@@ -10997,14 +11127,14 @@ dependencies = [
  "parity-scale-codec",
  "rustversion",
  "secp256k1 0.24.3",
- "sp-core",
- "sp-externalities",
- "sp-keystore",
- "sp-runtime-interface",
- "sp-state-machine",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime-interface 17.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-tracing",
- "sp-trie",
+ "sp-tracing 10.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "tracing",
  "tracing-core",
 ]
@@ -11015,9 +11145,23 @@ version = "24.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "lazy_static",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "strum 0.24.1",
+]
+
+[[package]]
+name = "sp-keystore"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9be3cdd67cc1d9c1db17c5cbc4ec4924054a8437009d167f21f6590797e4aa45"
+dependencies = [
+ "futures",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-externalities 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror",
 ]
 
 [[package]]
@@ -11027,8 +11171,8 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "sp-core",
- "sp-externalities",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
 ]
 
@@ -11058,8 +11202,19 @@ version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "sp-api",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+]
+
+[[package]]
+name = "sp-panic-handler"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebd2de46003fa8212426838ca71cd42ee36a26480ba9ffea983506ce03131033"
+dependencies = [
+ "backtrace",
+ "lazy_static",
+ "regex",
 ]
 
 [[package]]
@@ -11079,7 +11234,30 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 dependencies = [
  "rustc-hash",
  "serde",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+]
+
+[[package]]
+name = "sp-runtime"
+version = "24.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21c5bfc764a1a8259d7e8f7cfd22c84006275a512c958d3ff966c92151e134d5"
+dependencies = [
+ "either",
+ "hash256-std-hasher",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "paste",
+ "rand 0.8.5",
+ "scale-info",
+ "serde",
+ "sp-application-crypto 23.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-arithmetic 16.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-io 23.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-weights 20.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -11096,12 +11274,31 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "serde",
- "sp-application-crypto",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-weights",
+ "sp-weights 20.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+]
+
+[[package]]
+name = "sp-runtime-interface"
+version = "17.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e676128182f90015e916f806cba635c8141e341e7abbc45d25525472e1bbce8"
+dependencies = [
+ "bytes",
+ "impl-trait-for-tuples",
+ "parity-scale-codec",
+ "primitive-types",
+ "sp-externalities 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime-interface-proc-macro 11.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-storage 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-tracing 10.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-wasm-interface 14.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "static_assertions",
 ]
 
 [[package]]
@@ -11113,13 +11310,26 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "primitive-types",
- "sp-externalities",
- "sp-runtime-interface-proc-macro",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime-interface-proc-macro 11.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-storage",
- "sp-tracing",
- "sp-wasm-interface",
+ "sp-storage 13.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-tracing 10.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-wasm-interface 14.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "static_assertions",
+]
+
+[[package]]
+name = "sp-runtime-interface-proc-macro"
+version = "11.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d5bd5566fe5633ec48dfa35ab152fd29f8a577c21971e1c6db9f28afb9bbb9"
+dependencies = [
+ "Inflector",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
 ]
 
 [[package]]
@@ -11142,9 +11352,9 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-api",
- "sp-core",
- "sp-keystore",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-staking",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
@@ -11158,9 +11368,30 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+]
+
+[[package]]
+name = "sp-state-machine"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ef45d31f9e7ac648f8899a0cd038a3608f8499028bff55b6c799702592325b6"
+dependencies = [
+ "hash-db 0.16.0",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "smallvec",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-externalities 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-panic-handler 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-trie 22.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -11174,11 +11405,11 @@ dependencies = [
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "smallvec",
- "sp-core",
- "sp-externalities",
- "sp-panic-handler",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-panic-handler 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-trie",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "tracing",
  "trie-db",
@@ -11198,11 +11429,11 @@ dependencies = [
  "scale-info",
  "sha2 0.10.7",
  "sp-api",
- "sp-application-crypto",
- "sp-core",
- "sp-externalities",
- "sp-runtime",
- "sp-runtime-interface",
+ "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime-interface 17.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "x25519-dalek 2.0.0-pre.1",
@@ -11222,13 +11453,27 @@ source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthl
 [[package]]
 name = "sp-storage"
 version = "13.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94294be83f11d4958cfea89ed5798f0b6605f5defc3a996948848458abbcc18e"
+dependencies = [
+ "impl-serde",
+ "parity-scale-codec",
+ "ref-cast",
+ "serde",
+ "sp-debug-derive 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sp-storage"
+version = "13.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
  "ref-cast",
  "serde",
- "sp-debug-derive",
+ "sp-debug-derive 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -11240,9 +11485,22 @@ dependencies = [
  "async-trait",
  "parity-scale-codec",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
+]
+
+[[package]]
+name = "sp-tracing"
+version = "10.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357f7591980dd58305956d32f8f6646d0a8ea9ea0e7e868e46f53b68ddf00cec"
+dependencies = [
+ "parity-scale-codec",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -11263,7 +11521,7 @@ version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "sp-api",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -11274,11 +11532,35 @@ dependencies = [
  "async-trait",
  "parity-scale-codec",
  "scale-info",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
- "sp-trie",
+ "sp-trie 22.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+]
+
+[[package]]
+name = "sp-trie"
+version = "22.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48e4eeb7ef23f79eba8609db79ef9cef242f994f1f87a3c0387b4b5f177fda74"
+dependencies = [
+ "ahash 0.8.3",
+ "hash-db 0.16.0",
+ "hashbrown 0.13.2",
+ "lazy_static",
+ "memory-db",
+ "nohash-hasher",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "scale-info",
+ "schnellru",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror",
+ "tracing",
+ "trie-db",
+ "trie-root",
 ]
 
 [[package]]
@@ -11296,7 +11578,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "scale-info",
  "schnellru",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "thiserror",
  "tracing",
@@ -11315,7 +11597,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-core-hashing-proc-macro",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-version-proc-macro",
  "thiserror",
@@ -11335,6 +11617,20 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "14.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19c122609ca5d8246be6386888596320d03c7bc880959eaa2c36bcd5acd6846"
+dependencies = [
+ "anyhow",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmtime",
+]
+
+[[package]]
+name = "sp-wasm-interface"
+version = "14.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "anyhow",
@@ -11348,15 +11644,31 @@ dependencies = [
 [[package]]
 name = "sp-weights"
 version = "20.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45d084c735544f70625b821c3acdbc7a2fc1893ca98b85f1942631284692c75b"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-arithmetic 16.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-debug-derive 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-std 8.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sp-weights"
+version = "20.0.0"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2#fdf882fbc3bd18af7f35c11dcfeb42e7a61b4f8f"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
  "smallvec",
- "sp-arithmetic",
- "sp-core",
- "sp-debug-derive",
+ "sp-arithmetic 16.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-debug-derive 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
@@ -11478,10 +11790,10 @@ dependencies = [
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
- "sp-core",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
  "sp-offchain",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-session",
  "sp-std 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-transaction-pool",
@@ -11645,8 +11957,8 @@ dependencies = [
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core",
- "sp-runtime",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -11671,7 +11983,7 @@ dependencies = [
  "log",
  "sc-rpc-api",
  "serde",
- "sp-runtime",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
 ]
 
 [[package]]
@@ -11737,7 +12049,9 @@ dependencies = [
  "scale-value",
  "serde",
  "serde_json",
+ "sp-core 21.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-core-hashing 9.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-runtime 24.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "subxt-lightclient",
  "subxt-macro",
  "subxt-metadata",
@@ -12585,19 +12899,19 @@ dependencies = [
  "sp-api",
  "sp-consensus-aura",
  "sp-consensus-babe",
- "sp-core",
- "sp-debug-derive",
- "sp-externalities",
+ "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-debug-derive 8.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-externalities 0.19.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-inherents",
- "sp-io",
- "sp-keystore",
+ "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-keystore 0.27.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-rpc",
- "sp-runtime",
- "sp-state-machine",
+ "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
+ "sp-state-machine 0.28.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "sp-timestamp",
  "sp-transaction-storage-proof",
  "sp-version",
- "sp-weights",
+ "sp-weights 20.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "substrate-rpc-client",
  "zstd 0.12.4",
 ]

@@ -190,7 +190,7 @@ impl pallet_cf_validator::Config for Runtime {
 }
 
 parameter_types! {
-	pub CurrentCompatibilityVersion: SemVer = SemVer {
+	pub CurrentReleaseVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
@@ -203,7 +203,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = RuntimeSafeMode;
-	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
+	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -885,8 +885,7 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_current_compatibility_version() -> SemVer {
-			use cf_traits::CompatibleCfeVersions;
-			Environment::current_compatibility_version()
+			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()
