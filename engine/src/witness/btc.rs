@@ -1,6 +1,6 @@
 mod btc_chain_tracking;
 mod btc_deposits;
-mod btc_source;
+pub mod btc_source;
 
 use std::sync::Arc;
 

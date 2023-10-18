@@ -1,4 +1,4 @@
-use chainflip_engine::settings::WsHttpEndpoints;
+use chainflip_engine::settings::{HttpBasicAuthEndpoint, WsHttpEndpoints};
 use futures::FutureExt;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
 use std::{env, io::Write, net::SocketAddr, path::PathBuf};
@@ -14,6 +14,7 @@ pub struct DepositTrackerSettings {
 	eth_key_path: PathBuf,
 	dot_node: WsHttpEndpoints,
 	state_chain_ws_endpoint: String,
+	btc: HttpBasicAuthEndpoint,
 }
 
 async fn start(
@@ -26,7 +27,7 @@ async fn start(
 		.expect("setting default subscriber failed");
 	let mut module = RpcModule::new(());
 
-	let btc_tracker = witnessing::btc::start(scope).await;
+	let btc_tracker = witnessing::btc_mempool::start(scope).await;
 
 	module.register_async_method("status", move |arguments, _context| {
 		let btc_tracker = btc_tracker.clone();
@@ -109,6 +110,13 @@ async fn main() -> anyhow::Result<()> {
 		},
 		state_chain_ws_endpoint: env::var("SC_WS_ENDPOINT")
 			.unwrap_or("ws://localhost:9944".to_string()),
+		btc: HttpBasicAuthEndpoint {
+			http_endpoint: env::var("BTC_ENDPOINT")
+				.unwrap_or("http://127.0.0.1:8332".to_string())
+				.into(),
+			basic_auth_user: env::var("BTC_USERNAME").unwrap_or("flip".to_string()),
+			basic_auth_password: env::var("BTC_PASSWORD").unwrap_or("flip".to_string()),
+		},
 	};
 
 	task_scope::task_scope(|scope| async move { start(scope, settings).await }.boxed()).await
