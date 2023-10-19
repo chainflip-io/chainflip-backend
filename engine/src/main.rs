@@ -190,7 +190,11 @@ async fn main() -> anyhow::Result<()> {
 
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
-					settings.signing.db_file.as_path(),
+					&if settings.signing.db_file.is_absolute() {
+						settings.signing.db_file
+					} else {
+						config_root_path.join(&settings.signing.db_file)
+					},
 					Some(state_chain_client.genesis_hash()),
 				)
 				.context("Failed to open database")?,
