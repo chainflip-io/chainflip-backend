@@ -9,8 +9,9 @@ use crate::{
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
-		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockThresholdSignature,
-		MockTransaction, MockTransactionBuilder, ETH_TX_FEE, MOCK_TX_METADATA,
+		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockEthereumTransactionMetadata,
+		MockThresholdSignature, MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
+		MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -556,7 +557,7 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 #[test]
 fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 	new_test_ext().execute_with(|| {
-		MockTransactionMetaDataHandler::set_valid(false);
+		MockEthereumTransactionMetadata::set_valid(false);
 		let _ = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 		let nominee = MockNominator::get_last_nominee().unwrap();
 

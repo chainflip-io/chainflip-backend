@@ -17,11 +17,9 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::{BitcoinCrypto, BitcoinTransactionMetaDataHandler},
-	dot::{self, PolkadotCrypto, PolkadotTransactionMetaDataHandler},
-	eth::{
-		self, api::EthereumApi, Address as EthereumAddress, EthTransactionMetaDataHandler, Ethereum,
-	},
+	btc::BitcoinCrypto,
+	dot::{self, PolkadotCrypto},
+	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
 };
@@ -667,7 +665,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = EthereumVault;
-	type TransactionMetaDataHandler = EthTransactionMetaDataHandler;
 	type ChainTracking = EthereumChainTracking;
 }
 
@@ -691,7 +688,6 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = PolkadotVault;
-	type TransactionMetaDataHandler = PolkadotTransactionMetaDataHandler;
 	type ChainTracking = PolkadotChainTracking;
 }
 
@@ -715,7 +711,6 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = BitcoinVault;
-	type TransactionMetaDataHandler = BitcoinTransactionMetaDataHandler;
 	type ChainTracking = BitcoinChainTracking;
 }
 

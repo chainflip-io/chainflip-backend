@@ -130,7 +130,11 @@ pub trait Chain: Member + Parameter {
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 
-	type TransactionMetaData: Member + Parameter + BenchmarkValue + Default;
+	type TransactionMetaData: Member
+		+ Parameter
+		+ TransactionMetaDataHandler<Self>
+		+ BenchmarkValue
+		+ Default;
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;

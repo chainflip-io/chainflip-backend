@@ -24,6 +24,21 @@ impl Chain for NoneChain {
 	type ReplayProtection = ();
 }
 
+impl TransactionMetaDataHandler<NoneChain> for () {
+	fn extract_metadata(
+		_transaction: &<NoneChain as Chain>::Transaction,
+	) -> <NoneChain as Chain>::TransactionMetaData {
+		unimplemented!()
+	}
+
+	fn verify_metadata(
+		_metadata: &<NoneChain as Chain>::TransactionMetaData,
+		_expected_metadata: &<NoneChain as Chain>::TransactionMetaData,
+	) -> bool {
+		unimplemented!()
+	}
+}
+
 impl FeeRefundCalculator<NoneChain> for () {
 	fn return_fee_refund(
 		&self,

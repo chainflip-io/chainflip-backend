@@ -205,8 +205,6 @@ pub mod pallet {
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
 
-		type TransactionMetaDataHandler: TransactionMetaDataHandler<Self::TargetChain>;
-
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -556,7 +554,7 @@ pub mod pallet {
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
 			if let Some(expected_tx_metadata) = TransactionMetaData::<T, I>::take(broadcast_id) {
-				if T::TransactionMetaDataHandler::verify_metadata(
+				if <<T::TargetChain as Chain>::TransactionMetaData>::verify_metadata(
 					&tx_metadata,
 					&expected_tx_metadata,
 				) {
@@ -801,7 +799,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_attempt.transaction_payload);
 		TransactionMetaData::<T, I>::insert(
 			broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			T::TransactionMetaDataHandler::extract_metadata(&broadcast_attempt.transaction_payload),
+			<<T::TargetChain as Chain>::TransactionMetaData>::extract_metadata(
+				&broadcast_attempt.transaction_payload,
+			),
 		);
 
 		let seed =

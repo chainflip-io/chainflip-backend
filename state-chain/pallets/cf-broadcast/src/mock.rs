@@ -179,7 +179,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
-	type TransactionMetaDataHandler = MockTransactionMetaDataHandler;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 }
 

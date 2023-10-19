@@ -193,9 +193,7 @@ impl Chain for Bitcoin {
 	type ReplayProtection = ();
 }
 
-pub struct BitcoinTransactionMetaDataHandler;
-
-impl TransactionMetaDataHandler<Bitcoin> for BitcoinTransactionMetaDataHandler {
+impl TransactionMetaDataHandler<Bitcoin> for () {
 	fn extract_metadata(
 		_transaction: &<Bitcoin as Chain>::Transaction,
 	) -> <Bitcoin as Chain>::TransactionMetaData {

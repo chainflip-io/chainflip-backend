@@ -289,6 +289,21 @@ impl Chain for Polkadot {
 	type ReplayProtection = PolkadotReplayProtection;
 }
 
+impl TransactionMetaDataHandler<Polkadot> for () {
+	fn extract_metadata(
+		_transaction: &<Polkadot as Chain>::Transaction,
+	) -> <Polkadot as Chain>::TransactionMetaData {
+		Default::default()
+	}
+
+	fn verify_metadata(
+		_metadata: &<Polkadot as Chain>::TransactionMetaData,
+		_expected_metadata: &<Polkadot as Chain>::TransactionMetaData,
+	) -> bool {
+		true
+	}
+}
+
 pub type ResetProxyAccountNonce = bool;
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]

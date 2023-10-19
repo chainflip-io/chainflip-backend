@@ -361,6 +361,33 @@ pub struct TransactionMetadata {
 	pub gas_limit: Option<Uint>,
 }
 
+impl TransactionMetaDataHandler<Ethereum> for TransactionMetadata {
+	fn extract_metadata(
+		transaction: &<Ethereum as Chain>::Transaction,
+	) -> <Ethereum as Chain>::TransactionMetaData {
+		TransactionMetadata {
+			contract: transaction.contract,
+			max_fee_per_gas: transaction.max_fee_per_gas,
+			max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+			gas_limit: transaction.gas_limit,
+		}
+	}
+
+	fn verify_metadata(
+		metadata: &<Ethereum as Chain>::TransactionMetaData,
+		expected_metadata: &<Ethereum as Chain>::TransactionMetaData,
+	) -> bool {
+		metadata.contract == expected_metadata.contract &&
+			(expected_metadata.max_fee_per_gas.is_none() ||
+				expected_metadata.max_fee_per_gas == metadata.max_fee_per_gas) &&
+			(expected_metadata.max_priority_fee_per_gas.is_none() ||
+				expected_metadata.max_priority_fee_per_gas ==
+					metadata.max_priority_fee_per_gas) &&
+			(expected_metadata.gas_limit.is_none() ||
+				expected_metadata.gas_limit == metadata.gas_limit)
+	}
+}
+
 impl Transaction {
 	fn check_contract(
 		&self,
