@@ -16,7 +16,7 @@ import { runWithTimeout } from '../shared/utils';
 async function main(): Promise<void> {
   await noopRuntimeUpgrade();
 
-  if (process.argv[2] === "-test") {
+  if (process.argv[2] === '-test') {
     await testAllSwaps();
   }
 

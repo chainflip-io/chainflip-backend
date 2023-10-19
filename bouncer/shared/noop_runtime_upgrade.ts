@@ -38,9 +38,9 @@ export async function noopRuntimeUpgrade(): Promise<void> {
   if (newSpecVersion !== nextSpecVersion) {
     console.error(
       'After submitting the runtime upgrade, the new spec_version is not what we expected. Expected: ' +
-      nextSpecVersion +
-      ' Got: ' +
-      newSpecVersion,
+        nextSpecVersion +
+        ' Got: ' +
+        newSpecVersion,
     );
   }
 
