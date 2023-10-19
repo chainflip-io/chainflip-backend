@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
 import { jsonRpc } from './json_rpc';
 import { getChainflipApi, observeEvent } from './utils';
-import { promptUser } from './prompt_user';
+import { bumpSpecVersion } from './utils/bump_spec_version';
 
 async function getCurrentSpecVersion(): Promise<number> {
   return Number((await jsonRpc('state_getRuntimeVersion', [], 9944)).specVersion);
@@ -20,11 +20,7 @@ export async function noopRuntimeUpgrade(): Promise<void> {
 
   const nextSpecVersion = currentSpecVersion + 1;
 
-  await promptUser(
-    'Go to state-chain/runtime/src/lib.rs and then in that file go to #[sp_version::runtime_version]. Set the `spec_version` to ' +
-      nextSpecVersion +
-      ' and save the file.',
-  );
+  bumpSpecVersion('../state-chain/runtime/src/lib.rs', nextSpecVersion);
 
   console.log('Building the new runtime');
   execSync('cd ../state-chain/runtime && cargo build --release');

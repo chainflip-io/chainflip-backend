@@ -3,22 +3,22 @@
 //
 // Performs a noop runtime upgrade. You will bump the runtime `spec_version` and nothing else.
 // This should not affect the CFEs in any way. Everything should just function straight through the upgrade.
+//
+// Optional args:
+// -test: Run the swap tests after the upgrade.
 // For example ./commands/noop_runtime_upgrade.ts
 // NB: It *must* be run from the bouncer directory.
 
 import { noopRuntimeUpgrade } from '../shared/noop_runtime_upgrade';
-import { promptUser } from '../shared/prompt_user';
 import { testAllSwaps } from '../shared/swapping';
 import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
   await noopRuntimeUpgrade();
 
-  await promptUser(
-    'Would you like to test all swaps after the upgrade now? The vaults and liquidity must be set up already.',
-  );
-
-  await testAllSwaps();
+  if (process.argv[2] === '-test') {
+    await testAllSwaps();
+  }
 
   process.exit(0);
 }

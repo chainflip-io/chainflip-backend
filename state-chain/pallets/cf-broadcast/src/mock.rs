@@ -9,7 +9,7 @@ use cf_chains::{
 	mocks::{
 		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
 	},
-	Chain, ChainCrypto, TransactionMetaDataHandler,
+	Chain, ChainCrypto,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,

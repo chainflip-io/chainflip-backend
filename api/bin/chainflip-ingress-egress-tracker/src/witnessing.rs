@@ -1,4 +1,5 @@
-pub mod btc;
+mod btc;
+pub mod btc_mempool;
 mod dot;
 mod eth;
 
@@ -27,6 +28,7 @@ struct EnvironmentParameters {
 	usdc_contract_address: H160,
 	supported_erc20_tokens: HashMap<H160, cf_primitives::Asset>,
 	dot_genesis_hash: PolkadotHash,
+	btc_network: cf_chains::btc::BitcoinNetwork,
 }
 
 async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> EnvironmentParameters {
@@ -66,14 +68,20 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let dot_genesis_hash = PolkadotHash::from(
-		state_chain_client
-			.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-				state_chain_client.latest_finalized_hash(),
-			)
-			.await
-			.expect(STATE_CHAIN_CONNECTION),
-	);
+	let dot_genesis_hash = state_chain_client
+		.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+		)
+		.await
+		.expect(STATE_CHAIN_CONNECTION);
+
+	let btc_network = state_chain_client
+		.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_hash(),
+		)
+		.await
+		.expect(STATE_CHAIN_CONNECTION)
+		.into();
 
 	EnvironmentParameters {
 		eth_chain_id,
@@ -83,6 +91,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		eth_address_checker_address,
 		supported_erc20_tokens,
 		dot_genesis_hash,
+		btc_network,
 	}
 }
 
@@ -126,6 +135,17 @@ pub(super) async fn start(
 		env_params.clone(),
 		epoch_source.clone(),
 		witness_call.clone(),
+	)
+	.await?;
+
+	btc::start(
+		scope,
+		witness_call.clone(),
+		settings.clone(),
+		env_params.clone(),
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
 	)
 	.await?;
 
