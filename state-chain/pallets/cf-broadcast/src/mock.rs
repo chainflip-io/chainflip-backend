@@ -135,29 +135,6 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
-pub struct MockTransactionMetaDataHandler;
-
-impl TransactionMetaDataHandler<MockEthereum> for MockTransactionMetaDataHandler {
-	fn extract_metadata(
-		_transaction: &<MockEthereum as Chain>::Transaction,
-	) -> <MockEthereum as Chain>::TransactionMetaData {
-		Default::default()
-	}
-
-	fn verify_metadata(
-		_metadata: &<MockEthereum as Chain>::TransactionMetaData,
-		_expected_metadata: &<MockEthereum as Chain>::TransactionMetaData,
-	) -> bool {
-		VALID_METADATA.with(|cell| *cell.borrow())
-	}
-}
-
-impl MockTransactionMetaDataHandler {
-	pub fn set_valid(valid: bool) {
-		VALID_METADATA.with(|cell| *cell.borrow_mut() = valid);
-	}
-}
-
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
