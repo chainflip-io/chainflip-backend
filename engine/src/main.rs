@@ -197,7 +197,7 @@ async fn run_main(
 
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
-					settings.signing.db_file.as_path(),
+					&settings.signing.db_file,
 					Some(state_chain_client.genesis_hash()),
 				)
 				.context("Failed to open database")?,
