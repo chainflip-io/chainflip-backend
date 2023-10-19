@@ -40,28 +40,26 @@ where
 	)
 	.await?;
 
-	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
-
-	let strictly_monotonic_source = btc_source.strictly_monotonic().then({
-		let btc_client = btc_client.clone();
-		move |header| {
-			let btc_client = btc_client.clone();
-			async move {
-				let block = btc_client.block(header.hash).await;
-				(header.data, block.txdata)
-			}
-		}
-	});
-
 	let vaults = epoch_source.vaults().await;
 
-	strictly_monotonic_source
-		.clone()
-		.chunk_by_vault(vaults.clone())
+	BtcSource::new(btc_client.clone())
+		.strictly_monotonic()
+		.then({
+			let btc_client = btc_client.clone();
+			move |header| {
+				let btc_client = btc_client.clone();
+				async move {
+					let block = btc_client.block(header.hash).await;
+					(header.data, block.txdata)
+				}
+			}
+		})
+		.shared(scope)
+		.chunk_by_vault(vaults)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(witness_call.clone())
-		.egress_items(scope, state_chain_stream, state_chain_client.clone())
+		.egress_items(scope, state_chain_stream, state_chain_client)
 		.await
 		.then(move |epoch, header| process_egress(epoch, header, witness_call.clone()))
 		.logging("witnessing")

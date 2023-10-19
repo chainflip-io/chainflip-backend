@@ -54,9 +54,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 						CHANGE_ADDRESS_SALT,
 					)
 					.script_pubkey(),
-					// TODO: Ideally we can submit an empty type here. For
-					// Bitcoin and some other chains fee tracking is not
-					// necessary. PRO-370.
 					tx_fee: Default::default(),
 				},
 			),
