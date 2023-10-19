@@ -62,7 +62,6 @@ where
 	let vaults = epoch_source.vaults().await;
 
 	DotUnfinalisedSource::new(dot_client.clone())
-		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.strictly_monotonic()
 		.shared(scope)
