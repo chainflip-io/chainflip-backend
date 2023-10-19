@@ -1,6 +1,7 @@
 import fs from 'fs';
 
-export async function bumpSpecVersion(filePath: string) {
+export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
+    console.log("Bumping the spec version");
     try {
         const fileContent = fs.readFileSync(filePath, 'utf-8');
         const lines = fileContent.split('\n');
@@ -18,7 +19,11 @@ export async function bumpSpecVersion(filePath: string) {
                 const specVersionLine = line.match(/(spec_version:\s*)(\d+)/);
 
                 if (specVersionLine) {
-                    incrementedVersion = parseInt(specVersionLine[2]) + 1;
+                    if (nextSpecVersion) {
+                        incrementedVersion = nextSpecVersion;
+                    } else {
+                        incrementedVersion = parseInt(specVersionLine[2]) + 1;
+                    }
                     lines[i] = `	spec_version: ${incrementedVersion},`;
                     break;
                 }

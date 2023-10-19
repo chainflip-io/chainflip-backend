@@ -20,7 +20,7 @@ export async function noopRuntimeUpgrade(): Promise<void> {
 
   const nextSpecVersion = currentSpecVersion + 1;
 
-  bumpSpecVersion('../state-chain/runtime/src/lib.rs');
+  bumpSpecVersion('../state-chain/runtime/src/lib.rs', nextSpecVersion);
 
   console.log('Building the new runtime');
   execSync('cd ../state-chain/runtime && cargo build --release');
