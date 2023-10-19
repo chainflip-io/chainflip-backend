@@ -125,11 +125,12 @@ pub fn migrate_settings0_9_3_to_0_10_0(config_root: String) -> Result<Option<&'s
 		std::fs::create_dir_all(&migration_dir)?
 	}
 
+	let migrated_settings_file = migration_dir.join("Settings.toml");
 	fs::write(
 		migration_dir.join("Settings.toml"),
 		toml::to_string(&new_settings_table).context("Unable to serialize new Settings to TOML")?,
 	)
-	.context("Unable to write to {settings_file} for migration")?;
+	.context(std::format!("Unable to write to {:?} for migration", migrated_settings_file))?;
 
 	Ok(Some(MIGRATED_SETTINGS_DIR))
 }
