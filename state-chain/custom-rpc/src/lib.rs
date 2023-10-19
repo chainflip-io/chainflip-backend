@@ -2,10 +2,7 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	address::AddressConverter, btc::BitcoinNetwork, dot::PolkadotHash,
-	eth::Address as EthereumAddress,
-};
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
 use core::ops::Range;
 use jsonrpsee::{
@@ -22,7 +19,7 @@ use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
-	chainflip::{ChainAddressConverter, Offence},
+	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
@@ -89,14 +86,7 @@ impl RpcAccountInfo {
 			refund_addresses: info
 				.refund_addresses
 				.into_iter()
-				.map(|(chain, address)| {
-					(
-						chain,
-						address
-							.map(ChainAddressConverter::to_encoded_address)
-							.map(|a| format!("{}", a)),
-					)
-				})
+				.map(|(chain, address)| (chain, address.map(|a| format!("{}", a))))
 				.collect(),
 		}
 	}
@@ -945,6 +935,7 @@ where
 
 mod test {
 	use super::*;
+	use cf_chains::address::to_encoded_address;
 	use serde_json::json;
 	use sp_core::H160;
 
@@ -964,11 +955,17 @@ mod test {
 				refund_addresses: vec![
 					(
 						ForeignChain::Ethereum,
-						Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
+						Some(to_encoded_address(
+							cf_chains::ForeignChainAddress::Eth(H160::from([1; 20])),
+							|| cf_primitives::NetworkEnvironment::Mainnet,
+						)),
 					),
 					(
 						ForeignChain::Polkadot,
-						Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
+						Some(to_encoded_address(
+							cf_chains::ForeignChainAddress::Dot(Default::default()),
+							|| cf_primitives::NetworkEnvironment::Mainnet,
+						)),
 					),
 					(ForeignChain::Bitcoin, None),
 				],

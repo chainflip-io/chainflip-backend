@@ -4,7 +4,8 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
+	address::EncodedAddress, btc::BitcoinNetwork, dot::PolkadotHash,
+	eth::Address as EthereumAddress,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
@@ -77,7 +78,7 @@ pub struct Environment {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
-	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+	pub refund_addresses: Vec<(ForeignChain, Option<EncodedAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 }
 

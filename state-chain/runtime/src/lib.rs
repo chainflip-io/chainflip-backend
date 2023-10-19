@@ -1059,7 +1059,8 @@ impl_runtime_apis! {
 			}
 
 			let refund_addresses = ForeignChain::iter().map(|chain| {
-				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
+				use cf_chains::address::AddressConverter;
+				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain).map(ChainAddressConverter::to_encoded_address))
 			}).collect();
 
 			let balances = Asset::all().iter().map(|&asset|
