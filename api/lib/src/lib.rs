@@ -9,7 +9,6 @@ use cf_chains::{
 	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
-use codec::Encode;
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -149,14 +148,11 @@ impl<
 {
 	async fn dry_run(
 		&self,
-		call: RuntimeCall,
-		at: Option<state_chain_runtime::Hash>,
+		_call: RuntimeCall,
+		_at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
-		Ok(self
-			.base_rpc_client
-			.raw_rpc_client
-			.dry_run(Encode::encode(&call).into(), at)
-			.await?)
+		// TODO: PRO-917 fix dry run
+		Ok(Bytes::from(vec![]))
 	}
 }
 
@@ -173,11 +169,6 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		address: EthereumAddress,
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
-		// Are we in a current auction phase
-		if self.is_auction_phase().await? {
-			bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
-		}
-
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address, executor })
 			.await
