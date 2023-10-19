@@ -1,11 +1,12 @@
 # About
 
-Ingress-Egress Tracker observes events on external blockchains (ETH, DOT) and provides a way for client applications to subscribe and receive
-these events via a WebSocket subscription. For BTC, the tracker exposes a separate RPC call to query transactions in the mempool.
+Ingress-Egress Tracker observes events on external blockchains (ETH, DOT, BTC) and provides a way for client applications to subscribe and receive
+these events via a WebSocket subscription. For BTC, the tracker exposes a separate RPC call to query transactions in the mempool in addition to the
+WebSocket subscription.
 
 # Setup
 
-The tracker will start an rpc server on 0.0.0.0:13337 (at the moment this cannot be configured).
+The tracker will start an RPC server on 0.0.0.0:13337 (at the moment this cannot be configured).
 When working with a "localnet" (e.g. for development purposes), no extra configuration is necessary: `./chainflip-ingress-egress-tracker`.
 The default configuration can be overwritten with the following env variables:
 
@@ -22,7 +23,7 @@ The default configuration can be overwritten with the following env variables:
 
 # Usage
 
-Using a websocket client, here is an example interaction with the tracker (`wscat`` is used in this case):
+Using a WebSocket client, here is an example interaction with the tracker (`wscat`` is used in this case):
  
 1. The tracker is started with no parameters, which will connect it to localnet:
  
@@ -51,7 +52,7 @@ commands/perform_swap.ts flip btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 < {"jsonrpc":"2.0","method":"s_witnessing","params":{"subscription":6933028418422314,"result":[29,2,233,156,159,177,49,75,198,4,61,48,118,36,65,90,173,49,235,19,68,245,52,174,124,128,236,198,52,168,160,48,156,97,4,113,86,64,189,104,54,243,89,38,22,25,220,64,95,198,192,249,231,43,50,187,126,21,43,174,148,99,185,58,31,157,175,0,0,0,0,0,0,0,0]}}
 ```
 
-The events are substrate's codec encoded and correspond to the following decoded events, respectively:
+The events are substrate's SCALE codec encoded and correspond to the following decoded events, respectively:
 
 ```
 RuntimeCall::EthereumIngressEgress(Call::process_deposits { deposit_witnesses: [DepositWitness { deposit_address: 0x2af540adf89a69d1332d6b1f4339caae23a9c33b, asset: Flip, amount: 500000000000000000000, deposit_details: () }], block_height: 838 })
