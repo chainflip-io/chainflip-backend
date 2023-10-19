@@ -74,9 +74,10 @@ pub mod pallet {
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
-		/// Used to determine compatibility between the runtime and the CFE.
+		/// Used to access the current Chainflip runtime's release version (distinct from the
+		/// substrate RuntimeVersion)
 		#[pallet::constant]
-		type CurrentCompatibilityVersion: Get<SemVer>;
+		type CurrentReleaseVersion: Get<SemVer>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -148,10 +149,17 @@ pub mod pallet {
 	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
+	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
 	/// Stores the current safe mode state for the runtime.
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn current_release_version)]
+	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
+	/// constant to allow querying the value by block hash.
+	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn network_environment)]
@@ -176,6 +184,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
+			Self::update_current_release_version();
 			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
 
@@ -326,11 +335,17 @@ pub mod pallet {
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
+
+			Pallet::<T>::update_current_release_version();
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn update_current_release_version() {
+		CurrentReleaseVersion::<T>::set(T::CurrentReleaseVersion::get());
+	}
+
 	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
 		EthereumSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
@@ -425,7 +440,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
-	fn current_compatibility_version() -> SemVer {
-		<T as Config>::CurrentCompatibilityVersion::get()
+	fn current_release_version() -> SemVer {
+		Self::current_release_version()
 	}
 }
