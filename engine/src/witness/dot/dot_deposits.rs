@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
@@ -17,7 +15,7 @@ use crate::witness::{
 };
 use cf_chains::{
 	assets::dot::Asset,
-	dot::{PolkadotAccountId, PolkadotExtrinsicIndex, PolkadotHash},
+	dot::{PolkadotAccountId, PolkadotHash},
 	Polkadot,
 };
 use subxt::events::Phase;
@@ -30,7 +28,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		impl ChunkedByVault<
 			Index = PolkadotBlockNumber,
 			Hash = PolkadotHash,
-			Data = (Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
+			Data = Vec<(Phase, EventWrapper)>,
 			Chain = Polkadot,
 			ExtraInfo = PolkadotAccountId,
 			ExtraHistoricInfo = (),
@@ -62,7 +60,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				let addresses = address_and_details_to_addresses(addresses_and_details);
 
-				let (deposit_witnesses, broadcast_indices) = deposit_witnesses(addresses, &events);
+				let deposit_witnesses = deposit_witnesses(addresses, &events);
 
 				if !deposit_witnesses.is_empty() {
 					process_call(
@@ -76,7 +74,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.await
 				}
 
-				(events, broadcast_indices)
+				events
 			}
 		})
 	}
@@ -99,31 +97,24 @@ fn address_and_details_to_addresses(
 fn deposit_witnesses(
 	monitored_addresses: Vec<PolkadotAccountId>,
 	events: &Vec<(Phase, EventWrapper)>,
-) -> (Vec<DepositWitness<Polkadot>>, BTreeSet<PolkadotExtrinsicIndex>) {
+) -> Vec<DepositWitness<Polkadot>> {
 	let mut deposit_witnesses = vec![];
-	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			match wrapped_event {
-				EventWrapper::Transfer { to, amount, from: _ } => {
-					let deposit_address = PolkadotAccountId::from_aliased(to.0);
-					if monitored_addresses.contains(&deposit_address) {
-						deposit_witnesses.push(DepositWitness {
-							deposit_address,
-							asset: Asset::Dot,
-							amount: *amount,
-							deposit_details: (),
-						});
-					}
-				},
-				EventWrapper::ExtrinsicSuccess => {
-					extrinsic_indices.insert(*extrinsic_index);
-				},
-				_ => {}, // Not interested in other events
+		if let Phase::ApplyExtrinsic(_extrinsic_index) = phase {
+			if let EventWrapper::Transfer { to, amount, from: _ } = wrapped_event {
+				let deposit_address = PolkadotAccountId::from_aliased(to.0);
+				if monitored_addresses.contains(&deposit_address) {
+					deposit_witnesses.push(DepositWitness {
+						deposit_address,
+						asset: Asset::Dot,
+						amount: *amount,
+						deposit_details: (),
+					});
+				}
 			}
 		}
 	}
-	(deposit_witnesses, extrinsic_indices)
+	deposit_witnesses
 }
 
 #[cfg(test)]
@@ -164,9 +155,6 @@ mod test {
 
 		const TRANSFER_TO_SELF_INDEX: u32 = 9;
 		const TRANSFER_TO_SELF_AMOUNT: PolkadotBalance = 30000;
-
-		const EXTRINSIC_SUCCESS_1_INDEX: u32 = 10;
-		const EXTRINSIC_SUCCESS_2_INDEX: u32 = 11;
 
 		let block_event_details = phase_and_events(vec![
 			// we'll be witnessing this from the start
@@ -212,11 +200,9 @@ mod test {
 				TRANSFER_TO_SELF_INDEX,
 				mock_transfer(&our_vault, &transfer_2_deposit_address, TRANSFER_TO_SELF_AMOUNT),
 			),
-			(EXTRINSIC_SUCCESS_1_INDEX, EventWrapper::ExtrinsicSuccess),
-			(EXTRINSIC_SUCCESS_2_INDEX, EventWrapper::ExtrinsicSuccess),
 		]);
 
-		let (deposit_witnesses, extrinsic_indices) = deposit_witnesses(
+		let deposit_witnesses = deposit_witnesses(
 			vec![transfer_1_deposit_address, transfer_2_deposit_address],
 			&block_event_details,
 		);
@@ -225,9 +211,5 @@ mod test {
 		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
 		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
 		assert_eq!(deposit_witnesses.get(2).unwrap().amount, TRANSFER_TO_SELF_AMOUNT);
-
-		assert_eq!(extrinsic_indices.len(), 2);
-		assert!(extrinsic_indices.contains(&EXTRINSIC_SUCCESS_1_INDEX));
-		assert!(extrinsic_indices.contains(&EXTRINSIC_SUCCESS_2_INDEX));
 	}
 }

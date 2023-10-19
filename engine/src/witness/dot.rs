@@ -94,7 +94,7 @@ pub fn filter_map_events(
 
 pub async fn proxy_added_witnessing<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
-	header: Header<PolkadotBlockNumber, PolkadotHash, (Vec<(Phase, EventWrapper)>, BTreeSet<u32>)>,
+	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
 	process_call: ProcessCall,
 ) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>)
 where
@@ -105,17 +105,16 @@ where
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let (events, mut broadcast_indices) = header.data;
+	let events = header.data;
 
-	let (vault_key_rotated_calls, mut proxy_added_broadcasts) =
+	let (vault_key_rotated_calls, proxy_added_broadcasts) =
 		proxy_addeds(header.index, &events, &epoch.info.1);
-	broadcast_indices.append(&mut proxy_added_broadcasts);
 
 	for call in vault_key_rotated_calls {
 		process_call(call, epoch.index).await;
 	}
 
-	(events, broadcast_indices)
+	(events, proxy_added_broadcasts)
 }
 
 #[allow(clippy::type_complexity)]
@@ -136,11 +135,14 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let ((events, broadcast_indices), monitored_egress_ids) = header.data;
+	let ((events, mut extrinsic_indices), monitored_egress_ids) = header.data;
+
+	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
+	extrinsic_indices.extend(extrinsic_success_indexes(&events));
 
 	let extrinsics = dot_client.extrinsics(header.hash).await;
 
-	for (extrinsic_index, tx_fee) in transaction_fee_paids(&broadcast_indices, &events) {
+	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
 			"We know this exists since we got
 	this index from the event, from the block we are querying.",
@@ -295,6 +297,20 @@ fn transaction_fee_paids(
 		.collect()
 }
 
+fn extrinsic_success_indexes(events: &[(Phase, EventWrapper)]) -> BTreeSet<PolkadotExtrinsicIndex> {
+	events
+		.iter()
+		.filter_map(|(phase, wrapped_event)| {
+			if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
+				if let EventWrapper::ExtrinsicSuccess = wrapped_event {
+					return Some(*extrinsic_index)
+				}
+			}
+			None
+		})
+		.collect()
+}
+
 fn proxy_addeds(
 	block_number: PolkadotBlockNumber,
 	events: &Vec<(Phase, EventWrapper)>,
@@ -368,11 +384,27 @@ pub mod test {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (vault_key_rotated_calls, broadcast_indices) =
+		let (vault_key_rotated_calls, extrinsic_indices) =
 			proxy_addeds(20, &block_event_details, &our_vault);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
-		assert_eq!(broadcast_indices.len(), 1);
-		assert!(broadcast_indices.contains(&our_proxy_added_index));
+		assert_eq!(extrinsic_indices.len(), 1);
+		assert!(extrinsic_indices.contains(&our_proxy_added_index));
+	}
+
+	#[tokio::test]
+	async fn test_extrinsic_success_filtering() {
+		let events = phase_and_events(vec![
+			(1u32, EventWrapper::ExtrinsicSuccess),
+			(2u32, mock_tx_fee_paid(20000)),
+			(2u32, EventWrapper::ExtrinsicSuccess),
+			(3u32, mock_tx_fee_paid(20000)),
+		]);
+
+		let extrinsic_indices = extrinsic_success_indexes(&events);
+
+		assert_eq!(extrinsic_indices.len(), 2);
+		assert!(extrinsic_indices.contains(&1));
+		assert!(extrinsic_indices.contains(&2));
 	}
 }
