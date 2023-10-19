@@ -138,9 +138,10 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	let ((events, mut extrinsic_indices), monitored_egress_ids) = header.data;
 
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
-	extrinsic_indices.extend(extrinsic_success_indexes(&events));
+	extrinsic_indices.extend(extrinsic_success_indices(&events));
 
-	let extrinsics = dot_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<subxt::rpc::types::ChainBlockExtrinsic> =
+		dot_client.extrinsics(header.hash).await;
 
 	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(
@@ -297,16 +298,13 @@ fn transaction_fee_paids(
 		.collect()
 }
 
-fn extrinsic_success_indexes(events: &[(Phase, EventWrapper)]) -> BTreeSet<PolkadotExtrinsicIndex> {
+fn extrinsic_success_indices(events: &[(Phase, EventWrapper)]) -> BTreeSet<PolkadotExtrinsicIndex> {
 	events
 		.iter()
-		.filter_map(|(phase, wrapped_event)| {
-			if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-				if let EventWrapper::ExtrinsicSuccess = wrapped_event {
-					return Some(*extrinsic_index)
-				}
-			}
-			None
+		.filter_map(|(phase, wrapped_event)| match (phase, wrapped_event) {
+			(Phase::ApplyExtrinsic(extrinsic_index), EventWrapper::ExtrinsicSuccess) =>
+				Some(*extrinsic_index),
+			_ => None,
 		})
 		.collect()
 }
@@ -401,10 +399,6 @@ pub mod test {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let extrinsic_indices = extrinsic_success_indexes(&events);
-
-		assert_eq!(extrinsic_indices.len(), 2);
-		assert!(extrinsic_indices.contains(&1));
-		assert!(extrinsic_indices.contains(&2));
+		assert_eq!(extrinsic_success_indices(&events), BTreeSet::from([1, 2]));
 	}
 }
