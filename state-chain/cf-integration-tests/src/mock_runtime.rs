@@ -118,7 +118,10 @@ impl ExtBuilder {
 					})
 					.collect::<Vec<_>>(),
 			},
-			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE, daily_slashing_rate: Permill::from_perthousand(1)},
+			flip: FlipConfig {
+				total_issuance: TOTAL_ISSUANCE,
+				daily_slashing_rate: Permill::from_perthousand(1),
+			},
 			funding: FundingConfig {
 				genesis_accounts: self.genesis_accounts.clone(),
 				redemption_tax: MIN_FUNDING / 2,
