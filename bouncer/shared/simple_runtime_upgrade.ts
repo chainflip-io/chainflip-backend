@@ -1,24 +1,11 @@
-import { execSync } from 'node:child_process';
 import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
 import { jsonRpc } from './json_rpc';
 import { getChainflipApi, observeEvent } from './utils';
 import { bumpSpecVersion } from './utils/bump_spec_version';
+import { compileBinaries } from './utils/compile_binaries';
 
 async function getCurrentSpecVersion(): Promise<number> {
   return Number((await jsonRpc('state_getRuntimeVersion', [], 9944)).specVersion);
-}
-
-// Returns the expected next version of the runtime.
-export async function compileBinaries(type: "runtime" | "all", projectRoot: string) {
-  if (type === "all") {
-    console.log('Building all the binaries...');
-    execSync(`cd ${projectRoot} cargo build --release`);
-  } else {
-    console.log('Building the new runtime...');
-    execSync(`cd ${projectRoot}/state-chain/runtime && cargo build --release`);
-  }
-
-  console.log("Build complete.");
 }
 
 // Do a runtime upgrade using the code in the projectRoot directory.
