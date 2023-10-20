@@ -374,7 +374,7 @@ impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransact
 	fn verify_metadata(&self, expected_metadata: &Self) -> bool {
 		macro_rules! check_optional {
 			($field:ident) => {
-				expected_metadata.$field.is_none() || expected_metadata.$field == self.$field
+				(expected_metadata.$field.is_none() || expected_metadata.$field == self.$field)
 			};
 		}
 
@@ -733,4 +733,50 @@ mod verification_tests {
 			AggKeyVerificationError::NoMatch
 		);
 	}
+}
+
+#[test]
+fn metadata_verification() {
+	let submitted_metadata = EvmTransactionMetadata {
+		max_fee_per_gas: None,
+		max_priority_fee_per_gas: Some(U256::one()),
+		contract: Default::default(),
+		gas_limit: None,
+	};
+
+	// Exact match.
+	assert!(<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&submitted_metadata
+	));
+
+	// If we don't expect a value, it's ok if it's set.
+	assert!(<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata { max_priority_fee_per_gas: None, ..submitted_metadata }
+	));
+
+	// If we expect something else it fails.
+	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata {
+			max_priority_fee_per_gas: Some(U256::zero()),
+			..submitted_metadata
+		}
+	));
+
+	// If we witness `None` instead of `Some`, it fails.
+	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata { max_fee_per_gas: Some(U256::zero()), ..submitted_metadata }
+	));
+
+	// Wrong contract address.
+	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
+		&submitted_metadata,
+		&EvmTransactionMetadata {
+			contract: ethereum_types::H160::repeat_byte(1u8),
+			..submitted_metadata
+		}
+	));
 }
