@@ -1,0 +1,39 @@
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version
+        required: true
+        type: string
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get branch of tag
+        shell: get_tag
+        run: |
+          echo "tag=$(./ci/scripts/extract_version.sh ${{ inputs.version }})" >> $GITHUB_OUTPUT
+
+      - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: release-sisyphos.yml
+          name: chainflip-backend-packages-ubuntu-22.04
+          branch: release/${{ steps.get_tag.outputs.tag }}
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::951386877486:role/chainflip-github-bot
+
+      - name: Upload binaries to s3
+        run: |
+          aws s3 mv --recursive --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/

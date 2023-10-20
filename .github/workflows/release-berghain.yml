@@ -1,0 +1,20 @@
+name: Release Chainflip Berghain
+on:
+  push:
+    branches:
+      - PLA-884
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+concurrency:
+  group: ${{ github.ref }}-release-perseverance
+  cancel-in-progress: true
+
+jobs:
+  check-versions:
+    uses: ./.github/workflows/_03_check_versions.yml
+  upload:
+    needs: [check-versions]
+    uses: ./.github/workflows/_60_upload.yml
+    secrets: inherit
+    with:
+      version: 0.10.0
