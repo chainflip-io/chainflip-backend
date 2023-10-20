@@ -95,8 +95,11 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_balance(_account_id: &Self::AccountId, _amount: FlipBalance) {
-		unimplemented!()
+	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
+		// Count those slashes
+		SLASHES.with(|count| {
+			count.borrow_mut().push(*account_id);
+		});
 	}
 }
 

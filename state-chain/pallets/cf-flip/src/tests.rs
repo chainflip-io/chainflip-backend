@@ -291,7 +291,7 @@ impl FlipOperation {
 				SlashingRate::<Test>::set(*slashing_rate);
 
 				let attempted_slash: u128 =
-					(*slashing_rate * *bond).saturating_mul((*blocks).into());
+					(*slashing_rate * *bond / 14400u128).saturating_mul((*blocks).into());
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash
