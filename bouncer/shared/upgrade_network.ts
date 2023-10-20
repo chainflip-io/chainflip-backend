@@ -40,7 +40,6 @@ function createGitWorkspaceAt(absoluteWorkspacePath: string, toGitRef: string) {
   }
 }
 
-
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
 // If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
 export async function upgradeNetwork(toGitRef: string, bumpByIfEqual: SemVerLevel = 'patch') {
