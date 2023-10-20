@@ -224,6 +224,8 @@ fn compute_distance(index: usize, slot: usize, len: usize) -> usize {
 
 #[test]
 fn test_slot_extraction() {
+	use codec::Encode;
+	
 	let slot = Slot::from(42);
 	assert_eq!(
 		Some(slot),
