@@ -79,6 +79,9 @@ jobs:
           BINARY_ROOT_PATH: .
         run: |
           set -x
+          mkdir -p /tmp/chainflip/bashful
+          mkdir -p /tmp/chainflip/doc
+          mkdir -p /tmp/chainflip/dopey
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
