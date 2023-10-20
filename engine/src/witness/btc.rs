@@ -55,7 +55,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 					)
 					.script_pubkey(),
 					tx_fee: Default::default(),
-					tx_metadata: Default::default(),
+					tx_metadata: (),
 				},
 			),
 			epoch.index,
