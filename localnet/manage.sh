@@ -3,7 +3,7 @@
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 GENESIS_NODES=("bashful" "doc" "dopey")
-SELECTED_NODES=("bashful" "doc" "dopey")
+SELECTED_NODES=("bashful")
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
 INITIAL_CONTAINERS="init"
 CORE_CONTAINERS="bitcoin geth polkadot redis"
