@@ -2,8 +2,15 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
+use cf_chains::{
+	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	btc::BitcoinNetwork,
+	dot::PolkadotHash,
+	eth::Address as EthereumAddress,
+};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+};
 use core::ops::Range;
 use jsonrpsee::{
 	core::RpcResult,
@@ -40,7 +47,7 @@ pub enum RpcAccountInfo {
 	},
 	LiquidityProvider {
 		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-		refund_addresses: HashMap<ForeignChain, Option<String>>,
+		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
 	},
 	Validator {
@@ -70,7 +77,7 @@ impl RpcAccountInfo {
 		Self::Broker { flip_balance: balance.into() }
 	}
 
-	fn lp(info: LiquidityProviderInfo, balance: u128) -> Self {
+	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
 		let mut balances = HashMap::new();
 
 		for (asset, balance) in info.balances {
@@ -86,7 +93,7 @@ impl RpcAccountInfo {
 			refund_addresses: info
 				.refund_addresses
 				.into_iter()
-				.map(|(chain, address)| (chain, address.map(|a| format!("{}", a))))
+				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
 		}
 	}
@@ -177,7 +184,7 @@ pub struct RpcEnvironment {
 impl From<Environment> for RpcEnvironment {
 	fn from(environment: Environment) -> Self {
 		Self {
-			bitcoin_network: environment.bitcoin_network,
+			bitcoin_network: environment.network.into(),
 			ethereum_chain_id: environment.ethereum_chain_id,
 			polkadot_genesis_hash: environment.polkadot_genesis_hash,
 		}
@@ -546,7 +553,11 @@ where
 						.map_err(to_rpc_error)?
 						.expect("role already validated");
 
-					RpcAccountInfo::lp(info, balance)
+					RpcAccountInfo::lp(
+						info,
+						api.cf_environment(hash).map_err(to_rpc_error)?.network,
+						balance,
+					)
 				},
 				AccountRole::Validator => {
 					let info = api.cf_account_info_v2(hash, &account_id).map_err(to_rpc_error)?;
@@ -935,7 +946,6 @@ where
 
 mod test {
 	use super::*;
-	use cf_chains::address::to_encoded_address;
 	use serde_json::json;
 	use sp_core::H160;
 
@@ -955,17 +965,11 @@ mod test {
 				refund_addresses: vec![
 					(
 						ForeignChain::Ethereum,
-						Some(to_encoded_address(
-							cf_chains::ForeignChainAddress::Eth(H160::from([1; 20])),
-							|| cf_primitives::NetworkEnvironment::Mainnet,
-						)),
+						Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
 					),
 					(
 						ForeignChain::Polkadot,
-						Some(to_encoded_address(
-							cf_chains::ForeignChainAddress::Dot(Default::default()),
-							|| cf_primitives::NetworkEnvironment::Mainnet,
-						)),
+						Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
 					),
 					(ForeignChain::Bitcoin, None),
 				],
@@ -975,6 +979,7 @@ mod test {
 					(Asset::Flip, u128::MAX / 2),
 				],
 			},
+			cf_primitives::NetworkEnvironment::Mainnet,
 			0,
 		);
 

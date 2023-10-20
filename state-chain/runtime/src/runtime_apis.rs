@@ -3,12 +3,10 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	address::EncodedAddress, btc::BitcoinNetwork, dot::PolkadotHash,
-	eth::Address as EthereumAddress,
-};
+use cf_chains::{dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -71,14 +69,14 @@ pub struct AuctionState {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct Environment {
-	pub bitcoin_network: BitcoinNetwork,
+	pub network: NetworkEnvironment,
 	pub ethereum_chain_id: cf_chains::evm::api::EvmChainId,
 	pub polkadot_genesis_hash: PolkadotHash,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
-	pub refund_addresses: Vec<(ForeignChain, Option<EncodedAddress>)>,
+	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 }
 

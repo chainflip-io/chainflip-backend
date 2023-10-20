@@ -1040,7 +1040,7 @@ impl_runtime_apis! {
 
 		fn cf_environment() -> runtime_apis::Environment {
 			runtime_apis::Environment {
-				bitcoin_network: Environment::network_environment().into(),
+				network: Environment::network_environment(),
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
@@ -1059,8 +1059,7 @@ impl_runtime_apis! {
 			}
 
 			let refund_addresses = ForeignChain::iter().map(|chain| {
-				use cf_chains::address::AddressConverter;
-				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain).map(ChainAddressConverter::to_encoded_address))
+				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
 			let balances = Asset::all().iter().map(|&asset|
