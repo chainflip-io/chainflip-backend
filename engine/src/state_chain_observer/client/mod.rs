@@ -13,6 +13,7 @@ use futures::{StreamExt, TryStreamExt};
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{sync::Arc, time::Duration};
+use tokio::sync::watch;
 use tracing::info;
 
 use utilities::{
@@ -85,7 +86,7 @@ pub struct StateChainClient<
 	genesis_hash: state_chain_runtime::Hash,
 	signed_extrinsic_client: SignedExtrinsicClient,
 	unsigned_extrinsic_client: unsigned::UnsignedExtrinsicClient,
-	_block_producer: ScopedJoinHandle<()>,
+	_block_producer_handle: ScopedJoinHandle<()>,
 	pub base_rpc_client: Arc<BaseRpcClient>,
 	latest_block_hash_watcher: tokio::sync::watch::Receiver<state_chain_runtime::Hash>,
 }
@@ -154,6 +155,146 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	}
 }
 
+async fn create_block_subscription<
+	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+>(
+	scope: &Scope<'_, anyhow::Error>,
+	base_rpc_client: Arc<BaseRpcClient>,
+) -> Result<(watch::Receiver<H256>, impl StateChainStreamApi + Clone, ScopedJoinHandle<()>)> {
+	let (first_finalized_block_header, mut finalized_block_header_stream) = {
+		// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
+		// https://arxiv.org/abs/2007.01560
+		let mut sparse_finalized_block_header_stream = base_rpc_client
+			.subscribe_finalized_block_headers()
+			.await?
+			.map_err(Into::into)
+			.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
+				"sparse_finalized_block_header_stream unexpectedly ended"
+			)))));
+
+		let mut latest_finalized_header: state_chain_runtime::Header =
+			sparse_finalized_block_header_stream.next().await.unwrap()?;
+		let base_rpc_client = base_rpc_client.clone();
+
+		(
+			latest_finalized_header.clone(),
+			utilities::assert_stream_send(Box::pin(
+				sparse_finalized_block_header_stream
+					.and_then(move |next_finalized_header| {
+						assert!(
+							latest_finalized_header.number < next_finalized_header.number,
+							"{SUBSTRATE_BEHAVIOUR}",
+						);
+
+						let prev_finalized_header = std::mem::replace(
+							&mut latest_finalized_header,
+							next_finalized_header.clone(),
+						);
+
+						let base_rpc_client = base_rpc_client.clone();
+						async move {
+							let base_rpc_client = &base_rpc_client;
+							let intervening_headers: Vec<_> = futures::stream::iter(
+								prev_finalized_header.number + 1..next_finalized_header.number,
+							)
+							.then(|block_number| async move {
+								let block_hash = base_rpc_client
+									.block_hash(block_number)
+									.await?
+									.expect(SUBSTRATE_BEHAVIOUR);
+								let block_header = base_rpc_client.block_header(block_hash).await?;
+								assert_eq!(
+									block_header.hash(),
+									block_hash,
+									"{SUBSTRATE_BEHAVIOUR}"
+								);
+								assert_eq!(
+									block_header.number, block_number,
+									"{SUBSTRATE_BEHAVIOUR}",
+								);
+								Result::<_, anyhow::Error>::Ok((block_hash, block_header))
+							})
+							.try_collect()
+							.await?;
+
+							for (block_hash, next_block_header) in Iterator::zip(
+								std::iter::once(&prev_finalized_header.hash())
+									.chain(intervening_headers.iter().map(|(hash, _header)| hash)),
+								intervening_headers
+									.iter()
+									.map(|(_hash, header)| header)
+									.chain(std::iter::once(&next_finalized_header)),
+							) {
+								assert_eq!(*block_hash, next_block_header.parent_hash);
+							}
+
+							Result::<_, anyhow::Error>::Ok(futures::stream::iter(
+								intervening_headers
+									.into_iter()
+									.map(|(_hash, header)| header)
+									.chain(std::iter::once(next_finalized_header))
+									.map(Result::<_, anyhow::Error>::Ok),
+							))
+						}
+					})
+					.try_flatten(),
+			)),
+		)
+	};
+
+	// Often `finalized_header` returns a significantly newer latest block than the stream
+	// returns so we move the stream forward to this block
+	let (latest_block_hash, latest_block_number) = {
+		let finalised_header_hash = base_rpc_client.latest_finalized_block_hash().await?;
+		let finalised_header = base_rpc_client.block_header(finalised_header_hash).await?;
+
+		if first_finalized_block_header.number < finalised_header.number {
+			for block_number in first_finalized_block_header.number + 1..=finalised_header.number {
+				assert_eq!(
+					finalized_block_header_stream.next().await.unwrap()?.number,
+					block_number,
+					"{SUBSTRATE_BEHAVIOUR}"
+				);
+			}
+			(finalised_header_hash, finalised_header.number)
+		} else {
+			(first_finalized_block_header.hash(), first_finalized_block_header.number)
+		}
+	};
+
+	const BLOCK_CAPACITY: usize = 10;
+	let (block_sender, block_receiver) =
+		spmc::channel::<(state_chain_runtime::Hash, state_chain_runtime::Header)>(BLOCK_CAPACITY);
+
+	let (latest_block_hash_sender, latest_block_hash_watcher) =
+		watch::channel::<state_chain_runtime::Hash>(latest_block_hash);
+
+	Ok((
+		latest_block_hash_watcher,
+		block_receiver.make_cached(
+			StreamCache { block_hash: latest_block_hash, block_number: latest_block_number },
+			|(block_hash, block_header): &(
+				state_chain_runtime::Hash,
+				state_chain_runtime::Header,
+			)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
+		),
+		scope.spawn_with_handle({
+			async move {
+				loop {
+					let block_header = finalized_block_header_stream.next().await.unwrap()?;
+					let block_hash = block_header.hash();
+					if !block_sender.send((block_hash, block_header)).await {
+						break Ok(())
+					}
+					if latest_block_hash_sender.send(block_hash).is_err() {
+						break Ok(())
+					}
+				}
+			}
+		}),
+	))
+}
+
 impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
 	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
 {
@@ -178,151 +319,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 		let genesis_hash = base_rpc_client.block_hash(0).await?.expect(SUBSTRATE_BEHAVIOUR);
 
-		let (latest_block_hash_watcher, mut state_chain_stream, block_producer) = {
-			let (first_finalized_block_header, mut finalized_block_header_stream) = {
-				// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
-				// https://arxiv.org/abs/2007.01560
-				let mut sparse_finalized_block_header_stream = base_rpc_client
-					.subscribe_finalized_block_headers()
-					.await?
-					.map_err(Into::into)
-					.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-						"sparse_finalized_block_header_stream unexpectedly ended"
-					)))));
-
-				let mut latest_finalized_header: state_chain_runtime::Header =
-					sparse_finalized_block_header_stream.next().await.unwrap()?;
-				let base_rpc_client = base_rpc_client.clone();
-
-				(
-					latest_finalized_header.clone(),
-					utilities::assert_stream_send(Box::pin(
-						sparse_finalized_block_header_stream
-							.and_then(move |next_finalized_header| {
-								assert!(
-									latest_finalized_header.number < next_finalized_header.number,
-									"{SUBSTRATE_BEHAVIOUR}",
-								);
-
-								let prev_finalized_header = std::mem::replace(
-									&mut latest_finalized_header,
-									next_finalized_header.clone(),
-								);
-
-								let base_rpc_client = base_rpc_client.clone();
-								async move {
-									let base_rpc_client = &base_rpc_client;
-									let intervening_headers: Vec<_> = futures::stream::iter(
-										prev_finalized_header.number + 1..
-											next_finalized_header.number,
-									)
-									.then(|block_number| async move {
-										let block_hash = base_rpc_client
-											.block_hash(block_number)
-											.await?
-											.expect(SUBSTRATE_BEHAVIOUR);
-										let block_header =
-											base_rpc_client.block_header(block_hash).await?;
-										assert_eq!(
-											block_header.hash(),
-											block_hash,
-											"{SUBSTRATE_BEHAVIOUR}"
-										);
-										assert_eq!(
-											block_header.number, block_number,
-											"{SUBSTRATE_BEHAVIOUR}",
-										);
-										Result::<_, anyhow::Error>::Ok((block_hash, block_header))
-									})
-									.try_collect()
-									.await?;
-
-									for (block_hash, next_block_header) in Iterator::zip(
-										std::iter::once(&prev_finalized_header.hash()).chain(
-											intervening_headers.iter().map(|(hash, _header)| hash),
-										),
-										intervening_headers
-											.iter()
-											.map(|(_hash, header)| header)
-											.chain(std::iter::once(&next_finalized_header)),
-									) {
-										assert_eq!(*block_hash, next_block_header.parent_hash);
-									}
-
-									Result::<_, anyhow::Error>::Ok(futures::stream::iter(
-										intervening_headers
-											.into_iter()
-											.map(|(_hash, header)| header)
-											.chain(std::iter::once(next_finalized_header))
-											.map(Result::<_, anyhow::Error>::Ok),
-									))
-								}
-							})
-							.try_flatten(),
-					)),
-				)
-			};
-
-			// Often `finalized_header` returns a significantly newer latest block than the stream
-			// returns so we move the stream forward to this block
-			let (latest_block_hash, latest_block_number) = {
-				let finalised_header_hash = base_rpc_client.latest_finalized_block_hash().await?;
-				let finalised_header = base_rpc_client.block_header(finalised_header_hash).await?;
-
-				if first_finalized_block_header.number < finalised_header.number {
-					for block_number in
-						first_finalized_block_header.number + 1..=finalised_header.number
-					{
-						assert_eq!(
-							finalized_block_header_stream.next().await.unwrap()?.number,
-							block_number,
-							"{SUBSTRATE_BEHAVIOUR}"
-						);
-					}
-					(finalised_header_hash, finalised_header.number)
-				} else {
-					(first_finalized_block_header.hash(), first_finalized_block_header.number)
-				}
-			};
-
-			const BLOCK_CAPACITY: usize = 10;
-			let (block_sender, block_receiver) = spmc::channel::<(
-				state_chain_runtime::Hash,
-				state_chain_runtime::Header,
-			)>(BLOCK_CAPACITY);
-
-			let (latest_block_hash_sender, latest_block_hash_watcher) =
-				tokio::sync::watch::channel::<state_chain_runtime::Hash>(latest_block_hash);
-
-			(
-				latest_block_hash_watcher,
-				block_receiver.make_cached(
-					StreamCache {
-						block_hash: latest_block_hash,
-						block_number: latest_block_number,
-					},
-					|(block_hash, block_header): &(
-						state_chain_runtime::Hash,
-						state_chain_runtime::Header,
-					)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
-				),
-				scope.spawn_with_handle({
-					async move {
-						loop {
-							let block_header =
-								finalized_block_header_stream.next().await.unwrap()?;
-							let block_hash = block_header.hash();
-							if !block_sender.send((block_hash, block_header)).await {
-								break Ok(())
-							}
-							if latest_block_hash_sender.send(block_hash).is_err() {
-								break Ok(())
-							}
-						}
-					}
-				}),
-			)
-		};
+		let (latest_block_hash_watcher, mut state_chain_stream, block_producer_handle) =
+			create_block_subscription(scope, base_rpc_client.clone()).await?;
 
 		let state_chain_client = Arc::new(StateChainClient {
 			genesis_hash,
@@ -333,7 +331,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 				scope,
 				base_rpc_client.clone(),
 			),
-			_block_producer: block_producer,
+			_block_producer_handle: block_producer_handle,
 			base_rpc_client,
 			latest_block_hash_watcher,
 		});
