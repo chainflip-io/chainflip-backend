@@ -190,7 +190,7 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
 		// Count those slashes
 		SLASHES.with(|count| {
 			count.borrow_mut().push(*account_id);
@@ -233,6 +233,7 @@ cf_test_utilities::impl_test_helpers! {
 			vault_key: Some(GENESIS_AGG_PUB_KEY),
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
+			amount_to_slash: 10u128.pow(18),
 		},
 	},
 	|| {

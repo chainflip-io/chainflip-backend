@@ -19,7 +19,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, FlipBalance, ForeignChain, SemVer,
+	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -325,8 +326,8 @@ pub trait Slashing {
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
-	/// Slahes a percentage of a validator's total balance.
-	fn slash_balance(account_id: &Self::AccountId, amount: Percent);
+	/// Slashes a validator for a fixed amount
+	fn slash_balance(account_id: &Self::AccountId, slash_rate: FlipBalance);
 }
 
 /// Nominate a single account for transaction broadcasting.

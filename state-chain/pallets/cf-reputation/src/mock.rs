@@ -1,5 +1,6 @@
 use super::*;
 use crate::{self as pallet_cf_reputation, PalletSafeMode};
+use cf_primitives::FlipBalance;
 use cf_traits::{impl_mock_chainflip, impl_mock_runtime_safe_mode, AccountRoleRegistry, Slashing};
 use frame_support::{assert_ok, construct_runtime, parameter_types};
 use serde::{Deserialize, Serialize};
@@ -94,7 +95,7 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+	fn slash_balance(_account_id: &Self::AccountId, _amount: FlipBalance) {
 		unimplemented!()
 	}
 }

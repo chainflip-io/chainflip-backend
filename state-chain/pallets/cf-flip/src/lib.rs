@@ -11,6 +11,7 @@ mod imbalances;
 mod on_charge_transaction;
 
 pub mod weights;
+use cf_primitives::FlipBalance;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
@@ -28,7 +29,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
-		DispatchError, Percent, Permill, RuntimeDebug,
+		DispatchError, Permill, RuntimeDebug,
 	},
 };
 use frame_system::pallet_prelude::*;
@@ -107,7 +108,7 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
-	/// The per-block slashing rate expressed as a proportion of a validator's bond.
+	/// The per-day slashing rate expressed as a proportion of a validator's bond.
 	#[pallet::storage]
 	#[pallet::getter(fn slashing_rate)]
 	pub type SlashingRate<T: Config> = StorageValue<_, Permill, ValueQuery>;
@@ -206,12 +207,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub total_issuance: T::Balance,
+		pub daily_slashing_rate: Permill,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			use frame_support::sp_runtime::traits::Zero;
-			Self { total_issuance: Zero::zero() }
+			Self { total_issuance: Zero::zero(), daily_slashing_rate: Permill::zero() }
 		}
 	}
 
@@ -220,7 +222,7 @@ pub mod pallet {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
 			OffchainFunds::<T>::set(self.total_issuance);
-			SlashingRate::<T>::set(Permill::zero());
+			SlashingRate::<T>::set(self.daily_slashing_rate);
 		}
 	}
 }
@@ -599,13 +601,14 @@ where
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
-		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
+		// 14400 blocks per day
+		let slash_amount = (SlashingRate::<T>::get() * account.bond / 14400u128.into())
+			.saturating_mul(blocks.into());
 		Self::attempt_slash(account_id, account, slash_amount);
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, slash_rate: Percent) {
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
 		let account = Account::<T>::get(account_id);
-		let slash_amount = slash_rate * account.balance;
-		Self::attempt_slash(account_id, account, slash_amount);
+		Self::attempt_slash(account_id, account, slash_amount.into());
 	}
 }

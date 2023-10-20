@@ -19,6 +19,7 @@ use frame_support::{
 };
 use frame_system as system;
 use scale_info::TypeInfo;
+use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -27,6 +28,7 @@ pub type AccountId = u64;
 pub const FLIP_TO_BURN: u128 = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
+pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
 
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -214,7 +216,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE, daily_slashing_rate: DAILY_SLASHING_RATE },
 		emissions: {
 			EmissionsConfig {
 				current_authority_emission_inflation: 2720,

@@ -3,7 +3,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId,
+};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult,
@@ -144,7 +146,6 @@ pub struct VaultEpochAndState {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::sp_runtime::Percent;
 
 	use super::*;
 
@@ -395,10 +396,10 @@ pub mod pallet {
 	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// The % amoount of the bond that is slashed for an agreed reported party
+	/// The amount of FLIP that is slashed for an agreed reported party expressed in Flipperinos
 	/// (2/3 must agree the node was an offender) on keygen failure.
 	#[pallet::storage]
-	pub(super) type KeygenSlashRate<T, I = ()> = StorageValue<_, Percent, ValueQuery>;
+	pub(super) type KeygenSlashAmount<T, I = ()> = StorageValue<_, FlipBalance, ValueQuery>;
 
 	/// Counter for generating unique ceremony ids.
 	#[pallet::storage]
@@ -739,13 +740,13 @@ pub mod pallet {
 
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
-		pub fn set_keygen_slash_rate(
+		pub fn set_keygen_slash_amount(
 			origin: OriginFor<T>,
-			percent_of_total_funds: Percent,
+			amount_to_slash: FlipBalance,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			KeygenSlashRate::<T, I>::put(percent_of_total_funds);
+			KeygenSlashAmount::<T, I>::put(amount_to_slash);
 
 			Ok(().into())
 		}
@@ -756,6 +757,7 @@ pub mod pallet {
 		pub vault_key: Option<AggKeyFor<T, I>>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
 		pub keygen_response_timeout: BlockNumberFor<T>,
+		pub amount_to_slash: FlipBalance,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -765,6 +767,7 @@ pub mod pallet {
 				vault_key: None,
 				deployment_block: Zero::zero(),
 				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
+				amount_to_slash: 0u128,
 			}
 		}
 	}
@@ -780,7 +783,7 @@ pub mod pallet {
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
 			}
-
+			KeygenSlashAmount::<T, I>::put(self.amount_to_slash);
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 		}
 	}
@@ -903,7 +906,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		if T::SafeMode::get().slashing_enabled {
 			for offender in offenders {
-				T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
+				T::Slasher::slash_balance(offender, KeygenSlashAmount::<T, I>::get());
 			}
 		}
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {

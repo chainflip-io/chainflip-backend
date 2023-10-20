@@ -1,4 +1,5 @@
 use cf_primitives::{Asset, AssetAmount, AuthorityCount};
+use sp_runtime::Permill;
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance};
 
@@ -47,3 +48,6 @@ pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
 	(Asset::Dot, 2_000_000_000u128),       // 1 USD worth of DOT = 0.2 * 10 d.p
 	(Asset::Btc, 390_000u128),             // 1 USD worth of BTC = 0.000039 * 10 d.p
 ];
+
+// Daily slashing rate 0.1%
+pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
