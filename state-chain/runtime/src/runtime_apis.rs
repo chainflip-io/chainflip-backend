@@ -134,8 +134,10 @@ decl_runtime_apis!(
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
 		fn cf_environment() -> Environment;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
+		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
+		fn cf_redemption_tax() -> AssetAmount;
 	}
 );

@@ -24,7 +24,7 @@ use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::{ChainAddressConverter, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
+	runtime_apis::{CustomRuntimeApi, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -178,20 +178,35 @@ impl From<SwapOutput> for RpcSwapOutput {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcEnvironment {
-	bitcoin_network: BitcoinNetwork,
-	ethereum_chain_id: cf_chains::evm::api::EvmChainId,
-	polkadot_genesis_hash: PolkadotHash,
+pub struct BitcoinEnvironment {
+	pub network: BitcoinNetwork,
 }
 
-impl From<Environment> for RpcEnvironment {
-	fn from(environment: Environment) -> Self {
-		Self {
-			bitcoin_network: environment.bitcoin_network,
-			ethereum_chain_id: environment.ethereum_chain_id,
-			polkadot_genesis_hash: environment.polkadot_genesis_hash,
-		}
-	}
+#[derive(Serialize, Deserialize)]
+pub struct EthereumEnvironment {
+	pub chain_id: cf_chains::evm::api::EvmChainId,
+	pub contract_addresses: HashMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PolkadotEnvironment {
+	pub genesis_hash: PolkadotHash,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FundingEnvironment {
+	pub redemption_tax: NumberOrHex,
+	pub minimum_funding_amount: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcEnvironment {
+	bitcoin: BitcoinEnvironment,
+	ethereum: EthereumEnvironment,
+	polkadot: PolkadotEnvironment,
+	minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	funding: FundingEnvironment,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -786,11 +801,69 @@ where
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
-		self.client
-			.runtime_api()
-			.cf_environment(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-			.map(RpcEnvironment::from)
+		let runtime_api = &self.client.runtime_api();
+		let hash = self.unwrap_or_best(at);
+		let env = runtime_api.cf_environment(hash).map_err(to_rpc_error)?;
+
+		let mut minimum_swap_amounts = HashMap::new();
+		let mut minimum_deposit_amounts = HashMap::new();
+
+		for asset in Asset::all() {
+			let swap_amount =
+				runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?.into();
+			minimum_swap_amounts
+				.entry(asset.into())
+				.or_insert_with(HashMap::new)
+				.insert(asset, swap_amount);
+			let deposit_amount =
+				runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into();
+			minimum_deposit_amounts
+				.entry(asset.into())
+				.or_insert_with(HashMap::new)
+				.insert(asset, deposit_amount);
+		}
+
+		Ok(RpcEnvironment {
+			bitcoin: BitcoinEnvironment { network: env.bitcoin_network },
+			ethereum: EthereumEnvironment {
+				chain_id: env.ethereum_chain_id,
+				contract_addresses: HashMap::from([
+					(
+						"key_manager".into(),
+						format!(
+							"{}",
+							runtime_api.cf_eth_key_manager_address(hash).map_err(to_rpc_error)?
+						),
+					),
+					(
+						"state_chain_gateway".into(),
+						format!(
+							"{}",
+							runtime_api
+								.cf_eth_state_chain_gateway_address(hash)
+								.map_err(to_rpc_error)?
+						),
+					),
+					(
+						"flip_token".into(),
+						format!(
+							"{}",
+							runtime_api.cf_eth_flip_token_address(hash).map_err(to_rpc_error)?
+						),
+					),
+				]),
+			},
+			polkadot: PolkadotEnvironment { genesis_hash: env.polkadot_genesis_hash },
+			minimum_deposit_amounts,
+			minimum_swap_amounts,
+			funding: FundingEnvironment {
+				redemption_tax: runtime_api.cf_redemption_tax(hash).map_err(to_rpc_error)?.into(),
+				minimum_funding_amount: runtime_api
+					.cf_min_funding(hash)
+					.map_err(to_rpc_error)?
+					.into(),
+			},
+		})
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
