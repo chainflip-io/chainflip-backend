@@ -10,14 +10,13 @@ async function getCurrentSpecVersion(): Promise<number> {
 
 // Do a runtime upgrade using the code in the projectRoot directory.
 export async function simpleRuntimeUpgrade(projectRoot: string): Promise<void> {
-
   const chainflip = await getChainflipApi();
   const currentSpecVersion = await getCurrentSpecVersion();
   console.log('Current spec_version: ' + currentSpecVersion);
   const nextSpecVersion = currentSpecVersion + 1;
   bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, nextSpecVersion);
 
-  await compileBinaries("runtime", projectRoot);
+  await compileBinaries('runtime', projectRoot);
 
   console.log('Applying runtime upgrade.');
   await submitRuntimeUpgrade(
@@ -32,9 +31,9 @@ export async function simpleRuntimeUpgrade(projectRoot: string): Promise<void> {
   if (newSpecVersion !== nextSpecVersion) {
     console.error(
       'After submitting the runtime upgrade, the new spec_version is not what we expected. Expected: ' +
-      nextSpecVersion +
-      ' Got: ' +
-      newSpecVersion,
+        nextSpecVersion +
+        ' Got: ' +
+        newSpecVersion,
     );
   }
 

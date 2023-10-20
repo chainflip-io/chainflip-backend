@@ -2,7 +2,7 @@
 // INSTRUCTIONS
 // Upgrades a localnet network to a new version.
 // Start a network with the version you want to upgrade from. Then run this command, providing the git reference (commit, branch, tag) you wish to upgrade to.
-// 
+//
 // Optional args:
 // patch/minor/major: If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
 //
