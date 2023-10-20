@@ -82,7 +82,7 @@ pub async fn start<
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone + 'static + Send + Sync,
+	StateChainStream: StateChainStreamApi<true> + Clone + 'static + Send + Sync,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync

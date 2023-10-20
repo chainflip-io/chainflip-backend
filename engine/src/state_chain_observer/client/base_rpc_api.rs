@@ -122,7 +122,13 @@ pub trait BaseRpcApi {
 
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash>;
 
+	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash>;
+
 	async fn subscribe_finalized_block_headers(
+		&self,
+	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
+
+	async fn subscribe_unfinalized_block_headers(
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
 
@@ -221,10 +227,20 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		self.raw_rpc_client.finalized_head().await
 	}
 
+	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
+		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await?).expect(SUBSTRATE_BEHAVIOUR))
+	}
+
 	async fn subscribe_finalized_block_headers(
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
 		self.raw_rpc_client.subscribe_finalized_heads().await
+	}
+
+	async fn subscribe_unfinalized_block_headers(
+		&self,
+	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
+		self.raw_rpc_client.subscribe_new_heads().await
 	}
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {

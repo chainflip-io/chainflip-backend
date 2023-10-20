@@ -19,7 +19,7 @@ pub mod redact_endpoint_secret;
 pub mod serde_helpers;
 
 mod cached_stream;
-pub use cached_stream::{CachedStream, MakeCachedStream};
+pub use cached_stream::{CachedStream, InnerCachedStream, MakeCachedStream};
 
 /// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
 /// including context and source.

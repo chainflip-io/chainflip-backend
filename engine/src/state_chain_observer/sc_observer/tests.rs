@@ -52,7 +52,7 @@ const MOCK_ETH_TRANSACTION_OUT_ID: SchnorrVerificationComponents =
 	SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [1; 20] };
 
 async fn start_sc_observer<
-	BlockStream: crate::state_chain_observer::client::StateChainStreamApi,
+	BlockStream: crate::state_chain_observer::client::StateChainStreamApi<true>,
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,

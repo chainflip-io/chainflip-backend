@@ -122,7 +122,7 @@ impl SignedExtrinsicClient {
 	pub async fn new<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi + Clone,
+		BlockStream: StateChainStreamApi<true> + Clone,
 	>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,

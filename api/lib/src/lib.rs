@@ -106,7 +106,7 @@ impl StateChainApi {
 		scope: &Scope<'a, anyhow::Error>,
 		state_chain_settings: settings::StateChain,
 	) -> Result<Self, anyhow::Error> {
-		let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		let (_state_chain_stream, _, state_chain_client) = StateChainClient::connect_with_account(
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,

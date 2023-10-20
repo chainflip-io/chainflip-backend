@@ -47,7 +47,7 @@ enum CfeStatus {
 
 async fn ensure_cfe_version_record_up_to_date(
 	state_chain_client: &Arc<StateChainClient>,
-	state_chain_stream: &impl StateChainStreamApi,
+	state_chain_stream: &impl StateChainStreamApi<true>,
 ) -> anyhow::Result<()> {
 	let recorded_version = state_chain_client
 		.storage_map_entry::<pallet_cf_validator::NodeCFEVersion<state_chain_runtime::Runtime>>(
@@ -103,7 +103,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 
 			let mut cfe_status = CfeStatus::Idle;
 
-			let (state_chain_stream, state_chain_client) =
+			let (state_chain_stream, _, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
@@ -168,7 +168,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: Settings,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StateChainStreamApi<true> + Clone,
 	state_chain_client: Arc<StateChainClient>,
 ) -> anyhow::Result<()> {
 	let has_completed_initialising = Arc::new(AtomicBool::new(false));

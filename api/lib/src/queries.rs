@@ -39,7 +39,7 @@ impl QueryApi {
 	) -> Result<QueryApi> {
 		log::debug!("Connecting to state chain at: {}", state_chain_settings.ws_endpoint);
 
-		let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		let (_state_chain_stream, _, state_chain_client) = StateChainClient::connect_with_account(
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
