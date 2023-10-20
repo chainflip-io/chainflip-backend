@@ -2,7 +2,7 @@ pub mod base_rpc_api;
 pub mod chain_api;
 pub mod error_decoder;
 pub mod extrinsic_api;
-mod finalized_stream;
+pub mod finalized_stream;
 pub mod storage_api;
 
 use async_trait::async_trait;

@@ -203,7 +203,7 @@ mod tests {
 				)
 				.unwrap();
 
-				let (state_chain_stream, state_chain_client) =
+				let (state_chain_stream, _, state_chain_client) =
 					StateChainClient::connect_with_account(
 						scope,
 						"ws://localhost:9944",

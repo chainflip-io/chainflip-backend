@@ -4,7 +4,9 @@ use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
-	state_chain_observer::client::{extrinsic_api, StreamCache},
+	state_chain_observer::client::{
+		extrinsic_api, finalized_stream::FinalizedCachedStream, StreamCache,
+	},
 };
 use cf_chains::{
 	evm::{SchnorrVerificationComponents, Transaction},
@@ -146,7 +148,12 @@ async fn only_encodes_and_signs_when_specified() {
 	let mut eth_mock_clone = MockEthRetryRpcClient::new();
 	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
 
-	start_sc_observer(state_chain_client, sc_block_stream, eth_mock_clone).await;
+	start_sc_observer(
+		state_chain_client,
+		FinalizedCachedStream::new(sc_block_stream),
+		eth_mock_clone,
+	)
+	.await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -514,7 +521,7 @@ async fn run_the_sc_observer() {
 		async {
 			let settings = Settings::new_test().unwrap();
 
-			let (sc_block_stream, state_chain_client) =
+			let (sc_block_stream, _, state_chain_client) =
 				crate::state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
