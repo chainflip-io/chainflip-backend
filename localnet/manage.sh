@@ -243,11 +243,10 @@ logs() {
     if [[ $SERVICE == "staker" ]]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
-    if [[ $SERVICE == "node" ]]; then
-      tail -f /tmp/chainflip/chainflip-node.log
-    fi
-    if [[ $SERVICE == "engine" ]]; then
-      tail -f /tmp/chainflip/chainflip-engine.log
+    if [[ $SERVICE == "node" ]] || [[ $SERVICE == "engine" ]]; then
+      select NODE in bashful doc dopey; do
+        tail -f /tmp/chainflip/$NODE/chainflip-$SERVICE.log
+      done
     fi
     if [[ $SERVICE == "broker" ]]; then
       tail -f /tmp/chainflip/chainflip-broker-api.log
