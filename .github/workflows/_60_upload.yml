@@ -35,7 +35,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: eu-central-1
-          role-to-assume: arn:aws:iam::951386877486:role/chainflip-github-bot
+          role-to-assume: arn:aws:iam::771478732399:role/chainflip-github-bot
 
       - name: Upload binaries to s3
         run: |
