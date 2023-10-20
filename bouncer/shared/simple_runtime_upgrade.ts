@@ -9,15 +9,7 @@ async function getCurrentSpecVersion(): Promise<number> {
 }
 
 // Returns the expected next version of the runtime.
-export async function compileBinaries(type: "runtime" | "all", projectRoot: string): Promise<number> {
-  const currentSpecVersion = await getCurrentSpecVersion();
-
-  console.log('Current spec_version: ' + currentSpecVersion);
-
-  const nextSpecVersion = currentSpecVersion + 1;
-
-  bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, nextSpecVersion);
-
+export async function compileBinaries(type: "runtime" | "all", projectRoot: string) {
   if (type === "all") {
     console.log('Building all the binaries...');
     execSync(`cd ${projectRoot} cargo build --release`);
@@ -27,15 +19,18 @@ export async function compileBinaries(type: "runtime" | "all", projectRoot: stri
   }
 
   console.log("Build complete.");
-
-  return nextSpecVersion;
 }
 
 // Do a runtime upgrade using the code in the projectRoot directory.
 export async function simpleRuntimeUpgrade(projectRoot: string): Promise<void> {
-  const chainflip = await getChainflipApi();
 
-  const nextSpecVersion = await compileBinaries("runtime", projectRoot);
+  const chainflip = await getChainflipApi();
+  const currentSpecVersion = await getCurrentSpecVersion();
+  console.log('Current spec_version: ' + currentSpecVersion);
+  const nextSpecVersion = currentSpecVersion + 1;
+  bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, nextSpecVersion);
+
+  await compileBinaries("runtime", projectRoot);
 
   console.log('Applying runtime upgrade.');
   await submitRuntimeUpgrade(
