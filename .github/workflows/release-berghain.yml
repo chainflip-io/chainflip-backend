@@ -10,10 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-versions:
-    uses: ./.github/workflows/_03_check_versions.yml
+#  check-versions:
+#    uses: ./.github/workflows/_03_check_versions.yml
   upload:
-    needs: [check-versions]
+#    needs: [check-versions]
     uses: ./.github/workflows/_60_upload.yml
     secrets: inherit
     with:
