@@ -26,6 +26,7 @@ jobs:
         with:
           workflow: release-sisyphos.yml
           name: chainflip-backend-packages-ubuntu-22.04
+          path: ${{ inputs.version }}
           branch: release/${{ steps.get_tag.outputs.tag }}
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           search_artifacts: true
