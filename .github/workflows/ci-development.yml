@@ -10,44 +10,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-#  pre-check:
-#    uses: ./.github/workflows/_01_pre_check.yml
-#    secrets: inherit
-#  test:
-#    uses: ./.github/workflows/_10_test.yml
-#    secrets: inherit
-#  build:
-#    uses: ./.github/workflows/_20_build.yml
-#    secrets: inherit
-#    with:
-#      network: development
-#  docker:
-#    needs: [build]
-#    uses: ./.github/workflows/_24_docker.yml
-#    secrets: inherit
-#    with:
-#      network: development
-#      environment: dev
-#  package:
-#    needs: [build]
-#    uses: ./.github/workflows/_25_package.yml
-#    with:
-#      network: "development"
-#      environment: dev
-#    secrets: inherit
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: development
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    secrets: inherit
+    with:
+      network: development
+      environment: dev
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "development"
+      environment: dev
+    secrets: inherit
   post-check:
-#    needs: [build]
+    needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
       simple_bouncer: false
-#  publish:
-#    needs: [package]
-#    uses: ./.github/workflows/_30_publish.yml
-#    with:
-#      version: ci/${{ github.sha }}/
-#      environment: dev
-#    secrets: inherit
-#  merge-commit-summary:
-#    needs: [publish]
-#    uses: ./.github/workflows/_04_merge_commit_summary.yml
+  publish:
+    needs: [package]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: ci/${{ github.sha }}/
+      environment: dev
+    secrets: inherit
+  merge-commit-summary:
+    needs: [publish]
+    uses: ./.github/workflows/_04_merge_commit_summary.yml

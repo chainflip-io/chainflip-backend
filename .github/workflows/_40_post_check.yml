@@ -56,19 +56,10 @@ jobs:
         run: |
           npm install -g wscat
 
-#      - name: Download binaries
-#        uses: actions/download-artifact@v3
-#        with:
-#          name: chainflip-backend-bin-ubuntu-22.04
-      - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
-        uses: dawidd6/action-download-artifact@v2
+      - name: Download binaries
+        uses: actions/download-artifact@v3
         with:
-          workflow: ci-main.yml
           name: chainflip-backend-bin-ubuntu-22.04
-          branch: main
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          search_artifacts: true
-          check_artifacts: true
 
       - name: Install node dependencies
         working-directory: bouncer
