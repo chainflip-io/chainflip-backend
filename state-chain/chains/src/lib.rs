@@ -130,9 +130,9 @@ pub trait Chain: Member + Parameter {
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 
-	type TransactionMetaData: Member
+	type TransactionMetadata: Member
 		+ Parameter
-		+ TransactionMetaDataHandler<Self>
+		+ TransactionMetadata<Self>
 		+ BenchmarkValue
 		+ Default;
 	/// Passed in to construct the replay protection.
@@ -260,12 +260,18 @@ where
 	}
 }
 
-pub trait TransactionMetaDataHandler<C: Chain> {
-	fn extract_metadata(transaction: &C::Transaction) -> C::TransactionMetaData;
-	fn verify_metadata(
-		metadata: &C::TransactionMetaData,
-		expected_metadata: &C::TransactionMetaData,
-	) -> bool;
+pub trait TransactionMetadata<C: Chain> {
+	fn extract_metadata(transaction: &C::Transaction) -> Self;
+	fn verify_metadata(&self, expected_metadata: &Self) -> bool;
+}
+
+impl<C: Chain> TransactionMetadata<C> for () {
+	fn extract_metadata(_transaction: &C::Transaction) -> Self {
+		Default::default()
+	}
+	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
+		true
+	}
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.

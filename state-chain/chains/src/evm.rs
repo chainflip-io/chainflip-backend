@@ -354,18 +354,16 @@ pub struct Transaction {
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub struct TransactionMetadata {
+pub struct EvmTransactionMetadata {
 	pub max_fee_per_gas: Option<Uint>,
 	pub max_priority_fee_per_gas: Option<Uint>,
 	pub contract: Address,
 	pub gas_limit: Option<Uint>,
 }
 
-impl TransactionMetaDataHandler<Ethereum> for TransactionMetadata {
-	fn extract_metadata(
-		transaction: &<Ethereum as Chain>::Transaction,
-	) -> <Ethereum as Chain>::TransactionMetaData {
-		TransactionMetadata {
+impl<C: Chain<Transaction = Transaction>> TransactionMetadata<C> for EvmTransactionMetadata {
+	fn extract_metadata(transaction: &<C as Chain>::Transaction) -> Self {
+		Self {
 			contract: transaction.contract,
 			max_fee_per_gas: transaction.max_fee_per_gas,
 			max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
@@ -373,18 +371,17 @@ impl TransactionMetaDataHandler<Ethereum> for TransactionMetadata {
 		}
 	}
 
-	fn verify_metadata(
-		metadata: &<Ethereum as Chain>::TransactionMetaData,
-		expected_metadata: &<Ethereum as Chain>::TransactionMetaData,
-	) -> bool {
-		metadata.contract == expected_metadata.contract &&
-			(expected_metadata.max_fee_per_gas.is_none() ||
-				expected_metadata.max_fee_per_gas == metadata.max_fee_per_gas) &&
-			(expected_metadata.max_priority_fee_per_gas.is_none() ||
-				expected_metadata.max_priority_fee_per_gas ==
-					metadata.max_priority_fee_per_gas) &&
-			(expected_metadata.gas_limit.is_none() ||
-				expected_metadata.gas_limit == metadata.gas_limit)
+	fn verify_metadata(&self, expected_metadata: &Self) -> bool {
+		macro_rules! check_optional {
+			($field:ident) => {
+				expected_metadata.$field.is_none() || expected_metadata.$field == self.$field
+			};
+		}
+
+		self.contract == expected_metadata.contract &&
+			check_optional!(max_fee_per_gas) &&
+			check_optional!(max_priority_fee_per_gas) &&
+			check_optional!(gas_limit)
 	}
 }
 

@@ -6,7 +6,7 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId, Transaction, TransactionMetadata},
+	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
 	*,
 };
 use cf_primitives::chains::assets;
@@ -43,7 +43,7 @@ impl Chain for Ethereum {
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = ();
 	type Transaction = Transaction;
-	type TransactionMetaData = TransactionMetadata;
+	type TransactionMetadata = EvmTransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
 }

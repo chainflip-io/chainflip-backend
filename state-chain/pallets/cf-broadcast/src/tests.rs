@@ -4,7 +4,7 @@ use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
-	TransactionOutIdToBroadcastId, WeightInfo,
+	TransactionMetadata, TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -118,6 +118,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
 	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(TransactionMetadata::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
 fn start_mock_broadcast_tx_out_id(
@@ -137,7 +138,6 @@ fn start_mock_broadcast() -> BroadcastAttemptId {
 	start_mock_broadcast_tx_out_id(Default::default())
 }
 
-// The happy path :)
 #[test]
 fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
@@ -168,8 +168,8 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::ValidatorRefundRecorded {
-				validator_id: Default::default(),
+			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRecorded {
+				beneficiary: Default::default(),
 				amount: expected_refund
 			})
 		);
@@ -557,7 +557,7 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 #[test]
 fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 	new_test_ext().execute_with(|| {
-		MockEthereumTransactionMetadata::set_valid(false);
+		MockEthereumTransactionMetadata::set_validity(false);
 		let _ = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 		let nominee = MockNominator::get_last_nominee().unwrap();
 
@@ -573,8 +573,8 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::ValidatorRefundRefused {
-				validator_id: Default::default(),
+			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRefused {
+				beneficiary: Default::default(),
 			})
 		);
 	});

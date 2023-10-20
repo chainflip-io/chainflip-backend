@@ -66,17 +66,12 @@ impl Get<bool> for MockFixedKeySigningRequests {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereumTransactionMetadata;
 
-impl TransactionMetaDataHandler<MockEthereum> for MockEthereumTransactionMetadata {
-	fn extract_metadata(
-		_transaction: &<MockEthereum as Chain>::Transaction,
-	) -> <MockEthereum as Chain>::TransactionMetaData {
+impl TransactionMetadata<MockEthereum> for MockEthereumTransactionMetadata {
+	fn extract_metadata(_transaction: &<MockEthereum as Chain>::Transaction) -> Self {
 		Default::default()
 	}
 
-	fn verify_metadata(
-		_metadata: &<MockEthereum as Chain>::TransactionMetaData,
-		_expected_metadata: &<MockEthereum as Chain>::TransactionMetaData,
-	) -> bool {
+	fn verify_metadata(&self, _expected_metadata: &Self) -> bool {
 		MOCK_VALID_METADATA.with(|cell| *cell.borrow())
 	}
 }
@@ -88,7 +83,7 @@ impl BenchmarkValue for MockEthereumTransactionMetadata {
 }
 
 impl MockEthereumTransactionMetadata {
-	pub fn set_valid(valid: bool) {
+	pub fn set_validity(valid: bool) {
 		MOCK_VALID_METADATA.with(|cell| *cell.borrow_mut() = valid);
 	}
 }
@@ -109,7 +104,7 @@ impl Chain for MockEthereum {
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
 	type Transaction = MockTransaction;
-	type TransactionMetaData = MockEthereumTransactionMetadata;
+	type TransactionMetadata = MockEthereumTransactionMetadata;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
 }
@@ -287,7 +282,7 @@ pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
-pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetaData =
+pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetadata =
 	MockEthereumTransactionMetadata;
 
 #[derive(Encode, Decode, TypeInfo, CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]

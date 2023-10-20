@@ -11,7 +11,7 @@ use crate::address::EncodedAddress;
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::evm::EvmFetchId;
-use crate::evm::TransactionMetadata;
+use crate::evm::EvmTransactionMetadata;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -124,9 +124,9 @@ impl BenchmarkValueExtended for () {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for TransactionMetadata {
+impl BenchmarkValue for EvmTransactionMetadata {
 	fn benchmark_value() -> Self {
-		TransactionMetadata {
+		Self {
 			contract: H160::zero(),
 			max_fee_per_gas: Some(U256::zero()),
 			max_priority_fee_per_gas: Some(U256::zero()),

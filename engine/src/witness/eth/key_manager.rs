@@ -1,5 +1,5 @@
 use cf_chains::evm::{
-	EvmCrypto, SchnorrVerificationComponents, TransactionFee, TransactionMetadata,
+	EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee,
 };
 use cf_primitives::EpochIndex;
 use ethers::{
@@ -62,7 +62,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			ChainCrypto = EvmCrypto,
 			ChainAccount = H160,
 			TransactionFee = TransactionFee,
-			TransactionMetaData = TransactionMetadata,
+			TransactionMetadata = EvmTransactionMetadata,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -133,7 +133,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								.map_err(anyhow::Error::msg)?;
 
 							let transaction = eth_rpc.get_transaction(event.tx_hash).await;
-							let tx_metadata = TransactionMetadata {
+							let tx_metadata = EvmTransactionMetadata {
 								contract: to.expect("To have a contract"),
 								max_fee_per_gas: transaction.max_fee_per_gas,
 								max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,

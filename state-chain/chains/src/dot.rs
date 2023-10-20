@@ -194,23 +194,6 @@ impl PolkadotUncheckedExtrinsic {
 	}
 }
 
-pub struct PolkadotTransactionMetaDataHandler;
-
-impl TransactionMetaDataHandler<Polkadot> for PolkadotTransactionMetaDataHandler {
-	fn extract_metadata(
-		_transaction: &<Polkadot as Chain>::Transaction,
-	) -> <Polkadot as Chain>::TransactionMetaData {
-		Default::default()
-	}
-
-	fn verify_metadata(
-		_metadata: &<Polkadot as Chain>::TransactionMetaData,
-		_expected_metadata: &<Polkadot as Chain>::TransactionMetaData,
-	) -> bool {
-		true
-	}
-}
-
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 
@@ -284,24 +267,9 @@ impl Chain for Polkadot {
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
 	type Transaction = PolkadotTransactionData;
-	type TransactionMetaData = ();
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
-}
-
-impl TransactionMetaDataHandler<Polkadot> for () {
-	fn extract_metadata(
-		_transaction: &<Polkadot as Chain>::Transaction,
-	) -> <Polkadot as Chain>::TransactionMetaData {
-		Default::default()
-	}
-
-	fn verify_metadata(
-		_metadata: &<Polkadot as Chain>::TransactionMetaData,
-		_expected_metadata: &<Polkadot as Chain>::TransactionMetaData,
-	) -> bool {
-		true
-	}
 }
 
 pub type ResetProxyAccountNonce = bool;

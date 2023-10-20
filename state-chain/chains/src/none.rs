@@ -19,24 +19,9 @@ impl Chain for NoneChain {
 	type DepositChannelState = ();
 	type DepositDetails = ();
 	type Transaction = ();
-	type TransactionMetaData = ();
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-}
-
-impl TransactionMetaDataHandler<NoneChain> for () {
-	fn extract_metadata(
-		_transaction: &<NoneChain as Chain>::Transaction,
-	) -> <NoneChain as Chain>::TransactionMetaData {
-		unimplemented!()
-	}
-
-	fn verify_metadata(
-		_metadata: &<NoneChain as Chain>::TransactionMetaData,
-		_expected_metadata: &<NoneChain as Chain>::TransactionMetaData,
-	) -> bool {
-		unimplemented!()
-	}
 }
 
 impl FeeRefundCalculator<NoneChain> for () {
