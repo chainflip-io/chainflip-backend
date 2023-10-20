@@ -3,7 +3,8 @@ mod dot_deposits;
 mod dot_source;
 
 use cf_chains::dot::{
-	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotUncheckedExtrinsic,
+	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
+	PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber, TxId};
 use futures_core::Future;
@@ -29,12 +30,16 @@ use crate::{
 	witness::common::chain_source::extension::ChainSourceExt,
 };
 use anyhow::Result;
-use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
+pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 
-use super::common::{epoch_source::EpochSourceBuilder, STATE_CHAIN_CONNECTION};
+use super::common::{
+	chain_source::Header,
+	epoch_source::{EpochSourceBuilder, Vault},
+	STATE_CHAIN_CONNECTION,
+};
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
-// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment --url
+// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment,System --url
 // wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.json.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
@@ -44,14 +49,15 @@ pub enum EventWrapper {
 	ProxyAdded { delegator: AccountId32, delegatee: AccountId32 },
 	Transfer { to: AccountId32, from: AccountId32, amount: PolkadotBalance },
 	TransactionFeePaid { actual_fee: PolkadotBalance, tip: PolkadotBalance },
+	ExtrinsicSuccess,
 }
 
 use polkadot::{
-	balances::events::Transfer, proxy::events::ProxyAdded,
+	balances::events::Transfer, proxy::events::ProxyAdded, system::events::ExtrinsicSuccess,
 	transaction_payment::events::TransactionFeePaid,
 };
 
-fn filter_map_events(
+pub fn filter_map_events(
 	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
 ) -> Option<(Phase, EventWrapper)> {
 	match res_event_details {
@@ -71,6 +77,11 @@ fn filter_map_events(
 					event_details.as_event::<TransactionFeePaid>().unwrap().unwrap();
 				Some(EventWrapper::TransactionFeePaid { actual_fee, tip })
 			},
+			(ExtrinsicSuccess::PALLET, ExtrinsicSuccess::EVENT) => {
+				let ExtrinsicSuccess { .. } =
+					event_details.as_event::<ExtrinsicSuccess>().unwrap().unwrap();
+				Some(EventWrapper::ExtrinsicSuccess)
+			},
 			_ => None,
 		}
 		.map(|event| (event_details.phase(), event)),
@@ -78,6 +89,90 @@ fn filter_map_events(
 			error!("Error while parsing event: {:?}", err);
 			None
 		},
+	}
+}
+
+pub async fn proxy_added_witnessing<ProcessCall, ProcessingFut>(
+	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
+	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
+	process_call: ProcessCall,
+) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>)
+where
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
+{
+	let events = header.data;
+
+	let (vault_key_rotated_calls, proxy_added_broadcasts) =
+		proxy_addeds(header.index, &events, &epoch.info.2);
+
+	for call in vault_key_rotated_calls {
+		process_call(call, epoch.index).await;
+	}
+
+	(events, proxy_added_broadcasts)
+}
+
+#[allow(clippy::type_complexity)]
+pub async fn process_egress<ProcessCall, ProcessingFut>(
+	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
+	header: Header<
+		PolkadotBlockNumber,
+		PolkadotHash,
+		((Vec<(Phase, EventWrapper)>, BTreeSet<u32>), Vec<PolkadotSignature>),
+	>,
+	process_call: ProcessCall,
+	dot_client: DotRetryRpcClient,
+) where
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
+{
+	let ((events, mut extrinsic_indices), monitored_egress_ids) = header.data;
+
+	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
+	extrinsic_indices.extend(extrinsic_success_indices(&events));
+
+	let extrinsics: Vec<subxt::rpc::types::ChainBlockExtrinsic> =
+		dot_client.extrinsics(header.hash).await;
+
+	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
+		let xt = extrinsics.get(extrinsic_index as usize).expect(
+			"We know this exists since we got
+	this index from the event, from the block we are querying.",
+		);
+		let mut xt_bytes = xt.0.as_slice();
+
+		let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
+		if let Ok(unchecked) = unchecked {
+			if let Some(signature) = unchecked.signature() {
+				if monitored_egress_ids.contains(&signature) {
+					tracing::info!("Witnessing transaction_succeeded. signature: {signature:?}");
+					process_call(
+						pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
+							tx_out_id: signature,
+							signer_id: epoch.info.2,
+							tx_fee,
+						}
+						.into(),
+						epoch.index,
+					)
+					.await;
+				}
+			}
+		} else {
+			// We expect this to occur when attempting to decode
+			// a transaction that was not sent by us.
+			// We can safely ignore it, but we log it in case.
+			tracing::debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+		}
 	}
 }
 
@@ -168,22 +263,8 @@ where
 		// Proxy added witnessing
 		.then({
 			let process_call = process_call.clone();
-			move |epoch, header| {
-				let process_call = process_call.clone();
-				async move {
-					let (events, mut broadcast_indices) = header.data;
-
-					let (vault_key_rotated_calls, mut proxy_added_broadcasts) = proxy_addeds(header.index, &events, &epoch.info.2);
-					broadcast_indices.append(&mut proxy_added_broadcasts);
-
-					for call in vault_key_rotated_calls {
-						process_call(call, epoch.index).await;
-					}
-
-					(events, broadcast_indices)
-				}
-			}}
-		)
+			move |epoch, header| proxy_added_witnessing(epoch, header, process_call.clone())
+		})
 		// Broadcast success
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
@@ -191,49 +272,9 @@ where
 			let process_call = process_call.clone();
 			let dot_client = dot_client.clone();
 			move |epoch, header| {
-				let process_call = process_call.clone();
-				let dot_client = dot_client.clone();
-				async move {
-					let ((events, broadcast_indices), monitored_egress_ids) = header.data;
-
-					let extrinsics = dot_client
-						.extrinsics(header.hash)
-						.await;
-
-					for (extrinsic_index, tx_fee) in transaction_fee_paids(&broadcast_indices, &events) {
-						let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-						let mut xt_bytes = xt.0.as_slice();
-
-						let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
-						if let Ok(unchecked) = unchecked {
-							if let Some(signature) = unchecked.signature() {
-								if monitored_egress_ids.contains(&signature) {
-									tracing::info!("Witnessing transaction_succeeded. signature: {signature:?}");
-									process_call(
-										pallet_cf_broadcast::Call::<
-											_,
-											PolkadotInstance,
-										>::transaction_succeeded {
-											tx_out_id: signature,
-											signer_id: epoch.info.2,
-											tx_fee,
-										}
-										.into(),
-										epoch.index,
-									).await;
-								}
-							}
-						} else {
-							// We expect this to occur when attempting to decode
-							// a transaction that was not sent by us.
-							// We can safely ignore it, but we log it in case.
-							tracing::debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
-						}
-					}
-				}
-				}
+				process_egress(epoch, header, process_call.clone(), dot_client.clone())
 			}
-		)
+		})
 		.continuous("Polkadot".to_string(), db)
 		.logging("witnessing")
 		.spawn(scope);
@@ -243,19 +284,29 @@ where
 
 fn transaction_fee_paids(
 	indices: &BTreeSet<PolkadotExtrinsicIndex>,
-	events: &Vec<(Phase, EventWrapper)>,
+	events: &[(Phase, EventWrapper)],
 ) -> BTreeSet<(PolkadotExtrinsicIndex, PolkadotBalance)> {
-	let mut indices_with_fees = BTreeSet::new();
-	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			if indices.contains(extrinsic_index) {
-				if let EventWrapper::TransactionFeePaid { actual_fee, .. } = wrapped_event {
-					indices_with_fees.insert((*extrinsic_index, *actual_fee));
-				}
-			}
-		}
-	}
-	indices_with_fees
+	events
+		.iter()
+		.filter_map(|(phase, wrapped_event)| match (phase, wrapped_event) {
+			(
+				Phase::ApplyExtrinsic(extrinsic_index),
+				EventWrapper::TransactionFeePaid { actual_fee, .. },
+			) if indices.contains(extrinsic_index) => Some((*extrinsic_index, *actual_fee)),
+			_ => None,
+		})
+		.collect()
+}
+
+fn extrinsic_success_indices(events: &[(Phase, EventWrapper)]) -> BTreeSet<PolkadotExtrinsicIndex> {
+	events
+		.iter()
+		.filter_map(|(phase, wrapped_event)| match (phase, wrapped_event) {
+			(Phase::ApplyExtrinsic(extrinsic_index), EventWrapper::ExtrinsicSuccess) =>
+				Some(*extrinsic_index),
+			_ => None,
+		})
+		.collect()
 }
 
 fn proxy_addeds(
@@ -331,11 +382,23 @@ pub mod test {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (vault_key_rotated_calls, broadcast_indices) =
+		let (vault_key_rotated_calls, extrinsic_indices) =
 			proxy_addeds(20, &block_event_details, &our_vault);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
-		assert_eq!(broadcast_indices.len(), 1);
-		assert!(broadcast_indices.contains(&our_proxy_added_index));
+		assert_eq!(extrinsic_indices.len(), 1);
+		assert!(extrinsic_indices.contains(&our_proxy_added_index));
+	}
+
+	#[tokio::test]
+	async fn test_extrinsic_success_filtering() {
+		let events = phase_and_events(vec![
+			(1u32, EventWrapper::ExtrinsicSuccess),
+			(2u32, mock_tx_fee_paid(20000)),
+			(2u32, EventWrapper::ExtrinsicSuccess),
+			(3u32, mock_tx_fee_paid(20000)),
+		]);
+
+		assert_eq!(extrinsic_success_indices(&events), BTreeSet::from([1, 2]));
 	}
 }

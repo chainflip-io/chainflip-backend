@@ -175,7 +175,7 @@ impl_pallet_safe_mode! {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::{address::EncodedAddress, AnyChain};
+	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapDepositHandler};
 
@@ -191,7 +191,6 @@ pub mod pallet {
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
-			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// API for handling asset egress.
@@ -268,6 +267,7 @@ pub mod pallet {
 			channel_id: ChannelId,
 			broker_commission_rate: BasisPoints,
 			channel_metadata: Option<CcmChannelMetadata>,
+			source_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -519,14 +519,15 @@ pub mod pallet {
 				);
 			}
 
-			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
-				source_asset,
-				destination_asset,
-				destination_address_internal,
-				broker_commission_bps,
-				broker,
-				channel_metadata.clone(),
-			)?;
+			let (channel_id, deposit_address, expiry_height) =
+				T::DepositHandler::request_swap_deposit_address(
+					source_asset,
+					destination_asset,
+					destination_address_internal,
+					broker_commission_bps,
+					broker,
+					channel_metadata.clone(),
+				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
@@ -536,6 +537,7 @@ pub mod pallet {
 				channel_id,
 				broker_commission_rate: broker_commission_bps,
 				channel_metadata,
+				source_chain_expiry_block: expiry_height,
 			});
 
 			Ok(())

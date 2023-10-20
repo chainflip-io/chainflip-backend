@@ -6,7 +6,7 @@ use cf_chains::{
 	address::EncodedAddress,
 	dot::PolkadotAccountId,
 	evm::{to_evm_address, Address as EthereumAddress},
-	CcmChannelMetadata, ForeignChain,
+	AnyChain, CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use codec::Encode;
@@ -316,6 +316,7 @@ pub struct SwapDepositAddress {
 	pub address: String,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
+	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
 }
 
 #[async_trait]
@@ -342,7 +343,10 @@ pub trait BrokerApi: SignedExtrinsicApi {
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::SwapDepositAddressReady {
-				deposit_address, channel_id, ..
+				deposit_address,
+				channel_id,
+				source_chain_expiry_block,
+				..
 			},
 		)) = events.iter().find(|event| {
 			matches!(
@@ -356,6 +360,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				address: deposit_address.to_string(),
 				issued_block: header.number,
 				channel_id: *channel_id,
+				source_chain_expiry_block: *source_chain_expiry_block,
 			})
 		} else {
 			panic!("SwapDepositAddressReady must have been generated");

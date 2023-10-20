@@ -3,7 +3,8 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
-pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
+pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
+pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
@@ -17,6 +18,12 @@ pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
 /// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
+
+#[derive(Debug)]
+pub enum SetFeesError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+}
 
 #[derive(
 	Debug,
@@ -381,14 +388,14 @@ pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 }
 
 /// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
-pub(super) fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
+pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 	assert!(is_sqrt_price_valid(sqrt_price));
 
 	let sqrt_price_q64f128 = sqrt_price << 32u128;
 
 	let (integer_log_2, mantissa) = {
 		let mut _bits_remaining = sqrt_price_q64f128;
-		let mut most_signifcant_bit = 0u8;
+		let mut most_significant_bit = 0u8;
 
 		// rustfmt chokes when formatting this macro.
 		// See: https://github.com/rust-lang/rustfmt/issues/5404
@@ -396,7 +403,7 @@ pub(super) fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 		macro_rules! add_integer_bit {
 			($bit:literal, $lower_bits_mask:literal) => {
 				if _bits_remaining > U256::from($lower_bits_mask) {
-					most_signifcant_bit |= $bit;
+					most_significant_bit |= $bit;
 					_bits_remaining >>= $bit;
 				}
 			};
@@ -412,17 +419,17 @@ pub(super) fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 		add_integer_bit!(1u8, 0x1u128);
 
 		(
-			// most_signifcant_bit is the log2 of sqrt_price_q64f128 as an integer. This
-			// converts most_signifcant_bit to the integer log2 of sqrt_price_q64f128 as an
+			// most_significant_bit is the log2 of sqrt_price_q64f128 as an integer. This
+			// converts most_significant_bit to the integer log2 of sqrt_price_q64f128 as an
 			// q64f128
-			((most_signifcant_bit as i16) + (-128i16)) as i8,
+			((most_significant_bit as i16) + (-128i16)) as i8,
 			// Calculate mantissa of sqrt_price_q64f128.
-			if most_signifcant_bit >= 128u8 {
+			if most_significant_bit >= 128u8 {
 				// The bits we possibly drop when right shifting don't contribute to the log2
 				// above the 14th fractional bit.
-				sqrt_price_q64f128 >> (most_signifcant_bit - 127u8)
+				sqrt_price_q64f128 >> (most_significant_bit - 127u8)
 			} else {
-				sqrt_price_q64f128 << (127u8 - most_signifcant_bit)
+				sqrt_price_q64f128 << (127u8 - most_significant_bit)
 			}
 			.as_u128(), // Conversion to u128 is safe as top 128 bits are always zero
 		)

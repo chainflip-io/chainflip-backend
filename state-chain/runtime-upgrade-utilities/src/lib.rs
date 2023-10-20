@@ -31,83 +31,56 @@ pub struct VersionedMigration<
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime_helpers {
-	use frame_support::traits::PalletInfoAccess;
-	use sp_std::vec::Vec;
+	use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::PalletInfoAccess};
+	use sp_std::{
+		cmp::{max, min},
+		collections::btree_map::BTreeMap,
+		vec::Vec,
+	};
 
-	#[cfg(feature = "std")]
-	pub use with_std::*;
+	#[storage_alias]
+	pub type MigrationBounds =
+		StorageValue<CfUpgradeUtilities, BTreeMap<Vec<u8>, (u16, u16)>, ValueQuery>;
 
-	#[cfg(not(feature = "std"))]
-	pub use without_std::*;
+	#[storage_alias]
+	pub type MigrationState = StorageValue<
+		CfUpgradeUtilities,
+		BTreeMap<Vec<u8>, BTreeMap<(u16, u16), Vec<u8>>>,
+		ValueQuery,
+	>;
 
-	#[cfg(feature = "std")]
-	mod with_std {
-		use super::*;
-		use core::cell::RefCell;
-		use sp_std::{
-			cmp::{max, min},
-			collections::btree_map::BTreeMap,
-		};
-
-		thread_local! {
-			pub static MIGRATION_BOUNDS: RefCell<BTreeMap<&'static str, (u16, u16)>> = Default::default();
-			#[allow(clippy::type_complexity)]
-			pub static MIGRATION_STATE: RefCell<BTreeMap<&'static str, BTreeMap<(u16, u16), Vec<u8>>>> = Default::default();
-		}
-
-		pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
-			MIGRATION_BOUNDS.with(|cell| {
-				cell.borrow_mut()
-					.entry(T::name())
-					.and_modify(|(from, to)| {
-						*from = min(*from, FROM);
-						*to = max(*to, TO);
-					})
-					.or_insert((FROM, TO));
-			});
-		}
-
-		pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
-			MIGRATION_BOUNDS.with(|cell| cell.borrow().get(T::name()).copied())
-		}
-
-		pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
-			MIGRATION_STATE
-				.with(|cell| cell.borrow_mut().entry(T::name()).or_default().insert((FROM, TO), s));
-		}
-
-		pub fn restore_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> Vec<u8> {
-			MIGRATION_STATE.with(|cell| {
-				cell.borrow()
-					.get(T::name())
-					.cloned()
-					.unwrap_or_default()
-					.get(&(FROM, TO))
-					.cloned()
-					.unwrap_or_default()
-			})
-		}
+	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
+		MigrationBounds::mutate(|bounds| {
+			bounds
+				.entry(T::name().as_bytes().to_vec())
+				.and_modify(|(from, to)| {
+					*from = min(*from, FROM);
+					*to = max(*to, TO);
+				})
+				.or_insert((FROM, TO));
+		});
 	}
 
-	#[cfg(not(feature = "std"))]
-	mod without_std {
-		use super::*;
+	pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
+		MigrationBounds::get().get(T::name().as_bytes()).copied()
+	}
 
-		pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
-			log::warn!("❗️ Runtime upgrade utilities are not supported in no-std.");
-		}
+	pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
+		MigrationState::mutate(|state| {
+			state.entry(T::name().as_bytes().to_vec()).or_default().insert((FROM, TO), s)
+		});
+	}
 
-		pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
-			Default::default()
-		}
-
-		pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
-			log::warn!("❗️ Runtime upgrade utilities are not supported in no-std.");
-		}
-
-		pub fn restore_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> Vec<u8> {
-			Default::default()
-		}
+	pub fn restore_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> Vec<u8> {
+		MigrationState::mutate(|state| {
+			state
+				.get(T::name().as_bytes())
+				.cloned()
+				.unwrap_or_default()
+				.get(&(FROM, TO))
+				.cloned()
+				.unwrap_or_default()
+		})
 	}
 }
 

@@ -23,7 +23,7 @@ impl<C> BtcSource<C> {
 	}
 }
 
-const POLL_INTERVAL: Duration = Duration::from_secs(10);
+const POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 #[async_trait::async_trait]
 impl<C> ChainSource for BtcSource<C>

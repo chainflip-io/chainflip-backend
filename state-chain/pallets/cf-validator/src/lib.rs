@@ -1351,19 +1351,20 @@ impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
 }
 
 impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
-	/// Returns the percentage of current authorities with their CFEs at the given version.
-	fn precent_authorities_at_version(version: SemVer) -> Percent {
+	/// Returns the percentage of current authorities that are compatible with the provided version.
+	fn percent_authorities_compatible_with_version(version: SemVer) -> Percent {
 		let current_authorities = CurrentAuthorities::<T>::get();
 		let authorities_count = current_authorities.len() as u32;
 
-		let num_authorities_at_target_version = current_authorities
-			.into_iter()
-			.filter(|validator_id| {
-				NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
-			})
-			.count() as u32;
-
-		Percent::from_rational(num_authorities_at_target_version, authorities_count)
+		Percent::from_rational(
+			current_authorities
+				.into_iter()
+				.filter(|validator_id| {
+					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+				})
+				.count() as u32,
+			authorities_count,
+		)
 	}
 }
 

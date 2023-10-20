@@ -162,7 +162,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
-					state_chain_client
+					let _result = state_chain_client
 						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,

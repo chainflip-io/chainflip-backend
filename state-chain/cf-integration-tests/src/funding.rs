@@ -5,11 +5,14 @@ use crate::{
 
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_traits::{offence_reporting::OffenceReporter, EpochInfo};
+use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo};
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
-use state_chain_runtime::chainflip::Offence;
+use sp_runtime::{FixedPointNumber, FixedU64};
+use state_chain_runtime::chainflip::{
+	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence,
+};
 
 #[test]
 // Nodes cannot redeem when we are out of the redeeming period (50% of the epoch)
@@ -81,8 +84,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			assert_eq!(1, Validator::epoch_index(), "We should still be in the first epoch");
 
 			// Move to new epoch
-			testnet.move_to_next_epoch();
-			testnet.submit_heartbeat_all_engines();
+			testnet.move_to_the_next_epoch();
 			// TODO: figure out how to avoid this.
 			<pallet_cf_reputation::Pallet<Runtime> as OffenceReporter>::forgive_all(
 				Offence::MissedAuthorshipSlot,
@@ -90,8 +92,6 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			<pallet_cf_reputation::Pallet<Runtime> as OffenceReporter>::forgive_all(
 				Offence::GrandpaEquivocation,
 			);
-			// Run things to a successful vault rotation
-			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 			assert_eq!(
 				2,
@@ -137,5 +137,139 @@ fn funded_node_is_added_to_backups() {
 			let backups_map = Backups::<Runtime>::get();
 			assert_eq!(backups_map.len(), 1);
 			assert_eq!(backups_map.get(&new_backup).unwrap(), &NEW_FUNDING_AMOUNT);
+		});
+}
+
+#[test]
+fn backup_reward_is_calculated_linearly() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const MAX_AUTHORITIES: u32 = 10;
+	const NUM_BACKUPS: u32 = 20;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut network, _, _) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			network.move_to_the_next_epoch();
+
+			// 3 backup will split the backup reward.
+			assert_eq!(Validator::highest_funded_qualified_backup_node_bids().count(), 3);
+
+			let rewards_per_block = &calculate_backup_rewards::<AccountId, FlipBalance>(
+				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
+				Validator::bond(),
+				1u128,
+				Emissions::backup_node_emission_per_block(),
+				Emissions::current_authority_emission_per_block(),
+				Validator::current_authority_count() as u128,
+			);
+
+			let rewards_per_heartbeat = &calculate_backup_rewards::<AccountId, FlipBalance>(
+				Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>(),
+				Validator::bond(),
+				HEARTBEAT_BLOCK_INTERVAL as u128,
+				Emissions::backup_node_emission_per_block(),
+				Emissions::current_authority_emission_per_block(),
+				Validator::current_authority_count() as u128,
+			);
+
+			for i in 0..rewards_per_block.len() {
+				// Validator account should match
+				assert_eq!(rewards_per_block[i].0, rewards_per_heartbeat[i].0);
+				// Reward per heartbeat should be scaled linearly.
+				assert_eq!(
+					rewards_per_heartbeat[i].1,
+					rewards_per_block[i].1 * HEARTBEAT_BLOCK_INTERVAL as u128
+				);
+			}
+		});
+}
+
+#[test]
+fn can_calculate_account_apy() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const MAX_AUTHORITIES: u32 = 10;
+	const NUM_BACKUPS: u32 = 20;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut network, _, _) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			network.move_to_the_next_epoch();
+
+			let mut backup_earning_rewards = Validator::highest_funded_qualified_backup_node_bids();
+			let all_backups = Validator::backups();
+			let validator = Validator::current_authorities().into_iter().next().unwrap();
+			let Bid { bidder_id: backup, amount: backup_staked } =
+				backup_earning_rewards.next().unwrap();
+
+			// Normal account returns None
+			let no_reward = AccountId::from([0xff; 32]);
+			assert!(!Validator::current_authorities().contains(&no_reward));
+			assert!(!Validator::backups().contains_key(&no_reward));
+			assert!(calculate_account_apy(&no_reward).is_none());
+
+			// Backups that are not qualified to earn rewards are returned None
+			let backup_no_reward = AccountId::from([0x01; 32]);
+			assert!(all_backups.contains_key(&backup_no_reward));
+			assert!(!backup_earning_rewards
+				.any(|Bid { bidder_id, amount: _ }| bidder_id == backup_no_reward));
+			assert!(calculate_account_apy(&backup_no_reward).is_none());
+
+			// APY rate is correct for current Authority
+			let total = Flip::balance(&validator);
+			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128 / 10u128;
+			let apy_basis_point =
+				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
+			assert_eq!(apy_basis_point, 49u32);
+			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
+
+			// APY rate is correct for backup that are earning rewards.
+			// Since all 3 backup validators has the same staked amount, and the award is capped by
+			// Emission rewards are split evenly between 3 validators.
+			let reward = Emissions::backup_node_emission_per_block() / 3u128 * YEAR as u128;
+			let apy_basis_point = FixedU64::from_rational(reward, backup_staked)
+				.checked_mul_int(10_000u32)
+				.unwrap();
+			assert_eq!(apy_basis_point, 35u32);
+			assert_eq!(calculate_account_apy(&backup), Some(apy_basis_point));
+		});
+}
+
+#[test]
+fn apy_can_be_above_100_percent() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const MAX_AUTHORITIES: u32 = 1;
+	const NUM_BACKUPS: u32 = 1;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut network, _, _) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			network.move_to_the_next_epoch();
+
+			let validator = Validator::current_authorities().into_iter().next().unwrap();
+
+			// Set the validator yield to very high
+			assert_ok!(Emissions::update_current_authority_emission_inflation(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				1_000_000_000u32
+			));
+
+			network.move_to_the_next_epoch();
+
+			// APY rate of > 100% can be calculated correctly.
+			let total = Flip::balance(&validator);
+			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128;
+			let apy_basis_point =
+				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
+			assert_eq!(apy_basis_point, 242_543_802u32);
+			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
 		});
 }

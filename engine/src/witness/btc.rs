@@ -1,10 +1,10 @@
 mod btc_chain_tracking;
 mod btc_deposits;
-mod btc_source;
+pub mod btc_source;
 
 use std::sync::Arc;
 
-use bitcoin::Transaction;
+use bitcoin::{BlockHash, Transaction};
 use cf_chains::btc::{deposit_address::DepositAddress, CHANGE_ADDRESS_SALT};
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -21,12 +21,45 @@ use crate::{
 };
 use btc_source::BtcSource;
 
-use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
+use super::common::{
+	chain_source::{extension::ChainSourceExt, Header},
+	epoch_source::{EpochSourceBuilder, Vault},
+};
 
 use anyhow::Result;
 
 // safety margin of 5 implies 6 block confirmations
 const SAFETY_MARGIN: usize = 5;
+
+pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
+	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
+	header: Header<u64, BlockHash, (Vec<Transaction>, Vec<[u8; 32]>)>,
+	process_call: ProcessCall,
+) where
+	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	ProcessingFut: Future<Output = ()> + Send + 'static,
+{
+	let (txs, monitored_tx_hashes) = header.data;
+
+	for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
+		process_call(
+			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
+				pallet_cf_broadcast::Call::transaction_succeeded {
+					tx_out_id: tx_hash,
+					signer_id: DepositAddress::new(epoch.info.0.current, CHANGE_ADDRESS_SALT)
+						.script_pubkey(),
+					tx_fee: Default::default(),
+				},
+			),
+			epoch.index,
+		)
+		.await;
+	}
+}
 
 pub async fn start<
 	StateChainClient,
@@ -108,31 +141,9 @@ where
 		.btc_deposits(process_call.clone())
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())
 		.await
-		.then(move |epoch, header| {
+		.then({
 			let process_call = process_call.clone();
-			async move {
-				let (txs, monitored_tx_hashes) = header.data;
-				for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
-					process_call(
-						state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
-							pallet_cf_broadcast::Call::transaction_succeeded {
-								tx_out_id: tx_hash,
-								signer_id: DepositAddress::new(
-									epoch.info.0.current,
-									CHANGE_ADDRESS_SALT,
-								)
-								.script_pubkey(),
-								// TODO: Ideally we can submit an empty type here. For
-								// Bitcoin and some other chains fee tracking is not
-								// necessary. PRO-370.
-								tx_fee: Default::default(),
-							},
-						),
-						epoch.index,
-					)
-					.await;
-				}
-			}
+			move |epoch, header| process_egress(epoch, header, process_call.clone())
 		})
 		.continuous("Bitcoin".to_string(), db)
 		.logging("witnessing")
