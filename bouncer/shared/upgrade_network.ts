@@ -2,7 +2,6 @@ import { execSync } from 'child_process';
 import fs from 'fs/promises';
 import * as toml from 'toml';
 import path from 'path';
-import { promptUser } from './prompt_user';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
 import { compareSemVer } from './utils';
@@ -21,6 +20,26 @@ function isCompatibleWith(semVer1: string, semVer2: string) {
 
   return major1 === major2 && minor1 === minor2;
 }
+
+// Create a git workspace in the tmp/ directory and check out the specified commit.
+// Remember to delete it when you're done!
+function createGitWorkspaceAt(absoluteWorkspacePath: string, toGitRef: string) {
+  try {
+    // Create a directory for the new workspace
+    execSync(`mkdir -p ${absoluteWorkspacePath}`);
+
+    // Create a new workspace using git worktree.
+    execSync(`git worktree add ${absoluteWorkspacePath}`);
+
+    // Navigate to the new workspace and checkout the specific commit
+    execSync(`cd ${absoluteWorkspacePath} && git checkout ${toGitRef}`);
+
+    console.log('Commit checked out successfully in new workspace.');
+  } catch (error) {
+    console.error(`Error: ${error}`);
+  }
+}
+
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
 // If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
@@ -65,23 +84,4 @@ export async function upgradeNetwork(toGitRef: string, bumpByIfEqual: SemVerLeve
   }
 
   execSync(`cd ${absoluteWorkspacePath} && git worktree remove . --force`);
-}
-
-// Create a git workspace in the tmp/ directory and check out the specified commit.
-// Remember to delete it when you're done!
-function createGitWorkspaceAt(absoluteWorkspacePath: string, toGitRef: string) {
-  try {
-    // Create a directory for the new workspace
-    execSync(`mkdir -p ${absoluteWorkspacePath}`);
-
-    // Create a new workspace using git worktree.
-    execSync(`git worktree add ${absoluteWorkspacePath}`);
-
-    // Navigate to the new workspace and checkout the specific commit
-    execSync(`cd ${absoluteWorkspacePath} && git checkout ${toGitRef}`);
-
-    console.log('Commit checked out successfully in new workspace.');
-  } catch (error) {
-    console.error(`Error: ${error}`);
-  }
 }

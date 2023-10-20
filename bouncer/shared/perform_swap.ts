@@ -61,9 +61,9 @@ export async function requestNewSwap(
       // CF Parameters is always set to '' by the SDK for now
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message === messageMetadata.message &&
-          Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-            messageMetadata.gasBudget
+        event.data.channelMetadata.message === messageMetadata.message &&
+        Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
+        messageMetadata.gasBudget
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
@@ -145,8 +145,7 @@ export async function performSwap(
   const tag = swapTag ?? '';
 
   console.log(
-    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
-      messageMetadata ? `someMessage` : ''
+    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${messageMetadata ? `someMessage` : ''
     }`,
   );
 
