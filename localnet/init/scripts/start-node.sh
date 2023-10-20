@@ -31,4 +31,5 @@ $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \
   --rpc-port=$RPC_PORT \
   --blocks-pruning=archive \
   --state-pruning=archive \
+  --bootnodes=/ip4/127.0.0.1/tcp/30333/p2p/12D3KooWFD3YMDyQocSQBAx6VCcUruYihi6xYufduzf321FnvvoY \
   --trie-cache-size=0 > /tmp/chainflip/$NODE_NAME/chainflip-node.log 2>&1 &
