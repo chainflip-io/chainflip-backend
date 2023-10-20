@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use std::mem;
 use super::*;
 use crate::{
 	mock::{self, *},
@@ -17,6 +16,7 @@ use frame_support::{
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
 use sp_runtime::Permill;
+use std::mem;
 
 impl FlipOperation {
 	pub fn execute(&self) -> bool {
