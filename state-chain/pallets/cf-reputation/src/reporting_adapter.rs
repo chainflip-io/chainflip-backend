@@ -100,7 +100,7 @@ where
 
 		// TODO: Reconsider the slashing rate here. For now we assume we are reporting the node
 		// for equivocation, and that each report corresponds to 1 FLIP.
-		T::Slasher::slash_balance(&offender, 1_000_000_000_000_000_000u128);
+		T::Slasher::slash_balance(&offender, 10u128.pow(18));
 
 		Pallet::<T>::report(offence, offender);
 		Ok(())

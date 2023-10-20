@@ -168,7 +168,7 @@ impl ExtBuilder {
 				vault_key: Some(ethereum_vault_key),
 				deployment_block: 0,
 				keygen_response_timeout: 4,
-				amount_to_slash: 10u128.pow(18),
+				amount_to_slash: FLIPPERINOS_PER_FLIP,
 			},
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,

@@ -1,10 +1,11 @@
 #![cfg(test)]
 
 use std::mem;
-
+use super::*;
 use crate::{
-	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
-	Reserve, SlashingRate, TotalIssuance,
+	mock::{self, *},
+	Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds, Reserve,
+	SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
@@ -116,7 +117,6 @@ impl FlipOperation {
 			},
 			// Mint To Reserve
 			FlipOperation::MintToReserve(amount) => {
-				use crate::ReserveId;
 				const TEST_RESERVE: ReserveId = *b"TEST";
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
@@ -138,7 +138,6 @@ impl FlipOperation {
 			},
 			// Burn From Reserve
 			FlipOperation::BurnFromReserve(amount) => {
-				use crate::ReserveId;
 				const TEST_RESERVE: ReserveId = *b"TEST";
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
@@ -290,8 +289,9 @@ impl FlipOperation {
 
 				SlashingRate::<Test>::set(*slashing_rate);
 
-				let attempted_slash: u128 =
-					(*slashing_rate * *bond / 14400u128).saturating_mul((*blocks).into());
+				let attempted_slash: u128 = (*slashing_rate * *bond /
+					<mock::Test as pallet::Config>::BlocksPerDay::get() as u128)
+					.saturating_mul((*blocks).into());
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash

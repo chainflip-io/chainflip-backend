@@ -602,8 +602,9 @@ where
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
 		// 14400 blocks per day
-		let slash_amount = (SlashingRate::<T>::get() * account.bond / 14400u128.into())
-			.saturating_mul(blocks.into());
+		let slash_amount = (SlashingRate::<T>::get() * account.bond /
+			T::BlocksPerDay::get().into())
+		.saturating_mul(blocks.into());
 		Self::attempt_slash(account_id, account, slash_amount);
 	}
 
