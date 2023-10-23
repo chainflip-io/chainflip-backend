@@ -43,13 +43,12 @@ pub mod any {
 		Ord,
 		EnumIter,
 		Serialize,
-		Deserialize,
 	)]
 	#[repr(u32)]
 	// !!!!!! IMPORTANT !!!!!!
 	// Do not change these indices.
 	pub enum Asset {
-		// 0 is reservered for particular cross chain messaging scenarios where we want to pass
+		// 0 is reserved for particular cross chain messaging scenarios where we want to pass
 		// through a message without making a swap.
 		Eth = 1u32,
 		Flip = 2u32,
@@ -104,6 +103,17 @@ pub mod any {
 				"btc" => Ok(Asset::Btc),
 				_ => Err("Unrecognized asset"),
 			}
+		}
+	}
+
+	// Custom deserializer so we can avoid being case sensitive
+	impl<'de> Deserialize<'de> for Asset {
+		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+		where
+			D: serde::Deserializer<'de>,
+		{
+			let s = scale_info::prelude::string::String::deserialize(deserializer)?;
+			Asset::from_str(&s).map_err(serde::de::Error::custom)
 		}
 	}
 }

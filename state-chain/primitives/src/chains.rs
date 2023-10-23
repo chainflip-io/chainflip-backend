@@ -30,7 +30,7 @@ macro_rules! chains {
 		)+
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
-		#[derive(Serialize, Deserialize)]
+		#[derive(Serialize)]
 		#[repr(u32)]
 		pub enum ForeignChain {
 			$(
@@ -63,12 +63,25 @@ macro_rules! chains {
 			type Err = &'static str;
 
 			fn from_str(s: &str) -> Result<Self, Self::Err> {
-				match s {
-					$(
-						stringify!($chain) => Ok(ForeignChain::$chain),
-					)+
-					_ => Err("Unrecognized Chain"),
-				}
+				let s = s.to_lowercase();
+				$(
+					if s == stringify!($chain).to_lowercase() {
+						return Ok(ForeignChain::$chain);
+					}
+				)+
+				Err("Unrecognized Chain")
+			}
+		}
+
+		// Custom deserializer so we can avoid being case sensitive
+		impl<'de> Deserialize<'de> for ForeignChain {
+			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+			where
+				D: serde::Deserializer<'de>,
+			{
+				let s = scale_info::prelude::string::String::deserialize(deserializer)?;
+				ForeignChain::from_str(&s).map_err(serde::de::Error::custom)
+
 			}
 		}
 
