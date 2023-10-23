@@ -38,4 +38,5 @@ jobs:
     uses: ./.github/workflows/_60_upload.yml
     secrets: inherit
     with:
+      network: "berghain"
       version: 0.10.0

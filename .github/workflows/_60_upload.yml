@@ -5,6 +5,10 @@ on:
         description: Release version
         required: true
         type: string
+      network:
+        description: Network being released
+        required: true
+        type: string
 
 permissions:
   id-token: write
@@ -30,4 +34,5 @@ jobs:
 
       - name: Upload packages to s3 pre-release bucket
         run: |
-          aws s3 mv --recursive --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/
+          aws s3 mv --recursive --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/${{ inputs.version }}/
+          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/chainspecs/${{ inputs.network }}.chainspec.json
