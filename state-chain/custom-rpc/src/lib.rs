@@ -2,10 +2,7 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	address::AddressConverter, btc::BitcoinNetwork, dot::PolkadotHash,
-	eth::Address as EthereumAddress,
-};
+use cf_chains::{address::AddressConverter, eth::Address as EthereumAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
 use core::ops::Range;
 use jsonrpsee::{
@@ -178,19 +175,8 @@ impl From<SwapOutput> for RpcSwapOutput {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct BitcoinEnvironment {
-	pub network: BitcoinNetwork,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct EthereumEnvironment {
-	pub chain_id: cf_chains::evm::api::EvmChainId,
-	pub contract_addresses: HashMap<String, String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PolkadotEnvironment {
-	pub genesis_hash: PolkadotHash,
+pub struct IngressEgressEnvironment {
+	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -200,12 +186,14 @@ pub struct FundingEnvironment {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcEnvironment {
-	bitcoin: BitcoinEnvironment,
-	ethereum: EthereumEnvironment,
-	polkadot: PolkadotEnvironment,
-	minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+pub struct SwappingEnvironment {
 	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcEnvironment {
+	ingress_egress: IngressEgressEnvironment,
+	swapping: SwappingEnvironment,
 	funding: FundingEnvironment,
 }
 
@@ -359,6 +347,21 @@ pub trait CustomApi {
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
+	#[method(name = "funding_environment")]
+	fn cf_funding_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<FundingEnvironment>;
+	#[method(name = "swapping_environment")]
+	fn cf_swapping_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SwappingEnvironment>;
+	#[method(name = "ingress_egress_environment")]
+	fn cf_ingress_egress_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<IngressEgressEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
@@ -801,20 +804,22 @@ where
 	}
 
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
+		Ok(RpcEnvironment {
+			ingress_egress: self.cf_ingress_egress_environment(at)?,
+			swapping: self.cf_swapping_environment(at)?,
+			funding: self.cf_funding_environment(at)?,
+		})
+	}
+
+	fn cf_ingress_egress_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<IngressEgressEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-		let env = runtime_api.cf_environment(hash).map_err(to_rpc_error)?;
-
-		let mut minimum_swap_amounts = HashMap::new();
 		let mut minimum_deposit_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let swap_amount =
-				runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?.into();
-			minimum_swap_amounts
-				.entry(asset.into())
-				.or_insert_with(HashMap::new)
-				.insert(asset, swap_amount);
 			let deposit_amount =
 				runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into();
 			minimum_deposit_amounts
@@ -823,46 +828,39 @@ where
 				.insert(asset, deposit_amount);
 		}
 
-		Ok(RpcEnvironment {
-			bitcoin: BitcoinEnvironment { network: env.bitcoin_network },
-			ethereum: EthereumEnvironment {
-				chain_id: env.ethereum_chain_id,
-				contract_addresses: HashMap::from([
-					(
-						"key_manager".into(),
-						format!(
-							"{}",
-							runtime_api.cf_eth_key_manager_address(hash).map_err(to_rpc_error)?
-						),
-					),
-					(
-						"state_chain_gateway".into(),
-						format!(
-							"{}",
-							runtime_api
-								.cf_eth_state_chain_gateway_address(hash)
-								.map_err(to_rpc_error)?
-						),
-					),
-					(
-						"flip_token".into(),
-						format!(
-							"{}",
-							runtime_api.cf_eth_flip_token_address(hash).map_err(to_rpc_error)?
-						),
-					),
-				]),
-			},
-			polkadot: PolkadotEnvironment { genesis_hash: env.polkadot_genesis_hash },
-			minimum_deposit_amounts,
-			minimum_swap_amounts,
-			funding: FundingEnvironment {
-				redemption_tax: runtime_api.cf_redemption_tax(hash).map_err(to_rpc_error)?.into(),
-				minimum_funding_amount: runtime_api
-					.cf_min_funding(hash)
-					.map_err(to_rpc_error)?
-					.into(),
-			},
+		Ok(IngressEgressEnvironment { minimum_deposit_amounts })
+	}
+
+	fn cf_swapping_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SwappingEnvironment> {
+		let runtime_api = &self.client.runtime_api();
+		let hash = self.unwrap_or_best(at);
+		let mut minimum_swap_amounts = HashMap::new();
+
+		for asset in Asset::all() {
+			let swap_amount =
+				runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?.into();
+			minimum_swap_amounts
+				.entry(asset.into())
+				.or_insert_with(HashMap::new)
+				.insert(asset, swap_amount);
+		}
+
+		Ok(SwappingEnvironment { minimum_swap_amounts })
+	}
+
+	fn cf_funding_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<FundingEnvironment> {
+		let runtime_api = &self.client.runtime_api();
+		let hash = self.unwrap_or_best(at);
+
+		Ok(FundingEnvironment {
+			redemption_tax: runtime_api.cf_redemption_tax(hash).map_err(to_rpc_error)?.into(),
+			minimum_funding_amount: runtime_api.cf_min_funding(hash).map_err(to_rpc_error)?.into(),
 		})
 	}
 

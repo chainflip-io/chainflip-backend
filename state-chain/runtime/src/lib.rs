@@ -1038,14 +1038,6 @@ impl_runtime_apis! {
 			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
 		}
 
-		fn cf_environment() -> runtime_apis::Environment {
-			runtime_apis::Environment {
-				bitcoin_network: Environment::network_environment().into(),
-				ethereum_chain_id: Environment::ethereum_chain_id(),
-				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
-			}
-		}
-
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
 		}
