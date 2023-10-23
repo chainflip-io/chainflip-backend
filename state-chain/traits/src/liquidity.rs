@@ -54,6 +54,14 @@ pub trait PoolApi {
 	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
 }
 
+impl<T: frame_system::Config> PoolApi for T {
+	type AccountId = T::AccountId;
+
+	fn sweep(_who: &Self::AccountId) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
+
 pub trait SwappingApi {
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
 	/// and return the remaining value
