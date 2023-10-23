@@ -21,23 +21,23 @@ pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 24 * HOURS;
 
-// Number of online credits required to get `ACCRUAL_REPUTATION_POINTS` of reputation
-const ACCRUAL_ONLINE_CREDITS: u32 = 2500;
-// Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
-const ACCRUAL_REPUTATION_POINTS: i32 = 1;
-pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE_CREDITS);
+// This is equivalent to one reputation point for every minute of online time.
+pub const REPUTATION_PER_HEARTBEAT: i32 = 15;
+pub const ACCRUAL_RATIO: (i32, u32) = (REPUTATION_PER_HEARTBEAT, HEARTBEAT_BLOCK_INTERVAL);
+
+const REPUTATION_PENALTY_SMALL: i32 = REPUTATION_PER_HEARTBEAT; // 15 minutes to recover reputation
+const REPUTATION_PENALTY_MEDIUM: i32 = REPUTATION_PER_HEARTBEAT * 4; // One hour to recover reputation
+const REPUTATION_PENALTY_LARGE: i32 = REPUTATION_PER_HEARTBEAT * 8; // Two hours to recover reputation
 
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
-	(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	// We exclude them from the nomination pool of the next attempt,
-	// so there is no need to suspend them further.
-	(Offence::FailedToBroadcastTransaction, (10, 0)),
-	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+	(Offence::MissedHeartbeat, (REPUTATION_PENALTY_SMALL, 0)),
+	(Offence::ParticipateKeygenFailed, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::ParticipateSigningFailed, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedAuthorshipSlot, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::FailedToBroadcastTransaction, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::GrandpaEquivocation, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
 
 pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[

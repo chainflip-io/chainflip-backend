@@ -8,10 +8,6 @@ use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnv
 use sc_service::ChainType;
 use sp_core::H256;
 
-// *** Overrides from common
-pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
-// ***
-
 pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";

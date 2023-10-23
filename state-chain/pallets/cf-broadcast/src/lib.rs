@@ -16,8 +16,8 @@ impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
 
 use cf_chains::{ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, EpochKey,
-	OnBroadcastReady, SingleSignerNomination, ThresholdSigner,
+	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
+	EpochKey, OnBroadcastReady, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -73,7 +73,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, KeyProvider, OnBroadcastReady, SingleSignerNomination};
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, KeyProvider, OnBroadcastReady};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -169,7 +169,7 @@ pub mod pallet {
 		>;
 
 		/// Signer nomination.
-		type BroadcastSignerNomination: SingleSignerNomination<SignerId = Self::ValidatorId>;
+		type BroadcastSignerNomination: BroadcastNomination<BroadcasterId = Self::ValidatorId>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
@@ -759,7 +759,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let seed =
 			(broadcast_attempt.broadcast_attempt_id, broadcast_attempt.transaction_payload.clone())
 				.encode();
-		if let Some(nominated_signer) = T::BroadcastSignerNomination::nomination_with_seed(
+		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
 			seed,
 			&FailedBroadcasters::<T, I>::get(broadcast_attempt.broadcast_attempt_id.broadcast_id)
 				.unwrap_or_default(),
