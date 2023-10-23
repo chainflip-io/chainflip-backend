@@ -175,6 +175,40 @@ impl From<SwapOutput> for RpcSwapOutput {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct RpcAsset {
+	pub asset: Asset,
+	pub chain: ForeignChain,
+}
+
+impl Into<RpcAsset> for Asset {
+	fn into(self) -> RpcAsset {
+		RpcAsset { asset: self, chain: self.into() }
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPoolInfo {
+	pub limit_order_fee_hundredth_pips: u32,
+	pub range_order_fee_hundredth_pips: u32,
+	pub pair_asset: RpcAsset,
+}
+
+impl From<PoolInfo> for RpcPoolInfo {
+	fn from(value: PoolInfo) -> Self {
+		Self {
+			limit_order_fee_hundredth_pips: value.limit_order_fee_hundredth_pips,
+			range_order_fee_hundredth_pips: value.range_order_fee_hundredth_pips,
+			pair_asset: Asset::Usdc.into(),
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolEnvironment {
+	pub fees: HashMap<ForeignChain, HashMap<Asset, RpcPoolInfo>>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
@@ -195,6 +229,7 @@ pub struct RpcEnvironment {
 	ingress_egress: IngressEgressEnvironment,
 	swapping: SwappingEnvironment,
 	funding: FundingEnvironment,
+	pool: PoolEnvironment,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -362,6 +397,11 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<IngressEgressEnvironment>;
+	#[method(name = "pool_environment")]
+	fn cf_pool_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
@@ -808,6 +848,7 @@ where
 			ingress_egress: self.cf_ingress_egress_environment(at)?,
 			swapping: self.cf_swapping_environment(at)?,
 			funding: self.cf_funding_environment(at)?,
+			pool: self.cf_pool_environment(at)?,
 		})
 	}
 
@@ -862,6 +903,25 @@ where
 			redemption_tax: runtime_api.cf_redemption_tax(hash).map_err(to_rpc_error)?.into(),
 			minimum_funding_amount: runtime_api.cf_min_funding(hash).map_err(to_rpc_error)?.into(),
 		})
+	}
+
+	fn cf_pool_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolEnvironment> {
+		let mut fees = HashMap::new();
+
+		for asset in Asset::all() {
+			if asset == Asset::Usdc {
+				continue
+			}
+
+			let info = self.cf_pool_info(asset, Asset::Usdc, at)?.expect("pool should exist");
+
+			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info.into());
+		}
+
+		Ok(PoolEnvironment { fees })
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1107,6 +1167,99 @@ mod test {
 				"apy_bp": 100,
 				"restricted_balances": {
 					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
+				}
+			})
+		);
+	}
+
+	#[test]
+	fn test_environment_serialization() {
+		assert_eq!(
+			serde_json::to_value(&RpcEnvironment {
+				swapping: SwappingEnvironment {
+					minimum_swap_amounts: HashMap::from([
+						(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+						(
+							ForeignChain::Ethereum,
+							HashMap::from([
+								(Asset::Flip, u64::MAX.into()),
+								(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+								(Asset::Eth, 0u32.into()),
+							])
+						),
+					]),
+				},
+				ingress_egress: IngressEgressEnvironment {
+					minimum_deposit_amounts: HashMap::from([
+						(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+						(
+							ForeignChain::Ethereum,
+							HashMap::from([
+								(Asset::Flip, u64::MAX.into()),
+								(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+								(Asset::Eth, 0u32.into()),
+							])
+						),
+					])
+				},
+				funding: FundingEnvironment {
+					redemption_tax: 0u32.into(),
+					minimum_funding_amount: 0u32.into(),
+				},
+				pool: PoolEnvironment {
+					fees: HashMap::from([(
+						ForeignChain::Ethereum,
+						HashMap::from([(
+							Asset::Flip,
+							PoolInfo {
+								limit_order_fee_hundredth_pips: 0,
+								range_order_fee_hundredth_pips: 100,
+							}
+							.into()
+						),])
+					),])
+				}
+			})
+			.unwrap(),
+			json!({
+				"ingress_egress": {
+					"minimum_deposit_amounts": {
+						"Bitcoin": { "Btc": 0 },
+						"Ethereum": {
+							"Eth": 0,
+							// TODO: u64 is still too large for JSON, we should use a string
+							"Flip": 18446744073709551615u64,
+							"Usdc": 9223372036854775806u64
+						}
+					}
+				},
+				"swapping": {
+					"minimum_swap_amounts": {
+						"Ethereum": {
+							"Eth": 0,
+							"Flip": 18446744073709551615u64,
+							"Usdc": 9223372036854775806u64
+						},
+						"Bitcoin": { "Btc": 0 }
+					}
+				},
+				"funding": {
+					"redemption_tax": 0,
+					"minimum_funding_amount": 0
+				},
+				"pool": {
+					"fees": {
+						"Ethereum": {
+							"Flip": {
+								"limit_order_fee_hundredth_pips": 0,
+								"range_order_fee_hundredth_pips": 100,
+								"pair_asset": {
+									"asset": "Usdc",
+									"chain": "Ethereum"
+								}
+							}
+						}
+					}
 				}
 			})
 		);
