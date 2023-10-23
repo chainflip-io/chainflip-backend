@@ -14,6 +14,7 @@ use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 use utilities::task_scope;
+use cf_primitives::FlipBalance;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
@@ -148,6 +149,24 @@ impl QueryApi {
 		Ok(self
 			.state_chain_client
 			.storage_map_entry::<pallet_cf_funding::BoundExecutorAddress<state_chain_runtime::Runtime>>(
+				block_hash,
+				&account_id,
+			)
+			.await?)
+	}
+
+	pub async fn get_resticted_balances(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<BTreeMap<EthereumAddress, FlipBalance>> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		Ok(self
+			.state_chain_client
+			.storage_map_entry::<pallet_cf_funding::RestrictedBalances<state_chain_runtime::Runtime>>(
 				block_hash,
 				&account_id,
 			)

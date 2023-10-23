@@ -364,13 +364,20 @@ pub mod pallet {
 			amount: RedemptionAmount<FlipBalance<T>>,
 			address: EthereumAddress,
 			// Only this address can execute the redemption.
-			executor: Option<EthereumAddress>,
+			supplied_executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
-				let executor = executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
-				ensure!(executor_addr == executor, Error::<T>::ExecutorBindingRestrictionViolated);
+			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
+
+			let mut executor: Option<EthereumAddress> = None;
+			// In case of restricted address we don't care about the executor
+			if !restricted_balances.keys().any(|res_address| res_address == &address) {
+			 	if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
+					let temp_executor = supplied_executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
+					ensure!(executor_addr == temp_executor, Error::<T>::ExecutorBindingRestrictionViolated);
+					executor = supplied_executor;
+				}
 			}
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
@@ -386,7 +393,6 @@ pub mod pallet {
 				Error::<T>::PendingRedemption
 			);
 
-			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
 			let redemption_fee = RedemptionTax::<T>::get();
 
 			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
