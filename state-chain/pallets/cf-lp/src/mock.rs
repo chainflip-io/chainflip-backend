@@ -95,6 +95,7 @@ impl crate::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
+	type PoolApi = Self;
 }
 
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];
