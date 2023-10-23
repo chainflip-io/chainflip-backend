@@ -65,6 +65,7 @@ get-workflow() {
       exit 1
     fi
     echo "You have chosen $NODE_COUNT node(s) network"
+    NODE_COUNT="$NODE_COUNT-node"
 fi
 }
 
@@ -88,7 +89,7 @@ build-localnet() {
   done
 
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args > /dev/null 2>&1
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INITIAL_CONTAINERS -d $additional_docker_compose_up_args
 
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args > /dev/null 2>&1
