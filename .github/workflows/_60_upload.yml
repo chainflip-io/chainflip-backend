@@ -34,5 +34,5 @@ jobs:
 
       - name: Upload packages to s3 pre-release bucket
         run: |
-          aws s3 mv --recursive --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/${{ inputs.version }}/
-          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/chainspecs/${{ inputs.network }}.chainspec.json
+          aws s3 sync --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/${{ inputs.version }}/
+          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/${{ inputs.version }}/chainspecs/${{ inputs.network }}.chainspec.json
