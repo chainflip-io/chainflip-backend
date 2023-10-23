@@ -9,7 +9,7 @@ pub mod safe_mode;
 pub mod test_runner;
 mod weights;
 use crate::{
-	chainflip::Offence,
+	chainflip::{calculate_account_apy, Offence},
 	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
 };
 use cf_amm::{
@@ -27,7 +27,7 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, Depth, PoolLiquidity};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -82,7 +82,7 @@ use sp_version::RuntimeVersion;
 pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
-pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
+pub use cf_traits::{AccountInfo, EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -913,28 +913,35 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
-			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
-			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
-			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(&account_id);
-			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
-			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(&account_id);
-			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
+			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
+		}
+		fn cf_account_info_v2(account_id: &AccountId) -> RuntimeApiAccountInfoV2 {
+			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(account_id);
+			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(account_id);
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id);
+			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(account_id);
+			let bound_redeem_address = pallet_cf_funding::BoundRedeemAddress::<Runtime>::get(account_id);
+			let apy_bp = calculate_account_apy(account_id);
+			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(account_id);
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(account_id);
+			let restricted_balances = pallet_cf_funding::RestrictedBalances::<Runtime>::get(account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info.total(),
 				bond: account_info.bond(),
-				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
+				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online: Reputation::is_qualified(&account_id),
+				is_online: Reputation::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
+				apy_bp,
+				restricted_balances,
 			}
 		}
 
@@ -998,7 +1005,7 @@ impl_runtime_apis! {
 			LiquidityPools::pool_info(base_asset, pair_asset)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<Depth>, DispatchError>> {
+		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
 			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
 		}
 

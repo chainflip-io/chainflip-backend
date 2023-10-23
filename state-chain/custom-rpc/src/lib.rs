@@ -15,7 +15,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, Depth, PoolInfo, PoolLiquidity, PoolOrders};
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -26,19 +26,28 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{
+	collections::{BTreeMap, HashMap},
+	marker::PhantomData,
+	sync::Arc,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
-	None,
-	Broker,
+	None {
+		flip_balance: NumberOrHex,
+	},
+	Broker {
+		flip_balance: NumberOrHex,
+	},
 	LiquidityProvider {
 		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 		refund_addresses: HashMap<ForeignChain, Option<String>>,
+		flip_balance: NumberOrHex,
 	},
 	Validator {
-		balance: NumberOrHex,
+		flip_balance: NumberOrHex,
 		bond: NumberOrHex,
 		last_heartbeat: u32,
 		online_credits: u32,
@@ -50,19 +59,21 @@ pub enum RpcAccountInfo {
 		is_online: bool,
 		is_bidding: bool,
 		bound_redeem_address: Option<EthereumAddress>,
+		apy_bp: Option<u32>,
+		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
 	},
 }
 
 impl RpcAccountInfo {
-	fn none() -> Self {
-		Self::None
+	fn none(balance: u128) -> Self {
+		Self::None { flip_balance: balance.into() }
 	}
 
-	fn broker() -> Self {
-		Self::Broker
+	fn broker(balance: u128) -> Self {
+		Self::Broker { flip_balance: balance.into() }
 	}
 
-	fn lp(info: LiquidityProviderInfo) -> Self {
+	fn lp(info: LiquidityProviderInfo, balance: u128) -> Self {
 		let mut balances = HashMap::new();
 
 		for (asset, balance) in info.balances {
@@ -73,6 +84,7 @@ impl RpcAccountInfo {
 		}
 
 		Self::LiquidityProvider {
+			flip_balance: balance.into(),
 			balances,
 			refund_addresses: info
 				.refund_addresses
@@ -91,7 +103,7 @@ impl RpcAccountInfo {
 
 	fn validator(info: RuntimeApiAccountInfoV2) -> Self {
 		Self::Validator {
-			balance: info.balance.into(),
+			flip_balance: info.balance.into(),
 			bond: info.bond.into(),
 			last_heartbeat: info.last_heartbeat,
 			online_credits: info.online_credits,
@@ -103,6 +115,12 @@ impl RpcAccountInfo {
 			is_online: info.is_online,
 			is_bidding: info.is_bidding,
 			bound_redeem_address: info.bound_redeem_address,
+			apy_bp: info.apy_bp,
+			restricted_balances: info
+				.restricted_balances
+				.into_iter()
+				.map(|(address, balance)| (address, balance.into()))
+				.collect(),
 		}
 	}
 }
@@ -121,6 +139,8 @@ pub struct RpcAccountInfoV2 {
 	pub is_online: bool,
 	pub is_bidding: bool,
 	pub bound_redeem_address: Option<EthereumAddress>,
+	pub apy_bp: Option<u32>,
+	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -297,7 +317,7 @@ pub trait CustomApi {
 		pair_asset: Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Depth>>>;
+	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
@@ -518,26 +538,28 @@ where
 	) -> RpcResult<RpcAccountInfo> {
 		let api = self.client.runtime_api();
 
+		let hash = self.unwrap_or_best(at);
+
+		let balance = api.cf_account_flip_balance(hash, &account_id).map_err(to_rpc_error)?;
+
 		Ok(
 			match api
-				.cf_account_role(self.unwrap_or_best(at), account_id.clone())
+				.cf_account_role(hash, account_id.clone())
 				.map_err(to_rpc_error)?
 				.unwrap_or(AccountRole::None)
 			{
-				AccountRole::None => RpcAccountInfo::none(),
-				AccountRole::Broker => RpcAccountInfo::broker(),
+				AccountRole::None => RpcAccountInfo::none(balance),
+				AccountRole::Broker => RpcAccountInfo::broker(balance),
 				AccountRole::LiquidityProvider => {
 					let info = api
-						.cf_liquidity_provider_info(self.unwrap_or_best(at), account_id)
+						.cf_liquidity_provider_info(hash, account_id)
 						.map_err(to_rpc_error)?
 						.expect("role already validated");
 
-					RpcAccountInfo::lp(info)
+					RpcAccountInfo::lp(info, balance)
 				},
 				AccountRole::Validator => {
-					let info = api
-						.cf_account_info_v2(self.unwrap_or_best(at), account_id)
-						.map_err(to_rpc_error)?;
+					let info = api.cf_account_info_v2(hash, &account_id).map_err(to_rpc_error)?;
 
 					RpcAccountInfo::validator(info)
 				},
@@ -553,7 +575,7 @@ where
 		let account_info = self
 			.client
 			.runtime_api()
-			.cf_account_info_v2(self.unwrap_or_best(at), account_id)
+			.cf_account_info_v2(self.unwrap_or_best(at), &account_id)
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfoV2 {
@@ -569,6 +591,8 @@ where
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
 			bound_redeem_address: account_info.bound_redeem_address,
+			apy_bp: account_info.apy_bp,
+			restricted_balances: account_info.restricted_balances,
 		})
 	}
 
@@ -685,7 +709,7 @@ where
 		pair_asset: Asset,
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Depth>>> {
+	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>> {
 		self.client
 			.runtime_api()
 			.cf_pool_depth(self.unwrap_or_best(at), base_asset, pair_asset, tick_range)
@@ -927,33 +951,41 @@ mod test {
 	#[test]
 	fn test_account_info_serialization() {
 		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::none()).unwrap(),
-			json!({ "role": "none" })
+			serde_json::to_value(RpcAccountInfo::none(0)).unwrap(),
+			json!({ "role": "none", "flip_balance": "0x0" })
 		);
 		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::broker()).unwrap(),
-			json!({ "role":"broker" })
+			serde_json::to_value(RpcAccountInfo::broker(0)).unwrap(),
+			json!({ "role":"broker", "flip_balance": "0x0" })
 		);
 
-		let lp = RpcAccountInfo::lp(LiquidityProviderInfo {
-			refund_addresses: vec![
-				(
-					ForeignChain::Ethereum,
-					Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
-				),
-				(
-					ForeignChain::Polkadot,
-					Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
-				),
-				(ForeignChain::Bitcoin, None),
-			],
-			balances: vec![(Asset::Eth, u128::MAX), (Asset::Btc, 0), (Asset::Flip, u128::MAX / 2)],
-		});
+		let lp = RpcAccountInfo::lp(
+			LiquidityProviderInfo {
+				refund_addresses: vec![
+					(
+						ForeignChain::Ethereum,
+						Some(cf_chains::ForeignChainAddress::Eth(H160::from([1; 20]))),
+					),
+					(
+						ForeignChain::Polkadot,
+						Some(cf_chains::ForeignChainAddress::Dot(Default::default())),
+					),
+					(ForeignChain::Bitcoin, None),
+				],
+				balances: vec![
+					(Asset::Eth, u128::MAX),
+					(Asset::Btc, 0),
+					(Asset::Flip, u128::MAX / 2),
+				],
+			},
+			0,
+		);
 
 		assert_eq!(
 			serde_json::to_value(lp).unwrap(),
 			json!({
 				"role": "liquidity_provider",
+				"flip_balance": "0x0",
 				"balances": {
 					"Ethereum": {
 						"Flip": "0x7fffffffffffffffffffffffffffffff",
@@ -982,11 +1014,13 @@ mod test {
 			is_online: true,
 			is_qualified: true,
 			bound_redeem_address: Some(H160::from([1; 20])),
+			apy_bp: Some(100u32),
+			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
 		assert_eq!(
 			serde_json::to_value(validator).unwrap(),
 			json!({
-				"balance": "0xde0b6b3a7640000",
+				"flip_balance": "0xde0b6b3a7640000",
 				"bond": "0xde0b6b3a7640000",
 				"bound_redeem_address": "0x0101010101010101010101010101010101010101",
 				"is_bidding": false,
@@ -998,7 +1032,11 @@ mod test {
 				"last_heartbeat": 0,
 				"online_credits": 0,
 				"reputation_points": 0,
-				"role": "validator"
+				"role": "validator",
+				"apy_bp": 100,
+				"restricted_balances": {
+					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
+				}
 			})
 		);
 	}

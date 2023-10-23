@@ -1,5 +1,5 @@
-mod btc;
+pub mod btc;
 pub mod common;
-mod dot;
-mod eth;
+pub mod dot;
+pub mod eth;
 pub mod start;

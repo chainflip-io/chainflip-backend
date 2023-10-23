@@ -68,6 +68,7 @@ pub mod common {
 	pub const MINUTES: BlockNumber = 60_000 / (MILLISECONDS_PER_BLOCK as BlockNumber);
 	pub const HOURS: BlockNumber = MINUTES * 60;
 	pub const DAYS: BlockNumber = HOURS * 24;
+	pub const YEAR: BlockNumber = DAYS * 365;
 
 	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
 

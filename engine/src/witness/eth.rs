@@ -1,5 +1,5 @@
 mod contract_common;
-mod erc20_deposits;
+pub mod erc20_deposits;
 mod eth_chain_tracking;
 mod eth_source;
 mod ethereum_deposits;
@@ -28,7 +28,7 @@ use super::common::{
 	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
 	STATE_CHAIN_CONNECTION,
 };
-use eth_source::EthSource;
+pub use eth_source::EthSource;
 
 use anyhow::{Context, Result};
 

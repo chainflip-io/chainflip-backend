@@ -1,7 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
 pub mod all_vaults_rotator;
-mod backup_node_rewards;
+pub mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
 pub mod epoch_transition;
@@ -12,7 +12,7 @@ use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
 	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
+	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -44,16 +44,16 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
-	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
-	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	AccountInfo, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster,
+	Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat,
+	Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
 };
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
-		FixedU64,
+		FixedPointNumber, FixedU64,
 	},
 	traits::Get,
 };
@@ -443,19 +443,18 @@ macro_rules! impl_deposit_api_for_anychain {
 	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
 		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
-			type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Runtime>;
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				source_asset: Asset,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
 							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
-							),
+							).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}
@@ -467,7 +466,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission_bps: BasisPoints,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber), DispatchError> {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain => $pallet::request_swap_deposit_address(
@@ -477,7 +476,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission_bps,
 							broker_id,
 							channel_metadata,
-						),
+						).map(|(channel, address, block_number)| (channel, address, block_number.into())),
 					)+
 				}
 			}
@@ -601,4 +600,44 @@ impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualifica
 	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
 		AccountRoles::has_account_role(id, AccountRole::Validator)
 	}
+}
+
+// Calculates the APY of a given account, returned in Basis Points (1 b.p. = 0.01%)
+// Returns Some(APY) if the account is a Validator/backup validator.
+// Otherwise returns None.
+pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
+	if pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id) {
+		// Authority: reward is earned by authoring a block.
+		Some(
+			Emissions::current_authority_emission_per_block() * YEAR as u128 /
+				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_len()
+					.expect("Current authorities must exists and non-empty.") as u128,
+		)
+	} else {
+		let backups_earning_rewards =
+			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
+		if backups_earning_rewards.iter().any(|bid| bid.bidder_id == *account_id) {
+			// Calculate backup validator reward for the current block, then scaled linearly into
+			// YEAR.
+			calculate_backup_rewards::<AccountId, FlipBalance>(
+				backups_earning_rewards,
+				Validator::bond(),
+				One::one(),
+				Emissions::backup_node_emission_per_block(),
+				Emissions::current_authority_emission_per_block(),
+				u128::from(Validator::current_authority_count()),
+			)
+			.into_iter()
+			.find(|(id, _reward)| *id == *account_id)
+			.map(|(_id, reward)| reward * YEAR as u128)
+		} else {
+			None
+		}
+	}
+	.map(|reward_pa| {
+		// Convert Permill to Basis Point.
+		FixedU64::from_rational(reward_pa, Flip::balance(account_id))
+			.checked_mul_int(10_000u32)
+			.unwrap_or_default()
+	})
 }

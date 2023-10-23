@@ -32,7 +32,7 @@ A validator can have at most one open redemption at any given time. They must ei
 
 ### Redemption Restrictions
 
-Redemptions can be subject to certain rules and restrictions. The following categories apply simulataneously, that is, all of the following restrictions are checked on every redemption request.
+Redemptions can be subject to certain rules and restrictions. The following categories apply simultaneously, that is, all of the following restrictions are checked on every redemption request.
 
 #### Bonded Funds
 

@@ -39,7 +39,7 @@ async function provideLiquidityAndTestAssetBalances() {
   let retryCount = 0;
   let ethBalance = 0;
   do {
-    const balances = await lpApiRpc(`lp_assetBalances`, []);
+    const balances = await lpApiRpc(`lp_asset_balances`, []);
     ethBalance = balances.Eth;
     retryCount++;
     if (retryCount > 14) {
@@ -60,12 +60,12 @@ async function testRegisterLiquidityRefundAddress() {
     (event) => event.data.address.Eth === ethAddress,
   );
 
-  const registerRefundAddress = await lpApiRpc(`lp_registerLiquidityRefundAddress`, [
+  const registerRefundAddress = await lpApiRpc(`lp_register_liquidity_refund_address`, [
     'Ethereum',
     ethAddress,
   ]);
   if (!isValidHexHash(await registerRefundAddress)) {
-    throw new Error(`Unexpected lp_registerLiquidityRefundAddress result`);
+    throw new Error(`Unexpected lp_register_liquidity_refund_address result`);
   }
   await observeRefundAddressRegisteredEvent;
 
@@ -79,7 +79,7 @@ async function testLiquidityDeposit() {
     (event) => event.data.depositAddress.Eth,
   );
   // TODO: This result will need to be updated after #3995 is merged
-  const liquidityDepositAddress = await lpApiRpc(`lp_liquidityDeposit`, ['Eth']);
+  const liquidityDepositAddress = await lpApiRpc(`lp_liquidity_deposit`, ['Eth']);
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
@@ -107,7 +107,7 @@ async function testLiquidityDeposit() {
 async function testWithdrawAsset() {
   const oldBalance = await getBalance('ETH', ethAddress);
 
-  const [asset, egressId] = await lpApiRpc(`lp_withdrawAsset`, [
+  const [asset, egressId] = await lpApiRpc(`lp_withdraw_asset`, [
     testAssetAmount,
     'Eth',
     ethAddress,
@@ -120,18 +120,18 @@ async function testWithdrawAsset() {
 
 async function testRegisterWithExistingLpAccount() {
   try {
-    await lpApiRpc(`lp_registerAccount`, []);
-    throw new Error(`Unexpected lp_registerAccount result`);
+    await lpApiRpc(`lp_register_account`, []);
+    throw new Error(`Unexpected lp_register_account result`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     // This account is already registered, so the command will fail.
     if (!error.message.includes('Could not register account role for account')) {
-      throw new Error(`Unexpected lp_registerAccount error: ${JSON.stringify(error)}`);
+      throw new Error(`Unexpected lp_register_account error: ${JSON.stringify(error)}`);
     }
   }
 }
 
-/// Test lp_setRangeOrder and lp_updateRangeOrder by minting, updating, and burning a range order.
+/// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
 async function testRangeOrder() {
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
@@ -143,10 +143,10 @@ async function testRangeOrder() {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_setRangeOrder`, ['Usdc', 'Eth', orderId, range, zeroAssetAmounts]);
+  await lpApiRpc(`lp_set_range_order`, ['Usdc', 'Eth', orderId, range, zeroAssetAmounts]);
 
   // Mint a range order
-  const mintRangeOrder = await lpApiRpc(`lp_setRangeOrder`, [
+  const mintRangeOrder = await lpApiRpc(`lp_set_range_order`, [
     'Usdc',
     'Eth',
     orderId,
@@ -171,7 +171,7 @@ async function testRangeOrder() {
   );
 
   // Update the range order
-  const updateRangeOrder = await lpApiRpc(`lp_updateRangeOrder`, [
+  const updateRangeOrder = await lpApiRpc(`lp_update_range_order`, [
     'Usdc',
     'Eth',
     orderId,
@@ -197,7 +197,7 @@ async function testRangeOrder() {
   );
 
   // Burn the range order
-  const burnRangeOrder = await lpApiRpc(`lp_setRangeOrder`, [
+  const burnRangeOrder = await lpApiRpc(`lp_set_range_order`, [
     'Usdc',
     'Eth',
     orderId,
@@ -220,22 +220,22 @@ async function testRangeOrder() {
 
 async function testGetOpenSwapChannels() {
   // TODO: Test with some SwapChannelInfo data
-  const openSwapChannels = await lpApiRpc(`lp_getOpenSwapChannels`, []);
+  const openSwapChannels = await lpApiRpc(`lp_get_open_swap_channels`, []);
   assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
   assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
   assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
 }
 
-/// Test lp_setLimitOrder and lp_updateLimitOrder by minting, updating, and burning a limit order.
+/// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
 async function testLimitOrder() {
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_setLimitOrder`, ['Eth', 'Usdc', orderId, tick, 0]);
+  await lpApiRpc(`lp_set_limit_order`, ['Eth', 'Usdc', orderId, tick, 0]);
 
   // Mint a limit order
-  const mintLimitOrder = await lpApiRpc(`lp_setLimitOrder`, [
+  const mintLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     'Eth',
     'Usdc',
     orderId,
@@ -255,7 +255,7 @@ async function testLimitOrder() {
   );
 
   // Update the limit order
-  const updateLimitOrder = await lpApiRpc(`lp_updateLimitOrder`, [
+  const updateLimitOrder = await lpApiRpc(`lp_update_limit_order`, [
     'Eth',
     'Usdc',
     orderId,
@@ -276,7 +276,7 @@ async function testLimitOrder() {
   );
 
   // Burn the limit order
-  const burnLimitOrder = await lpApiRpc(`lp_setLimitOrder`, ['Eth', 'Usdc', orderId, tick, 0]);
+  const burnLimitOrder = await lpApiRpc(`lp_set_limit_order`, ['Eth', 'Usdc', orderId, tick, 0]);
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
   assert.strictEqual(
     burnLimitOrder[0].increase_or_decrease,
