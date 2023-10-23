@@ -16,16 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Get branch of tag
-        id: get_tag
-        run: |
-          echo "tag=$(./ci/scripts/extract_version.sh ${{ inputs.version }})" >> $GITHUB_OUTPUT
-
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-packages-ubuntu-22.04
-          path: ${{ steps.get_tag.outputs.tag }}
+          path: ${{ inputs.version }}
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2
