@@ -21,16 +21,11 @@ jobs:
         run: |
           echo "tag=$(./ci/scripts/extract_version.sh ${{ inputs.version }})" >> $GITHUB_OUTPUT
 
-      - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
-        uses: dawidd6/action-download-artifact@v2
+      - name: Download packages
+        uses: actions/download-artifact@v3
         with:
-          workflow: release-sisyphos.yml
           name: chainflip-backend-packages-ubuntu-22.04
-          path: ${{ inputs.version }}
-          branch: release/${{ steps.get_tag.outputs.tag }}
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          search_artifacts: true
-          check_artifacts: true
+          path: packages
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2
