@@ -25,7 +25,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-packages-ubuntu-22.04
-          path: packages
+          path: ${{ steps.get_tag.outputs.tag }}
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2
@@ -33,6 +33,6 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::771478732399:role/chainflip-github-bot
 
-      - name: Upload binaries to s3
+      - name: Upload packages to s3 pre-release bucket
         run: |
           aws s3 mv --recursive --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/
