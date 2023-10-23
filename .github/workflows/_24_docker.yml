@@ -24,7 +24,7 @@ env:
 
 jobs:
   get-date-time:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       date: ${{ steps.date.outputs.date }}
       time: ${{ steps.date.outputs.time }}
@@ -36,7 +36,7 @@ jobs:
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
 
   set-dockerfile-name:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path }}
     steps:
@@ -65,7 +65,7 @@ jobs:
           - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -73,7 +73,7 @@ jobs:
       - name: Download binaries 📥
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin-ubuntu-20.04
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Set up QEMU 🧞
         uses: docker/setup-qemu-action@v2
@@ -138,7 +138,7 @@ jobs:
           - chainflip-lp-api
         docker-repo:
           - chainfliplabs
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -146,7 +146,7 @@ jobs:
       - name: Download binaries 📥
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin-ubuntu-20.04
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Set up QEMU 🧞
         uses: docker/setup-qemu-action@v2

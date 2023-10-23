@@ -24,6 +24,14 @@ jobs:
       network: "berghain"
       profile: "production"
     secrets: inherit
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    with:
+      network: "berghain"
+      environment: "production"
+      publish_public_images: false
+    secrets: inherit
   upload:
 #    needs: [check-versions]
     needs: [package]
