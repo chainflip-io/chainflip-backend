@@ -11,7 +11,7 @@ Group=flip
 WorkingDirectory=/etc/chainflip
 
 ExecStart=/usr/bin/chainflip-node \
-    --chain=/etc/chainflip/development.chainspec.json \
+    --chain=/etc/chainflip/berghain.chainspec.json \
     --base-path=/etc/chainflip/chaindata \
     --node-key-file=/etc/chainflip/keys/node_key_file \
     --trie-cache-size=0 \

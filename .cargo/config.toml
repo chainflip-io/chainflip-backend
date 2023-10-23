@@ -15,7 +15,7 @@ cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runt
 cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 
 cf-build = "build --features runtime-benchmarks"
-cf-build-ci = "build --release --features runtime-benchmarks"
+cf-build-ci = "build --features runtime-benchmarks"
 
 # Check for feature inconsistencies.
 check-sc-features = '''

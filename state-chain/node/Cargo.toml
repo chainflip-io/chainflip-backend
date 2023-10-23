@@ -107,7 +107,7 @@ systemd-units = [
   { unit-name = "chainflip-genesis-node", enable = false },
 ]
 
-[package.metadata.deb.variants.development]
+[package.metadata.deb.variants.test]
 maintainer-scripts = "package/development"
 assets = [["target/release/chainflip-node", "usr/bin/", "755"]]
 
@@ -141,32 +141,17 @@ assets = [
   ],
 ]
 
-[package.metadata.deb.variants.partnernet]
-maintainer-scripts = "package/partnernet"
+[package.metadata.deb.variants.berghain]
+maintainer-scripts = "package/berghain"
 assets = [
   [
-    "target/release/chainflip-node",
+    "target/production/chainflip-node",
     "usr/bin/",
     "755",
   ],
   [
-    "chainspecs/partnernet.chainspec.raw.json",
-    "etc/chainflip/partnernet.chainspec.json",
-    "644",
-  ],
-]
-
-[package.metadata.deb.variants.kitkat]
-maintainer-scripts = "package/kitkat"
-assets = [
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
-    "chainspecs/kitkat.chainspec.raw.json",
-    "etc/chainflip/kitkat.chainspec.json",
+    "chainspecs/berghain.chainspec.raw.json",
+    "etc/chainflip/berghain.chainspec.json",
     "644",
   ],
 ]

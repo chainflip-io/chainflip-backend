@@ -23,3 +23,23 @@ utilities = { path = "../../../utilities" }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08+2' }
+
+[package.metadata.deb]
+depends = "$auto, systemd"
+extended-description = """\
+Chainflip CLI"""
+maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
+name = "chainflip-cli"
+priority = "required"
+section = "rust"
+[package.metadata.deb.variants.test]
+assets = [["target/release/chainflip-cli", "usr/bin/", "755"]]
+
+[package.metadata.deb.variants.sisyphos]
+assets = [["target/release/chainflip-cli", "usr/bin/", "755"]]
+
+[package.metadata.deb.variants.perseverance]
+assets = [["target/release/chainflip-cli", "usr/bin/", "755"]]
+
+[package.metadata.deb.variants.berghain]
+assets = [["target/production/chainflip-cli", "usr/bin/", "755"]]

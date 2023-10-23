@@ -18,8 +18,8 @@ jobs:
     needs: [bins]
     uses: ./.github/workflows/_24_docker.yml
     with:
-      network: perseverance
-      environment: prod
+      network: "perseverance"
+      environment: "production"
       publish_public_images: true
     secrets: inherit
   package:
@@ -27,18 +27,18 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "perseverance"
-      environment: prod
+      profile: "release"
     secrets: inherit
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "perseverance/"
-      environment: prod
+      environment: "production"
     secrets: inherit
   release:
     needs: [publish]
     uses: ./.github/workflows/_50_release.yml
     secrets: inherit
     with:
-      network: perseverance
+      network: "perseverance"

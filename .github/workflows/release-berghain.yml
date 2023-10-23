@@ -12,6 +12,18 @@ concurrency:
 jobs:
 #  check-versions:
 #    uses: ./.github/workflows/_03_check_versions.yml
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "production"
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "berghain"
+      profile: "production"
+    secrets: inherit
   upload:
 #    needs: [check-versions]
     uses: ./.github/workflows/_60_upload.yml

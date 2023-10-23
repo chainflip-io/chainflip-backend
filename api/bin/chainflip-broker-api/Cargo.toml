@@ -14,7 +14,19 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
+
+[package.metadata.deb.variants.test]
 assets = [["target/release/chainflip-broker-api", "usr/bin/", "755"]]
+
+[package.metadata.deb.variants.sisyphos]
+assets = [["target/release/chainflip-broker-api", "usr/bin/", "755"]]
+
+[package.metadata.deb.variants.perseverance]
+assets = [["target/release/chainflip-broker-api", "usr/bin/", "755"]]
+
+[package.metadata.deb.variants.berghain]
+assets = [["target/production/chainflip-broker-api", "usr/bin/", "755"]]
+
 
 [[bin]]
 name = "chainflip-broker-api"

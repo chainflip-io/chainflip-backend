@@ -20,20 +20,20 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      network: sisyphos
+      profile: "release"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
-      network: sisyphos
-      environment: dev
+      network: "sisyphos"
+      environment: "development"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "sisyphos"
-      environment: dev
+      profile: "release"
     secrets: inherit
   post-check:
     needs: [build]
@@ -44,5 +44,5 @@ jobs:
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "sisyphos/"
-      environment: dev
+      environment: "development"
     secrets: inherit
