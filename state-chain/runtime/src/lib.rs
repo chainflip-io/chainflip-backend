@@ -23,6 +23,7 @@ use cf_chains::{
 	evm::EvmCrypto,
 	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
 };
+use cf_primitives::NetworkEnvironment;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -931,7 +932,6 @@ impl_runtime_apis! {
 				balance: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
-				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
@@ -1036,6 +1036,10 @@ impl_runtime_apis! {
 			liquidity: Liquidity,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
 			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
+		}
+
+		fn cf_network_environment() -> NetworkEnvironment {
+			Environment::network_environment()
 		}
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {

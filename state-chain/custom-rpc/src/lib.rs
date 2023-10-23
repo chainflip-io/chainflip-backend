@@ -2,8 +2,13 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{address::AddressConverter, eth::Address as EthereumAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, ForeignChain, SemVer, SwapOutput};
+use cf_chains::{
+	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	eth::Address as EthereumAddress,
+};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+};
 use core::ops::Range;
 use jsonrpsee::{
 	core::RpcResult,
@@ -19,7 +24,7 @@ use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
-	chainflip::{ChainAddressConverter, Offence},
+	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{CustomRuntimeApi, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
@@ -40,14 +45,13 @@ pub enum RpcAccountInfo {
 	},
 	LiquidityProvider {
 		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
-		refund_addresses: HashMap<ForeignChain, Option<String>>,
+		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
 		bond: NumberOrHex,
 		last_heartbeat: u32,
-		online_credits: u32,
 		reputation_points: i32,
 		keyholder_epochs: Vec<u32>,
 		is_current_authority: bool,
@@ -70,7 +74,7 @@ impl RpcAccountInfo {
 		Self::Broker { flip_balance: balance.into() }
 	}
 
-	fn lp(info: LiquidityProviderInfo, balance: u128) -> Self {
+	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
 		let mut balances = HashMap::new();
 
 		for (asset, balance) in info.balances {
@@ -86,14 +90,7 @@ impl RpcAccountInfo {
 			refund_addresses: info
 				.refund_addresses
 				.into_iter()
-				.map(|(chain, address)| {
-					(
-						chain,
-						address
-							.map(ChainAddressConverter::to_encoded_address)
-							.map(|a| format!("{}", a)),
-					)
-				})
+				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
 		}
 	}
@@ -103,7 +100,6 @@ impl RpcAccountInfo {
 			flip_balance: info.balance.into(),
 			bond: info.bond.into(),
 			last_heartbeat: info.last_heartbeat,
-			online_credits: info.online_credits,
 			reputation_points: info.reputation_points,
 			keyholder_epochs: info.keyholder_epochs,
 			is_current_authority: info.is_current_authority,
@@ -127,7 +123,6 @@ pub struct RpcAccountInfoV2 {
 	pub balance: NumberOrHex,
 	pub bond: NumberOrHex,
 	pub last_heartbeat: u32,
-	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<u32>,
 	pub is_current_authority: bool,
@@ -381,8 +376,6 @@ pub trait CustomApi {
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
-	#[method(name = "environment")]
-	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -615,7 +608,11 @@ where
 						.map_err(to_rpc_error)?
 						.expect("role already validated");
 
-					RpcAccountInfo::lp(info, balance)
+					RpcAccountInfo::lp(
+						info,
+						api.cf_network_environment(hash).map_err(to_rpc_error)?,
+						balance,
+					)
 				},
 				AccountRole::Validator => {
 					let info = api.cf_account_info_v2(hash, &account_id).map_err(to_rpc_error)?;
@@ -641,7 +638,6 @@ where
 			balance: account_info.balance.into(),
 			bond: account_info.bond.into(),
 			last_heartbeat: account_info.last_heartbeat,
-			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
 			keyholder_epochs: account_info.keyholder_epochs,
 			is_current_authority: account_info.is_current_authority,
@@ -842,15 +838,6 @@ where
 			.map_err(to_rpc_error)?
 			.transpose()
 			.map_err(map_dispatch_error)
-	}
-
-	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
-		Ok(RpcEnvironment {
-			ingress_egress: self.cf_ingress_egress_environment(at)?,
-			swapping: self.cf_swapping_environment(at)?,
-			funding: self.cf_funding_environment(at)?,
-			pool: self.cf_pool_environment(at)?,
-		})
 	}
 
 	fn cf_ingress_egress_environment(
@@ -1110,6 +1097,7 @@ mod test {
 					(Asset::Flip, u128::MAX / 2),
 				],
 			},
+			cf_primitives::NetworkEnvironment::Mainnet,
 			0,
 		);
 
@@ -1126,9 +1114,9 @@ mod test {
 					"Bitcoin": { "Btc": "0x0" },
 				},
 				"refund_addresses": {
-					"Ethereum": "0x0101010101010101010101010101010101010101",
+					"Ethereum": { "Eth" : "0x0101010101010101010101010101010101010101" },
 					"Bitcoin": null,
-					"Polkadot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+					"Polkadot": { "Dot": "111111111111111111111111111111111HC1" }
 				}
 			})
 		);
@@ -1137,7 +1125,6 @@ mod test {
 			balance: 10u128.pow(18),
 			bond: 10u128.pow(18),
 			last_heartbeat: 0,
-			online_credits: 0,
 			reputation_points: 0,
 			keyholder_epochs: vec![123],
 			is_current_authority: true,
@@ -1162,7 +1149,6 @@ mod test {
 				"is_qualified": true,
 				"keyholder_epochs": [123],
 				"last_heartbeat": 0,
-				"online_credits": 0,
 				"reputation_points": 0,
 				"role": "validator",
 				"apy_bp": 100,

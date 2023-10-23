@@ -187,7 +187,6 @@ pub trait EpochTransitionHandler {
 	fn on_expired_epoch(_expired: EpochIndex) {}
 }
 
-/// Resetter for Reputation Points and Online Credits of a Validator
 pub trait ReputationResetter {
 	type ValidatorId;
 
@@ -330,17 +329,17 @@ pub trait Slashing {
 	fn slash_balance(account_id: &Self::AccountId, amount: Percent);
 }
 
-/// Can nominate a single account.
-pub trait SingleSignerNomination {
-	/// The id type of signer
-	type SignerId;
+/// Nominate a single account for transaction broadcasting.
+pub trait BroadcastNomination {
+	/// The id type of the broadcaster.
+	type BroadcasterId;
 
-	/// Returns a random live signer, excluding particular provided signers. The seed value is used
+	/// Returns a random broadcaster id, excluding particular provided ids. The seed value is used
 	/// as a source of randomness. Returns None if no signers are live.
-	fn nomination_with_seed<H: Hashable>(
+	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId>;
+		exclude_ids: &[Self::BroadcasterId],
+	) -> Option<Self::BroadcasterId>;
 }
 
 pub trait ThresholdSignerNomination {

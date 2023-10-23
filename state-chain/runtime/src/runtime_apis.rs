@@ -5,7 +5,8 @@ use cf_amm::{
 };
 use cf_chains::{eth::Address as EthereumAddress, ForeignChainAddress};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -38,7 +39,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
@@ -129,5 +129,6 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_redemption_tax() -> AssetAmount;
+		fn cf_network_environment() -> NetworkEnvironment;
 	}
 );
