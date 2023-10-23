@@ -4,8 +4,10 @@ use cf_utilities::{
 	AnyhowRpcError,
 };
 use chainflip_api::{
-	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	self, asset_from_asset_chain_pair, clean_foreign_chain_address,
+	primitives::{
+		AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId, ForeignChain,
+	},
 	settings::StateChain,
 	BrokerApi, OperatorApi, StateChainApi,
 };
@@ -47,7 +49,9 @@ pub trait Rpc {
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
+		source_chain: ForeignChain,
 		destination_asset: Asset,
+		destination_chain: ForeignChain,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -84,7 +88,9 @@ impl RpcServer for RpcServerImpl {
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
+		source_chain: ForeignChain,
 		destination_asset: Asset,
+		destination_chain: ForeignChain,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -93,8 +99,8 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
-				source_asset,
-				destination_asset,
+				asset_from_asset_chain_pair(source_asset, source_chain)?,
+				asset_from_asset_chain_pair(destination_asset, destination_chain)?,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,
 				channel_metadata,

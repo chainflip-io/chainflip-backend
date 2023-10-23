@@ -10,8 +10,8 @@ use crate::settings::{
 	LiquidityProviderSubcommands,
 };
 use api::{
-	lp::LpApi, primitives::RedemptionAmount, queries::QueryApi, AccountId32, BrokerApi,
-	GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
+	asset_from_asset_chain_pair, lp::LpApi, primitives::RedemptionAmount, queries::QueryApi,
+	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
@@ -60,8 +60,11 @@ async fn run_cli() -> Result<()> {
 					let SwapDepositAddress { address, .. } = api
 						.broker_api()
 						.request_swap_deposit_address(
-							params.source_asset,
-							params.destination_asset,
+							asset_from_asset_chain_pair(params.source_asset, params.source_chain)?,
+							asset_from_asset_chain_pair(
+								params.destination_asset,
+								params.destination_chain,
+							)?,
 							chainflip_api::clean_foreign_chain_address(
 								params.destination_asset.into(),
 								&params.destination_address,
@@ -73,9 +76,14 @@ async fn run_cli() -> Result<()> {
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset },
+					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
 				) => {
-					let address = api.lp_api().request_liquidity_deposit_address(asset).await?;
+					let address = api
+						.lp_api()
+						.request_liquidity_deposit_address(asset_from_asset_chain_pair(
+							asset, chain,
+						)?)
+						.await?;
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(

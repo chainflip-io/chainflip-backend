@@ -26,9 +26,9 @@ Then in another terminal:
 {"jsonrpc":"2.0","result":null,"id":1}
 
 # This method take a little while to respond because it submits and waits for finality. So make sure the request doesn't block.
-# Parameters are: [ asset ].
+# Parameters are: [ asset, chain ].
 > curl -H "Content-Type: application/json" \
-    -d '{"id":1, "jsonrpc":"2.0", "method": "lp_liquidityDeposit", "params": ["Eth"]}' \
+    -d '{"id":1, "jsonrpc":"2.0", "method": "lp_liquidityDeposit", "params": ["Eth", "Ethereum"]}' \
     http://localhost:80
 
 # The result is the hex-encoded deposit address.
@@ -66,7 +66,7 @@ OPTIONS:
 
 ## Rpc Methods
 
-### `lp_registerAccount`
+### `lp_register_account`
 
 Parameters:
 
@@ -76,21 +76,22 @@ Return:
 
 - null if successful, otherwise an error
 
-### `lp_liquidityDeposit`
+### `lp_liquidity_deposit`
 
 Parameters:
 
-- Source asset as a camel-case string, eg "Eth" or "Dot"
+- Source asset as a string, eg "Eth" or "dot"
+- Source chain as a string, eg "Ethereum" or "polkadot"
 
 Return:
 
 - Hex encoded deposit address.
 
-
-### `lp_registerLiquidityRefundAddress`
+### `lp_register_liquidity_refund_address`
 
 Parameters:
-- Chain: the forein chain where the address belongs to
+
+- Chain: the foreign chain where the address belongs to.
 - Address: Address refunded liquidity will be send to.
 
 e.g. ["Ethereum", "1594300cbd587694AffD70c933B9eE9155B186d9"]
@@ -99,23 +100,25 @@ Return:
 
 - Transaction hash of the successful extrinsic.
 
-### `lp_withdrawAsset`
+### `lp_withdraw_asset`
 
 Parameters:
 
 - Asset amount as u128
-- Egress asset as a camel-case string, eg "Eth" or "Dot"
-- Egress Address in hex. Must match the format of the egress asset's chain: 20 bytes for ethereum assets, 32 bytes for polkadot.
+- Egress asset as a string, eg "Eth" or "dot"
+- Egress chain as a string, eg "Ethereum" or "polkadot"
+- Egress Address in hex. Must match the format of the Egress chain: 20 bytes for the ethereum chain, 32 bytes for polkadot.
 
 Return:
 
 - Egress id
 
-### `lp_mintRangeOrder`
+### `lp_mint_range_order`
 
 Parameters:
 
-- Asset as a camel-case string, eg "Eth" or "Dot"
+- Asset as a string, eg "Eth" or "dot"
+- Chain as a string, eg "Ethereum" or "polkadot"
 - Lower tick as i32
 - Upper tick as i32
 - Order size amount as RangeOrderSize
@@ -129,11 +132,12 @@ Return:
   - Asset_0
   - Asset_1
 
-### `lp_burnRangeOrder`
+### `lp_burn_range_order`
 
 Parameters:
 
-- Asset as a camel-case string, eg "Eth" or "Dot"
+- Asset as a string, eg "Eth" or "dot"
+- Chain as a string, eg "Ethereum" or "polkadot"
 - Lower tick as i32
 - Upper tick as i32
 - Asset amount as u128
@@ -147,11 +151,12 @@ Return:
   - Asset_0
   - Asset_1
 
-### `lp_mintLimitOrder`
+### `lp_mint_limit_order`
 
 Parameters:
 
-- Asset as a camel-case string, eg "Eth" or "Dot"
+- Asset as a string, eg "Eth" or "dot"
+- Chain as a string, eg "Ethereum" or "polkadot"
 - Order as a camel-case string, "Buy" or "Sell"
 - Price tick as i32
 - Asset amount as u128
@@ -162,11 +167,12 @@ Return:
 - collected_fees
 - swapped_liquidity
 
-### `lp_burnLimitOrder`
+### `lp_burn_limit_order`
 
 Parameters:
 
-- Asset as a camel-case string, eg "Eth" or "Dot"
+- Asset as a string, eg "Eth" or "dot"
+- Chain as a string, eg "Ethereum" or "polkadot"
 - Order as a camel-case string, "Buy" or "Sell"
 - Price tick as i32
 - Asset amount as u128
@@ -177,7 +183,7 @@ Return:
 - collected_fees
 - swapped_liquidity
 
-### `lp_tokenBalances`
+### `lp_token_balances`
 
 Parameters:
 
@@ -187,7 +193,7 @@ Return:
 
 - A list of all assets and their free balance in json format
 
-### `lp_getRangeOrders`
+### `lp_get_range_orders`
 
 Parameters:
 
@@ -198,26 +204,6 @@ Return:
 Note: This functionality is not implemented yet.
 
 - A list of all assets and their range order positions in json format
-
-### `lp_getPools`
-
-Parameters:
-
-None
-
-Return:
-
-- A BTreeMap of all pools in json format
-
-### `lp_getPool`
-
-Parameters:
-
-- Asset as a camel-case string, eg "Eth" or "Dot"
-
-Return:
-
-- The required pool in json format
 
 -------------
 

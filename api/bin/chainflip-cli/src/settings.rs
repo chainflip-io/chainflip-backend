@@ -62,10 +62,14 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Source asset ("eth"|"dot")
+	/// Source asset ("Eth"|"Dot")
 	pub source_asset: Asset,
-	/// Egress asset ("eth"|"dot")
+	/// Source chain ("Ethereum"|"Polkadot")
+	pub source_chain: ForeignChain,
+	/// Egress asset ("Eth"|"Dot")
 	pub destination_asset: Asset,
+	/// Egress chain ("Ethereum"|"Polkadot")
+	pub destination_chain: ForeignChain,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
 	// on destination_asset)
@@ -87,6 +91,8 @@ pub enum LiquidityProviderSubcommands {
 	RequestLiquidityDepositAddress {
 		/// Asset to deposit.
 		asset: Asset,
+		/// Chain of the deposit asset.
+		chain: ForeignChain,
 	},
 	/// Register an Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
