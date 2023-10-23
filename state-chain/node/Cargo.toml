@@ -108,17 +108,11 @@ systemd-units = [
 ]
 
 [package.metadata.deb.variants.test]
-maintainer-scripts = "package/development"
-assets = [["target/release/chainflip-node", "usr/bin/", "755"]]
+maintainer-scripts = "package/test"
 
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
 assets = [
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
   [
     "chainspecs/sisyphos.chainspec.raw.json",
     "etc/chainflip/sisyphos.chainspec.json",
@@ -130,11 +124,6 @@ assets = [
 maintainer-scripts = "package/perseverance"
 assets = [
   [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
     "chainspecs/perseverance.chainspec.raw.json",
     "etc/chainflip/perseverance.chainspec.json",
     "644",
@@ -143,15 +132,11 @@ assets = [
 
 [package.metadata.deb.variants.berghain]
 maintainer-scripts = "package/berghain"
-assets = [
-  [
-    "target/production/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
-    "chainspecs/berghain.chainspec.raw.json",
-    "etc/chainflip/berghain.chainspec.json",
-    "644",
-  ],
-]
+# TODO: Uncomment during Berghain launch
+#assets = [
+#  [
+#    "chainspecs/berghain.chainspec.raw.json",
+#    "etc/chainflip/berghain.chainspec.json",
+#    "644",
+#  ],
+#]

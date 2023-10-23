@@ -33,7 +33,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
-          path: ./target/${{ inputs.profile }}
+          path: ./target/release
 
       - name: Get date
         id: get-date
