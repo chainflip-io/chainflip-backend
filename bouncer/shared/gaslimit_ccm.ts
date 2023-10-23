@@ -277,7 +277,7 @@ export async function testGasLimitCcmSwaps() {
   const spamming = spamEthereum();
 
   // Wait for the fees to increase to the stable expected amount
-  while ((await getChainFees()).priorityFee >= MIN_PRIORITY_FEE) {
+  while ((await getChainFees()).priorityFee < MIN_PRIORITY_FEE) {
     await sleep(500);
   }
 
