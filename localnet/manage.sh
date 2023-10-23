@@ -54,20 +54,18 @@ get-workflow() {
     break
   done
   if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
-    echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 2)"
-    select NODE_COUNT in 1-node 3-node; do
-      echo "You have chosen $NODE_COUNT node(s) network"
-      break
-    done
-    if [[ $NODE_COUNT == "1-node" ]]; then
-     SELECTED_NODES=("${GENESIS_NODES[0]}")
-    elif [[ $NODE_COUNT == "3-node" ]]; then
-     SELECTED_NODES=("${GENESIS_NODES[@]}")
+    echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 3)"
+    read -r NODE_COUNT
+    if [[ $NODE_COUNT == "1" ]]; then
+      SELECTED_NODES=("${GENESIS_NODES[0]}")
+    elif [[ $NODE_COUNT == "3" ]]; then
+      SELECTED_NODES=("${GENESIS_NODES[@]}")
     else
       echo "Invalid NODE_COUNT value: $NODE_COUNT"
       exit 1
     fi
-  fi
+    echo "You have chosen $NODE_COUNT node(s) network"
+fi
 }
 
 build-localnet() {
