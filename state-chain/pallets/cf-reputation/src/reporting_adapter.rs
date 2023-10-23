@@ -5,6 +5,7 @@
 //!
 //! Hence in this module we simply define [ReportOffence].
 use crate::*;
+use cf_primitives::FLIPPERINOS_PER_FLIP;
 use cf_traits::offence_reporting::OffenceReporter;
 use codec::Encode;
 use frame_support::{traits::OnKilledAccount, Blake2_128Concat, StorageHasher};
@@ -100,7 +101,7 @@ where
 
 		// TODO: Reconsider the slashing rate here. For now we assume we are reporting the node
 		// for equivocation, and that each report corresponds to 1 FLIP.
-		T::Slasher::slash_balance(&offender, 10u128.pow(18));
+		T::Slasher::slash_balance(&offender, FLIPPERINOS_PER_FLIP);
 
 		Pallet::<T>::report(offence, offender);
 		Ok(())

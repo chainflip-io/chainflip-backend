@@ -2,9 +2,8 @@
 
 use super::*;
 use crate::{
-	mock::{self, *},
-	Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds, Reserve,
-	SlashingRate, TotalIssuance,
+	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
+	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
@@ -289,9 +288,8 @@ impl FlipOperation {
 
 				SlashingRate::<Test>::set(*slashing_rate);
 
-				let attempted_slash: u128 = (*slashing_rate * *bond /
-					<mock::Test as pallet::Config>::BlocksPerDay::get() as u128)
-					.saturating_mul((*blocks).into());
+				let attempted_slash: u128 =
+					FlipSlasher::<Test>::calculate_slash_amount(account_id, *blocks);
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash

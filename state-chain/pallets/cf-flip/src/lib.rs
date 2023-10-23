@@ -598,18 +598,25 @@ where
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
+	type Balance = T::Balance;
 
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
-		// 14400 blocks per day
-		let slash_amount = (SlashingRate::<T>::get() * account.bond /
-			T::BlocksPerDay::get().into())
-		.saturating_mul(blocks.into());
+		let slash_amount = Self::calculate_slash_amount(account_id, blocks);
 		Self::attempt_slash(account_id, account, slash_amount);
 	}
 
 	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance) {
 		let account = Account::<T>::get(account_id);
 		Self::attempt_slash(account_id, account, slash_amount.into());
+	}
+
+	fn calculate_slash_amount(
+		account_id: &Self::AccountId,
+		blocks: Self::BlockNumber,
+	) -> Self::Balance {
+		let account = Account::<T>::get(account_id);
+		(SlashingRate::<T>::get() * account.bond / T::BlocksPerDay::get().into())
+			.saturating_mul(blocks.into())
 	}
 }

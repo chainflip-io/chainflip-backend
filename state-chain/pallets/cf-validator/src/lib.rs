@@ -16,7 +16,7 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
+use cf_primitives::{AuthorityCount, EpochIndex, SemVer, FLIPPERINOS_PER_FLIP};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -1028,7 +1028,7 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.winners.len(),
 					auction_outcome.losers.len(),
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
-						10u128.pow(18),
+					FLIPPERINOS_PER_FLIP,
 				);
 
 				// Without reading the full list of bidders we can't know the real number.

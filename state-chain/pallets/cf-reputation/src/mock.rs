@@ -87,6 +87,7 @@ impl MockSlasher {
 impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
+	type Balance = u128;
 
 	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
 		// Count those slashes
@@ -100,6 +101,13 @@ impl Slashing for MockSlasher {
 		SLASHES.with(|count| {
 			count.borrow_mut().push(*account_id);
 		});
+	}
+
+	fn calculate_slash_amount(
+		_account_id: &Self::AccountId,
+		_blocks: Self::BlockNumber,
+	) -> Self::Balance {
+		unimplemented!()
 	}
 }
 

@@ -322,12 +322,19 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
+	type Balance;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
-	/// Slashes a validator for a fixed amount
-	fn slash_balance(account_id: &Self::AccountId, slash_rate: FlipBalance);
+	/// Slashes a validator by some fixed amount.
+	fn slash_balance(account_id: &Self::AccountId, slash_amount: FlipBalance);
+
+	/// Calculate the amount of FLIP to slash
+	fn calculate_slash_amount(
+		account_id: &Self::AccountId,
+		blocks: Self::BlockNumber,
+	) -> Self::Balance;
 }
 
 /// Nominate a single account for transaction broadcasting.
