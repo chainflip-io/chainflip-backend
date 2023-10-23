@@ -175,14 +175,15 @@ impl From<SwapOutput> for RpcSwapOutput {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcAsset {
-	pub asset: Asset,
-	pub chain: ForeignChain,
+#[serde(untagged)]
+pub enum RpcAsset {
+	ImplicitChain { asset: Asset },
+	ExplicitChain { chain: ForeignChain, asset: Asset },
 }
 
 impl Into<RpcAsset> for Asset {
 	fn into(self) -> RpcAsset {
-		RpcAsset { asset: self, chain: self.into() }
+		RpcAsset::ExplicitChain { asset: self, chain: self.into() }
 	}
 }
 
