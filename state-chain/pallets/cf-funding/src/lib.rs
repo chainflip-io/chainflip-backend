@@ -260,13 +260,6 @@ pub mod pallet {
 		/// We are in the auction phase
 		AuctionPhase,
 
-		/// A withdrawal address is provided, but the account has a different withdrawal address
-		/// already associated.
-		WithdrawalAddressRestricted,
-
-		/// An invalid redemption has been made
-		InvalidRedemption,
-
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
 
