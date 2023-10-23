@@ -62,7 +62,6 @@ where
 	let vaults = epoch_source.vaults().await;
 
 	DotUnfinalisedSource::new(dot_client.clone())
-		.shared(scope)
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.strictly_monotonic()
 		.shared(scope)
@@ -79,12 +78,8 @@ where
 		// Broadcast success
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
-		.then({
-			let witness_call = witness_call.clone();
-			let dot_client = dot_client.clone();
-			move |epoch, header| {
-				process_egress(epoch, header, witness_call.clone(), dot_client.clone())
-			}
+		.then(move |epoch, header| {
+			process_egress(epoch, header, witness_call.clone(), dot_client.clone())
 		})
 		.logging("witnessing")
 		.spawn(scope);

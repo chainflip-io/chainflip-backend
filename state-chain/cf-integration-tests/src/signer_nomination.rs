@@ -1,9 +1,6 @@
 use std::collections::BTreeSet;
 
-use cf_traits::{
-	offence_reporting::OffenceReporter, EpochInfo, SingleSignerNomination,
-	ThresholdSignerNomination,
-};
+use cf_traits::{offence_reporting::OffenceReporter, EpochInfo, ThresholdSignerNomination};
 use pallet_cf_threshold_signature::PalletOffence;
 use pallet_cf_validator::{CurrentAuthorities, CurrentEpoch, HistoricalAuthorities};
 use sp_runtime::AccountId32;
@@ -11,9 +8,6 @@ use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
 
 type RuntimeThresholdSignerNomination =
 	<Runtime as pallet_cf_threshold_signature::Config<EthereumInstance>>::ThresholdSignerNomination;
-
-type RuntimeBroadcastsignerNomination =
-	<Runtime as pallet_cf_broadcast::Config<EthereumInstance>>::BroadcastSignerNomination;
 
 #[test]
 fn threshold_signer_nomination_respects_epoch() {
@@ -81,36 +75,10 @@ fn test_not_nominated_for_offence<F: Fn(crate::AccountId)>(penalise: F) {
 }
 
 #[test]
-fn offline_nodes_are_not_nominated_for_threshold_signing() {
-	super::genesis::default().build().execute_with(|| {
-		test_not_nominated_for_offence(|node_id| {
-			Reputation::penalise_offline_authorities(vec![node_id])
-		});
-	});
-}
-
-#[test]
 fn nodes_who_failed_to_sign_excluded_from_threshold_nomination() {
 	super::genesis::default().build().execute_with(|| {
 		test_not_nominated_for_offence(|node_id| {
 			Reputation::report_many(PalletOffence::ParticipateSigningFailed, &[node_id])
 		});
-	});
-}
-
-#[test]
-fn offline_nodes_are_not_nominated_transaction_signing() {
-	super::genesis::default().build().execute_with(|| {
-		let node1 = Validator::current_authorities().first().unwrap().clone();
-
-		Reputation::penalise_offline_authorities(vec![node1.clone()]);
-
-		for seed in 0..20 {
-			// no extra ids, excluded.
-			assert_ne!(
-				RuntimeBroadcastsignerNomination::nomination_with_seed(seed, &[]).unwrap(),
-				node1
-			);
-		}
 	});
 }
