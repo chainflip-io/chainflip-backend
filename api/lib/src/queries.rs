@@ -222,34 +222,43 @@ fn compute_distance(index: usize, slot: usize, len: usize) -> usize {
 	}
 }
 
-#[test]
-fn test_slot_extraction() {
-	let slot = Slot::from(42);
-	assert_eq!(
-		Some(slot),
-		extract_slot_from_digest_item(&DigestItem::PreRuntime(
-			AURA_ENGINE_ID,
-			Encode::encode(&slot)
-		))
-	);
-	assert_eq!(
-		None,
-		extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
-	);
-	assert_eq!(None, extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec())));
-}
+#[cfg(test)]
+mod test {
+	use super::*;
+	use codec::Encode;
 
-#[test]
-fn test_compute_distance() {
-	let index: usize = 5;
-	let slot: usize = 7;
-	let len: usize = 15;
+	#[test]
+	fn test_slot_extraction() {
+		let slot = Slot::from(42);
+		assert_eq!(
+			Some(slot),
+			extract_slot_from_digest_item(&DigestItem::PreRuntime(
+				AURA_ENGINE_ID,
+				Encode::encode(&slot)
+			))
+		);
+		assert_eq!(
+			None,
+			extract_slot_from_digest_item(&DigestItem::PreRuntime(*b"BORA", Encode::encode(&slot)))
+		);
+		assert_eq!(
+			None,
+			extract_slot_from_digest_item(&DigestItem::Other(b"SomethingElse".to_vec()))
+		);
+	}
 
-	assert_eq!(compute_distance(index, slot, len), 13);
+	#[test]
+	fn test_compute_distance() {
+		let index: usize = 5;
+		let slot: usize = 7;
+		let len: usize = 15;
 
-	let index: usize = 18;
-	let slot: usize = 7;
-	let len: usize = 24;
+		assert_eq!(compute_distance(index, slot, len), 13);
 
-	assert_eq!(compute_distance(index, slot, len), 11);
+		let index: usize = 18;
+		let slot: usize = 7;
+		let len: usize = 24;
+
+		assert_eq!(compute_distance(index, slot, len), 11);
+	}
 }

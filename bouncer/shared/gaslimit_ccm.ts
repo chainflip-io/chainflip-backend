@@ -29,6 +29,7 @@ const MAX_TEST_GAS_CONSUMPTION = 4000000;
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
 const GAS_PER_BYTE = 17;
 const MIN_PRIORITY_FEE = 1000000000;
+const LOOP_TIMEOUT = 15;
 
 let stopObservingCcmReceived = false;
 
@@ -277,7 +278,15 @@ export async function testGasLimitCcmSwaps() {
   const spamming = spamEthereum();
 
   // Wait for the fees to increase to the stable expected amount
-  while ((await getChainFees()).priorityFee >= MIN_PRIORITY_FEE) {
+  let i = 0;
+  while ((await getChainFees()).priorityFee < MIN_PRIORITY_FEE) {
+    console.log(i);
+    if (++i > LOOP_TIMEOUT) {
+      spam = false;
+      await spamming;
+      console.log("=== Skipping gasLimit CCM test as the priority fee didn't increase enough. ===");
+      return;
+    }
     await sleep(500);
   }
 
