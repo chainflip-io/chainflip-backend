@@ -172,7 +172,7 @@ impl From<SwapOutput> for RpcSwapOutput {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RpcAsset {
-	ImplicitChain { asset: Asset },
+	ImplicitChain(Asset),
 	ExplicitChain { chain: ForeignChain, asset: Asset },
 }
 
@@ -197,7 +197,7 @@ impl From<PoolInfo> for RpcPoolInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct PoolsEnvironment {
-	pub fees: HashMap<ForeignChain, HashMap<Asset, RpcPoolInfo>>,
+	pub fees: HashMap<ForeignChain, HashMap<Asset, Option<RpcPoolInfo>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -905,15 +905,15 @@ where
 				continue
 			}
 
-			let info = self.cf_pool_info(asset, Asset::Usdc, at)?.expect("pool should exist");
+			let info = self.cf_pool_info(asset, Asset::Usdc, at)?.map(Into::into);
 
-			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info.into());
+			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info);
 		}
 
 		Ok(PoolsEnvironment { fees })
 	}
 
-	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) {
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
 		Ok(RpcEnvironment {
 			ingress_egress: self.cf_ingress_egress_environment(at)?,
 			swapping: self.cf_swapping_environment(at)?,
@@ -1218,13 +1218,15 @@ mod test {
 						ForeignChain::Ethereum,
 						HashMap::from([(
 							Asset::Flip,
-							PoolInfo {
-								limit_order_fee_hundredth_pips: 0,
-								range_order_fee_hundredth_pips: 100,
-							}
-							.into()
-						),])
-					),])
+							Some(
+								PoolInfo {
+									limit_order_fee_hundredth_pips: 0,
+									range_order_fee_hundredth_pips: 100,
+								}
+								.into()
+							)
+						)])
+					)])
 				}
 			})
 			.unwrap(),

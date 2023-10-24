@@ -258,6 +258,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
 }
 
+#[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for ForeignChainAddressHumanreadable {
 	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
 	where
