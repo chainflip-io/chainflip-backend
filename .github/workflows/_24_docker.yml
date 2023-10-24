@@ -14,6 +14,10 @@ on:
         required: false
         type: boolean
         default: false
+      use_save:
+        description: Use save
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -114,7 +118,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: true
+          push: ${{ ! inputs.use_save }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -123,6 +127,18 @@ jobs:
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
+
+      - name: Save image 📦
+        if: inputs.use_save
+        run: |
+          docker save ${{ steps.meta.outputs.tags }} -o ${{ steps.meta.outputs.tags }}.tar
+
+      - name: Upload image 📤
+        if: inputs.use_save
+        uses: actions/upload-artifact@v2
+        with:
+          name: chainflip-backend-images
+          path: ${{ steps.meta.outputs.tags }}.tar
 
   public-images:
     if: inputs.publish_public_images

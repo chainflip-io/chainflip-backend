@@ -23,8 +23,20 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
+          name: chainflip-backend-bin-ubuntu-22.04
+          path: assets/bin
+
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
           name: chainflip-backend-packages-ubuntu-22.04
-          path: ${{ inputs.version }}
+          path: assets/debian
+
+      - name: Download images
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-images
+          path: assets/docker
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2
@@ -34,5 +46,5 @@ jobs:
 
       - name: Upload packages to s3 pre-release bucket
         run: |
-          aws s3 sync --include "*.deb" ${{ inputs.version }} s3://chainflip-mainnet-prerelease/${{ inputs.version }}/
+          aws s3 mv assets s3://chainflip-mainnet-prerelease/${{ inputs.version }}/ --recursive
           aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/${{ inputs.version }}/chainspecs/${{ inputs.network }}.chainspec.json

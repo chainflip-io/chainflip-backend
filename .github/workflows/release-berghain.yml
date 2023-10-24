@@ -31,6 +31,7 @@ jobs:
       network: "berghain"
       environment: "production"
       publish_public_images: false
+      use_save: true
     secrets: inherit
   upload:
 #    needs: [check-versions]
