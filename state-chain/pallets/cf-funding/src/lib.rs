@@ -368,6 +368,19 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
+			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
+
+			// Not allowed to redeem if we are an active bidder in the auction phase
+			if T::EpochInfo::is_auction_phase() {
+				ensure!(!ActiveBidder::<T>::get(&account_id), Error::<T>::AuctionPhase);
+			}
+
+			// The redemption must be executed before a new one can be requested.
+			ensure!(
+				!PendingRedemptions::<T>::contains_key(&account_id),
+				Error::<T>::PendingRedemption
+			);
+
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
 
 			let mut executor: Option<EthereumAddress> = None;
@@ -383,19 +396,6 @@ pub mod pallet {
 					executor = supplied_executor;
 				}
 			}
-
-			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
-
-			// Not allowed to redeem if we are an active bidder in the auction phase
-			if T::EpochInfo::is_auction_phase() {
-				ensure!(!ActiveBidder::<T>::get(&account_id), Error::<T>::AuctionPhase);
-			}
-
-			// The redemption must be executed before a new one can be requested.
-			ensure!(
-				!PendingRedemptions::<T>::contains_key(&account_id),
-				Error::<T>::PendingRedemption
-			);
 
 			let redemption_fee = RedemptionTax::<T>::get();
 
