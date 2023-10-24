@@ -188,6 +188,12 @@ impl SemVer {
 		self > &other
 	}
 }
+#[cfg(feature = "std")]
+impl core::fmt::Display for SemVer {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+	}
+}
 
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(

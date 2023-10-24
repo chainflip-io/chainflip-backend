@@ -392,6 +392,9 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment>;
+	#[method(name = "environment")]
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
+	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
@@ -910,7 +913,17 @@ where
 		Ok(PoolsEnvironment { fees })
 	}
 
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) {
+		Ok(RpcEnvironment {
+			ingress_egress: self.cf_ingress_egress_environment(at)?,
+			swapping: self.cf_swapping_environment(at)?,
+			funding: self.cf_funding_environment(at)?,
+			pools: self.cf_pool_environment(at)?,
+		})
+	}
+
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
+		#[allow(deprecated)]
 		self.client
 			.runtime_api()
 			.cf_current_compatibility_version(self.unwrap_or_best(None))

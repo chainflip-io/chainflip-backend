@@ -111,6 +111,7 @@ impl StateChainApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::None,
 			false,
+			None,
 		)
 		.await?;
 
