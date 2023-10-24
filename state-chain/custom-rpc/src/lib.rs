@@ -200,7 +200,7 @@ impl From<PoolInfo> for RpcPoolInfo {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct PoolEnvironment {
+pub struct PoolsEnvironment {
 	pub fees: HashMap<ForeignChain, HashMap<Asset, RpcPoolInfo>>,
 }
 
@@ -225,7 +225,7 @@ pub struct RpcEnvironment {
 	ingress_egress: IngressEgressEnvironment,
 	swapping: SwappingEnvironment,
 	funding: FundingEnvironment,
-	pool: PoolEnvironment,
+	pools: PoolsEnvironment,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -395,7 +395,7 @@ pub trait CustomApi {
 	fn cf_pool_environment(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolEnvironment>;
+	) -> RpcResult<PoolsEnvironment>;
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
@@ -896,7 +896,7 @@ where
 	fn cf_pool_environment(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolEnvironment> {
+	) -> RpcResult<PoolsEnvironment> {
 		let mut fees = HashMap::new();
 
 		for asset in Asset::all() {
@@ -909,7 +909,7 @@ where
 			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info.into());
 		}
 
-		Ok(PoolEnvironment { fees })
+		Ok(PoolsEnvironment { fees })
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1193,7 +1193,7 @@ mod test {
 					redemption_tax: 0u32.into(),
 					minimum_funding_amount: 0u32.into(),
 				},
-				pool: PoolEnvironment {
+				pools: PoolsEnvironment {
 					fees: HashMap::from([(
 						ForeignChain::Ethereum,
 						HashMap::from([(
