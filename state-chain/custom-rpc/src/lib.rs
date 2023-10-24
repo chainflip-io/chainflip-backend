@@ -184,18 +184,14 @@ impl From<Asset> for RpcAsset {
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcPoolInfo {
-	pub limit_order_fee_hundredth_pips: u32,
-	pub range_order_fee_hundredth_pips: u32,
+	#[serde(flatten)]
+	pub pool_info: PoolInfo,
 	pub pair_asset: RpcAsset,
 }
 
 impl From<PoolInfo> for RpcPoolInfo {
-	fn from(value: PoolInfo) -> Self {
-		Self {
-			limit_order_fee_hundredth_pips: value.limit_order_fee_hundredth_pips,
-			range_order_fee_hundredth_pips: value.range_order_fee_hundredth_pips,
-			pair_asset: Asset::Usdc.into(),
-		}
+	fn from(pool_info: PoolInfo) -> Self {
+		Self { pool_info, pair_asset: Asset::Usdc.into() }
 	}
 }
 
@@ -849,12 +845,15 @@ where
 		let mut minimum_deposit_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let deposit_amount =
-				runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into();
 			minimum_deposit_amounts
-				.entry(asset.into())
+				.entry(ForeignChain::from(asset))
 				.or_insert_with(HashMap::new)
-				.insert(asset, deposit_amount);
+				.insert(
+					asset,
+					NumberOrHex::from(
+						runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?,
+					),
+				);
 		}
 
 		Ok(IngressEgressEnvironment { minimum_deposit_amounts })
@@ -869,12 +868,11 @@ where
 		let mut minimum_swap_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let swap_amount =
-				runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?.into();
+			let swap_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
 			minimum_swap_amounts
 				.entry(asset.into())
 				.or_insert_with(HashMap::new)
-				.insert(asset, swap_amount);
+				.insert(asset, swap_amount.into());
 		}
 
 		Ok(SwappingEnvironment { minimum_swap_amounts })
@@ -1234,7 +1232,7 @@ mod test {
 					"redemption_tax": 0,
 					"minimum_funding_amount": 0
 				},
-				"pool": {
+				"pools": {
 					"fees": {
 						"Ethereum": {
 							"Flip": {

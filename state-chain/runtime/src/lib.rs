@@ -1051,9 +1051,18 @@ impl_runtime_apis! {
 			use cf_chains::assets::{eth, dot, btc};
 
 			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => MinimumDeposit::<Runtime, EthereumInstance>::get(eth::Asset::try_from(asset).expect("asset should convert")),
-				ForeignChain::Polkadot => MinimumDeposit::<Runtime, PolkadotInstance>::get(dot::Asset::try_from(asset).expect("asset should convert")),
-				ForeignChain::Bitcoin => MinimumDeposit::<Runtime, BitcoinInstance>::get(btc::Asset::try_from(asset).expect("asset should convert")).into(),
+				ForeignChain::Ethereum => MinimumDeposit::<Runtime, EthereumInstance>::get(
+					eth::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Polkadot => MinimumDeposit::<Runtime, PolkadotInstance>::get(
+					dot::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Bitcoin => MinimumDeposit::<Runtime, BitcoinInstance>::get(
+					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				).into(),
 			}
 		}
 
