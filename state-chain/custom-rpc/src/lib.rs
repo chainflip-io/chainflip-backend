@@ -34,6 +34,15 @@ use std::{
 	sync::Arc,
 };
 
+fn asset_from_asset_chain_pair(
+	asset: Asset,
+	chain: ForeignChain,
+) -> Result<Asset, jsonrpsee::core::Error> {
+	cf_chains::assets::asset_from_asset_chain_pair(asset, chain).map_err(|_| {
+		jsonrpsee::core::Error::Custom(format!("Unsupported asset {asset:?} on chain {chain}"))
+	})
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
@@ -313,15 +322,19 @@ pub trait CustomApi {
 	#[method(name = "pool_price")]
 	fn cf_pool_price(
 		&self,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Price>>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
 		&self,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
@@ -329,7 +342,9 @@ pub trait CustomApi {
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
@@ -337,7 +352,9 @@ pub trait CustomApi {
 	fn cf_pool_info(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolInfo>>;
 	#[method(name = "pool_depth")]
@@ -352,14 +369,18 @@ pub trait CustomApi {
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolLiquidity>>;
 	#[method(name = "pool_orders")]
 	fn cf_pool_orders(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		lp: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolOrders>>;
@@ -367,7 +388,9 @@ pub trait CustomApi {
 	fn cf_pool_range_order_liquidity_value(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
@@ -398,18 +421,32 @@ pub trait CustomApi {
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
-	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount>;
+	fn cf_min_swap_amount(&self, asset: Asset, chain: ForeignChain) -> RpcResult<AssetAmount>;
 	#[subscription(name = "subscribe_pool_price", item = Price)]
-	fn cf_subscribe_pool_price(&self, from: Asset, to: Asset);
+	fn cf_subscribe_pool_price(
+		&self,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
+	);
 
 	#[subscription(name = "subscribe_prewitness_swaps", item = Vec<AssetAmount>)]
-	fn cf_subscribe_prewitness_swaps(&self, from: Asset, to: Asset);
+	fn cf_subscribe_prewitness_swaps(
+		&self,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
+	);
 
 	#[method(name = "prewitness_swaps")]
 	fn cf_prewitness_swaps(
 		&self,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>>;
 }
@@ -707,20 +744,28 @@ where
 
 	fn cf_pool_price(
 		&self,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Price>> {
 		self.client
 			.runtime_api()
-			.cf_pool_price(self.unwrap_or_best(at), from, to)
+			.cf_pool_price(
+				self.unwrap_or_best(at),
+				asset_from_asset_chain_pair(from_asset, from_chain)?,
+				asset_from_asset_chain_pair(to_asset, to_chain)?,
+			)
 			.map_err(to_rpc_error)
 	}
 
 	fn cf_pool_swap_rate(
 		&self,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
@@ -728,8 +773,8 @@ where
 			.runtime_api()
 			.cf_pool_simulate_swap(
 				self.unwrap_or_best(at),
-				from,
-				to,
+				asset_from_asset_chain_pair(from_asset, from_chain)?,
+				asset_from_asset_chain_pair(to_asset, to_chain)?,
 				amount
 					.try_into()
 					.and_then(|amount| {
@@ -751,12 +796,18 @@ where
 	fn cf_pool_info(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolInfo>> {
 		self.client
 			.runtime_api()
-			.cf_pool_info(self.unwrap_or_best(at), base_asset, pair_asset)
+			.cf_pool_info(
+				self.unwrap_or_best(at),
+				asset_from_asset_chain_pair(base_asset, base_chain)?,
+				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
+			)
 			.map_err(to_rpc_error)
 	}
 
@@ -778,19 +829,27 @@ where
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolLiquidity>> {
 		self.client
 			.runtime_api()
-			.cf_pool_liquidity(self.unwrap_or_best(at), base_asset, pair_asset)
+			.cf_pool_liquidity(
+				self.unwrap_or_best(at),
+				asset_from_asset_chain_pair(base_asset, base_chain)?,
+				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
+			)
 			.map_err(to_rpc_error)
 	}
 
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>> {
@@ -798,8 +857,8 @@ where
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
 				self.unwrap_or_best(at),
-				base_asset,
-				pair_asset,
+				asset_from_asset_chain_pair(base_asset, base_chain)?,
+				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
 				tick_range,
 			)
 			.map_err(to_rpc_error)?
@@ -810,20 +869,29 @@ where
 	fn cf_pool_orders(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		lp: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<PoolOrders>> {
 		self.client
 			.runtime_api()
-			.cf_pool_orders(self.unwrap_or_best(at), base_asset, pair_asset, lp)
+			.cf_pool_orders(
+				self.unwrap_or_best(at),
+				asset_from_asset_chain_pair(base_asset, base_chain)?,
+				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
+				lp,
+			)
 			.map_err(to_rpc_error)
 	}
 
 	fn cf_pool_range_order_liquidity_value(
 		&self,
 		base_asset: Asset,
+		base_chain: ForeignChain,
 		pair_asset: Asset,
+		pair_chain: ForeignChain,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
@@ -832,8 +900,8 @@ where
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
 				self.unwrap_or_best(at),
-				base_asset,
-				pair_asset,
+				asset_from_asset_chain_pair(base_asset, base_chain)?,
+				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
 				tick_range,
 				liquidity,
 			)
@@ -931,40 +999,61 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_min_swap_amount(&self, asset: Asset) -> RpcResult<AssetAmount> {
+	fn cf_min_swap_amount(&self, asset: Asset, chain: ForeignChain) -> RpcResult<AssetAmount> {
 		self.client
 			.runtime_api()
-			.cf_min_swap_amount(self.unwrap_or_best(None), asset)
+			.cf_min_swap_amount(
+				self.unwrap_or_best(None),
+				asset_from_asset_chain_pair(asset, chain)?,
+			)
 			.map_err(to_rpc_error)
 	}
 
 	fn cf_subscribe_pool_price(
 		&self,
 		sink: SubscriptionSink,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 	) -> Result<(), SubscriptionEmptyError> {
+		let from = asset_from_asset_chain_pair(from_asset, from_chain)
+			.map_err(|_| SubscriptionEmptyError)?;
+		let to =
+			asset_from_asset_chain_pair(to_asset, to_chain).map_err(|_| SubscriptionEmptyError)?;
 		self.new_update_subscription(sink, move |api, hash| api.cf_pool_price(hash, from, to))
 	}
 
 	fn cf_subscribe_prewitness_swaps(
 		&self,
 		sink: SubscriptionSink,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 	) -> Result<(), SubscriptionEmptyError> {
+		let from = asset_from_asset_chain_pair(from_asset, from_chain)
+			.map_err(|_| SubscriptionEmptyError)?;
+		let to =
+			asset_from_asset_chain_pair(to_asset, to_chain).map_err(|_| SubscriptionEmptyError)?;
 		self.new_items_subscription(sink, move |api, hash| api.cf_prewitness_swaps(hash, from, to))
 	}
 
 	fn cf_prewitness_swaps(
 		&self,
-		from: Asset,
-		to: Asset,
+		from_asset: Asset,
+		from_chain: ForeignChain,
+		to_asset: Asset,
+		to_chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>> {
 		self.client
 			.runtime_api()
-			.cf_prewitness_swaps(self.unwrap_or_best(at), from, to)
+			.cf_prewitness_swaps(
+				self.unwrap_or_best(at),
+				asset_from_asset_chain_pair(from_asset, from_chain)?,
+				asset_from_asset_chain_pair(to_asset, to_chain)?,
+			)
 			.map_err(to_rpc_error)
 	}
 }

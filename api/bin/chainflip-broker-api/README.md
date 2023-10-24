@@ -4,7 +4,7 @@ Exposes Broker functionality via a json api interface.
 
 ## Example
 
-> ✋ Note: This example assumes that the node that is exposing the statechain rpc is funded.
+> ✋ Note: This example assumes that the node that is exposing the Statechain RPC's is funded.
 
 ```sh
 > ./target/release/chainflip-broker-api \
@@ -28,14 +28,14 @@ Then in another terminal:
 # This method take a little while to respond because it submits and waits for finality. So make sure the request doesn't block.
 # Parameters are: [source_asset, destination_asset, destination_address, broker_commission].
 > curl -H "Content-Type: application/json" \
-    -d '{"id":1, "jsonrpc":"2.0", "method": "broker_requestSwapDepositAddress", "params": ["Eth", "Flip","0xabababababababababababababababababababab", 0]}' \
+    -d '{"id":1, "jsonrpc":"2.0", "method": "broker_requestSwapDepositAddress", "params": ["Eth", "Ethereum", "Flip", "Ethereum","0xabababababababababababababababababababab", 0]}' \
     http://localhost:62378
 
 # The result is the hex-encoded deposit address, expiry block, and the issued block.
 {"jsonrpc":"2.0","result":{"address":"0x4ef7608893d5a06c2689b8d15b4dc400be0954f2",expiry_block:12345},"id":1}
 
-# This request also accepts cross chain message metadata as an optional fifth parameter:
-{"gas_budget":"0x1000", message:[0,1,2,3,4], cf_parameters: [], source_address: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", source_chain: "Bitcoin"}
+# This request also accepts cross chain message metadata as an optional seventh parameter:
+{"channel_metadata":[0,1,2,3,4], ... }
 ```
 
 ## Command line arguments and defaults
@@ -74,9 +74,11 @@ OPTIONS:
 
 Parameters:
 
-- Source asset as a camel-case string, eg "Eth" or "Dot".
+- Source asset as a string, eg "Eth" or "dot".
+- Source chain a string, eg "Ethereum" or "polkadot".
 - Egress asset as a camel-case string, eg "Eth" or "Dot".
-- Egress Address in hex. Must match the format of the egress asset's chain: 20 bytes for ethereum assets, 32 bytes for polkadot.
+- Egress chain a string, eg "Ethereum" or "polkadot".
+- Egress Address in hex. Must match the format of the egress chain: 20 bytes for ethereum, 32 bytes for polkadot.
 - Broker Commission in basis points (100th of a percent).
 
 Return:

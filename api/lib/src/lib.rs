@@ -83,14 +83,9 @@ impl<
 	}
 }
 
-/// Converts from an Asset and Chain pair to the internal Asset type that the SC uses.
-/// At the moment it is the same Asset type, but that may change in the future.
-/// Returns an error if the given asset is not supported on the given chain.
 pub fn asset_from_asset_chain_pair(asset: Asset, chain: ForeignChain) -> Result<Asset> {
-	if chain != asset.into() {
-		bail!("Unsupported asset {asset:?} on chain {chain}");
-	}
-	Ok(asset)
+	cf_chains::assets::asset_from_asset_chain_pair(asset, chain)
+		.map_err(|_| anyhow!("Unsupported asset {asset:?} on chain {chain}"))
 }
 
 pub async fn request_block(
@@ -569,32 +564,5 @@ mod tests {
 			anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
 		);
 		}
-	}
-
-	#[test]
-	fn test_asset_chain_pair_check() {
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Eth, ForeignChain::Ethereum).unwrap(),
-			Asset::Eth
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Flip, ForeignChain::Ethereum).unwrap(),
-			Asset::Flip
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Usdc, ForeignChain::Ethereum).unwrap(),
-			Asset::Usdc
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Dot, ForeignChain::Polkadot).unwrap(),
-			Asset::Dot
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Btc, ForeignChain::Bitcoin).unwrap(),
-			Asset::Btc
-		);
-		assert!(asset_from_asset_chain_pair(Asset::Eth, ForeignChain::Polkadot).is_err());
-		assert!(asset_from_asset_chain_pair(Asset::Flip, ForeignChain::Bitcoin).is_err());
-		assert!(asset_from_asset_chain_pair(Asset::Dot, ForeignChain::Ethereum).is_err());
 	}
 }
