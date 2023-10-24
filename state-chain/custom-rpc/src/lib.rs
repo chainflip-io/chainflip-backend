@@ -176,9 +176,9 @@ pub enum RpcAsset {
 	ExplicitChain { chain: ForeignChain, asset: Asset },
 }
 
-impl Into<RpcAsset> for Asset {
-	fn into(self) -> RpcAsset {
-		RpcAsset::ExplicitChain { asset: self, chain: self.into() }
+impl From<Asset> for RpcAsset {
+	fn from(asset: Asset) -> Self {
+		RpcAsset::ExplicitChain { asset, chain: asset.into() }
 	}
 }
 
@@ -1162,7 +1162,7 @@ mod test {
 	#[test]
 	fn test_environment_serialization() {
 		assert_eq!(
-			serde_json::to_value(&RpcEnvironment {
+			serde_json::to_value(RpcEnvironment {
 				swapping: SwappingEnvironment {
 					minimum_swap_amounts: HashMap::from([
 						(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
