@@ -73,7 +73,7 @@ benchmarks! {
 		let call = Call::<T>::redeem {
 			amount: RedemptionAmount::Max,
 			address: withdrawal_address,
-			executor: Default::default(),
+			supplied_executor: Default::default(),
 		};
 	}: { call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into())? }
 	verify {
