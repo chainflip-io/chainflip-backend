@@ -373,9 +373,13 @@ pub mod pallet {
 			let mut executor: Option<EthereumAddress> = None;
 			// In case of restricted address we don't care about the executor
 			if !restricted_balances.keys().any(|res_address| res_address == &address) {
-			 	if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
-					let temp_executor = supplied_executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
-					ensure!(executor_addr == temp_executor, Error::<T>::ExecutorBindingRestrictionViolated);
+				if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
+					let temp_executor =
+						supplied_executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
+					ensure!(
+						executor_addr == temp_executor,
+						Error::<T>::ExecutorBindingRestrictionViolated
+					);
 					executor = supplied_executor;
 				}
 			}

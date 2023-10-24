@@ -952,18 +952,13 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
 		const REDEEM_ADDRESS: EthereumAddress = H160([0x02; 20]);
 		const EXECUTOR_ADDRESS: EthereumAddress = H160([0x04; 20]);
+		const RANDOM_ADDRESS: EthereumAddress = H160([0x12; 20]);
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
 		BoundRedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
 		BoundExecutorAddress::<Test>::insert(ALICE, EXECUTOR_ADDRESS);
 
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			REDEEM_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, REDEEM_ADDRESS, TX_HASH));
 		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, REDEEM_ADDRESS, TX_HASH));
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
@@ -972,8 +967,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			RESTRICTED_ADDRESS,
 			TX_HASH
 		));
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, RESTRICTED_ADDRESS, TX_HASH));
-		
+
 		// Redeem using a wrong executor should fail because we have bounded executor address
 		assert_noop!(
 			Funding::redeem(
@@ -992,12 +986,13 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			Some(EXECUTOR_ADDRESS)
 		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
-		// Redeem using restricted address should complete even with wrong executor
+		// Redeem using restricted address should complete even with wrong executor and bound redeem
+		// address
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			(AMOUNT).into(),
 			RESTRICTED_ADDRESS,
-			Default::default()
+			Some(RANDOM_ADDRESS)
 		));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
 	});

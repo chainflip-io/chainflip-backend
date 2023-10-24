@@ -167,7 +167,11 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		address: EthereumAddress,
 		supplied_executor: Option<EthereumAddress>,
 	) -> Result<H256> {
-		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, supplied_executor });
+		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem {
+			amount,
+			address,
+			supplied_executor,
+		});
 		self.dry_run(call.clone(), None).await?;
 
 		let (tx_hash, ..) = self.submit_signed_extrinsic(call).await.until_in_block().await?;

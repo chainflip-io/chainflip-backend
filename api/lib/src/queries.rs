@@ -1,6 +1,6 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, Chain};
-use cf_primitives::{chains::assets::any, AssetAmount};
+use cf_primitives::{chains::assets::any, AssetAmount, FlipBalance};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
@@ -14,7 +14,6 @@ use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 use utilities::task_scope;
-use cf_primitives::FlipBalance;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
