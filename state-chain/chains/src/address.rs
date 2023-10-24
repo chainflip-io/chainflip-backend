@@ -245,12 +245,26 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 }
 
 #[cfg(feature = "std")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
+/// A type that serializes the address in a human-readable way. This can only be
+/// serialized and not deserialized.
+/// `deserialize` is not implemented for ForeignChainAddressHumanreadable
+/// because it is not possible to deserialize a human-readable address without
+/// further context around the asset and chain.
 pub enum ForeignChainAddressHumanreadable {
 	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
 	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
+}
+
+impl<'de> Deserialize<'de> for ForeignChainAddressHumanreadable {
+	fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		unimplemented!("Deserialization of ForeignChainAddressHumanreadable is not implemented")
+	}
 }
 
 impl ToHumanreadableAddress for ForeignChainAddress {
