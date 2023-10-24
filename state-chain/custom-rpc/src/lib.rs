@@ -1075,7 +1075,8 @@ where
 
 mod test {
 	use super::*;
-	use serde_json::json;
+	use insta;
+	use serde_json;
 	use sp_core::H160;
 
 	/*
@@ -1088,16 +1089,17 @@ mod test {
 	*/
 
 	#[test]
-	fn test_account_info_serialization() {
-		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::none(0)).unwrap(),
-			json!({ "role": "none", "flip_balance": "0x0" })
-		);
-		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::broker(0)).unwrap(),
-			json!({ "role":"broker", "flip_balance": "0x0" })
-		);
+	fn test_no_account_serialization() {
+		insta::assert_json_snapshot!(serde_json::to_value(RpcAccountInfo::none(0)).unwrap());
+	}
 
+	#[test]
+	fn test_broker_serialization() {
+		insta::assert_json_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
+	}
+
+	#[test]
+	fn test_lp_serialization() {
 		let lp = RpcAccountInfo::lp(
 			LiquidityProviderInfo {
 				refund_addresses: vec![
@@ -1121,26 +1123,11 @@ mod test {
 			0,
 		);
 
-		assert_eq!(
-			serde_json::to_value(lp).unwrap(),
-			json!({
-				"role": "liquidity_provider",
-				"flip_balance": "0x0",
-				"balances": {
-					"Ethereum": {
-						"Flip": "0x7fffffffffffffffffffffffffffffff",
-						"Eth": "0xffffffffffffffffffffffffffffffff"
-					},
-					"Bitcoin": { "Btc": "0x0" },
-				},
-				"refund_addresses": {
-					"Ethereum": "0x0101010101010101010101010101010101010101",
-					"Bitcoin": null,
-					"Polkadot": "111111111111111111111111111111111HC1"
-				}
-			})
-		);
+		insta::assert_json_snapshot!(serde_json::to_value(lp).unwrap());
+	}
 
+	#[test]
+	fn test_validator_serialization() {
 		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
 			balance: 10u128.pow(18),
 			bond: 10u128.pow(18),
@@ -1156,121 +1143,59 @@ mod test {
 			apy_bp: Some(100u32),
 			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
-		assert_eq!(
-			serde_json::to_value(validator).unwrap(),
-			json!({
-				"flip_balance": "0xde0b6b3a7640000",
-				"bond": "0xde0b6b3a7640000",
-				"bound_redeem_address": "0x0101010101010101010101010101010101010101",
-				"is_bidding": false,
-				"is_current_authority": true,
-				"is_current_backup": false,
-				"is_online": true,
-				"is_qualified": true,
-				"keyholder_epochs": [123],
-				"last_heartbeat": 0,
-				"reputation_points": 0,
-				"role": "validator",
-				"apy_bp": 100,
-				"restricted_balances": {
-					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
-				}
-			})
-		);
+
+		insta::assert_json_snapshot!(serde_json::to_value(validator).unwrap());
 	}
 
 	#[test]
 	fn test_environment_serialization() {
-		assert_eq!(
-			serde_json::to_value(RpcEnvironment {
-				swapping: SwappingEnvironment {
-					minimum_swap_amounts: HashMap::from([
-						(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
-						(
-							ForeignChain::Ethereum,
-							HashMap::from([
-								(Asset::Flip, u64::MAX.into()),
-								(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-								(Asset::Eth, 0u32.into()),
-							])
-						),
-					]),
-				},
-				ingress_egress: IngressEgressEnvironment {
-					minimum_deposit_amounts: HashMap::from([
-						(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
-						(
-							ForeignChain::Ethereum,
-							HashMap::from([
-								(Asset::Flip, u64::MAX.into()),
-								(Asset::Usdc, (u64::MAX / 2 - 1).into()),
-								(Asset::Eth, 0u32.into()),
-							])
-						),
-					])
-				},
-				funding: FundingEnvironment {
-					redemption_tax: 0u32.into(),
-					minimum_funding_amount: 0u32.into(),
-				},
-				pools: PoolsEnvironment {
-					fees: HashMap::from([(
+		insta::assert_json_snapshot!(serde_json::to_value(RpcEnvironment {
+			swapping: SwappingEnvironment {
+				minimum_swap_amounts: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
 						ForeignChain::Ethereum,
-						HashMap::from([(
-							Asset::Flip,
-							Some(
-								PoolInfo {
-									limit_order_fee_hundredth_pips: 0,
-									range_order_fee_hundredth_pips: 100,
-								}
-								.into()
-							)
-						)])
-					)])
-				}
-			})
-			.unwrap(),
-			json!({
-				"ingress_egress": {
-					"minimum_deposit_amounts": {
-						"Bitcoin": { "Btc": 0 },
-						"Ethereum": {
-							"Eth": 0,
-							// TODO: u64 is still too large for JSON, we should use a string
-							"Flip": 18446744073709551615u64,
-							"Usdc": 9223372036854775806u64
-						}
-					}
-				},
-				"swapping": {
-					"minimum_swap_amounts": {
-						"Ethereum": {
-							"Eth": 0,
-							"Flip": 18446744073709551615u64,
-							"Usdc": 9223372036854775806u64
-						},
-						"Bitcoin": { "Btc": 0 }
-					}
-				},
-				"funding": {
-					"redemption_tax": 0,
-					"minimum_funding_amount": 0
-				},
-				"pools": {
-					"fees": {
-						"Ethereum": {
-							"Flip": {
-								"limit_order_fee_hundredth_pips": 0,
-								"range_order_fee_hundredth_pips": 100,
-								"pair_asset": {
-									"asset": "Usdc",
-									"chain": "Ethereum"
-								}
+						HashMap::from([
+							(Asset::Flip, u64::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						])
+					),
+				]),
+			},
+			ingress_egress: IngressEgressEnvironment {
+				minimum_deposit_amounts: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, u64::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						])
+					),
+				])
+			},
+			funding: FundingEnvironment {
+				redemption_tax: 0u32.into(),
+				minimum_funding_amount: 0u32.into(),
+			},
+			pools: PoolsEnvironment {
+				fees: HashMap::from([(
+					ForeignChain::Ethereum,
+					HashMap::from([(
+						Asset::Flip,
+						Some(
+							PoolInfo {
+								limit_order_fee_hundredth_pips: 0,
+								range_order_fee_hundredth_pips: 100,
 							}
-						}
-					}
-				}
-			})
-		);
+							.into()
+						)
+					)])
+				)])
+			}
+		})
+		.unwrap());
 	}
 }
