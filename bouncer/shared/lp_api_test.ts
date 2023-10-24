@@ -272,6 +272,12 @@ async function testLimitOrder() {
     testAssetAmount,
   ]);
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
+  assert(mintLimitOrder[0].position_delta.length >= 1, `Empty mint limit order position_delta`);
+  assert.strictEqual(
+    mintLimitOrder[0].position_delta[0][0],
+    'I',
+    `Expected mint of limit order to increase liquidity`,
+  );
   assert.strictEqual(
     mintLimitOrder[0].amount_total,
     testAssetAmount,
@@ -290,6 +296,12 @@ async function testLimitOrder() {
     testAssetAmount,
   ]);
   assert(updateLimitOrder.length >= 1, `Empty update limit order result`);
+  assert(updateLimitOrder[0].position_delta.length >= 1, `Empty update limit order position_delta`);
+  assert.strictEqual(
+    updateLimitOrder[0].position_delta[0][0],
+    'I',
+    `Expected update of limit order to increase liquidity`,
+  );
   assert.strictEqual(
     updateLimitOrder[0].amount_total,
     testAssetAmount * 2,
@@ -307,6 +319,12 @@ async function testLimitOrder() {
     0,
   ]);
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
+  assert(burnLimitOrder[0].position_delta.length >= 1, `Empty burn limit order position_delta`);
+  assert.strictEqual(
+    burnLimitOrder[0].position_delta[0][0],
+    'D',
+    `Expected burn of limit order to decrease liquidity`,
+  );
   assert.strictEqual(
     burnLimitOrder[0].amount_total,
     0,
