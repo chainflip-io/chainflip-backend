@@ -946,6 +946,63 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 	});
 }
 
+#[test]
+fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		const REDEEM_ADDRESS: EthereumAddress = H160([0x02; 20]);
+		const EXECUTOR_ADDRESS: EthereumAddress = H160([0x04; 20]);
+		const AMOUNT: u128 = 100;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+		BoundRedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		BoundExecutorAddress::<Test>::insert(ALICE, EXECUTOR_ADDRESS);
+
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			REDEEM_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, REDEEM_ADDRESS, TX_HASH));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, RESTRICTED_ADDRESS, TX_HASH));
+		
+		// Redeem using a wrong executor should fail because we have bounded executor address
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				(AMOUNT).into(),
+				REDEEM_ADDRESS,
+				Default::default()
+			),
+			Error::<Test>::ExecutorBindingRestrictionViolated
+		);
+		// Redeem using correct redeem and executor should complete succesfully
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			(AMOUNT).into(),
+			REDEEM_ADDRESS,
+			Some(EXECUTOR_ADDRESS)
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
+		// Redeem using restricted address should complete even with wrong executor
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			(AMOUNT).into(),
+			RESTRICTED_ADDRESS,
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
+	});
+}
+
 #[cfg(test)]
 mod test_restricted_balances {
 	use sp_core::H160;
