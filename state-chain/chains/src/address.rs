@@ -246,6 +246,7 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ForeignChainAddressHumanreadable {
 	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
 	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),

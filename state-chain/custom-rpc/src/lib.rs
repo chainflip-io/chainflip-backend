@@ -1065,6 +1065,15 @@ mod test {
 	use serde_json::json;
 	use sp_core::H160;
 
+	/*
+		changing any of these serialization tests signifies a breaking change in the
+		API. please make sure to get approval from the product team before merging
+		any changes that break a serialization test.
+
+		if approval is received and a new breaking change is introduced, please
+		stale the review and get a new review from someone on product.
+	*/
+
 	#[test]
 	fn test_account_info_serialization() {
 		assert_eq!(
@@ -1112,9 +1121,9 @@ mod test {
 					"Bitcoin": { "Btc": "0x0" },
 				},
 				"refund_addresses": {
-					"Ethereum": { "Eth" : "0x0101010101010101010101010101010101010101" },
+					"Ethereum": "0x0101010101010101010101010101010101010101",
 					"Bitcoin": null,
-					"Polkadot": { "Dot": "111111111111111111111111111111111HC1" }
+					"Polkadot": "111111111111111111111111111111111HC1"
 				}
 			})
 		);
