@@ -234,9 +234,9 @@ pub struct DotOptions {
 pub struct BtcOptions {
 	#[clap(long = "btc.rpc.http_endpoint")]
 	pub btc_http_endpoint: Option<String>,
-	#[clap(long = "btc.basic_auth_user")]
+	#[clap(long = "btc.rpc.basic_auth_user")]
 	pub btc_basic_auth_user: Option<String>,
-	#[clap(long = "btc.basic_auth_password")]
+	#[clap(long = "btc.rpc.basic_auth_password")]
 	pub btc_basic_auth_password: Option<String>,
 
 	#[clap(long = "btc.backup_rpc.http_endpoint")]
