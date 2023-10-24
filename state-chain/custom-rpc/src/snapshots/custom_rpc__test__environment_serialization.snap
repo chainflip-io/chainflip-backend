@@ -1,0 +1,48 @@
+---
+source: state-chain/custom-rpc/src/lib.rs
+expression: "serde_json::to_value(RpcEnvironment {\n            swapping: SwappingEnvironment {\n                minimum_swap_amounts: HashMap::from([(ForeignChain::Bitcoin,\n                                HashMap::from([(Asset::Btc, 0u32.into())])),\n                            (ForeignChain::Ethereum,\n                                HashMap::from([(Asset::Flip, u64::MAX.into()),\n                                            (Asset::Usdc, (u64::MAX / 2 - 1).into()),\n                                            (Asset::Eth, 0u32.into())]))]),\n            },\n            ingress_egress: IngressEgressEnvironment {\n                minimum_deposit_amounts: HashMap::from([(ForeignChain::Bitcoin,\n                                HashMap::from([(Asset::Btc, 0u32.into())])),\n                            (ForeignChain::Ethereum,\n                                HashMap::from([(Asset::Flip, u64::MAX.into()),\n                                            (Asset::Usdc, (u64::MAX / 2 - 1).into()),\n                                            (Asset::Eth, 0u32.into())]))]),\n            },\n            funding: FundingEnvironment {\n                redemption_tax: 0u32.into(),\n                minimum_funding_amount: 0u32.into(),\n            },\n            pools: PoolsEnvironment {\n                fees: HashMap::from([(ForeignChain::Ethereum,\n                                HashMap::from([(Asset::Flip,\n                                                Some(PoolInfo {\n                                                            limit_order_fee_hundredth_pips: 0,\n                                                            range_order_fee_hundredth_pips: 100,\n                                                        }.into()))]))]),\n            },\n        }).unwrap()"
+---
+{
+  "funding": {
+    "minimum_funding_amount": 0,
+    "redemption_tax": 0
+  },
+  "ingress_egress": {
+    "minimum_deposit_amounts": {
+      "Bitcoin": {
+        "Btc": 0
+      },
+      "Ethereum": {
+        "Eth": 0,
+        "Flip": 18446744073709551615,
+        "Usdc": 9223372036854775806
+      }
+    }
+  },
+  "pools": {
+    "fees": {
+      "Ethereum": {
+        "Flip": {
+          "limit_order_fee_hundredth_pips": 0,
+          "pair_asset": {
+            "asset": "Usdc",
+            "chain": "Ethereum"
+          },
+          "range_order_fee_hundredth_pips": 100
+        }
+      }
+    }
+  },
+  "swapping": {
+    "minimum_swap_amounts": {
+      "Bitcoin": {
+        "Btc": 0
+      },
+      "Ethereum": {
+        "Eth": 0,
+        "Flip": 18446744073709551615,
+        "Usdc": 9223372036854775806
+      }
+    }
+  }
+}
