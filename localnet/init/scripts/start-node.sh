@@ -8,7 +8,7 @@ NODE_COUNT=$5
 
 CHAIN="dev"
 if [ $NODE_COUNT == "3-node" ]; then
-    CHAIN="test"
+    CHAIN="dev-3"
 fi
 
 source ./localnet/init/env/eth.env

@@ -125,7 +125,6 @@ build-localnet() {
     ((RPC_PORT++))
   done
 
-  P2P_PORT=30333
   RPC_PORT=9944
   ENGINE_PORT=8078
   HEALTH_PORT=5555
@@ -134,7 +133,6 @@ build-localnet() {
     cp -R $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/$NODE.db /tmp/chainflip/$NODE
     ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARY_ROOT_PATH $NODE $ENGINE_PORT $HEALTH_PORT $RPC_PORT $LOG_PORT &
     echo "🚗 Starting chainflip-engine of $NODE ..."
-    ((P2P_PORT++))
     ((RPC_PORT++))
     ((ENGINE_PORT++))
     ((LOG_PORT++))
