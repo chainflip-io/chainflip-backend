@@ -154,7 +154,7 @@ impl QueryApi {
 			.await?)
 	}
 
-	pub async fn get_resticted_balances(
+	pub async fn get_restricted_balances(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
 		account_id: Option<state_chain_runtime::AccountId>,

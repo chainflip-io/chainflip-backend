@@ -161,7 +161,7 @@ async fn request_redemption(
 	let redeem_address = match supplied_redeem_address {
 		Some(supplied_address) => {
 			let restricted_balances =
-				api.query_api().get_resticted_balances(None, Some(account_id.clone())).await?;
+				api.query_api().get_restricted_balances(None, Some(account_id.clone())).await?;
 			if restricted_balances.keys().any(|res_address| res_address == &supplied_address) {
 				is_restricted = true;
 				supplied_address

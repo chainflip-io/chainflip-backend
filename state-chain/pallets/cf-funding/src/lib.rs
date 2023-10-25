@@ -364,7 +364,7 @@ pub mod pallet {
 			amount: RedemptionAmount<FlipBalance<T>>,
 			address: EthereumAddress,
 			// Only this address can execute the redemption.
-			supplied_executor: Option<EthereumAddress>,
+			executor: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
@@ -383,17 +383,13 @@ pub mod pallet {
 
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
 
-			let mut executor: Option<EthereumAddress> = None;
-			// In case of restricted address we don't care about the executor
-			if !restricted_balances.keys().any(|res_address| res_address == &address) {
-				if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
-					let temp_executor =
-						supplied_executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
+			// Ignore executor binding restrictions for withdrawals of restricted funds.
+			if !restricted_balances.contains_key(&address) {
+				if let Some(bound_executor) = BoundExecutorAddress::<T>::get(&account_id) {
 					ensure!(
-						executor_addr == temp_executor,
+						executor == Some(bound_executor),
 						Error::<T>::ExecutorBindingRestrictionViolated
 					);
-					executor = supplied_executor;
 				}
 			}
 
@@ -401,8 +397,7 @@ pub mod pallet {
 
 			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
-					bound_address == address ||
-						restricted_balances.keys().any(|res_address| res_address == &address),
+					bound_address == address || restricted_balances.contains_key(&address),
 					Error::<T>::AccountBindingRestrictionViolated
 				);
 			}
