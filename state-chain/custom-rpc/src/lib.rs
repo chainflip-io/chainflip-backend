@@ -1075,8 +1075,6 @@ where
 
 mod test {
 	use super::*;
-	use insta;
-	use serde_json;
 	use sp_core::H160;
 
 	/*
