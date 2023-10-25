@@ -29,7 +29,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_address_checker_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	ethereum_chain_id: CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
-		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024" // TODO: Albert to replace AGG key before launch
+		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024" /* TODO: Albert to
+		                                                                      * replace AGG key
+		                                                                      * before launch */
 	),
 	ethereum_deployment_block: 18277081u64, // TODO: Albert to confirm block number before launch
 	genesis_funding_amount: 1_000 * FLIPPERINOS_PER_FLIP,
@@ -38,7 +40,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9430, transaction_version: 24 }, // TODO: Dan confirm number
+	dot_runtime_version: RuntimeVersion { spec_version: 9430, transaction_version: 24 }, /* TODO:
+	                                                                                      * Dan confirm
+	                                                                                      * number */
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

@@ -45,12 +45,12 @@ use sp_runtime::{
 	Percent,
 };
 
+pub mod berghain;
 pub mod common;
 pub mod devnet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
-pub mod berghain;
 
 /// Generate a crypto pair from seed.
 pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
