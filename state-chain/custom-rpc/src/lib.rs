@@ -1088,16 +1088,12 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_json_snapshot!(
-			serde_json::to_string_pretty(&RpcAccountInfo::none(0)).unwrap()
-		);
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::none(0)).unwrap());
 	}
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_json_snapshot!(
-			serde_json::to_string_pretty(&RpcAccountInfo::broker(0)).unwrap()
-		);
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
 	}
 
 	#[test]
@@ -1125,7 +1121,7 @@ mod test {
 			0,
 		);
 
-		insta::assert_json_snapshot!(serde_json::to_string_pretty(&lp).unwrap());
+		insta::assert_display_snapshot!(serde_json::to_value(lp).unwrap());
 	}
 
 	#[test]
@@ -1146,7 +1142,7 @@ mod test {
 			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
 
-		insta::assert_json_snapshot!(serde_json::to_string_pretty(&validator).unwrap());
+		insta::assert_display_snapshot!(serde_json::to_value(validator).unwrap());
 	}
 
 	#[test]
@@ -1199,6 +1195,6 @@ mod test {
 			},
 		};
 
-		insta::assert_json_snapshot!(serde_json::to_string_pretty(&env).unwrap());
+		insta::assert_display_snapshot!(serde_json::to_value(env).unwrap());
 	}
 }
