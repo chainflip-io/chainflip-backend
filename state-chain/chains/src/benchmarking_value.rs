@@ -3,6 +3,8 @@ use cf_primitives::{
 	chains::assets::{btc, dot, eth},
 	Asset,
 };
+
+#[cfg(feature = "runtime-benchmarks")]
 use ethereum_types::{H160, U256};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -10,8 +12,7 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::evm::EvmFetchId;
-use crate::evm::EvmTransactionMetadata;
+use crate::evm::{EvmFetchId, EvmTransactionMetadata};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
