@@ -135,7 +135,6 @@ jobs:
           for tag in ${{ inputs.save_tags }}; do
             docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o ${{ matrix.target }}.tar
           done
-          docker save ${{ steps.meta.outputs.tags }} -o ${{ matrix.target }}.tar
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
