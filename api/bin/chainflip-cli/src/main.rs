@@ -11,7 +11,7 @@ use crate::settings::{
 };
 use api::{
 	lp::LpApi, primitives::RedemptionAmount, queries::QueryApi, AccountId32, BrokerApi,
-	GovernanceApi, KeyPair, OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
+	GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
@@ -143,82 +143,23 @@ async fn request_redemption(
 	supplied_redeem_address: Option<String>,
 	supplied_executor_address: Option<String>,
 ) -> Result<()> {
-	let account_id = api.state_chain_client.account_id();
+	// Check validity of the redeem address
+	let redeem_address = if let Some(address) = supplied_redeem_address {
+		EthereumAddress::from(
+			clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
+		)
+	} else {
+		bail!("Redeem address not provided");
+	};
 
-	// Check the bound redeem address for this account
-	let supplied_redeem_address = if let Some(address) = supplied_redeem_address {
+	// Check the validity of the executor address
+	let executor_address = if let Some(address) = supplied_executor_address {
 		Some(EthereumAddress::from(
 			clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
 		))
 	} else {
 		None
 	};
-	let bound_redeem_address =
-		api.query_api().get_bound_redeem_address(None, Some(account_id.clone())).await?;
-
-	// Restricted addresses override bound address
-	let mut is_restricted = false;
-	let redeem_address = match supplied_redeem_address {
-		Some(supplied_address) => {
-			let restricted_balances =
-				api.query_api().get_restricted_balances(None, Some(account_id.clone())).await?;
-			if restricted_balances.keys().any(|res_address| res_address == &supplied_address) {
-				is_restricted = true;
-				supplied_address
-			} else {
-				match bound_redeem_address {
-					Some(bound_address) =>
-						if supplied_address != bound_address {
-							bail!("Supplied ETH address `{supplied_address:?}` does not match bound address for this account `{bound_address:?}`.");
-						} else {
-							bound_address
-						},
-					None => supplied_address,
-				}
-			}
-		},
-		None => match bound_redeem_address {
-			Some(bound_address) => {
-				println!("Using bound redeem address.");
-				bound_address
-			},
-			None => {
-				bail!("No redeem address supplied and no bound redeem address found for your account {account_id}.");
-			},
-		},
-	};
-
-	//if we are handling a restricted address we don't care about the executor
-	let mut executor_address = None;
-	if !is_restricted {
-		// Check the bound executor address for this account
-		let supplied_executor_address = if let Some(address) = supplied_executor_address {
-			Some(EthereumAddress::from(
-				clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
-			))
-		} else {
-			None
-		};
-		let bound_executor_address = api
-			.query_api()
-			.get_bound_executor_address(None, Some(account_id.clone()))
-			.await?;
-
-		executor_address = match (bound_executor_address, supplied_executor_address) {
-			(Some(bound_address), Some(supplied_address)) =>
-				if bound_address != supplied_address {
-					bail!("Supplied executor address `{supplied_address:?}` does not match bound address for this account `{bound_address:?}`.");
-				} else {
-					Some(supplied_address)
-				},
-			(Some(bound_address), None) => {
-				println!("Using bound executor address {bound_address}.");
-				Some(bound_address)
-			},
-			(None, Some(executor)) => Some(executor),
-			(None, None) => None,
-		};
-	}
 
 	// Calculate the redemption amount
 	let amount = match amount {
