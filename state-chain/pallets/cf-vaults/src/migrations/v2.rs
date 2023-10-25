@@ -20,16 +20,6 @@ mod old {
 		StorageValue<Pallet<T, I>, Percent, ValueQuery>;
 }
 
-mod new {
-	use super::*;
-
-	use frame_support::pallet_prelude::ValueQuery;
-
-	#[frame_support::storage_alias]
-	pub type KeygenSlashAmount<T: Config<I>, I: 'static> =
-		StorageValue<Pallet<T, I>, FlipBalance, ValueQuery>;
-}
-
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// remove the old storage containing Percent
