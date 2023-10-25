@@ -730,13 +730,16 @@ where
 				self.unwrap_or_best(at),
 				from,
 				to,
-				amount.try_into().and_then(|amount| {
-					if amount == 0 {
-						Err(anyhow::anyhow!("Swap input amount cannot be zero."))
-					} else {
-						Ok(amount)
-					}
-				})?,
+				amount
+					.try_into()
+					.and_then(|amount| {
+						if amount == 0 {
+							Err("Swap input amount cannot be zero.")
+						} else {
+							Ok(amount)
+						}
+					})
+					.map_err(|str| anyhow::anyhow!(str))?,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {

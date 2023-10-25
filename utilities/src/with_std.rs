@@ -4,7 +4,7 @@ use futures::{stream, Stream};
 use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
-use sp_rpc::number::NumberOrHex;
+use rpc::NumberOrHex;
 
 pub mod future_map;
 pub mod loop_select;
