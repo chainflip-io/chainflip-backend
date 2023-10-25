@@ -29,6 +29,7 @@ pub struct RangeOrderReturn {
 
 fn collect_range_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+	order_id: OrderId,
 ) -> Vec<RangeOrderReturn> {
 	events
 		.into_iter()
@@ -40,9 +41,10 @@ fn collect_range_order_returns(
 					assets_delta,
 					collected_fees,
 					tick_range,
+					id,
 					..
 				},
-			) => Some(RangeOrderReturn {
+			) if order_id == id => Some(RangeOrderReturn {
 				liquidity_delta,
 				liquidity_total,
 				increase_or_decrease,
@@ -66,6 +68,7 @@ pub struct LimitOrderReturn {
 
 fn collect_limit_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+	order_id: OrderId,
 ) -> Vec<LimitOrderReturn> {
 	events
 		.into_iter()
@@ -77,9 +80,10 @@ fn collect_limit_order_returns(
 					collected_fees,
 					bought_amount,
 					tick,
+					id,
 					..
 				},
-			) => Some(LimitOrderReturn {
+			) if order_id == id => Some(LimitOrderReturn {
 				tick,
 				amount_total,
 				collected_fees,
@@ -177,7 +181,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_range_order_returns(events))
+		Ok(collect_range_order_returns(events, id))
 	}
 
 	async fn set_range_order(
@@ -201,7 +205,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_range_order_returns(events))
+		Ok(collect_range_order_returns(events, id))
 	}
 
 	async fn update_limit_order(
@@ -227,7 +231,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_limit_order_returns(events))
+		Ok(collect_limit_order_returns(events, id))
 	}
 
 	async fn set_limit_order(
@@ -251,6 +255,6 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_limit_order_returns(events))
+		Ok(collect_limit_order_returns(events, id))
 	}
 }
