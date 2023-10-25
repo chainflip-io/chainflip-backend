@@ -16,6 +16,7 @@ pub mod unending_stream;
 pub use unending_stream::UnendingStream;
 pub mod logging;
 pub mod redact_endpoint_secret;
+pub mod rpc;
 pub mod serde_helpers;
 
 mod cached_stream;
