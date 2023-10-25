@@ -5,10 +5,6 @@ on:
         description: Network being released
         required: true
         type: string
-      profile:
-        description: Release profile
-        required: true
-        type: string
 
 env:
   FORCE_COLOR: 1

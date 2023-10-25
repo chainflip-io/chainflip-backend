@@ -1,17 +1,13 @@
 name: Release Chainflip Berghain
 on:
   push:
-    branches:
-      - PLA-884
     tags:
       - '[0-9]+.[0-9]+.[0-9]+*'
 concurrency:
-  group: ${{ github.ref }}-release-perseverance
+  group: ${{ github.ref }}-release-berghain
   cancel-in-progress: true
 
 jobs:
-#  check-versions:
-#    uses: ./.github/workflows/_03_check_versions.yml
   build:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
@@ -22,7 +18,6 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "berghain"
-      profile: "production"
     secrets: inherit
   docker:
     needs: [build]
@@ -30,14 +25,14 @@ jobs:
     with:
       network: "berghain"
       environment: "production"
+      publish_private_images: false
       publish_public_images: false
-      save_tags: "PLA-884"
+      save_tags: "berghain-${{ github.ref_name }}"
     secrets: inherit
   upload:
-#    needs: [check-versions]
     needs: [package, docker]
     uses: ./.github/workflows/_60_upload.yml
     secrets: inherit
     with:
       network: "berghain"
-      version: 1.1.1
+      version: "${{ github.ref_name }}"

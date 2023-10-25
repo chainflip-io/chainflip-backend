@@ -27,7 +27,6 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "perseverance"
-      profile: "release"
     secrets: inherit
   publish:
     needs: [package]

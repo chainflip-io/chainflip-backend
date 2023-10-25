@@ -33,7 +33,6 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "sisyphos"
-      profile: "release"
     secrets: inherit
   post-check:
     needs: [build]

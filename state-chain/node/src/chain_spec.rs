@@ -47,11 +47,10 @@ use sp_runtime::{
 
 pub mod common;
 pub mod devnet;
-pub mod kitkat;
-pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
+pub mod berghain;
 
 /// Generate a crypto pair from seed.
 pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -421,10 +420,9 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
-network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
-network_spec!(kitkat);
+network_spec!(berghain);
 
 /// Configure initial storage state for FRAME modules.
 /// 150 authority limit
