@@ -16,7 +16,7 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      profile: "production"
+      profile: "release"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
@@ -35,9 +35,9 @@ jobs:
     secrets: inherit
   upload:
 #    needs: [check-versions]
-    needs: [package]
+    needs: [package, docker]
     uses: ./.github/workflows/_60_upload.yml
     secrets: inherit
     with:
       network: "berghain"
-      version: 0.10.0
+      version: 1.1.1

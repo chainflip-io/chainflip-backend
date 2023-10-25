@@ -131,14 +131,14 @@ jobs:
       - name: Save image 📦
         if: inputs.use_save
         run: |
-          docker save ${{ steps.meta.outputs.tags }} -o ${{ steps.meta.outputs.tags }}.tar
+          docker save ${{ steps.meta.outputs.tags }} -o ${{ matrix.target }}.tar
 
       - name: Upload image 📤
         if: inputs.use_save
         uses: actions/upload-artifact@v2
         with:
           name: chainflip-backend-images
-          path: ${{ steps.meta.outputs.tags }}.tar
+          path: ${{ matrix.target }}.tar
 
   public-images:
     if: inputs.publish_public_images
