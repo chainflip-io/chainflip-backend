@@ -104,10 +104,8 @@ pub enum CliCommand {
 			long = "exact"
 		)]
 		amount: Option<f64>,
-		#[clap(
-			help = "The Ethereum address you wish to redeem your FLIP to. If not specified, the redeem address bound to your account will be used"
-		)]
-		eth_address: Option<String>,
+		#[clap(help = "The Ethereum address you wish to redeem your FLIP to.")]
+		eth_address: String,
 		#[clap(
 			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
 		)]

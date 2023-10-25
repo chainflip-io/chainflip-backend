@@ -1,5 +1,5 @@
 #![feature(absolute_path)]
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
@@ -140,22 +140,19 @@ async fn run_cli() -> Result<()> {
 async fn request_redemption(
 	api: StateChainApi,
 	amount: Option<f64>,
-	supplied_redeem_address: Option<String>,
+	supplied_redeem_address: String,
 	supplied_executor_address: Option<String>,
 ) -> Result<()> {
 	// Check validity of the redeem address
-	let redeem_address = if let Some(address) = supplied_redeem_address {
-		EthereumAddress::from(
-			clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
-		)
-	} else {
-		bail!("Redeem address not provided");
-	};
+	let redeem_address = EthereumAddress::from(
+		clean_hex_address::<[u8; 20]>(&supplied_redeem_address)
+			.context("Invalid redeem address")?,
+	);
 
 	// Check the validity of the executor address
 	let executor_address = if let Some(address) = supplied_executor_address {
 		Some(EthereumAddress::from(
-			clean_hex_address::<[u8; 20]>(&address).context("Invalid ETH address supplied")?,
+			clean_hex_address::<[u8; 20]>(&address).context("Invalid executor address")?,
 		))
 	} else {
 		None
