@@ -119,7 +119,7 @@ jobs:
       - name: Lint 🐳🔬
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ci/docker/dev/${{ matrix.dockerfile }}.Dockerfile
+          dockerfile: ci/docker/development/${{ matrix.dockerfile }}.Dockerfile
   lint-prod-dockerfiles:
     runs-on: ubuntu-20.04
     strategy:
