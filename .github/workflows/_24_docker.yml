@@ -14,10 +14,10 @@ on:
         required: false
         type: boolean
         default: false
-      use_save:
+      save_tags:
         description: Use save
-        type: boolean
-        default: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -118,8 +118,8 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ ! inputs.use_save }}
-          load: ${{ inputs.use_save }}
+          push: ${{ inputs.save_tags == '' }}
+          load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -130,12 +130,15 @@ jobs:
             CHAINSPEC=${{ inputs.network }}
 
       - name: Save image 📦
-        if: inputs.use_save
+        if: inputs.save_tags != ''
         run: >
+          for tag in ${{ inputs.save_tags }}; do
+            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o ${{ matrix.target }}.tar
+          done
           docker save ${{ steps.meta.outputs.tags }} -o ${{ matrix.target }}.tar
 
       - name: Upload image 📤
-        if: inputs.use_save
+        if: inputs.save_tags != ''
         uses: actions/upload-artifact@v2
         with:
           name: chainflip-backend-images

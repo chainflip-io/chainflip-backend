@@ -31,8 +31,7 @@ jobs:
       network: "berghain"
       environment: "production"
       publish_public_images: false
-      use_save: true
-
+      save_tags: "PLA-884"
     secrets: inherit
   upload:
 #    needs: [check-versions]
