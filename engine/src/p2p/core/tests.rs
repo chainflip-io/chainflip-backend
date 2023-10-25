@@ -27,7 +27,6 @@ struct Node {
 	account_id: AccountId,
 	msg_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	_own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
 	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 }
 
@@ -43,18 +42,12 @@ fn spawn_node(
 	let secret = ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap();
 
 	let key = P2PKey::new(secret);
-	let (msg_sender, peer_update_sender, msg_receiver, own_peer_info_receiver, fut) =
+	let (msg_sender, peer_update_sender, msg_receiver, fut) =
 		super::start(&key, our_peer_info.port, peer_infos.to_vec(), account_id.clone());
 
 	tokio::spawn(fut.instrument(info_span!("node", idx = idx)));
 
-	Node {
-		account_id,
-		msg_sender,
-		peer_update_sender,
-		_own_peer_info_receiver: own_peer_info_receiver,
-		msg_receiver,
-	}
+	Node { account_id, msg_sender, peer_update_sender, msg_receiver }
 }
 
 // Create an x25519 keypair along with the corresponding ed25519 public key

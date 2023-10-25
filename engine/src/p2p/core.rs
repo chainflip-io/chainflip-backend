@@ -230,7 +230,6 @@ struct P2PContext {
 	peer_infos: BTreeMap<AccountId, PeerInfo>,
 	/// Channel through which we send incoming messages to the multisig
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
-	own_peer_info_sender: UnboundedSender<PeerInfo>,
 	reconnect_context: ReconnectContext,
 	/// This is how we communicate with the "monitor" thread
 	monitor_handle: monitor::MonitorHandle,
@@ -251,7 +250,6 @@ pub(super) fn start(
 	UnboundedSender<OutgoingMultisigStageMessages>,
 	UnboundedSender<PeerUpdate>,
 	UnboundedReceiver<(AccountId, Vec<u8>)>,
-	UnboundedReceiver<PeerInfo>,
 	impl Future<Output = ()>,
 ) {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
@@ -274,9 +272,6 @@ pub(super) fn start(
 	let (monitor_handle, monitor_event_receiver) =
 		monitor::start_monitoring_thread(zmq_context.clone());
 
-	// A channel used to notify whenever our own peer info changes on SC
-	let (own_peer_info_sender, own_peer_info_receiver) = tokio::sync::mpsc::unbounded_channel();
-
 	let mut context = P2PContext {
 		zmq_context,
 		key: p2p_key.encryption_key.clone(),
@@ -287,7 +282,6 @@ pub(super) fn start(
 		peer_infos: Default::default(),
 		reconnect_context: ReconnectContext::new(reconnect_sender),
 		incoming_message_sender,
-		own_peer_info_sender,
 		our_account_id,
 		status: RegistrationStatus::Pending,
 	};
@@ -312,7 +306,7 @@ pub(super) fn start(
 		)
 		.instrument(info_span!("p2p"));
 
-	(out_msg_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, fut)
+	(out_msg_sender, peer_update_sender, incoming_message_receiver, fut)
 }
 
 fn disconnect_socket(_socket: ConnectedOutgoingSocket) {
@@ -518,8 +512,6 @@ impl P2PContext {
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
 		debug!("Received own node's registration. Starting to connect to peers.");
-
-		self.own_peer_info_sender.send(own_info).unwrap();
 
 		if let RegistrationStatus::Pending = &mut self.status {
 			let peers: Vec<_> = self.peer_infos.values().cloned().collect();

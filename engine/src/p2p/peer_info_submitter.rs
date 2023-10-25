@@ -4,9 +4,7 @@ use std::{
 	time::Duration,
 };
 
-use anyhow::Result;
-use sp_core::H256;
-use tokio::sync::mpsc::UnboundedReceiver;
+use anyhow::{Context, Result};
 
 use codec::Encode;
 use tracing::{debug, info};
@@ -15,7 +13,7 @@ use utilities::{make_periodic_tick, Port};
 use crate::{
 	p2p::PeerInfo,
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
 };
 
@@ -63,40 +61,46 @@ async fn update_registered_peer_id<StateChainClient>(
 		.await;
 }
 
-pub(super) async fn start<StateChainClient>(
-	p2p_key: P2PKey,
-	state_chain_client: Arc<StateChainClient>,
+pub(super) async fn ensure_peer_info_registered<StateChainClient>(
+	p2p_key: &P2PKey,
+	state_chain_client: &Arc<StateChainClient>,
 	ip_address: IpAddr,
 	cfe_port: Port,
 	mut previous_registered_peer_info: Option<PeerInfo>,
-	mut own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
 ) -> Result<()>
 where
-	StateChainClient: StorageApi + SignedExtrinsicApi + Send + Sync,
+	StateChainClient: StorageApi + SignedExtrinsicApi + ChainApi + Send + Sync,
 {
 	let ip_address = match ip_address {
 		IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
 		IpAddr::V6(ipv6) => ipv6,
 	};
 
-	let public_encryption_key = &p2p_key.encryption_key.public_key;
+	let public_encryption_key = p2p_key.encryption_key.public_key;
 
 	let mut update_interval = make_periodic_tick(Duration::from_secs(60), true);
+	let mut read_interval = make_periodic_tick(Duration::from_secs(1), false);
 
 	// Periodically try to update our address on chain until we receive
 	// a confirmation (own peer info that matches desired values)
 	loop {
 		tokio::select! {
-			Some(own_info) = own_peer_info_receiver.recv() => {
-				previous_registered_peer_info = Some(own_info);
+			_ = read_interval.tick() => {
+				let current_peers =
+					get_current_peer_infos(state_chain_client)
+						.await
+						.context("Failed to get peer info")?;
+				let our_account_id = state_chain_client.account_id();
+
+				previous_registered_peer_info = current_peers.into_iter().find(|pi| pi.account_id == our_account_id);
 			}
 			_ = update_interval.tick() => {
 				if Some((ip_address, cfe_port, public_encryption_key)) != previous_registered_peer_info
 					.as_ref()
-					.map(|pi| (pi.ip, pi.port, &pi.pubkey))
+					.map(|pi| (pi.ip, pi.port, pi.pubkey))
 				{
 					update_registered_peer_id(
-						&p2p_key,
+						p2p_key,
 						&state_chain_client,
 						&previous_registered_peer_info,
 						ip_address,
@@ -116,14 +120,13 @@ where
 
 pub async fn get_current_peer_infos<StateChainClient>(
 	state_chain_client: &Arc<StateChainClient>,
-	block_hash: H256,
 ) -> anyhow::Result<Vec<PeerInfo>>
 where
-	StateChainClient: StorageApi,
+	StateChainClient: StorageApi + ChainApi,
 {
 	let peer_infos: Vec<_> = state_chain_client
 		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>, Vec<_>>(
-			block_hash,
+			state_chain_client.latest_finalized_hash(),
 		)
 		.await?
 		.into_iter()

@@ -12,7 +12,7 @@ use crate::{
 	p2p::core::ed25519_secret_key_to_x25519_secret_key,
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
 };
 
@@ -99,7 +99,7 @@ pub async fn start<StateChainClient>(
 	impl Future<Output = anyhow::Result<()>>,
 )>
 where
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + SignedExtrinsicApi + ChainApi + 'static + Send + Sync,
 {
 	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
 		anyhow::bail!("Should provide a valid IP address");
@@ -122,21 +122,25 @@ where
 		P2PKey::new(ed_secret_key)
 	};
 
-	let current_peers =
-		peer_info_submitter::get_current_peer_infos(&state_chain_client, latest_block_hash)
-			.await
-			.context("Failed to get initial peer info")?;
+	let current_peers = peer_info_submitter::get_current_peer_infos(&state_chain_client)
+		.await
+		.context("Failed to get initial peer info")?;
 	let our_account_id = state_chain_client.account_id();
 
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 
-	let (
-		outgoing_message_sender,
-		peer_update_sender,
-		incoming_message_receiver,
-		own_peer_info_receiver,
-		p2p_fut,
-	) = core::start(&node_key, settings.port, current_peers, our_account_id);
+	peer_info_submitter::ensure_peer_info_registered(
+		&node_key,
+		&state_chain_client,
+		settings.ip_address,
+		settings.port,
+		own_peer_info,
+	)
+	.instrument(info_span!("P2PClient"))
+	.await?;
+
+	let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, p2p_fut) =
+		core::start(&node_key, settings.port, current_peers, our_account_id);
 
 	let (
 		eth_outgoing_sender,
@@ -154,18 +158,6 @@ where
 				p2p_fut.await;
 				Ok(())
 			});
-
-			scope.spawn(
-				peer_info_submitter::start(
-					node_key,
-					state_chain_client,
-					settings.ip_address,
-					settings.port,
-					own_peer_info,
-					own_peer_info_receiver,
-				)
-				.instrument(info_span!("P2PClient")),
-			);
 
 			scope.spawn(async move {
 				muxer_future.await;
