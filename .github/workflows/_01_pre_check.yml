@@ -109,9 +109,6 @@ jobs:
           - chainflip-engine
           - chainflip-lp-api
           - chainflip-node
-          - generate-genesis-keys
-          - rust-base
-          - chainflip-ingress-egress-tracker
         environment:
           - development
           - production
