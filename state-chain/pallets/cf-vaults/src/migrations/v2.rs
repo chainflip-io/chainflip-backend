@@ -34,13 +34,13 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		// just check that the old storage item existed
-		Ok(KeygenSlashRate::<T, I>::exists().encode())
+		Ok(old::KeygenSlashRate::<T, I>::exists().encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		if <bool>::decode(&mut &_state[..]).map_err(|_| "Failed to decode pre-upgrade state.")? {
-			assert!(!KeygenSlashRate::<T, I>::exist());
+		if <bool>::decode(&mut &state[..]).map_err(|_| "Failed to decode pre-upgrade state.")? {
+			assert!(!old::KeygenSlashRate::<T, I>::exists());
 			assert!(KeygenSlashAmount::<T, I>::exists());
 			assert!(KeygenSlashAmount::<T, I>::get() == FLIPPERINOS_PER_FLIP)
 		}
