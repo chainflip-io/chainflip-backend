@@ -28,7 +28,7 @@ use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
 use muxer::P2PMuxer;
-use sp_core::{ed25519, H256};
+use sp_core::ed25519;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
@@ -87,7 +87,6 @@ fn pk_to_string(pk: &XPublicKey) -> String {
 pub async fn start<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
-	latest_block_hash: H256,
 ) -> anyhow::Result<(
 	MultisigMessageSender<EvmCrypto>,
 	MultisigMessageReceiver<EvmCrypto>,

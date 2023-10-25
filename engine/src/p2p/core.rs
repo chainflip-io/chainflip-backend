@@ -89,16 +89,6 @@ impl std::fmt::Display for PeerInfo {
 	}
 }
 
-/// Used to track "registration" status on the network
-enum RegistrationStatus {
-	/// The node is not yet known to the network (its peer info
-	/// may not be known to the network yet)
-	Pending,
-	/// The node is registered, i.e. its peer info has been
-	/// recorded/updated
-	Registered,
-}
-
 pub fn ed25519_secret_key_to_x25519_secret_key(
 	ed25519_sk: &ed25519_dalek::SecretKey,
 ) -> x25519_dalek::StaticSecret {
@@ -233,8 +223,6 @@ struct P2PContext {
 	reconnect_context: ReconnectContext,
 	/// This is how we communicate with the "monitor" thread
 	monitor_handle: monitor::MonitorHandle,
-	/// Our own "registration" status on the network
-	status: RegistrationStatus,
 	our_account_id: AccountId,
 	/// NOTE: zmq context is intentionally declared at the bottom of the struct
 	/// to ensure its destructor is called after that of any zmq sockets
@@ -283,12 +271,11 @@ pub(super) fn start(
 		reconnect_context: ReconnectContext::new(reconnect_sender),
 		incoming_message_sender,
 		our_account_id,
-		status: RegistrationStatus::Pending,
 	};
 
 	debug!("Registering peer info for {} peers", current_peers.len());
 	for peer_info in current_peers {
-		context.handle_peer_update(peer_info);
+		context.add_or_update_peer(peer_info);
 	}
 
 	let incoming_message_receiver_ed25519 = context.start_listening_thread(port);
@@ -380,7 +367,7 @@ impl P2PContext {
 
 	fn on_peer_update(&mut self, update: PeerUpdate) {
 		match update {
-			PeerUpdate::Registered(peer_info) => self.handle_peer_update(peer_info),
+			PeerUpdate::Registered(peer_info) => self.add_or_update_peer(peer_info),
 			PeerUpdate::Deregistered(account_id, _pubkey) =>
 				self.handle_peer_deregistration(account_id),
 		}
@@ -510,20 +497,12 @@ impl P2PContext {
 		}
 	}
 
-	fn handle_own_registration(&mut self, own_info: PeerInfo) {
-		debug!("Received own node's registration. Starting to connect to peers.");
-
-		if let RegistrationStatus::Pending = &mut self.status {
-			let peers: Vec<_> = self.peer_infos.values().cloned().collect();
-			// Connect to all outstanding peers
-			for peer in peers {
-				self.connect_to_peer(peer)
-			}
-			self.status = RegistrationStatus::Registered;
-		};
-	}
-
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
+		if peer.account_id == self.our_account_id {
+			// nothing to do
+			return
+		}
+
 		if let Some(existing_state) = self.active_connections.remove(&peer.account_id) {
 			debug!(
 				peer_info = peer.to_string(),
@@ -558,24 +537,7 @@ impl P2PContext {
 
 		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
-		match &mut self.status {
-			RegistrationStatus::Pending => {
-				// We will connect to all peers in `self.peer_infos` once we receive our own
-				// registration
-				info!("Delaying connecting to {}", peer.account_id);
-			},
-			RegistrationStatus::Registered => {
-				self.connect_to_peer(peer);
-			},
-		}
-	}
-
-	fn handle_peer_update(&mut self, peer: PeerInfo) {
-		if peer.account_id == self.our_account_id {
-			self.handle_own_registration(peer);
-		} else {
-			self.add_or_update_peer(peer);
-		}
+		self.connect_to_peer(peer);
 	}
 
 	/// Start listening for incoming p2p messages on a separate thread
