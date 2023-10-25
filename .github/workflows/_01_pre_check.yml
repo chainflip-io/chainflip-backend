@@ -99,7 +99,7 @@ jobs:
           ./actionlint -color -shellcheck=
         shell: bash
 
-  lint-dev-dockerfiles:
+  lint-dockerfiles:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -112,6 +112,16 @@ jobs:
           - generate-genesis-keys
           - rust-base
           - chainflip-ingress-egress-tracker
+        environment:
+          - development
+          - production
+        include:
+          - dockerfile: rust-base
+            environment: development
+          - dockerfile: generate-genesis-keys
+            environment: development
+          - dockerfile: chainflip-ingress-egress-tracker
+            environment: development
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -119,23 +129,5 @@ jobs:
       - name: Lint 🐳🔬
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ci/docker/development/${{ matrix.dockerfile }}.Dockerfile
-  lint-prod-dockerfiles:
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        dockerfile:
-          - chainflip-broker-api
-          - chainflip-cli
-          - chainflip-engine
-          - chainflip-lp-api
-          - chainflip-node
-          - generate-genesis-keys
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@v3
+          dockerfile: ci/docker/${{ matrix.environment }}/${{ matrix.dockerfile }}.Dockerfile
 
-      - name: Lint 🐳🔬
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: ci/docker/prod/${{ matrix.dockerfile }}.Dockerfile
