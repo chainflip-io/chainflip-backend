@@ -102,6 +102,8 @@ pub trait EthersRetryRpcApi: Clone {
 		newest_block: BlockNumber,
 		reward_percentiles: Vec<f64>,
 	) -> FeeHistory;
+
+	async fn get_transaction(&self, tx_hash: H256) -> Transaction;
 }
 
 #[async_trait::async_trait]
@@ -262,6 +264,18 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 			)
 			.await
 	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> Transaction {
+		self.rpc_retry_client
+			.request(
+				Box::pin(move |client| {
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_transaction(tx_hash).await })
+				}),
+				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
+			)
+			.await
+	}
 }
 
 #[async_trait::async_trait]
@@ -360,6 +374,8 @@ pub mod mocks {
 				newest_block: BlockNumber,
 				reward_percentiles: Vec<f64>,
 			) -> FeeHistory;
+
+			async fn get_transaction(&self, tx_hash: H256) -> Transaction;
 		}
 	}
 }

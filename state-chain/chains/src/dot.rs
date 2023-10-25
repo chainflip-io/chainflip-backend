@@ -267,6 +267,7 @@ impl Chain for Polkadot {
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = ();
 	type Transaction = PolkadotTransactionData;
+	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 }

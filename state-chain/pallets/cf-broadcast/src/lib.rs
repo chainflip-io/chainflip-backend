@@ -14,7 +14,9 @@ pub use weights::WeightInfo;
 
 impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
 
-use cf_chains::{ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
+use cf_chains::{
+	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder, TransactionMetadata as _,
+};
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
 	EpochKey, OnBroadcastReady, ThresholdSigner,
@@ -93,6 +95,10 @@ pub mod pallet {
 	/// Type alias for the instance's configured Payload.
 	pub type PayloadFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload;
+
+	/// Type alias for the instance's configured transaction Metadata.
+	pub type TransactionMetadataFor<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::TransactionMetadata;
 
 	pub type ChainBlockNumberFor<T, I> =
 		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainBlockNumber;
@@ -275,6 +281,11 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores metadata related to a transaction.
+	#[pallet::storage]
+	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
+
 	/// Tracks how much a signer id is owed for paying transaction fees.
 	#[pallet::storage]
 	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
@@ -307,6 +318,13 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
+		/// The fee paid for broadcasting a transaction has been recorded.
+		TransactionFeeDeficitRecorded {
+			beneficiary: SignerIdFor<T, I>,
+			amount: ChainAmountFor<T, I>,
+		},
+		/// The fee paid for broadcasting a transaction has been refused.
+		TransactionFeeDeficitRefused { beneficiary: SignerIdFor<T, I> },
 	}
 
 	#[pallet::error]
@@ -526,6 +544,7 @@ pub mod pallet {
 			tx_out_id: TransactionOutIdFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
+			tx_metadata: TransactionMetadataFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
@@ -533,18 +552,40 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
-			let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
-				broadcast_id,
-				attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
-			})
-			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
-			.broadcast_attempt
-			.transaction_payload
-			.return_fee_refund(tx_fee);
+			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
+				if tx_metadata.verify_metadata(&expected_tx_metadata) {
+					let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+						broadcast_id,
+						attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+					})
+					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
+					.broadcast_attempt
+					.transaction_payload
+					.return_fee_refund(tx_fee);
 
-			TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
-				*fee_deficit = fee_deficit.saturating_add(to_refund);
-			});
+					TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
+						*fee_deficit = fee_deficit.saturating_add(to_refund);
+					});
+
+					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
+						beneficiary: signer_id,
+						amount: to_refund,
+					});
+				} else {
+					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
+						beneficiary: signer_id,
+					});
+					log::warn!(
+						"Transaction metadata verification failed for broadcast {}. Deficit will not be recorded.",
+						broadcast_id
+					);
+				}
+			} else {
+				log::error!(
+					"Transaction metadata not found for broadcast {}. Deficit will be ignored.",
+					broadcast_id
+				);
+			}
 
 			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
@@ -613,6 +654,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 
+		TransactionMetadata::<T, I>::remove(broadcast_id);
 		RequestCallbacks::<T, I>::remove(broadcast_id);
 		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
@@ -755,6 +797,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_attempt.transaction_payload);
+		TransactionMetadata::<T, I>::insert(
+			broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			<<T::TargetChain as Chain>::TransactionMetadata>::extract_metadata(
+				&broadcast_attempt.transaction_payload,
+			),
+		);
 
 		let seed =
 			(broadcast_attempt.broadcast_attempt_id, broadcast_attempt.transaction_payload.clone())
