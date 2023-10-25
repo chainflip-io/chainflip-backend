@@ -1088,12 +1088,16 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_json_snapshot!(serde_json::to_value(RpcAccountInfo::none(0)).unwrap());
+		insta::assert_json_snapshot!(
+			serde_json::to_string_pretty(&RpcAccountInfo::none(0)).unwrap()
+		);
 	}
 
 	#[test]
 	fn test_broker_serialization() {
-		insta::assert_json_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
+		insta::assert_json_snapshot!(
+			serde_json::to_string_pretty(&RpcAccountInfo::broker(0)).unwrap()
+		);
 	}
 
 	#[test]
@@ -1121,7 +1125,7 @@ mod test {
 			0,
 		);
 
-		insta::assert_json_snapshot!(serde_json::to_value(lp).unwrap());
+		insta::assert_json_snapshot!(serde_json::to_string_pretty(&lp).unwrap());
 	}
 
 	#[test]
@@ -1142,12 +1146,12 @@ mod test {
 			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
 
-		insta::assert_json_snapshot!(serde_json::to_value(validator).unwrap());
+		insta::assert_json_snapshot!(serde_json::to_string_pretty(&validator).unwrap());
 	}
 
 	#[test]
 	fn test_environment_serialization() {
-		insta::assert_json_snapshot!(serde_json::to_value(RpcEnvironment {
+		let env = RpcEnvironment {
 			swapping: SwappingEnvironment {
 				minimum_swap_amounts: HashMap::from([
 					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
@@ -1157,7 +1161,7 @@ mod test {
 							(Asset::Flip, u64::MAX.into()),
 							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
 							(Asset::Eth, 0u32.into()),
-						])
+						]),
 					),
 				]),
 			},
@@ -1170,9 +1174,9 @@ mod test {
 							(Asset::Flip, u64::MAX.into()),
 							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
 							(Asset::Eth, 0u32.into()),
-						])
+						]),
 					),
-				])
+				]),
 			},
 			funding: FundingEnvironment {
 				redemption_tax: 0u32.into(),
@@ -1188,12 +1192,13 @@ mod test {
 								limit_order_fee_hundredth_pips: 0,
 								range_order_fee_hundredth_pips: 100,
 							}
-							.into()
-						)
-					)])
-				)])
-			}
-		})
-		.unwrap());
+							.into(),
+						),
+					)]),
+				)]),
+			},
+		};
+
+		insta::assert_json_snapshot!(serde_json::to_string_pretty(&env).unwrap());
 	}
 }

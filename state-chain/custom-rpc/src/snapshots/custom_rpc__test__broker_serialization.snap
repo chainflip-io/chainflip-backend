@@ -1,8 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
-expression: "serde_json::to_value(RpcAccountInfo::broker(0)).unwrap()"
+expression: "serde_json::to_string_pretty(&RpcAccountInfo::broker(0)).unwrap()"
 ---
-{
-  "flip_balance": "0x0",
-  "role": "broker"
-}
+"{\n  \"role\": \"broker\",\n  \"flip_balance\": \"0x0\"\n}"

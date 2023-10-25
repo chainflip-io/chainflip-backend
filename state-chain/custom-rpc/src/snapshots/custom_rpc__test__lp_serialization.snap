@@ -1,22 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
-expression: "serde_json::to_value(lp).unwrap()"
+expression: "serde_json::to_string_pretty(&lp).unwrap()"
 ---
-{
-  "balances": {
-    "Bitcoin": {
-      "Btc": "0x0"
-    },
-    "Ethereum": {
-      "Eth": "0xffffffffffffffffffffffffffffffff",
-      "Flip": "0x7fffffffffffffffffffffffffffffff"
-    }
-  },
-  "flip_balance": "0x0",
-  "refund_addresses": {
-    "Bitcoin": null,
-    "Ethereum": "0x0101010101010101010101010101010101010101",
-    "Polkadot": "111111111111111111111111111111111HC1"
-  },
-  "role": "liquidity_provider"
-}
+"{\n  \"role\": \"liquidity_provider\",\n  \"balances\": {\n    \"Ethereum\": {\n      \"Flip\": \"0x7fffffffffffffffffffffffffffffff\",\n      \"Eth\": \"0xffffffffffffffffffffffffffffffff\"\n    },\n    \"Bitcoin\": {\n      \"Btc\": \"0x0\"\n    }\n  },\n  \"refund_addresses\": {\n    \"Polkadot\": \"111111111111111111111111111111111HC1\",\n    \"Bitcoin\": null,\n    \"Ethereum\": \"0x0101010101010101010101010101010101010101\"\n  },\n  \"flip_balance\": \"0x0\"\n}"
