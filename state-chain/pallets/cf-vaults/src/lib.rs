@@ -16,7 +16,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::traits::{One, Saturating},
-	traits::StorageVersion,
+	traits::{OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;

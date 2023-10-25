@@ -23,7 +23,7 @@ mod old {
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// remove the old storage containing Percent
-		KeygenSlashRate::<T, I>::kill();
+		old::KeygenSlashRate::<T, I>::kill();
 
 		// set the new storage containing the absolute FlipAmount
 		KeygenSlashAmount::<T, I>::put(FLIPPERINOS_PER_FLIP);
