@@ -36,10 +36,11 @@ use response_status::ResponseStatus;
 
 pub mod weights;
 pub use weights::WeightInfo;
+mod migrations;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
 
@@ -329,12 +330,22 @@ pub mod pallet {
 
 		fn on_runtime_upgrade() -> Weight {
 			// For new pallet instances, genesis items need to be set.
-			if !KeygenResponseTimeout::<T, I>::exists() {
-				KeygenResponseTimeout::<T, I>::set(
-					KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
-				);
-			}
-			Weight::zero()
+			// if !KeygenResponseTimeout::<T, I>::exists() {
+			// 	KeygenResponseTimeout::<T, I>::set(
+			// 		KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
+			// 	);
+			// }
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
