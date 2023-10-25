@@ -18,10 +18,10 @@ use jsonrpsee::{
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
+use safety::SafeNumberOrHex;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
-use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::Offence,
@@ -34,23 +34,25 @@ use std::{
 	sync::Arc,
 };
 
+mod safety;
+
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
 	None {
-		flip_balance: NumberOrHex,
+		flip_balance: SafeNumberOrHex,
 	},
 	Broker {
-		flip_balance: NumberOrHex,
+		flip_balance: SafeNumberOrHex,
 	},
 	LiquidityProvider {
-		balances: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+		balances: HashMap<ForeignChain, HashMap<Asset, SafeNumberOrHex>>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
-		flip_balance: NumberOrHex,
+		flip_balance: SafeNumberOrHex,
 	},
 	Validator {
-		flip_balance: NumberOrHex,
-		bond: NumberOrHex,
+		flip_balance: SafeNumberOrHex,
+		bond: SafeNumberOrHex,
 		last_heartbeat: u32,
 		reputation_points: i32,
 		keyholder_epochs: Vec<u32>,
@@ -61,7 +63,7 @@ pub enum RpcAccountInfo {
 		is_bidding: bool,
 		bound_redeem_address: Option<EthereumAddress>,
 		apy_bp: Option<u32>,
-		restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
+		restricted_balances: BTreeMap<EthereumAddress, SafeNumberOrHex>,
 	},
 }
 
@@ -120,8 +122,8 @@ impl RpcAccountInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfoV2 {
-	pub balance: NumberOrHex,
-	pub bond: NumberOrHex,
+	pub balance: SafeNumberOrHex,
+	pub bond: SafeNumberOrHex,
 	pub last_heartbeat: u32,
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<u32>,
@@ -148,23 +150,23 @@ pub struct RpcAuctionState {
 	blocks_per_epoch: u32,
 	current_epoch_started_at: u32,
 	redemption_period_as_percentage: u8,
-	min_funding: NumberOrHex,
+	min_funding: SafeNumberOrHex,
 	auction_size_range: (u32, u32),
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcSwapOutput {
 	// Intermediary amount, if there's any
-	pub intermediary: Option<NumberOrHex>,
+	pub intermediary: Option<SafeNumberOrHex>,
 	// Final output of the swap
-	pub output: NumberOrHex,
+	pub output: SafeNumberOrHex,
 }
 
 impl From<SwapOutput> for RpcSwapOutput {
 	fn from(swap_output: SwapOutput) -> Self {
 		Self {
-			intermediary: swap_output.intermediary.map(NumberOrHex::from),
-			output: NumberOrHex::from(swap_output.output),
+			intermediary: swap_output.intermediary.map(Into::into),
+			output: swap_output.output.into(),
 		}
 	}
 }
@@ -202,18 +204,18 @@ pub struct PoolsEnvironment {
 
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
-	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, SafeNumberOrHex>>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct FundingEnvironment {
-	pub redemption_tax: NumberOrHex,
-	pub minimum_funding_amount: NumberOrHex,
+	pub redemption_tax: SafeNumberOrHex,
+	pub minimum_funding_amount: SafeNumberOrHex,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
-	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, SafeNumberOrHex>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -255,7 +257,7 @@ pub trait CustomApi {
 	fn cf_auction_parameters(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<(u32, u32)>;
 	#[method(name = "min_funding")]
-	fn cf_min_funding(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<NumberOrHex>;
+	fn cf_min_funding(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SafeNumberOrHex>;
 	#[method(name = "current_epoch")]
 	fn cf_current_epoch(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
 	#[method(name = "epoch_duration")]
@@ -266,17 +268,17 @@ pub trait CustomApi {
 	fn cf_authority_emission_per_block(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<NumberOrHex>;
+	) -> RpcResult<SafeNumberOrHex>;
 	#[method(name = "backup_emission_per_block")]
 	fn cf_backup_emission_per_block(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<NumberOrHex>;
+	) -> RpcResult<SafeNumberOrHex>;
 	#[method(name = "flip_supply")]
 	fn cf_flip_supply(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<(NumberOrHex, NumberOrHex)>;
+	) -> RpcResult<(SafeNumberOrHex, SafeNumberOrHex)>;
 	#[method(name = "accounts")]
 	fn cf_accounts(
 		&self,
@@ -322,7 +324,7 @@ pub trait CustomApi {
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: NumberOrHex,
+		amount: SafeNumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -509,7 +511,7 @@ where
 			.cf_auction_parameters(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
-	fn cf_min_funding(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<NumberOrHex> {
+	fn cf_min_funding(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<SafeNumberOrHex> {
 		self.client
 			.runtime_api()
 			.cf_min_funding(self.unwrap_or_best(at))
@@ -537,7 +539,7 @@ where
 	fn cf_authority_emission_per_block(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> RpcResult<NumberOrHex> {
+	) -> RpcResult<SafeNumberOrHex> {
 		self.client
 			.runtime_api()
 			.cf_authority_emission_per_block(self.unwrap_or_best(at))
@@ -547,7 +549,7 @@ where
 	fn cf_backup_emission_per_block(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> RpcResult<NumberOrHex> {
+	) -> RpcResult<SafeNumberOrHex> {
 		self.client
 			.runtime_api()
 			.cf_backup_emission_per_block(self.unwrap_or_best(at))
@@ -557,7 +559,7 @@ where
 	fn cf_flip_supply(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-	) -> RpcResult<(NumberOrHex, NumberOrHex)> {
+	) -> RpcResult<(SafeNumberOrHex, SafeNumberOrHex)> {
 		self.client
 			.runtime_api()
 			.cf_flip_supply(self.unwrap_or_best(at))
@@ -721,7 +723,7 @@ where
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: NumberOrHex,
+		amount: SafeNumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
 		self.client
@@ -730,7 +732,7 @@ where
 				self.unwrap_or_best(at),
 				from,
 				to,
-				cf_utilities::try_parse_number_or_hex(amount).and_then(|amount| {
+				amount.try_into().and_then(|amount| {
 					if amount == 0 {
 						Err(anyhow::anyhow!("Swap input amount cannot be zero."))
 					} else {
@@ -853,9 +855,7 @@ where
 				.or_insert_with(HashMap::new)
 				.insert(
 					asset,
-					NumberOrHex::from(
-						runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?,
-					),
+					runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
 				);
 		}
 
