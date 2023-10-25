@@ -131,7 +131,7 @@ jobs:
 
       - name: Save image 📦
         if: inputs.use_save
-        run: |
+        run: >
           docker save ${{ steps.meta.outputs.tags }} -o ${{ matrix.target }}.tar
 
       - name: Upload image 📤

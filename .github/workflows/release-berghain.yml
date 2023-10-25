@@ -32,6 +32,8 @@ jobs:
       environment: "production"
       publish_public_images: false
       use_save: true
+      use_version: |
+
     secrets: inherit
   upload:
 #    needs: [check-versions]
