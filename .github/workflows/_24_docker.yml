@@ -125,7 +125,7 @@ jobs:
 
       - name: Save tags to tar 📦
         if: inputs.save_tags != ''
-        run: >
+        run: |
           mkdir -p private
           for tag in ${{ inputs.save_tags }}; do
             docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o private/${{ matrix.target }}.tar
