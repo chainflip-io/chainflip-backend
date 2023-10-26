@@ -2,9 +2,8 @@ set -e
 ./commands/observe_block.ts 5
 ./commands/setup_vaults.ts
 ./commands/setup_swaps.ts
-# Gas limit tests to be executed first to have a deterministic pool state
-./tests/gaslimit_ccm.ts
 ./tests/swap_less_than_existential_deposit_dot.ts
+./tests/gaslimit_ccm.ts
 ./tests/all_concurrent_tests.ts
 ./tests/rotates_through_btc_swap.ts
 
