@@ -103,7 +103,7 @@ mod test {
 		assert!(u128::try_from(NumberOrHex::Hex(U256::MAX / 2)).is_err());
 
 		assert_eq!(u64::try_from(NumberOrHex::Hex(u64::MAX.into())).unwrap(), u64::MAX);
-		assert_eq!(u64::try_from(NumberOrHex::Number(u64::MAX.into())).unwrap(), u64::MAX);
+		assert_eq!(u64::try_from(NumberOrHex::Number(u64::MAX)).unwrap(), u64::MAX);
 		assert!(u64::try_from(NumberOrHex::Hex((u128::MAX / 2).into())).is_err());
 
 		assert_eq!(u128::try_from(NumberOrHex::Number(0)).unwrap(), 0);
