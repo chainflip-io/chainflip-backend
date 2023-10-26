@@ -1,6 +1,6 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, Chain};
-use cf_primitives::{chains::assets::any, AssetAmount};
+use cf_primitives::{chains::assets::any, AssetAmount, FlipBalance};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
@@ -149,6 +149,24 @@ impl QueryApi {
 		Ok(self
 			.state_chain_client
 			.storage_map_entry::<pallet_cf_funding::BoundExecutorAddress<state_chain_runtime::Runtime>>(
+				block_hash,
+				&account_id,
+			)
+			.await?)
+	}
+
+	pub async fn get_restricted_balances(
+		&self,
+		block_hash: Option<state_chain_runtime::Hash>,
+		account_id: Option<state_chain_runtime::AccountId>,
+	) -> Result<BTreeMap<EthereumAddress, FlipBalance>> {
+		let block_hash =
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
+
+		Ok(self
+			.state_chain_client
+			.storage_map_entry::<pallet_cf_funding::RestrictedBalances<state_chain_runtime::Runtime>>(
 				block_hash,
 				&account_id,
 			)

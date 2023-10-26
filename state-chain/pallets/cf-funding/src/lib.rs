@@ -361,11 +361,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			if let Some(executor_addr) = BoundExecutorAddress::<T>::get(&account_id) {
-				let executor = executor.ok_or(Error::<T>::ExecutorBindingRestrictionViolated)?;
-				ensure!(executor_addr == executor, Error::<T>::ExecutorBindingRestrictionViolated);
-			}
-
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
@@ -380,12 +375,22 @@ pub mod pallet {
 			);
 
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
+
+			// Ignore executor binding restrictions for withdrawals of restricted funds.
+			if !restricted_balances.contains_key(&address) {
+				if let Some(bound_executor) = BoundExecutorAddress::<T>::get(&account_id) {
+					ensure!(
+						executor == Some(bound_executor),
+						Error::<T>::ExecutorBindingRestrictionViolated
+					);
+				}
+			}
+
 			let redemption_fee = RedemptionTax::<T>::get();
 
 			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
 				ensure!(
-					bound_address == address ||
-						restricted_balances.keys().any(|res_address| res_address == &address),
+					bound_address == address || restricted_balances.contains_key(&address),
 					Error::<T>::AccountBindingRestrictionViolated
 				);
 			}
