@@ -40,6 +40,9 @@ lazy_static = "1.4"
 jsonrpsee = { version = "0.20", features = [
   "jsonrpsee-types",
 ], optional = true }
+jsonrpsee_16 = {package = "jsonrpsee" , version = "0.16.2", features = [
+  "jsonrpsee-types",
+], optional = true }
 regex = { version = "1", optional = true }
 url = { version = "2.4", optional = true }
 
@@ -73,4 +76,5 @@ std = [
   'dep:jsonrpsee',
   'dep:regex',
   'dep:url',
+  'dep:jsonrpsee_16',
 ]

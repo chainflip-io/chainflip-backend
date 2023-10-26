@@ -4,7 +4,7 @@ use cf_utilities::{
 	try_parse_number_or_hex, AnyhowRpcError,
 };
 use chainflip_api::{
-	self, asset_from_asset_chain_pair,
+	self,
 	lp::{LimitOrderReturn, LpApi, RangeOrderReturn, Tick},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -14,6 +14,7 @@ use chainflip_api::{
 	OperatorApi, StateChainApi,
 };
 use clap::Parser;
+use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
@@ -84,8 +85,7 @@ pub trait Rpc {
 	#[method(name = "liquidity_deposit")]
 	async fn request_liquidity_deposit_address(
 		&self,
-		asset: Asset,
-		chain: ForeignChain,
+		asset: RpcAsset,
 	) -> Result<String, AnyhowRpcError>;
 
 	#[method(name = "register_liquidity_refund_address")]
@@ -99,18 +99,15 @@ pub trait Rpc {
 	async fn withdraw_asset(
 		&self,
 		amount: NumberOrHex,
-		asset: Asset,
-		chain: ForeignChain,
+		asset: RpcAsset,
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		base_chain: ForeignChain,
-		pair_asset: Asset,
-		pair_chain: ForeignChain,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -119,10 +116,8 @@ pub trait Rpc {
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		base_chain: ForeignChain,
-		pair_asset: Asset,
-		pair_chain: ForeignChain,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -131,10 +126,8 @@ pub trait Rpc {
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
 		&self,
-		sell_asset: Asset,
-		sell_chain: ForeignChain,
-		buy_asset: Asset,
-		buy_chain: ForeignChain,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -143,10 +136,8 @@ pub trait Rpc {
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
 		&self,
-		sell_asset: Asset,
-		sell_chain: ForeignChain,
-		buy_asset: Asset,
-		buy_chain: ForeignChain,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
@@ -180,13 +171,12 @@ impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
 	async fn request_liquidity_deposit_address(
 		&self,
-		asset: Asset,
-		chain: ForeignChain,
+		asset: RpcAsset,
 	) -> Result<String, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset_from_asset_chain_pair(asset, chain)?)
+			.request_liquidity_deposit_address(asset.try_into()?)
 			.await
 			.map(|address| address.to_string())?)
 	}
@@ -204,11 +194,10 @@ impl RpcServer for RpcServerImpl {
 	async fn withdraw_asset(
 		&self,
 		amount: NumberOrHex,
-		asset: Asset,
-		chain: ForeignChain,
+		asset: RpcAsset,
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), AnyhowRpcError> {
-		let asset = asset_from_asset_chain_pair(asset, chain)?;
+		let asset: Asset = asset.try_into()?;
 
 		let destination_address =
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
@@ -227,10 +216,8 @@ impl RpcServer for RpcServerImpl {
 
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		base_chain: ForeignChain,
-		pair_asset: Asset,
-		pair_chain: ForeignChain,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -239,8 +226,8 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.update_range_order(
-				asset_from_asset_chain_pair(base_asset, base_chain)?,
-				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
+				base_asset.try_into()?,
+				pair_asset.try_into()?,
 				id.try_into()?,
 				tick_range,
 				size_change.try_map(|size| size.try_into())?,
@@ -250,10 +237,8 @@ impl RpcServer for RpcServerImpl {
 
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		base_chain: ForeignChain,
-		pair_asset: Asset,
-		pair_chain: ForeignChain,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -262,8 +247,8 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.set_range_order(
-				asset_from_asset_chain_pair(base_asset, base_chain)?,
-				asset_from_asset_chain_pair(pair_asset, pair_chain)?,
+				base_asset.try_into()?,
+				pair_asset.try_into()?,
 				id.try_into()?,
 				tick_range,
 				size.try_into()?,
@@ -273,10 +258,8 @@ impl RpcServer for RpcServerImpl {
 
 	async fn update_limit_order(
 		&self,
-		sell_asset: Asset,
-		sell_chain: ForeignChain,
-		buy_asset: Asset,
-		buy_chain: ForeignChain,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -285,8 +268,8 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.update_limit_order(
-				asset_from_asset_chain_pair(sell_asset, sell_chain)?,
-				asset_from_asset_chain_pair(buy_asset, buy_chain)?,
+				sell_asset.try_into()?,
+				buy_asset.try_into()?,
 				id.try_into()?,
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
@@ -296,10 +279,8 @@ impl RpcServer for RpcServerImpl {
 
 	async fn set_limit_order(
 		&self,
-		sell_asset: Asset,
-		sell_chain: ForeignChain,
-		buy_asset: Asset,
-		buy_chain: ForeignChain,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -308,8 +289,8 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.set_limit_order(
-				asset_from_asset_chain_pair(sell_asset, sell_chain)?,
-				asset_from_asset_chain_pair(buy_asset, buy_chain)?,
+				sell_asset.try_into()?,
+				buy_asset.try_into()?,
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,

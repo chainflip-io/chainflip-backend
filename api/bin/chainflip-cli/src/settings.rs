@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
+use chainflip_api::primitives::{AccountRole, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -9,6 +9,7 @@ use chainflip_engine::{
 };
 use clap::Parser;
 use config::{ConfigBuilder, ConfigError, Source, Value};
+use custom_rpc::RpcAsset;
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
@@ -62,14 +63,10 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Source asset ("Eth"|"Dot")
-	pub source_asset: Asset,
-	/// Source chain ("Ethereum"|"Polkadot")
-	pub source_chain: ForeignChain,
-	/// Egress asset ("Eth"|"Dot")
-	pub destination_asset: Asset,
-	/// Egress chain ("Ethereum"|"Polkadot")
-	pub destination_chain: ForeignChain,
+	/// Source asset ("Eth"|"dot")
+	pub source_asset: RpcAsset,
+	/// Egress asset ("Eth"|"dot")
+	pub destination_asset: RpcAsset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
 	// on destination_asset)
@@ -90,9 +87,7 @@ pub enum LiquidityProviderSubcommands {
 	/// Request a liquidity deposit address.
 	RequestLiquidityDepositAddress {
 		/// Asset to deposit.
-		asset: Asset,
-		/// Chain of the deposit asset.
-		chain: ForeignChain,
+		asset: RpcAsset,
 	},
 	/// Register an Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.

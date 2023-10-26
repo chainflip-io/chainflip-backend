@@ -1,4 +1,4 @@
-import { assetDecimals, Asset } from '@chainflip-io/cli';
+import { assetDecimals, Asset, Chain } from '@chainflip-io/cli';
 import assert from 'assert';
 import {
   getChainflipApi,
@@ -8,14 +8,20 @@ import {
   amountToFineAmount,
   sleep,
   observeBalanceIncrease,
+  chainFromAsset,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
 import { sendEth } from './send_eth';
 import { getBalance } from './get_balance';
 
+type RpcAsset = {
+  asset: Asset;
+  chain: Chain;
+};
+
 const testAsset: Asset = 'ETH'; // TODO: Make these tests work with any asset
-const testChain = 'Ethereum';
+const testRpcAsset: RpcAsset = { chain: chainFromAsset(testAsset), asset: testAsset };
 const testAmount = 0.1;
 const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals.ETH));
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
@@ -81,7 +87,7 @@ async function testLiquidityDeposit() {
     (event) => event.data.depositAddress.Eth,
   );
 
-  const liquidityDepositAddress = await lpApiRpc(`lp_liquidity_deposit`, [testAsset, testChain]);
+  const liquidityDepositAddress = await lpApiRpc(`lp_liquidity_deposit`, [testRpcAsset]);
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
@@ -109,13 +115,12 @@ async function testLiquidityDeposit() {
 async function testWithdrawAsset() {
   const oldBalance = await getBalance(testAsset, testAddress);
 
-  const [asset, egressId] = await lpApiRpc(`lp_withdraw_asset`, [
+  const [chain, egressId] = await lpApiRpc(`lp_withdraw_asset`, [
     testAssetAmount,
-    testAsset,
-    testChain,
+    testRpcAsset,
     testAddress,
   ]);
-  assert.strictEqual(asset, testChain, `Unexpected withdraw asset result`);
+  assert.strictEqual(chain, testRpcAsset.chain, `Unexpected withdraw asset result`);
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
   await observeBalanceIncrease(testAsset, testAddress, oldBalance);
@@ -147,22 +152,12 @@ async function testRangeOrder() {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_range_order`, [
-    'Usdc',
-    'Ethereum',
-    testAsset,
-    testChain,
-    orderId,
-    range,
-    zeroAssetAmounts,
-  ]);
+  await lpApiRpc(`lp_set_range_order`, ['Usdc', testRpcAsset, orderId, range, zeroAssetAmounts]);
 
   // Mint a range order
   const mintRangeOrder = await lpApiRpc(`lp_set_range_order`, [
     'Usdc',
-    'Ethereum',
-    testAsset,
-    testChain,
+    testRpcAsset,
     orderId,
     range,
     {
@@ -187,9 +182,7 @@ async function testRangeOrder() {
   // Update the range order
   const updateRangeOrder = await lpApiRpc(`lp_update_range_order`, [
     'Usdc',
-    'Ethereum',
-    testAsset,
-    testChain,
+    testRpcAsset,
     orderId,
     range,
     `Increase`,
@@ -215,9 +208,7 @@ async function testRangeOrder() {
   // Burn the range order
   const burnRangeOrder = await lpApiRpc(`lp_set_range_order`, [
     'Usdc',
-    'Ethereum',
-    testAsset,
-    testChain,
+    testRpcAsset,
     orderId,
     range,
     zeroAssetAmounts,
@@ -251,22 +242,12 @@ async function testLimitOrder() {
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [
-    testAsset,
-    testChain,
-    'Usdc',
-    'Ethereum',
-    orderId,
-    tick,
-    0,
-  ]);
+  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'Usdc', orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
-    testAsset,
-    testChain,
+    testRpcAsset,
     'Usdc',
-    'Ethereum',
     orderId,
     tick,
     testAssetAmount,
@@ -286,10 +267,8 @@ async function testLimitOrder() {
 
   // Update the limit order
   const updateLimitOrder = await lpApiRpc(`lp_update_limit_order`, [
-    testAsset,
-    testChain,
+    testRpcAsset,
     'Usdc',
-    'Ethereum',
     orderId,
     tick,
     `Increase`,
@@ -310,10 +289,8 @@ async function testLimitOrder() {
 
   // Burn the limit order
   const burnLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
-    testAsset,
-    testChain,
+    testRpcAsset,
     'Usdc',
-    'Ethereum',
     orderId,
     tick,
     0,

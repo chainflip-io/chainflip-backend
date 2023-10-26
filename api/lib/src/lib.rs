@@ -83,11 +83,6 @@ impl<
 	}
 }
 
-pub fn asset_from_asset_chain_pair(asset: Asset, chain: ForeignChain) -> Result<Asset> {
-	cf_chains::assets::asset_from_asset_chain_pair(asset, chain)
-		.map_err(|_| anyhow!("Unsupported asset {asset:?} on chain {chain}"))
-}
-
 pub async fn request_block(
 	block_hash: state_chain_runtime::Hash,
 	state_chain_settings: &settings::StateChain,

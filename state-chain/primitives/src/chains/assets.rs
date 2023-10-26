@@ -197,16 +197,6 @@ macro_rules! chain_assets {
 	};
 }
 
-/// Converts from an user facing Asset and Chain pair to the internal Asset type that the SC uses.
-/// At the moment it is the same Asset type, but that may change in the future.
-/// Returns an error if the given asset is not supported on the given chain.
-pub fn asset_from_asset_chain_pair(asset: Asset, chain: ForeignChain) -> Result<Asset, AssetError> {
-	if chain != asset.into() {
-		return Err(AssetError::Unsupported)
-	}
-	Ok(asset)
-}
-
 // Defines each chain's Asset enum.
 // Must be consistent with the mapping defined in any::Asset
 chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
@@ -253,32 +243,5 @@ mod test_assets {
 		assert_incompatible!(dot, Flip);
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
-	}
-
-	#[test]
-	fn test_asset_chain_pair_check() {
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Eth, ForeignChain::Ethereum).unwrap(),
-			Asset::Eth
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Flip, ForeignChain::Ethereum).unwrap(),
-			Asset::Flip
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Usdc, ForeignChain::Ethereum).unwrap(),
-			Asset::Usdc
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Dot, ForeignChain::Polkadot).unwrap(),
-			Asset::Dot
-		);
-		assert_eq!(
-			asset_from_asset_chain_pair(Asset::Btc, ForeignChain::Bitcoin).unwrap(),
-			Asset::Btc
-		);
-		assert!(asset_from_asset_chain_pair(Asset::Eth, ForeignChain::Polkadot).is_err());
-		assert!(asset_from_asset_chain_pair(Asset::Flip, ForeignChain::Bitcoin).is_err());
-		assert!(asset_from_asset_chain_pair(Asset::Dot, ForeignChain::Ethereum).is_err());
 	}
 }

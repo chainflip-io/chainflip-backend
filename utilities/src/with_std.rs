@@ -40,6 +40,12 @@ impl From<AnyhowRpcError> for ErrorObjectOwned {
 	}
 }
 
+impl From<jsonrpsee_16::core::Error> for AnyhowRpcError {
+	fn from(error: jsonrpsee_16::core::Error) -> Self {
+		Self { error: anyhow::anyhow!("{error}") }
+	}
+}
+
 pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
