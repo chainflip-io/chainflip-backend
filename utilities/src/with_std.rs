@@ -54,7 +54,7 @@ pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, an
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 	u128::try_from(amount).map_err(|_| {
-		anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
+		anyhow!("Error parsing amount to u128. Please use a valid number or hex string as input.")
 	})
 }
 
