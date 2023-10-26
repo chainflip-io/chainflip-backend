@@ -6,7 +6,6 @@ mod tests;
 
 use std::{
 	collections::{BTreeMap, HashMap},
-	future::Future,
 	net::Ipv6Addr,
 	sync::Arc,
 	time::Duration,
@@ -238,16 +237,14 @@ struct P2PContext {
 	zmq_context: zmq::Context,
 }
 
-pub(super) fn start(
-	p2p_key: &P2PKey,
+pub(super) async fn start(
+	p2p_key: P2PKey,
 	port: Port,
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
-) -> (
-	UnboundedSender<OutgoingMultisigStageMessages>,
-	UnboundedSender<PeerUpdate>,
-	UnboundedReceiver<(AccountId, Vec<u8>)>,
-	impl Future<Output = ()>,
+	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 ) {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
@@ -261,9 +258,6 @@ pub(super) fn start(
 
 	let authenticator = auth::start_authentication_thread(zmq_context.clone());
 
-	let (incoming_message_sender, incoming_message_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
 	let (reconnect_sender, reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 	let (monitor_handle, monitor_event_receiver) =
@@ -271,7 +265,7 @@ pub(super) fn start(
 
 	let mut context = P2PContext {
 		zmq_context,
-		key: p2p_key.encryption_key.clone(),
+		key: p2p_key.encryption_key,
 		monitor_handle,
 		authenticator,
 		active_connections: ActiveConnectionWrapper::new(),
@@ -288,20 +282,16 @@ pub(super) fn start(
 
 	let incoming_message_receiver_ed25519 = context.start_listening_thread(port);
 
-	let (out_msg_sender, out_msg_receiver) = tokio::sync::mpsc::unbounded_channel();
-	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-	let fut = context
+	context
 		.control_loop(
-			out_msg_receiver,
+			outgoing_message_receiver,
 			incoming_message_receiver_ed25519,
 			peer_update_receiver,
 			monitor_event_receiver,
 			reconnect_receiver,
 		)
-		.instrument(info_span!("p2p"));
-
-	(out_msg_sender, peer_update_sender, incoming_message_receiver, fut)
+		.instrument(info_span!("p2p"))
+		.await;
 }
 
 fn disconnect_socket(_socket: ConnectedOutgoingSocket) {

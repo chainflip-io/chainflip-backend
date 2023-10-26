@@ -128,18 +128,13 @@ where
 
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 
-	peer_info_submitter::ensure_peer_info_registered(
-		&node_key,
-		&state_chain_client,
-		settings.ip_address,
-		settings.port,
-		own_peer_info,
-	)
-	.instrument(info_span!("P2PClient"))
-	.await?;
+	let (incoming_message_sender, incoming_message_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
 
-	let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, p2p_fut) =
-		core::start(&node_key, settings.port, current_peers, our_account_id);
+	let (outgoing_message_sender, outgoing_message_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
+	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 	let (
 		eth_outgoing_sender,
@@ -153,8 +148,28 @@ where
 
 	let fut = task_scope(move |scope| {
 		async move {
-			scope.spawn(async {
-				p2p_fut.await;
+			scope.spawn(async move {
+				peer_info_submitter::ensure_peer_info_registered(
+					&node_key,
+					&state_chain_client,
+					settings.ip_address,
+					settings.port,
+					own_peer_info,
+				)
+				.instrument(info_span!("P2PClient"))
+				.await?;
+
+				core::start(
+					node_key,
+					settings.port,
+					current_peers,
+					our_account_id,
+					incoming_message_sender,
+					outgoing_message_receiver,
+					peer_update_receiver,
+				)
+				.await;
+
 				Ok(())
 			});
 
