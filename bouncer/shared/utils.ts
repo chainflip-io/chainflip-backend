@@ -466,3 +466,16 @@ export function isValidEthAddress(address: string): boolean {
   const ethRegex = /^0x[a-fA-F0-9]{40}$/;
   return ethRegex.test(address);
 }
+
+// "v1 is greater than v2" -> "greater"
+export function compareSemVer(version1: string, version2: string) {
+  const v1 = version1.split('.').map(Number);
+  const v2 = version2.split('.').map(Number);
+
+  for (let i = 0; i < 3; i++) {
+    if (v1[i] > v2[i]) return 'greater';
+    if (v1[i] < v2[i]) return 'less';
+  }
+
+  return 'equal';
+}

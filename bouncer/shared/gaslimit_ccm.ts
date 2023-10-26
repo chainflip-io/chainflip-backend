@@ -280,7 +280,6 @@ export async function testGasLimitCcmSwaps() {
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
   while ((await getChainFees()).priorityFee < MIN_PRIORITY_FEE) {
-    console.log(i);
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spamming;

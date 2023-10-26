@@ -6,15 +6,17 @@
 //
 // Optional args:
 // -test: Run the swap tests after the upgrade.
+//
 // For example ./commands/noop_runtime_upgrade.ts
 // NB: It *must* be run from the bouncer directory.
 
-import { noopRuntimeUpgrade } from '../shared/noop_runtime_upgrade';
+import path from 'path';
+import { simpleRuntimeUpgrade } from '../shared/simple_runtime_upgrade';
 import { testAllSwaps } from '../shared/swapping';
 import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  await noopRuntimeUpgrade();
+  await simpleRuntimeUpgrade(path.dirname(process.cwd()));
 
   if (process.argv[2] === '-test') {
     await testAllSwaps();
