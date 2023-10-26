@@ -15,6 +15,7 @@ use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
+		lp_balance::MockBalance,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
@@ -101,7 +102,7 @@ impl crate::Config for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
-	type LpBalance = Self;
+	type LpBalance = MockBalance;
 	type SwapDepositHandler =
 		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;

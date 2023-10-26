@@ -31,6 +31,7 @@ pub mod threshold_signer;
 pub mod time_source;
 pub mod vault_rotator;
 pub mod waived_fees_mock;
+pub mod lp_balance;
 
 #[macro_export]
 macro_rules! impl_mock_chainflip {
