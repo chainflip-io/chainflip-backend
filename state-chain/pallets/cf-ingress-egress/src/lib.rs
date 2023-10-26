@@ -538,13 +538,22 @@ pub mod pallet {
 			for DepositWitness { deposit_address, asset, amount, deposit_details } in
 				deposit_witnesses
 			{
-				Self::process_single_deposit(
-					deposit_address,
+				if Self::process_single_deposit(
+					deposit_address.clone(),
 					asset,
 					amount,
-					deposit_details,
+					deposit_details.clone(),
 					block_height,
-				)?;
+				)
+				.is_err()
+				{
+					Self::deposit_event(Event::<T, I>::DepositIgnored {
+						deposit_address,
+						asset,
+						amount,
+						deposit_details,
+					});
+				}
 			}
 			Ok(())
 		}

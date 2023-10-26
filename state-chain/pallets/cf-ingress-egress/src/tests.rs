@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
+	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
 	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
@@ -20,7 +20,7 @@ use cf_traits::{
 	DepositApi, EgressApi, GetBlockHeight,
 };
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -575,6 +575,49 @@ fn can_egress_ccm() {
 }
 
 #[test]
+fn multi_deposit_includes_invalid_deposit() {
+	const ETH: eth::Asset = eth::Asset::Eth;
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			let (_, address, ..) =
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH).unwrap();
+			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+			let recycles_at = IngressEgress::expiry_and_recycle_block_height().2;
+			(address, recycles_at)
+		})
+		.then_execute_at_next_block(|(address, recycles_at)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(recycles_at);
+			address
+		})
+		.then_execute_at_next_block(|address| {
+			let (_, address2, ..) =
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH).unwrap();
+			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
+			(address, address2)
+		})
+		.then_execute_at_next_block(|(address, address2)| {
+			assert_ok!(IngressEgress::process_deposits(
+				RuntimeOrigin::root(),
+				vec![
+					DepositWitness {
+						deposit_address: address,
+						asset: eth::Asset::Eth,
+						amount: 1,
+						deposit_details: Default::default()
+					},
+					DepositWitness {
+						deposit_address: address2,
+						asset: eth::Asset::Eth,
+						amount: 1,
+						deposit_details: Default::default()
+					}
+				],
+				Default::default()
+			));
+		});
+}
+
+#[test]
 fn multi_use_deposit_address_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 
@@ -597,19 +640,23 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		.then_execute_at_next_block(|(_, deposit_address)| {
 			// Closing the channel should invalidate the deposit address.
-			assert_noop!(
-				IngressEgress::process_deposits(
-					RuntimeOrigin::root(),
-					vec![DepositWitness {
-						deposit_address,
-						asset: eth::Asset::Eth,
-						amount: 1,
-						deposit_details: Default::default()
-					}],
-					Default::default()
-				),
-				Error::<Test, _>::InvalidDepositAddress
-			);
+			System::reset_events();
+			assert_ok!(IngressEgress::process_deposits(
+				RuntimeOrigin::root(),
+				vec![DepositWitness {
+					deposit_address,
+					asset: eth::Asset::Eth,
+					amount: 1,
+					deposit_details: Default::default()
+				}],
+				Default::default()
+			));
+			System::assert_has_event(RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
+				deposit_address,
+				asset: eth::Asset::Eth,
+				amount: 1,
+				deposit_details: Default::default(),
+			}));
 		});
 }
 
