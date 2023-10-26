@@ -294,6 +294,8 @@ async function testLimitOrder() {
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi() {
+  console.log('=== Starting LP API test ===');
+
   // Provide the amount of eth needed for the tests
   await provideLiquidityAndTestAssetBalances();
 
@@ -306,4 +308,6 @@ export async function testLpApi() {
     // testLimitOrder(),
     testGetOpenSwapChannels(),
   ]);
+
+  console.log('=== LP API test complete ===');
 }
