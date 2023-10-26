@@ -46,7 +46,6 @@ export async function upgradeNetwork(toGitRef: string, bumpByIfEqual: SemVerLeve
   const fromTomlVersion = await readPackageTomlVersion(path.dirname(process.cwd()));
   console.log("Version we're upgrading from: " + fromTomlVersion);
 
-  // abcd124 ensures there's no bracnh with the same name that will stop us from creating the workspace.
   // tmp/ is ignored in the bouncer .gitignore file.
   const absoluteWorkspacePath = path.join(process.cwd(), 'tmp/upgrade-network');
 
