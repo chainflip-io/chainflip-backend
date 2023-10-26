@@ -1,5 +1,5 @@
 {
-    "chainflip-dev": {
+    "chainflip-development": {
       "region": "eu-central-1",
       "bucket": "apt.aws.chainflip.xyz",
       "endpoint": "",
