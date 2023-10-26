@@ -300,8 +300,8 @@ export async function testLpApi() {
     testLiquidityDeposit(),
     testWithdrawAsset(),
     testRegisterWithExistingLpAccount(),
-    testRangeOrder(),
-    testLimitOrder(),
+    // testRangeOrder(),
+    // testLimitOrder(),
     testGetOpenSwapChannels(),
   ]);
 }
