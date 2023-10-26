@@ -38,12 +38,17 @@ jobs:
           name: chainflip-backend-packages-ubuntu-22.04
           path: assets/debian
 
-      - name: Download images
+      - name: Download public images
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-images
-          path: assets/docker
+          name: chainflip-backend-public-images
+          path: assets/docker/public
 
+      - name: Download private images
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-private-images
+          path: assets/docker/private
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2

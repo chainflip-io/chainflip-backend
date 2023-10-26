@@ -135,7 +135,7 @@ jobs:
         if: inputs.save_tags != ''
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-images
+          name: chainflip-backend-private-images
           path: private
 
   public-images:
@@ -217,5 +217,5 @@ jobs:
         if: inputs.save_tags != ''
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-images
+          name: chainflip-backend-public-images
           path: public
