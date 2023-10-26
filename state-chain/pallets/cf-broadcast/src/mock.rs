@@ -135,7 +135,7 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
-impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode }
+impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<MockEthereum> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;

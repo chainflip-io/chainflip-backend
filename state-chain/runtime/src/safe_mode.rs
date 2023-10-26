@@ -1,6 +1,7 @@
 //! For filtering runtime calls and other related utilities.
 
 use crate::{Runtime, RuntimeCall};
+use cf_chains::{Bitcoin, Ethereum, Polkadot};
 use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -17,7 +18,9 @@ impl_runtime_safe_mode! {
 	reputation: pallet_cf_reputation::PalletSafeMode,
 	vault: pallet_cf_vaults::PalletSafeMode,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
-	broadcast: pallet_cf_broadcast::PalletSafeMode,
+	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<Ethereum>,
+	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<Bitcoin>,
+	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<Polkadot>,
 }
 
 /// Contains permissions for different Runtime calls.
