@@ -176,7 +176,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
-		signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
+		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		{
@@ -298,6 +298,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					(first_finalized_block_header.hash(), first_finalized_block_header.number)
 				}
 			};
+
+			signed_extrinsic_client_builder
+				.pre_compatibility(base_rpc_client.clone())
+				.await?;
 
 			if let Some((required_version, wait_for_required_version)) = required_version_and_wait {
 				if wait_for_required_version {
@@ -452,6 +456,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 trait SignedExtrinsicClientBuilderTrait {
 	type Client;
 
+	async fn pre_compatibility<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>(
+		&mut self,
+		base_rpc_client: Arc<BaseRpcClient>,
+	) -> Result<()>;
+
 	async fn build<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
@@ -468,6 +477,13 @@ trait SignedExtrinsicClientBuilderTrait {
 #[async_trait]
 impl SignedExtrinsicClientBuilderTrait for () {
 	type Client = ();
+
+	async fn pre_compatibility<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>(
+		&mut self,
+		_base_rpc_client: Arc<BaseRpcClient>,
+	) -> Result<()> {
+		Ok(())
+	}
 
 	async fn build<
 		'a,
@@ -493,6 +509,13 @@ struct SignedExtrinsicClientBuilder {
 #[async_trait]
 impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 	type Client = extrinsic_api::signed::SignedExtrinsicClient;
+
+	async fn pre_compatibility<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>(
+		&mut self,
+		_base_rpc_client: Arc<BaseRpcClient>,
+	) -> Result<()> {
+		Ok(())
+	}
 
 	async fn build<
 		'b,
