@@ -7,6 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 
 use codec::Encode;
+use sp_core::H256;
 use tracing::{debug, info};
 use utilities::{make_periodic_tick, Port};
 
@@ -87,7 +88,7 @@ where
 		tokio::select! {
 			_ = read_interval.tick() => {
 				let current_peers =
-					get_current_peer_infos(state_chain_client)
+					get_current_peer_infos(state_chain_client, None)
 						.await
 						.context("Failed to get peer info")?;
 				let our_account_id = state_chain_client.account_id();
@@ -101,7 +102,7 @@ where
 				{
 					update_registered_peer_id(
 						p2p_key,
-						&state_chain_client,
+						state_chain_client,
 						&previous_registered_peer_info,
 						ip_address,
 						cfe_port,
@@ -120,13 +121,16 @@ where
 
 pub async fn get_current_peer_infos<StateChainClient>(
 	state_chain_client: &Arc<StateChainClient>,
+	block_hash: Option<H256>,
 ) -> anyhow::Result<Vec<PeerInfo>>
 where
 	StateChainClient: StorageApi + ChainApi,
 {
+	let block_hash = block_hash.unwrap_or_else(|| state_chain_client.latest_finalized_hash());
+
 	let peer_infos: Vec<_> = state_chain_client
 		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>, Vec<_>>(
-			state_chain_client.latest_finalized_hash(),
+			block_hash,
 		)
 		.await?
 		.into_iter()

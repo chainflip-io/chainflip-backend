@@ -28,7 +28,7 @@ use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
 use muxer::P2PMuxer;
-use sp_core::ed25519;
+use sp_core::{ed25519, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
@@ -87,6 +87,7 @@ fn pk_to_string(pk: &XPublicKey) -> String {
 pub async fn start<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
+	initial_block_hash: H256,
 ) -> anyhow::Result<(
 	MultisigMessageSender<EvmCrypto>,
 	MultisigMessageReceiver<EvmCrypto>,
@@ -121,9 +122,10 @@ where
 		P2PKey::new(ed_secret_key)
 	};
 
-	let current_peers = peer_info_submitter::get_current_peer_infos(&state_chain_client)
-		.await
-		.context("Failed to get initial peer info")?;
+	let current_peers =
+		peer_info_submitter::get_current_peer_infos(&state_chain_client, Some(initial_block_hash))
+			.await
+			.context("Failed to get initial peer info")?;
 	let our_account_id = state_chain_client.account_id();
 
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();

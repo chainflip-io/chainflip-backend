@@ -215,6 +215,7 @@ async fn run_main(
 			) = p2p::start(
 				state_chain_client.clone(),
 				settings.node_p2p.clone(),
+				state_chain_stream.cache().block_hash,
 			)
 			.await
 			.context("Failed to start p2p")?;
