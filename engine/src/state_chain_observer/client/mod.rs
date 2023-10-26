@@ -6,8 +6,8 @@ pub mod storage_api;
 
 use async_trait::async_trait;
 
-use anyhow::{anyhow, Context, Result};
-use cf_primitives::AccountRole;
+use anyhow::{anyhow, bail, Context, Result};
+use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
 use sp_core::{Pair, H256};
@@ -28,6 +28,7 @@ use self::{
 		signed::{signer, SignedExtrinsicApi},
 		unsigned,
 	},
+	storage_api::StorageApi,
 };
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
@@ -97,6 +98,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
+		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		Self::new_with_account(
 			scope,
@@ -104,6 +106,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 			signing_key_file,
 			required_role,
 			wait_for_required_role,
+			required_version_and_wait,
 		)
 		.await
 	}
@@ -113,8 +116,14 @@ impl StateChainClient<()> {
 	pub async fn connect_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		ws_endpoint: &str,
+		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
-		Self::new_without_account(scope, DefaultRpcClient::connect(ws_endpoint).await?.into()).await
+		Self::new_without_account(
+			scope,
+			DefaultRpcClient::connect(ws_endpoint).await?.into(),
+			required_version_and_wait,
+		)
+		.await
 	}
 }
 
@@ -127,6 +136,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
+		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		Self::new(
 			scope,
@@ -137,7 +147,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				                                                * seems */
 				required_role,
 				wait_for_required_role,
+				check_unfinalized_version: required_version_and_wait.map(|(version, _)| version),
 			},
+			required_version_and_wait,
 		)
 		.await
 	}
@@ -149,8 +161,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn new_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
+		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
-		Self::new(scope, base_rpc_client, ()).await
+		Self::new(scope, base_rpc_client, (), required_version_and_wait).await
 	}
 }
 
@@ -164,6 +177,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
+		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		{
 			let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
@@ -265,7 +279,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 
 			// Often `finalized_header` returns a significantly newer latest block than the stream
 			// returns so we move the stream forward to this block
-			let (latest_block_hash, latest_block_number) = {
+			let (mut latest_block_hash, mut latest_block_number) = {
 				let finalised_header_hash = base_rpc_client.latest_finalized_block_hash().await?;
 				let finalised_header = base_rpc_client.block_header(finalised_header_hash).await?;
 
@@ -284,6 +298,80 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					(first_finalized_block_header.hash(), first_finalized_block_header.number)
 				}
 			};
+
+			if let Some((required_version, wait_for_required_version)) = required_version_and_wait {
+				if wait_for_required_version {
+					let incompatible_blocks =
+						futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(
+							latest_block_hash,
+						)))
+						.chain(futures::stream::try_unfold(
+							(
+								&mut finalized_block_header_stream,
+								&mut latest_block_number,
+								&mut latest_block_hash,
+							),
+							|(
+								finalized_block_header_stream,
+								latest_block_number,
+								latest_block_hash,
+							)| async move {
+								let next_header =
+									finalized_block_header_stream.next().await.unwrap()?;
+								*latest_block_number = next_header.number;
+								*latest_block_hash = next_header.hash();
+								Ok::<_, anyhow::Error>(Some((
+									*latest_block_hash,
+									(
+										finalized_block_header_stream,
+										latest_block_number,
+										latest_block_hash,
+									),
+								)))
+							},
+						))
+						.and_then(|block_hash| {
+							let base_rpc_client = &base_rpc_client;
+							async move {
+								Ok::<_, anyhow::Error>((
+									block_hash,
+									base_rpc_client
+										.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
+											state_chain_runtime::Runtime,
+										>>(block_hash)
+										.await?,
+								))
+							}
+						})
+						.try_take_while(|(_block_hash, current_release_version)| {
+							futures::future::ready({
+								Ok::<_, anyhow::Error>(
+									!required_version.is_compatible_with(*current_release_version),
+								)
+							})
+						})
+						.boxed();
+
+					incompatible_blocks.try_for_each(move |(block_hash, current_release_version)| futures::future::ready({
+						info!("This version '{}' is incompatible with the current release '{}' at block: {}. WAITING for a compatible release version.", required_version, current_release_version, block_hash);
+						Ok::<_, anyhow::Error>(())
+					})).await?;
+				} else {
+					let current_release_version = base_rpc_client
+						.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+							latest_block_hash,
+						)
+						.await?;
+					if !required_version.is_compatible_with(current_release_version) {
+						bail!(
+							"This version '{}' is incompatible with the current release '{}' at block: {}.",
+							required_version,
+							current_release_version,
+							latest_block_hash,
+						);
+					}
+				}
+			}
 
 			const BLOCK_CAPACITY: usize = 10;
 			let (block_sender, block_receiver) = spmc::channel::<(
@@ -307,11 +395,19 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 					)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
 				),
 				scope.spawn_with_handle({
+					let base_rpc_client = base_rpc_client.clone();
 					async move {
 						loop {
 							let block_header =
 								finalized_block_header_stream.next().await.unwrap()?;
 							let block_hash = block_header.hash();
+							if let Some((required_version, _)) = required_version_and_wait {
+								let current_release_version = base_rpc_client.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(block_hash).await?;
+								if !required_version.is_compatible_with(current_release_version) {
+									break Err(anyhow!("This version '{}' is no longer compatible with the release version '{}' at block: {}", required_version, current_release_version, block_hash))
+								}
+							}
+
 							if !block_sender.send((block_hash, block_header)).await {
 								break Ok(())
 							}
@@ -392,6 +488,7 @@ struct SignedExtrinsicClientBuilder {
 	signing_key_file: std::path::PathBuf,
 	required_role: AccountRole,
 	wait_for_required_role: bool,
+	check_unfinalized_version: Option<SemVer>,
 }
 #[async_trait]
 impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
@@ -424,6 +521,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 			)),
 			self.required_role,
 			self.wait_for_required_role,
+			self.check_unfinalized_version,
 			genesis_hash,
 			state_chain_stream,
 		)

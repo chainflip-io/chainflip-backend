@@ -1,33 +1,26 @@
-// Do a runtime upgrade that does nothing - the runtime should be identical except for the `spec_version` field.
-// Needs to be run from the bouncer directory.
-import { execSync } from 'node:child_process';
-
 import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
 import { jsonRpc } from './json_rpc';
 import { getChainflipApi, observeEvent } from './utils';
 import { bumpSpecVersion } from './utils/bump_spec_version';
+import { compileBinaries } from './utils/compile_binaries';
 
 async function getCurrentSpecVersion(): Promise<number> {
   return Number((await jsonRpc('state_getRuntimeVersion', [], 9944)).specVersion);
 }
 
-export async function noopRuntimeUpgrade(): Promise<void> {
+// Do a runtime upgrade using the code in the projectRoot directory.
+export async function simpleRuntimeUpgrade(projectRoot: string): Promise<void> {
   const chainflip = await getChainflipApi();
-
   const currentSpecVersion = await getCurrentSpecVersion();
-
   console.log('Current spec_version: ' + currentSpecVersion);
-
   const nextSpecVersion = currentSpecVersion + 1;
+  bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, nextSpecVersion);
 
-  bumpSpecVersion('../state-chain/runtime/src/lib.rs', nextSpecVersion);
+  await compileBinaries('runtime', projectRoot);
 
-  console.log('Building the new runtime');
-  execSync('cd ../state-chain/runtime && cargo build --release');
-
-  console.log('Built the new runtime. Applying runtime upgrade.');
+  console.log('Applying runtime upgrade.');
   await submitRuntimeUpgrade(
-    '../target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm',
+    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
   );
 
   await observeEvent('system:CodeUpdated', chainflip);

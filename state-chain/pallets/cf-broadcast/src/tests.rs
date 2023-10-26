@@ -4,13 +4,14 @@ use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
-	TransactionOutIdToBroadcastId, WeightInfo,
+	TransactionMetadata, TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
-		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockThresholdSignature,
-		MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
+		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockEthereumTransactionMetadata,
+		MockThresholdSignature, MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
+		MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -117,6 +118,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
 	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(TransactionMetadata::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
 fn start_mock_broadcast_tx_out_id(
@@ -136,7 +138,6 @@ fn start_mock_broadcast() -> BroadcastAttemptId {
 	start_mock_broadcast_tx_out_id(Default::default())
 }
 
-// The happy path :)
 #[test]
 fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
@@ -153,6 +154,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
+			MOCK_TX_METADATA,
 		));
 
 		let expected_refund = tx_sig_request
@@ -163,6 +165,14 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 
 		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
+
+		assert_eq!(
+			System::events().get(1).expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRecorded {
+				beneficiary: Default::default(),
+				amount: expected_refund
+			})
+		);
 
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	});
@@ -285,6 +295,7 @@ fn test_sigdata_with_no_match_is_noop() {
 				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
+				MOCK_TX_METADATA,
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -315,6 +326,7 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
+			MOCK_TX_METADATA,
 		));
 
 		MockOffenceReporter::assert_reported(
@@ -495,6 +507,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
+			MOCK_TX_METADATA,
 		));
 		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();
@@ -538,5 +551,31 @@ fn ensure_retries_are_skipped_during_safe_mode() {
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get().len(), 2);
+	});
+}
+
+#[test]
+fn transaction_succeeded_results_in_refund_refuse_for_signer() {
+	new_test_ext().execute_with(|| {
+		MockEthereumTransactionMetadata::set_validity(false);
+		let _ = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
+		let nominee = MockNominator::get_last_nominee().unwrap();
+
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			MOCK_TRANSACTION_OUT_ID,
+			nominee,
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+		));
+
+		assert_eq!(
+			System::events().get(1).expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::TransactionFeeDeficitRefused {
+				beneficiary: Default::default(),
+			})
+		);
 	});
 }

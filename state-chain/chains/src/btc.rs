@@ -187,6 +187,7 @@ impl Chain for Bitcoin {
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
 	type Transaction = BitcoinTransactionData;
+	type TransactionMetadata = ();
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();

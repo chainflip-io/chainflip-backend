@@ -3,11 +3,10 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	btc::BitcoinNetwork, dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress,
-};
+use cf_chains::{dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -40,7 +39,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
@@ -70,7 +68,7 @@ pub struct AuctionState {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct Environment {
-	pub bitcoin_network: BitcoinNetwork,
+	pub network: NetworkEnvironment,
 	pub ethereum_chain_id: cf_chains::evm::api::EvmChainId,
 	pub polkadot_genesis_hash: PolkadotHash,
 }
@@ -96,6 +94,7 @@ decl_runtime_apis!(
 		fn cf_auction_parameters() -> (u32, u32);
 		fn cf_min_funding() -> u128;
 		fn cf_current_epoch() -> u32;
+		#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 		fn cf_current_compatibility_version() -> SemVer;
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;
