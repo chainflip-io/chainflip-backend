@@ -15,12 +15,12 @@ use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
-		lp_balance::MockBalance,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		block_height_provider::BlockHeightProvider,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
 	DepositApi, DepositHandler,
