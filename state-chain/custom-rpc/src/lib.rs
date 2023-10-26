@@ -4,13 +4,12 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
-	btc::BitcoinNetwork,
-	dot::PolkadotHash,
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
 };
+use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
 	core::RpcResult,
@@ -23,12 +22,11 @@ use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, Unidirecti
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
-use sp_rpc::number::NumberOrHex;
 use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{CustomRuntimeApi, Environment, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
+	runtime_apis::{CustomRuntimeApi, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -165,27 +163,65 @@ pub struct RpcSwapOutput {
 impl From<SwapOutput> for RpcSwapOutput {
 	fn from(swap_output: SwapOutput) -> Self {
 		Self {
-			intermediary: swap_output.intermediary.map(NumberOrHex::from),
-			output: NumberOrHex::from(swap_output.output),
+			intermediary: swap_output.intermediary.map(Into::into),
+			output: swap_output.output.into(),
 		}
 	}
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcEnvironment {
-	bitcoin_network: BitcoinNetwork,
-	ethereum_chain_id: cf_chains::evm::api::EvmChainId,
-	polkadot_genesis_hash: PolkadotHash,
+#[serde(untagged)]
+pub enum RpcAsset {
+	ImplicitChain(Asset),
+	ExplicitChain { chain: ForeignChain, asset: Asset },
 }
 
-impl From<Environment> for RpcEnvironment {
-	fn from(environment: Environment) -> Self {
-		Self {
-			bitcoin_network: environment.network.into(),
-			ethereum_chain_id: environment.ethereum_chain_id,
-			polkadot_genesis_hash: environment.polkadot_genesis_hash,
-		}
+impl From<Asset> for RpcAsset {
+	fn from(asset: Asset) -> Self {
+		RpcAsset::ExplicitChain { asset, chain: asset.into() }
 	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPoolInfo {
+	#[serde(flatten)]
+	pub pool_info: PoolInfo,
+	pub pair_asset: RpcAsset,
+}
+
+impl From<PoolInfo> for RpcPoolInfo {
+	fn from(pool_info: PoolInfo) -> Self {
+		Self { pool_info, pair_asset: Asset::Usdc.into() }
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolsEnvironment {
+	pub fees: HashMap<ForeignChain, HashMap<Asset, Option<RpcPoolInfo>>>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct IngressEgressEnvironment {
+	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FundingEnvironment {
+	pub redemption_tax: NumberOrHex,
+	pub minimum_funding_amount: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SwappingEnvironment {
+	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcEnvironment {
+	ingress_egress: IngressEgressEnvironment,
+	swapping: SwappingEnvironment,
+	funding: FundingEnvironment,
+	pools: PoolsEnvironment,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -336,6 +372,26 @@ pub trait CustomApi {
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	#[method(name = "funding_environment")]
+	fn cf_funding_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<FundingEnvironment>;
+	#[method(name = "swapping_environment")]
+	fn cf_swapping_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SwappingEnvironment>;
+	#[method(name = "ingress_egress_environment")]
+	fn cf_ingress_egress_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<IngressEgressEnvironment>;
+	#[method(name = "pool_environment")]
+	fn cf_pool_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolsEnvironment>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
@@ -553,7 +609,7 @@ where
 
 					RpcAccountInfo::lp(
 						info,
-						api.cf_environment(hash).map_err(to_rpc_error)?.network,
+						api.cf_network_environment(hash).map_err(to_rpc_error)?,
 						balance,
 					)
 				},
@@ -674,7 +730,7 @@ where
 				self.unwrap_or_best(at),
 				from,
 				to,
-				cf_utilities::try_parse_number_or_hex(amount).and_then(|amount| {
+				amount.try_into().and_then(|amount| {
 					if amount == 0 {
 						Err(anyhow::anyhow!("Swap input amount cannot be zero."))
 					} else {
@@ -783,12 +839,85 @@ where
 			.map_err(map_dispatch_error)
 	}
 
+	fn cf_ingress_egress_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<IngressEgressEnvironment> {
+		let runtime_api = &self.client.runtime_api();
+		let hash = self.unwrap_or_best(at);
+		let mut minimum_deposit_amounts = HashMap::new();
+
+		for asset in Asset::all() {
+			minimum_deposit_amounts
+				.entry(ForeignChain::from(asset))
+				.or_insert_with(HashMap::new)
+				.insert(
+					asset,
+					runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
+				);
+		}
+
+		Ok(IngressEgressEnvironment { minimum_deposit_amounts })
+	}
+
+	fn cf_swapping_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SwappingEnvironment> {
+		let runtime_api = &self.client.runtime_api();
+		let hash = self.unwrap_or_best(at);
+		let mut minimum_swap_amounts = HashMap::new();
+
+		for asset in Asset::all() {
+			let swap_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
+			minimum_swap_amounts
+				.entry(asset.into())
+				.or_insert_with(HashMap::new)
+				.insert(asset, swap_amount.into());
+		}
+
+		Ok(SwappingEnvironment { minimum_swap_amounts })
+	}
+
+	fn cf_funding_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<FundingEnvironment> {
+		let runtime_api = &self.client.runtime_api();
+		let hash = self.unwrap_or_best(at);
+
+		Ok(FundingEnvironment {
+			redemption_tax: runtime_api.cf_redemption_tax(hash).map_err(to_rpc_error)?.into(),
+			minimum_funding_amount: runtime_api.cf_min_funding(hash).map_err(to_rpc_error)?.into(),
+		})
+	}
+
+	fn cf_pool_environment(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolsEnvironment> {
+		let mut fees = HashMap::new();
+
+		for asset in Asset::all() {
+			if asset == Asset::Usdc {
+				continue
+			}
+
+			let info = self.cf_pool_info(asset, Asset::Usdc, at)?.map(Into::into);
+
+			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info);
+		}
+
+		Ok(PoolsEnvironment { fees })
+	}
+
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
-		self.client
-			.runtime_api()
-			.cf_environment(self.unwrap_or_best(at))
-			.map_err(to_rpc_error)
-			.map(RpcEnvironment::from)
+		Ok(RpcEnvironment {
+			ingress_egress: self.cf_ingress_egress_environment(at)?,
+			swapping: self.cf_swapping_environment(at)?,
+			funding: self.cf_funding_environment(at)?,
+			pools: self.cf_pool_environment(at)?,
+		})
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -944,20 +1073,29 @@ where
 
 mod test {
 	use super::*;
-	use serde_json::json;
 	use sp_core::H160;
 
-	#[test]
-	fn test_account_info_serialization() {
-		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::none(0)).unwrap(),
-			json!({ "role": "none", "flip_balance": "0x0" })
-		);
-		assert_eq!(
-			serde_json::to_value(RpcAccountInfo::broker(0)).unwrap(),
-			json!({ "role":"broker", "flip_balance": "0x0" })
-		);
+	/*
+		changing any of these serialization tests signifies a breaking change in the
+		API. please make sure to get approval from the product team before merging
+		any changes that break a serialization test.
 
+		if approval is received and a new breaking change is introduced, please
+		stale the review and get a new review from someone on product.
+	*/
+
+	#[test]
+	fn test_no_account_serialization() {
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::none(0)).unwrap());
+	}
+
+	#[test]
+	fn test_broker_serialization() {
+		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::broker(0)).unwrap());
+	}
+
+	#[test]
+	fn test_lp_serialization() {
 		let lp = RpcAccountInfo::lp(
 			LiquidityProviderInfo {
 				refund_addresses: vec![
@@ -981,26 +1119,11 @@ mod test {
 			0,
 		);
 
-		assert_eq!(
-			serde_json::to_value(lp).unwrap(),
-			json!({
-				"role": "liquidity_provider",
-				"flip_balance": "0x0",
-				"balances": {
-					"Ethereum": {
-						"Flip": "0x7fffffffffffffffffffffffffffffff",
-						"Eth": "0xffffffffffffffffffffffffffffffff"
-					},
-					"Bitcoin": { "Btc": "0x0" },
-				},
-				"refund_addresses": {
-					"Ethereum": { "Eth" : "0x0101010101010101010101010101010101010101" },
-					"Bitcoin": null,
-					"Polkadot": { "Dot": "111111111111111111111111111111111HC1" }
-				}
-			})
-		);
+		insta::assert_display_snapshot!(serde_json::to_value(lp).unwrap());
+	}
 
+	#[test]
+	fn test_validator_serialization() {
 		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
 			balance: 10u128.pow(18),
 			bond: 10u128.pow(18),
@@ -1016,26 +1139,60 @@ mod test {
 			apy_bp: Some(100u32),
 			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
 		});
-		assert_eq!(
-			serde_json::to_value(validator).unwrap(),
-			json!({
-				"flip_balance": "0xde0b6b3a7640000",
-				"bond": "0xde0b6b3a7640000",
-				"bound_redeem_address": "0x0101010101010101010101010101010101010101",
-				"is_bidding": false,
-				"is_current_authority": true,
-				"is_current_backup": false,
-				"is_online": true,
-				"is_qualified": true,
-				"keyholder_epochs": [123],
-				"last_heartbeat": 0,
-				"reputation_points": 0,
-				"role": "validator",
-				"apy_bp": 100,
-				"restricted_balances": {
-					"0x0101010101010101010101010101010101010101": "0xde0b6b3a7640000"
-				}
-			})
-		);
+
+		insta::assert_display_snapshot!(serde_json::to_value(validator).unwrap());
+	}
+
+	#[test]
+	fn test_environment_serialization() {
+		let env = RpcEnvironment {
+			swapping: SwappingEnvironment {
+				minimum_swap_amounts: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, u64::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+			},
+			ingress_egress: IngressEgressEnvironment {
+				minimum_deposit_amounts: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, u64::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+			},
+			funding: FundingEnvironment {
+				redemption_tax: 0u32.into(),
+				minimum_funding_amount: 0u32.into(),
+			},
+			pools: PoolsEnvironment {
+				fees: HashMap::from([(
+					ForeignChain::Ethereum,
+					HashMap::from([(
+						Asset::Flip,
+						Some(
+							PoolInfo {
+								limit_order_fee_hundredth_pips: 0,
+								range_order_fee_hundredth_pips: 100,
+							}
+							.into(),
+						),
+					)]),
+				)]),
+			},
+		};
+
+		insta::assert_display_snapshot!(serde_json::to_value(env).unwrap());
 	}
 }
