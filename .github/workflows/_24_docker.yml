@@ -9,16 +9,13 @@ on:
         description: Prod of dev
         required: true
         type: string
-      publish_private_images:
-        description: Publish private images
-        type: boolean
-        default: true
       publish_public_images:
         description: Publish public images
+        required: false
         type: boolean
         default: false
       save_tags:
-        description: Use save
+        description: Save specific tags
         type: string
         default: ""
 
@@ -67,22 +64,11 @@ jobs:
           - chainflip-cli
           - chainflip-broker-api
           - chainflip-lp-api
+          - generate-genesis-keys
+          - chainflip-ingress-egress-tracker
+          - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-        include:
-          - docker-repo: ghcr.io/${{ github.repository }}
-            registry: ghcr.io
-            publish: ${{ inputs.publish_private_images }}
-          - docker-repo: chainfliplabs
-            registry: docker.io
-            publish: ${{ inputs.publish_public_images }}
-          - docker-repo: ghcr.io/${{ github.repository }}
-            target: generate-genesis-keys
-          - docker-repo: ghcr.io/${{ github.repository }}
-            target: chainflip-ingress-egress-tracker
-          - docker-repo: ghcr.io/${{ github.repository }}
-            target: chainflip-engine-databases
-
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🏁
@@ -116,15 +102,88 @@ jobs:
             type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
-        if: matrix.registry == 'ghcr.io'
         uses: docker/login-action@v2
         with:
-          registry: ${{ matrix.registry }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build and push 🏗️🫸
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: ${{ inputs.save_tags == '' }}
+          load: ${{ inputs.save_tags != '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
+          build-args: |
+            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
+            VCS_REF=${{ github.sha }}
+            CHAINSPEC=${{ inputs.network }}
+
+      - name: Save tags to tar 📦
+        if: inputs.save_tags != ''
+        run: >
+          for tag in ${{ inputs.save_tags }}; do
+            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o ${{ matrix.target }}.tar
+          done
+
+      - name: Upload image 📤
+        if: inputs.save_tags != ''
+        uses: actions/upload-artifact@v2
+        with:
+          name: chainflip-backend-images
+          path: ${{ matrix.target }}.tar
+
+  public-images:
+    if: inputs.publish_public_images || inputs.save_tags != ''
+    needs: [get-date-time, set-dockerfile-name]
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - chainflip-node
+          - chainflip-engine
+          - chainflip-cli
+          - chainflip-broker-api
+          - chainflip-lp-api
+        docker-repo:
+          - chainfliplabs
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Download binaries 📥
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin-ubuntu-22.04
+
+      - name: Set up QEMU 🧞
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx 🪄
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker meta 📄
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ matrix.docker-repo }}/${{ matrix.target }}
+          flavor: |
+            latest=true
+          tags: |
+            type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
+            type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
+            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ inputs.network }}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+
       - name: Login to DockerHub 🔑
-        if: matrix.registry == 'docker.io'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
@@ -134,7 +193,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ matrix.publish }}
+          push: ${{ inputs.publish_public_images }}
           load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
@@ -158,69 +217,3 @@ jobs:
         with:
           name: chainflip-backend-images
           path: ${{ matrix.target }}.tar
-#
-#  public-images:
-#    if: inputs.publish_public_images
-#    needs: [get-date-time, set-dockerfile-name]
-#    strategy:
-#      fail-fast: false
-#      matrix:
-#        target:
-#          - chainflip-node
-#          - chainflip-engine
-#          - chainflip-cli
-#          - chainflip-broker-api
-#          - chainflip-lp-api
-#        docker-repo:
-#          - chainfliplabs
-#    runs-on: ubuntu-22.04
-#    steps:
-#      - name: Checkout 🏁
-#        uses: actions/checkout@v3
-#
-#      - name: Download binaries 📥
-#        uses: actions/download-artifact@v3
-#        with:
-#          name: chainflip-backend-bin-ubuntu-22.04
-#
-#      - name: Set up QEMU 🧞
-#        uses: docker/setup-qemu-action@v2
-#
-#      - name: Set up Docker Buildx 🪄
-#        uses: docker/setup-buildx-action@v2
-#
-#      - name: Docker meta 📄
-#        id: meta
-#        uses: docker/metadata-action@v4
-#        with:
-#          images: ${{ matrix.docker-repo }}/${{ matrix.target }}
-#          flavor: |
-#            latest=true
-#          tags: |
-#            type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
-#            type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
-#            type=raw,value=${{ github.sha }}
-#            type=raw,value=${{ inputs.network }}
-#            type=ref,event=branch
-#            type=ref,event=tag
-#            type=ref,event=pr
-#
-#      - name: Login to DockerHub 🔑
-#        uses: docker/login-action@v2
-#        with:
-#          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
-#
-#      - name: Build and push 🏗️🫸
-#        uses: docker/build-push-action@v4
-#        with:
-#          context: .
-#          push: true
-#          tags: ${{ steps.meta.outputs.tags }}
-#          cache-from: type=gha
-#          cache-to: type=gha,mode=max
-#          file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
-#          build-args: |
-#            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
-#            VCS_REF=${{ github.sha }}
-#            CHAINSPEC=${{ inputs.network }}
