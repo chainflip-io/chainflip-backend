@@ -86,6 +86,7 @@ pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
+	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
 
 pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;

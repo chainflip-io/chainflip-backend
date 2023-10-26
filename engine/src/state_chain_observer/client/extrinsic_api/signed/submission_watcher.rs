@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use cf_primitives::SemVer;
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
@@ -110,12 +111,15 @@ pub struct SubmissionWatcher<
 	#[allow(clippy::type_complexity)]
 	block_cache: VecDeque<(
 		state_chain_runtime::Hash,
-		state_chain_runtime::Header,
-		Vec<UncheckedExtrinsic>,
-		Vec<Box<frame_system::EventRecord<state_chain_runtime::RuntimeEvent, H256>>>,
+		Option<(
+			state_chain_runtime::Header,
+			Vec<UncheckedExtrinsic>,
+			Vec<Box<frame_system::EventRecord<state_chain_runtime::RuntimeEvent, H256>>>,
+		)>,
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: ErrorDecoder,
+	check_unfinalized_version: Option<SemVer>,
 }
 
 pub enum SubmissionLogicError {
@@ -135,6 +139,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
 		base_rpc_client: Arc<BaseRpcClient>,
+		check_unfinalized_version: Option<SemVer>,
 	) -> (Self, BTreeMap<RequestID, Request>) {
 		(
 			Self {
@@ -151,6 +156,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
+				check_unfinalized_version,
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -340,34 +346,49 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		requests: &mut BTreeMap<RequestID, Request>,
 		(request_id, submission_id, block_hash, tx_hash): (RequestID, SubmissionID, H256, H256),
 	) -> Result<(), anyhow::Error> {
-		if let Some((header, extrinsics, events)) = {
-			if let Some((_, header, extrinsics, events)) = self
-				.block_cache
-				.iter()
-				.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
-			{
-				Some((header, extrinsics, events))
-			} else if let (Some(block), events) = (
-				self.base_rpc_client.block(block_hash).await?,
-				self.base_rpc_client
+		if let Some((header, extrinsics, events)) = if let Some((
+			_,
+			cached_compatbile_block_details,
+		)) = self
+			.block_cache
+			.iter()
+			.find(|(cached_block_hash, ..)| block_hash == *cached_block_hash)
+		{
+			cached_compatbile_block_details.as_ref()
+		} else if let Some(block) = self.base_rpc_client.block(block_hash).await? {
+			let compatible_or_unchecked_version =
+				if let Some(check_unfinalized_version) = self.check_unfinalized_version {
+					check_unfinalized_version.is_compatible_with(
+						self.base_rpc_client
+							.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
+								state_chain_runtime::Runtime,
+							>>(block_hash)
+							.await?,
+					)
+				} else {
+					true
+				};
+
+			let compatible_block_details = if compatible_or_unchecked_version {
+				let events = self
+					.base_rpc_client
 					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?,
-			) {
-				if self.block_cache.len() >= 4 {
-					self.block_cache.pop_front();
-				}
-				self.block_cache.push_back((
-					block_hash,
-					block.block.header,
-					block.block.extrinsics,
-					events,
-				));
-				let (_, header, extrinsics, events) = self.block_cache.back().unwrap();
-				Some((header, extrinsics, events))
+					.await?;
+
+				Some((block.block.header, block.block.extrinsics, events))
 			} else {
-				warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
 				None
+			};
+
+			if self.block_cache.len() >= 4 {
+				self.block_cache.pop_front();
 			}
+			self.block_cache.push_back((block_hash, compatible_block_details));
+
+			self.block_cache.back().unwrap().1.as_ref()
+		} else {
+			warn!(target: "state_chain_client", request_id = request_id, submission_id = submission_id, "Block not found with hash {block_hash:?}");
+			None
 		} {
 			let (extrinsic_index, _extrinsic) = extrinsics
 				.iter()

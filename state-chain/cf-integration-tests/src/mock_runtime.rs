@@ -23,6 +23,8 @@ pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
+pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
+
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[

@@ -15,12 +15,6 @@ pub mod common {
 
 	pub const MAX_AUTHORITIES: AuthorityCount = 150;
 
-	// Number of online credits required to get `ACCRUAL_REPUTATION_POINTS` of reputation
-	const ACCRUAL_ONLINE_CREDITS: u32 = 2500;
-	// Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
-	const ACCRUAL_REPUTATION_POINTS: i32 = 1;
-	pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE_CREDITS);
-
 	// ======= Keygen and signing =======
 
 	/// Maximum duration a ceremony stage can last
