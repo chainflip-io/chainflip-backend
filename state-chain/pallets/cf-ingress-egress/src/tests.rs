@@ -1117,3 +1117,36 @@ fn all_can_be_recycled() {
 	);
 	assert!(channel_recycle_blocks.is_empty());
 }
+
+#[test]
+fn deposit_processing_tolerates_failures() {
+	new_test_ext()
+		.request_deposit_addresses(&[
+			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
+			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
+		])
+		.then_execute_at_next_block(|deposit_details| {
+			// Delete the first channel to simulate expiry.
+			let (.., deposit_addr) = deposit_details[0];
+			DepositChannelLookup::<Test, _>::remove(&deposit_addr);
+			deposit_details
+		})
+		.then_apply_extrinsics(|deposit_details| {
+			[(
+				OriginTrait::root(),
+				PalletCall::<Test, _>::process_deposits {
+					deposit_witnesses: deposit_details
+						.into_iter()
+						.map(|&(.., deposit_address)| DepositWitness {
+							deposit_address,
+							asset: eth::Asset::Eth,
+							amount: 1,
+							deposit_details: Default::default(),
+						})
+						.collect(),
+					block_height: Default::default(),
+				},
+				Ok(()),
+			)]
+		});
+}
