@@ -12,7 +12,7 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      profile: "production"
+      profile: "release"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml

@@ -126,8 +126,9 @@ jobs:
       - name: Save tags to tar 📦
         if: inputs.save_tags != ''
         run: >
+          mkdir -p private
           for tag in ${{ inputs.save_tags }}; do
-            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o ${{ matrix.target }}.tar
+            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o private/${{ matrix.target }}.tar
           done
 
       - name: Upload image 📤
@@ -135,7 +136,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: chainflip-backend-images
-          path: ${{ matrix.target }}.tar
+          path: private
 
   public-images:
     if: inputs.publish_public_images || inputs.save_tags != ''
@@ -207,8 +208,9 @@ jobs:
       - name: Save image 📦
         if: inputs.save_tags != ''
         run: >
+          mkdir -p public
           for tag in ${{ inputs.save_tags }}; do
-            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o ${{ matrix.target }}.tar
+            docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o public/${{ matrix.target }}.tar
           done
 
       - name: Upload image 📤
@@ -216,4 +218,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: chainflip-backend-images
-          path: ${{ matrix.target }}.tar
+          path: public

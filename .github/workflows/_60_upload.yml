@@ -26,6 +26,12 @@ jobs:
           name: chainflip-backend-bin-ubuntu-22.04
           path: assets/bin
 
+      - name: Remove non production binaries
+        run: |
+          rm -f assets/bin/chainflip-engine-databases
+          rm -f assets/bin/chainflip-ingress-egress-tracker
+          rm -f assets/bin/generate-genesis-keys
+
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
@@ -38,6 +44,7 @@ jobs:
           name: chainflip-backend-images
           path: assets/docker
 
+
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -48,3 +55,4 @@ jobs:
         run: |
           aws s3 cp assets s3://chainflip-mainnet-prerelease/${{ inputs.version }}/ --recursive
           aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/${{ inputs.version }}/chainspecs/${{ inputs.network }}.chainspec.json
+          aws s3 cp CHANGELOG.md s3://chainflip-mainnet-prerelease/${{ inputs.version }}/CHANGELOG.md
