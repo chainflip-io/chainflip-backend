@@ -1,4 +1,5 @@
 use cf_utilities::{
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
 	try_parse_number_or_hex, AnyhowRpcError,
 };
@@ -17,7 +18,6 @@ use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use sp_rpc::number::NumberOrHex;
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
 
@@ -25,10 +25,10 @@ use tracing::log;
 pub mod rpc_types {
 	use super::*;
 	use anyhow::anyhow;
+	use cf_utilities::rpc::NumberOrHex;
 	use chainflip_api::queries::SwapChannelInfo;
 	use pallet_cf_pools::AssetsMap;
 	use serde::{Deserialize, Serialize};
-	use sp_rpc::number::NumberOrHex;
 
 	#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 	pub struct OrderIdJson(NumberOrHex);

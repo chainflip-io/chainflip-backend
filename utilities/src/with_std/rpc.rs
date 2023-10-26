@@ -1,8 +1,7 @@
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Copy, Clone)]
 #[serde(untagged)]
 pub enum NumberOrHex {
 	Number(u64),
@@ -51,15 +50,24 @@ macro_rules! impl_safe_hex {
 
 impl_safe_hex!(u128, U256);
 
-impl TryInto<u128> for NumberOrHex {
-	type Error = anyhow::Error;
+impl TryFrom<NumberOrHex> for u128 {
+	type Error = &'static str;
 
-	fn try_into(self) -> Result<u128, Self::Error> {
-		match self {
-			Self::Number(n) => Ok(n.into()),
-			Self::Hex(n) => n.try_into().map_err(|_| {
-				anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
-			}),
+	fn try_from(value: NumberOrHex) -> Result<Self, Self::Error> {
+		match value {
+			NumberOrHex::Number(n) => Ok(n.into()),
+			NumberOrHex::Hex(n) => u128::try_from(n),
+		}
+	}
+}
+
+impl TryFrom<NumberOrHex> for u64 {
+	type Error = &'static str;
+
+	fn try_from(value: NumberOrHex) -> Result<Self, Self::Error> {
+		match value {
+			NumberOrHex::Number(n) => Ok(n),
+			NumberOrHex::Hex(n) => u64::try_from(n),
 		}
 	}
 }
@@ -87,5 +95,18 @@ mod test {
 		assert_deser(r#"10000"#, NumberOrHex::Number(10000));
 		assert_deser(r#"0"#, NumberOrHex::Number(0));
 		assert_deser(r#"1000000000000"#, NumberOrHex::Number(1000000000000));
+	}
+
+	#[test]
+	fn test_conversions() {
+		assert_eq!(u128::try_from(NumberOrHex::Hex(u128::MAX.into())).unwrap(), u128::MAX);
+		assert!(u128::try_from(NumberOrHex::Hex(U256::MAX / 2)).is_err());
+
+		assert_eq!(u64::try_from(NumberOrHex::Hex(u64::MAX.into())).unwrap(), u64::MAX);
+		assert_eq!(u64::try_from(NumberOrHex::Number(u64::MAX)).unwrap(), u64::MAX);
+		assert!(u64::try_from(NumberOrHex::Hex((u128::MAX / 2).into())).is_err());
+
+		assert_eq!(u128::try_from(NumberOrHex::Number(0)).unwrap(), 0);
+		assert_eq!(u128::try_from(NumberOrHex::Hex(U256::zero())).unwrap(), 0);
 	}
 }
