@@ -25,7 +25,6 @@ jobs:
     with:
       network: "berghain"
       environment: "production"
-      publish_private_images: false
       publish_public_images: false
       save_tags: "berghain-${{ github.ref_name }}"
     secrets: inherit
