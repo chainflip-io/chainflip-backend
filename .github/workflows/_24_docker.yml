@@ -207,7 +207,7 @@ jobs:
 
       - name: Save image 📦
         if: inputs.save_tags != ''
-        run: >
+        run: |
           mkdir -p public
           for tag in ${{ inputs.save_tags }}; do
             docker save ${{ matrix.docker-repo }}/${{ matrix.target }}:$tag -o public/${{ matrix.target }}.tar
