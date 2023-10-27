@@ -16,7 +16,9 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer, FLIPPERINOS_PER_FLIP};
+
+use cf_primitives::{AuthorityCount, EpochIndex, SemVer, Versions, FLIPPERINOS_PER_FLIP};
+
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -218,7 +220,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Versions, ValueQuery>;
 
 	/// The last expired epoch index.
 	#[pallet::storage]
@@ -675,10 +677,10 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(
+		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
+		pub fn set_node_cfe_version(
 			origin: OriginFor<T>,
-			new_version: Version,
+			new_version: Versions,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
@@ -688,8 +690,13 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: *current_version,
-						new_version,
+						old_version: (*current_version).cfe,
+						new_version: new_version.cfe,
+					});
+					Self::deposit_event(Event::NodeVersionUpdated {
+						account_id: validator_id.clone(),
+						old_version: (*current_version).node,
+						new_version: new_version.node,
 					});
 					*current_version = new_version;
 				}
@@ -1368,7 +1375,7 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).cfe.is_compatible_with(version)
 				})
 				.count() as u32,
 			authorities_count,
@@ -1380,7 +1387,7 @@ pub struct QualifyByCfeVersion<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
+		NodeCFEVersion::<T>::get(validator_id).cfe >= MinimumReportedCfeVersion::<T>::get()
 	}
 
 	fn filter_unqualified(
@@ -1389,7 +1396,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		let min_version = MinimumReportedCfeVersion::<T>::get();
 		validators
 			.into_iter()
-			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.filter(|id| NodeCFEVersion::<T>::get(id).cfe >= min_version)
 			.collect()
 	}
 }

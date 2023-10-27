@@ -126,7 +126,7 @@ benchmarks! {
 		assert_eq!(Pallet::<T>::auction_parameters(), parameters)
 	}
 
-	cfe_version {
+	set_node_cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));

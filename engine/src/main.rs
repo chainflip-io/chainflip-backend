@@ -1,6 +1,6 @@
 use anyhow::Context;
 use cf_chains::dot::PolkadotHash;
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::{AccountRole, SemVer, Versions};
 use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},

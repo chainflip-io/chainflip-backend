@@ -195,6 +195,15 @@ impl SemVer {
 		// would be caught by tests).
 		self > &other
 	}
+
+	pub fn parse(text: String) -> Result<Self, &str> {
+		let prefix = text.split("-").next().unwrap();
+		let mut version = prefix.split(".");
+		let major = version.next().unwrap();
+		let minor = version.next().unwrap();
+		let patch = version.next().unwrap();
+		Ok(SemVer { major.into(), minor, patch })
+	}
 }
 #[cfg(feature = "std")]
 impl core::fmt::Display for SemVer {
@@ -203,6 +212,25 @@ impl core::fmt::Display for SemVer {
 	}
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Versions {
+	pub node: SemVer,
+	pub cfe: SemVer,
+}
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(
 	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,
