@@ -195,15 +195,18 @@ async function testRangeOrder() {
   ]);
 
   assert(updateRangeOrder.length >= 1, `Empty update range order result`);
-  assert.strictEqual(
-    updateRangeOrder[0].increase_or_decrease,
-    `Increase`,
-    `Expected positive update of range order to increase liquidity`,
-  );
-  assert(
-    updateRangeOrder[0].liquidity_total > 0,
-    `Expected range order to have liquidity after update`,
-  );
+  let matchUpdate = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  updateRangeOrder.forEach((order: any) => {
+    if (
+      order.increase_or_decrease === `Increase` &&
+      order.liquidity_total > 0 &&
+      order.liquidity_delta > 0
+    ) {
+      matchUpdate = true;
+    }
+  });
+  assert.strictEqual(matchUpdate, true, `Expected update of range order to increase liquidity`);
 
   // Burn the range order
   const burnRangeOrder = await lpApiRpc(`lp_set_range_order`, [
@@ -215,16 +218,18 @@ async function testRangeOrder() {
   ]);
 
   assert(burnRangeOrder.length >= 1, `Empty burn range order result`);
-  assert.strictEqual(
-    burnRangeOrder[0].increase_or_decrease,
-    `Decrease`,
-    `Expected burn range order to decrease liquidity`,
-  );
-  assert.strictEqual(
-    burnRangeOrder[0].liquidity_total,
-    0,
-    `Expected burn range order to result in 0 liquidity total`,
-  );
+  let matchBurn = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  burnRangeOrder.forEach((order: any) => {
+    if (
+      order.increase_or_decrease === `Decrease` &&
+      order.liquidity_total === 0 &&
+      order.liquidity_delta > 0
+    ) {
+      matchBurn = true;
+    }
+  });
+  assert.strictEqual(matchBurn, true, `Expected burn of range order to decrease liquidity to 0`);
 }
 
 async function testGetOpenSwapChannels() {
@@ -255,8 +260,8 @@ async function testLimitOrder() {
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
   assert(mintLimitOrder[0].position_delta.length >= 1, `Empty mint limit order position_delta`);
   assert.strictEqual(
-    mintLimitOrder[0].position_delta[0][0],
-    'I',
+    mintLimitOrder[0].position_delta[0],
+    'Increase',
     `Expected mint of limit order to increase liquidity`,
   );
   assert.strictEqual(
@@ -274,17 +279,22 @@ async function testLimitOrder() {
     `Increase`,
     testAssetAmount,
   ]);
+
   assert(updateLimitOrder.length >= 1, `Empty update limit order result`);
-  assert(updateLimitOrder[0].position_delta.length >= 1, `Empty update limit order position_delta`);
+  let matchUpdate = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  updateLimitOrder.forEach((order: any) => {
+    console.log('order', JSON.stringify(order));
+    console.log('order.position_delta[0]', JSON.stringify(order.position_delta[0]));
+    console.log('order.amount_total', JSON.stringify(order.amount_total));
+    if (order.position_delta[0] === `Increase` && order.amount_total === testAssetAmount * 2) {
+      matchUpdate = true;
+    }
+  });
   assert.strictEqual(
-    updateLimitOrder[0].position_delta[0][0],
-    'I',
-    `Expected update of limit order to increase liquidity`,
-  );
-  assert.strictEqual(
-    updateLimitOrder[0].amount_total,
-    testAssetAmount * 2,
-    `Unexpected amount of asset was minted after updating limit order`,
+    matchUpdate,
+    true,
+    `Expected update of limit order to increase liquidity to exact amount`,
   );
 
   // Burn the limit order
@@ -295,18 +305,19 @@ async function testLimitOrder() {
     tick,
     0,
   ]);
+
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
-  assert(burnLimitOrder[0].position_delta.length >= 1, `Empty burn limit order position_delta`);
-  assert.strictEqual(
-    burnLimitOrder[0].position_delta[0][0],
-    'D',
-    `Expected burn of limit order to decrease liquidity`,
-  );
-  assert.strictEqual(
-    burnLimitOrder[0].amount_total,
-    0,
-    `Expected burn limit order to result in 0 amount total`,
-  );
+  let matchBurn = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  burnLimitOrder.forEach((order: any) => {
+    console.log('order', JSON.stringify(order));
+    console.log('order.position_delta[0]', JSON.stringify(order.position_delta[0]));
+    console.log('order.amount_total', JSON.stringify(order.amount_total));
+    if (order.position_delta[0] === `Decrease` && order.amount_total === 0) {
+      matchBurn = true;
+    }
+  });
+  assert.strictEqual(matchBurn, true, `Expected burn of limit order to decrease liquidity to 0`);
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
