@@ -157,7 +157,7 @@ These commands can be used to control which logs the engine outputs at runtime.
 - `curl -X POST -H 'Content-Type: application/json' -d '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Equivalent to the above, but without using the --sjon short-hand)
 
 The `RUST_LOG` environment variable controls the initial filtering directives if specified at engine startup.
-
+[manage.sh](localnet%2Fmanage.sh)
 The syntax for specifying filtering directives is given here: <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html>
 
 ## Testnet
