@@ -137,7 +137,7 @@ impl cf_traits::WaivedFees for WaivedFees {
 /// limit of the rate of increase of the base fee over 6 blocks (12.5% per block).
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 // We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
-const ETHEREUM_MAX_GAS_LIMIT:u128 = 10_000_000;
+const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
 
 pub struct EthTransactionBuilder;
 
