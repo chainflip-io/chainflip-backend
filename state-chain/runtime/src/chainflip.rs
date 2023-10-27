@@ -197,7 +197,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				.unwrap_or_else(||{
 					log::warn!("Current gas price for Ethereum is 0. This should never happen. Please check Chain Tracking data.");
 					Default::default()
-				}).min(ETHEREUM_MAX_GAS_LIMIT.into())
+				}).min(ETHEREUM_MAX_GAS_LIMIT)
 				.into())
 		} else {
 			None
