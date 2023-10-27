@@ -835,7 +835,16 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		Self::inner_request_signature(payload, RequestType::CurrentKey)
+		let request_type = if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
+			if let Some(EpochKey { key, epoch_index, .. }) = T::KeyProvider::active_epoch_key() {
+					RequestType::SpecificKey(key, epoch_index)
+			} else {
+				RequestType::CurrentKey
+			}
+		} else {
+			RequestType::CurrentKey
+		};
+		Self::inner_request_signature(payload, request_type)
 	}
 
 	fn request_verification_signature(

@@ -343,7 +343,7 @@ pub struct CurrentVaultAndProxy {
 pub struct PolkadotExtrinsicBuilder {
 	extrinsic_call: PolkadotRuntimeCall,
 	replay_protection: PolkadotReplayProtection,
-	signer_and_signature: Option<(PolkadotAccountId, PolkadotSignature)>,
+	signature: Option<PolkadotSignature>,
 }
 
 impl PolkadotExtrinsicBuilder {
@@ -351,11 +351,11 @@ impl PolkadotExtrinsicBuilder {
 		replay_protection: PolkadotReplayProtection,
 		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
-		Self { extrinsic_call, replay_protection, signer_and_signature: None }
+		Self { extrinsic_call, replay_protection, signature: None }
 	}
 
 	pub fn signature(&self) -> Option<PolkadotSignature> {
-		self.signer_and_signature.as_ref().map(|(_, sig)| sig.clone())
+		self.signature.clone()
 	}
 
 	fn extra(&self) -> PolkadotSignedExtra {
@@ -399,15 +399,15 @@ impl PolkadotExtrinsicBuilder {
 		)
 	}
 
-	pub fn insert_signature(&mut self, signer: PolkadotAccountId, signature: PolkadotSignature) {
-		self.signer_and_signature.replace((signer, signature));
+	pub fn insert_signature(&mut self, signature: PolkadotSignature) {
+		self.signature.replace(signature);
 	}
 
 	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {
-		self.signer_and_signature.as_ref().map(|(signer, signature)| {
+		self.signature.as_ref().map(|signature| {
 			PolkadotUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
-				*signer,
+				self.replay_protection.signer,
 				signature.clone(),
 				self.extra(),
 			)
@@ -415,7 +415,7 @@ impl PolkadotExtrinsicBuilder {
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signer_and_signature.is_some()
+		self.signature.is_some()
 	}
 }
 
@@ -922,6 +922,7 @@ pub type PolkadotPublicKey = PolkadotAccountId;
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
 	pub genesis_hash: PolkadotHash,
+	pub signer: PolkadotAccountId,
 	pub nonce: PolkadotIndex,
 }
 
@@ -1048,16 +1049,19 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new(
-			PolkadotReplayProtection { nonce: 12, genesis_hash: Default::default() },
+			PolkadotReplayProtection {
+				nonce: 12,
+				signer: account_id_1,
+				genesis_hash: Default::default(),
+			},
 			test_runtime_call,
 		);
-		extrinsic_builder.insert_signature(
-			account_id_1,
-			keypair_1.sign(&extrinsic_builder.get_signature_payload(
+		extrinsic_builder.insert_signature(keypair_1.sign(
+			&extrinsic_builder.get_signature_payload(
 				TEST_RUNTIME_VERSION.spec_version,
 				TEST_RUNTIME_VERSION.transaction_version,
-			)),
-		);
+			),
+		));
 
 		assert!(extrinsic_builder.is_signed());
 

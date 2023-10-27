@@ -55,7 +55,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedU64,
 	},
-	traits::Get,
+	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
@@ -332,6 +332,11 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
+			// It should not be possible to get None here, since we never send
+			// any transactions unless we have a vault account and associated
+			// proxy.
+			signer: Self::lookup(cf_chains::dot::api::SystemAccounts::Proxy)
+				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
 	}
