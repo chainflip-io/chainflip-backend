@@ -595,25 +595,28 @@ fn multi_deposit_includes_invalid_deposit() {
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
 			(address, address2)
 		})
-		.then_execute_at_next_block(|(address, address2)| {
-			assert_ok!(IngressEgress::process_deposits(
+		.then_apply_extrinsics(|&(address, address2)| {
+			[(
 				RuntimeOrigin::root(),
-				vec![
-					DepositWitness {
-						deposit_address: address,
-						asset: eth::Asset::Eth,
-						amount: 1,
-						deposit_details: Default::default()
-					},
-					DepositWitness {
-						deposit_address: address2,
-						asset: eth::Asset::Eth,
-						amount: 1,
-						deposit_details: Default::default()
-					}
-				],
-				Default::default()
-			));
+				crate::Call::<Test, _>::process_deposits {
+					deposit_witnesses: vec![
+						DepositWitness {
+							deposit_address: address,
+							asset: ETH,
+							amount: 1,
+							deposit_details: Default::default(),
+						},
+						DepositWitness {
+							deposit_address: address2,
+							asset: ETH,
+							amount: 1,
+							deposit_details: Default::default(),
+						},
+					],
+					block_height: Default::default(),
+				},
+				Ok(()),
+			)]
 		});
 }
 
@@ -638,25 +641,32 @@ fn multi_use_deposit_address_different_blocks() {
 
 			channel
 		})
-		.then_execute_at_next_block(|(_, deposit_address)| {
-			// Closing the channel should invalidate the deposit address.
-			System::reset_events();
-			assert_ok!(IngressEgress::process_deposits(
+		// Closing the channel should invalidate the deposit address.
+		.then_apply_extrinsics(|&(_, deposit_address)| {
+			[(
 				RuntimeOrigin::root(),
-				vec![DepositWitness {
-					deposit_address,
-					asset: eth::Asset::Eth,
-					amount: 1,
-					deposit_details: Default::default()
-				}],
-				Default::default()
-			));
-			System::assert_has_event(RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address,
-				asset: eth::Asset::Eth,
-				amount: 1,
-				deposit_details: Default::default(),
-			}));
+				crate::Call::<Test, _>::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address,
+						asset: ETH,
+						amount: 1,
+						deposit_details: Default::default(),
+					}],
+					block_height: Default::default(),
+				},
+				Ok(()),
+			)]
+		})
+		.then_process_events(|_, event| match event {
+			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected {
+				deposit_witness,
+				..
+			}) => Some(deposit_witness),
+			_ => None,
+		})
+		.inspect_context(|((_, expected_address), emitted)| {
+			assert_eq!(emitted.len(), 1);
+			assert_eq!(&emitted[0].deposit_address, expected_address);
 		});
 }
 
