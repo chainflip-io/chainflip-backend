@@ -40,7 +40,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9430, transaction_version: 24 }, /* TODO:
+	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 }, /* TODO:
 	                                                                                      * Dan confirm
 	                                                                                      * number */
 };
