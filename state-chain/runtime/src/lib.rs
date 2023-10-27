@@ -23,6 +23,7 @@ use cf_chains::{
 	evm::EvmCrypto,
 	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
 };
+use cf_primitives::NetworkEnvironment;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -82,7 +83,9 @@ use sp_version::RuntimeVersion;
 pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
-pub use cf_traits::{AccountInfo, EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
+pub use cf_traits::{
+	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
+};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -191,7 +194,7 @@ impl pallet_cf_validator::Config for Runtime {
 }
 
 parameter_types! {
-	pub CurrentCompatibilityVersion: SemVer = SemVer {
+	pub CurrentReleaseVersion: SemVer = SemVer {
 		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
@@ -204,7 +207,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = RuntimeSafeMode;
-	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
+	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -337,6 +340,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = RuntimeSafeMode;
+	type PoolApi = LiquidityPools;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 
@@ -886,8 +890,7 @@ impl_runtime_apis! {
 			Validator::current_epoch()
 		}
 		fn cf_current_compatibility_version() -> SemVer {
-			use cf_traits::CompatibleCfeVersions;
-			Environment::current_compatibility_version()
+			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()
@@ -931,7 +934,6 @@ impl_runtime_apis! {
 				balance: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(account_id).unwrap_or(0),
-				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
@@ -1038,16 +1040,32 @@ impl_runtime_apis! {
 			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
 		}
 
-		fn cf_environment() -> runtime_apis::Environment {
-			runtime_apis::Environment {
-				bitcoin_network: Environment::network_environment().into(),
-				ethereum_chain_id: Environment::ethereum_chain_id(),
-				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
-			}
+		fn cf_network_environment() -> NetworkEnvironment {
+			Environment::network_environment()
 		}
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
+		}
+
+		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
+			use pallet_cf_ingress_egress::MinimumDeposit;
+			use cf_chains::assets::{eth, dot, btc};
+
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => MinimumDeposit::<Runtime, EthereumInstance>::get(
+					eth::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Polkadot => MinimumDeposit::<Runtime, PolkadotInstance>::get(
+					dot::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Bitcoin => MinimumDeposit::<Runtime, BitcoinInstance>::get(
+					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				).into(),
+			}
 		}
 
 		fn cf_liquidity_provider_info(
@@ -1062,6 +1080,8 @@ impl_runtime_apis! {
 				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
+			LiquidityPools::sweep(&account_id).unwrap();
+
 			let balances = Asset::all().iter().map(|&asset|
 				(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 			).collect();
@@ -1074,6 +1094,10 @@ impl_runtime_apis! {
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
+		}
+
+		fn cf_redemption_tax() -> AssetAmount {
+			pallet_cf_funding::RedemptionTax::<Runtime>::get()
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.

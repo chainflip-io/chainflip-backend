@@ -5,7 +5,7 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi,
+	EgressApi, PoolApi,
 };
 
 #[cfg(feature = "try-runtime")]
@@ -58,6 +58,9 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
+
+		/// The interface for sweeping funds from pools into free balance
+		type PoolApi: PoolApi;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;

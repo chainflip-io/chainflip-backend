@@ -1,0 +1,5 @@
+---
+source: state-chain/custom-rpc/src/lib.rs
+expression: "serde_json::to_value(RpcAccountInfo::none(0)).unwrap()"
+---
+{"flip_balance":"0x0","role":"none"}

@@ -1,4 +1,5 @@
 use cf_utilities::{
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
 	AnyhowRpcError,
 };
@@ -12,7 +13,6 @@ use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use serde::{Deserialize, Serialize};
-use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 use tracing::log;
 

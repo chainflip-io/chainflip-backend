@@ -160,6 +160,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 							tx_out_id: signature,
 							signer_id: epoch.info.1,
 							tx_fee,
+							tx_metadata: (),
 						}
 						.into(),
 						epoch.index,

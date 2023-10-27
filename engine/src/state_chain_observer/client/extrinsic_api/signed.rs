@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, SemVer};
 use futures::StreamExt;
 use futures_util::FutureExt;
 use sp_core::H256;
@@ -129,6 +129,7 @@ impl SignedExtrinsicClient {
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
+		check_unfinalized_version: Option<SemVer>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
 	) -> Result<Self> {
@@ -191,6 +192,7 @@ impl SignedExtrinsicClient {
 							genesis_hash,
 							SIGNED_EXTRINSIC_LIFETIME,
 							base_rpc_client.clone(),
+							check_unfinalized_version
 						);
 
 					utilities::loop_select! {

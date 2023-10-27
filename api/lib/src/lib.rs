@@ -9,7 +9,6 @@ use cf_chains::{
 	AnyChain, CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
-use codec::Encode;
 use futures::FutureExt;
 use pallet_cf_governance::ExecutionMode;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -112,6 +111,7 @@ impl StateChainApi {
 			&state_chain_settings.signing_key_file,
 			AccountRole::None,
 			false,
+			None,
 		)
 		.await?;
 
@@ -147,14 +147,11 @@ impl<
 {
 	async fn dry_run(
 		&self,
-		call: RuntimeCall,
-		at: Option<state_chain_runtime::Hash>,
+		_call: RuntimeCall,
+		_at: Option<state_chain_runtime::Hash>,
 	) -> Result<Bytes> {
-		Ok(self
-			.base_rpc_client
-			.raw_rpc_client
-			.dry_run(Encode::encode(&call).into(), at)
-			.await?)
+		// TODO: PRO-917 fix dry run
+		Ok(Bytes::from(vec![]))
 	}
 }
 

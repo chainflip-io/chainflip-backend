@@ -12,7 +12,7 @@ const MAX_VALIDATOR_COUNT: u32 = 150;
 
 benchmarks! {
 	update_accrual_ratio {
-		let call = Call::<T>::update_accrual_ratio{ reputation_points: 2, online_credits: 151u32.into() };
+		let call = Call::<T>::update_accrual_ratio{ reputation_points: 2, number_of_blocks: 151u32.into() };
 	} : { let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()); }
 	set_penalty {
 		let call = Call::<T>::set_penalty { offence: PalletOffence::MissedHeartbeat.into(), new_penalty: Default::default() };

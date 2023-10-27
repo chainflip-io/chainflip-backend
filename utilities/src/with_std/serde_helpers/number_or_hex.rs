@@ -12,8 +12,8 @@
 //!     bar: u128,
 //! }
 /// ```
+use crate::rpc::NumberOrHex;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-use sp_rpc::number::NumberOrHex;
 
 pub fn serialize<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where

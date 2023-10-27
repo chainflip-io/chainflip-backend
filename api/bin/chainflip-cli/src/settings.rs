@@ -2,7 +2,7 @@ use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
-	settings::{CfSettings, Eth, EthOptions, StateChainOptions},
+	settings::{CfSettings, Eth, EthOptions, StateChainOptions, DEFAULT_SETTINGS_DIR},
 };
 use clap::Parser;
 use config::{ConfigBuilder, ConfigError, Source, Value};
@@ -104,10 +104,8 @@ pub enum CliCommand {
 			long = "exact"
 		)]
 		amount: Option<f64>,
-		#[clap(
-			help = "The Ethereum address you wish to redeem your FLIP to. If not specified, the redeem address bound to your account will be used"
-		)]
-		eth_address: Option<String>,
+		#[clap(help = "The Ethereum address you wish to redeem your FLIP to.")]
+		eth_address: String,
 		#[clap(
 			help = "Optional executor address. If specified, only this address will be able to execute the redemption."
 		)]
@@ -234,7 +232,7 @@ impl CLISettings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources(opts.config_root.clone(), opts)
+		Self::load_settings_from_all_sources(opts.config_root.clone(), DEFAULT_SETTINGS_DIR, opts)
 	}
 }
 
@@ -260,6 +258,7 @@ mod tests {
 
 		let settings = CLISettings::load_settings_from_all_sources(
 			DEFAULT_CONFIG_ROOT.to_owned(),
+			DEFAULT_SETTINGS_DIR,
 			CLICommandLineOptions::default(),
 		)
 		.unwrap();
