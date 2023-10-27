@@ -101,10 +101,10 @@ impl LpApi for StateChainClient {}
 pub trait LpApi: SignedExtrinsicApi {
 	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(RuntimeCall::from(
+			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
 				pallet_cf_lp::Call::register_liquidity_refund_address { address },
 			))
-			.await
+			.await?
 			.until_in_block()
 			.await
 			.context("Registration for Liquidity Refund Address failed.")?;
@@ -138,12 +138,12 @@ pub trait LpApi: SignedExtrinsicApi {
 		destination_address: EncodedAddress,
 	) -> Result<EgressId> {
 		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_lp::Call::withdraw_asset {
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_lp::Call::withdraw_asset {
 				amount,
 				asset,
 				destination_address,
 			})
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
@@ -169,7 +169,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<RangeOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::update_range_order {
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_pools::Call::update_range_order {
 				base_asset,
 				pair_asset,
 				id,
@@ -177,7 +177,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				increase_or_decrease,
 				size,
 			})
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
@@ -194,14 +194,14 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<RangeOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::set_range_order {
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_pools::Call::set_range_order {
 				base_asset,
 				pair_asset,
 				id,
 				option_tick_range,
 				size,
 			})
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
@@ -219,7 +219,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::update_limit_order {
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_pools::Call::update_limit_order {
 				sell_asset,
 				buy_asset,
 				id,
@@ -227,7 +227,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				increase_or_decrease,
 				amount,
 			})
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
@@ -244,14 +244,14 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the burn order
 		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::set_limit_order {
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_pools::Call::set_limit_order {
 				sell_asset,
 				buy_asset,
 				id,
 				option_tick,
 				sell_amount,
 			})
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
