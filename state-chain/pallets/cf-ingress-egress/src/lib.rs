@@ -465,12 +465,20 @@ pub mod pallet {
 				deposit_witnesses
 			{
 				Self::process_single_deposit(
-					deposit_address,
+					deposit_address.clone(),
 					asset,
 					amount,
-					deposit_details,
+					deposit_details.clone(),
 					block_height,
-				)?;
+				)
+				.unwrap_or_else(|_| {
+					Self::deposit_event(Event::<T, I>::DepositIgnored {
+						deposit_address,
+						asset,
+						amount,
+						deposit_details,
+					});
+				});
 			}
 			Ok(())
 		}
