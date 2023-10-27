@@ -222,7 +222,12 @@ async fn create_block_subscription<
 			utilities::assert_stream_send(Box::pin(
 				sparse_block_header_stream
 					.and_then(move |next_header| {
-						assert!(latest_header.number < next_header.number, "{SUBSTRATE_BEHAVIOUR}",);
+						if finalized {
+							assert!(
+								latest_header.number < next_header.number,
+								"{SUBSTRATE_BEHAVIOUR}",
+							);
+						}
 
 						let prev_header =
 							std::mem::replace(&mut latest_header, next_header.clone());
@@ -253,15 +258,18 @@ async fn create_block_subscription<
 									.try_collect()
 									.await?;
 
-							for (block_hash, next_block_header) in Iterator::zip(
-								std::iter::once(&prev_header.hash())
-									.chain(intervening_headers.iter().map(|(hash, _header)| hash)),
-								intervening_headers
-									.iter()
-									.map(|(_hash, header)| header)
-									.chain(std::iter::once(&next_header)),
-							) {
-								assert_eq!(*block_hash, next_block_header.parent_hash);
+							if finalized {
+								for (block_hash, next_block_header) in Iterator::zip(
+									std::iter::once(&prev_header.hash()).chain(
+										intervening_headers.iter().map(|(hash, _header)| hash),
+									),
+									intervening_headers
+										.iter()
+										.map(|(_hash, header)| header)
+										.chain(std::iter::once(&next_header)),
+								) {
+									assert_eq!(*block_hash, next_block_header.parent_hash);
+								}
 							}
 
 							Result::<_, anyhow::Error>::Ok(futures::stream::iter(
@@ -289,14 +297,17 @@ async fn create_block_subscription<
 		let header = base_rpc_client.block_header(header_hash).await?;
 
 		if first_block_header.number < header.number {
-			for block_number in first_block_header.number + 1..=header.number {
-				assert_eq!(
-					block_header_stream.next().await.unwrap()?.number,
-					block_number,
-					"{SUBSTRATE_BEHAVIOUR}"
-				);
+			let mut prev_stream_number = first_block_header.number;
+			loop {
+				let next_number = block_header_stream.next().await.unwrap()?.number;
+				if finalized {
+					assert_eq!(next_number, prev_stream_number + 1, "{SUBSTRATE_BEHAVIOUR}");
+				}
+				prev_stream_number = next_number;
+				if next_number == header.number {
+					break (header_hash, header.number)
+				}
 			}
-			(header_hash, header.number)
 		} else {
 			(first_block_header.hash(), first_block_header.number)
 		}
