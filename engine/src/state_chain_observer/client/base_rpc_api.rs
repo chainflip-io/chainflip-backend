@@ -22,13 +22,18 @@ use sc_rpc_api::{
 	system::{Health, SystemApiClient},
 };
 
+use futures::future::BoxFuture;
+use serde_json::value::RawValue;
+
 #[cfg(test)]
 use mockall::automock;
 
 use super::SUBSTRATE_BEHAVIOUR;
 
 pub trait RawRpcApi:
-	CustomApiClient
+	ClientT
+	+ SubscriptionClientT
+	+ CustomApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
 	+ AuthorApiClient<
@@ -133,6 +138,19 @@ pub trait BaseRpcApi {
 		extrinsic: Bytes,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Bytes>;
+
+	async fn request_raw(
+		&self,
+		method: &str,
+		params: Option<Box<RawValue>>,
+	) -> RpcResult<Box<RawValue>>;
+
+	async fn subscribe_raw(
+		&self,
+		sub: &str,
+		params: Option<Box<RawValue>>,
+		unsub: &str,
+	) -> RpcResult<Subscription<Box<RawValue>>>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -237,5 +255,75 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Bytes> {
 		self.raw_rpc_client.dry_run(extrinsic, at).await
+	}
+
+	async fn request_raw(
+		&self,
+		method: &str,
+		params: Option<Box<RawValue>>,
+	) -> RpcResult<Box<RawValue>> {
+		self.raw_rpc_client.request(method, Params(params)).await
+	}
+
+	async fn subscribe_raw(
+		&self,
+		sub: &str,
+		params: Option<Box<RawValue>>,
+		unsub: &str,
+	) -> RpcResult<Subscription<Box<RawValue>>> {
+		self.raw_rpc_client.subscribe(sub, Params(params), unsub).await
+	}
+}
+
+struct Params(Option<Box<RawValue>>);
+
+impl jsonrpsee::core::traits::ToRpcParams for Params {
+	fn to_rpc_params(self) -> RpcResult<Option<Box<RawValue>>> {
+		Ok(self.0)
+	}
+}
+
+pub struct SubxtInterface<T>(T);
+
+impl<T: BaseRpcApi + Send + Sync + 'static> subxt::rpc::RpcClientT for SubxtInterface<T> {
+	fn request_raw<'a>(
+		&'a self,
+		method: &'a str,
+		params: Option<Box<RawValue>>,
+	) -> BoxFuture<'a, Result<Box<RawValue>, subxt::error::RpcError>> {
+		Box::pin(async move {
+			self.0
+				.request_raw(method, params)
+				.await
+				.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e)))
+		})
+	}
+
+	fn subscribe_raw<'a>(
+		&'a self,
+		sub: &'a str,
+		params: Option<Box<RawValue>>,
+		unsub: &'a str,
+	) -> BoxFuture<'a, Result<subxt::rpc::RpcSubscription, subxt::error::RpcError>> {
+		Box::pin(async move {
+			let stream = self
+				.0
+				.subscribe_raw(sub, params, unsub)
+				.await
+				.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e)))?;
+
+			let id = match stream.kind() {
+				jsonrpsee::core::client::SubscriptionKind::Subscription(
+					jsonrpsee::types::SubscriptionId::Str(id),
+				) => Some(id.clone().into_owned()),
+				_ => None,
+			};
+
+			use futures::{StreamExt, TryStreamExt};
+
+			let stream =
+				stream.map_err(|e| subxt::error::RpcError::ClientError(Box::new(e))).boxed();
+			Ok(subxt::rpc::RpcSubscription { stream, id })
+		})
 	}
 }
