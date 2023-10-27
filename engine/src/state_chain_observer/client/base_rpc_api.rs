@@ -24,6 +24,7 @@ use sc_rpc_api::{
 
 use futures::future::BoxFuture;
 use serde_json::value::RawValue;
+use std::sync::Arc;
 
 #[cfg(test)]
 use mockall::automock;
@@ -283,9 +284,9 @@ impl jsonrpsee::core::traits::ToRpcParams for Params {
 	}
 }
 
-pub struct SubxtInterface<T>(T);
+pub struct SubxtInterface<T>(pub T);
 
-impl<T: BaseRpcApi + Send + Sync + 'static> subxt::rpc::RpcClientT for SubxtInterface<T> {
+impl<T: BaseRpcApi + Send + Sync + 'static> subxt::rpc::RpcClientT for SubxtInterface<Arc<T>> {
 	fn request_raw<'a>(
 		&'a self,
 		method: &'a str,

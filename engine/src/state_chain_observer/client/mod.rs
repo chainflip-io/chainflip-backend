@@ -31,6 +31,8 @@ use self::{
 	storage_api::StorageApi,
 };
 
+use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
+
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
 
@@ -142,6 +144,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			scope,
 			base_rpc_client,
 			SignedExtrinsicClientBuilder {
+				signer: None,
 				signing_key_file: signing_key_file.to_owned(), /* I have to take a clone here
 				                                                * because of a compiler issue it
 				                                                * seems */
@@ -501,6 +504,7 @@ impl SignedExtrinsicClientBuilderTrait for () {
 }
 
 struct SignedExtrinsicClientBuilder {
+	signer: Option<signer::PairSigner<sp_core::sr25519::Pair>>,
 	signing_key_file: std::path::PathBuf,
 	required_role: AccountRole,
 	wait_for_required_role: bool,
@@ -512,8 +516,99 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 
 	async fn pre_compatibility<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>(
 		&mut self,
-		_base_rpc_client: Arc<BaseRpcClient>,
+		base_rpc_client: Arc<BaseRpcClient>,
 	) -> Result<()> {
+		// TODO: add waiting for funds
+
+		use subxt::tx::Signer;
+
+		let pair = sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
+			&self.signing_key_file,
+			"Signing Key",
+			|str| {
+				<[u8; 32]>::try_from(hex::decode(str)?)
+					.map_err(|e| anyhow!("Failed to decode signing key: Wrong length. {e:?}"))
+			},
+		)?);
+
+		let signer = self
+			.signer
+			.insert(signer::PairSigner::<sp_core::sr25519::Pair>::new(pair.clone()));
+
+		use subxt::PolkadotConfig;
+
+		let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
+			Arc::new(SubxtInterface(base_rpc_client)),
+		)
+		.await?;
+
+		struct SubxtSignerInterface<T>(subxt::utils::AccountId32, T);
+		impl subxt::tx::Signer<PolkadotConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
+			fn account_id(&self) -> <subxt::PolkadotConfig as subxt::Config>::AccountId {
+				self.0.clone()
+			}
+
+			fn address(&self) -> <subxt::PolkadotConfig as subxt::Config>::Address {
+				subxt::utils::MultiAddress::Id(self.0.clone())
+			}
+
+			fn sign(&self, bytes: &[u8]) -> <subxt::PolkadotConfig as subxt::Config>::Signature {
+				use sp_core::Pair;
+				subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
+			}
+		}
+
+		let subxt_signer =
+			SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair);
+
+		let recorded_version = <SemVer as codec::Decode>::decode(
+			&mut subxt_client
+				.storage()
+				.at_latest()
+				.await?
+				.fetch_or_default(&subxt::storage::dynamic(
+					"Validator",
+					"NodeCFEVersion",
+					vec![subxt_signer.account_id()],
+				))
+				.await?
+				.encoded(),
+		)
+		.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
+
+		// Note that around CFE upgrade period, the less recent version might still be running (and
+		// can even be *the* "active" instance), so it is important that it doesn't downgrade the
+		// version record:
+		if let Some(check_unfinalized_version) = self.check_unfinalized_version {
+			if check_unfinalized_version.is_more_recent_than(recorded_version) {
+				info!(
+					"Updating CFE version record from {:?} to {:?}",
+					recorded_version, check_unfinalized_version
+				);
+
+				subxt_client
+					.tx()
+					.sign_and_submit_then_watch_default(
+						&subxt::dynamic::tx(
+							"Validator",
+							"cfe_version",
+							vec![(
+								"new_version",
+								vec![
+									("major", check_unfinalized_version.major),
+									("minor", check_unfinalized_version.minor),
+									("patch", check_unfinalized_version.patch),
+								],
+							)],
+						),
+						&subxt_signer,
+					)
+					.await?
+					.wait_for_in_block()
+					.await?;
+			}
+		}
+
 		Ok(())
 	}
 
@@ -531,17 +626,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		Self::Client::new(
 			scope,
 			base_rpc_client,
-			signer::PairSigner::<sp_core::sr25519::Pair>::new(sp_core::sr25519::Pair::from_seed(
-				&read_clean_and_decode_hex_str_file(
-					&self.signing_key_file,
-					"Signing Key",
-					|str| {
-						<[u8; 32]>::try_from(hex::decode(str)?).map_err(|e| {
-							anyhow!("Failed to decode signing key: Wrong length. {e:?}")
-						})
-					},
-				)?,
-			)),
+			self.signer.unwrap(),
 			self.required_role,
 			self.wait_for_required_role,
 			self.check_unfinalized_version,
