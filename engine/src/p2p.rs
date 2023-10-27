@@ -29,7 +29,10 @@ use futures::{Future, FutureExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
 use muxer::P2PMuxer;
 use sp_core::{ed25519, H256};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	mpsc::{UnboundedReceiver, UnboundedSender},
+	oneshot,
+};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
@@ -96,6 +99,7 @@ pub async fn start<StateChainClient>(
 	MultisigMessageSender<BitcoinCrypto>,
 	MultisigMessageReceiver<BitcoinCrypto>,
 	UnboundedSender<PeerUpdate>,
+	oneshot::Receiver<()>,
 	impl Future<Output = anyhow::Result<()>>,
 )>
 where
@@ -138,6 +142,8 @@ where
 
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+	let (p2p_ready_sender, p2p_ready_receiver) = oneshot::channel();
+
 	let (
 		eth_outgoing_sender,
 		eth_incoming_receiver,
@@ -160,6 +166,8 @@ where
 				)
 				.instrument(info_span!("P2PClient"))
 				.await?;
+
+				p2p_ready_sender.send(()).unwrap();
 
 				core::start(
 					node_key,
@@ -193,6 +201,7 @@ where
 		btc_outgoing_sender,
 		btc_incoming_receiver,
 		peer_update_sender,
+		p2p_ready_receiver,
 		fut,
 	))
 }
