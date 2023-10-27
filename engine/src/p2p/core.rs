@@ -402,6 +402,11 @@ impl P2PContext {
 		// on peer from disconnecting from "client side".
 		// TODO: ensure that stale/inactive connections are terminated
 
+		if account_id == self.our_account_id {
+			warn!("Received peer info deregistration of our own node!");
+			return
+		}
+
 		if let Some(peer) = self.active_connections.remove(&account_id) {
 			match peer.state {
 				ConnectionState::Connected(existing_socket) => {
