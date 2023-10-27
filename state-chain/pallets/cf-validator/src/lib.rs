@@ -298,6 +298,11 @@ pub mod pallet {
 			old_version: Version,
 			new_version: Version,
 		},
+		NodeVersionUpdated {
+			account_id: ValidatorIdOf<T>,
+			old_version: Version,
+			new_version: Version,
+		},
 		/// An authority has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
