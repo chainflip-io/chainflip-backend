@@ -19,10 +19,10 @@ impl_runtime_safe_mode! {
 	vault_ethereum: pallet_cf_vaults::PalletSafeMode<Ethereum>,
 	vault_bitcoin: pallet_cf_vaults::PalletSafeMode<Bitcoin>,
 	vault_polkadot: pallet_cf_vaults::PalletSafeMode<Polkadot>,
-	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<Ethereum>,
 	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<Bitcoin>,
 	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<Polkadot>,
+	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 }
 
 /// Contains permissions for different Runtime calls.
