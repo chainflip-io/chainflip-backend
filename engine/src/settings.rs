@@ -310,7 +310,10 @@ pub struct CommandLineOptions {
 impl Default for CommandLineOptions {
 	fn default() -> Self {
 		Self {
+			#[cfg(not(test))]
 			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
+			#[cfg(test)]
+			config_root: env!("CF_TEST_CONFIG_ROOT").to_owned(),
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
@@ -730,7 +733,7 @@ impl Settings {
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
 		Settings::load_settings_from_all_sources(
-			"config/testing/".to_owned(),
+			env!("CF_TEST_CONFIG_ROOT").to_owned(),
 			DEFAULT_SETTINGS_DIR,
 			CommandLineOptions::default(),
 		)
@@ -872,29 +875,25 @@ pub mod tests {
 
 		assert_eq!(
 			test_settings.state_chain.signing_key_file,
-			PathBuf::from("./tests/test_keystore/alice_key")
+			PathBuf::from(env!("CF_TEST_CONFIG_ROOT"))
+				.join("keys/alice")
+				.canonicalize()
+				.unwrap()
 		);
 	}
 
 	fn test_base_config_path_command_line_option() {
 		// Load the settings using a custom base config path.
-		let test_base_config_path = "config/testing/";
-		let custom_base_path_settings = Settings::new(CommandLineOptions {
-			config_root: test_base_config_path.to_owned(),
-			..Default::default()
-		})
-		.unwrap();
+		let custom_base_path_settings = Settings::new(CommandLineOptions::default()).unwrap();
 
 		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
-		// by comparing it to a different settings file.
-		let different_settings_config_path = "config/testing2/";
-		assert_ne!(
-			custom_base_path_settings,
-			Settings::new(CommandLineOptions {
-				config_root: different_settings_config_path.to_owned(),
-				..Default::default()
-			})
-			.unwrap()
+		// checking that the `alice` key was loaded rather than the default.
+		assert_eq!(
+			custom_base_path_settings.state_chain.signing_key_file,
+			PathBuf::from(env!("CF_TEST_CONFIG_ROOT"))
+				.join("keys/alice")
+				.canonicalize()
+				.unwrap()
 		);
 
 		// Check that a key file is a child of the custom base path.
@@ -904,7 +903,7 @@ pub mod tests {
 			.node_p2p
 			.node_key_file
 			.to_string_lossy()
-			.contains(test_base_config_path));
+			.contains(&env!("CF_TEST_CONFIG_ROOT")));
 
 		assert_eq!(
 			custom_base_path_settings.btc.nodes.primary.http_endpoint,
@@ -921,21 +920,23 @@ pub mod tests {
 		let opts = CommandLineOptions {
 			config_root: CommandLineOptions::default().config_root,
 			p2p_opts: P2POptions {
-				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
+				node_key_file: Some(PathBuf::from_str("keys/node_key_file_2").unwrap()),
 				ip_address: Some("1.1.1.1".parse().unwrap()),
 				p2p_port: Some(8087),
 				allow_local_ip: Some(false),
 			},
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
-				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
+				state_chain_signing_key_file: Some(
+					PathBuf::from_str("keys/signing_key_file_2").unwrap(),
+				),
 			},
 			eth_opts: EthOptions {
 				eth_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
 				eth_http_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_backup_ws_endpoint: Some("ws://second_endpoint:4321".to_owned()),
 				eth_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+				eth_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			dot_opts: DotOptions {
 				dot_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
@@ -968,7 +969,7 @@ pub mod tests {
 		// Compare the opts and the settings
 		assert_eq!(opts.logging_span_lifecycle, settings.logging.span_lifecycle);
 		assert_eq!(opts.logging_command_server_port.unwrap(), settings.logging.command_server_port);
-		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert!(settings.node_p2p.node_key_file.ends_with("node_key_file_2"));
 		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
 		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
 		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
@@ -977,10 +978,7 @@ pub mod tests {
 			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
 			settings.state_chain.ws_endpoint
 		);
-		assert_eq!(
-			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
-			settings.state_chain.signing_key_file
-		);
+		assert!(settings.state_chain.signing_key_file.ends_with("signing_key_file_2"));
 
 		assert_eq!(
 			opts.eth_opts.eth_ws_endpoint.unwrap(),
@@ -1001,7 +999,7 @@ pub mod tests {
 			eth_backup_node.http_endpoint.as_ref()
 		);
 
-		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
+		assert!(settings.eth.private_key_file.ends_with("eth_private_key_2"));
 
 		assert_eq!(
 			opts.dot_opts.dot_ws_endpoint.unwrap(),
@@ -1199,11 +1197,11 @@ pub mod tests {
 		assert_eq!(
 			resolve_settings_path(
 				&config_root,
-				&PathBuf::from("../testing2/config/Settings.toml"),
+				&PathBuf::from("../testing/config/Settings.toml"),
 				Some(PathResolutionExpectation::ExistingFile)
 			)
 			.unwrap(),
-			config_root.parent().unwrap().join("testing2/config/Settings.toml"),
+			config_root.parent().unwrap().join("testing/config/Settings.toml"),
 		);
 
 		// Path not required to exist resolves correctly.
