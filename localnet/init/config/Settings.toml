@@ -1,18 +1,18 @@
 # Default configurations for the CFE
 [node_p2p]
-node_key_file = "./localnet/init/keys/node_key_file"
+#node_key_file = "./localnet/init/keys/node_key_file"
 ip_address = "127.0.0.1"
-port = 8078
+#port = 8078
 allow_local_ip = true
 
-[state_chain]
+#[state_chain]
 # 32 byte hex secret key - associated with the node's public id (public key)
-signing_key_file = "./localnet/init/keys/signing_key_file"
-ws_endpoint = "ws://localhost:9944"
+#signing_key_file = "./localnet/init/keys/signing_key_file"
+#ws_endpoint = "ws://localhost:9944"
 
-[eth]
+#[eth]
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
-private_key_file = "./localnet/init/keys/eth_private_key_file"
+#private_key_file = "./localnet/init/keys/eth_private_key_file"
 
 [eth.rpc]
 ws_endpoint = "ws://localhost:8546"
@@ -24,8 +24,8 @@ http_endpoint = "http://localhost:8545"
 #http_endpoint = "http://localhost:8555"
 
 [dot.rpc]
-ws_endpoint = "ws://localhost:9945"
-http_endpoint = "http://localhost:9945"
+ws_endpoint = "ws://localhost:9947"
+http_endpoint = "http://localhost:9947"
 
 # optional
 #[dot.backup_rpc]
@@ -46,15 +46,15 @@ basic_auth_password = "flip"
 # optional
 [health_check]
 hostname = "0.0.0.0"
-port = 5555
+#port = 5555
 
 # optional
-[prometheus]
-hostname = "0.0.0.0"
-port = 5566
+#[prometheus]
+#hostname = "0.0.0.0"
+#port = 5566
 
-[signing]
-db_file = "/tmp/chainflip/bashful.db"
+#[signing]
+#db_file = "/tmp/chainflip/bashful.db"
 
 [logging]
 command_server_port = 4321

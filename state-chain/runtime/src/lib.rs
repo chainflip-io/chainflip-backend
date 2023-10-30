@@ -23,6 +23,7 @@ use cf_chains::{
 	evm::EvmCrypto,
 	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
 };
+use cf_primitives::NetworkEnvironment;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -1039,16 +1040,32 @@ impl_runtime_apis! {
 			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
 		}
 
-		fn cf_environment() -> runtime_apis::Environment {
-			runtime_apis::Environment {
-				network: Environment::network_environment(),
-				ethereum_chain_id: Environment::ethereum_chain_id(),
-				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
-			}
+		fn cf_network_environment() -> NetworkEnvironment {
+			Environment::network_environment()
 		}
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
+		}
+
+		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
+			use pallet_cf_ingress_egress::MinimumDeposit;
+			use cf_chains::assets::{eth, dot, btc};
+
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => MinimumDeposit::<Runtime, EthereumInstance>::get(
+					eth::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Polkadot => MinimumDeposit::<Runtime, PolkadotInstance>::get(
+					dot::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				),
+				ForeignChain::Bitcoin => MinimumDeposit::<Runtime, BitcoinInstance>::get(
+					btc::Asset::try_from(asset)
+						.expect("Conversion must succeed: ForeignChain checked in match clause.")
+				).into(),
+			}
 		}
 
 		fn cf_liquidity_provider_info(
@@ -1077,6 +1094,10 @@ impl_runtime_apis! {
 
 		fn cf_account_role(account_id: AccountId) -> Option<AccountRole> {
 			pallet_cf_account_roles::AccountRoles::<Runtime>::get(account_id)
+		}
+
+		fn cf_redemption_tax() -> AssetAmount {
+			pallet_cf_funding::RedemptionTax::<Runtime>::get()
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.

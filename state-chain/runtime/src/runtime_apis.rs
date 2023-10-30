@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{dot::PolkadotHash, eth::Address as EthereumAddress, ForeignChainAddress};
+use cf_chains::{eth::Address as EthereumAddress, ForeignChainAddress};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
 	SwapOutput,
@@ -67,13 +67,6 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct Environment {
-	pub network: NetworkEnvironment,
-	pub ethereum_chain_id: cf_chains::evm::api::EvmChainId,
-	pub polkadot_genesis_hash: PolkadotHash,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
@@ -131,10 +124,12 @@ decl_runtime_apis!(
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
-		fn cf_environment() -> Environment;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
+		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
 		fn cf_prewitness_swaps(from: Asset, to: Asset) -> Option<Vec<AssetAmount>>;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> Option<LiquidityProviderInfo>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
+		fn cf_redemption_tax() -> AssetAmount;
+		fn cf_network_environment() -> NetworkEnvironment;
 	}
 );

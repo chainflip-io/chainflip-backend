@@ -41,6 +41,7 @@ impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::cf_development_config()?),
+			"dev-3" => Box::new(chain_spec::cf_three_node_development_config()?),
 			"test" => Box::new(chain_spec::testnet::Config::build_spec(Some(
 				chain_spec::get_environment_or_defaults(testnet::ENV),
 			))?),
