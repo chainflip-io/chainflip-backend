@@ -12,7 +12,7 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
-use pallet_cf_pools::{AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderDelta, RangeOrderSize};
+use pallet_cf_pools::{AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderChange, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
@@ -25,7 +25,7 @@ pub struct RangeOrderReturn {
 	tick_range: Range<Tick>,
 	liquidity_total: Liquidity,
 	collected_fees: AssetAmounts,
-	order_delta: Option<IncreaseOrDecrease<RangeOrderDelta>>,
+	order_delta: Option<IncreaseOrDecrease<RangeOrderChange>>,
 }
 
 fn collect_range_order_returns(

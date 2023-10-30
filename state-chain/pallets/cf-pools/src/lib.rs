@@ -334,7 +334,7 @@ pub mod pallet {
 		Deserialize,
 		Serialize,
 	)]
-	pub struct RangeOrderDelta {
+	pub struct RangeOrderChange {
 		pub liquidity: Liquidity,
 		pub amounts: AssetsMap<AssetAmount>,
 	}
@@ -542,7 +542,7 @@ pub mod pallet {
 			pair_asset: Asset,
 			id: OrderId,
 			tick_range: core::ops::Range<Tick>,
-			order_delta: Option<IncreaseOrDecrease<RangeOrderDelta>>,
+			order_delta: Option<IncreaseOrDecrease<RangeOrderChange>>,
 			liquidity_total: Liquidity,
 			collected_fees: AssetAmounts,
 		},
@@ -1408,7 +1408,7 @@ impl<T: Config> Pallet<T> {
 						None
 					} else {
 						Some(
-							liquidity_change.map(|liquidity| RangeOrderDelta {
+							liquidity_change.map(|liquidity| RangeOrderChange {
 								liquidity,
 								amounts: assets_delta,
 							}),
