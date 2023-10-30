@@ -217,17 +217,12 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+		_current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		_signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// First check if the payload is still valid. If it is, check if the signature is still
-		// valid
-		(&call.threshold_signature_payload() == payload) &&
-			<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
-				current_key,
-				payload,
-				signature,
-			)
+		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
+		// transaction is if the payload changes due to a runtime version update.
+		&call.threshold_signature_payload() == payload
 	}
 }
 
