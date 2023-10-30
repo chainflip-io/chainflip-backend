@@ -1252,7 +1252,7 @@ impl<T: Config> Pallet<T> {
 				let debited_asset_amount =
 					asset_pair.try_debit_asset(lp, asset_pair.base_side, amount)?;
 
-				(debited_asset_amount, position_info, collected)
+				(IncreaseOrDecrease::Increase(debited_asset_amount), position_info, collected)
 			},
 			IncreaseOrDecrease::Decrease(amount) => {
 				let (withdrawn_amount, collected, position_info) =
@@ -1279,7 +1279,7 @@ impl<T: Config> Pallet<T> {
 				let withdrawn_asset_amount =
 					asset_pair.try_credit_asset(lp, asset_pair.base_side, withdrawn_amount)?;
 
-				(withdrawn_asset_amount, position_info, collected)
+				(IncreaseOrDecrease::Decrease(withdrawn_asset_amount), position_info, collected)
 			},
 		};
 
@@ -1293,10 +1293,10 @@ impl<T: Config> Pallet<T> {
 			tick,
 			collected,
 			position_info,
-			delta.map(|_| amount_change),
+			amount_change,
 		)?;
 
-		Ok(amount_change)
+		Ok(*amount_change.abs())
 	}
 
 	#[allow(clippy::too_many_arguments)]
