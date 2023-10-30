@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use cf_primitives::{AccountRole, SemVer};
 use futures::StreamExt;
@@ -295,7 +295,8 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 		})
 		.await
 		.await
-		.expect(OR_CANCEL)?;
+		.expect(OR_CANCEL)
+		.with_context(|| format!("Dry run failed. Call: {:?}", call.clone()))?;
 
 		Ok(self.submit_signed_extrinsic(call.into()).await)
 	}
