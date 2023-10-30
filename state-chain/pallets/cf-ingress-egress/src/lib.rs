@@ -29,6 +29,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{DispatchError, Saturating, TransactionOutcome},
+	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -688,6 +689,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Completes a single deposit request.
+	#[transactional]
 	fn process_single_deposit(
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
