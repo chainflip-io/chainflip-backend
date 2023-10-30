@@ -983,7 +983,9 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		let rotation =
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
-		if <<T::Chain as Chain>::ChainCrypto>::optimistic_activation() {
+		if <<T::Chain as Chain>::ChainCrypto>::optimistic_activation() &&
+			CurrentVaultEpochAndState::<T, I>::exists()
+		{
 			// New key is already activated, nothing to do.
 			ensure!(
 				matches!(rotation, VaultRotationStatus::<T, I>::Complete),

@@ -293,43 +293,28 @@ impl Engine {
 								}),
 							RuntimeOrigin::signed(self.node_id.clone())
 						);
+					}
 
+					RuntimeEvent::PolkadotVault(pallet_cf_vaults::Event::<_, PolkadotInstance>::AwaitingGovernanceActivation { .. }) => {
 						queue_dispatch_extrinsic(
-							RuntimeCall::Witnesser(
-								pallet_cf_witnesser::Call::witness_at_epoch {
-									call: Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
-										block_number: 100,
-										tx_id: [2u8; 32],
-									}.into()),
-									epoch_index: Validator::epoch_index()
-								}),
-							RuntimeOrigin::signed(self.node_id.clone())
+							RuntimeCall::Environment(pallet_cf_environment::Call::witness_polkadot_vault_creation {
+								dot_pure_proxy_vault_key: Default::default(),
+								tx_id: TxId {
+									block_number: 1,
+									extrinsic_index: 0,
+								},
+							}),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
 						);
-
-						if Validator::epoch_index() == GENESIS_EPOCH {
-							queue_dispatch_extrinsic(
-								RuntimeCall::Environment(pallet_cf_environment::Call::witness_polkadot_vault_creation {
-									dot_pure_proxy_vault_key: Default::default(),
-									tx_id: TxId {
-										block_number: 1,
-										extrinsic_index: 0,
-									},
-								}
-							), pallet_cf_governance::RawOrigin::GovernanceApproval.into());
-						} else {
-							queue_dispatch_extrinsic(RuntimeCall::Witnesser(
-								pallet_cf_witnesser::Call::witness_at_epoch {
-									call: Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-										block_number: 100,
-										tx_id: TxId {
-											block_number: 2,
-											extrinsic_index: 1,
-										},
-									}.into()),
-									epoch_index: Validator::epoch_index()
-								}
-							), RuntimeOrigin::signed(self.node_id.clone()));
-						}
+					}
+					RuntimeEvent::BitcoinVault(pallet_cf_vaults::Event::<_, BitcoinInstance>::AwaitingGovernanceActivation { new_public_key }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(pallet_cf_environment::Call::witness_current_bitcoin_block_number_for_key {
+								block_number: 0,
+								new_public_key: new_public_key.clone(),
+							}),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
 					}
 				};
 			}
