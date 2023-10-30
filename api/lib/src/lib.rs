@@ -305,15 +305,13 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic(
-				pallet_cf_swapping::Call::request_swap_deposit_address {
-					source_asset,
-					destination_asset,
-					destination_address,
-					broker_commission_bps,
-					channel_metadata,
-				},
-			)
+			.submit_signed_extrinsic(pallet_cf_swapping::Call::request_swap_deposit_address {
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission_bps,
+				channel_metadata,
+			})
 			.await
 			.until_in_block()
 			.await?;
