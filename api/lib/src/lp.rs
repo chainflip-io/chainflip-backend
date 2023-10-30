@@ -68,7 +68,7 @@ pub struct LimitOrderReturn {
 	amount_total: AssetAmount,
 	collected_fees: AssetAmount,
 	bought_amount: AssetAmount,
-	amount_delta: Option<IncreaseOrDecrease<AssetAmount>>,
+	amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
 }
 
 fn collect_limit_order_returns(
@@ -79,7 +79,7 @@ fn collect_limit_order_returns(
 		.filter_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::LimitOrderUpdated {
-					amount_delta,
+					amount_change,
 					amount_total,
 					collected_fees,
 					bought_amount,
@@ -97,7 +97,7 @@ fn collect_limit_order_returns(
 				amount_total,
 				collected_fees,
 				bought_amount,
-				amount_delta,
+				amount_change,
 			}),
 			_ => None,
 		})
@@ -173,7 +173,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		pair_asset: Asset,
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
-		size_delta: IncreaseOrDecrease<RangeOrderSize>,
+		size_change: IncreaseOrDecrease<RangeOrderSize>,
 	) -> Result<Vec<RangeOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
@@ -182,7 +182,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				pair_asset,
 				id,
 				option_tick_range,
-				size_delta,
+				size_change,
 			})
 			.await
 			.until_in_block()
@@ -221,7 +221,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		buy_asset: Asset,
 		id: OrderId,
 		option_tick: Option<Tick>,
-		amount_delta: IncreaseOrDecrease<AssetAmount>,
+		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
@@ -230,7 +230,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				buy_asset,
 				id,
 				option_tick,
-				amount_delta,
+				amount_change,
 			})
 			.await
 			.until_in_block()

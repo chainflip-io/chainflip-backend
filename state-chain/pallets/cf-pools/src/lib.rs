@@ -555,7 +555,7 @@ pub mod pallet {
 			buy_asset: Asset,
 			id: OrderId,
 			tick: Tick,
-			amount_delta: Option<IncreaseOrDecrease<AssetAmount>>,
+			amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
 			amount_total: AssetAmount,
 			collected_fees: AssetAmount,
 			bought_amount: AssetAmount,
@@ -705,7 +705,7 @@ pub mod pallet {
 			pair_asset: Asset,
 			id: OrderId,
 			option_tick_range: Option<core::ops::Range<Tick>>,
-			size_delta: IncreaseOrDecrease<RangeOrderSize>,
+			size_change: IncreaseOrDecrease<RangeOrderSize>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().range_order_update_enabled,
@@ -761,7 +761,7 @@ pub mod pallet {
 					asset_pair,
 					id,
 					tick_range,
-					size_delta.map(|size| match size {
+					size_change.map(|size| match size {
 						RangeOrderSize::Liquidity { liquidity } =>
 							range_orders::Size::Liquidity { liquidity },
 						RangeOrderSize::AssetAmounts { maximum, minimum } =>
@@ -862,7 +862,7 @@ pub mod pallet {
 			buy_asset: any::Asset,
 			id: OrderId,
 			option_tick: Option<Tick>,
-			amount_delta: IncreaseOrDecrease<AssetAmount>,
+			amount_change: IncreaseOrDecrease<AssetAmount>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
@@ -912,7 +912,7 @@ pub mod pallet {
 					asset_pair,
 					id,
 					tick,
-					amount_delta.map(|amount| amount.into()),
+					amount_change.map(|amount| amount.into()),
 					/* allow_noop */ false,
 				)?;
 
@@ -1222,7 +1222,7 @@ impl<T: Config> Pallet<T> {
 		delta: IncreaseOrDecrease<cf_amm::common::Amount>,
 		allow_noop: bool,
 	) -> Result<AssetAmount, DispatchError> {
-		let (amount_delta, position_info, collected) = match delta {
+		let (amount_change, position_info, collected) = match delta {
 			IncreaseOrDecrease::Increase(amount) => {
 				let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
 					&(lp.clone(), id),
@@ -1293,10 +1293,10 @@ impl<T: Config> Pallet<T> {
 			tick,
 			collected,
 			position_info,
-			delta.map(|_| amount_delta),
+			delta.map(|_| amount_change),
 		)?;
 
-		Ok(amount_delta)
+		Ok(amount_change)
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -1309,7 +1309,7 @@ impl<T: Config> Pallet<T> {
 		delta: IncreaseOrDecrease<range_orders::Size>,
 		allow_noop: bool,
 	) -> Result<AssetAmounts, DispatchError> {
-		let (liquidity_delta, position_info, assets_delta, collected) = match delta {
+		let (liquidity_change, position_info, assets_delta, collected) = match delta {
 			IncreaseOrDecrease::Increase(size) => {
 				let (assets_debited, minted_liquidity, collected, position_info) =
 					match pool.pool_state.collect_and_mint_range_order(
@@ -1394,7 +1394,7 @@ impl<T: Config> Pallet<T> {
 			range_orders.insert(id, tick_range.clone());
 		}
 
-		let zero_delta = *liquidity_delta.abs() == 0;
+		let zero_delta = *liquidity_change.abs() == 0;
 
 		if !zero_delta || collected_fees != Default::default() {
 			Self::deposit_event(Event::<T>::RangeOrderUpdated {
@@ -1408,7 +1408,7 @@ impl<T: Config> Pallet<T> {
 						None
 					} else {
 						Some(
-							liquidity_delta.map(|liquidity| RangeOrderDelta {
+							liquidity_change.map(|liquidity| RangeOrderDelta {
 								liquidity,
 								amounts: assets_delta,
 							}),
@@ -1676,7 +1676,7 @@ impl<T: Config> Pallet<T> {
 		tick: Tick,
 		collected: Collected,
 		position_info: PositionInfo,
-		amount_delta: IncreaseOrDecrease<AssetAmount>,
+		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let collected_fees = asset_pair.try_credit_asset(lp, !side, collected.fees)?;
 		let bought_amount = asset_pair.try_credit_asset(lp, !side, collected.bought_amount)?;
@@ -1692,7 +1692,7 @@ impl<T: Config> Pallet<T> {
 			limit_orders.entry(lp.clone()).or_default().insert(order, tick);
 		}
 
-		let zero_delta = *amount_delta.abs() == 0;
+		let zero_delta = *amount_change.abs() == 0;
 
 		if !zero_delta ||
 			collected_fees != Default::default() ||
@@ -1704,11 +1704,11 @@ impl<T: Config> Pallet<T> {
 				buy_asset: asset_pair.canonical_asset_pair.side_to_asset(!side),
 				id: order,
 				tick,
-				amount_delta: {
+				amount_change: {
 					if zero_delta {
 						None
 					} else {
-						Some(amount_delta)
+						Some(amount_change)
 					}
 				},
 				amount_total: position_info.amount.try_into()?,
