@@ -1,17 +1,20 @@
-use std::{collections::BTreeSet, marker::PhantomData};
+use std::{cell::RefCell, collections::BTreeSet, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, CeremonyRetryQueues, EnsureThresholdSigned,
+	self as pallet_cf_threshold_signature, CeremonyRetryQueues, EnsureThresholdSigned, Pallet,
 	PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
+	btc,
+	evm::SchnorrVerificationComponents,
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
+use cf_primitives::{AuthorityCount, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_chainflip,
-	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
-	AccountRoleRegistry, AsyncResult, KeyProvider, ThresholdSigner,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator},
+	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
@@ -24,6 +27,13 @@ use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 type Block = frame_system::mocking::MockBlock<Test>;
+
+pub type ValidatorId = u64;
+
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+
+pub const BTC_DUMMY_SIG: btc::Signature = [0xcf; 64];
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -69,6 +79,8 @@ impl_mock_chainflip!(Test);
 thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
+	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
+	pub static VAULT_ACTIVATION_STATUS: RefCell<AsyncResult<()>> = RefCell::new(AsyncResult::Pending);
 }
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
@@ -109,8 +121,18 @@ impl UnfilteredDispatchable for MockCallback<MockEthereumChainCrypto> {
 	}
 }
 
+impl From<crate::Call<Test, Instance1>> for MockCallback<MockEthereumChainCrypto> {
+	fn from(_value: crate::Call<Test, Instance1>) -> Self {
+		Default::default() //revisit
+	}
+}
+
 pub fn current_agg_key() -> <MockEthereumChainCrypto as ChainCrypto>::AggKey {
-	<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap().key
+	<Pallet<Test, Instance1> as KeyProvider<
+		<Test as pallet_cf_threshold_signature::Config<Instance1>>::TargetChainCrypto,
+	>>::active_epoch_key()
+	.unwrap()
+	.key
 }
 
 pub fn sign(
@@ -132,6 +154,8 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
+impl_mock_runtime_safe_mode! { threshold_signature: pallet_cf_threshold_signature::PalletSafeMode }
+
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
@@ -139,10 +163,66 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type ThresholdCallable = MockCallback<MockEthereumChainCrypto>;
 	type TargetChainCrypto = MockEthereumChainCrypto;
 	type ThresholdSignerNomination = MockNominator;
-	type KeyProvider = MockKeyProvider<MockEthereumChainCrypto>;
+	type VaultActivator = MockVaultActivator;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
+	type Slasher = MockSlasher;
+	type SafeMode = MockRuntimeSafeMode;
 	type Weights = ();
+}
+
+pub struct MockVaultActivator;
+impl VaultActivator<MockEthereumChainCrypto> for MockVaultActivator {
+	type ValidatorId = <Test as Chainflip>::ValidatorId;
+	fn activate(
+		_new_key: MockAggKey,
+		_maybe_old_key: Option<MockAggKey>,
+		_maybe_optimistic_activation: bool,
+	) -> Vec<u32> {
+		Default::default()
+	}
+
+	fn status() -> AsyncResult<()> {
+		VAULT_ACTIVATION_STATUS.with(|value| *value.borrow())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_status(outcome: AsyncResult<()>) {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = outcome)
+	}
+}
+
+impl MockVaultActivator {
+	pub fn set_activation_completed() {
+		VAULT_ACTIVATION_STATUS.with(|value| *(value.borrow_mut()) = AsyncResult::Ready(()))
+	}
+}
+
+pub struct MockSlasher;
+
+impl MockSlasher {
+	pub fn slash_count(validator_id: ValidatorId) -> usize {
+		SLASHES.with(|slashes| slashes.borrow().iter().filter(|id| **id == validator_id).count())
+	}
+}
+
+impl Slashing for MockSlasher {
+	type AccountId = ValidatorId;
+	type BlockNumber = u64;
+
+	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
+		// Count those slashes
+		SLASHES.with(|count| {
+			count.borrow_mut().push(*validator_id);
+		});
+	}
+
+	fn slash_balance(account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+		// Count those slashes
+		SLASHES.with(|count| {
+			count.borrow_mut().push(*account_id);
+		});
+	}
 }
 
 pub const AGG_KEY: [u8; 4] = *b"AKEY";
@@ -249,8 +329,40 @@ impl TestHelper for TestRunner<()> {
 	}
 }
 
+pub const GENESIS_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"genk");
+pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
+pub const NEW_AGG_PUB_KEY_PRE_HANDOVER: MockAggKey = MockAggKey(*b"next");
+pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
-	RuntimeGenesisConfig::default(),
-	|| MockKeyProvider::<MockEthereumChainCrypto>::add_key(MockAggKey(AGG_KEY))
+	RuntimeGenesisConfig {
+		system:Default::default(),
+		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			vault_key: Some(GENESIS_AGG_PUB_KEY),
+			threshold_signature_response_timeout: 0,
+			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
+			_instance: PhantomData,
+	} },
+	|| {
+		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
+		for id in &authorities {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
+		MockEpochInfo::set_epoch(GENESIS_EPOCH);
+		MockEpochInfo::set_epoch_authority_count(
+			GENESIS_EPOCH,
+			authorities.len() as AuthorityCount,
+		);
+		MockEpochInfo::set_authorities(authorities);
+	}
+}
+
+pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {
+	TestRunner::<()>::new(RuntimeGenesisConfig::default())
 }

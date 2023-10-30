@@ -1,35 +1,13 @@
 #![cfg(test)]
 
-use core::panic;
-
-use crate::{
-	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
-	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout,
-	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
-};
-use cf_chains::{
-	btc::BitcoinCrypto,
-	evm::EvmCrypto,
-	mocks::{MockAggKey, MockOptimisticActivation},
-};
-use cf_primitives::{AuthorityCount, GENESIS_EPOCH};
-use cf_test_utilities::{last_event, maybe_last_event};
-use cf_traits::{
-	mocks::threshold_signer::{MockThresholdSigner, VerificationParams},
-	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, KeyProvider, SafeMode, SetSafeMode,
-	VaultRotator, VaultStatus,
-};
-use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
-};
-use frame_system::pallet_prelude::BlockNumberFor;
+use crate::{mock::*, PendingVaultActivation, VaultActivationStatus};
+use cf_chains::mocks::MockAggKey;
+use cf_test_utilities::last_event;
+use cf_traits::{AsyncResult, SafeMode, VaultActivator};
+use frame_support::assert_ok;
 use sp_core::Get;
-use sp_std::collections::btree_set::BTreeSet;
 
-pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
-pub type BtcMockThresholdSigner = MockThresholdSigner<BitcoinCrypto, crate::mock::RuntimeCall>;
-
-const ALL_CANDIDATES: &[<Test as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
+pub const NEW_AGG_PUBKEY: MockAggKey = MockAggKey(*b"newk");
 
 macro_rules! assert_last_event {
 	($pat:pat) => {
@@ -49,7 +27,7 @@ fn test_vault_key_rotated_externally_triggers_code_red() {
 		assert_eq!(<MockRuntimeSafeMode as Get<MockRuntimeSafeMode>>::get(), SafeMode::CODE_GREEN);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			RuntimeOrigin::root(),
-			NEW_AGG_PUB_KEY_POST_HANDOVER,
+			NEW_AGG_PUBKEY,
 			1,
 			TX_HASH,
 		));
@@ -61,11 +39,7 @@ fn test_vault_key_rotated_externally_triggers_code_red() {
 #[test]
 fn key_unavailable_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
-		PendingVaultRotation::put(VaultRotationStatus::<Test, _>::KeyHandoverComplete {
-			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
-		});
-
-		VaultsPallet::activate();
+		VaultsPallet::activate(NEW_AGG_PUBKEY, None, false);
 
 		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
 
@@ -78,17 +52,15 @@ fn key_unavailable_on_activate_returns_governance_event() {
 #[test]
 fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	new_test_ext().execute_with(|| {
-		PendingVaultRotation::put(VaultRotationStatus::<Test, _>::KeyHandoverComplete {
-			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
-		});
-
 		MockSetAggKeyWithAggKey::set_required(false);
 
-		VaultsPallet::activate();
+		VaultsPallet::activate(NEW_AGG_PUBKEY, Some(Default::default()), false);
 
 		assert!(matches!(
-			PendingVaultRotation::<Test, _>::get().unwrap(),
-			VaultRotationStatus::Complete
+			PendingVaultActivation::<Test, _>::get().unwrap(),
+			VaultActivationStatus::Complete
 		))
 	});
 }
+
+// add test for testing active from block functionality

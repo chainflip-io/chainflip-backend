@@ -4,8 +4,8 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::Percent;
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig,
-	GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
+	AccountRolesConfig, EmissionsConfig, EthereumThresholdSignerConfig, EthereumVaultConfig,
+	FlipConfig, FundingConfig, GovernanceConfig, ReputationConfig, SessionConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -159,11 +159,7 @@ impl ExtBuilder {
 				max_size: self.max_authorities,
 				max_expansion: self.max_authorities,
 			},
-			ethereum_vault: EthereumVaultConfig {
-				vault_key: Some(ethereum_vault_key),
-				deployment_block: 0,
-				keygen_response_timeout: 4,
-			},
+			ethereum_vault: EthereumVaultConfig { deployment_block: Some(0) },
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -205,7 +201,12 @@ impl ExtBuilder {
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),
-			ethereum_threshold_signer: Default::default(),
+			ethereum_threshold_signer: EthereumThresholdSignerConfig {
+				vault_key: Some(ethereum_vault_key),
+				keygen_response_timeout: 4,
+				threshold_signature_response_timeout: Default::default(),
+				_instance: std::marker::PhantomData,
+			},
 			polkadot_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),

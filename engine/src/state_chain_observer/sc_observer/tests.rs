@@ -8,7 +8,7 @@ use crate::{
 };
 use cf_chains::{
 	evm::{SchnorrVerificationComponents, Transaction},
-	Chain, ChainCrypto,
+	ChainCrypto,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
@@ -313,12 +313,12 @@ mod dot_signing {
 async fn should_handle_keygen_request<C, I>()
 where
 	C: ChainSigning<
-			ChainCrypto = <<Runtime as pallet_cf_vaults::Config<I>>::Chain as Chain>::ChainCrypto,
+			ChainCrypto = <Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChainCrypto,
 		> + Send
 		+ Sync,
 	I: CryptoCompat<C, C::ChainCrypto> + 'static + Send + Sync,
-	Runtime: pallet_cf_vaults::Config<I>,
-	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
+	Runtime: pallet_cf_threshold_signature::Config<I>,
+	RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 {
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
@@ -331,7 +331,7 @@ where
 		.times(2)
 		.return_const(our_account_id.clone());
 	state_chain_client
-		.expect_finalize_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, I>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
 		.once()
 		.return_once(|_| {
 			(
@@ -414,8 +414,8 @@ mod dot_keygen {
 #[tokio::test]
 async fn should_handle_key_handover_request()
 where
-	Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
-	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>,
+	Runtime: pallet_cf_threshold_signature::Config<BitcoinInstance>,
+	RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>,
 {
 	use multisig::bitcoin::BtcCryptoScheme;
 
@@ -458,7 +458,8 @@ where
 				.boxed()
 		});
 	state_chain_client
-		.expect_finalize_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>()
+		.expect_finalize_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, BitcoinInstance>>(
+		)
 		.once()
 		.return_once(|_| {
 			(

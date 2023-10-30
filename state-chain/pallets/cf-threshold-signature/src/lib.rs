@@ -56,7 +56,8 @@ type AttemptCount = AuthorityCount;
 
 impl_pallet_safe_mode!(PalletSafeMode; slashing_enabled);
 
-type SignatureFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::ThresholdSignature;
+pub type SignatureFor<T, I> =
+	<<T as Config<I>>::TargetChainCrypto as ChainCrypto>::ThresholdSignature;
 type PayloadFor<T, I> = <<T as Config<I>>::TargetChainCrypto as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
 	Result<AggKeyFor<T, I>, BTreeSet<<T as Chainflip>::ValidatorId>>;
@@ -1591,11 +1592,8 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::TargetChainCrypto> for Pallet<T, I
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey) {
-		Vaults::<T, I>::insert(
-			CurrentEpochIndex::<T>::get(),
-			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
-		);
+	fn set_key(key: <T::TargetChainCrypto as ChainCrypto>::AggKey) {
+		VaultKeys::<T, I>::insert(CurrentEpochIndex::<T>::get(), key);
 	}
 }
 

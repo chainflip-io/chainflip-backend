@@ -209,7 +209,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(outcome: AsyncResult<VaultRotationStatus<Self::ValidatorId>>) {
+	fn set_status(outcome: AsyncResult<VaultRotationStatusOuter<Self::ValidatorId>>) {
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -219,26 +219,26 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					new_epoch_index: Default::default(),
 				});
 			},
-			AsyncResult::Ready(VaultRotationStatus::KeygenComplete) => {
+			AsyncResult::Ready(VaultRotationStatusOuter::KeygenComplete) => {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
 						new_public_key: Default::default(),
 					},
 				);
 			},
-			AsyncResult::Ready(VaultRotationStatus::KeyHandoverComplete) => {
+			AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete) => {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::KeyHandoverComplete {
 						new_public_key: Default::default(),
 					},
 				);
 			},
-			AsyncResult::Ready(VaultRotationStatus::Failed(offenders)) => {
+			AsyncResult::Ready(VaultRotationStatusOuter::Failed(offenders)) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 					offenders,
 				});
 			},
-			AsyncResult::Ready(VaultRotationStatus::RotationComplete) => {
+			AsyncResult::Ready(VaultRotationStatusOuter::RotationComplete) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 			},
 			AsyncResult::Void => {

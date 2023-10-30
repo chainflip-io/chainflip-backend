@@ -344,22 +344,22 @@ impl Engine {
 			// Being funded we would be required to respond to keygen requests
 			on_events!(
 				events,
-				RuntimeEvent::EthereumVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
+				RuntimeEvent::EthereumThresholdSigner(
+					pallet_cf_threshold_signature::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						if participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::EthereumVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
+							queue_dispatch_extrinsic(RuntimeCall::EthereumThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: *ceremony_id,
 										reported_outcome: Ok(self.eth_threshold_signer.borrow_mut().propose_new_key()),
 									}
 								), RuntimeOrigin::signed(self.node_id.clone()));
 						}
 				}
-				RuntimeEvent::PolkadotVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
+				RuntimeEvent::PolkadotThresholdSigner(
+					pallet_cf_threshold_signature::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						if participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::PolkadotVault(
-									pallet_cf_vaults::Call::report_keygen_outcome {
+							queue_dispatch_extrinsic(RuntimeCall::PolkadotThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
 										ceremony_id: *ceremony_id,
 										reported_outcome: Ok(self.dot_threshold_signer.borrow_mut().propose_new_key()),
 									}
@@ -367,23 +367,23 @@ impl Engine {
 						}
 				}
 
-				RuntimeEvent::BitcoinVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
+				RuntimeEvent::BitcoinThresholdSigner(
+					pallet_cf_threshold_signature::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						if participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::BitcoinVault(
-								pallet_cf_vaults::Call::report_keygen_outcome {
+							queue_dispatch_extrinsic(RuntimeCall::BitcoinThresholdSigner(
+								pallet_cf_threshold_signature::Call::report_keygen_outcome {
 									ceremony_id: *ceremony_id,
 									reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
 								}
 							), RuntimeOrigin::signed(self.node_id.clone()));
 						}
 				}
-				RuntimeEvent::BitcoinVault(
-					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
+				RuntimeEvent::BitcoinThresholdSigner(
+					pallet_cf_threshold_signature::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
 						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
-							queue_dispatch_extrinsic(RuntimeCall::BitcoinVault(
-								pallet_cf_vaults::Call::report_key_handover_outcome {
+							queue_dispatch_extrinsic(RuntimeCall::BitcoinThresholdSigner(
+								pallet_cf_threshold_signature::Call::report_key_handover_outcome {
 									ceremony_id: *ceremony_id,
 									reported_outcome: Ok(self.btc_threshold_signer.borrow_mut().propose_new_key()),
 								}

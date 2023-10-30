@@ -165,6 +165,7 @@ mod tests {
 
 	use std::{path::PathBuf, str::FromStr};
 
+	use cf_chains::Ethereum;
 	use cf_primitives::AccountRole;
 	use futures_util::FutureExt;
 	use sp_core::{H160, U256};
@@ -217,7 +218,7 @@ mod tests {
 				let vault_source =
 					EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
 						.await
-						.vaults()
+						.vaults::<Ethereum>()
 						.await;
 
 				EthSource::new(retry_client.clone())

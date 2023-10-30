@@ -50,21 +50,18 @@ fn test_address_generation() {
 	use cf_primitives::chains::assets::btc;
 	use cf_traits::KeyState;
 	use cf_utilities::assert_ok;
+	use pallet_cf_threshold_signature::{CurrentVaultEpochAndState, VaultEpochAndState, VaultKeys};
 	use pallet_cf_validator::CurrentEpoch;
-	use pallet_cf_vaults::{CurrentVaultEpochAndState, Vault, VaultEpochAndState, Vaults};
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 		CurrentEpoch::<Runtime>::set(1);
-		Vaults::<Runtime, crate::BitcoinInstance>::insert(
+		VaultKeys::<Runtime, crate::BitcoinInstance>::insert(
 			1,
-			Vault::<Bitcoin> {
-				public_key: cf_chains::btc::AggKey {
-					previous: None,
-					current: hex_literal::hex!(
-						"9fe94d03955ff4cc5dec97fa5f0dc564ae5ab63012e76dbe84c87c1c83460b48"
-					),
-				},
-				active_from_block: 1,
+			cf_chains::btc::AggKey {
+				previous: None,
+				current: hex_literal::hex!(
+					"9fe94d03955ff4cc5dec97fa5f0dc564ae5ab63012e76dbe84c87c1c83460b48"
+				),
 			},
 		);
 		CurrentVaultEpochAndState::<Runtime, crate::BitcoinInstance>::put(VaultEpochAndState {
