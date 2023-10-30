@@ -14,34 +14,40 @@ pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
 
 pub struct Config;
 
-pub const NETWORK_NAME: &str = "Chainflip-KitKat";
+pub const NETWORK_NAME: &str = "Chainflip-Berghain";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Mainnet;
-pub const PROTOCOL_ID: &str = "flip-kitkat";
+pub const PROTOCOL_ID: &str = "flip-berghain";
 
+// TODO: Change spec
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("6fA66Cb44dE97CaA1aE7742019DF6e7AFA3F9b51"),
+	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
 	eth_usdc_address: hex_literal::hex!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
-	state_chain_gateway_address: hex_literal::hex!("B5E2C8fa04Ae426167490a0437c4F20556c9B07C"),
-	key_manager_address: hex_literal::hex!("697C9BCA7916305C1D9377AB0E985da1411Dd70b"),
-	eth_vault_address: hex_literal::hex!("806cDBA7E42AdDE2B6cb09b748943E4B9A9188E5"),
-	eth_address_checker_address: hex_literal::hex!("D2D873BCaE693C9Cb9F7757183012edD671d2216"),
+	state_chain_gateway_address: hex_literal::hex!("6995Ab7c4D7F4B03f467Cf4c8E920427d9621DBd"),
+	key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
+	eth_vault_address: hex_literal::hex!("F5e10380213880111522dd0efD3dbb45b9f62Bcc"),
+	eth_address_checker_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	ethereum_chain_id: CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
-		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024"
+		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024" /* TODO: Albert to
+		                                                                      * replace AGG key
+		                                                                      * before launch */
 	),
-	ethereum_deployment_block: 18227257u64,
+	ethereum_deployment_block: 18277081u64, // TODO: Albert to confirm block number before launch
 	genesis_funding_amount: 1_000 * FLIPPERINOS_PER_FLIP,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9430, transaction_version: 24 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 }, /* TODO:
+	                                                                                      * Dan confirm
+	                                                                                      * number */
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
 
+// TODO: change once nodes have been spun up
 pub const BASHFUL_ACCOUNT_ID: &str = "cFNBWrx4Wx68hVugPVX3KAtKwbsmHjw6ozAXE3d663bwtYF5R";
 pub const BASHFUL_SR25519: [u8; 32] =
 	hex_literal::hex!["beb23228343fc71c913a10299f577cbc20ee0eb44dcf8a698ab861c76223495b"];

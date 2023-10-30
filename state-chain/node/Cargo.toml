@@ -107,18 +107,12 @@ systemd-units = [
   { unit-name = "chainflip-genesis-node", enable = false },
 ]
 
-[package.metadata.deb.variants.development]
-maintainer-scripts = "package/development"
-assets = [["target/release/chainflip-node", "usr/bin/", "755"]]
+[package.metadata.deb.variants.test]
+maintainer-scripts = "package/test"
 
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
 assets = [
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
   [
     "chainspecs/sisyphos.chainspec.raw.json",
     "etc/chainflip/sisyphos.chainspec.json",
@@ -130,43 +124,19 @@ assets = [
 maintainer-scripts = "package/perseverance"
 assets = [
   [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
     "chainspecs/perseverance.chainspec.raw.json",
     "etc/chainflip/perseverance.chainspec.json",
     "644",
   ],
 ]
 
-[package.metadata.deb.variants.partnernet]
-maintainer-scripts = "package/partnernet"
-assets = [
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
-    "chainspecs/partnernet.chainspec.raw.json",
-    "etc/chainflip/partnernet.chainspec.json",
-    "644",
-  ],
-]
-
-[package.metadata.deb.variants.kitkat]
-maintainer-scripts = "package/kitkat"
-assets = [
-  [
-    "target/release/chainflip-node",
-    "usr/bin/",
-    "755",
-  ],
-  [
-    "chainspecs/kitkat.chainspec.raw.json",
-    "etc/chainflip/kitkat.chainspec.json",
-    "644",
-  ],
-]
+[package.metadata.deb.variants.berghain]
+maintainer-scripts = "package/berghain"
+# TODO: Uncomment during Berghain launch
+#assets = [
+#  [
+#    "chainspecs/berghain.chainspec.raw.json",
+#    "etc/chainflip/berghain.chainspec.json",
+#    "644",
+#  ],
+#]

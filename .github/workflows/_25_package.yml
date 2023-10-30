@@ -5,10 +5,6 @@ on:
         description: Network being released
         required: true
         type: string
-      environment:
-        description: Environment
-        required: true
-        type: string
 
 env:
   FORCE_COLOR: 1
@@ -47,11 +43,6 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-lp-api --deb-revision "${{ steps.get-date.outputs.date }}"
-
-      - name: Build development packages
-        if: inputs.environment == 'dev'
-        run: |
-          cargo deb -v --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Upload packages
         uses: actions/upload-artifact@v3
