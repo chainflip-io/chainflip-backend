@@ -14,6 +14,7 @@ hex = { optional = true, version = '0.4' }
 ethabi = { default-features = false, version = '18.0' }
 strum = { default-features = false, version = '0.24' }
 strum_macros = { default-features = false, version = '0.24' }
+semver = { default-features = false, version = "1.0.20" }
 
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3", default-features = false }
@@ -39,5 +40,6 @@ std = [
   'serde/std',
   'sp-std/std',
   'strum/std',
+  'semver/std',
 ]
 runtime-benchmarks = ['frame-support/runtime-benchmarks']

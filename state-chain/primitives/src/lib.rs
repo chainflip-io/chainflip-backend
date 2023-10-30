@@ -3,12 +3,14 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
 };
 use scale_info::TypeInfo;
+use semver::{Error, Version};
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
@@ -196,13 +198,13 @@ impl SemVer {
 		self > &other
 	}
 
-	pub fn parse(text: String) -> Result<Self, &str> {
-		let prefix = text.split("-").next().unwrap();
-		let mut version = prefix.split(".");
-		let major = version.next().unwrap();
-		let minor = version.next().unwrap();
-		let patch = version.next().unwrap();
-		Ok(SemVer { major.into(), minor, patch })
+	pub fn parse(text: &str) -> Result<Self, Error> {
+		let version = Version::parse(text)?;
+		Ok(SemVer {
+			major: version.major as u8,
+			minor: version.minor as u8,
+			patch: version.patch as u8,
+		})
 	}
 }
 #[cfg(feature = "std")]

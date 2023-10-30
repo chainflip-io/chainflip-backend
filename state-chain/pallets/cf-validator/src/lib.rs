@@ -13,8 +13,8 @@ pub use weights::WeightInfo;
 
 mod auction_resolver;
 mod benchmarking;
+mod migrations;
 mod rotation_state;
-
 pub use auction_resolver::*;
 
 use cf_primitives::{AuthorityCount, EpochIndex, SemVer, Versions, FLIPPERINOS_PER_FLIP};
@@ -33,7 +33,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
 		Percent, Permill,
 	},
-	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	traits::{EstimateNextSessionRotation, OnKilledAccount, OnRuntimeUpgrade},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -93,7 +93,7 @@ pub enum PalletOffence {
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
-
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -102,6 +102,7 @@ pub mod pallet {
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -468,6 +469,20 @@ pub mod pallet {
 			});
 			weight
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
+		}
 	}
 
 	#[pallet::call]
@@ -690,12 +705,12 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: (*current_version).cfe,
+						old_version: current_version.cfe,
 						new_version: new_version.cfe,
 					});
 					Self::deposit_event(Event::NodeVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: (*current_version).node,
+						old_version: current_version.node,
 						new_version: new_version.node,
 					});
 					*current_version = new_version;
