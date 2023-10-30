@@ -30,16 +30,16 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let storage_len = NodeCFEVersionOld::<T>::iter_keys().count;
+		let storage_len: u64 = NodeCFEVersionOld::<T>::iter_keys().count() as u64;
 
 		Ok(storage_len.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let old_storage_len = <usize>::decode(&mut &state[..]).unwrap();
+		let old_storage_len = <u64>::decode(&mut &state[..]).unwrap();
 		ensure!(
-			NodeCFEVersionOld::<T>::iter_keys().count == old_storage_len,
+			NodeCFEVersionOld::<T>::iter_keys().count() as u64 == old_storage_len,
 			"NodeCFEVersion migration failed."
 		);
 		Ok(())
