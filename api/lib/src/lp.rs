@@ -29,6 +29,8 @@ pub struct RangeOrderReturn {
 
 fn collect_range_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+	order_base_asset: Asset,
+	order_pair_asset: Asset,
 	order_id: OrderId,
 ) -> Vec<RangeOrderReturn> {
 	events
@@ -41,17 +43,20 @@ fn collect_range_order_returns(
 					assets_delta,
 					collected_fees,
 					tick_range,
+					base_asset,
+					pair_asset,
 					id,
 					..
 				},
-			) if order_id == id => Some(RangeOrderReturn {
-				liquidity_delta,
-				liquidity_total,
-				increase_or_decrease,
-				tick_range,
-				collected_fees,
-				assets_delta,
-			}),
+			) if (base_asset, pair_asset, id) == (order_base_asset, order_pair_asset, order_id) =>
+				Some(RangeOrderReturn {
+					liquidity_delta,
+					liquidity_total,
+					increase_or_decrease,
+					tick_range,
+					collected_fees,
+					assets_delta,
+				}),
 			_ => None,
 		})
 		.collect()
@@ -68,6 +73,8 @@ pub struct LimitOrderReturn {
 
 fn collect_limit_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+	order_sell_asset: Asset,
+	order_buy_asset: Asset,
 	order_id: OrderId,
 ) -> Vec<LimitOrderReturn> {
 	events
@@ -80,16 +87,19 @@ fn collect_limit_order_returns(
 					collected_fees,
 					bought_amount,
 					tick,
+					sell_asset,
+					buy_asset,
 					id,
 					..
 				},
-			) if order_id == id => Some(LimitOrderReturn {
-				tick,
-				amount_total,
-				collected_fees,
-				bought_amount,
-				position_delta,
-			}),
+			) if (order_sell_asset, order_buy_asset, order_id) == (sell_asset, buy_asset, id) =>
+				Some(LimitOrderReturn {
+					tick,
+					amount_total,
+					collected_fees,
+					bought_amount,
+					position_delta,
+				}),
 			_ => None,
 		})
 		.collect()
@@ -181,7 +191,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_range_order_returns(events, id))
+		Ok(collect_range_order_returns(events, base_asset, pair_asset, id))
 	}
 
 	async fn set_range_order(
@@ -205,7 +215,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_range_order_returns(events, id))
+		Ok(collect_range_order_returns(events, base_asset, pair_asset, id))
 	}
 
 	async fn update_limit_order(
@@ -231,7 +241,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_limit_order_returns(events, id))
+		Ok(collect_limit_order_returns(events, sell_asset, buy_asset, id))
 	}
 
 	async fn set_limit_order(
@@ -255,6 +265,6 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(collect_limit_order_returns(events, id))
+		Ok(collect_limit_order_returns(events, sell_asset, buy_asset, id))
 	}
 }

@@ -669,8 +669,8 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
-			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
+				Self::inner_sweep(&lp, asset_pair.base_side)?;
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -754,8 +754,8 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
-			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
+				Self::inner_sweep(&lp, asset_pair.base_side)?;
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -828,8 +828,8 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
-			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
+				Self::inner_sweep(&lp, Side::Zero)?;
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
 						.get(&lp)
@@ -905,8 +905,8 @@ pub mod pallet {
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
-			Self::inner_sweep(&lp)?;
 			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
+				Self::inner_sweep(&lp, Side::Zero)?;
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
 						.get(&lp)
@@ -1047,7 +1047,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn sweep(who: &T::AccountId) -> DispatchResult {
-		Self::inner_sweep(who)
+		Self::inner_sweep(who, Side::Zero)
 	}
 }
 
@@ -1118,13 +1118,14 @@ pub struct UnidirectionalPoolDepth {
 }
 
 impl<T: Config> Pallet<T> {
-	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
+	fn inner_sweep(lp: &T::AccountId, range_order_base_side: Side) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
 		for canonical_asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
 			let mut pool = Pools::<T>::get(canonical_asset_pair).unwrap();
 
 			if let Some(range_orders_cache) = pool.range_orders_cache.get(lp).cloned() {
-				let asset_pair = AssetPair { canonical_asset_pair, base_side: Side::Zero };
+				let asset_pair =
+					AssetPair { canonical_asset_pair, base_side: range_order_base_side };
 
 				for (id, range) in range_orders_cache.iter() {
 					Self::inner_update_range_order(
