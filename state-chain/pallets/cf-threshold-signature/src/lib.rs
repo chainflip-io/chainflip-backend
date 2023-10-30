@@ -33,7 +33,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, Saturating, Zero},
 		RuntimeDebug,
 	},
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
+	traits::{DefensiveOption, EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -835,7 +835,15 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		Self::inner_request_signature(payload, RequestType::CurrentKey)
+		let request_type = if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
+			T::KeyProvider::active_epoch_key().defensive_map_or_else(
+				|| RequestType::CurrentKey,
+				|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
+			)
+		} else {
+			RequestType::CurrentKey
+		};
+		Self::inner_request_signature(payload, request_type)
 	}
 
 	fn request_verification_signature(
