@@ -3,7 +3,6 @@
 //! Chainflip Primitives
 //!
 //! Primitive types to be used across Chainflip's various crates.
-
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
