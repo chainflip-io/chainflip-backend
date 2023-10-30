@@ -284,9 +284,6 @@ async function testLimitOrder() {
   let matchUpdate = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateLimitOrder.forEach((order: any) => {
-    console.log('order', JSON.stringify(order));
-    console.log('order.position_delta[0]', JSON.stringify(order.position_delta[0]));
-    console.log('order.amount_total', JSON.stringify(order.amount_total));
     if (order.position_delta[0] === `Increase` && order.amount_total === testAssetAmount * 2) {
       matchUpdate = true;
     }
@@ -310,9 +307,6 @@ async function testLimitOrder() {
   let matchBurn = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnLimitOrder.forEach((order: any) => {
-    console.log('order', JSON.stringify(order));
-    console.log('order.position_delta[0]', JSON.stringify(order.position_delta[0]));
-    console.log('order.amount_total', JSON.stringify(order.amount_total));
     if (order.position_delta[0] === `Decrease` && order.amount_total === 0) {
       matchBurn = true;
     }
