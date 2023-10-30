@@ -311,7 +311,7 @@ impl Engine {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(pallet_cf_environment::Call::witness_current_bitcoin_block_number_for_key {
 								block_number: 0,
-								new_public_key: new_public_key.clone(),
+								new_public_key: *new_public_key,
 							}),
 							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
 						);
