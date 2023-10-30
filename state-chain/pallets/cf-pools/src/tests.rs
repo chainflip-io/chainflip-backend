@@ -193,6 +193,60 @@ fn test_buy_back_flip_2() {
 }
 
 #[test]
+fn test_sweeping() {
+	new_test_ext().execute_with(|| {
+		const TICK: Tick = 0;
+		const ETH: Asset = Asset::Eth;
+		const POSITION_0_SIZE: AssetAmount = 100_000;
+		const POSITION_1_SIZE: AssetAmount = 90_000;
+		const SWAP_AMOUNT: AssetAmount = 50_000;
+
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			ETH,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			STABLE_ASSET,
+			ETH,
+			0,
+			Some(TICK),
+			POSITION_0_SIZE,
+		));
+
+		assert_eq!(AliceCollectedEth::get(), 0);
+		assert_eq!(AliceCollectedUsdc::get(), 0);
+		assert_eq!(AliceDebitedEth::get(), 0);
+		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
+
+		LiquidityPools::swap_with_network_fee(ETH, STABLE_ASSET, SWAP_AMOUNT).unwrap();
+
+		assert_eq!(AliceCollectedEth::get(), 0);
+		assert_eq!(AliceCollectedUsdc::get(), 0);
+		assert_eq!(AliceDebitedEth::get(), 0);
+		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
+
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			ETH,
+			STABLE_ASSET,
+			1,
+			Some(TICK),
+			POSITION_1_SIZE,
+		));
+
+		assert_eq!(AliceCollectedEth::get(), SWAP_AMOUNT);
+		assert_eq!(AliceCollectedUsdc::get(), 0);
+		assert_eq!(AliceDebitedEth::get(), POSITION_1_SIZE);
+		assert_eq!(AliceDebitedUsdc::get(), POSITION_0_SIZE);
+	});
+}
+
+#[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
 		const INTERVAL: BlockNumberFor<Test> = 5;
