@@ -983,6 +983,16 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		let rotation =
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
+		if <<T::Chain as Chain>::ChainCrypto>::optimistic_activation() {
+			// New key is already activated, nothing to do.
+			ensure!(
+				PendingVaultRotation::<T, I>::decode_variant() ==
+					Some(VaultRotationStatusVariant::Complete),
+				Error::<T, I>::InvalidRotationStatus
+			);
+			return Ok(().into())
+		}
+
 		let new_public_key = ensure_variant!(
 			VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key } => new_public_key,
 			rotation,
