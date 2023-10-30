@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade};
+use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
@@ -784,6 +784,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Completes a single deposit request.
+	#[transactional]
 	fn process_single_deposit(
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
