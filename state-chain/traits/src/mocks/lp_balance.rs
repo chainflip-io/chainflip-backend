@@ -1,7 +1,10 @@
 use crate::LpBalanceApi;
-use cf_chains::{assets::any::Asset, ForeignChainAddress};
+use cf_chains::assets::any::Asset;
 use cf_primitives::AssetAmount;
 use sp_runtime::DispatchResult;
+
+#[cfg(feature = "runtime-benchmarks")]
+use cf_chains::ForeignChainAddress;
 
 pub struct MockBalance;
 impl LpBalanceApi for MockBalance {
