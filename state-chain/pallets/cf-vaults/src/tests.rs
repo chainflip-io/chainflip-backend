@@ -855,16 +855,6 @@ mod vault_key_rotation {
 
 	fn final_checks(ext: TestRunner<()>, expected_activation_block: u64) {
 		ext.execute_with(|| {
-			// Can't repeat.
-			assert_noop!(
-				VaultsPallet::vault_key_rotated(
-					RuntimeOrigin::root(),
-					expected_activation_block,
-					TX_HASH,
-				),
-				Error::<Test, _>::InvalidRotationStatus
-			);
-
 			let current_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
 
 			let Vault { public_key, active_from_block } =
@@ -936,15 +926,12 @@ mod vault_key_rotation {
 			MockOptimisticActivation::set(true);
 			VaultsPallet::activate();
 
-			// No need to call vault_key_rotated.
-			assert_noop!(
-				VaultsPallet::vault_key_rotated(
-					RuntimeOrigin::root(),
-					ACTIVATION_BLOCK_NUMBER,
-					TX_HASH,
-				),
-				Error::<Test, _>::InvalidRotationStatus
-			);
+			// No need to call vault_key_rotated, but it's ok if we do.
+			assert_ok!(VaultsPallet::vault_key_rotated(
+				RuntimeOrigin::root(),
+				ACTIVATION_BLOCK_NUMBER,
+				TX_HASH,
+			),);
 
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get().unwrap(),

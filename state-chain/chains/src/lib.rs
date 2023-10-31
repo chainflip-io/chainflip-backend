@@ -176,7 +176,7 @@ pub trait ChainCrypto {
 	/// Determines whether threshold signatures are made with a specific fixed key, or whether the
 	/// key is refreshed if we need to retry the signature.
 	///
-	/// By default, this is true for Utxo-based chains, true otherwise.
+	/// By default, this is true for Utxo-based chains, false otherwise.
 	fn sign_with_specific_key() -> bool {
 		Self::UtxoChain::get()
 	}

@@ -155,11 +155,10 @@ impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
 		mut self,
 		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		let proxy_account = E::proxy_account();
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature(proxy_account, threshold_signature.clone())
+			call.insert_signature(threshold_signature.clone())
 		);
 		self
 	}
@@ -219,7 +218,7 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall
 	}
 
 	fn signed(mut self, signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		self.builder.insert_signature(E::proxy_account(), signature.clone());
+		self.builder.insert_signature(signature.clone());
 		self
 	}
 
