@@ -10,6 +10,8 @@ import {
   observeCcmReceived,
   assetToChain,
   observeSwapScheduled,
+  observeSwapEvents,
+  observeBroadcastSuccess,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 
@@ -160,4 +162,28 @@ export async function performSwap(
   await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount);
 
   return swapParams;
+}
+
+// function to create a swap and track it until we detect the corresponding broadcast success
+export async function performAndTrackSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  amount?: string,
+  tag?: string,
+) {
+  const chainflipApi = await getChainflipApi();
+
+  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
+  const channelId = swapParams.channelId;
+  console.log(`${tag} swap channel created with channel_id: ${channelId}`);
+
+  await send(sourceAsset, swapParams.depositAddress, amount);
+  console.log(`${tag} fund sent, waiting for the deposit to be witnessed..`);
+
+  // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
+  const broadcastId = await observeSwapEvents(swapParams, chainflipApi, tag);
+
+  await observeBroadcastSuccess(broadcastId);
+  console.log(`${tag} broadcast executed succesfully, swap is complete!`);
 }

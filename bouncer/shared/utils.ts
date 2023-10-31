@@ -12,6 +12,7 @@ import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './eth_abis';
+import { SwapParams } from './perform_swap';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -203,6 +204,99 @@ export async function observeEvent(
   return result as Event;
 }
 
+type EgressId = [Chain, number];
+// Observe multiple events related to the same swap that could be emitted in the same block
+export async function observeSwapEvents(
+  { sourceAsset, destAsset, channelId }: SwapParams,
+  api: ApiPromise,
+  tag?: string,
+  swapType?: SwapType,
+  finalized = false,
+): Promise<number> {
+  let eventFound = false;
+
+  const subscribeMethod = finalized
+    ? api.rpc.chain.subscribeFinalizedHeads
+    : api.rpc.chain.subscribeNewHeads;
+
+  const swapScheduledEvent = 'SwapScheduled';
+  const swapExecutedEvent = 'SwapExecuted';
+  const swapEgressScheduled = 'SwapEgressScheduled';
+  const batchBroadcastRequested = 'BatchBroadcastRequesteded';
+  let expectedMethod = swapScheduledEvent;
+
+  let swapId = 0;
+  let egressId: EgressId;
+  let broadcastId = 0;
+
+  console.log(`${tag} starting observing swap events...`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unsubscribe: any = await subscribeMethod(async (header) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const events: any[] = await api.query.system.events.at(header.hash);
+    events.forEach((record, index) => {
+      const { event } = record;
+      if (!eventFound && event.method.includes(expectedMethod)) {
+        const expectedEvent = {
+          name: { section: event.section, method: event.method },
+          data: event.toHuman().data,
+          block: header.number.toNumber(),
+          event_index: index,
+        };
+
+        switch (expectedMethod) {
+          case swapScheduledEvent:
+            if ('DepositChannel' in expectedEvent.data.origin) {
+              if (
+                Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
+                sourceAsset === (expectedEvent.data.sourceAsset.toUpperCase() as Asset) &&
+                destAsset === (expectedEvent.data.destinationAsset.toUpperCase() as Asset) &&
+                swapType
+                  ? expectedEvent.data.swapType[swapType] !== undefined
+                  : true
+              ) {
+                expectedMethod = swapExecutedEvent;
+                swapId = expectedEvent.data.swapId;
+                console.log(`${tag} swap scheduled with swapId: ${swapId}`);
+              }
+            }
+            break;
+          case swapExecutedEvent:
+            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+              expectedMethod = swapEgressScheduled;
+              console.log(`${tag} swap executed, with id: ${swapId}`);
+            }
+            break;
+          case swapEgressScheduled:
+            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+              expectedMethod = batchBroadcastRequested;
+              egressId = expectedEvent.data.egressId as EgressId;
+              console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
+            }
+            break;
+          case batchBroadcastRequested:
+            for (const eventEgressId of expectedEvent.data.egressIds) {
+              if (egressId[0] === eventEgressId[0] && egressId[1] === Number(eventEgressId[1])) {
+                broadcastId = Number(expectedEvent.data.broadcastId);
+                console.log(`${tag} broadcast requested, with id: ${broadcastId}`);
+                eventFound = true;
+                unsubscribe();
+                break;
+              }
+            }
+            break;
+          default:
+            break;
+        }
+      }
+    });
+  });
+  while (!eventFound) {
+    await sleep(1000);
+  }
+  return broadcastId as number;
+}
+
 // TODO: To import from the SDK once it's exported
 export enum SwapType {
   Swap = 'Swap',
@@ -248,6 +342,28 @@ export async function observeBadEvents(
       `Unexpected event emited ${event.name.section}:${event.name.method} in block ${event.block}`,
     );
   }
+}
+
+export async function observeBroadcastSuccess(broadcastId: number) {
+  const chainflipApi = await getChainflipApi();
+
+  let stopObserving = false;
+  const observeBroadcastFailure = observeBadEvents(
+    ':BroadcastAborted',
+    () => stopObserving,
+    (event) => {
+      if (broadcastId === Number(event.data.broadcastId)) return true;
+      return false;
+    },
+  );
+
+  await observeEvent(':BroadcastSuccess', chainflipApi, (event) => {
+    if (broadcastId === Number(event.data.broadcastId)) return true;
+    return false;
+  });
+
+  stopObserving = true;
+  await observeBroadcastFailure;
 }
 
 export async function newAddress(
