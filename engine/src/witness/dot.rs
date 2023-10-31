@@ -374,10 +374,8 @@ pub mod test {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (vault_key_rotated_calls, extrinsic_indices) =
-			proxy_addeds(20, &block_event_details, &our_vault);
+		let extrinsic_indices = proxy_addeds(20, &block_event_details, &our_vault);
 
-		assert_eq!(vault_key_rotated_calls.len(), 1);
 		assert_eq!(extrinsic_indices.len(), 1);
 		assert!(extrinsic_indices.contains(&our_proxy_added_index));
 	}
