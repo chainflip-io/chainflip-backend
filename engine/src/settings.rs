@@ -903,7 +903,7 @@ pub mod tests {
 			.node_p2p
 			.node_key_file
 			.to_string_lossy()
-			.contains(&env!("CF_TEST_CONFIG_ROOT")));
+			.contains(env!("CF_TEST_CONFIG_ROOT")));
 
 		assert_eq!(
 			custom_base_path_settings.btc.nodes.primary.http_endpoint,
