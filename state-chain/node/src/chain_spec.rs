@@ -18,7 +18,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
-	sr25519, Pair, Public,
+	Pair, Public,
 };
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
@@ -45,10 +45,9 @@ use sp_runtime::{
 	Percent,
 };
 
+pub mod berghain;
 pub mod common;
 pub mod devnet;
-pub mod kitkat;
-pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
@@ -169,13 +168,40 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 
 /// Start a single node development chain - using bashful as genesis node
 pub fn cf_development_config() -> Result<ChainSpec, String> {
+	inner_cf_development_config(vec![(
+		parse_account(testnet::BASHFUL_ACCOUNT_ID),
+		testnet::BASHFUL_SR25519.unchecked_into(),
+		testnet::BASHFUL_ED25519.unchecked_into(),
+	)])
+}
+
+/// Start a three node development chain - using bashful, doc and dopey as genesis nodes
+pub fn cf_three_node_development_config() -> Result<ChainSpec, String> {
+	inner_cf_development_config(vec![
+		(
+			parse_account(testnet::BASHFUL_ACCOUNT_ID),
+			testnet::BASHFUL_SR25519.unchecked_into(),
+			testnet::BASHFUL_ED25519.unchecked_into(),
+		),
+		(
+			parse_account(testnet::DOC_ACCOUNT_ID),
+			testnet::DOC_SR25519.unchecked_into(),
+			testnet::DOC_ED25519.unchecked_into(),
+		),
+		(
+			parse_account(testnet::DOPEY_ACCOUNT_ID),
+			testnet::DOPEY_SR25519.unchecked_into(),
+			testnet::DOPEY_ED25519.unchecked_into(),
+		),
+	])
+}
+
+pub fn inner_cf_development_config(
+	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
+) -> Result<ChainSpec, String> {
 	let wasm_binary =
 		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
 
-	let snow_white =
-		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
-	let bashful_sr25519 =
-		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	let StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -199,45 +225,10 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		move || {
 			testnet_genesis(
 				wasm_binary,
-				// Initial PoA authorities
-				vec![(
-					// Bashful
-					bashful_sr25519.into(),
-					bashful_sr25519.unchecked_into(),
-					hex_literal::hex![
-						"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
-					]
-					.unchecked_into(),
-				)],
-				// Extra accounts
-				vec![
-					(
-						get_account_id_from_seed::<sr25519::Public>("LP_1"),
-						AccountRole::LiquidityProvider,
-						100 * FLIPPERINOS_PER_FLIP,
-						Some(b"Chainflip LP 1".to_vec()),
-					),
-					(
-						get_account_id_from_seed::<sr25519::Public>("LP_2"),
-						AccountRole::LiquidityProvider,
-						100 * FLIPPERINOS_PER_FLIP,
-						Some(b"Chainflip LP 2".to_vec()),
-					),
-					(
-						get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
-						AccountRole::Broker,
-						100 * FLIPPERINOS_PER_FLIP,
-						Some(b"Chainflip Broker 1".to_vec()),
-					),
-					(
-						get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
-						AccountRole::Broker,
-						100 * FLIPPERINOS_PER_FLIP,
-						Some(b"Chainflip Broker 2".to_vec()),
-					),
-				],
+				initial_authorities.clone(),
+				testnet::extra_accounts(),
 				// Governance account - Snow White
-				snow_white.into(),
+				testnet::SNOW_WHITE_SR25519.into(),
 				1,
 				devnet::MAX_AUTHORITIES,
 				EnvironmentConfig {
@@ -421,10 +412,9 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
-network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
-network_spec!(kitkat);
+network_spec!(berghain);
 
 /// Configure initial storage state for FRAME modules.
 /// 150 authority limit

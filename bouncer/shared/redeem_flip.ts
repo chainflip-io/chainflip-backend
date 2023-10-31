@@ -84,7 +84,7 @@ export async function redeemFlip(
 
   const delay = await getRedemptionDelay(networkOptions);
   console.log(`Waiting for ${delay}s before we can execute redemption`);
-  await sleep(delay * 1000);
+  await sleep(Number(delay) * 1000);
 
   console.log(`Executing redemption`);
 
@@ -96,7 +96,7 @@ export async function redeemFlip(
     (event) => event.data[0] === flipWallet.address,
   );
 
-  await executeRedemption(accountIdHex, networkOptions, { nonce: BigInt(nonce) });
+  await executeRedemption(accountIdHex, networkOptions, { nonce });
   const redemptionExecutedAmount = (await redemptionExecutedHandle).data[1];
   console.log('Observed RedemptionSettled event: ', redemptionExecutedAmount);
   assert.strictEqual(

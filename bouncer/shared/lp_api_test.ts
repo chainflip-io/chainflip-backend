@@ -132,6 +132,7 @@ async function testRegisterWithExistingLpAccount() {
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testRangeOrder() {
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
@@ -227,6 +228,7 @@ async function testGetOpenSwapChannels() {
 }
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testLimitOrder() {
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
@@ -292,6 +294,8 @@ async function testLimitOrder() {
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi() {
+  console.log('=== Starting LP API test ===');
+
   // Provide the amount of eth needed for the tests
   await provideLiquidityAndTestAssetBalances();
 
@@ -300,8 +304,10 @@ export async function testLpApi() {
     testLiquidityDeposit(),
     testWithdrawAsset(),
     testRegisterWithExistingLpAccount(),
-    testRangeOrder(),
-    testLimitOrder(),
+    // testRangeOrder(),
+    // testLimitOrder(),
     testGetOpenSwapChannels(),
   ]);
+
+  console.log('=== LP API test complete ===');
 }

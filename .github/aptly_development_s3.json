@@ -1,7 +1,7 @@
 {
-    "chainflip-prod": {
+    "chainflip-development": {
       "region": "eu-central-1",
-      "bucket": "repo.chainflip.io",
+      "bucket": "apt.aws.chainflip.xyz",
       "endpoint": "",
       "awsAccessKeyID": "",
       "awsSecretAccessKey": "",

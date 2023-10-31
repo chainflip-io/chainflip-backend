@@ -223,6 +223,7 @@ async function testGasLimitSwap(
     if (ccmReceived?.returnValues.ccmTestGasUsed < gasConsumption) {
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
+
     const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
     const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
@@ -272,15 +273,12 @@ function getRandomGasConsumption(): number {
 }
 
 export async function testGasLimitCcmSwaps() {
-  console.log('=== Testing GasLimit CCM swaps ===');
-
   // Spam ethereum with transfers to increase the gasLimitBudget price
   const spamming = spamEthereum();
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
   while ((await getChainFees()).priorityFee < MIN_PRIORITY_FEE) {
-    console.log(i);
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spamming;
@@ -335,6 +333,4 @@ export async function testGasLimitCcmSwaps() {
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);
-
-  console.log('=== GasLimit CCM test completed ===');
 }
