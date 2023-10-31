@@ -387,7 +387,7 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<IngressEgressEnvironment>;
-	#[method(name = "pool_environment")]
+	#[method(name = "pools_environment")]
 	fn cf_pools_environment(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
