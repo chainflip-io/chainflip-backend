@@ -613,7 +613,8 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 							deposit_details: Default::default(),
 						},
 					],
-					block_height: Default::default(),
+					// The block height is purely informative.
+					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
 				},
 				Ok(()),
 			)]
@@ -652,7 +653,8 @@ fn multi_use_deposit_address_different_blocks() {
 						amount: 1,
 						deposit_details: Default::default(),
 					}],
-					block_height: Default::default(),
+					// block height is purely informative.
+					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
 				},
 				Ok(()),
 			)]
