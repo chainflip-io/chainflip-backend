@@ -7,6 +7,8 @@ export interface CcmDepositMetadata {
   cfParameters: string;
 }
 
+let brokerClient: undefined | BrokerClient;
+
 export async function newSwap(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -16,11 +18,13 @@ export async function newSwap(
   const destinationAddress =
     destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
 
-  const client = await BrokerClient.create({
-    url: process.env.BROKER_ENDPOINT ?? 'ws://127.0.0.1:10997',
-  });
+  if (!brokerClient) {
+    brokerClient = await BrokerClient.create({
+      url: process.env.BROKER_ENDPOINT ?? 'ws://127.0.0.1:10997',
+    });
+  }
 
-  await client.requestSwapDepositAddress({
+  await brokerClient.requestSwapDepositAddress({
     srcAsset: sourceAsset,
     destAsset,
     srcChain: chainFromAsset(sourceAsset),
