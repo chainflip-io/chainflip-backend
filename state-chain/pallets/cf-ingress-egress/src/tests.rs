@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
+	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
 	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
@@ -20,7 +20,7 @@ use cf_traits::{
 	DepositApi, EgressApi, GetBlockHeight,
 };
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_ok,
 	traits::{Hooks, OriginTrait},
 };
 use sp_core::H160;
@@ -606,19 +606,20 @@ fn multi_use_deposit_address_different_blocks() {
 		.then_execute_at_next_block(|(_, deposit_address)| {
 			// Closing the channel should invalidate the deposit address.
 			IngressEgress::expire_channel(deposit_address);
-			assert_noop!(
-				IngressEgress::process_deposits(
-					RuntimeOrigin::root(),
-					vec![DepositWitness {
-						deposit_address,
-						asset: eth::Asset::Eth,
-						amount: 1,
-						deposit_details: Default::default()
-					}],
-					Default::default()
-				),
-				Error::<Test, _>::InvalidDepositAddress
-			);
+			assert_ok!(IngressEgress::process_deposits(
+				RuntimeOrigin::root(),
+				vec![DepositWitness {
+					deposit_address,
+					asset: eth::Asset::Eth,
+					amount: 1,
+					deposit_details: Default::default()
+				}],
+				Default::default()
+			),);
+			assert!(matches!(
+				cf_test_utilities::last_event::<Test>(),
+				RuntimeEvent::IngressEgress(crate::Event::DepositIgnored { .. }),
+			));
 		});
 }
 

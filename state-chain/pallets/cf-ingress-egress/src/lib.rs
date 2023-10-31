@@ -29,6 +29,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{DispatchError, Saturating, TransactionOutcome},
+	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -465,12 +466,20 @@ pub mod pallet {
 				deposit_witnesses
 			{
 				Self::process_single_deposit(
-					deposit_address,
+					deposit_address.clone(),
 					asset,
 					amount,
-					deposit_details,
+					deposit_details.clone(),
 					block_height,
-				)?;
+				)
+				.unwrap_or_else(|_| {
+					Self::deposit_event(Event::<T, I>::DepositIgnored {
+						deposit_address,
+						asset,
+						amount,
+						deposit_details,
+					});
+				});
 			}
 			Ok(())
 		}
@@ -680,6 +689,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Completes a single deposit request.
+	#[transactional]
 	fn process_single_deposit(
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
