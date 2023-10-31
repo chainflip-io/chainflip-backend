@@ -353,6 +353,7 @@ pub mod pallet {
 		Deserialize,
 		Serialize,
 	)]
+	#[serde(rename_all = "snake_case")]
 	pub enum IncreaseOrDecrease<T> {
 		Increase(T),
 		Decrease(T),
