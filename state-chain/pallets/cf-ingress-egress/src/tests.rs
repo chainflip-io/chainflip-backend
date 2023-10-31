@@ -618,6 +618,38 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 				},
 				Ok(()),
 			)]
+		})
+		.then_process_events(|_, event| match event {
+			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
+			RuntimeEvent::IngressEgress(crate::Event::DepositReceived { .. }) => Some(event),
+			_ => None,
+		})
+		.inspect_context(|((expected_rejected_address, expected_accepted_address), emitted)| {
+			assert_eq!(emitted.len(), 2);
+			assert!(emitted
+				.iter()
+				.filter(|e| matches!(
+				e,
+				RuntimeEvent::IngressEgress(
+					crate::Event::DepositWitnessRejected {
+						deposit_witness,
+						..
+					}) if deposit_witness.deposit_address == *expected_rejected_address
+				))
+				.next()
+				.is_some(),);
+			assert!(emitted
+				.iter()
+				.filter(|e| matches!(
+				e,
+				RuntimeEvent::IngressEgress(
+					crate::Event::DepositReceived {
+						deposit_address,
+						..
+					}) if deposit_address == expected_accepted_address
+				))
+				.next()
+				.is_some(),);
 		});
 }
 
