@@ -1,6 +1,12 @@
 #!/usr/bin/env -S pnpm tsx
 import { testGasLimitCcmSwaps } from '../shared/gaslimit_ccm';
-import { runWithTimeout, observeBadEvents, sleep } from '../shared/utils';
+import {
+  runWithTimeout,
+  observeBadEvents,
+  sleep,
+  observeEvent,
+  getChainflipApi,
+} from '../shared/utils';
 
 // Running this test separately from all the concurrent tests because there will
 // be BroadcastAborted events emited.
@@ -12,9 +18,10 @@ async function testGasLimitCcmTest() {
 
   await testGasLimitCcmSwaps();
 
-  // Wait for some blocks to make sure the FeeDeficitRefused would have been triggered
   console.log('Waiting for the fee deficits to be recorded...');
-  await sleep(72000);
+  await observeEvent('ethereumBroadcaster:TransactionFeeDeficitRecorded', await getChainflipApi());
+  // Wait for some blocks after the first fee deficit is recorded
+  await sleep(30000);
   stopObserving = true;
   await feeDeficitRefused;
 
