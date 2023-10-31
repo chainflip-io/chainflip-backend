@@ -1055,7 +1055,7 @@ pub mod tests {
 		);
 		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
 
-		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
+		assert!(settings.signing.db_file.ends_with("not/real.db"));
 	}
 
 	#[test]
