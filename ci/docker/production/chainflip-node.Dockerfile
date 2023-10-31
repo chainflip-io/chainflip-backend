@@ -1,4 +1,4 @@
-FROM debian:bullseye
+FROM debian:bookworm
 ARG BUILD_DATETIME
 ARG VCS_REF
 ARG CHAINSPEC
