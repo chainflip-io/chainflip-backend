@@ -27,7 +27,7 @@ pub struct RangeOrderReturn {
 	tick_range: Range<Tick>,
 	liquidity_total: Liquidity,
 	collected_fees: AssetAmounts,
-	order_delta: Option<IncreaseOrDecrease<RangeOrderChange>>,
+	size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
 }
 
 fn collect_range_order_returns(
@@ -38,7 +38,7 @@ fn collect_range_order_returns(
 		.filter_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::RangeOrderUpdated {
-					order_delta,
+					size_change,
 					liquidity_total,
 					collected_fees,
 					tick_range,
@@ -51,7 +51,7 @@ fn collect_range_order_returns(
 				base_asset,
 				pair_asset,
 				id,
-				order_delta,
+				size_change,
 				liquidity_total,
 				tick_range,
 				collected_fees,

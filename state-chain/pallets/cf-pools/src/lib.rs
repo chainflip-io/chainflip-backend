@@ -543,7 +543,7 @@ pub mod pallet {
 			pair_asset: Asset,
 			id: OrderId,
 			tick_range: core::ops::Range<Tick>,
-			order_delta: Option<IncreaseOrDecrease<RangeOrderChange>>,
+			size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
 			liquidity_total: Liquidity,
 			collected_fees: AssetAmounts,
 		},
@@ -1229,10 +1229,10 @@ impl<T: Config> Pallet<T> {
 		asset_pair: &AssetPair<T>,
 		id: OrderId,
 		tick: cf_amm::common::Tick,
-		delta: IncreaseOrDecrease<cf_amm::common::Amount>,
+		amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
 		allow_noop: bool,
 	) -> Result<AssetAmount, DispatchError> {
-		let (amount_change, position_info, collected) = match delta {
+		let (amount_change, position_info, collected) = match amount_change {
 			IncreaseOrDecrease::Increase(amount) => {
 				let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
 					&(lp.clone(), id),
@@ -1316,10 +1316,10 @@ impl<T: Config> Pallet<T> {
 		asset_pair: &AssetPair<T>,
 		id: OrderId,
 		tick_range: Range<cf_amm::common::Tick>,
-		delta: IncreaseOrDecrease<range_orders::Size>,
+		size_change: IncreaseOrDecrease<range_orders::Size>,
 		allow_noop: bool,
 	) -> Result<AssetAmounts, DispatchError> {
-		let (liquidity_change, position_info, assets_delta, collected) = match delta {
+		let (liquidity_change, position_info, assets_change, collected) = match size_change {
 			IncreaseOrDecrease::Increase(size) => {
 				let (assets_debited, minted_liquidity, collected, position_info) =
 					match pool.pool_state.collect_and_mint_range_order(
@@ -1404,25 +1404,23 @@ impl<T: Config> Pallet<T> {
 			range_orders.insert(id, tick_range.clone());
 		}
 
-		let zero_delta = *liquidity_change.abs() == 0;
+		let zero_change = *liquidity_change.abs() == 0;
 
-		if !zero_delta || collected_fees != Default::default() {
+		if !zero_change || collected_fees != Default::default() {
 			Self::deposit_event(Event::<T>::RangeOrderUpdated {
 				lp: lp.clone(),
 				base_asset: asset_pair.canonical_asset_pair.side_to_asset(asset_pair.base_side),
 				pair_asset: asset_pair.canonical_asset_pair.side_to_asset(!asset_pair.base_side),
 				id,
 				tick_range,
-				order_delta: {
-					if zero_delta {
+				size_change: {
+					if zero_change {
 						None
 					} else {
-						Some(
-							liquidity_change.map(|liquidity| RangeOrderChange {
-								liquidity,
-								amounts: assets_delta,
-							}),
-						)
+						Some(liquidity_change.map(|liquidity| RangeOrderChange {
+							liquidity,
+							amounts: assets_change,
+						}))
 					}
 				},
 				liquidity_total: position_info.liquidity,
@@ -1430,7 +1428,7 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		Ok(assets_delta)
+		Ok(assets_change)
 	}
 
 	#[transactional]
@@ -1722,9 +1720,9 @@ impl<T: Config> Pallet<T> {
 			limit_orders.entry(lp.clone()).or_default().insert(order, tick);
 		}
 
-		let zero_delta = *amount_change.abs() == 0;
+		let zero_change = *amount_change.abs() == 0;
 
-		if !zero_delta ||
+		if !zero_change ||
 			collected_fees != Default::default() ||
 			bought_amount != Default::default()
 		{
@@ -1735,7 +1733,7 @@ impl<T: Config> Pallet<T> {
 				id: order,
 				tick,
 				amount_change: {
-					if zero_delta {
+					if zero_change {
 						None
 					} else {
 						Some(amount_change)
