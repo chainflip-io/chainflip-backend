@@ -388,7 +388,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<IngressEgressEnvironment>;
 	#[method(name = "pool_environment")]
-	fn cf_pool_environment(
+	fn cf_pools_environment(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment>;
@@ -895,7 +895,7 @@ where
 		})
 	}
 
-	fn cf_pool_environment(
+	fn cf_pools_environment(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
@@ -919,7 +919,7 @@ where
 			ingress_egress: self.cf_ingress_egress_environment(at)?,
 			swapping: self.cf_swapping_environment(at)?,
 			funding: self.cf_funding_environment(at)?,
-			pools: self.cf_pool_environment(at)?,
+			pools: self.cf_pools_environment(at)?,
 		})
 	}
 
