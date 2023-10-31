@@ -663,12 +663,11 @@ fn multi_use_deposit_address_different_blocks() {
 			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected {
 				deposit_witness,
 				..
-			}) => Some(deposit_witness),
+			}) => Some(deposit_witness.deposit_address),
 			_ => None,
 		})
 		.inspect_context(|((_, expected_address), emitted)| {
-			assert_eq!(emitted.len(), 1);
-			assert_eq!(&emitted[0].deposit_address, expected_address);
+			assert_eq!(*emitted, vec![*expected_address]);
 		});
 }
 
