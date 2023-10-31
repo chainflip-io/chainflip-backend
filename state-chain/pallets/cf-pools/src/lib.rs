@@ -621,7 +621,7 @@ pub mod pallet {
 			enabled: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::try_mutate_pool(base_asset, pair_asset, |_asset_pair, pool| {
+			Self::try_mutate_pool(base_asset, pair_asset, |_| Ok(()), |_asset_pair, pool| {
 				pool.enabled = enabled;
 				Self::deposit_event(Event::<T>::PoolStateUpdated {
 					base_asset,
@@ -712,9 +712,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
-			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
-				Self::inner_sweep(&lp, asset_pair.base_side)?;
+			Self::try_mutate_order(&lp, base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -796,9 +794,7 @@ pub mod pallet {
 				Error::<T>::UpdatingRangeOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpBalance::ensure_has_refund_address_for_pair(&lp, base_asset, pair_asset)?;
-			Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair, pool| {
-				Self::inner_sweep(&lp, asset_pair.base_side)?;
+			Self::try_mutate_order(&lp, base_asset, pair_asset, |asset_pair, pool| {
 				let tick_range = match (
 					pool.range_orders_cache
 						.get(&lp)
@@ -869,9 +865,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
-			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
-				Self::inner_sweep(&lp, Side::Zero)?;
+			Self::try_mutate_order(&lp, sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
 						.get(&lp)
@@ -943,9 +937,7 @@ pub mod pallet {
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
-			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
-				Self::inner_sweep(&lp, Side::Zero)?;
+			Self::try_mutate_order(&lp, sell_asset, buy_asset, |asset_pair, pool| {
 				let tick = match (
 					pool.limit_orders_cache[asset_pair.base_side]
 						.get(&lp)
@@ -1011,6 +1003,7 @@ pub mod pallet {
 			Self::try_mutate_enabled_pool(
 				base_asset,
 				pair_asset,
+				|_| Ok(()),
 				|asset_pair: &AssetPair<T>, pool| {
 					pool.pool_state
 						.set_fees(fee_hundredth_pips)
@@ -1066,7 +1059,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		to: any::Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		Self::try_mutate_enabled_pool(from, to, |asset_pair, pool| {
+		Self::try_mutate_enabled_pool(from, to, |_| Ok(()), |asset_pair, pool| {
 			let (output_amount, remaining_amount) =
 				pool.pool_state.swap(asset_pair.base_side, Order::Sell, input_amount.into());
 			remaining_amount
@@ -1446,32 +1439,50 @@ impl<T: Config> Pallet<T> {
 	fn try_mutate_pool<
 		R,
 		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
+		F: FnOnce(&AssetPair<T>) -> Result<(), E>,
+		G: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
 	>(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		f: F,
+		g: G,
 	) -> Result<R, E> {
 		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
+		f(&asset_pair)?;
 		Pools::<T>::try_mutate(asset_pair.canonical_asset_pair, |maybe_pool| {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-			f(&asset_pair, pool)
+			g(&asset_pair, pool)
 		})
 	}
 
 	fn try_mutate_enabled_pool<
 		R,
 		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
+		F: FnOnce(&AssetPair<T>) -> Result<(), E>,
+		G: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
 	>(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		f: F,
+		g: G,
 	) -> Result<R, E> {
-		Self::try_mutate_pool(base_asset, pair_asset, |asset_pair, pool| {
+		Self::try_mutate_pool(base_asset, pair_asset, f, |asset_pair, pool| {
 			ensure!(pool.enabled, Error::<T>::PoolDisabled);
-			f(asset_pair, pool)
+			g(asset_pair, pool)
 		})
+	}
+
+	fn try_mutate_order<
+		R,
+		F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, DispatchError>,
+	>(
+		lp: &T::AccountId,
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+		f: F,
+	) -> Result<R, DispatchError> {
+		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, pair_asset)?;
+		Self::try_mutate_enabled_pool(base_asset, pair_asset, |asset_pair| Self::inner_sweep(lp, asset_pair.base_side), f)
 	}
 
 	pub fn current_price(from: Asset, to: Asset) -> Option<Price> {
