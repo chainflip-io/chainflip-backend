@@ -12,7 +12,9 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
-use pallet_cf_pools::{AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderChange, RangeOrderSize};
+use pallet_cf_pools::{
+	AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderChange, RangeOrderSize,
+};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
