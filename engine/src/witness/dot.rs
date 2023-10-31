@@ -6,7 +6,7 @@ use cf_chains::dot::{
 	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotSignature,
 	PolkadotUncheckedExtrinsic,
 };
-use cf_primitives::{EpochIndex, PolkadotBlockNumber, TxId};
+use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -92,27 +92,12 @@ pub fn filter_map_events(
 	}
 }
 
-pub async fn proxy_added_witnessing<ProcessCall, ProcessingFut>(
+pub async fn proxy_added_witnessing(
 	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
 	header: Header<PolkadotBlockNumber, PolkadotHash, Vec<(Phase, EventWrapper)>>,
-	process_call: ProcessCall,
-) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>)
-where
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
+) -> (Vec<(Phase, EventWrapper)>, BTreeSet<u32>) {
 	let events = header.data;
-
-	let (vault_key_rotated_calls, proxy_added_broadcasts) =
-		proxy_addeds(header.index, &events, &epoch.info.1);
-
-	for call in vault_key_rotated_calls {
-		process_call(call, epoch.index).await;
-	}
+	let proxy_added_broadcasts = proxy_addeds(header.index, &events, &epoch.info.1);
 
 	(events, proxy_added_broadcasts)
 }
@@ -262,10 +247,7 @@ where
 		// Deposit witnessing
 		.dot_deposits(process_call.clone())
 		// Proxy added witnessing
-		.then({
-			let process_call = process_call.clone();
-			move |epoch, header| proxy_added_witnessing(epoch, header, process_call.clone())
-		})
+		.then(proxy_added_witnessing)
 		// Broadcast success
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await

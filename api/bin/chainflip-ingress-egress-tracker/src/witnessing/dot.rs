@@ -71,10 +71,7 @@ where
 		// Deposit witnessing
 		.dot_deposits(witness_call.clone())
 		// Proxy added witnessing
-		.then({
-			let witness_call = witness_call.clone();
-			move |epoch, header| proxy_added_witnessing(epoch, header, witness_call.clone())
-		})
+		.then(proxy_added_witnessing)
 		// Broadcast success
 		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
