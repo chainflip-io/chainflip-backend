@@ -314,8 +314,7 @@ fn proxy_addeds(
 	block_number: PolkadotBlockNumber,
 	events: &Vec<(Phase, EventWrapper)>,
 	our_vault: &PolkadotAccountId,
-) -> (Vec<state_chain_runtime::RuntimeCall>, BTreeSet<PolkadotExtrinsicIndex>) {
-	let mut vault_key_rotated_calls = vec![];
+) -> BTreeSet<PolkadotExtrinsicIndex> {
 	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
@@ -326,19 +325,11 @@ fn proxy_addeds(
 
 				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
-				vault_key_rotated_calls.push(
-					pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-						block_number,
-						tx_id: TxId { block_number, extrinsic_index },
-					}
-					.into(),
-				);
-
 				extrinsic_indices.insert(extrinsic_index);
 			}
 		}
 	}
-	(vault_key_rotated_calls, extrinsic_indices)
+	extrinsic_indices
 }
 
 #[cfg(test)]
