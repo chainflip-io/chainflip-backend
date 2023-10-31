@@ -127,7 +127,7 @@ where
 	};
 
 	let current_peers =
-		peer_info_submitter::get_current_peer_infos(&state_chain_client, Some(initial_block_hash))
+		peer_info_submitter::get_current_peer_infos(&state_chain_client, initial_block_hash)
 			.await
 			.context("Failed to get initial peer info")?;
 	let our_account_id = state_chain_client.account_id();

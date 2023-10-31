@@ -98,13 +98,11 @@ where
 
 pub async fn get_current_peer_infos<StateChainClient>(
 	state_chain_client: &Arc<StateChainClient>,
-	block_hash: Option<H256>,
+	block_hash: H256,
 ) -> anyhow::Result<Vec<PeerInfo>>
 where
 	StateChainClient: StorageApi + ChainApi,
 {
-	let block_hash = block_hash.unwrap_or_else(|| state_chain_client.latest_finalized_hash());
-
 	let peer_infos: Vec<_> = state_chain_client
 		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>, Vec<_>>(
 			block_hash,
