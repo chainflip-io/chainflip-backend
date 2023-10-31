@@ -575,7 +575,7 @@ fn can_egress_ccm() {
 }
 
 #[test]
-fn multi_deposit_includes_invalid_deposit() {
+fn multi_deposit_includes_deposit_beyond_recycle_height() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
 		.then_execute_at_next_block(|_| {
