@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# LOG_SUFFIX is optional. It can be used to differtiate between the logs of two engines, potentially with the same owner
+# e.g. in the case of an upgrade where we run two engines simultaneously.
+
 set -e
 source ./localnet/init/env/cfe.env
 $BINARY_ROOT_PATH/chainflip-engine \
@@ -10,4 +14,4 @@ $BINARY_ROOT_PATH/chainflip-engine \
   --p2p.port=$P2P_PORT \
   --logging.command_server_port=$LOG_PORT \
   --signing.db_file=/tmp/chainflip/$NODE_NAME/$NODE_NAME.db \
-  --health_check.port=$HEALTH_PORT > /tmp/chainflip/$NODE_NAME/chainflip-engine.log 2>&1 &
+  --health_check.port=$HEALTH_PORT > /tmp/chainflip/$NODE_NAME/chainflip-engine$LOG_SUFFIX.log 2>&1 &
