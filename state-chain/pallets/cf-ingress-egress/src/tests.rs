@@ -628,7 +628,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			assert_eq!(emitted.len(), 2);
 			assert!(emitted
 				.iter()
-				.filter(|e| matches!(
+				.find(|e| matches!(
 				e,
 				RuntimeEvent::IngressEgress(
 					crate::Event::DepositWitnessRejected {
@@ -636,11 +636,10 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 						..
 					}) if deposit_witness.deposit_address == *expected_rejected_address
 				))
-				.next()
 				.is_some(),);
 			assert!(emitted
 				.iter()
-				.filter(|e| matches!(
+				.find(|e| matches!(
 				e,
 				RuntimeEvent::IngressEgress(
 					crate::Event::DepositReceived {
@@ -648,7 +647,6 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 						..
 					}) if deposit_address == expected_accepted_address
 				))
-				.next()
 				.is_some(),);
 		});
 }
