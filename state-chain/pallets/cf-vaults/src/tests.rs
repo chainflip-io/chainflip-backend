@@ -797,7 +797,6 @@ fn test_key_handover_timeout_period() {
 #[cfg(test)]
 mod vault_key_rotation {
 	use cf_chains::mocks::{MockEthereum, BAD_AGG_KEY_POST_HANDOVER};
-	use cf_runtime_utilities::StorageDecodeVariant;
 	use cf_traits::mocks::block_height_provider::BlockHeightProvider;
 
 	use super::*;
