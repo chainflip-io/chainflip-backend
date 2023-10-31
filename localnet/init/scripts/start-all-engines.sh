@@ -1,4 +1,4 @@
-# Starts all the engines necessary for the network, or for the upgrade.
+# Starts all the engines necessary for the network, or for an upgrade.
 
 ENGINE_P2P_PORT=3100
 LOG_PORT=30687

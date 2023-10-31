@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# LOG_SUFFIX is optional. It can be used to differtiate between the logs of two engines, potentially with the same owner
+# LOG_SUFFIX is optional. It can be used to differentiate between the logs of two engines, potentially with the same owner
 # e.g. in the case of an upgrade where we run two engines simultaneously.
 
 set -e
