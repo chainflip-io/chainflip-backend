@@ -659,9 +659,23 @@ fn multi_use_deposit_address_different_blocks() {
 
 	new_test_ext()
 		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
+		.then_apply_extrinsics(|&(_, deposit_address)| {
+			[(
+				RuntimeOrigin::root(),
+				crate::Call::<Test, _>::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address,
+						asset: ETH,
+						amount: 1,
+						deposit_details: Default::default(),
+					}],
+					// block height is purely informative.
+					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+				},
+				Ok(()),
+			)]
+		})
 		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
-			// Set the address to deployed.
-			// Do another, should succeed.
 			assert_ok!(Pallet::<Test, _>::process_single_deposit(
 				deposit_address,
 				ETH,
@@ -674,7 +688,7 @@ fn multi_use_deposit_address_different_blocks() {
 
 			channel
 		})
-		// Closing the channel should invalidate the deposit address.
+		// The channel should be closed at the next block.
 		.then_apply_extrinsics(|&(_, deposit_address)| {
 			[(
 				RuntimeOrigin::root(),
