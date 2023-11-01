@@ -50,8 +50,6 @@ pub enum DryRunError {
 	DryRunRpcCallError,
 	#[error("The reply from the dry_run RPC cannot be decoded correctly.")]
 	CannotDecodeReply,
-	#[error("The dry_run returned Invalid Transaction error.")]
-	TransactionInvalid,
 }
 
 pub type ExtrinsicResult<OtherError> = Result<
@@ -303,17 +301,16 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		call: state_chain_runtime::RuntimeCall,
 	) -> anyhow::Result<()> {
-		let nonce = self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
-		let uxt = self.build_and_sign_extrinsic(call.clone(), nonce);
+		let uxt = self.build_and_sign_extrinsic(call.clone(), self.finalized_nonce);
 		let dry_run_result = self
 			.base_rpc_client
 			.dry_run(Encode::encode(&uxt).into(), None)
 			.await
 			.map_err(|_| ExtrinsicError::Other(DryRunError::DryRunRpcCallError))?;
-		let res: ApplyExtrinsicResult = Decode::decode(&mut &*dry_run_result)
-			.map_err(|_| ExtrinsicError::Other(DryRunError::CannotDecodeReply))?;
+		let res: ApplyExtrinsicResult =
+			Decode::decode(&mut &*dry_run_result).map_err(|_| DryRunError::CannotDecodeReply)?;
 		info!(target: "state_chain_client", "Dry run completed. Result: {:?}", res.clone());
-		res.map_err(|_| ExtrinsicError::Other(DryRunError::TransactionInvalid))?
+		res.map_err(|e| anyhow!("Dry run failed due to invalid transactions: {:?}", e))?
 			.map_err(|e| {
 				anyhow!(
 					"DispatchError during dry run: {:?}",
