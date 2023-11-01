@@ -632,7 +632,7 @@ impl P2PContext {
 				state.last_activity.get().elapsed() > MAX_INACTIVITY_THRESHOLD
 			{
 				debug!("Peer connection is deemed stale due to inactivity: {}", account_id);
-				self.reconnect_context.reset(&account_id);
+				self.reconnect_context.reset(account_id);
 				// ZMQ socket is dropped here
 				state.state = ConnectionState::Stale;
 			}
