@@ -3,7 +3,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
@@ -222,7 +222,7 @@ export async function observeSwapEvents(
   const swapScheduledEvent = 'SwapScheduled';
   const swapExecutedEvent = 'SwapExecuted';
   const swapEgressScheduled = 'SwapEgressScheduled';
-  const batchBroadcastRequested = 'BatchBroadcastRequesteded';
+  const batchBroadcastRequested = 'BatchBroadcastRequested';
   let expectedMethod = swapScheduledEvent;
 
   let swapId = 0;
@@ -275,15 +275,14 @@ export async function observeSwapEvents(
             }
             break;
           case batchBroadcastRequested:
-            for (const eventEgressId of expectedEvent.data.egressIds) {
-              if (egressId[0] === eventEgressId[0] && egressId[1] === Number(eventEgressId[1])) {
+            expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
+              if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
                 broadcastId = Number(expectedEvent.data.broadcastId);
                 console.log(`${tag} broadcast requested, with id: ${broadcastId}`);
                 eventFound = true;
                 unsubscribe();
-                break;
               }
-            }
+            });
             break;
           default:
             break;
@@ -594,4 +593,30 @@ export function compareSemVer(version1: string, version2: string) {
   }
 
   return 'equal';
+}
+
+type SwapRate = {
+  intermediary: string;
+  output: string;
+};
+export async function getSwapRate(from: Asset, to: Asset, amount: string) {
+  function parseAsset(text: Asset) {
+    return text.charAt(0) + text.slice(1).toLowerCase();
+  }
+  const chainflipApi = await getChainflipApi();
+  let decimal = assetDecimals[from];
+
+  const fineAmount = amountToFineAmount(amount, decimal);
+  const hexPrice = (await chainflipApi.rpc(
+    'cf_swap_rate',
+    parseAsset(from),
+    parseAsset(to),
+    Number(fineAmount).toString(16),
+  )) as SwapRate;
+
+  const finePrice = parseInt(hexPrice.output);
+  decimal = assetDecimals[to];
+  const price = fineAmountToAmount(finePrice.toString(), decimal);
+
+  return price;
 }
