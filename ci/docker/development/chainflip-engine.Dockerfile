@@ -1,4 +1,4 @@
-FROM debian:bullseye
+FROM ubuntu:22.04
 ARG BUILD_DATETIME
 ARG VCS_REF
 
