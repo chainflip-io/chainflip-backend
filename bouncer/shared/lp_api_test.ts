@@ -169,9 +169,8 @@ async function testRangeOrder() {
   ]);
 
   assert(mintRangeOrder.length >= 1, `Empty mint range order result`);
-  assert.strictEqual(
-    mintRangeOrder[0].increase_or_decrease,
-    `Increase`,
+  assert(
+    mintRangeOrder[0].size_change.increase.liquidity > 0,
     `Expected mint of range order to increase liquidity`,
   );
   assert(
@@ -185,11 +184,12 @@ async function testRangeOrder() {
     testRpcAsset,
     orderId,
     range,
-    `Increase`,
     {
-      AssetAmounts: {
-        maximum: { base: 0, pair: testAssetAmount },
-        minimum: { base: 0, pair: 0 },
+      increase: {
+        AssetAmounts: {
+          maximum: { base: 0, pair: testAssetAmount },
+          minimum: { base: 0, pair: 0 },
+        },
       },
     },
   ]);
@@ -198,11 +198,7 @@ async function testRangeOrder() {
   let matchUpdate = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateRangeOrder.forEach((order: any) => {
-    if (
-      order.increase_or_decrease === `Increase` &&
-      order.liquidity_total > 0 &&
-      order.liquidity_delta > 0
-    ) {
+    if (order.size_change.increase.liquidity > 0 && order.liquidity_total > 0) {
       matchUpdate = true;
     }
   });
@@ -221,11 +217,7 @@ async function testRangeOrder() {
   let matchBurn = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnRangeOrder.forEach((order: any) => {
-    if (
-      order.increase_or_decrease === `Decrease` &&
-      order.liquidity_total === 0 &&
-      order.liquidity_delta > 0
-    ) {
+    if (order.size_change.decrease.liquidity > 0 && order.liquidity_total === 0) {
       matchBurn = true;
     }
   });
@@ -258,11 +250,11 @@ async function testLimitOrder() {
     testAssetAmount,
   ]);
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
-  assert(mintLimitOrder[0].position_delta.length >= 1, `Empty mint limit order position_delta`);
-  assert.strictEqual(
-    mintLimitOrder[0].position_delta[0],
-    'Increase',
-    `Expected mint of limit order to increase liquidity`,
+  assert(
+    mintLimitOrder[0].amount_change.increase > 0,
+    `Expected mint of limit order to increase liquidity. amount_change: ${JSON.stringify(
+      mintLimitOrder[0].amount_change,
+    )}`,
   );
   assert.strictEqual(
     mintLimitOrder[0].amount_total,
@@ -276,15 +268,19 @@ async function testLimitOrder() {
     'Usdc',
     orderId,
     tick,
-    `Increase`,
-    testAssetAmount,
+    {
+      increase: testAssetAmount,
+    },
   ]);
 
   assert(updateLimitOrder.length >= 1, `Empty update limit order result`);
   let matchUpdate = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateLimitOrder.forEach((order: any) => {
-    if (order.position_delta[0] === `Increase` && order.amount_total === testAssetAmount * 2) {
+    if (
+      order.amount_change.increase === testAssetAmount &&
+      order.amount_total === testAssetAmount * 2
+    ) {
       matchUpdate = true;
     }
   });
@@ -307,7 +303,7 @@ async function testLimitOrder() {
   let matchBurn = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnLimitOrder.forEach((order: any) => {
-    if (order.position_delta[0] === `Decrease` && order.amount_total === 0) {
+    if (order.amount_change.decrease === testAssetAmount * 2 && order.amount_total === 0) {
       matchBurn = true;
     }
   });
