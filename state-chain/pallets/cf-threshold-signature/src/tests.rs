@@ -155,7 +155,9 @@ impl MockCfe {
 					},
 				};
 			},
-			_ => {},
+			_ => {
+				unimplemented!()
+			},
 		};
 	}
 }
