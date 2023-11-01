@@ -208,7 +208,8 @@ pub mod pallet {
 	pub type AccountPeerMapping<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
-	/// Peers that are associated with account ids.
+	/// Ed25519 public keys (aka peer ids) that are associated with account ids. (We keep track
+	/// of them to ensure they don't somehow get reused between different account ids.)
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
@@ -608,6 +609,8 @@ pub mod pallet {
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
+			// Note: this signature is necessary to prevent "rogue key" attacks (by ensuring
+			// that `account_id` holds the corresponding secret key for `peer_id`)
 			// Note: This signature verify doesn't need replay protection as you need the
 			// account_id's private key to pass the above ensure_validator which has replay
 			// protection. Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys,

@@ -8,7 +8,8 @@ import { testLpApi } from '../shared/lp_api_test';
 
 async function runAllConcurrentTests() {
   let stopObserving = false;
-  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
 
   await Promise.all([
     testAllSwaps(),
@@ -20,7 +21,7 @@ async function runAllConcurrentTests() {
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
-  await observingBadEvents;
+  await Promise.all([broadcastAborted, feeDeficitRefused]);
 }
 
 runWithTimeout(runAllConcurrentTests(), 1800000)

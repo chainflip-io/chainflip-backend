@@ -2,12 +2,18 @@ use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
-	settings::{CfSettings, Eth, EthOptions, StateChainOptions, DEFAULT_SETTINGS_DIR},
+	settings::{
+		resolve_settings_path, CfSettings, Eth, EthOptions, PathResolutionExpectation,
+		StateChainOptions, DEFAULT_SETTINGS_DIR,
+	},
 };
 use clap::Parser;
 use config::{ConfigBuilder, ConfigError, Source, Value};
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+};
 
 #[derive(Parser, Clone, Debug)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
@@ -200,10 +206,22 @@ pub struct CLISettings {
 impl CfSettings for CLISettings {
 	type CommandLineOptions = CLICommandLineOptions;
 
-	fn validate_settings(&self) -> Result<(), ConfigError> {
+	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
+		self.eth.private_key_file = resolve_settings_path(
+			config_root,
+			&self.eth.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
 
-		self.state_chain.validate_settings()
+		self.state_chain.validate_settings()?;
+		self.state_chain.signing_key_file = resolve_settings_path(
+			config_root,
+			&self.state_chain.signing_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+
+		Ok(())
 	}
 
 	fn set_defaults(

@@ -41,13 +41,13 @@ impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::cf_development_config()?),
+			"dev-3" => Box::new(chain_spec::cf_three_node_development_config()?),
 			"test" => Box::new(chain_spec::testnet::Config::build_spec(Some(
 				chain_spec::get_environment_or_defaults(testnet::ENV),
 			))?),
 			"sisyphos-new" => Box::new(chain_spec::sisyphos::Config::build_spec(None)?),
-			"partnernet-new" => Box::new(chain_spec::partnernet::Config::build_spec(None)?),
 			"perseverance-new" => Box::new(chain_spec::perseverance::Config::build_spec(None)?),
-			"kitkat-new" => Box::new(chain_spec::kitkat::Config::build_spec(None)?),
+			"berghain-new" => Box::new(chain_spec::berghain::Config::build_spec(None)?),
 			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/sisyphos.chainspec.raw.json").as_slice(),
 			)?),

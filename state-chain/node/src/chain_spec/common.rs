@@ -35,7 +35,7 @@ const REPUTATION_PENALTY_LARGE: i32 = REPUTATION_PER_HEARTBEAT * 8; // Two hours
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::MissedHeartbeat, (REPUTATION_PENALTY_SMALL, 0)),
 	(Offence::ParticipateKeygenFailed, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::ParticipateSigningFailed, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::ParticipateSigningFailed, (REPUTATION_PENALTY_MEDIUM, MINUTES / 2)),
 	(Offence::MissedAuthorshipSlot, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::FailedToBroadcastTransaction, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::GrandpaEquivocation, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL * 5)),

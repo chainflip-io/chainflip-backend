@@ -14,7 +14,6 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
-assets = [["target/release/chainflip-lp-api", "usr/bin/", "755"]]
 
 [[bin]]
 name = "chainflip-lp-api"

@@ -197,7 +197,7 @@ async fn run_main(
 
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
-					settings.signing.db_file.as_path(),
+					&settings.signing.db_file,
 					Some(state_chain_client.genesis_hash()),
 				)
 				.context("Failed to open database")?,
@@ -211,6 +211,7 @@ async fn run_main(
 				btc_outgoing_sender,
 				btc_incoming_receiver,
 				peer_update_sender,
+				p2p_ready_receiver,
 				p2p_fut,
 			) = p2p::start(
 				state_chain_client.clone(),
@@ -335,6 +336,8 @@ async fn run_main(
 				btc_multisig_client,
 				peer_update_sender,
 			));
+
+			p2p_ready_receiver.await.unwrap();
 
 			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 

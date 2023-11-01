@@ -88,39 +88,3 @@ impl<T: frame_system::Config> SwappingApi for T {
 		Ok(input_amount)
 	}
 }
-
-impl<T: frame_system::Config> LpBalanceApi for T {
-	type AccountId = T::AccountId;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {
-		// TODO
-	}
-
-	fn ensure_has_refund_address_for_pair(
-		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_pair_asset: Asset,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
-	}
-
-	fn try_credit_account(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
-	}
-
-	fn try_debit_account(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> DispatchResult {
-		// TODO
-		Ok(())
-	}
-}

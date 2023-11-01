@@ -27,7 +27,6 @@ struct Node {
 	account_id: AccountId,
 	msg_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	_own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
 	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 }
 
@@ -41,19 +40,34 @@ fn spawn_node(
 
 	// Secret key does not implement clone:
 	let secret = ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap();
-
 	let key = P2PKey::new(secret);
-	let (msg_sender, peer_update_sender, msg_receiver, own_peer_info_receiver, fut) =
-		super::start(&key, our_peer_info.port, peer_infos.to_vec(), account_id.clone());
 
-	tokio::spawn(fut.instrument(info_span!("node", idx = idx)));
+	let (incoming_message_sender, incoming_message_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
+	let (outgoing_message_sender, outgoing_message_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
+	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+	tokio::spawn({
+		super::start(
+			key,
+			our_peer_info.port,
+			peer_infos.to_vec(),
+			account_id.clone(),
+			incoming_message_sender,
+			outgoing_message_receiver,
+			peer_update_receiver,
+		)
+		.instrument(info_span!("node", idx = idx))
+	});
 
 	Node {
 		account_id,
-		msg_sender,
+		msg_sender: outgoing_message_sender,
 		peer_update_sender,
-		_own_peer_info_receiver: own_peer_info_receiver,
-		msg_receiver,
+		msg_receiver: incoming_message_receiver,
 	}
 }
 
