@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
 	common::{Order, SideMap, Tick},
@@ -131,7 +131,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(events
+		events
 			.into_iter()
 			.find_map(|event| match event {
 				state_chain_runtime::RuntimeEvent::LiquidityProvider(
@@ -139,7 +139,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				) => Some(deposit_address),
 				_ => None,
 			})
-			.expect("DepositAddressReady must have been generated"))
+			.ok_or_else(|| anyhow::anyhow!("No LiquidityDepositAddressReady event was found"))
 	}
 
 	async fn withdraw_asset(
@@ -148,6 +148,10 @@ pub trait LpApi: SignedExtrinsicApi {
 		asset: Asset,
 		destination_address: EncodedAddress,
 	) -> Result<EgressId> {
+		if amount == 0 {
+			bail!("Withdrawal amount must be greater than 0");
+		}
+
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_lp::Call::withdraw_asset {
 				amount,
@@ -158,7 +162,7 @@ pub trait LpApi: SignedExtrinsicApi {
 			.until_in_block()
 			.await?;
 
-		Ok(events
+		events
 			.into_iter()
 			.find_map(|event| match event {
 				state_chain_runtime::RuntimeEvent::LiquidityProvider(
@@ -166,7 +170,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				) => Some(egress_id),
 				_ => None,
 			})
-			.expect("WithdrawalEgressScheduled must have been generated"))
+			.ok_or_else(|| anyhow::anyhow!("No WithdrawalEgressScheduled event was found"))
 	}
 
 	async fn update_range_order(
