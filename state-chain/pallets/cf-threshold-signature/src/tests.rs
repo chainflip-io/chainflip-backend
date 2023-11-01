@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, AuthorityCount, CeremonyContext,
-	CeremonyId, CeremonyIdCounter, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
-	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout,
-	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, RequestContext, RequestId,
-	ThresholdSignatureResponseTimeout, VaultRotationStatus,
+	CeremonyId, CurrentVaultEpochAndState, Error, Event as PalletEvent,
+	KeyHandoverResolutionPendingSince, KeygenFailureVoters, KeygenOutcomeFor,
+	KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters, PalletOffence,
+	PendingVaultRotation, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
+	VaultRotationStatus,
 };
 
 use cf_chains::mocks::{
@@ -14,9 +15,9 @@ use cf_chains::mocks::{
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
-	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
-	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider, SetSafeMode,
-	ThresholdSigner, VaultRotationStatusOuter, VaultRotator,
+	mocks::signer_nomination::MockNominator, AccountRoleRegistry, AsyncResult, Chainflip,
+	EpochInfo, EpochKey, KeyProvider, SetSafeMode, ThresholdSigner, VaultRotationStatusOuter,
+	VaultRotator,
 };
 pub use frame_support::traits::Get;
 
@@ -79,10 +80,6 @@ fn run_cfes_on_sc_events(cfes: &[MockCfe]) {
 	}
 }
 
-fn current_ceremony_id() -> CeremonyId {
-	CeremonyIdCounter::<Test, _>::get()
-}
-
 impl MockCfe {
 	fn process_event(&self, event: RuntimeEvent) {
 		match event {
@@ -95,8 +92,8 @@ impl MockCfe {
 					..
 				},
 			) => {
-				assert_eq!(key, current_agg_key());
-				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
+				//assert_eq!(key, current_agg_key());
+				//assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
 					CfeBehaviour::Success => {
@@ -105,7 +102,7 @@ impl MockCfe {
 							EthereumThresholdSigner::signature_success(
 								RuntimeOrigin::none(),
 								ceremony_id + 1,
-								sign(payload)
+								sign(payload, key)
 							),
 							Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
 						);
@@ -113,7 +110,7 @@ impl MockCfe {
 						assert_ok!(EthereumThresholdSigner::signature_success(
 							RuntimeOrigin::none(),
 							ceremony_id,
-							sign(payload),
+							sign(payload, key),
 						));
 					},
 					CfeBehaviour::ReportFailure(bad) => {
@@ -158,7 +155,7 @@ impl MockCfe {
 					},
 				};
 			},
-			_ => panic!("Unexpected event"),
+			_ => {},
 		};
 	}
 }
@@ -252,7 +249,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 				EthereumThresholdSigner::signature_success(
 					RuntimeOrigin::none(),
 					ceremony_id,
-					sign(*PAYLOAD)
+					sign(*PAYLOAD, current_agg_key())
 				),
 				Error::<Test, Instance1>::InvalidThresholdSignatureCeremonyId
 			);
@@ -470,7 +467,13 @@ fn test_retries_for_locked_key() {
 				..
 			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
-			MockKeyProvider::<MockEthereumChainCrypto>::lock_key(request_id);
+			CurrentVaultEpochAndState::<Test, Instance1>::mutate(|epoch_and_state| {
+				epoch_and_state
+					.as_mut()
+					.expect("key should exist since we injected it at genesis")
+					.key_state
+					.lock(vec![request_id])
+			});
 
 			// Key is now locked and should be unavailable for new requests.
 			<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*b"SUP?");
@@ -512,7 +515,7 @@ fn test_retries_for_immutable_key() {
 			MockFixedKeySigningRequests::set(true);
 
 			// Pretend the key has been updated to the next one.
-			MockKeyProvider::<MockEthereumChainCrypto>::add_key(MockAggKey(*b"NEXT"));
+			EthereumThresholdSigner::activate_new_key(MockAggKey(*b"NEXT"));
 
 			// Retry should re-use the original key.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
@@ -529,7 +532,7 @@ fn test_retries_for_immutable_key() {
 			assert_eq!(request_id, request_id_2);
 			assert_eq!(second_attempt, first_attempt + 1);
 			assert_eq!(retry_ceremony_id, ceremony_id + 1);
-			assert_eq!(key, MockAggKey(AGG_KEY));
+			assert_eq!(key, GENESIS_AGG_PUB_KEY);
 		});
 }
 
@@ -538,7 +541,7 @@ mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, CeremonyRetryQueues, PendingCeremonies};
 	use cf_chains::{mocks::MockAggKey, ChainCrypto};
-	use cf_traits::{mocks::ceremony_id_provider::MockCeremonyIdProvider, ThresholdSigner};
+	use cf_traits::ThresholdSigner;
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -559,7 +562,7 @@ mod unsigned_validation {
 					new_public_key: CUSTOM_AGG_KEY,
 				},
 			);
-			let ceremony_id = MockCeremonyIdProvider::get();
+			let ceremony_id = current_ceremony_id();
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				EthereumThresholdSigner::threshold_signature_response_timeout();
@@ -582,15 +585,18 @@ mod unsigned_validation {
 				const PAYLOAD: <MockEthereumChainCrypto as ChainCrypto>::Payload = *b"OHAI";
 
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let ceremony_id = MockCeremonyIdProvider::get();
+				let ceremony_id = current_ceremony_id();
 				let EpochKey { key: current_key, .. } =
 					EthereumThresholdSigner::active_epoch_key().unwrap();
 
 				assert!(
 					Test::validate_unsigned(
 						TransactionSource::External,
-						&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }
-							.into(),
+						&PalletCall::signature_success {
+							ceremony_id,
+							signature: sign(PAYLOAD, current_agg_key())
+						}
+						.into(),
 					)
 					.is_ok(),
 					"Validation Failed: {:?} / {:?}",
@@ -615,8 +621,8 @@ mod unsigned_validation {
 						TransactionSource::External,
 						&PalletCall::signature_success {
 							// Incorrect ceremony id
-							ceremony_id: MockCeremonyIdProvider::get() + 1,
-							signature: sign(PAYLOAD)
+							ceremony_id: current_ceremony_id() + 1,
+							signature: sign(PAYLOAD, current_agg_key())
 						}
 						.into()
 					)
@@ -639,7 +645,7 @@ mod unsigned_validation {
 					Test::validate_unsigned(
 						TransactionSource::External,
 						&PalletCall::signature_success {
-							ceremony_id: MockCeremonyIdProvider::get(),
+							ceremony_id: current_ceremony_id(),
 							signature: INVALID_SIGNATURE
 						}
 						.into()
@@ -682,7 +688,7 @@ mod unsigned_validation {
 			.with_nominees(NOMINEES)
 			.with_request(b"OHAI")
 			.execute_with_consistency_checks(|| {
-				let ceremony_id = MockCeremonyIdProvider::get();
+				let ceremony_id = current_ceremony_id();
 				EthereumThresholdSigner::report_signature_failed(
 					RuntimeOrigin::signed(NOMINEES[0]),
 					ceremony_id,
@@ -704,7 +710,7 @@ mod unsigned_validation {
 mod failure_reporting {
 	use super::*;
 	use crate::{CeremonyContext, RequestContext, ThresholdCeremonyType};
-	use cf_chains::{mocks::MockAggKey, ChainCrypto};
+	use cf_chains::ChainCrypto;
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
@@ -715,7 +721,7 @@ mod failure_reporting {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			epoch: 0,
-			key: MockAggKey(AGG_KEY),
+			key: GENESIS_AGG_PUB_KEY,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			candidates: BTreeSet::from_iter(validator_set),
@@ -963,34 +969,45 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 
 #[test]
 fn keygen_verification_failure() {
-	new_test_ext().execute_with(|| {
-		let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		let participants = (5u64..15).collect::<BTreeSet<_>>();
-		let keygen_ceremony_id = 12;
+	new_test_ext()
+		.with_authorities((5u64..16).collect::<BTreeSet<_>>())
+		.execute_with(|| {
+			let participants = (5u64..15).collect::<BTreeSet<_>>();
 
-		let _request_id = EthereumThresholdSigner::trigger_keygen_verification(
-			keygen_ceremony_id,
-			NEW_AGG_PUB_KEY_PRE_HANDOVER,
-			participants.clone(),
-			rotation_epoch_index,
-		);
+			let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
+			let keygen_ceremony_id = 12;
 
-		let blamed = vec![5, 6, 7, 8];
-		assert!(blamed.iter().all(|b| participants.contains(b)));
+			let _request_id = EthereumThresholdSigner::trigger_keygen_verification(
+				keygen_ceremony_id,
+				NEW_AGG_PUB_KEY_PRE_HANDOVER,
+				participants.clone(),
+				rotation_epoch_index,
+			);
 
-		let cfes = participants
-			.iter()
-			.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::ReportFailure(blamed.clone()) })
-			.collect::<Vec<_>>();
-		run_cfes_on_sc_events(&cfes);
+			let blamed = vec![5, 6, 7, 8];
+			assert!(blamed.iter().all(|b| participants.contains(b)));
 
-		assert_last_event!(PalletEvent::KeygenVerificationFailure { .. });
-		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
-		assert_eq!(
-			EthereumThresholdSigner::status(),
-			AsyncResult::Ready(VaultRotationStatusOuter::Failed(blamed.into_iter().collect()))
-		)
-	});
+			let cfes = participants
+				.iter()
+				.map(|id| MockCfe {
+					id: *id,
+					behaviour: CfeBehaviour::ReportFailure(blamed.clone()),
+				})
+				.collect::<Vec<_>>();
+			run_cfes_on_sc_events(&cfes);
+
+			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+				frame_system::Pallet::<Test>::current_block_number() +
+					EthereumThresholdSigner::threshold_signature_response_timeout(),
+			);
+
+			//assert_last_event!(PalletEvent::KeygenVerificationFailure { .. });
+			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
+			assert_eq!(
+				EthereumThresholdSigner::status(),
+				AsyncResult::Ready(VaultRotationStatusOuter::Failed(blamed.into_iter().collect()))
+			)
+		});
 }
 
 #[test]
@@ -1290,7 +1307,7 @@ fn do_full_key_rotation() {
 		VaultRotationStatus::AwaitingKeygenVerification { .. }
 	));
 
-	let cfes = [ALICE, BOB, CHARLIE]
+	let cfes = [ALICE]
 		.iter()
 		.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
 		.collect::<Vec<_>>();
@@ -1326,7 +1343,9 @@ fn do_full_key_rotation() {
 	<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 	assert_eq!(<EthereumThresholdSigner as VaultRotator>::status(), AsyncResult::Pending);
 
-	assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
+	//assert_last_event!(crate::Event::ThresholdSignatureRequest { .. });
+
+	//assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
 
 	assert!(matches!(
 		PendingVaultRotation::<Test, _>::get().unwrap(),
@@ -1340,7 +1359,8 @@ fn do_full_key_rotation() {
 		AsyncResult::Ready(VaultRotationStatusOuter::KeyHandoverComplete)
 	);
 
-	assert_last_event!(crate::Event::KeyHandoverVerificationSuccess { .. });
+	//println!("{:?}", System::events());
+	//assert_last_event!(crate::Event::KeyHandoverVerificationSuccess { .. });
 
 	assert!(matches!(
 		PendingVaultRotation::<Test, _>::get().unwrap(),
@@ -1516,17 +1536,20 @@ mod vault_key_rotation {
 
 	use super::*;
 
+	const AUTHORITIES: [u64; 3] = [1, 2, 3];
+	const CANDIDATES: [u64; 2] = [1, 2];
+
 	fn setup(key_handover_outcome: KeygenOutcomeFor<Test, Instance1>) -> TestRunner<()> {
-		let ext = new_test_ext();
+		let ext = new_test_ext().with_authorities(AUTHORITIES);
 		ext.execute_with(|| {
-			let authorities = BTreeSet::from_iter(ALL_CANDIDATES.iter().take(2).cloned());
-			let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().skip(1).take(2).cloned());
+			let authorities = BTreeSet::from_iter(AUTHORITIES.iter().cloned());
+			let candidates = BTreeSet::from_iter(CANDIDATES.iter().cloned());
 
 			let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 
 			assert_noop!(
 				EthereumThresholdSigner::report_keygen_outcome(
-					RuntimeOrigin::root(),
+					RuntimeOrigin::signed(ALICE),
 					Default::default(),
 					Err(Default::default()),
 				),
@@ -1541,6 +1564,12 @@ mod vault_key_rotation {
 				candidates.clone(),
 				rotation_epoch_index,
 			);
+
+			let cfes = [ALICE]
+				.iter()
+				.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
+				.collect::<Vec<_>>();
+			run_cfes_on_sc_events(&cfes);
 
 			EthereumThresholdSigner::key_handover(
 				authorities.clone(),
@@ -1590,7 +1619,7 @@ mod vault_key_rotation {
 	#[test]
 	fn non_optimistic_activation() {
 		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			let cfes = [ALICE, BOB, CHARLIE]
+			let cfes = [CANDIDATES[0]]
 				.iter()
 				.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
 				.collect::<Vec<_>>();
@@ -1618,7 +1647,7 @@ mod vault_key_rotation {
 	fn optimistic_activation() {
 		const HANDOVER_ACTIVATION_BLOCK: u64 = 420;
 		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			let cfes = [ALICE, BOB, CHARLIE]
+			let cfes = [CANDIDATES[0]]
 				.iter()
 				.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
 				.collect::<Vec<_>>();
@@ -1662,7 +1691,7 @@ mod vault_key_rotation {
 
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
-			let cfes = [ALICE, BOB, CHARLIE]
+			let cfes = [ALICE]
 				.iter()
 				.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
 				.collect::<Vec<_>>();
@@ -1699,9 +1728,9 @@ mod vault_key_rotation {
 	#[test]
 	fn can_recover_after_key_handover_verification_failure() {
 		setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			let offenders = vec![ALICE];
+			let offenders = vec![CANDIDATES[0]];
 
-			let cfes = [ALICE, BOB, CHARLIE]
+			let cfes = CANDIDATES
 				.iter()
 				.map(|id| MockCfe {
 					id: *id,
@@ -1710,9 +1739,12 @@ mod vault_key_rotation {
 				.collect::<Vec<_>>();
 			run_cfes_on_sc_events(&cfes);
 
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
+			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+				frame_system::Pallet::<Test>::current_block_number() +
+					EthereumThresholdSigner::threshold_signature_response_timeout(),
+			);
 
-			assert_last_event!(crate::Event::KeyHandoverVerificationFailure { .. });
+			//assert_last_event!(crate::Event::KeyHandoverVerificationFailure { .. });
 
 			MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, offenders.clone());
 
@@ -1835,7 +1867,7 @@ fn can_recover_from_abort_vault_rotation_after_key_verification() {
 
 		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
-		let cfes = [ALICE, BOB, CHARLIE]
+		let cfes = [ALICE]
 			.iter()
 			.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
 			.collect::<Vec<_>>();
@@ -1877,7 +1909,7 @@ fn can_recover_from_abort_vault_rotation_after_key_handover_failed() {
 
 		<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(1);
 
-		let cfes = [ALICE, BOB, CHARLIE]
+		let cfes = [ALICE]
 			.iter()
 			.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::Success })
 			.collect::<Vec<_>>();

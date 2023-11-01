@@ -1,8 +1,8 @@
 use std::{cell::RefCell, collections::BTreeSet, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, CeremonyRetryQueues, EnsureThresholdSigned, Pallet,
-	PalletOffence, PendingCeremonies, RequestId,
+	self as pallet_cf_threshold_signature, Call, CeremonyIdCounter, CeremonyRetryQueues,
+	EnsureThresholdSigned, Origin, Pallet, PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
 	btc,
@@ -10,10 +10,9 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_primitives::{AuthorityCount, GENESIS_EPOCH};
+use cf_primitives::{AuthorityCount, CeremonyId, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator},
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::signer_nomination::MockNominator,
 	AccountRoleRegistry, AsyncResult, KeyProvider, Slashing, ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
@@ -82,20 +81,44 @@ thread_local! {
 	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
 	pub static VAULT_ACTIVATION_STATUS: RefCell<AsyncResult<()>> = RefCell::new(AsyncResult::Pending);
 }
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum MockCallback<C: ChainCrypto> {
+	Regular(RequestId, PhantomData<C>),
+	Keygen(Call<Test, Instance1>),
+}
+
+impl<C: ChainCrypto> Default for MockCallback<C> {
+	fn default() -> Self {
+		Self::Regular(Default::default(), Default::default())
+	}
+}
 
 impl MockCallback<MockEthereumChainCrypto> {
 	pub fn new(id: RequestId) -> Self {
-		Self(id, Default::default())
+		Self::Regular(id, Default::default())
 	}
 
 	pub fn call(self) {
-		assert!(matches!(
-			<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(self.0),
-			AsyncResult::Ready(..)
-		));
-		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0));
+		match self {
+			Self::Regular(request_id, _) => {
+				assert!(matches!(
+					<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
+					AsyncResult::Ready(..)
+				));
+				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(request_id));
+			},
+			Self::Keygen(call) => {
+				_ = call.dispatch_bypass_filter(Origin(Default::default()).into());
+				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(999));
+			},
+		}
+		// if let Self::Regular(request_id) = self {
+		// 	assert!(matches!(
+		// 		<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
+		// 		AsyncResult::Ready(..)
+		// 	));
+		// }
+		//CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0.unwrap_or(999)));
 		TIMES_CALLED.with(|times| *times.borrow_mut() += 1)
 	}
 
@@ -121,9 +144,9 @@ impl UnfilteredDispatchable for MockCallback<MockEthereumChainCrypto> {
 	}
 }
 
-impl From<crate::Call<Test, Instance1>> for MockCallback<MockEthereumChainCrypto> {
-	fn from(_value: crate::Call<Test, Instance1>) -> Self {
-		Default::default() //revisit
+impl From<Call<Test, Instance1>> for MockCallback<MockEthereumChainCrypto> {
+	fn from(value: Call<Test, Instance1>) -> Self {
+		Self::Keygen(value)
 	}
 }
 
@@ -137,11 +160,12 @@ pub fn current_agg_key() -> <MockEthereumChainCrypto as ChainCrypto>::AggKey {
 
 pub fn sign(
 	payload: <MockEthereumChainCrypto as ChainCrypto>::Payload,
+	key: <MockEthereumChainCrypto as ChainCrypto>::AggKey,
 ) -> MockThresholdSignature<
 	<MockEthereumChainCrypto as ChainCrypto>::AggKey,
 	<MockEthereumChainCrypto as ChainCrypto>::Payload,
 > {
-	MockThresholdSignature::<_, _> { signing_key: current_agg_key(), signed_payload: payload }
+	MockThresholdSignature::<_, _> { signing_key: key, signed_payload: payload }
 }
 
 pub const INVALID_SIGNATURE: <MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature =
@@ -225,6 +249,10 @@ impl Slashing for MockSlasher {
 	}
 }
 
+pub fn current_ceremony_id() -> CeremonyId {
+	CeremonyIdCounter::<Test, _>::get()
+}
+
 pub const AGG_KEY: [u8; 4] = *b"AKEY";
 
 /// Define helper functions used for tests.
@@ -261,11 +289,11 @@ impl TestHelper for TestRunner<()> {
 
 	fn with_request(self, message: &<MockEthereumChainCrypto as ChainCrypto>::Payload) -> Self {
 		self.execute_with(|| {
-			let initial_ceremony_id = MockCeremonyIdProvider::get();
+			let initial_ceremony_id = current_ceremony_id();
 			// Initiate request
 			let request_id =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
-			let ceremony_id = MockCeremonyIdProvider::get();
+			let ceremony_id = current_ceremony_id();
 
 			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
 			assert!(
@@ -278,9 +306,9 @@ impl TestHelper for TestRunner<()> {
 					pending_ceremony.remaining_respondents,
 					BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 				);
-				assert_eq!(MockCeremonyIdProvider::get(), initial_ceremony_id + 1);
+				assert_eq!(current_ceremony_id(), initial_ceremony_id + 1);
 			} else {
-				assert_eq!(MockCeremonyIdProvider::get(), initial_ceremony_id);
+				assert_eq!(current_ceremony_id(), initial_ceremony_id);
 			}
 
 			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
@@ -296,7 +324,7 @@ impl TestHelper for TestRunner<()> {
 			// Initiate request
 			let request_id =
 				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
-			let ceremony_id = MockCeremonyIdProvider::get();
+			let ceremony_id = current_ceremony_id();
 			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,
@@ -344,7 +372,7 @@ cf_test_utilities::impl_test_helpers! {
 		system:Default::default(),
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
 			vault_key: Some(GENESIS_AGG_PUB_KEY),
-			threshold_signature_response_timeout: 0,
+			threshold_signature_response_timeout: 1,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 			_instance: PhantomData,
 	} },
