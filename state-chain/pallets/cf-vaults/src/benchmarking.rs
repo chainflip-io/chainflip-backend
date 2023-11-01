@@ -29,7 +29,7 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert!(VaultStartBlockNumbers::<T, I>::contains_key(T::EpochInfo::epoch_index()));
+		assert!(VaultStartBlockNumbers::<T, I>::contains_key(T::EpochInfo::epoch_index().saturating_add(1)));
 	}
 	vault_key_rotated_externally {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();

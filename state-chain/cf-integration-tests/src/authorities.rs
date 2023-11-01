@@ -71,6 +71,7 @@ fn authority_rotates_with_correct_sequence() {
 			// when rotating for the first time.
 			testnet.move_to_the_next_epoch();
 
+			println!("{:?}", Validator::current_rotation_phase());
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(
 				AllVaults::status(),
@@ -448,7 +449,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 						EthereumThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_vaults::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, EthereumInstance>::InvalidRotationStatus
 				);
 				assert_err!(
 					PolkadotThresholdSigner::report_key_handover_outcome(
@@ -456,7 +457,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 						EthereumThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_vaults::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
 				);
 			});
 
