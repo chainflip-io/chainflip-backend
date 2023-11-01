@@ -27,11 +27,6 @@ pub trait PolkadotEnvironment {
 		Self::try_vault_account().expect("Vault account must be set")
 	}
 
-	fn try_proxy_account() -> Option<PolkadotAccountId>;
-	fn proxy_account() -> PolkadotAccountId {
-		Self::try_proxy_account().expect("Proxy account must be set")
-	}
-
 	fn runtime_version() -> RuntimeVersion;
 }
 
@@ -42,10 +37,6 @@ impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion
 		Self::lookup(SystemAccounts::Vault)
 	}
 
-	fn try_proxy_account() -> Option<PolkadotAccountId> {
-		Self::lookup(SystemAccounts::Proxy)
-	}
-
 	fn runtime_version() -> RuntimeVersion {
 		Self::get()
 	}
@@ -53,7 +44,6 @@ impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemAccounts {
-	Proxy,
 	Vault,
 }
 

@@ -12,7 +12,7 @@ use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
 	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator, YEAR,
+	PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -333,7 +333,8 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 			// It should not be possible to get None here, since we never send
 			// any transactions unless we have a vault account and associated
 			// proxy.
-			signer: Self::lookup(cf_chains::dot::api::SystemAccounts::Proxy)
+			signer: <PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+				.map(|epoch_key| epoch_key.key)
 				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
@@ -348,11 +349,7 @@ impl Get<RuntimeVersion> for DotEnvironment {
 
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
-		use crate::PolkadotVault;
 		match query {
-			cf_chains::dot::api::SystemAccounts::Proxy =>
-				<PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
-					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
