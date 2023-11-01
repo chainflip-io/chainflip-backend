@@ -1,5 +1,8 @@
 use super::{PeerInfo, PeerUpdate};
-use crate::p2p::{OutgoingMultisigStageMessages, P2PKey};
+use crate::p2p::{
+	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
+	OutgoingMultisigStageMessages, P2PKey,
+};
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -222,4 +225,29 @@ async fn connects_after_registration() {
 
 	// It should now be able to communicate with node 2:
 	assert!(send_and_receive_message(&node1, &mut node2).await.is_some());
+}
+
+#[tokio::test(start_paused = true)]
+async fn stale_connections() {
+	let node_key1 = create_keypair();
+	let node_key2 = create_keypair();
+
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8094);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8095);
+
+	let mut node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
+	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
+
+	// Sleep long enough for nodes to deem connections "stale" (due to inactivity)
+	tokio::time::sleep(
+		ACTIVITY_CHECK_INTERVAL + MAX_INACTIVITY_THRESHOLD + std::time::Duration::from_secs(1),
+	)
+	.await;
+
+	// Resuming is necessary for timeouts to work correctly
+	tokio::time::resume();
+
+	// Ensure that we can re-activate stale connections when needed
+	send_and_receive_message(&node1, &mut node2).await.unwrap();
+	send_and_receive_message(&node2, &mut node1).await.unwrap();
 }

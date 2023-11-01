@@ -41,12 +41,6 @@ impl OutgoingSocket {
 		// Discard any pending messages when disconnecting a socket
 		socket.set_linger(DO_NOT_LINGER).unwrap();
 
-		// Do not buffer outgoing messages before a connection is
-		// established (this means the messages will be lost, but
-		// this prevents us from buffering messages to peers that
-		// are misconfigured, for example).
-		socket.set_immediate(true).unwrap();
-
 		// Buffer at most OUTGOING_MESSAGES_BUFFER_SIZE messages
 		// per peer (this minimises how much memory we might "leak"
 		// if they never come online again).
