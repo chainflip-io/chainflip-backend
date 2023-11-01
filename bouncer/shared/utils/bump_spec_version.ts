@@ -1,4 +1,9 @@
 import fs from 'fs';
+import { jsonRpc } from '../json_rpc';
+
+export async function getCurrentSpecVersion(): Promise<number> {
+  return Number((await jsonRpc('state_getRuntimeVersion', [], 9944)).specVersion);
+}
 
 export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
   console.log('Bumping the spec version');
@@ -42,4 +47,14 @@ export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
   } catch (error) {
     console.error(`An error occurred: ${error.message}`);
   }
+}
+
+// Bump the spec version in the runtime file, using the spec version of the network.
+export async function bumpSpecVersionAgainstNetwork(projectRoot: string): Promise<number> {
+  const currentSpecVersion = await getCurrentSpecVersion();
+  console.log('Current spec_version: ' + currentSpecVersion);
+  const nextSpecVersion = currentSpecVersion + 1;
+  console.log('Bumping the spec version to: ' + nextSpecVersion);
+  bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, nextSpecVersion);
+  return nextSpecVersion;
 }

@@ -69,6 +69,10 @@ export async function upgradeNetwork(toGitRef: string, bumpByIfEqual: SemVerLeve
   const newToTomlVersion = await readPackageTomlVersion(path.join(absoluteWorkspacePath));
   const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
 
+
+  // Both upgrades require a runtime upgrade. To do that, we first need to bump the spec version.
+  await bumpSpecVersionAgainstNetwork(absoluteWorkspacePath);
+
   if (isCompatible) {
     // The CFE could be upgraded too. But an incompatible CFE upgrade would mean it's... incompatible, so covered in the other path.
     console.log('The versions are compatible.');

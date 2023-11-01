@@ -1,7 +1,7 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { getChainflipApi } from '../shared/utils';
+import { getChainflipApi, observeEvent } from '../shared/utils';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
@@ -28,6 +28,8 @@ export async function submitRuntimeUpgrade(
   await submitGovernanceExtrinsic(
     chainflip.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
+
+  await observeEvent('system:CodeUpdated', chainflip);
 
   console.log('Runtime upgrade completed.');
 }
