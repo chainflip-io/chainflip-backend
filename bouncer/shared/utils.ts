@@ -205,6 +205,7 @@ export async function observeEvent(
 }
 
 type EgressId = [Chain, number];
+type BroadcastId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
   { sourceAsset, destAsset, channelId }: SwapParams,
@@ -212,7 +213,7 @@ export async function observeSwapEvents(
   tag?: string,
   swapType?: SwapType,
   finalized = false,
-): Promise<number> {
+): Promise<BroadcastId | undefined> {
   let eventFound = false;
 
   const subscribeMethod = finalized
@@ -227,7 +228,7 @@ export async function observeSwapEvents(
 
   let swapId = 0;
   let egressId: EgressId;
-  let broadcastId = 0;
+  let broadcastId;
 
   console.log(`${tag} starting observing swap events...`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -277,7 +278,7 @@ export async function observeSwapEvents(
           case batchBroadcastRequested:
             expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
               if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
-                broadcastId = Number(expectedEvent.data.broadcastId);
+                broadcastId = [egressId[0], Number(expectedEvent.data.broadcastId)] as BroadcastId;
                 console.log(`${tag} broadcast requested, with id: ${broadcastId}`);
                 eventFound = true;
                 unsubscribe();
@@ -293,7 +294,7 @@ export async function observeSwapEvents(
   while (!eventFound) {
     await sleep(1000);
   }
-  return broadcastId as number;
+  return broadcastId;
 }
 
 // TODO: To import from the SDK once it's exported
@@ -343,21 +344,36 @@ export async function observeBadEvents(
   }
 }
 
-export async function observeBroadcastSuccess(broadcastId: number) {
+export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
   const chainflipApi = await getChainflipApi();
+  let broadcaster;
+  const broadcastIdNumber = broadcastId[1];
+  switch (broadcastId[0]) {
+    case 'Bitcoin':
+      broadcaster = 'bitcoinBroadcaster';
+      break;
+    case 'Ethereum':
+      broadcaster = 'ethereumBroadcaster';
+      break;
+    case 'Polkadot':
+      broadcaster = 'polkadotBroadcaster';
+      break;
+    default:
+      break;
+  }
 
   let stopObserving = false;
   const observeBroadcastFailure = observeBadEvents(
-    ':BroadcastAborted',
+    broadcaster + ':BroadcastAborted',
     () => stopObserving,
     (event) => {
-      if (broadcastId === Number(event.data.broadcastId)) return true;
+      if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
       return false;
     },
   );
 
-  await observeEvent(':BroadcastSuccess', chainflipApi, (event) => {
-    if (broadcastId === Number(event.data.broadcastId)) return true;
+  await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
+    if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
     return false;
   });
 
