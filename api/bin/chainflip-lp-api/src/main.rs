@@ -109,8 +109,7 @@ pub trait Rpc {
 		pair_asset: Asset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		increase_or_decrease: IncreaseOrDecrease,
-		size: RangeOrderSizeJson,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_range_order")]
@@ -130,8 +129,7 @@ pub trait Rpc {
 		buy_asset: Asset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
-		increase_or_decrease: IncreaseOrDecrease,
-		amount: NumberOrHex,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
@@ -219,8 +217,7 @@ impl RpcServer for RpcServerImpl {
 		pair_asset: Asset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		increase_or_decrease: IncreaseOrDecrease,
-		size: RangeOrderSizeJson,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -230,8 +227,7 @@ impl RpcServer for RpcServerImpl {
 				pair_asset,
 				id.try_into()?,
 				tick_range,
-				increase_or_decrease,
-				size.try_into()?,
+				size_change.try_map(|size| size.try_into())?,
 			)
 			.await?)
 	}
@@ -257,8 +253,7 @@ impl RpcServer for RpcServerImpl {
 		buy_asset: Asset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
-		increase_or_decrease: IncreaseOrDecrease,
-		amount: NumberOrHex,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -268,8 +263,7 @@ impl RpcServer for RpcServerImpl {
 				buy_asset,
 				id.try_into()?,
 				tick,
-				increase_or_decrease,
-				try_parse_number_or_hex(amount)?,
+				amount_change.try_map(try_parse_number_or_hex)?,
 			)
 			.await?)
 	}

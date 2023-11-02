@@ -340,7 +340,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				source_chain_expiry_block: *source_chain_expiry_block,
 			})
 		} else {
-			panic!("SwapDepositAddressReady must have been generated");
+			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
 }

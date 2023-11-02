@@ -7,7 +7,7 @@ on:
         required: true
         type: string
       environment:
-        description: prod or dev repo
+        description: production or dev repo
         required: true
         type: string
 
@@ -62,21 +62,21 @@ jobs:
 
       - name: Import prod GPG package signing key
         id: import_gpg_prod
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'production'
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
 
       - name: Import dev GPG package signing key
         id: import_gpg_dev
-        if: inputs.environment == 'dev'
+        if: inputs.environment == 'development'
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
 
       - name: Set environment
         run: |
-          if [[ '${{ inputs.environment }}' == 'prod' ]]; then
+          if [[ '${{ inputs.environment }}' == 'production' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
@@ -108,11 +108,11 @@ jobs:
           aptly publish -gpg-key=${{ env.GPG_KEY_ID }} repo local "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Set Summary Title
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'production'
         run: echo "### Production Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Set Summary Title
-        if: inputs.environment != 'prod'
+        if: inputs.environment != 'production'
         run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Github Summary
@@ -135,7 +135,7 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Testnet tools summary
-        if: inputs.environment == 'dev'
+        if: inputs.environment == 'development'
         run: |
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
           echo "Use the full commit hash: \`${{ github.sha }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
