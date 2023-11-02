@@ -46,6 +46,7 @@ pub mod any {
 		Deserialize,
 	)]
 	#[repr(u32)]
+	#[serde(rename_all = "UPPERCASE")]
 	// !!!!!! IMPORTANT !!!!!!
 	// Do not change these indices.
 	pub enum Asset {
