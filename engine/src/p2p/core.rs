@@ -381,6 +381,10 @@ impl P2PContext {
 				ConnectionState::Stale => {
 					// Connect and try again (there is no infinite loop here
 					// since the state will be `Connected` after this)
+
+					// This is guaranteed by construction of `active_connections`:
+					assert_eq!(peer.info.account_id, account_id);
+
 					self.connect_to_peer(peer.info.clone());
 					self.send_message(account_id, payload);
 				},
@@ -424,7 +428,6 @@ impl P2PContext {
 		// already connected to our listening ZMQ socket, we can only
 		// prevent future connections from being established and rely
 		// on peer from disconnecting from "client side".
-		// TODO: ensure that stale/inactive connections are terminated
 
 		if account_id == self.our_account_id {
 			warn!("Received peer info deregistration of our own node!");
@@ -512,23 +515,21 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer.clone());
 
-		if self
-			.active_connections
-			.insert(
-				account_id.clone(),
-				ConnectionStateInfo {
-					state: ConnectionState::Connected(connected_socket),
-					info: peer,
-					last_activity: Cell::new(tokio::time::Instant::now()),
-				},
-			)
-			.is_some()
-		{
-			// This should not happen because we always remove existing connection/socket
-			// prior to connecting, but even if it does, it should be OK to replace the
-			// connection (this doesn't break any invariants and the new peer info is
-			// likely to be more up-to-date).
-			error!("Unexpected existing connection while connecting to {account_id}");
+		if let Some(connection) = self.active_connections.insert(
+			account_id.clone(),
+			ConnectionStateInfo {
+				state: ConnectionState::Connected(connected_socket),
+				info: peer,
+				last_activity: Cell::new(tokio::time::Instant::now()),
+			},
+		) {
+			if !matches!(connection.state, ConnectionState::Stale) {
+				// This should not happen for non-stale sockets because we always remove
+				// existing connection/socket prior to connecting, but even if it does,
+				// it should be OK to replace the connection (this doesn't break any
+				// invariants and the new peer info is likely to be more up-to-date).
+				error!("Unexpected existing connection while connecting to {account_id}");
+			}
 		}
 	}
 
