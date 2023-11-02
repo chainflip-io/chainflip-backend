@@ -301,7 +301,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		call: state_chain_runtime::RuntimeCall,
 	) -> anyhow::Result<()> {
-		let uxt = self.build_and_sign_extrinsic(call.clone(), self.finalized_nonce);
+		// Use the nonce from the latest unfinalized block.
+		let hash = self.base_rpc_client.latest_unfinalized_block_hash().await?;
+		let nonce = self
+			.base_rpc_client
+			.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
+				hash,
+				&self.signer.account_id,
+			)
+			.await?
+			.nonce;
+		let uxt = self.build_and_sign_extrinsic(call.clone(), nonce);
 		let dry_run_result = self
 			.base_rpc_client
 			.dry_run(Encode::encode(&uxt).into(), None)
@@ -312,10 +322,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		info!(target: "state_chain_client", "Dry run completed. Result: {:?}", res.clone());
 		res.map_err(|e| anyhow!("Dry run failed due to invalid transactions: {:?}", e))?
 			.map_err(|e| {
-				anyhow!(
-					"DispatchError during dry run: {:?}",
-					self.error_decoder.decode_dispatch_error(e)
-				)
+				anyhow!("DispatchError: {:?}", self.error_decoder.decode_dispatch_error(e))
 			})
 	}
 
