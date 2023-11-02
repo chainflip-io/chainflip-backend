@@ -27,7 +27,7 @@ async fn main() {
 	std::process::exit(match run_cli().await {
 		Ok(_) => 0,
 		Err(err) => {
-			eprintln!("Error: {err:?}");
+			eprintln!("Error: {err:#}");
 			1
 		},
 	})
