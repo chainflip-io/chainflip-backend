@@ -38,6 +38,12 @@ jobs:
           name: chainflip-backend-packages-ubuntu-22.04
           path: assets/debian
 
+      - name: Download runtime
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-node-runtime-ubuntu-22.04
+          path: assets/runtime
+
       - name: Download public images
         uses: actions/download-artifact@v3
         with:
