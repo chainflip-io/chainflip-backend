@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use cf_primitives::{AccountRole, SemVer};
 use futures::StreamExt;
@@ -215,7 +215,7 @@ impl SignedExtrinsicClient {
 							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
 						} else break Ok(()),
 						if let Some((call, result_sender)) = dry_run_receiver.recv() => {
-							let _ = result_sender.send(submission_watcher.dry_run_extrinsic(call).await);
+							let _ = result_sender.send(submission_watcher.dry_run_extrinsic(call).await.map_err(Into::into));
 						} else break Ok(()),
 						let submission_details = submission_watcher.watch_for_submission_in_block() => {
 							submission_watcher.on_submission_in_block(&mut requests, submission_details).await?;
@@ -295,8 +295,7 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 		})
 		.await
 		.await
-		.expect(OR_CANCEL)
-		.with_context(|| format!("Dry run failed. Call: {:?}", call.clone()))?;
+		.expect(OR_CANCEL)?;
 
 		Ok(self.submit_signed_extrinsic(call.into()).await)
 	}

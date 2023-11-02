@@ -10,7 +10,10 @@ use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
-use sp_runtime::{traits::Hash, ApplyExtrinsicResult, MultiAddress};
+use sp_runtime::{
+	traits::Hash, transaction_validity::TransactionValidityError, ApplyExtrinsicResult,
+	MultiAddress,
+};
 use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -46,10 +49,14 @@ pub enum ExtrinsicError<OtherError> {
 
 #[derive(Error, Debug)]
 pub enum DryRunError {
-	#[error("The dry_run RPC call failed.")]
-	DryRunRpcCallError,
-	#[error("The reply from the dry_run RPC cannot be decoded correctly.")]
-	CannotDecodeReply,
+	#[error(transparent)]
+	RpcCallError(#[from] jsonrpsee::core::Error),
+	#[error("Unable to decode dry_run RPC result: {0}")]
+	CannotDecodeReply(#[from] codec::Error),
+	#[error("The transaction is invalid: {0}")]
+	InvalidTransaction(#[from] TransactionValidityError),
+	#[error("The transaction failed: {0}")]
+	Dispatch(#[from] DispatchError),
 }
 
 pub type ExtrinsicResult<OtherError> = Result<
@@ -300,7 +307,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn dry_run_extrinsic(
 		&mut self,
 		call: state_chain_runtime::RuntimeCall,
-	) -> anyhow::Result<()> {
+	) -> Result<(), DryRunError> {
 		// Use the nonce from the latest unfinalized block.
 		let hash = self.base_rpc_client.latest_unfinalized_block_hash().await?;
 		let nonce = self
@@ -312,18 +319,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			.await?
 			.nonce;
 		let uxt = self.build_and_sign_extrinsic(call.clone(), nonce);
-		let dry_run_result = self
-			.base_rpc_client
-			.dry_run(Encode::encode(&uxt).into(), None)
-			.await
-			.map_err(|_| ExtrinsicError::Other(DryRunError::DryRunRpcCallError))?;
-		let res: ApplyExtrinsicResult =
-			Decode::decode(&mut &*dry_run_result).map_err(|_| DryRunError::CannotDecodeReply)?;
-		info!(target: "state_chain_client", "Dry run completed. Result: {:?}", res.clone());
-		res.map_err(|e| anyhow!("Dry run failed due to invalid transactions: {:?}", e))?
-			.map_err(|e| {
-				anyhow!("DispatchError: {:?}", self.error_decoder.decode_dispatch_error(e))
-			})
+		let result_bytes = self.base_rpc_client.dry_run(Encode::encode(&uxt).into(), None).await?;
+		let dry_run_result: ApplyExtrinsicResult = Decode::decode(&mut &*result_bytes)?;
+
+		debug!(target: "state_chain_client", "Dry run completed. Result: {:?}", &dry_run_result);
+
+		Ok(dry_run_result?.map_err(|e| self.error_decoder.decode_dispatch_error(e))?)
 	}
 
 	pub async fn new_request(
