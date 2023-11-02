@@ -34,7 +34,7 @@ use std::{
 	sync::Arc,
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
 pub enum RpcAsset {
 	ImplicitChain(Asset),
@@ -42,28 +42,45 @@ pub enum RpcAsset {
 }
 
 impl TryInto<Asset> for RpcAsset {
-	type Error = jsonrpsee::core::Error;
+	type Error = AssetConversionError;
 
 	fn try_into(self) -> Result<Asset, Self::Error> {
 		match self {
 			RpcAsset::ImplicitChain(asset) => Ok(asset),
 			RpcAsset::ExplicitChain { chain, asset } =>
-				if chain != asset.into() {
-					Err(jsonrpsee::core::Error::Custom(format!(
-						"Unsupported asset {asset:?} on chain {chain}"
-					)))
-				} else {
+				if chain == ForeignChain::from(asset) {
 					Ok(asset)
+				} else {
+					Err(AssetConversionError::UnupportedAsset(chain, asset))
 				},
 		}
 	}
 }
 
-impl From<(Asset, Option<ForeignChain>)> for RpcAsset {
-	fn from((asset, chain): (Asset, Option<ForeignChain>)) -> Self {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum AssetConversionError {
+	#[error("Unsupported asset {1:?} on chain {0}")]
+	UnupportedAsset(ForeignChain, Asset),
+}
+
+impl From<AssetConversionError> for jsonrpsee::core::Error {
+	fn from(e: AssetConversionError) -> Self {
+		CallError::from_std_error(e).into()
+	}
+}
+
+impl TryFrom<(Asset, Option<ForeignChain>)> for RpcAsset {
+	type Error = AssetConversionError;
+
+	fn try_from((asset, chain): (Asset, Option<ForeignChain>)) -> Result<Self, Self::Error> {
 		match chain {
-			Some(chain) => RpcAsset::ExplicitChain { asset, chain },
-			None => RpcAsset::ImplicitChain(asset),
+			None => Ok(RpcAsset::ExplicitChain { asset, chain: asset.into() }),
+			Some(chain) =>
+				if chain == ForeignChain::from(asset) {
+					Ok(RpcAsset::ExplicitChain { asset, chain })
+				} else {
+					Err(AssetConversionError::UnupportedAsset(chain, asset))
+				},
 		}
 	}
 }
@@ -1129,7 +1146,6 @@ where
 }
 
 #[cfg(test)]
-
 mod test {
 	use super::*;
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
@@ -1264,7 +1280,7 @@ mod test {
 		fn try_into_asset(
 			asset: Asset,
 			chain: ForeignChain,
-		) -> Result<Asset, jsonrpsee::core::Error> {
+		) -> Result<Asset, AssetConversionError> {
 			RpcAsset::ExplicitChain { asset, chain }.try_into()
 		}
 

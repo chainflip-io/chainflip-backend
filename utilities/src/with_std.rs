@@ -28,21 +28,15 @@ pub struct AnyhowRpcError {
 	pub error: anyhow::Error,
 }
 
-impl From<anyhow::Error> for AnyhowRpcError {
-	fn from(error: anyhow::Error) -> Self {
-		Self { error }
+impl<E: Into<anyhow::Error>> From<E> for AnyhowRpcError {
+	fn from(error: E) -> Self {
+		Self { error: error.into() }
 	}
 }
 
 impl From<AnyhowRpcError> for ErrorObjectOwned {
 	fn from(e: AnyhowRpcError) -> Self {
 		ErrorObjectOwned::owned(CALL_EXECUTION_FAILED_CODE, format!("{:#}", e.error), None::<()>)
-	}
-}
-
-impl From<jsonrpsee_16::core::Error> for AnyhowRpcError {
-	fn from(error: jsonrpsee_16::core::Error) -> Self {
-		Self { error: anyhow::anyhow!("{error}") }
 	}
 }
 

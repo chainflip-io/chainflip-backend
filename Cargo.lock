@@ -2354,6 +2354,7 @@ dependencies = [
  "sp-rpc",
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+2)",
  "state-chain-runtime",
+ "thiserror",
  "utilities",
 ]
 
@@ -13168,7 +13169,6 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.11.0",
- "jsonrpsee 0.16.2",
  "jsonrpsee 0.20.0",
  "lazy_format",
  "lazy_static",

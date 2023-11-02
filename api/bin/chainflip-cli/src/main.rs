@@ -58,14 +58,14 @@ async fn run_cli() -> Result<()> {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
 				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
-					let source_asset = RpcAsset::from((params.source_asset, params.source_chain));
 					let destination_asset =
-						RpcAsset::from((params.destination_asset, params.destination_chain))
+						RpcAsset::try_from((params.destination_asset, params.destination_chain))?
 							.try_into()?;
 					let SwapDepositAddress { address, .. } = api
 						.broker_api()
 						.request_swap_deposit_address(
-							source_asset.try_into()?,
+							RpcAsset::try_from((params.source_asset, params.source_chain))?
+								.try_into()?,
 							destination_asset,
 							chainflip_api::clean_foreign_chain_address(
 								destination_asset.into(),
@@ -80,7 +80,7 @@ async fn run_cli() -> Result<()> {
 				LiquidityProvider(
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
 				) => {
-					let asset = RpcAsset::from((asset, chain));
+					let asset = RpcAsset::try_from((asset, chain))?;
 					let address =
 						api.lp_api().request_liquidity_deposit_address(asset.try_into()?).await?;
 					println!("Deposit Address: {address}");
