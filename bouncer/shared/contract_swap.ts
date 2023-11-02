@@ -131,6 +131,10 @@ export async function performSwapViaContract(
       txHash: receipt.hash,
     };
   } catch (err) {
+    console.error('err:', err);
+    if (err instanceof Error) {
+      console.log(err.stack);
+    }
     throw new Error(`${tag} ${err}`);
   }
 }
