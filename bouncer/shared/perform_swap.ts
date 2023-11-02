@@ -175,8 +175,6 @@ export async function performAndTrackSwap(
   const chainflipApi = await getChainflipApi();
 
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
-  const channelId = swapParams.channelId;
-  console.log(`${tag} swap channel created with channel_id: ${channelId}`);
 
   await send(sourceAsset, swapParams.depositAddress, amount);
   console.log(`${tag} fund sent, waiting for the deposit to be witnessed..`);

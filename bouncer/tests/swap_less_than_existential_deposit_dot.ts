@@ -1,7 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 import { performAndTrackSwap } from '../shared/perform_swap';
 
-import { newAddress, runWithTimeout } from '../shared/utils';
+import { getSwapRate, newAddress, runWithTimeout } from '../shared/utils';
 
 export async function swapLessThanED() {
   console.log('=== Testing USDC -> DOT swaps obtaining less than ED ===');
@@ -9,6 +9,10 @@ export async function swapLessThanED() {
   // The initial price is 10USDC = 1DOT,
   // we will swap only 5 USDC and check that the swap is completed successfully
   const tag = `USDC -> DOT (less than ED)`;
+  const outputAmount = await getSwapRate('USDC', 'DOT', '5');
+  console.log(`Output amount: ${outputAmount} DOT`);
+  if (parseFloat(outputAmount) >= 1)
+    throw new Error('Output amount too big! It should be < 1 for the test to be valid!');
   const address = await newAddress('DOT', '!testing less than ED output for dot swaps!');
 
   console.log('Generated DOT address: ' + address);

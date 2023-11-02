@@ -230,7 +230,6 @@ export async function observeSwapEvents(
   let egressId: EgressId;
   let broadcastId;
 
-  console.log(`${tag} starting observing swap events...`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const unsubscribe: any = await subscribeMethod(async (header) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
