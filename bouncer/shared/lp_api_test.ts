@@ -125,7 +125,8 @@ async function testRegisterWithExistingLpAccount() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     // This account is already registered, so the command will fail.
-    if (!error.message.includes('Could not register account role for account')) {
+    // This message is from the `AccountRoleAlreadyRegistered` pallet error.
+    if (!error.message.includes('The account already has a registered role')) {
       throw new Error(`Unexpected lp_register_account error: ${error}`);
     }
   }
