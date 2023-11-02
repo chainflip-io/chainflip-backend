@@ -220,13 +220,6 @@ impl From<SwapOutput> for RpcSwapOutput {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum RpcAsset {
-	ImplicitChain(Asset),
-	ExplicitChain { chain: ForeignChain, asset: Asset },
-}
-
 impl From<Asset> for RpcAsset {
 	fn from(asset: Asset) -> Self {
 		RpcAsset::ExplicitChain { asset, chain: asset.into() }
