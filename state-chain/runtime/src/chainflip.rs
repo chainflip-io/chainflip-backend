@@ -12,7 +12,7 @@ use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
 	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator, YEAR,
+	PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -55,7 +55,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,
 	},
-	traits::Get,
+	traits::{Defensive, Get},
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
@@ -220,17 +220,12 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+		_current_key: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		_signature: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		// First check if the payload is still valid. If it is, check if the signature is still
-		// valid
-		(&call.threshold_signature_payload() == payload) &&
-			<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::verify_threshold_signature(
-				current_key,
-				payload,
-				signature,
-			)
+		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
+		// transaction is if the payload changes due to a runtime version update.
+		&call.threshold_signature_payload() == payload
 	}
 }
 
@@ -335,6 +330,12 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
 		PolkadotReplayProtection {
 			genesis_hash: Environment::polkadot_genesis_hash(),
+			// It should not be possible to get None here, since we never send
+			// any transactions unless we have a vault account and associated
+			// proxy.
+			signer: <PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+				.map(|epoch_key| epoch_key.key)
+				.defensive_unwrap_or_default(),
 			nonce: Environment::next_polkadot_proxy_account_nonce(reset_nonce),
 		}
 	}
@@ -346,15 +347,9 @@ impl Get<RuntimeVersion> for DotEnvironment {
 	}
 }
 
-impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
-	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
-		use crate::PolkadotVault;
-		match query {
-			cf_chains::dot::api::SystemAccounts::Proxy =>
-				<PolkadotVault as KeyProvider<PolkadotCrypto>>::active_epoch_key()
-					.map(|epoch_key| epoch_key.key),
-			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
-		}
+impl ChainEnvironment<cf_chains::dot::api::VaultAccount, PolkadotAccountId> for DotEnvironment {
+	fn lookup(_: cf_chains::dot::api::VaultAccount) -> Option<PolkadotAccountId> {
+		Environment::polkadot_vault_account()
 	}
 }
 

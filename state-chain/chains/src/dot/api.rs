@@ -27,23 +27,14 @@ pub trait PolkadotEnvironment {
 		Self::try_vault_account().expect("Vault account must be set")
 	}
 
-	fn try_proxy_account() -> Option<PolkadotAccountId>;
-	fn proxy_account() -> PolkadotAccountId {
-		Self::try_proxy_account().expect("Proxy account must be set")
-	}
-
 	fn runtime_version() -> RuntimeVersion;
 }
 
-impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion>>
-	PolkadotEnvironment for T
+impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>> PolkadotEnvironment
+	for T
 {
 	fn try_vault_account() -> Option<PolkadotAccountId> {
-		Self::lookup(SystemAccounts::Vault)
-	}
-
-	fn try_proxy_account() -> Option<PolkadotAccountId> {
-		Self::lookup(SystemAccounts::Proxy)
+		Self::lookup(VaultAccount)
 	}
 
 	fn runtime_version() -> RuntimeVersion {
@@ -51,11 +42,8 @@ impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SystemAccounts {
-	Proxy,
-	Vault,
-}
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct VaultAccount;
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
@@ -155,11 +143,10 @@ impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
 		mut self,
 		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		let proxy_account = E::proxy_account();
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature(proxy_account, threshold_signature.clone())
+			call.insert_signature(threshold_signature.clone())
 		);
 		self
 	}
@@ -219,7 +206,7 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall
 	}
 
 	fn signed(mut self, signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		self.builder.insert_signature(E::proxy_account(), signature.clone());
+		self.builder.insert_signature(signature.clone());
 		self
 	}
 
