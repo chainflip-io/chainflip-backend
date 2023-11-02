@@ -27,7 +27,7 @@ const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DO_NOT_LINGER: i32 = 0;
 
 /// How many messages to keep in a "resend" buffer per peer
-const OUTGOING_MESSAGES_BUFFER_SIZE: i32 = 10;
+const OUTGOING_MESSAGES_BUFFER_SIZE: i32 = 100;
 
 /// Socket to be used for connecting to peer on the network
 pub struct OutgoingSocket {
