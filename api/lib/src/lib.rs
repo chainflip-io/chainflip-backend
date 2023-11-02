@@ -200,7 +200,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			.await?
 			.until_in_block()
 			.await
-			.context("Could not register account role for account")?;
+			.map_err(|e| anyhow!("Could not register account role for account. Error: {:?}", e))?;
 		Ok(tx_hash)
 	}
 
