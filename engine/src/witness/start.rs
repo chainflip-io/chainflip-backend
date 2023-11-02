@@ -33,7 +33,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainStream: StateChainStreamApi<true> + Clone,
+	StateChainStream: StateChainStreamApi + Clone,
 	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let epoch_source =

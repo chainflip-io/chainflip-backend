@@ -237,7 +237,7 @@ pub async fn start<
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 ) -> Result<(), anyhow::Error>
 where
-	BlockStream: StateChainStreamApi<true>,
+	BlockStream: StateChainStreamApi,
 	EthRpc: EthersRetryRpcApi + Send + Sync + 'static,
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRetryRpcApi + Send + Sync + 'static,

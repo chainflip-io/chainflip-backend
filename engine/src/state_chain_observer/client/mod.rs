@@ -46,7 +46,7 @@ pub struct StreamCache {
 	pub block_hash: state_chain_runtime::Hash,
 }
 
-pub trait StateChainStreamApi<const FINALIZED: bool>:
+pub trait StateChainStreamApi<const FINALIZED: bool = true>:
 	CachedStream<
 		Cache = StreamCache,
 		Item = (state_chain_runtime::Hash, state_chain_runtime::Header),
@@ -68,7 +68,7 @@ where
 {
 }
 
-impl<S: StateChainStreamApi<false>> StateChainStreamApi<true> for FinalizedCachedStream<S> {}
+impl<S: StateChainStreamApi<false>> StateChainStreamApi for FinalizedCachedStream<S> {}
 
 pub type DefaultRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>;
 
@@ -107,7 +107,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		wait_for_required_role: bool,
 		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(
-		impl StateChainStreamApi<true> + Clone,
+		impl StateChainStreamApi + Clone,
 		impl StateChainStreamApi<false> + Clone,
 		Arc<Self>,
 	)> {
@@ -129,7 +129,7 @@ impl StateChainClient<()> {
 		ws_endpoint: &str,
 		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(
-		impl StateChainStreamApi<true> + Clone,
+		impl StateChainStreamApi + Clone,
 		impl StateChainStreamApi<false> + Clone,
 		Arc<Self>,
 	)> {
@@ -153,7 +153,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		wait_for_required_role: bool,
 		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(
-		impl StateChainStreamApi<true> + Clone,
+		impl StateChainStreamApi + Clone,
 		impl StateChainStreamApi<false> + Clone,
 		Arc<Self>,
 	)> {
@@ -182,7 +182,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		base_rpc_client: Arc<BaseRpcClient>,
 		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(
-		impl StateChainStreamApi<true> + Clone,
+		impl StateChainStreamApi + Clone,
 		impl StateChainStreamApi<false> + Clone,
 		Arc<Self>,
 	)> {
@@ -432,7 +432,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		required_version_and_wait: Option<(SemVer, bool)>,
 	) -> Result<(
-		impl StateChainStreamApi<true> + Clone,
+		impl StateChainStreamApi + Clone,
 		impl StateChainStreamApi<false> + Clone,
 		Arc<Self>,
 	)> {
@@ -520,7 +520,7 @@ trait SignedExtrinsicClientBuilderTrait {
 	async fn build<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi<true> + Clone,
+		BlockStream: StateChainStreamApi + Clone,
 	>(
 		self,
 		scope: &Scope<'a, anyhow::Error>,
@@ -537,7 +537,7 @@ impl SignedExtrinsicClientBuilderTrait for () {
 	async fn build<
 		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi<true> + Clone,
+		BlockStream: StateChainStreamApi + Clone,
 	>(
 		self,
 		_scope: &Scope<'a, anyhow::Error>,
@@ -562,7 +562,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 	async fn build<
 		'b,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		BlockStream: StateChainStreamApi<true> + Clone,
+		BlockStream: StateChainStreamApi + Clone,
 	>(
 		self,
 		scope: &Scope<'b, anyhow::Error>,
