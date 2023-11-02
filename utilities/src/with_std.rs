@@ -21,6 +21,9 @@ pub mod serde_helpers;
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
 
+mod try_cached_stream;
+pub use try_cached_stream::{MakeTryCachedStream, TryCachedStream};
+
 /// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
 /// including context and source.
 pub struct AnyhowRpcError {
