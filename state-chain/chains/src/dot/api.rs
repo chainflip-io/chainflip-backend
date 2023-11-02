@@ -30,11 +30,11 @@ pub trait PolkadotEnvironment {
 	fn runtime_version() -> RuntimeVersion;
 }
 
-impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion>>
-	PolkadotEnvironment for T
+impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>> PolkadotEnvironment
+	for T
 {
 	fn try_vault_account() -> Option<PolkadotAccountId> {
-		Self::lookup(SystemAccounts::Vault)
+		Self::lookup(VaultAccount)
 	}
 
 	fn runtime_version() -> RuntimeVersion {
@@ -42,10 +42,8 @@ impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SystemAccounts {
-	Vault,
-}
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct VaultAccount;
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where

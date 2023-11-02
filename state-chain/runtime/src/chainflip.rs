@@ -347,11 +347,9 @@ impl Get<RuntimeVersion> for DotEnvironment {
 	}
 }
 
-impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
-	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
-		match query {
-			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
-		}
+impl ChainEnvironment<cf_chains::dot::api::VaultAccount, PolkadotAccountId> for DotEnvironment {
+	fn lookup(_: cf_chains::dot::api::VaultAccount) -> Option<PolkadotAccountId> {
+		Environment::polkadot_vault_account()
 	}
 }
 
