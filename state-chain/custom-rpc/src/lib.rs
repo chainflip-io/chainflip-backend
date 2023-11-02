@@ -1076,6 +1076,7 @@ where
 
 mod test {
 	use super::*;
+	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use sp_core::H160;
 
 	/*
@@ -1128,8 +1129,8 @@ mod test {
 	#[test]
 	fn test_validator_serialization() {
 		let validator = RpcAccountInfo::validator(RuntimeApiAccountInfoV2 {
-			balance: 10u128.pow(18),
-			bond: 10u128.pow(18),
+			balance: FLIPPERINOS_PER_FLIP,
+			bond: FLIPPERINOS_PER_FLIP,
 			last_heartbeat: 0,
 			reputation_points: 0,
 			keyholder_epochs: vec![123],
@@ -1140,7 +1141,10 @@ mod test {
 			is_qualified: true,
 			bound_redeem_address: Some(H160::from([1; 20])),
 			apy_bp: Some(100u32),
-			restricted_balances: BTreeMap::from_iter(vec![(H160::from([1; 20]), 10u128.pow(18))]),
+			restricted_balances: BTreeMap::from_iter(vec![(
+				H160::from([1; 20]),
+				FLIPPERINOS_PER_FLIP,
+			)]),
 		});
 
 		insta::assert_display_snapshot!(serde_json::to_value(validator).unwrap());

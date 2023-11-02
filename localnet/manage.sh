@@ -109,8 +109,10 @@ build-localnet() {
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
+  INIT_RPC_PORT=9944
+
   P2P_PORT=30333
-  RPC_PORT=9944
+  RPC_PORT=$INIT_RPC_PORT
   for NODE in "${SELECTED_NODES[@]}"; do
     echo "🚧 Starting chainflip-node of $NODE ..."
     DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARY_ROOT_PATH $NODE $P2P_PORT $RPC_PORT $NODE_COUNT
@@ -118,28 +120,17 @@ build-localnet() {
     ((RPC_PORT++))
   done
 
-  RPC_PORT=9944
+  RPC_PORT=$INIT_RPC_PORT
   for NODE in "${SELECTED_NODES[@]}"; do
     check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "http://localhost:$RPC_PORT" > /dev/null
     echo "💚 $NODE's chainflip-node is running!"
     ((RPC_PORT++))
   done
 
-  RPC_PORT=9944
-  ENGINE_PORT=8078
   HEALTH_PORT=5555
-  LOG_PORT=30687
-  for NODE in "${SELECTED_NODES[@]}"; do
-    cp -R $LOCALNET_INIT_DIR/keyshare/$NODE_COUNT/$NODE.db /tmp/chainflip/$NODE
-    ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARY_ROOT_PATH $NODE $ENGINE_PORT $HEALTH_PORT $RPC_PORT $LOG_PORT &
-    echo "🚗 Starting chainflip-engine of $NODE ..."
-    ((RPC_PORT++))
-    ((ENGINE_PORT++))
-    ((LOG_PORT++))
-    ((HEALTH_PORT++))
-  done
 
-  HEALTH_PORT=5555
+  BINARY_ROOT_PATH=$BINARY_ROOT_PATH SC_RPC_PORT=$INIT_RPC_PORT HEALTH_PORT=$HEALTH_PORT LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR SELECTED_NODES=${SELECTED_NODES[@]} ./$LOCALNET_INIT_DIR/scripts/start-all-engines.sh
+
   for NODE in "${SELECTED_NODES[@]}"; do
     while true; do
         output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
