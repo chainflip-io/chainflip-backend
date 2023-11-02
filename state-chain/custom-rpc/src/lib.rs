@@ -964,7 +964,7 @@ where
 				continue
 			}
 
-			let info = self.cf_pool_info(asset, Asset::Usdc, at)?.map(Into::into);
+			let info = self.cf_pool_info(asset.into(), Asset::Usdc.into(), at)?.map(Into::into);
 
 			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info);
 		}
