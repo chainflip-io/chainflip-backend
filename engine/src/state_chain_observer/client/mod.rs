@@ -31,8 +31,6 @@ use self::{
 	storage_api::StorageApi,
 };
 
-use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
-
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
 
@@ -151,6 +149,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				required_role,
 				wait_for_required_role,
 				check_unfinalized_version: required_version_and_wait.map(|(version, _)| version),
+				update_cfe_version: required_version_and_wait.map(|(version, _)| version),
 			},
 			required_version_and_wait,
 		)
@@ -506,6 +505,7 @@ struct SignedExtrinsicClientBuilder {
 	required_role: AccountRole,
 	wait_for_required_role: bool,
 	check_unfinalized_version: Option<SemVer>,
+	update_cfe_version: Option<SemVer>,
 }
 #[async_trait]
 impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
@@ -525,8 +525,6 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 	) -> Result<()> {
 		assert!(self.nonce_and_signer.is_none());
 
-		use subxt::tx::Signer;
-
 		let pair = sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
 			&self.signing_key_file,
 			"Signing Key",
@@ -535,82 +533,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.map_err(|e| anyhow!("Failed to decode signing key: Wrong length. {e:?}"))
 			},
 		)?);
-
 		let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(pair.clone());
-
-		use subxt::PolkadotConfig;
-
-		let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
-			Arc::new(SubxtInterface(base_rpc_client.clone())),
-		)
-		.await?;
-
-		struct SubxtSignerInterface<T>(subxt::utils::AccountId32, T);
-		impl subxt::tx::Signer<PolkadotConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
-			fn account_id(&self) -> <subxt::PolkadotConfig as subxt::Config>::AccountId {
-				self.0.clone()
-			}
-
-			fn address(&self) -> <subxt::PolkadotConfig as subxt::Config>::Address {
-				subxt::utils::MultiAddress::Id(self.0.clone())
-			}
-
-			fn sign(&self, bytes: &[u8]) -> <subxt::PolkadotConfig as subxt::Config>::Signature {
-				use sp_core::Pair;
-				subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
-			}
-		}
-
-		let subxt_signer =
-			SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair);
-
-		let recorded_version = <SemVer as codec::Decode>::decode(
-			&mut subxt_client
-				.storage()
-				.at_latest()
-				.await?
-				.fetch_or_default(&subxt::storage::dynamic(
-					"Validator",
-					"NodeCFEVersion",
-					vec![subxt_signer.account_id()],
-				))
-				.await?
-				.encoded(),
-		)
-		.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
-
-		// Note that around CFE upgrade period, the less recent version might still be running (and
-		// can even be *the* "active" instance), so it is important that it doesn't downgrade the
-		// version record:
-		if let Some(check_unfinalized_version) = self.check_unfinalized_version {
-			if check_unfinalized_version.is_more_recent_than(recorded_version) {
-				info!(
-					"Updating CFE version record from {:?} to {:?}",
-					recorded_version, check_unfinalized_version
-				);
-
-				subxt_client
-					.tx()
-					.sign_and_submit_then_watch_default(
-						&subxt::dynamic::tx(
-							"Validator",
-							"cfe_version",
-							vec![(
-								"new_version",
-								vec![
-									("major", check_unfinalized_version.major),
-									("minor", check_unfinalized_version.minor),
-									("patch", check_unfinalized_version.patch),
-								],
-							)],
-						),
-						&subxt_signer,
-					)
-					.await?
-					.wait_for_in_block()
-					.await?;
-			}
-		}
 
 		let account_nonce = {
 			loop {
@@ -652,6 +575,83 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				.await?
 				.nonce
 		};
+
+		if let Some(this_version) = self.update_cfe_version {
+			use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
+			use subxt::{tx::Signer, PolkadotConfig};
+
+			let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
+				Arc::new(SubxtInterface(base_rpc_client.clone())),
+			)
+			.await?;
+			let subxt_signer = {
+				struct SubxtSignerInterface<T>(subxt::utils::AccountId32, T);
+				impl subxt::tx::Signer<PolkadotConfig> for SubxtSignerInterface<sp_core::sr25519::Pair> {
+					fn account_id(&self) -> <subxt::PolkadotConfig as subxt::Config>::AccountId {
+						self.0.clone()
+					}
+
+					fn address(&self) -> <subxt::PolkadotConfig as subxt::Config>::Address {
+						subxt::utils::MultiAddress::Id(self.0.clone())
+					}
+
+					fn sign(
+						&self,
+						bytes: &[u8],
+					) -> <subxt::PolkadotConfig as subxt::Config>::Signature {
+						use sp_core::Pair;
+						subxt::utils::MultiSignature::Sr25519(self.1.sign(bytes).0)
+					}
+				}
+				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
+			};
+
+			let recorded_version = <SemVer as codec::Decode>::decode(
+				&mut subxt_client
+					.storage()
+					.at_latest()
+					.await?
+					.fetch_or_default(&subxt::storage::dynamic(
+						"Validator",
+						"NodeCFEVersion",
+						vec![subxt_signer.account_id()],
+					))
+					.await?
+					.encoded(),
+			)
+			.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
+
+			// Note that around CFE upgrade period, the less recent version might still be running
+			// (and can even be *the* "active" instance), so it is important that it doesn't
+			// downgrade the version record:
+			if this_version.is_more_recent_than(recorded_version) {
+				info!(
+					"Updating CFE version record from {:?} to {:?}",
+					recorded_version, this_version
+				);
+
+				subxt_client
+					.tx()
+					.sign_and_submit_then_watch_default(
+						&subxt::dynamic::tx(
+							"Validator",
+							"cfe_version",
+							vec![(
+								"new_version",
+								vec![
+									("major", this_version.major),
+									("minor", this_version.minor),
+									("patch", this_version.patch),
+								],
+							)],
+						),
+						&subxt_signer,
+					)
+					.await?
+					.wait_for_in_block()
+					.await?;
+			}
+		}
 
 		self.nonce_and_signer = Some((account_nonce, signer));
 
