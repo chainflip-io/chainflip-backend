@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = '0.10.0'
+version = '1.0.0'
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -14,10 +14,14 @@ maintainer-scripts = "package/"
 name = "chainflip-engine0.10"
 priority = "required"
 section = "rust"
-systemd-units = [
-  { unit-name = "chainflip-engine0.10", enable = false },
+systemd-units = [{ unit-name = "chainflip-engine0.10", enable = false }]
+assets = [
+  [
+    "target/release/chainflip-engine",
+    "usr/bin/chainflip-engine0.10",
+    "755",
+  ],
 ]
-assets = [["target/release/chainflip-engine", "usr/bin/chainflip-engine0.10", "755"]]
 
 [package.metadata.deb.variants.test]
 maintainer-scripts = "package/test"
@@ -87,7 +91,7 @@ zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v
   "vendored",
 ] }
 warp = { version = "0.3.6" }
-regex = { version = "1"}
+regex = { version = "1" }
 
 # Local deps
 cf-chains = { path = "../state-chain/chains" }
