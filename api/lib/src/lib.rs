@@ -140,25 +140,11 @@ impl StateChainApi {
 }
 
 #[async_trait]
-impl<
-		SignedExtrinsicClient: Send + Sync + 'static + SignedExtrinsicApi,
-		RawRpcClient: Send + Sync + 'static + RawRpcApi,
-	> OperatorApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
-{
-	async fn dry_run(
-		&self,
-		_call: RuntimeCall,
-		_at: Option<state_chain_runtime::Hash>,
-	) -> Result<Bytes> {
-		// TODO: PRO-917 fix dry run
-		Ok(Bytes::from(vec![]))
-	}
-}
-
-#[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
 impl BrokerApi for StateChainClient {}
+#[async_trait]
+impl OperatorApi for StateChainClient {}
 
 #[async_trait]
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
@@ -169,9 +155,9 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
 		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
-		self.dry_run(call.clone(), None).await?;
 
-		let (tx_hash, ..) = self.submit_signed_extrinsic(call).await.until_in_block().await?;
+		let (tx_hash, ..) =
+			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
 
 		Ok(tx_hash)
 	}
@@ -209,11 +195,9 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::None => bail!("Cannot register account role None"),
 		};
 
-		let _ = self.dry_run(call.clone(), None).await?;
-
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(call)
-			.await
+			.submit_signed_extrinsic_with_dry_run(call)
+			.await?
 			.until_in_block()
 			.await
 			.context("Could not register account role for account")?;
@@ -282,12 +266,6 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
-
-	async fn dry_run(
-		&self,
-		call: RuntimeCall,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -327,14 +305,16 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic(pallet_cf_swapping::Call::request_swap_deposit_address {
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission_bps,
-				channel_metadata,
-			})
-			.await
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::request_swap_deposit_address {
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission_bps,
+					channel_metadata,
+				},
+			)
+			.await?
 			.until_in_block()
 			.await?;
 
