@@ -59,27 +59,11 @@ impl TryInto<Asset> for RpcAsset {
 	}
 }
 
-impl std::str::FromStr for RpcAsset {
-	type Err = jsonrpsee::core::Error;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let mut parts = s.splitn(2, ':');
-
-		let chain = parts.next().unwrap_or_default();
-		let asset = parts.next().unwrap_or_default();
-		match (chain, asset) {
-			("", "") => Err(jsonrpsee::core::Error::Custom("Empty asset".to_string())),
-			("", asset) => Ok(RpcAsset::ImplicitChain(
-				Asset::from_str(asset)
-					.map_err(|e| jsonrpsee::core::Error::Custom(e.to_string()))?,
-			)),
-			(chain, asset) => {
-				let chain = ForeignChain::from_str(chain)
-					.map_err(|e| jsonrpsee::core::Error::Custom(e.to_string()))?;
-				let asset = Asset::from_str(asset)
-					.map_err(|e| jsonrpsee::core::Error::Custom(e.to_string()))?;
-				Ok(RpcAsset::ExplicitChain { chain, asset })
-			},
+impl From<(Asset, Option<ForeignChain>)> for RpcAsset {
+	fn from((asset, chain): (Asset, Option<ForeignChain>)) -> Self {
+		match chain {
+			Some(chain) => RpcAsset::ExplicitChain { asset, chain },
+			None => RpcAsset::ImplicitChain(asset),
 		}
 	}
 }

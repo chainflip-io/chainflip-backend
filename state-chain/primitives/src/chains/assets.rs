@@ -43,6 +43,7 @@ pub mod any {
 		Ord,
 		EnumIter,
 		Serialize,
+		Deserialize,
 	)]
 	#[repr(u32)]
 	// !!!!!! IMPORTANT !!!!!!
@@ -103,17 +104,6 @@ pub mod any {
 				"btc" => Ok(Asset::Btc),
 				_ => Err("Unrecognized asset"),
 			}
-		}
-	}
-
-	// Custom deserializer so we can avoid being case sensitive
-	impl<'de> Deserialize<'de> for Asset {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: serde::Deserializer<'de>,
-		{
-			let s = scale_info::prelude::string::String::deserialize(deserializer)?;
-			Asset::from_str(&s).map_err(serde::de::Error::custom)
 		}
 	}
 }

@@ -16,12 +16,12 @@ import { sendEth } from './send_eth';
 import { getBalance } from './get_balance';
 
 type RpcAsset = {
-  asset: Asset;
+  asset: string; // TODO: Use Asset type with correct serialization to "Eth" instead of "ETH".
   chain: Chain;
 };
 
 const testAsset: Asset = 'ETH'; // TODO: Make these tests work with any asset
-const testRpcAsset: RpcAsset = { chain: chainFromAsset(testAsset), asset: testAsset };
+const testRpcAsset: RpcAsset = { chain: chainFromAsset(testAsset), asset: 'Eth' };
 const testAmount = 0.1;
 const testAssetAmount = parseInt(amountToFineAmount(testAmount.toString(), assetDecimals.ETH));
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
