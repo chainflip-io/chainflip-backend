@@ -144,7 +144,7 @@ pub trait Rpc {
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError>;
+	async fn asset_balances(&self) -> Result<BTreeMap<RpcAsset, u128>, AnyhowRpcError>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
@@ -210,8 +210,15 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError> {
-		Ok(self.api.query_api().get_balances(None).await?)
+	async fn asset_balances(&self) -> Result<BTreeMap<RpcAsset, u128>, AnyhowRpcError> {
+		Ok(self
+			.api
+			.query_api()
+			.get_balances(None)
+			.await?
+			.into_iter()
+			.map(|(asset, balance)| (RpcAsset::from(asset), balance))
+			.collect())
 	}
 
 	async fn update_range_order(

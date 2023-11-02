@@ -29,7 +29,7 @@ macro_rules! chains {
 			}
 		)+
 
-		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+		#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
 		#[derive(Serialize, Deserialize)]
 		#[repr(u32)]
 		pub enum ForeignChain {
