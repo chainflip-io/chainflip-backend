@@ -76,6 +76,10 @@ jobs:
           --steps ${{ github.event.inputs.steps }}
           --repetitions ${{ github.event.inputs.repetitions }}
 
+      - name: Cleanup
+        run: >
+          rm ./chainflip-node
+
       - name: Make a pull request with the changed weight files
         uses: peter-evans/create-pull-request@v5
         with:
