@@ -708,6 +708,22 @@ impl<
 		self.signed_extrinsic_client.account_id()
 	}
 
+	/// Do a dry run of the extrinsic first, only submit if Ok(())
+	async fn submit_signed_extrinsic_with_dry_run<Call>(
+		&self,
+		call: Call,
+	) -> anyhow::Result<(H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
+	{
+		self.signed_extrinsic_client.submit_signed_extrinsic_with_dry_run(call).await
+	}
+
 	/// Submit an signed extrinsic, returning the hash of the submission
 	async fn submit_signed_extrinsic<Call>(
 		&self,
@@ -804,6 +820,15 @@ pub mod mocks {
 			fn account_id(&self) -> AccountId;
 
 			async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, (<Self as SignedExtrinsicApi>::UntilInBlockFuture, <Self as SignedExtrinsicApi>::UntilFinalizedFuture))
+			where
+				Call: Into<state_chain_runtime::RuntimeCall>
+					+ Clone
+					+ std::fmt::Debug
+					+ Send
+					+ Sync
+					+ 'static;
+
+			async fn submit_signed_extrinsic_with_dry_run<Call>(&self, call: Call) -> anyhow::Result<(H256, (<Self as SignedExtrinsicApi>::UntilInBlockFuture, <Self as SignedExtrinsicApi>::UntilFinalizedFuture))>
 			where
 				Call: Into<state_chain_runtime::RuntimeCall>
 					+ Clone

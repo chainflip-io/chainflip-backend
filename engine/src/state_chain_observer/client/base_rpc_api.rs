@@ -128,6 +128,8 @@ pub trait BaseRpcApi {
 
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash>;
 
+	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash>;
+
 	async fn subscribe_finalized_block_headers(
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
@@ -234,6 +236,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<state_chain_runtime::Header> {
 		Ok(self.raw_rpc_client.header(Some(block_hash)).await?.expect(SUBSTRATE_BEHAVIOUR))
+	}
+
+	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
+		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await?).expect(SUBSTRATE_BEHAVIOUR))
 	}
 
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {

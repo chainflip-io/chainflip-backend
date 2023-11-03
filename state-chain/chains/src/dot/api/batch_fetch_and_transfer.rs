@@ -103,7 +103,11 @@ mod test_batch_fetch {
 		];
 
 		let mut builder = super::extrinsic_builder(
-			PolkadotReplayProtection { nonce: NONCE_1, genesis_hash: Default::default() },
+			PolkadotReplayProtection {
+				nonce: NONCE_1,
+				signer: keypair_proxy.public_key(),
+				genesis_hash: Default::default(),
+			},
 			dummy_fetch_params,
 			dummy_transfer_params,
 			account_id_vault,
@@ -117,7 +121,7 @@ mod test_batch_fetch {
 			hex::encode(&payload.0),
 			"6fdbf2de25ba016e2c8b4f8238d057066a6ea2a63770073c3b6dcee86b02aeff"
 		);
-		builder.insert_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
+		builder.insert_signature(keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
 	}
 

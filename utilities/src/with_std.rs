@@ -4,7 +4,7 @@ use futures::{stream, Stream};
 use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObjectOwned};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
-use sp_rpc::number::NumberOrHex;
+use rpc::NumberOrHex;
 
 pub mod future_map;
 pub mod loop_select;
@@ -16,6 +16,7 @@ pub mod unending_stream;
 pub use unending_stream::UnendingStream;
 pub mod logging;
 pub mod redact_endpoint_secret;
+pub mod rpc;
 pub mod serde_helpers;
 
 mod cached_stream;
@@ -30,9 +31,9 @@ pub struct AnyhowRpcError {
 	pub error: anyhow::Error,
 }
 
-impl From<anyhow::Error> for AnyhowRpcError {
-	fn from(error: anyhow::Error) -> Self {
-		Self { error }
+impl<E: Into<anyhow::Error>> From<E> for AnyhowRpcError {
+	fn from(error: E) -> Self {
+		Self { error: error.into() }
 	}
 }
 
@@ -56,7 +57,7 @@ pub fn clean_hex_address<A: TryFrom<Vec<u8>>>(address_str: &str) -> Result<A, an
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 	u128::try_from(amount).map_err(|_| {
-		anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
+		anyhow!("Error parsing amount to u128. Please use a valid number or hex string as input.")
 	})
 }
 

@@ -18,21 +18,19 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      network: development
-
+      profile: "release"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
-      network: development
-      environment: dev
+      network: "test"
+      environment: "development"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
-      network: "development"
-      environment: dev
+      network: "test"
     secrets: inherit
   post-check:
     needs: [build]
@@ -43,5 +41,5 @@ jobs:
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: ci/${{ github.sha }}/
-      environment: dev
+      environment: "development"
     secrets: inherit

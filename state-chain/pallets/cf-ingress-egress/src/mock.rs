@@ -20,6 +20,7 @@ use cf_traits::{
 		block_height_provider::BlockHeightProvider,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
+		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
 	DepositApi, DepositHandler,
@@ -101,7 +102,7 @@ impl crate::Config for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
-	type LpBalance = Self;
+	type LpBalance = MockBalance;
 	type SwapDepositHandler =
 		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;

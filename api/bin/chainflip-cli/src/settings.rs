@@ -2,12 +2,18 @@ use chainflip_api::primitives::{AccountRole, Asset, ForeignChain};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
-	settings::{CfSettings, Eth, EthOptions, StateChainOptions, DEFAULT_SETTINGS_DIR},
+	settings::{
+		resolve_settings_path, CfSettings, Eth, EthOptions, PathResolutionExpectation,
+		StateChainOptions, DEFAULT_SETTINGS_DIR,
+	},
 };
 use clap::Parser;
 use config::{ConfigBuilder, ConfigError, Source, Value};
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+};
 
 #[derive(Parser, Clone, Debug)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
@@ -56,9 +62,9 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Source asset ("eth"|"dot")
+	/// Source asset ("ETH"|"DOT")
 	pub source_asset: Asset,
-	/// Egress asset ("eth"|"dot")
+	/// Egress asset ("ETH"|"DOT")
 	pub destination_asset: Asset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
@@ -67,6 +73,10 @@ pub struct SwapRequestParams {
 	pub destination_address: String,
 	/// Commission to the broker in basis points
 	pub broker_commission: u16,
+	/// Chain of the source asset ("Ethereum"|"Polkadot")
+	pub source_chain: Option<ForeignChain>,
+	/// Chain of the destination asset ("Ethereum"|"Polkadot")
+	pub destination_chain: Option<ForeignChain>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -79,8 +89,10 @@ pub enum BrokerSubcommands {
 pub enum LiquidityProviderSubcommands {
 	/// Request a liquidity deposit address.
 	RequestLiquidityDepositAddress {
-		/// Asset to deposit.
+		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
+		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
+		chain: Option<ForeignChain>,
 	},
 	/// Register an Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
@@ -200,10 +212,22 @@ pub struct CLISettings {
 impl CfSettings for CLISettings {
 	type CommandLineOptions = CLICommandLineOptions;
 
-	fn validate_settings(&self) -> Result<(), ConfigError> {
+	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
+		self.eth.private_key_file = resolve_settings_path(
+			config_root,
+			&self.eth.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
 
-		self.state_chain.validate_settings()
+		self.state_chain.validate_settings()?;
+		self.state_chain.signing_key_file = resolve_settings_path(
+			config_root,
+			&self.state_chain.signing_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+
+		Ok(())
 	}
 
 	fn set_defaults(

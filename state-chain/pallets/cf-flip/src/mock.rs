@@ -141,7 +141,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000 },
+		flip: FlipConfig { total_issuance: 1_000, daily_slashing_rate: Permill::from_perthousand(1) },
 		transaction_payment: Default::default(),
 	},
 	|| {

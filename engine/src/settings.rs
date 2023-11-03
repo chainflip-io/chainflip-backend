@@ -310,7 +310,10 @@ pub struct CommandLineOptions {
 impl Default for CommandLineOptions {
 	fn default() -> Self {
 		Self {
+			#[cfg(not(test))]
 			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
+			#[cfg(test)]
+			config_root: env!("CF_TEST_CONFIG_ROOT").to_owned(),
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
@@ -407,7 +410,7 @@ where
 			)))
 		}
 
-		let settings: Self = builder
+		let mut settings: Self = builder
 			.add_source(Environment::default().separator("__"))
 			.add_source(opts)
 			.build()?
@@ -421,7 +424,7 @@ where
 				})
 			})?;
 
-		settings.validate_settings()?;
+		settings.validate_settings(&PathBuf::from(&config_root))?;
 
 		Ok(settings)
 	}
@@ -438,13 +441,59 @@ where
 	}
 
 	/// Validate the formatting of some settings
-	fn validate_settings(&self) -> Result<(), ConfigError>;
+	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError>;
+}
+
+pub enum PathResolutionExpectation {
+	ExistingFile,
+	ExistingDir,
+}
+
+pub fn resolve_settings_path(
+	root: &Path,
+	path: &Path,
+	expectation: Option<PathResolutionExpectation>,
+) -> Result<PathBuf, ConfigError> {
+	// Note: if path is already absolute, `join` ignores the `root`.
+	let absolute_path = root.join(path);
+	match expectation {
+		None => Ok(absolute_path),
+		Some(expectation) => {
+			if !absolute_path.try_exists().map_err(|e| ConfigError::Foreign(Box::new(e)))? {
+				Err(ConfigError::Message(format!(
+					"Path does not exist: {}",
+					absolute_path.to_string_lossy()
+				)))
+			} else {
+				absolute_path
+					.canonicalize()
+					.map_err(|e| ConfigError::Foreign(Box::new(e)))
+					.and_then(|path| {
+						if match expectation {
+							PathResolutionExpectation::ExistingFile => path.is_file(),
+							PathResolutionExpectation::ExistingDir => path.is_dir(),
+						} {
+							Ok(path)
+						} else {
+							Err(ConfigError::Message(std::format!(
+								"{:?} is not a {}",
+								path,
+								match expectation {
+									PathResolutionExpectation::ExistingFile => "file",
+									PathResolutionExpectation::ExistingDir => "path",
+								}
+							)))
+						}
+					})
+			}
+		},
+	}
 }
 
 impl CfSettings for Settings {
 	type CommandLineOptions = CommandLineOptions;
 
-	fn validate_settings(&self) -> Result<(), ConfigError> {
+	fn validate_settings(&mut self, config_root: &Path) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
 
 		self.dot.validate_settings()?;
@@ -453,8 +502,26 @@ impl CfSettings for Settings {
 
 		self.state_chain.validate_settings()?;
 
-		is_valid_db_path(self.signing.db_file.as_path())
-			.map_err(|e| ConfigError::Message(e.to_string()))
+		is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
+
+		self.state_chain.signing_key_file = resolve_settings_path(
+			config_root,
+			&self.state_chain.signing_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+		self.eth.private_key_file = resolve_settings_path(
+			config_root,
+			&self.eth.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+		self.signing.db_file = resolve_settings_path(config_root, &self.signing.db_file, None)?;
+		self.node_p2p.node_key_file = resolve_settings_path(
+			config_root,
+			&self.node_p2p.node_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+
+		Ok(())
 	}
 
 	fn set_defaults(
@@ -666,7 +733,7 @@ impl Settings {
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
 		Settings::load_settings_from_all_sources(
-			"config/testing/".to_owned(),
+			env!("CF_TEST_CONFIG_ROOT").to_owned(),
 			DEFAULT_SETTINGS_DIR,
 			CommandLineOptions::default(),
 		)
@@ -711,7 +778,6 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 
 #[cfg(test)]
 pub mod tests {
-
 	use utilities::assert_ok;
 
 	use crate::constants::{
@@ -809,29 +875,25 @@ pub mod tests {
 
 		assert_eq!(
 			test_settings.state_chain.signing_key_file,
-			PathBuf::from("./tests/test_keystore/alice_key")
+			PathBuf::from(env!("CF_TEST_CONFIG_ROOT"))
+				.join("keys/alice")
+				.canonicalize()
+				.unwrap()
 		);
 	}
 
 	fn test_base_config_path_command_line_option() {
 		// Load the settings using a custom base config path.
-		let test_base_config_path = "config/testing/";
-		let custom_base_path_settings = Settings::new(CommandLineOptions {
-			config_root: test_base_config_path.to_owned(),
-			..Default::default()
-		})
-		.unwrap();
+		let custom_base_path_settings = Settings::new(CommandLineOptions::default()).unwrap();
 
 		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
-		// by comparing it to a different settings file.
-		let different_settings_config_path = "config/testing2/";
-		assert_ne!(
-			custom_base_path_settings,
-			Settings::new(CommandLineOptions {
-				config_root: different_settings_config_path.to_owned(),
-				..Default::default()
-			})
-			.unwrap()
+		// checking that the `alice` key was loaded rather than the default.
+		assert_eq!(
+			custom_base_path_settings.state_chain.signing_key_file,
+			PathBuf::from(env!("CF_TEST_CONFIG_ROOT"))
+				.join("keys/alice")
+				.canonicalize()
+				.unwrap()
 		);
 
 		// Check that a key file is a child of the custom base path.
@@ -841,7 +903,7 @@ pub mod tests {
 			.node_p2p
 			.node_key_file
 			.to_string_lossy()
-			.contains(test_base_config_path));
+			.contains(env!("CF_TEST_CONFIG_ROOT")));
 
 		assert_eq!(
 			custom_base_path_settings.btc.nodes.primary.http_endpoint,
@@ -858,21 +920,23 @@ pub mod tests {
 		let opts = CommandLineOptions {
 			config_root: CommandLineOptions::default().config_root,
 			p2p_opts: P2POptions {
-				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
+				node_key_file: Some(PathBuf::from_str("keys/node_key_file_2").unwrap()),
 				ip_address: Some("1.1.1.1".parse().unwrap()),
 				p2p_port: Some(8087),
 				allow_local_ip: Some(false),
 			},
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
-				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
+				state_chain_signing_key_file: Some(
+					PathBuf::from_str("keys/signing_key_file_2").unwrap(),
+				),
 			},
 			eth_opts: EthOptions {
 				eth_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
 				eth_http_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_backup_ws_endpoint: Some("ws://second_endpoint:4321".to_owned()),
 				eth_backup_http_endpoint: Some("http://second_endpoint:4321".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+				eth_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			dot_opts: DotOptions {
 				dot_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
@@ -905,7 +969,7 @@ pub mod tests {
 		// Compare the opts and the settings
 		assert_eq!(opts.logging_span_lifecycle, settings.logging.span_lifecycle);
 		assert_eq!(opts.logging_command_server_port.unwrap(), settings.logging.command_server_port);
-		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert!(settings.node_p2p.node_key_file.ends_with("node_key_file_2"));
 		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
 		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
 		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
@@ -914,10 +978,7 @@ pub mod tests {
 			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
 			settings.state_chain.ws_endpoint
 		);
-		assert_eq!(
-			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
-			settings.state_chain.signing_key_file
-		);
+		assert!(settings.state_chain.signing_key_file.ends_with("signing_key_file_2"));
 
 		assert_eq!(
 			opts.eth_opts.eth_ws_endpoint.unwrap(),
@@ -938,7 +999,7 @@ pub mod tests {
 			eth_backup_node.http_endpoint.as_ref()
 		);
 
-		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
+		assert!(settings.eth.private_key_file.ends_with("eth_private_key_2"));
 
 		assert_eq!(
 			opts.dot_opts.dot_ws_endpoint.unwrap(),
@@ -994,7 +1055,7 @@ pub mod tests {
 		);
 		assert_eq!(opts.prometheus_port.unwrap(), settings.prometheus.as_ref().unwrap().port);
 
-		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
+		assert!(settings.signing.db_file.ends_with("not/real.db"));
 	}
 
 	#[test]
@@ -1062,5 +1123,99 @@ pub mod tests {
 			http_endpoint: "http://invalid.no_port_in_url/secret_key".into(),
 		});
 		assert!(invalid_backup_settings.validate_settings().is_err());
+	}
+
+	#[test]
+	fn settings_path_resolution() {
+		let config_root = PathBuf::from(env!("CF_TEST_CONFIG_ROOT"));
+		let absolute_path_to_settings = config_root.join("config/Settings.toml");
+
+		// Resolving paths.
+		assert_eq!(
+			resolve_settings_path(
+				&config_root,
+				&PathBuf::from(""),
+				Some(PathResolutionExpectation::ExistingDir)
+			)
+			.unwrap(),
+			PathBuf::from(&config_root),
+		);
+
+		// Directory doesn't exist.
+		assert!(resolve_settings_path(
+			&config_root,
+			&PathBuf::from("does/not/exist"),
+			Some(PathResolutionExpectation::ExistingDir)
+		)
+		.expect_err("Expected error when resolving non-existing path")
+		.to_string()
+		.contains("Path does not exist"));
+
+		// Expect file but existing directory found.
+		assert!(resolve_settings_path(
+			&config_root,
+			&PathBuf::from(""),
+			Some(PathResolutionExpectation::ExistingFile)
+		)
+		.expect_err("Expected error when resolving non-existing file")
+		.to_string()
+		.contains("is not a file"),);
+
+		// File doesn't exist.
+		assert!(resolve_settings_path(
+			&config_root,
+			&PathBuf::from("config/Setings.toml"),
+			Some(PathResolutionExpectation::ExistingFile)
+		)
+		.expect_err("Expected error when resolving non-existing file")
+		.to_string()
+		.contains("Path does not exist"),);
+
+		// Resolving files.
+		// Relative path:
+		assert_eq!(
+			resolve_settings_path(
+				&config_root,
+				&PathBuf::from("config/Settings.toml"),
+				Some(PathResolutionExpectation::ExistingFile)
+			)
+			.unwrap(),
+			absolute_path_to_settings,
+		);
+		// Absolute path:
+		assert_eq!(
+			resolve_settings_path(
+				&config_root,
+				&absolute_path_to_settings,
+				Some(PathResolutionExpectation::ExistingFile)
+			)
+			.unwrap(),
+			absolute_path_to_settings,
+		);
+
+		// Relative path is canonicalized.
+		assert_eq!(
+			resolve_settings_path(
+				&config_root,
+				&PathBuf::from("../testing/config/Settings.toml"),
+				Some(PathResolutionExpectation::ExistingFile)
+			)
+			.unwrap(),
+			config_root.parent().unwrap().join("testing/config/Settings.toml"),
+		);
+
+		// Path not required to exist resolves correctly.
+		// Relative:
+		assert_eq!(
+			resolve_settings_path(&config_root, &PathBuf::from("../path/to/somewhere"), None)
+				.unwrap(),
+			PathBuf::from(&config_root).join("../path/to/somewhere"),
+		);
+		// Absolute:
+		assert_eq!(
+			resolve_settings_path(&config_root, &PathBuf::from("/path/to/somewhere"), None)
+				.unwrap(),
+			PathBuf::from("/path/to/somewhere"),
+		);
 	}
 }

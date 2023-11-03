@@ -1,18 +1,19 @@
 use cf_utilities::{
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
 	AnyhowRpcError,
 };
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
+	primitives::{AccountRole, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId},
 	settings::StateChain,
 	BrokerApi, OperatorApi, StateChainApi,
 };
 use clap::Parser;
+use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use serde::{Deserialize, Serialize};
-use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 use tracing::log;
 
@@ -46,8 +47,8 @@ pub trait Rpc {
 	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
+		source_asset: RpcAsset,
+		destination_asset: RpcAsset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
@@ -83,17 +84,18 @@ impl RpcServer for RpcServerImpl {
 
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
+		source_asset: RpcAsset,
+		destination_asset: RpcAsset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<BrokerSwapDepositAddress, AnyhowRpcError> {
+		let destination_asset = destination_asset.try_into()?;
 		Ok(self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
-				source_asset,
+				source_asset.try_into()?,
 				destination_asset,
 				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 				broker_commission_bps,

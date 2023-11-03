@@ -68,5 +68,4 @@ export async function testMultipleMembersGovernance() {
   await submitWithMultipleGovernanceMembers();
 
   console.log('=== Multiple members governance test complete ===');
-  process.exit(0);
 }

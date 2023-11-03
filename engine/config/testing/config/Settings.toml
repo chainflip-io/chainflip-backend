@@ -5,7 +5,7 @@ allow_local_ip = true
 
 [state_chain]
 # 32 byte hex secret key - associated with the node's public id (public key)
-signing_key_file = "./tests/test_keystore/alice_key"
+signing_key_file = "./keys/alice"
 
 [eth.rpc]
 http_endpoint = "http://localhost:8545"

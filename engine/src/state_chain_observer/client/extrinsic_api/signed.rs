@@ -94,6 +94,18 @@ pub trait SignedExtrinsicApi {
 			+ Sync
 			+ 'static;
 
+	async fn submit_signed_extrinsic_with_dry_run<Call>(
+		&self,
+		call: Call,
+	) -> Result<(H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static;
+
 	async fn finalize_signed_extrinsic<Call>(
 		&self,
 		call: Call,
@@ -115,6 +127,7 @@ pub struct SignedExtrinsicClient {
 		oneshot::Sender<submission_watcher::FinalizationResult>,
 		submission_watcher::RequestStrategy,
 	)>,
+	dry_run_sender: mpsc::Sender<(state_chain_runtime::RuntimeCall, oneshot::Sender<Result<()>>)>,
 	_task_handle: ScopedJoinHandle<()>,
 }
 
@@ -135,10 +148,12 @@ impl SignedExtrinsicClient {
 		const REQUEST_BUFFER: usize = 16;
 
 		let (request_sender, mut request_receiver) = mpsc::channel(REQUEST_BUFFER);
+		let (dry_run_sender, mut dry_run_receiver) = mpsc::channel(REQUEST_BUFFER);
 
 		Ok(Self {
 			account_id: signer.account_id.clone(),
 			request_sender,
+			dry_run_sender,
 			_task_handle: scope.spawn_with_handle({
 				let mut state_chain_stream = state_chain_stream.clone();
 
@@ -160,6 +175,9 @@ impl SignedExtrinsicClient {
 					utilities::loop_select! {
 						if let Some((call, until_in_block_sender, until_finalized_sender, strategy)) = request_receiver.recv() => {
 							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
+						} else break Ok(()),
+						if let Some((call, result_sender)) = dry_run_receiver.recv() => {
+							let _ = result_sender.send(submission_watcher.dry_run_extrinsic(call).await.map_err(Into::into));
 						} else break Ok(()),
 						let submission_details = submission_watcher.watch_for_submission_in_block() => {
 							submission_watcher.on_submission_in_block(&mut requests, submission_details).await?;
@@ -218,6 +236,30 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 				UntilFinalizedFuture(until_finalized_receiver),
 			),
 		)
+	}
+
+	/// Dry run the call, and only submit the extrinsic onto the chain
+	/// if dry-run returns Ok(())
+	async fn submit_signed_extrinsic_with_dry_run<Call>(
+		&self,
+		call: Call,
+	) -> Result<(H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
+	{
+		let _ = send_request(&self.dry_run_sender, |result_sender| {
+			(call.clone().into(), result_sender)
+		})
+		.await
+		.await
+		.expect(OR_CANCEL)?;
+
+		Ok(self.submit_signed_extrinsic(call.into()).await)
 	}
 
 	async fn finalize_signed_extrinsic<Call>(

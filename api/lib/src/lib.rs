@@ -140,25 +140,11 @@ impl StateChainApi {
 }
 
 #[async_trait]
-impl<
-		SignedExtrinsicClient: Send + Sync + 'static + SignedExtrinsicApi,
-		RawRpcClient: Send + Sync + 'static + RawRpcApi,
-	> OperatorApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
-{
-	async fn dry_run(
-		&self,
-		_call: RuntimeCall,
-		_at: Option<state_chain_runtime::Hash>,
-	) -> Result<Bytes> {
-		// TODO: PRO-917 fix dry run
-		Ok(Bytes::from(vec![]))
-	}
-}
-
-#[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
 impl BrokerApi for StateChainClient {}
+#[async_trait]
+impl OperatorApi for StateChainClient {}
 
 #[async_trait]
 pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
@@ -169,9 +155,9 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		executor: Option<EthereumAddress>,
 	) -> Result<H256> {
 		let call = RuntimeCall::from(pallet_cf_funding::Call::redeem { amount, address, executor });
-		self.dry_run(call.clone(), None).await?;
 
-		let (tx_hash, ..) = self.submit_signed_extrinsic(call).await.until_in_block().await?;
+		let (tx_hash, ..) =
+			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
 
 		Ok(tx_hash)
 	}
@@ -209,11 +195,9 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::None => bail!("Cannot register account role None"),
 		};
 
-		let _ = self.dry_run(call.clone(), None).await?;
-
 		let (tx_hash, ..) = self
-			.submit_signed_extrinsic(call)
-			.await
+			.submit_signed_extrinsic_with_dry_run(call)
+			.await?
 			.until_in_block()
 			.await
 			.context("Could not register account role for account")?;
@@ -282,12 +266,6 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
-
-	async fn dry_run(
-		&self,
-		call: RuntimeCall,
-		at: Option<state_chain_runtime::Hash>,
-	) -> Result<Bytes>;
 }
 
 #[async_trait]
@@ -327,14 +305,16 @@ pub trait BrokerApi: SignedExtrinsicApi {
 		channel_metadata: Option<CcmChannelMetadata>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic(pallet_cf_swapping::Call::request_swap_deposit_address {
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission_bps,
-				channel_metadata,
-			})
-			.await
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::request_swap_deposit_address {
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission_bps,
+					channel_metadata,
+				},
+			)
+			.await?
 			.until_in_block()
 			.await?;
 
@@ -360,7 +340,7 @@ pub trait BrokerApi: SignedExtrinsicApi {
 				source_chain_expiry_block: *source_chain_expiry_block,
 			})
 		} else {
-			panic!("SwapDepositAddressReady must have been generated");
+			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
 }
@@ -473,78 +453,83 @@ pub fn generate_ethereum_key(
 }
 
 #[cfg(test)]
-mod test_key_generation {
-	use sp_core::crypto::Ss58Codec;
-
+mod tests {
 	use super::*;
 
-	#[test]
-	fn restored_keys_remain_compatible() {
-		const SEED_PHRASE: &str =
+	mod key_generation {
+
+		use super::*;
+		use sp_core::crypto::Ss58Codec;
+
+		#[test]
+		fn restored_keys_remain_compatible() {
+			const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-		let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+			let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
-		// Compare the generated secret key with a known secret key generated using the
-		// `chainflip-node key generate` command
-		assert_eq!(
-			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
-			hex::encode(generated.1.secret_key)
-		);
-		assert_eq!(
-			(generated.0, generated.2),
-			(
-				SEED_PHRASE.to_string(),
-				AccountId32::from_ss58check("cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA")
+			// Compare the generated secret key with a known secret key generated using the
+			// `chainflip-node key generate` command
+			assert_eq!(
+				"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
+				hex::encode(generated.1.secret_key)
+			);
+			assert_eq!(
+				(generated.0, generated.2),
+				(
+					SEED_PHRASE.to_string(),
+					AccountId32::from_ss58check(
+						"cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA"
+					)
 					.unwrap(),
-			)
-		);
+				)
+			);
 
-		let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
-		assert_eq!(
-			"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
-			hex::encode(generated.1.secret_key)
-		);
-		assert_eq!(
-			(generated.0, generated.2.as_bytes().to_vec()),
-			(
-				SEED_PHRASE.to_string(),
-				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
-			)
-		);
-	}
+			let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
+			assert_eq!(
+				"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
+				hex::encode(generated.1.secret_key)
+			);
+			assert_eq!(
+				(generated.0, generated.2.as_bytes().to_vec()),
+				(
+					SEED_PHRASE.to_string(),
+					hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
+				)
+			);
+		}
 
-	#[test]
-	fn test_restore_signing_keys() {
-		let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
-		let restored = generate_signing_key(Some(seed_phrase)).unwrap();
+		#[test]
+		fn test_restore_signing_keys() {
+			let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
+			let restored = generate_signing_key(Some(seed_phrase)).unwrap();
 
-		assert_eq!(*original, restored);
-	}
+			assert_eq!(*original, restored);
+		}
 
-	#[test]
-	fn test_restore_eth_keys() {
-		let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
-		let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
+		#[test]
+		fn test_restore_eth_keys() {
+			let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
+			let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
 
-		assert_eq!(*original, restored);
-	}
+			assert_eq!(*original, restored);
+		}
 
-	#[test]
-	fn test_dot_address_decoding() {
-		assert_eq!(
-			clean_foreign_chain_address(
-				ForeignChain::Polkadot,
-				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARE"
-			)
-			.unwrap(),
-			clean_foreign_chain_address(
-				ForeignChain::Polkadot,
-				"0x305875a3025d8be7f7048a280aba2bd571126fc171986adc1af58d1f4e02f15e"
-			)
-			.unwrap(),
-		);
-		assert_eq!(
+		#[test]
+		fn test_dot_address_decoding() {
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARE"
+				)
+				.unwrap(),
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"0x305875a3025d8be7f7048a280aba2bd571126fc171986adc1af58d1f4e02f15e"
+				)
+				.unwrap(),
+			);
+			assert_eq!(
 			clean_foreign_chain_address(
 				ForeignChain::Polkadot,
 				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
@@ -553,5 +538,6 @@ mod test_key_generation {
 			.to_string(),
 			anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
 		);
+		}
 	}
 }

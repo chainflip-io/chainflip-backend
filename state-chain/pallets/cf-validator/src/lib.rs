@@ -16,7 +16,7 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
+use cf_primitives::{AuthorityCount, EpochIndex, SemVer, FLIPPERINOS_PER_FLIP};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -208,7 +208,8 @@ pub mod pallet {
 	pub type AccountPeerMapping<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
-	/// Peers that are associated with account ids.
+	/// Ed25519 public keys (aka peer ids) that are associated with account ids. (We keep track
+	/// of them to ensure they don't somehow get reused between different account ids.)
 	#[pallet::storage]
 	#[pallet::getter(fn mapped_peer)]
 	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
@@ -608,6 +609,8 @@ pub mod pallet {
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
+			// Note: this signature is necessary to prevent "rogue key" attacks (by ensuring
+			// that `account_id` holds the corresponding secret key for `peer_id`)
 			// Note: This signature verify doesn't need replay protection as you need the
 			// account_id's private key to pass the above ensure_validator which has replay
 			// protection. Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys,
@@ -1028,7 +1031,7 @@ impl<T: Config> Pallet<T> {
 					auction_outcome.winners.len(),
 					auction_outcome.losers.len(),
 					UniqueSaturatedInto::<u128>::unique_saturated_into(auction_outcome.bond) /
-						10u128.pow(18),
+					FLIPPERINOS_PER_FLIP,
 				);
 
 				// Without reading the full list of bidders we can't know the real number.
