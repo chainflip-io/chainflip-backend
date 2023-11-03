@@ -1,4 +1,4 @@
-import { assetDecimals, Asset, Chain } from '@chainflip-io/cli';
+import { assetDecimals, Asset, Chain, Assets } from '@chainflip-io/cli';
 import assert from 'assert';
 import {
   getChainflipApi,
@@ -140,7 +140,7 @@ async function testRegisterWithExistingLpAccount() {
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 async function testRangeOrder() {
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
@@ -152,11 +152,11 @@ async function testRangeOrder() {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_range_order`, ['Usdc', testRpcAsset, orderId, range, zeroAssetAmounts]);
+  await lpApiRpc(`lp_set_range_order`, [Assets.USDC, testRpcAsset, orderId, range, zeroAssetAmounts]);
 
   // Mint a range order
   const mintRangeOrder = await lpApiRpc(`lp_set_range_order`, [
-    'Usdc',
+    Assets.USDC,
     testRpcAsset,
     orderId,
     range,
@@ -180,7 +180,7 @@ async function testRangeOrder() {
 
   // Update the range order
   const updateRangeOrder = await lpApiRpc(`lp_update_range_order`, [
-    'Usdc',
+    Assets.USDC,
     testRpcAsset,
     orderId,
     range,
@@ -206,7 +206,7 @@ async function testRangeOrder() {
 
   // Burn the range order
   const burnRangeOrder = await lpApiRpc(`lp_set_range_order`, [
-    'Usdc',
+    Assets.USDC,
     testRpcAsset,
     orderId,
     range,
@@ -233,18 +233,18 @@ async function testGetOpenSwapChannels() {
 }
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 async function testLimitOrder() {
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, 'Usdc', orderId, tick, 0]);
+  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     testRpcAsset,
-    'Usdc',
+    Assets.USDC,
     orderId,
     tick,
     testAssetAmount,
@@ -265,7 +265,7 @@ async function testLimitOrder() {
   // Update the limit order
   const updateLimitOrder = await lpApiRpc(`lp_update_limit_order`, [
     testRpcAsset,
-    'Usdc',
+    Assets.USDC,
     orderId,
     tick,
     {
@@ -293,7 +293,7 @@ async function testLimitOrder() {
   // Burn the limit order
   const burnLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     testRpcAsset,
-    'Usdc',
+    Assets.USDC,
     orderId,
     tick,
     0,
@@ -322,8 +322,8 @@ export async function testLpApi() {
     testLiquidityDeposit(),
     testWithdrawAsset(),
     testRegisterWithExistingLpAccount(),
-    // testRangeOrder(),
-    // testLimitOrder(),
+    testRangeOrder(),
+    testLimitOrder(),
     testGetOpenSwapChannels(),
   ]);
 

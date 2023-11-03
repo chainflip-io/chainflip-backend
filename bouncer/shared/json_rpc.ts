@@ -8,23 +8,24 @@ export async function jsonRpc(
   console.log('Sending json RPC', method);
 
   id++;
+  const request = JSON.stringify({
+      jsonrpc: '2.0',
+      method,
+      params,
+      id,
+    });
   const response = await fetch(`http://127.0.0.1:${port}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method,
-      params,
-      id,
-    }),
+    body: request
   });
 
   const data = await response.json();
   if (data.error) {
-    throw new Error(`${method} failed: ${data.error.message}`);
+    throw new Error(`JSON Rpc request ${request} failed: ${data.error.message}`);
   } else {
     return data.result;
   }

@@ -19,7 +19,7 @@ use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use std::{collections::BTreeMap, ops::Range, path::PathBuf};
+use std::{ops::Range, path::PathBuf};
 use tracing::log;
 
 /// Contains RPC interface types that differ from internal types.
@@ -144,7 +144,7 @@ pub trait Rpc {
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
-	async fn asset_balances(&self) -> Result<BTreeMap<RpcAsset, u128>, AnyhowRpcError>;
+	async fn asset_balances(&self) -> Result<Vec<(RpcAsset, u128)>, AnyhowRpcError>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
@@ -210,7 +210,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<BTreeMap<RpcAsset, u128>, AnyhowRpcError> {
+	async fn asset_balances(&self) -> Result<Vec<(RpcAsset, u128)>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.query_api()
