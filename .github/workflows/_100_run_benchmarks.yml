@@ -63,6 +63,9 @@ jobs:
           search_artifacts: true
           check_artifacts: true
 
+      - name: Update permissions on chainflip-node
+        run: chmod +x ./chainflip-node
+
       - name: Run benchmarks
         run: >
           ./state-chain/scripts/benchmark-all.sh
