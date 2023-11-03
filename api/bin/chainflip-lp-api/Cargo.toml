@@ -32,6 +32,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 pallet-cf-pools = { path = '../../../state-chain/pallets/cf-pools' }
 cf-primitives = { path = "../../../state-chain/primitives" }
+custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 # Local
 chainflip-api = { path = "../../lib" }

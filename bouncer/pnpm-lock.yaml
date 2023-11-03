@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip-io/cli':
-    specifier: ^0.1.4
-    version: 0.1.4
+    specifier: ^0.1.5-rc.1
+    version: 0.1.5-rc.1
   '@polkadot/api':
     specifier: 10.7.2
     version: 10.7.2
@@ -39,8 +39,8 @@ dependencies:
     specifier: ^2.1.0
     version: 2.1.0
   ethers:
-    specifier: 6.7.1
-    version: 6.7.1
+    specifier: 6.8.0
+    version: 6.8.0
   md5:
     specifier: ^2.3.0
     version: 2.3.0
@@ -94,17 +94,16 @@ devDependencies:
 
 packages:
 
-  /@adraffy/ens-normalize@1.9.2:
-    resolution: {integrity: sha512-0h+FrQDqe2Wn+IIGFkTCd4aAwTJ+7834Ek1COohCyV26AXhwQ7WQaz+4F/nLOeVl/3BtWHOHLPsq46V8YB46Eg==}
+  /@adraffy/ens-normalize@1.10.0:
+    resolution: {integrity: sha512-nA9XHtlAkYfJxY7bce8DcN7eKxWWCWkU+1GR9d+U6MbNpfwQp8TI7vqOsBsMcHoT4mBu2kypKoSKnghEzOOq5Q==}
     dev: false
 
-  /@chainflip-io/cli@0.1.4:
-    resolution: {integrity: sha512-c91GIZvyBWYYzARuJpJZzKnw00n+i++kNl3GLSyorUuMsFLEz5qkyMf0i1bFTIp/No0nvWI0MAOgnofP0zTOrQ==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.1.4/52273fa90fdea2826c552689fe54e909b57e39a5}
+  /@chainflip-io/cli@0.1.5-rc.1:
+    resolution: {integrity: sha512-G2TS0UG/Ato0aOvDDBQtqQsHpHEP1P0CiBaXYr0hB1sknSP1cMoLZKXHfuudwey5IbuKxTtnydM+b2wzCYnybw==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.1.5-rc.1/2de8ba984c607049eb9ecd55b69f9fcee4389d4e}
     hasBin: true
     dependencies:
-      ethers: 6.7.1
+      ethers: 6.8.0
       yargs: 17.7.2
-      zod: 3.22.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -565,16 +564,19 @@ packages:
       '@noble/hashes': 1.3.0
     dev: false
 
-  /@noble/hashes@1.1.2:
-    resolution: {integrity: sha512-KYRCASVTv6aeUi1tsF8/vpyR7zpfs3FUzy2Jqm+MU+LmUKhQ0y2FpfwqkCcxSg2ua4GALJd8k2R76WxwZGbQpA==}
+  /@noble/curves@1.2.0:
+    resolution: {integrity: sha512-oYclrNgRaM9SsBUBVbb8M6DTV7ZHRTKugureoYEncY5c65HOmRzvSiTE3y5CYaPYJA/GVkrhXEoF0M3Ya9PMnw==}
+    dependencies:
+      '@noble/hashes': 1.3.2
     dev: false
 
   /@noble/hashes@1.3.0:
     resolution: {integrity: sha512-ilHEACi9DwqJB0pw7kv+Apvh50jiiSyR/cQ3y4W7lOR5mhvn/50FLUfsnfJz0BDZtl/RR16kXvptiv6q1msYZg==}
     dev: false
 
-  /@noble/secp256k1@1.7.1:
-    resolution: {integrity: sha512-hOUk6AyBFmqVrv7k5WAw/LpszxVbj9gGN4JRkIX52fdFAj1UA61KXmZDvqVEm+pOyec3+fIeZB02LYa/pWOArw==}
+  /@noble/hashes@1.3.2:
+    resolution: {integrity: sha512-MVC8EAQp7MvEcm30KWENFjgR+Mkmf+D189XJTkFIlwohU5hcBbn1ZkKq7KVTi2Hme3PMGF390DaL52beVrIihQ==}
+    engines: {node: '>= 16'}
     dev: false
 
   /@nodelib/fs.scandir@2.1.5:
@@ -2410,13 +2412,13 @@ packages:
       rlp: 2.2.7
     dev: false
 
-  /ethers@6.7.1:
-    resolution: {integrity: sha512-qX5kxIFMfg1i+epfgb0xF4WM7IqapIIu50pOJ17aebkxxa4BacW5jFrQRmCJpDEg2ZK2oNtR5QjrQ1WDBF29dA==}
+  /ethers@6.8.0:
+    resolution: {integrity: sha512-zrFbmQRlraM+cU5mE4CZTLBurZTs2gdp2ld0nG/f3ecBK+x6lZ69KSxBqZ4NjclxwfTxl5LeNufcBbMsTdY53Q==}
     engines: {node: '>=14.0.0'}
     dependencies:
-      '@adraffy/ens-normalize': 1.9.2
-      '@noble/hashes': 1.1.2
-      '@noble/secp256k1': 1.7.1
+      '@adraffy/ens-normalize': 1.10.0
+      '@noble/curves': 1.2.0
+      '@noble/hashes': 1.3.2
       '@types/node': 18.15.13
       aes-js: 4.0.0-beta.5
       tslib: 2.4.0
@@ -5057,7 +5059,3 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
     dev: true
-
-  /zod@3.22.2:
-    resolution: {integrity: sha512-wvWkphh5WQsJbVk1tbx1l1Ly4yg+XecD+Mq280uBGt9wa5BKSWf4Mhp6GmrkPixhMxmabYY7RbzlwVP32pbGCg==}
-    dev: false

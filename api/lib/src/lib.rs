@@ -453,78 +453,83 @@ pub fn generate_ethereum_key(
 }
 
 #[cfg(test)]
-mod test_key_generation {
-	use sp_core::crypto::Ss58Codec;
-
+mod tests {
 	use super::*;
 
-	#[test]
-	fn restored_keys_remain_compatible() {
-		const SEED_PHRASE: &str =
+	mod key_generation {
+
+		use super::*;
+		use sp_core::crypto::Ss58Codec;
+
+		#[test]
+		fn restored_keys_remain_compatible() {
+			const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-		let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+			let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
-		// Compare the generated secret key with a known secret key generated using the
-		// `chainflip-node key generate` command
-		assert_eq!(
-			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
-			hex::encode(generated.1.secret_key)
-		);
-		assert_eq!(
-			(generated.0, generated.2),
-			(
-				SEED_PHRASE.to_string(),
-				AccountId32::from_ss58check("cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA")
+			// Compare the generated secret key with a known secret key generated using the
+			// `chainflip-node key generate` command
+			assert_eq!(
+				"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
+				hex::encode(generated.1.secret_key)
+			);
+			assert_eq!(
+				(generated.0, generated.2),
+				(
+					SEED_PHRASE.to_string(),
+					AccountId32::from_ss58check(
+						"cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA"
+					)
 					.unwrap(),
-			)
-		);
+				)
+			);
 
-		let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
-		assert_eq!(
-			"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
-			hex::encode(generated.1.secret_key)
-		);
-		assert_eq!(
-			(generated.0, generated.2.as_bytes().to_vec()),
-			(
-				SEED_PHRASE.to_string(),
-				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
-			)
-		);
-	}
+			let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
+			assert_eq!(
+				"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
+				hex::encode(generated.1.secret_key)
+			);
+			assert_eq!(
+				(generated.0, generated.2.as_bytes().to_vec()),
+				(
+					SEED_PHRASE.to_string(),
+					hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
+				)
+			);
+		}
 
-	#[test]
-	fn test_restore_signing_keys() {
-		let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
-		let restored = generate_signing_key(Some(seed_phrase)).unwrap();
+		#[test]
+		fn test_restore_signing_keys() {
+			let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
+			let restored = generate_signing_key(Some(seed_phrase)).unwrap();
 
-		assert_eq!(*original, restored);
-	}
+			assert_eq!(*original, restored);
+		}
 
-	#[test]
-	fn test_restore_eth_keys() {
-		let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
-		let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
+		#[test]
+		fn test_restore_eth_keys() {
+			let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
+			let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
 
-		assert_eq!(*original, restored);
-	}
+			assert_eq!(*original, restored);
+		}
 
-	#[test]
-	fn test_dot_address_decoding() {
-		assert_eq!(
-			clean_foreign_chain_address(
-				ForeignChain::Polkadot,
-				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARE"
-			)
-			.unwrap(),
-			clean_foreign_chain_address(
-				ForeignChain::Polkadot,
-				"0x305875a3025d8be7f7048a280aba2bd571126fc171986adc1af58d1f4e02f15e"
-			)
-			.unwrap(),
-		);
-		assert_eq!(
+		#[test]
+		fn test_dot_address_decoding() {
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARE"
+				)
+				.unwrap(),
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"0x305875a3025d8be7f7048a280aba2bd571126fc171986adc1af58d1f4e02f15e"
+				)
+				.unwrap(),
+			);
+			assert_eq!(
 			clean_foreign_chain_address(
 				ForeignChain::Polkadot,
 				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
@@ -533,5 +538,6 @@ mod test_key_generation {
 			.to_string(),
 			anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
 		);
+		}
 	}
 }

@@ -28,9 +28,9 @@ pub struct AnyhowRpcError {
 	pub error: anyhow::Error,
 }
 
-impl From<anyhow::Error> for AnyhowRpcError {
-	fn from(error: anyhow::Error) -> Self {
-		Self { error }
+impl<E: Into<anyhow::Error>> From<E> for AnyhowRpcError {
+	fn from(error: E) -> Self {
+		Self { error: error.into() }
 	}
 }
 
