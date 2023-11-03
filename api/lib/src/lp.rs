@@ -250,6 +250,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				id,
 				option_tick,
 				sell_amount,
+				validity: None,
 			})
 			.await
 			.until_in_block()

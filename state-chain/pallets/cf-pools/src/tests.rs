@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, utilities, AssetAmounts, AssetPair, AssetsMap, CanonicalAssetPair,
-	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, PoolInfo, PoolOrders, Pools,
-	RangeOrderSize, STABLE_ASSET,
+	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrderQueue, OrderValidity,
+	PoolInfo, PoolOrders, Pools, RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -216,6 +216,7 @@ fn test_sweeping() {
 			0,
 			Some(TICK),
 			POSITION_0_SIZE,
+			Default::default(),
 		));
 
 		assert_eq!(AliceCollectedEth::get(), 0);
@@ -237,6 +238,7 @@ fn test_sweeping() {
 			1,
 			Some(TICK),
 			POSITION_1_SIZE,
+			Default::default(),
 		));
 
 		assert_eq!(AliceCollectedEth::get(), SWAP_AMOUNT);
@@ -351,6 +353,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			0,
 			Some(0),
 			5_000,
+			Default::default(),
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(ALICE),
@@ -359,6 +362,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			1,
 			Some(0),
 			1_000,
+			Default::default(),
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -367,6 +371,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			0,
 			Some(0),
 			10_000,
+			Default::default(),
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -375,6 +380,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			1,
 			Some(0),
 			10_000,
+			Default::default(),
 		));
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
@@ -504,6 +510,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			0,
 			Some(0),
 			100,
+			Default::default(),
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -512,6 +519,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			0,
 			Some(tick),
 			100_000,
+			Default::default(),
 		));
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
@@ -520,6 +528,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			1,
 			Some(tick),
 			10_000,
+			Default::default(),
 		));
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
@@ -704,4 +713,131 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(BobDebitedEth::get(), 4_988u128);
 		assert_eq!(BobDebitedUsdc::get(), 4_988u128);
 	});
+}
+
+#[test]
+fn can_mint_limit_order_with_validity() {
+	new_test_ext().execute_with(|| {
+		let old_fee = 400_000u32;
+		let tick = 100;
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			STABLE_ASSET,
+			old_fee,
+			price_at_tick(0).unwrap(),
+		));
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			STABLE_ASSET,
+			Asset::Flip,
+			0,
+			Some(tick),
+			55,
+			Some(OrderValidity::new(Some(2..5), Some(6))),
+		));
+		// Not yet minted.
+		assert!(!LimitOrderQueue::<Test>::get(2).is_empty());
+		// We mint the order.
+		LiquidityPools::on_initialize(2);
+		// Removed as minted from the order queue.
+		assert!(
+			LimitOrderQueue::<Test>::get(2).is_empty(),
+			"Should be empty, but is {:?}",
+			LimitOrderQueue::<Test>::get(2)
+		);
+		// Order is getting moved to the block where we expect it to ge burned.
+		assert!(!LimitOrderQueue::<Test>::get(6).is_empty());
+	});
+}
+
+#[test]
+fn gets_rejected_if_order_window_has_already_passed() {
+	new_test_ext().execute_with(|| {
+		let tick = 100;
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+		System::set_block_number(1);
+		assert_noop!(
+			LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				STABLE_ASSET,
+				Asset::Flip,
+				0,
+				Some(tick),
+				55,
+				Some(OrderValidity::new(Some(0..1), None)),
+			),
+			Error::<Test>::OrderValidityExpired
+		);
+	});
+}
+
+mod order_validity_tests {
+	use super::*;
+
+	#[test]
+	fn default_is_always_valid() {
+		let validity = OrderValidity::default();
+
+		assert!(validity.is_valid_at(0));
+		assert!(validity.is_valid_at(1));
+		assert!(validity.is_valid_at(BlockNumberFor::<Test>::MAX));
+
+		assert!(validity.is_ready_at(0));
+		assert!(validity.is_ready_at(1));
+		assert!(validity.is_ready_at(BlockNumberFor::<Test>::MAX));
+	}
+
+	#[test]
+	fn validity_window() {
+		let validity = OrderValidity::new(Some(2u32..5), None);
+
+		assert!(validity.is_valid_at(1));
+		assert!(validity.is_valid_at(2));
+		assert!(validity.is_valid_at(3));
+		assert!(validity.is_valid_at(4));
+		assert!(!validity.is_valid_at(5));
+
+		assert!(!validity.is_ready_at(1));
+		assert!(validity.is_ready_at(2));
+		assert!(validity.is_ready_at(3));
+		assert!(validity.is_ready_at(4));
+		assert!(!validity.is_ready_at(5));
+	}
+
+	#[test]
+	fn expiry() {
+		let validity = OrderValidity::new(None, Some(3));
+
+		assert!(validity.is_valid_at(2));
+		assert!(!validity.is_valid_at(3));
+		assert!(!validity.is_valid_at(4));
+
+		assert!(validity.is_ready_at(2));
+		assert!(!validity.is_ready_at(3));
+		assert!(!validity.is_ready_at(4));
+	}
+
+	#[test]
+	fn combined() {
+		let validity = OrderValidity::new(Some(2..4), Some(5));
+
+		assert!(validity.is_valid_at(2));
+		assert!(validity.is_valid_at(3));
+		assert!(!validity.is_valid_at(4));
+		assert!(!validity.is_valid_at(5));
+		assert!(!validity.is_valid_at(6));
+
+		assert!(validity.is_ready_at(2));
+		assert!(validity.is_ready_at(3));
+		assert!(!validity.is_ready_at(4));
+		assert!(!validity.is_ready_at(5));
+		assert!(!validity.is_ready_at(5));
+	}
 }

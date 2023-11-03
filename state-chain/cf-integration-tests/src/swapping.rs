@@ -161,6 +161,7 @@ fn set_limit_order(
 		id,
 		tick,
 		sell_amount,
+		Default::default(),
 	));
 	let new_sell_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();

@@ -174,7 +174,8 @@ benchmarks! {
 		Asset::Usdc,
 		0,
 		Some(100),
-		1_000
+		1_000,
+		Default::default()
 	)
 	verify {}
 
@@ -198,6 +199,7 @@ benchmarks! {
 			0,
 			Some(0),
 			10_000,
+			Default::default(),
 		));
 		assert_ok!(Pallet::<T>::set_limit_order(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -206,6 +208,7 @@ benchmarks! {
 			1,
 			Some(0),
 			10_000,
+			Default::default(),
 		));
 		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000));
 		let fee = 1_000;

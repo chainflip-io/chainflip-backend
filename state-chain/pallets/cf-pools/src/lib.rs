@@ -16,7 +16,7 @@ use frame_support::{
 	sp_runtime::{Permill, Saturating},
 	transactional,
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
@@ -223,6 +223,97 @@ pub mod pallet {
 	use super::*;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	pub enum OrderUpdate<AccountId, BlockNumber> {
+		Mint { order_details: LimitOrderDetails<AccountId>, expiry_block: Option<BlockNumber> },
+		Burn { order_details: LimitOrderDetails<AccountId> },
+	}
+
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	pub struct LimitOrderDetails<AccountId> {
+		pub lp: AccountId,
+		pub sell_asset: any::Asset,
+		pub buy_asset: any::Asset,
+		pub id: OrderId,
+		pub option_tick: Option<Tick>,
+		pub sell_amount: AssetAmount,
+	}
+
+	#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	pub struct OrderValidity<BlockNumber: PartialOrd + Copy> {
+		valid_at: Option<Range<BlockNumber>>,
+		valid_until: Option<BlockNumber>,
+	}
+
+	impl<BlockNumber: PartialOrd + Copy> Default for OrderValidity<BlockNumber> {
+		fn default() -> Self {
+			Self { valid_at: None, valid_until: None }
+		}
+	}
+
+	impl<BlockNumber: PartialOrd + Copy> OrderValidity<BlockNumber> {
+		#[cfg(test)]
+		pub fn new(valid_at: Option<Range<BlockNumber>>, valid_until: Option<BlockNumber>) -> Self {
+			let validity = Self { valid_at, valid_until };
+			assert!(validity.is_internally_consistent());
+			validity
+		}
+
+		/// Returns false if the constructed validity is internally inconsistent.
+		pub fn is_internally_consistent(&self) -> bool {
+			self.valid_at.as_ref().map_or(true, |range| {
+				!range.is_empty() && self.valid_until.map_or(true, |until| until > range.end)
+			})
+		}
+
+		/// The future block at which the order should be minted.
+		pub fn mint_block(&self) -> Option<BlockNumber> {
+			self.valid_at.as_ref().map(|range| range.start)
+		}
+
+		/// The future block at which the order should be burned.
+		pub fn burn_block(&self) -> Option<BlockNumber> {
+			self.valid_until
+		}
+
+		/// Whether this validity will *ever* be ready.
+		pub fn is_valid_at(&self, block_number: BlockNumber) -> bool {
+			debug_assert!(self.is_internally_consistent());
+			let entry_window_not_past = match self.valid_at {
+				Some(ref range) => range.end > block_number,
+				None => true,
+			};
+			let expiry_not_past = match self.valid_until {
+				Some(expiry_block) => expiry_block > block_number,
+				None => true,
+			};
+			entry_window_not_past && expiry_not_past
+		}
+
+		/// Whether this validity is ready at a given block number.
+		pub fn is_ready_at(&self, block_number: BlockNumber) -> bool {
+			debug_assert!(self.is_internally_consistent());
+			match self.valid_at {
+				Some(ref range) => range.contains(&block_number),
+				None => match self.valid_until {
+					Some(until) => block_number < until,
+					None => true,
+				},
+			}
+		}
+	}
+
+	/// Queue of limit orders, indexed by block number waiting to get minted or burned.
+	#[pallet::storage]
+	pub(super) type LimitOrderQueue<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<OrderUpdate<T::AccountId, BlockNumberFor<T>>>,
+		ValueQuery,
+	>;
+
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		pub enabled: bool,
@@ -425,7 +516,7 @@ pub mod pallet {
 					}
 				}
 			}
-			weight_used
+			weight_used.saturating_add(Self::mint_or_burn(current_block))
 		}
 	}
 
@@ -468,6 +559,8 @@ pub mod pallet {
 		UpdatingLimitOrdersDisabled,
 		/// Updating Range Orders is disabled
 		UpdatingRangeOrdersDisabled,
+		OrderValidityInconsistent,
+		OrderValidityExpired,
 	}
 
 	#[pallet::event]
@@ -898,52 +991,47 @@ pub mod pallet {
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
+			validity: Option<OrderValidity<BlockNumberFor<T>>>,
 		) -> DispatchResult {
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
+			let validity = validity.unwrap_or_default();
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			T::LpBalance::ensure_has_refund_address_for_pair(&lp, sell_asset, buy_asset)?;
-			Self::inner_sweep(&lp)?;
-			Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
-				let tick = match (
-					pool.limit_orders_cache[asset_pair.base_side]
-						.get(&lp)
-						.and_then(|limit_orders| limit_orders.get(&id))
-						.cloned(),
-					option_tick,
-				) {
-					(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
-					(None, Some(tick)) => Ok(tick),
-					(Some(previous_tick), option_new_tick) => {
-						Self::inner_update_limit_order(
-							pool,
-							&lp,
-							asset_pair,
-							id,
-							previous_tick,
-							IncreaseOrDecrease::Decrease,
-							cf_amm::common::Amount::MAX,
-							/* allow noop */ false,
-						)?;
-
-						Ok(option_new_tick.unwrap_or(previous_tick))
-					},
-				}?;
-				Self::inner_update_limit_order(
-					pool,
+			let current_block = <frame_system::Pallet<T>>::block_number();
+			ensure!(validity.is_internally_consistent(), Error::<T>::OrderValidityInconsistent);
+			ensure!(validity.is_valid_at(current_block), Error::<T>::OrderValidityExpired);
+			if validity.is_ready_at(current_block) {
+				Self::set_limit_order_inner(
 					&lp,
-					asset_pair,
+					sell_asset,
+					buy_asset,
 					id,
-					tick,
-					IncreaseOrDecrease::Increase,
-					sell_amount.into(),
-					/* allow noop */ true,
+					option_tick,
+					sell_amount,
 				)?;
-
-				Ok(())
-			})
+			} else if let Some(mint_block) = validity.mint_block() {
+				LimitOrderQueue::<T>::append(
+					mint_block,
+					OrderUpdate::Mint {
+						order_details: LimitOrderDetails {
+							lp,
+							sell_asset,
+							buy_asset,
+							id,
+							option_tick,
+							sell_amount,
+						},
+						expiry_block: validity.burn_block(),
+					},
+				);
+			} else {
+				log::error!("Order validity checks failed.");
+				return Err(Error::<T>::OrderValidityExpired.into())
+			}
+			Ok(())
 		}
 
 		/// Sets the Liquidity Pool fees. Also collect earned fees and bought amount for
@@ -1118,6 +1206,99 @@ pub struct UnidirectionalPoolDepth {
 }
 
 impl<T: Config> Pallet<T> {
+	fn mint_or_burn(current_block: BlockNumberFor<T>) -> Weight {
+		for m_o_b in LimitOrderQueue::<T>::take(current_block) {
+			match m_o_b {
+				OrderUpdate::Mint {
+					order_details:
+						LimitOrderDetails { lp, sell_asset, buy_asset, id, option_tick, sell_amount },
+					expiry_block,
+				} => {
+					let _ = Self::set_limit_order_inner(
+						&lp,
+						sell_asset,
+						buy_asset,
+						id,
+						option_tick,
+						sell_amount,
+					);
+					if let Some(expiry_block) = expiry_block {
+						LimitOrderQueue::<T>::append(
+							expiry_block,
+							OrderUpdate::Burn {
+								order_details: LimitOrderDetails {
+									lp,
+									sell_asset,
+									buy_asset,
+									id,
+									option_tick,
+									sell_amount,
+								},
+							},
+						);
+					}
+				},
+				OrderUpdate::Burn {
+					order_details:
+						LimitOrderDetails { lp, sell_asset, buy_asset, id, option_tick, .. },
+				} => {
+					let _ =
+						Self::set_limit_order_inner(&lp, sell_asset, buy_asset, id, option_tick, 0);
+				},
+			}
+		}
+		Weight::zero()
+	}
+
+	fn set_limit_order_inner(
+		lp: &T::AccountId,
+		sell_asset: any::Asset,
+		buy_asset: any::Asset,
+		id: OrderId,
+		option_tick: Option<Tick>,
+		sell_amount: AssetAmount,
+	) -> DispatchResult {
+		Self::inner_sweep(lp)?;
+		Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
+			let tick = match (
+				pool.limit_orders_cache[asset_pair.base_side]
+					.get(lp)
+					.and_then(|limit_orders| limit_orders.get(&id))
+					.cloned(),
+				option_tick,
+			) {
+				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
+				(None, Some(tick)) => Ok(tick),
+				(Some(previous_tick), option_new_tick) => {
+					Self::inner_update_limit_order(
+						pool,
+						lp,
+						asset_pair,
+						id,
+						previous_tick,
+						IncreaseOrDecrease::Decrease,
+						cf_amm::common::Amount::MAX,
+						/* allow noop */ false,
+					)?;
+
+					Ok(option_new_tick.unwrap_or(previous_tick))
+				},
+			}?;
+			Self::inner_update_limit_order(
+				pool,
+				lp,
+				asset_pair,
+				id,
+				tick,
+				IncreaseOrDecrease::Increase,
+				sell_amount.into(),
+				/* allow noop */ true,
+			)?;
+
+			Ok(())
+		})
+	}
+
 	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorsgeMap::iter_keys documentation)
 		for canonical_asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
