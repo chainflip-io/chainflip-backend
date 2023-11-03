@@ -56,6 +56,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: ci-benchmarks.yml
+          workflow_conclusion: completed
           name: chainflip-node-20.04-benchmarks-${{ inputs.profile }}
           commit: ${{ inputs.commit_sha }}
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
