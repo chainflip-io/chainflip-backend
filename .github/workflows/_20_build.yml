@@ -34,7 +34,7 @@ jobs:
 
       - name: Build
         run: |
-          cargo cf-build-ci --locked --profile=${{ inputs.profile }}
+          cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
 
       - name: Upload binary artifacts
