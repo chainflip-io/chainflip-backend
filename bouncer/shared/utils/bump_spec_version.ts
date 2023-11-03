@@ -6,7 +6,6 @@ export async function getCurrentSpecVersion(): Promise<number> {
 }
 
 export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
-  console.log('Bumping the spec version');
   try {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const lines = fileContent.split('\n');

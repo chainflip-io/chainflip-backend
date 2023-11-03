@@ -4,7 +4,10 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer } from './utils';
+import { compareSemVer, sleep } from './utils';
+import { bumpSpecVersionAgainstNetwork } from './utils/bump_spec_version';
+import { compileBinaries } from './utils/compile_binaries';
+import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -23,16 +26,16 @@ function isCompatibleWith(semVer1: string, semVer2: string) {
 
 // Create a git workspace in the tmp/ directory and check out the specified commit.
 // Remember to delete it when you're done!
-function createGitWorkspaceAt(absoluteWorkspacePath: string, toGitRef: string) {
+function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string) {
   try {
     // Create a directory for the new workspace
-    execSync(`mkdir -p ${absoluteWorkspacePath}`);
+    execSync(`mkdir -p ${nextVersionWorkspacePath}`);
 
     // Create a new workspace using git worktree.
-    execSync(`git worktree add ${absoluteWorkspacePath}`);
+    execSync(`git worktree add ${nextVersionWorkspacePath}`);
 
     // Navigate to the new workspace and checkout the specific commit
-    execSync(`cd ${absoluteWorkspacePath} && git checkout ${toGitRef}`);
+    execSync(`cd ${nextVersionWorkspacePath} && git checkout ${toGitRef}`);
 
     console.log('Commit checked out successfully in new workspace.');
   } catch (error) {
@@ -40,21 +43,66 @@ function createGitWorkspaceAt(absoluteWorkspacePath: string, toGitRef: string) {
   }
 }
 
+async function incompatibleUpgrade(
+  currentVersionWorkspacePath: string,
+  nextVersionWorkspacePath: string,
+  numberOfNodes: 1 | 3,
+) {
+  await bumpSpecVersionAgainstNetwork(nextVersionWorkspacePath);
+
+  await compileBinaries('all', nextVersionWorkspacePath);
+
+  let selectedNodes;
+  if (numberOfNodes === 1) {
+    selectedNodes = ['bashful'];
+  } else if (numberOfNodes === 3) {
+    selectedNodes = ['bashful', 'doc', 'dopey'];
+  } else {
+    throw new Error('Invalid number of nodes');
+  }
+
+  console.log('Starting all the engines');
+
+  const nodeCount = numberOfNodes + '-node';
+  execSync(
+    `LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES="${selectedNodes.join(
+      ' ',
+    )}" LOCALNET_INIT_DIR=${currentVersionWorkspacePath}/localnet/init BINARY_ROOT_PATH=${nextVersionWorkspacePath}/target/release ${currentVersionWorkspacePath}/localnet/init/scripts/start-all-engines.sh`,
+  );
+
+  // let the engines do what they gotta do
+  sleep(6000);
+
+  console.log('Engines started');
+
+  await submitRuntimeUpgrade(nextVersionWorkspacePath);
+
+  console.log(
+    'Check that the old engine has now shut down, and that the new engine is now running.',
+  );
+}
+
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
 // If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
-export async function upgradeNetwork(toGitRef: string, bumpByIfEqual: SemVerLevel = 'patch') {
-  const fromTomlVersion = await readPackageTomlVersion(path.dirname(process.cwd()));
+// Only the incompatible upgrade requires the number of nodes.
+export async function upgradeNetwork(
+  toGitRef: string,
+  bumpByIfEqual: SemVerLevel = 'patch',
+  numberOfNodes: 1 | 3 = 1,
+) {
+  const currentVersionWorkspacePath = path.dirname(process.cwd());
+
+  const fromTomlVersion = await readPackageTomlVersion(currentVersionWorkspacePath);
   console.log("Version we're upgrading from: " + fromTomlVersion);
 
   // tmp/ is ignored in the bouncer .gitignore file.
-  const absoluteWorkspacePath = path.join(process.cwd(), 'tmp/upgrade-network');
+  const nextVersionWorkspacePath = path.join(process.cwd(), 'tmp/upgrade-network');
 
-  console.log('Creating a new git workspace at: ' + absoluteWorkspacePath);
+  console.log('Creating a new git workspace at: ' + nextVersionWorkspacePath);
+  createGitWorkspaceAt(nextVersionWorkspacePath, toGitRef);
 
-  createGitWorkspaceAt(absoluteWorkspacePath, toGitRef);
-
-  const toTomlVersion = await readPackageTomlVersion(`${absoluteWorkspacePath}`);
-  console.log("Version we're upgrading to: " + toTomlVersion);
+  const toTomlVersion = await readPackageTomlVersion(`${nextVersionWorkspacePath}`);
+  console.log("Version of commit we're upgrading to: " + toTomlVersion);
 
   if (compareSemVer(fromTomlVersion, toTomlVersion) === 'greater') {
     throw new Error(
@@ -62,28 +110,33 @@ export async function upgradeNetwork(toGitRef: string, bumpByIfEqual: SemVerLeve
     );
   }
 
+  // Now we need to bump the TOML versions if required, to ensure the `CurrentReleaseVersion` in the environment pallet is correct.
   if (fromTomlVersion === toTomlVersion) {
-    await bumpReleaseVersion(bumpByIfEqual, absoluteWorkspacePath);
+    console.log('Versions are equal, bumping by: ' + bumpByIfEqual);
+    await bumpReleaseVersion(bumpByIfEqual, nextVersionWorkspacePath);
+  } else {
+    console.log('Versions are not equal, no need to bump.');
   }
 
-  const newToTomlVersion = await readPackageTomlVersion(path.join(absoluteWorkspacePath));
+  const newToTomlVersion = await readPackageTomlVersion(path.join(nextVersionWorkspacePath));
+  console.log("Version we're upgrading to: " + newToTomlVersion);
+
   const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
+  console.log('Is compatible: ' + isCompatible);
 
-
-  // Both upgrades require a runtime upgrade. To do that, we first need to bump the spec version.
-  await bumpSpecVersionAgainstNetwork(absoluteWorkspacePath);
-
+  // For some reason shit isn't working here. Keeps thinking it's compatible or something.
   if (isCompatible) {
     // The CFE could be upgraded too. But an incompatible CFE upgrade would mean it's... incompatible, so covered in the other path.
     console.log('The versions are compatible.');
 
-    // Runtime upgrade using the *new* version.
-    await simpleRuntimeUpgrade(absoluteWorkspacePath);
+    await simpleRuntimeUpgrade(nextVersionWorkspacePath);
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
-    // Incompatible upgrades requires running two versions of the CFEs side by side.
-    console.log('Incompatible CFE upgrades are not yet supported :(');
+    console.log('The versions are incompatible.');
+    await incompatibleUpgrade(currentVersionWorkspacePath, nextVersionWorkspacePath, numberOfNodes);
   }
 
-  execSync(`cd ${absoluteWorkspacePath} && git worktree remove . --force`);
+  console.log('Cleaning up...');
+  execSync(`cd ${nextVersionWorkspacePath} && git worktree remove . --force`);
+  console.log('Done.');
 }

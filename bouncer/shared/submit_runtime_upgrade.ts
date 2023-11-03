@@ -8,7 +8,7 @@ async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
 }
 
 // By default we don't want to restrict that any of the nodes need to be upgraded.
-export async function submitRuntimeUpgrade(
+export async function submitRuntimeUpgradeWithRestrictions(
   wasmPath: string,
   semverRestriction?: Record<string, number>,
   percentNodesUpgraded = 0,
@@ -29,7 +29,17 @@ export async function submitRuntimeUpgrade(
     chainflip.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
 
+  // TODO: Check if there were any errors in the submission, like `UpgradeConditionsNotMet` and `NotEnoughAuthoritiesCfesAtTargetVersion`.
+  // and exit with error.
+
   await observeEvent('system:CodeUpdated', chainflip);
 
   console.log('Runtime upgrade completed.');
+}
+
+// Restrictions not provided.
+export async function submitRuntimeUpgrade(projectRoot: string) {
+  await submitRuntimeUpgradeWithRestrictions(
+    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
+  );
 }
