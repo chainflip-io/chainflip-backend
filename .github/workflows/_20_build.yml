@@ -56,3 +56,45 @@ jobs:
           name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/${{ inputs.profile }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+
+      - name: Build with benchmarks
+        run: |
+          cargo cf-build-${{ inputs.profile }} --locked --features runtime-benchmarks -p chainflip-node
+          sccache --show-stats
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-node-ubuntu-${{ matrix.ubuntu_version }}-benchmarks
+          path: |
+            ./target/${{ inputs.profile }}/chainflip-node
+
+  benchmarks:
+    runs-on: [hetzner]
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: [20.04, 22.04]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-${{ matrix.ubuntu_version }}-27"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Build with benchmarks
+        run: |
+          cargo cf-build-${{ inputs.profile }} --locked --features runtime-benchmarks -p chainflip-node
+          sccache --show-stats
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-node-ubuntu-${{ matrix.ubuntu_version }}-benchmarks
+          path: |
+            ./target/${{ inputs.profile }}/chainflip-node
