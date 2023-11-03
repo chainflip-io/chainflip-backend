@@ -110,10 +110,6 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn on_initialize(_a: u32) -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
 	fn set_minimum_swap_amount() -> Weight {
 		Weight::from_parts(100, 0)
 	}
