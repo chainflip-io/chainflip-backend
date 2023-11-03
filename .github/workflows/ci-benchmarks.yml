@@ -56,5 +56,5 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          chmod +x ./target/release/chainflip-node
+          chmod +x ./chainflip-node
           ./state-chain/scripts/benchmark-all.sh --binary ./chainflip-node --steps 2 --repetitions 1
