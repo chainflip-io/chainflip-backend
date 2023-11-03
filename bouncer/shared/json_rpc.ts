@@ -9,18 +9,18 @@ export async function jsonRpc(
 
   id++;
   const request = JSON.stringify({
-      jsonrpc: '2.0',
-      method,
-      params,
-      id,
-    });
+    jsonrpc: '2.0',
+    method,
+    params,
+    id,
+  });
   const response = await fetch(`http://127.0.0.1:${port}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: request
+    body: request,
   });
 
   const data = await response.json();

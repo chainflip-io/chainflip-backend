@@ -152,7 +152,13 @@ async function testRangeOrder() {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_range_order`, [Assets.USDC, testRpcAsset, orderId, range, zeroAssetAmounts]);
+  await lpApiRpc(`lp_set_range_order`, [
+    Assets.USDC,
+    testRpcAsset,
+    orderId,
+    range,
+    zeroAssetAmounts,
+  ]);
 
   // Mint a range order
   const mintRangeOrder = await lpApiRpc(`lp_set_range_order`, [
