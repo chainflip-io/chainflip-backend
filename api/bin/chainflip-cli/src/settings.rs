@@ -62,9 +62,9 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Source asset ("DOT"|"DOT")
+	/// Source asset ("ETH"|"DOT")
 	pub source_asset: Asset,
-	/// Egress asset ("DOT"|"DOT")
+	/// Egress asset ("ETH"|"DOT")
 	pub destination_asset: Asset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
