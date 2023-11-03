@@ -27,7 +27,7 @@ jobs:
 
       - name: Build with benchmarks
         run: |
-          cargo cf-build-${{ matrix.profile }} --locked --features runtime-benchmarks -p chainflip-node
+          cargo build --profile=${{ inputs.profile }} --locked --features runtime-benchmarks -p chainflip-node
           sccache --show-stats
 
       - name: Upload chainflip-node binary artifact with benchmarks
