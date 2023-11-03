@@ -523,7 +523,18 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		base_rpc_client: Arc<BaseRpcClient>,
 		finalized_block_stream: &mut FinalizedBlockStream,
 	) -> Result<()> {
-		assert!(self.nonce_and_signer.is_none());
+		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// !!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!
+		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// !!!!! This is because this code is run before the version compatibility checks !!!!!!
+		// !!!!!!!!!!! Therefore if any storage items used here are changed between !!!!!!!!!!!!
+		// !!!!!!!!!!!!!!!!!!!!!!! runtime upgrades this code will fail !!!!!!!!!!!!!!!!!!!!!!!!
+		// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+		assert!(
+			self.nonce_and_signer.is_none(),
+			"This function should be run exactly once successfully before build is called"
+		);
 
 		let pair = sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
 			&self.signing_key_file,
@@ -669,7 +680,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		genesis_hash: state_chain_runtime::Hash,
 		state_chain_stream: &mut BlockStream,
 	) -> Result<Self::Client> {
-		let (nonce, signer) = self.nonce_and_signer.unwrap();
+		let (nonce, signer) = self.nonce_and_signer.expect("The function pre_compatibility should be run exactly once successfully before build is called");
 		Self::Client::new(
 			scope,
 			base_rpc_client,
