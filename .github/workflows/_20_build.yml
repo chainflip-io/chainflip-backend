@@ -32,7 +32,9 @@ jobs:
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
-      - name: Build
+      - name: Build chainflip binaries
+        env:
+          SKIP_WASM_BUILD: true
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
           sccache --show-stats
@@ -50,33 +52,10 @@ jobs:
             ./target/${{ inputs.profile }}/chainflip-lp-api
             ./target/${{ inputs.profile }}/chainflip-ingress-egress-tracker
 
-      - name: Upload binary artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
-          path: |
-            ./target/${{ inputs.profile }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
-
-      - name: Build with benchmarks
-        run: |
-          cargo cf-build-${{ inputs.profile }} --locked --features runtime-benchmarks -p chainflip-node
-          sccache --show-stats
-
-      - name: Upload binary artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-node-ubuntu-${{ matrix.ubuntu_version }}-benchmarks
-          path: |
-            ./target/${{ inputs.profile }}/chainflip-node
-
-  benchmarks:
+  runtime:
     runs-on: [hetzner]
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-${{ matrix.ubuntu_version }}-27"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-07-31-ubuntu-22.04-27"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -87,14 +66,14 @@ jobs:
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
 
-      - name: Build with benchmarks
+      - name: Build runtime
         run: |
-          cargo cf-build-${{ inputs.profile }} --locked --features runtime-benchmarks -p chainflip-node
+          cargo cf-build-${{ inputs.profile }} -p state-chain-runtime --locked
           sccache --show-stats
 
-      - name: Upload binary artifacts
+      - name: Upload runtime artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-node-ubuntu-${{ matrix.ubuntu_version }}-benchmarks
+          name: chainflip-node-runtime-${{ inputs.profile }}
           path: |
-            ./target/${{ inputs.profile }}/chainflip-node
+            ./target/${{ inputs.profile }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
