@@ -41,6 +41,9 @@ env:
 
 jobs:
   run_benchmarks:
+    permissions:
+      contents: read
+      pull-requests: write
     runs-on:
       [
         self-hosted,
@@ -74,7 +77,7 @@ jobs:
           --repetitions ${{ github.event.inputs.repetitions }}
 
       - name: Make a pull request with the changed weight files
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v5
         with:
           base: ${{ inputs.base_branch_name }}
           title: "[AUTOMATED] Benchmark results"
@@ -82,4 +85,4 @@ jobs:
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
           delete-branch: true
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
