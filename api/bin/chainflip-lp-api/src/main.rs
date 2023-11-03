@@ -18,8 +18,8 @@ use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
-use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use std::{ops::Range, path::PathBuf};
+use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
 
 /// Contains RPC interface types that differ from internal types.
@@ -74,6 +74,12 @@ pub mod rpc_types {
 		pub ethereum: Vec<SwapChannelInfo<Ethereum>>,
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
+	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct AssetBalance {
+		pub asset: Asset,
+		pub balance: u128,
 	}
 }
 
@@ -144,7 +150,9 @@ pub trait Rpc {
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
-	async fn asset_balances(&self) -> Result<Vec<(RpcAsset, u128)>, AnyhowRpcError>;
+	async fn asset_balances(
+		&self,
+	) -> Result<BTreeMap<ForeignChain, Vec<AssetBalance>>, AnyhowRpcError>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
@@ -210,15 +218,17 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<Vec<(RpcAsset, u128)>, AnyhowRpcError> {
-		Ok(self
-			.api
-			.query_api()
-			.get_balances(None)
-			.await?
-			.into_iter()
-			.map(|(asset, balance)| (RpcAsset::from(asset), balance))
-			.collect())
+	async fn asset_balances(
+		&self,
+	) -> Result<BTreeMap<ForeignChain, Vec<AssetBalance>>, AnyhowRpcError> {
+		let mut balances = BTreeMap::<_, Vec<_>>::new();
+		for (asset, balance) in self.api.query_api().get_balances(None).await? {
+			balances
+				.entry(ForeignChain::from(asset))
+				.or_default()
+				.push(AssetBalance { asset, balance });
+		}
+		Ok(balances)
 	}
 
 	async fn update_range_order(
