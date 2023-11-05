@@ -130,7 +130,7 @@ fn cannot_register_swapping_roles_if_swapping_disabled() {
 		assert!(!SwappingEnabled::<Test>::get());
 
 		// As if the account is already funded.
-		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
+		AccountRoles::<Test>::insert(ALICE, AccountRole::Unassigned);
 
 		assert_noop!(Pallet::<Test>::register_as_broker(&ALICE), Error::<Test>::SwappingDisabled);
 		assert_noop!(

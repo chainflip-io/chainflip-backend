@@ -128,7 +128,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		AccountRoles::<T>::try_mutate(account_id, |old_account_role| {
 			match old_account_role.replace(account_role) {
-				Some(AccountRole::None) => {
+				Some(AccountRole::Unassigned) => {
 					Self::deposit_event(Event::AccountRoleRegistered {
 						account_id: account_id.clone(),
 						role: account_role,
@@ -169,7 +169,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin> {
 		match role {
-			AccountRole::None => Err(BadOrigin),
+			AccountRole::Unassigned => Err(BadOrigin),
 			AccountRole::Validator => ensure_validator::<T>(origin),
 			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
 			AccountRole::Broker => ensure_broker::<T>(origin),

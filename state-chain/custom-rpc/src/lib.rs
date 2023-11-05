@@ -641,9 +641,9 @@ where
 			match api
 				.cf_account_role(hash, account_id.clone())
 				.map_err(to_rpc_error)?
-				.unwrap_or(AccountRole::None)
+				.unwrap_or(AccountRole::Unassigned)
 			{
-				AccountRole::None => RpcAccountInfo::none(balance),
+				AccountRole::Unassigned => RpcAccountInfo::none(balance),
 				AccountRole::Broker => RpcAccountInfo::broker(balance),
 				AccountRole::LiquidityProvider => {
 					let info = api

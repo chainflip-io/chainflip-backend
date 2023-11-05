@@ -161,9 +161,9 @@ impl SignedExtrinsicClient {
 					.await?
 				{
 					Some(role) =>
-						if required_role == AccountRole::None || required_role == role {
+						if required_role == AccountRole::Unassigned || required_role == role {
 							break
-						} else if wait_for_required_role && role == AccountRole::None {
+						} else if wait_for_required_role && role == AccountRole::Unassigned {
 							warn!("Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{required_role:?}' at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
 						} else {
 							bail!("Your Chainflip account {} has the wrong account role '{role:?}'. The '{required_role:?}' account role is required", signer.account_id);

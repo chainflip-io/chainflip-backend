@@ -221,7 +221,7 @@ mod tests {
 						scope,
 						"ws://localhost:9944",
 						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
-						AccountRole::None,
+						AccountRole::Unassigned,
 						false,
 						None,
 					)
