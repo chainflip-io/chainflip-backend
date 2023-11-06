@@ -41,6 +41,11 @@ pub mod pallet {
 	#[pallet::getter(fn swapping_enabled)]
 	pub type SwappingEnabled<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// !!! This is because this is used before the version compatibility checks in the engine !!!
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	#[pallet::storage]
 	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
 

@@ -1,40 +1,40 @@
-use futures::Stream;
+use futures::{Stream, TryStream};
 
-pub trait CachedStream: Stream {
+pub trait TryCachedStream: Stream {
 	type Cache;
 
 	fn cache(&self) -> &Self::Cache;
 }
 
-/// Caches the last item of a stream according to some map function `f`.
+/// Caches the last mapped last item of a stream according to some map function `f`.
 #[derive(Clone)]
 #[pin_project::pin_project]
-pub struct InnerCachedStream<Stream, Cache, F> {
+pub struct InnerTryCachedStream<Stream, Cache, F> {
 	#[pin]
 	stream: Stream,
 	cache: Cache,
 	f: F,
 }
-impl<St, Cache, F> InnerCachedStream<St, Cache, F> {
+impl<St, Cache, F> InnerTryCachedStream<St, Cache, F> {
 	pub fn into_inner(self) -> St {
 		self.stream
 	}
 }
-impl<St, Cache, F> Stream for InnerCachedStream<St, Cache, F>
+impl<St, Cache, F> Stream for InnerTryCachedStream<St, Cache, F>
 where
-	St: Stream,
-	F: FnMut(&St::Item) -> Cache,
+	St: TryStream,
+	F: FnMut(&St::Ok) -> Cache,
 {
-	type Item = St::Item;
+	type Item = Result<St::Ok, St::Error>;
 
 	fn poll_next(
 		self: core::pin::Pin<&mut Self>,
 		cx: &mut core::task::Context<'_>,
 	) -> core::task::Poll<Option<Self::Item>> {
 		let this = self.project();
-		let poll = this.stream.poll_next(cx);
+		let poll = this.stream.try_poll_next(cx);
 
-		if let core::task::Poll::Ready(Some(item)) = &poll {
+		if let core::task::Poll::Ready(Some(Ok(item))) = &poll {
 			*this.cache = (this.f)(item);
 		}
 
@@ -45,10 +45,10 @@ where
 		self.stream.size_hint()
 	}
 }
-impl<St, Cache, F> CachedStream for InnerCachedStream<St, Cache, F>
+impl<St, Cache, F> TryCachedStream for InnerTryCachedStream<St, Cache, F>
 where
-	St: Stream,
-	F: FnMut(&St::Item) -> Cache,
+	St: TryStream,
+	F: FnMut(&St::Ok) -> Cache,
 {
 	type Cache = Cache;
 
@@ -56,25 +56,25 @@ where
 		&self.cache
 	}
 }
-pub trait MakeCachedStream: Stream {
-	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
+pub trait MakeTryCachedStream: TryStream {
+	fn make_try_cached<Cache, F: FnMut(&<Self as TryStream>::Ok) -> Cache>(
 		self,
 		initial: Cache,
 		f: F,
-	) -> InnerCachedStream<Self, Cache, F>
+	) -> InnerTryCachedStream<Self, Cache, F>
 	where
 		Self: Sized;
 }
-impl<T: Stream> MakeCachedStream for T {
-	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
+impl<T: TryStream> MakeTryCachedStream for T {
+	fn make_try_cached<Cache, F: FnMut(&<Self as TryStream>::Ok) -> Cache>(
 		self,
 		initial: Cache,
 		f: F,
-	) -> InnerCachedStream<Self, Cache, F>
+	) -> InnerTryCachedStream<Self, Cache, F>
 	where
 		Self: Sized,
 	{
-		InnerCachedStream { stream: self, cache: initial, f }
+		InnerTryCachedStream { stream: self, cache: initial, f }
 	}
 }
 
@@ -83,19 +83,20 @@ mod tests {
 	use super::*;
 	use futures::{stream, StreamExt};
 
-	fn test_stream() -> impl Stream<Item = i32> {
-		stream::iter(vec![1, 2, 3])
+	fn test_stream() -> impl TryStream<Ok = i32, Error = i32> {
+		stream::iter(vec![Ok(1), Err(2), Ok(3)])
 	}
 
 	#[test]
 	fn size_hint() {
-		let cached_stream = test_stream().make_cached(0, |&item| item * 2);
+		let cached_stream = test_stream().make_try_cached(0, |&item| item * 2);
 		assert_eq!(cached_stream.size_hint(), (3, Some(3)));
 	}
 
 	#[tokio::test]
 	async fn next_on_empty() {
-		let mut cached_stream = stream::empty::<i32>().make_cached(0, |&item| item * 2);
+		let mut cached_stream =
+			stream::empty::<Result<i32, i32>>().make_try_cached(0, |&item| item * 2);
 		assert_eq!(cached_stream.next().await, None);
 	}
 
@@ -105,20 +106,20 @@ mod tests {
 		struct Wrappedi32(i32);
 
 		let mut cached_stream =
-			test_stream().make_cached(Wrappedi32(0), |&item| Wrappedi32(item * 2));
+			test_stream().make_try_cached(Wrappedi32(0), |&item| Wrappedi32(item * 2));
 
 		assert_eq!(*cached_stream.cache(), Wrappedi32(0));
 
 		let x = cached_stream.next().await;
-		assert_eq!(x, Some(1));
+		assert_eq!(x, Some(Ok(1)));
 		assert_eq!(*cached_stream.cache(), Wrappedi32(2));
 
 		let x = cached_stream.next().await;
-		assert_eq!(x, Some(2));
-		assert_eq!(*cached_stream.cache(), Wrappedi32(4));
+		assert_eq!(x, Some(Err(2)));
+		assert_eq!(*cached_stream.cache(), Wrappedi32(2));
 
 		let x = cached_stream.next().await;
-		assert_eq!(x, Some(3));
+		assert_eq!(x, Some(Ok(3)));
 		assert_eq!(*cached_stream.cache(), Wrappedi32(6));
 
 		// The cache still exists when we get None from the stream.
