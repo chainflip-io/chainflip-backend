@@ -14,7 +14,6 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
-assets = [["target/release/chainflip-broker-api", "usr/bin/", "755"]]
 
 [[bin]]
 name = "chainflip-broker-api"
@@ -22,6 +21,7 @@ name = "chainflip-broker-api"
 [dependencies]
 chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
+custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 anyhow = "1.0.66"
 clap = { version = "3.2.23", features = ["derive"] }

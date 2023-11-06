@@ -10,7 +10,7 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereum, MockEthereumChainCrypto},
 	ApiCall, SetAggKeyWithAggKeyError,
 };
-use cf_primitives::{BroadcastId, GENESIS_EPOCH};
+use cf_primitives::{BroadcastId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{block_height_provider::BlockHeightProvider, threshold_signer::MockThresholdSigner},
@@ -182,6 +182,7 @@ impl MockSlasher {
 impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
+	type Balance = u128;
 
 	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
 		// Count those slashes
@@ -190,11 +191,18 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_balance(account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+	fn slash_balance(account_id: &Self::AccountId, _amount: FlipBalance) {
 		// Count those slashes
 		SLASHES.with(|count| {
 			count.borrow_mut().push(*account_id);
 		});
+	}
+
+	fn calculate_slash_amount(
+		_account_id: &Self::AccountId,
+		_blocks: Self::BlockNumber,
+	) -> Self::Balance {
+		unimplemented!()
 	}
 }
 
@@ -233,6 +241,7 @@ cf_test_utilities::impl_test_helpers! {
 			vault_key: Some(GENESIS_AGG_PUB_KEY),
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 		},
 	},
 	|| {

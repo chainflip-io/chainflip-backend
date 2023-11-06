@@ -20,6 +20,7 @@ pub mod eth_environment_provider;
 pub mod fee_payment;
 pub mod funding_info;
 pub mod key_provider;
+pub mod lp_balance;
 pub mod offence_reporting;
 pub mod on_account_funded;
 pub mod qualify_node;

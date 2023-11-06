@@ -14,10 +14,11 @@ use chainflip_api::{
 	OperatorApi, StateChainApi,
 };
 use clap::Parser;
+use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
-use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
 
@@ -74,6 +75,12 @@ pub mod rpc_types {
 		pub bitcoin: Vec<SwapChannelInfo<Bitcoin>>,
 		pub polkadot: Vec<SwapChannelInfo<Polkadot>>,
 	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct AssetBalance {
+		pub asset: Asset,
+		pub balance: u128,
+	}
 }
 
 #[rpc(server, client, namespace = "lp")]
@@ -84,7 +91,7 @@ pub trait Rpc {
 	#[method(name = "liquidity_deposit")]
 	async fn request_liquidity_deposit_address(
 		&self,
-		asset: Asset,
+		asset: RpcAsset,
 	) -> Result<String, AnyhowRpcError>;
 
 	#[method(name = "register_liquidity_refund_address")]
@@ -98,26 +105,25 @@ pub trait Rpc {
 	async fn withdraw_asset(
 		&self,
 		amount: NumberOrHex,
-		asset: Asset,
+		asset: RpcAsset,
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		pair_asset: Asset,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		increase_or_decrease: IncreaseOrDecrease,
-		size: RangeOrderSizeJson,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		pair_asset: Asset,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -126,26 +132,27 @@ pub trait Rpc {
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
 		&self,
-		sell_asset: Asset,
-		buy_asset: Asset,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
-		increase_or_decrease: IncreaseOrDecrease,
-		amount: NumberOrHex,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
 		&self,
-		sell_asset: Asset,
-		buy_asset: Asset,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError>;
+	async fn asset_balances(
+		&self,
+	) -> Result<BTreeMap<ForeignChain, Vec<AssetBalance>>, AnyhowRpcError>;
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
@@ -172,12 +179,12 @@ impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
 	async fn request_liquidity_deposit_address(
 		&self,
-		asset: Asset,
+		asset: RpcAsset,
 	) -> Result<String, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset)
+			.request_liquidity_deposit_address(asset.try_into()?)
 			.await
 			.map(|address| address.to_string())?)
 	}
@@ -195,9 +202,11 @@ impl RpcServer for RpcServerImpl {
 	async fn withdraw_asset(
 		&self,
 		amount: NumberOrHex,
-		asset: Asset,
+		asset: RpcAsset,
 		destination_address: &str,
 	) -> Result<(ForeignChain, u64), AnyhowRpcError> {
+		let asset: Asset = asset.try_into()?;
+
 		let destination_address =
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
 
@@ -209,37 +218,44 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<BTreeMap<Asset, u128>, AnyhowRpcError> {
-		Ok(self.api.query_api().get_balances(None).await?)
+	async fn asset_balances(
+		&self,
+	) -> Result<BTreeMap<ForeignChain, Vec<AssetBalance>>, AnyhowRpcError> {
+		let mut balances = BTreeMap::<_, Vec<_>>::new();
+		for (asset, balance) in self.api.query_api().get_balances(None).await? {
+			balances
+				.entry(ForeignChain::from(asset))
+				.or_default()
+				.push(AssetBalance { asset, balance });
+		}
+		Ok(balances)
 	}
 
 	async fn update_range_order(
 		&self,
-		base_asset: Asset,
-		pair_asset: Asset,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
-		increase_or_decrease: IncreaseOrDecrease,
-		size: RangeOrderSizeJson,
+		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
 	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
 			.update_range_order(
-				base_asset,
-				pair_asset,
+				base_asset.try_into()?,
+				pair_asset.try_into()?,
 				id.try_into()?,
 				tick_range,
-				increase_or_decrease,
-				size.try_into()?,
+				size_change.try_map(|size| size.try_into())?,
 			)
 			.await?)
 	}
 
 	async fn set_range_order(
 		&self,
-		base_asset: Asset,
-		pair_asset: Asset,
+		base_asset: RpcAsset,
+		pair_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -247,37 +263,41 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.lp_api()
-			.set_range_order(base_asset, pair_asset, id.try_into()?, tick_range, size.try_into()?)
+			.set_range_order(
+				base_asset.try_into()?,
+				pair_asset.try_into()?,
+				id.try_into()?,
+				tick_range,
+				size.try_into()?,
+			)
 			.await?)
 	}
 
 	async fn update_limit_order(
 		&self,
-		sell_asset: Asset,
-		buy_asset: Asset,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
-		increase_or_decrease: IncreaseOrDecrease,
-		amount: NumberOrHex,
+		amount_change: IncreaseOrDecrease<NumberOrHex>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
 			.update_limit_order(
-				sell_asset,
-				buy_asset,
+				sell_asset.try_into()?,
+				buy_asset.try_into()?,
 				id.try_into()?,
 				tick,
-				increase_or_decrease,
-				try_parse_number_or_hex(amount)?,
+				amount_change.try_map(try_parse_number_or_hex)?,
 			)
 			.await?)
 	}
 
 	async fn set_limit_order(
 		&self,
-		sell_asset: Asset,
-		buy_asset: Asset,
+		sell_asset: RpcAsset,
+		buy_asset: RpcAsset,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -286,8 +306,8 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.set_limit_order(
-				sell_asset,
-				buy_asset,
+				sell_asset.try_into()?,
+				buy_asset.try_into()?,
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,

@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade};
+use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
@@ -382,7 +382,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			minimum_deposit: TargetChainAmount<T, I>,
 		},
-		///The deposits is rejected because the amount is below the minimum allowed.
+		/// The deposits was rejected because the amount was below the minimum allowed.
 		DepositIgnored {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
@@ -393,6 +393,11 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
+		},
+		/// The deposit witness was rejected.
+		DepositWitnessRejected {
+			reason: DispatchError,
+			deposit_witness: DepositWitness<T::TargetChain>,
 		},
 	}
 
@@ -535,16 +540,26 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for DepositWitness { deposit_address, asset, amount, deposit_details } in
-				deposit_witnesses
+			for ref deposit_witness @ DepositWitness {
+				ref deposit_address,
+				asset,
+				amount,
+				ref deposit_details,
+			} in deposit_witnesses
 			{
 				Self::process_single_deposit(
-					deposit_address,
+					deposit_address.clone(),
 					asset,
 					amount,
-					deposit_details,
+					deposit_details.clone(),
 					block_height,
-				)?;
+				)
+				.unwrap_or_else(|e| {
+					Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+						reason: e,
+						deposit_witness: deposit_witness.clone(),
+					});
+				})
 			}
 			Ok(())
 		}
@@ -769,6 +784,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Completes a single deposit request.
+	#[transactional]
 	fn process_single_deposit(
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,

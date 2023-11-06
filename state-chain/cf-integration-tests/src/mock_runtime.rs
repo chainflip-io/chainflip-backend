@@ -1,7 +1,7 @@
 use chainflip_node::test_account_from_seed;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::Percent;
+use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
 	AccountRolesConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig,
@@ -118,7 +118,10 @@ impl ExtBuilder {
 					})
 					.collect::<Vec<_>>(),
 			},
-			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+			flip: FlipConfig {
+				total_issuance: TOTAL_ISSUANCE,
+				daily_slashing_rate: Permill::from_perthousand(1),
+			},
 			funding: FundingConfig {
 				genesis_accounts: self.genesis_accounts.clone(),
 				redemption_tax: MIN_FUNDING / 2,
@@ -165,6 +168,7 @@ impl ExtBuilder {
 				vault_key: Some(ethereum_vault_key),
 				deployment_block: 0,
 				keygen_response_timeout: 4,
+				amount_to_slash: FLIPPERINOS_PER_FLIP,
 			},
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,

@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
+	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
 	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
 };
@@ -20,7 +20,7 @@ use cf_traits::{
 	DepositApi, EgressApi, GetBlockHeight,
 };
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -575,14 +575,99 @@ fn can_egress_ccm() {
 }
 
 #[test]
+fn multi_deposit_includes_deposit_beyond_recycle_height() {
+	const ETH: eth::Asset = eth::Asset::Eth;
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			let (_, address, ..) =
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH).unwrap();
+			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+			let recycles_at = IngressEgress::expiry_and_recycle_block_height().2;
+			(address, recycles_at)
+		})
+		.then_execute_at_next_block(|(address, recycles_at)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(recycles_at);
+			address
+		})
+		.then_execute_at_next_block(|address| {
+			let (_, address2, ..) =
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH).unwrap();
+			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
+			(address, address2)
+		})
+		.then_apply_extrinsics(|&(address, address2)| {
+			[(
+				RuntimeOrigin::root(),
+				crate::Call::<Test, _>::process_deposits {
+					deposit_witnesses: vec![
+						DepositWitness {
+							deposit_address: address,
+							asset: ETH,
+							amount: 1,
+							deposit_details: Default::default(),
+						},
+						DepositWitness {
+							deposit_address: address2,
+							asset: ETH,
+							amount: 1,
+							deposit_details: Default::default(),
+						},
+					],
+					// The block height is purely informative.
+					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+				},
+				Ok(()),
+			)]
+		})
+		.then_process_events(|_, event| match event {
+			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected { .. }) |
+			RuntimeEvent::IngressEgress(crate::Event::DepositReceived { .. }) => Some(event),
+			_ => None,
+		})
+		.inspect_context(|((expected_rejected_address, expected_accepted_address), emitted)| {
+			assert_eq!(emitted.len(), 2);
+			assert!(emitted.iter().any(|e| matches!(
+			e,
+			RuntimeEvent::IngressEgress(
+				crate::Event::DepositWitnessRejected {
+					deposit_witness,
+					..
+				}) if deposit_witness.deposit_address == *expected_rejected_address
+			)),);
+			assert!(emitted.iter().any(|e| matches!(
+			e,
+			RuntimeEvent::IngressEgress(
+				crate::Event::DepositReceived {
+					deposit_address,
+					..
+				}) if deposit_address == expected_accepted_address
+			)),);
+		});
+}
+
+#[test]
 fn multi_use_deposit_address_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 
 	new_test_ext()
 		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
+		.then_apply_extrinsics(|&(_, deposit_address)| {
+			[(
+				RuntimeOrigin::root(),
+				crate::Call::<Test, _>::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address,
+						asset: ETH,
+						amount: 1,
+						deposit_details: Default::default(),
+					}],
+					// block height is purely informative.
+					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+				},
+				Ok(()),
+			)]
+		})
 		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
-			// Set the address to deployed.
-			// Do another, should succeed.
 			assert_ok!(Pallet::<Test, _>::process_single_deposit(
 				deposit_address,
 				ETH,
@@ -595,21 +680,32 @@ fn multi_use_deposit_address_different_blocks() {
 
 			channel
 		})
-		.then_execute_at_next_block(|(_, deposit_address)| {
-			// Closing the channel should invalidate the deposit address.
-			assert_noop!(
-				IngressEgress::process_deposits(
-					RuntimeOrigin::root(),
-					vec![DepositWitness {
+		// The channel should be closed at the next block.
+		.then_apply_extrinsics(|&(_, deposit_address)| {
+			[(
+				RuntimeOrigin::root(),
+				crate::Call::<Test, _>::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
-						asset: eth::Asset::Eth,
+						asset: ETH,
 						amount: 1,
-						deposit_details: Default::default()
+						deposit_details: Default::default(),
 					}],
-					Default::default()
-				),
-				Error::<Test, _>::InvalidDepositAddress
-			);
+					// block height is purely informative.
+					block_height: BlockHeightProvider::<MockEthereum>::get_block_height(),
+				},
+				Ok(()),
+			)]
+		})
+		.then_process_events(|_, event| match event {
+			RuntimeEvent::IngressEgress(crate::Event::DepositWitnessRejected {
+				deposit_witness,
+				..
+			}) => Some(deposit_witness.deposit_address),
+			_ => None,
+		})
+		.inspect_context(|((_, expected_address), emitted)| {
+			assert_eq!(*emitted, vec![*expected_address]);
 		});
 }
 

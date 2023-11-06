@@ -19,8 +19,8 @@ systemd-units = [
 ]
 assets = [["target/release/chainflip-engine", "usr/bin/chainflip-engine0.10", "755"]]
 
-[package.metadata.deb.variants.development]
-maintainer-scripts = "package/development"
+[package.metadata.deb.variants.test]
+maintainer-scripts = "package/test"
 
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
@@ -28,8 +28,8 @@ maintainer-scripts = "package/sisyphos"
 [package.metadata.deb.variants.perseverance]
 maintainer-scripts = "package/perseverance"
 
-[package.metadata.deb.variants.partnernet]
-maintainer-scripts = "package/partnernet"
+[package.metadata.deb.variants.berghain]
+maintainer-scripts = "package/berghain"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

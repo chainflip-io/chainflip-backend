@@ -223,6 +223,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		Ok(self.raw_rpc_client.header(Some(block_hash)).await?.expect(SUBSTRATE_BEHAVIOUR))
 	}
 
+	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
+		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await?).expect(SUBSTRATE_BEHAVIOUR))
+	}
+
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
 		self.raw_rpc_client.finalized_head().await
 	}

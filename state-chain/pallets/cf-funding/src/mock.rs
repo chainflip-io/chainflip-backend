@@ -13,7 +13,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32,
+	AccountId32, Permill,
 };
 use std::time::Duration;
 
@@ -205,7 +205,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		flip: FlipConfig { total_issuance: 1_000_000 },
+		flip: FlipConfig { total_issuance: 1_000_000, daily_slashing_rate: Permill::from_perthousand(1)},
 		funding: FundingConfig {
 			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
 			redemption_tax: REDEMPTION_TAX,

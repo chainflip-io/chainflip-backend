@@ -113,8 +113,6 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 		&self,
 		tx: cf_chains::evm::Transaction,
 	) -> anyhow::Result<TxHash> {
-		// We arbitrarily set the MAX_GAS_LIMIT we are willing broadcast to 10M.
-		const MAX_GAS_LIMIT: u128 = 10_000_000;
 		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
 		self.rpc_retry_client
 			.request_with_limit(
@@ -148,7 +146,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 										"Estimated gas is greater than the gas limit"
 									))
 								} else {
-									gas_limit.min(MAX_GAS_LIMIT.into())
+									gas_limit
 								},
 							None => {
 								// increase the estimate by 33% for normal transactions
@@ -156,7 +154,6 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 									.saturating_mul(U256::from(4u64))
 									.checked_div(U256::from(3u64))
 									.unwrap()
-									.min(MAX_GAS_LIMIT.into())
 							},
 						});
 

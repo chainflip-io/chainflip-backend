@@ -76,6 +76,7 @@ impl<E> BenchmarkValue for PolkadotApi<E> {
 		PolkadotApi::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			PolkadotReplayProtection {
 				genesis_hash: Default::default(),
+				signer: BenchmarkValue::benchmark_value(),
 				nonce: Default::default(),
 			},
 			Some(Default::default()),
