@@ -190,28 +190,24 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	}
 }
 
-async fn create_block_subscription<
+async fn create_finalized_block_subscription<
 	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 >(
 	scope: &Scope<'_, anyhow::Error>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	required_version_and_wait: Option<(SemVer, bool)>,
-	finalized: bool,
 ) -> Result<(watch::Receiver<H256>, impl StateChainStreamApi<false> + Clone, ScopedJoinHandle<()>)>
 {
 	let mut block_header_stream = {
 		// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
 		// https://arxiv.org/abs/2007.01560
-		let sparse_block_header_stream = if finalized {
-			base_rpc_client.subscribe_finalized_block_headers()
-		} else {
-			base_rpc_client.subscribe_unfinalized_block_headers()
-		}
-		.await?
-		.map_err(Into::into)
-		.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-			"sparse_block_header_stream unexpectedly ended"
-		)))));
+		let sparse_block_header_stream = base_rpc_client
+			.subscribe_finalized_block_headers()
+			.await?
+			.map_err(Into::into)
+			.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
+				"sparse_block_header_stream unexpectedly ended"
+			)))));
 
 		let base_rpc_client = base_rpc_client.clone();
 
@@ -222,21 +218,15 @@ async fn create_block_subscription<
 
 	// Often `header` returns a significantly newer latest block than the stream
 	// returns so we move the stream forward to this block
-	let (mut latest_block_hash, mut latest_block_number) = {
-		let header_hash = if finalized {
-			base_rpc_client.latest_finalized_block_hash().await?
-		} else {
-			base_rpc_client.latest_unfinalized_block_hash().await?
-		};
+	let (mut latest_block_hash, latest_block_number) = {
+		let header_hash = base_rpc_client.latest_finalized_block_hash().await?;
 		let header = base_rpc_client.block_header(header_hash).await?;
 
 		if first_block_header.number < header.number {
 			let mut prev_stream_number = first_block_header.number;
 			loop {
 				let next_number = block_header_stream.next().await.unwrap()?.number;
-				if finalized {
-					assert_eq!(next_number, prev_stream_number + 1, "{SUBSTRATE_BEHAVIOUR}");
-				}
+				assert_eq!(next_number, prev_stream_number + 1, "{SUBSTRATE_BEHAVIOUR}");
 				prev_stream_number = next_number;
 				if next_number == header.number {
 					break (header_hash, header.number)
@@ -254,14 +244,13 @@ async fn create_block_subscription<
 					latest_block_hash,
 				)))
 				.chain(futures::stream::try_unfold(
-					(&mut block_header_stream, &mut latest_block_number, &mut latest_block_hash),
-					|(block_header_stream, latest_block_number, latest_block_hash)| async move {
+					(&mut block_header_stream, &mut latest_block_hash),
+					|(block_header_stream, latest_block_hash)| async move {
 						let next_header = block_header_stream.next().await.unwrap()?;
-						*latest_block_number = next_header.number;
 						*latest_block_hash = next_header.hash();
 						Ok::<_, anyhow::Error>(Some((
 							*latest_block_hash,
-							(block_header_stream, latest_block_number, latest_block_hash),
+							(block_header_stream, latest_block_hash),
 						)))
 					},
 				))
@@ -354,6 +343,58 @@ async fn create_block_subscription<
 	))
 }
 
+async fn create_unfinalized_block_subscription<
+	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+>(
+	scope: &Scope<'_, anyhow::Error>,
+	base_rpc_client: Arc<BaseRpcClient>,
+) -> Result<(watch::Receiver<H256>, impl StateChainStreamApi<false> + Clone, ScopedJoinHandle<()>)>
+{
+	let mut block_header_stream = base_rpc_client
+		.subscribe_unfinalized_block_headers()
+		.await?
+		.map_err(Into::into)
+		.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
+			"sparse_block_header_stream unexpectedly ended"
+		)))));
+
+	let first_block_header = block_header_stream.next().await.unwrap()?;
+
+	let latest_block_hash = first_block_header.hash();
+	let latest_block_number = first_block_header.number;
+
+	const BLOCK_CAPACITY: usize = 10;
+	let (block_sender, block_receiver) =
+		spmc::channel::<(state_chain_runtime::Hash, state_chain_runtime::Header)>(BLOCK_CAPACITY);
+
+	let (latest_block_hash_sender, latest_block_hash_watcher) =
+		tokio::sync::watch::channel::<state_chain_runtime::Hash>(latest_block_hash);
+
+	Ok((
+		latest_block_hash_watcher,
+		block_receiver.make_cached(
+			StreamCache { block_hash: latest_block_hash, block_number: latest_block_number },
+			|(block_hash, block_header): &(
+				state_chain_runtime::Hash,
+				state_chain_runtime::Header,
+			)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
+		),
+		scope.spawn_with_handle(async move {
+			loop {
+				let block_header = block_header_stream.next().await.unwrap()?;
+				let block_hash = block_header.hash();
+
+				if !block_sender.send((block_hash, block_header)).await {
+					break Ok(())
+				}
+				if latest_block_hash_sender.send(block_hash).is_err() {
+					break Ok(())
+				}
+			}
+		}),
+	))
+}
+
 impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
 	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
 {
@@ -388,11 +429,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			mut finalized_state_chain_stream,
 			finalized_block_producer_handle,
 		) = {
-			let (watcher, stream, handle) = create_block_subscription(
+			let (watcher, stream, handle) = create_finalized_block_subscription(
 				scope,
 				base_rpc_client.clone(),
 				required_version_and_wait,
-				true,
 			)
 			.await?;
 			(watcher, FinalizedCachedStream::new(stream), handle)
@@ -402,13 +442,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			latest_unfinalized_block_hash_watcher,
 			unfinalized_state_chain_stream,
 			unfinalized_block_producer_handle,
-		) = create_block_subscription(
-			scope,
-			base_rpc_client.clone(),
-			required_version_and_wait,
-			false,
-		)
-		.await?;
+		) = create_unfinalized_block_subscription(scope, base_rpc_client.clone()).await?;
 
 		let state_chain_client = Arc::new(StateChainClient {
 			genesis_hash,
