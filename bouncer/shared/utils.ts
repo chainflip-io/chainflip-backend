@@ -234,7 +234,7 @@ export async function observeSwapEvents(
   const unsubscribe: any = await subscribeMethod(async (header) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
+    events.forEach((record) => {
       const { event } = record;
       if (!eventFound && event.method.includes(expectedMethod)) {
         const expectedEvent = {
