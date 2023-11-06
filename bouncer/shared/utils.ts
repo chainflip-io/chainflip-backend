@@ -238,10 +238,7 @@ export async function observeSwapEvents(
       const { event } = record;
       if (!eventFound && event.method.includes(expectedMethod)) {
         const expectedEvent = {
-          name: { section: event.section, method: event.method },
           data: event.toHuman().data,
-          block: header.number.toNumber(),
-          event_index: index,
         };
 
         switch (expectedMethod) {
@@ -278,7 +275,7 @@ export async function observeSwapEvents(
             expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
               if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
                 broadcastId = [egressId[0], Number(expectedEvent.data.broadcastId)] as BroadcastId;
-                console.log(`${tag} broadcast requested, with id: ${broadcastId}`);
+                console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
                 eventFound = true;
                 unsubscribe();
               }
@@ -345,21 +342,8 @@ export async function observeBadEvents(
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
   const chainflipApi = await getChainflipApi();
-  let broadcaster;
+  const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
-  switch (broadcastId[0]) {
-    case 'Bitcoin':
-      broadcaster = 'bitcoinBroadcaster';
-      break;
-    case 'Ethereum':
-      broadcaster = 'ethereumBroadcaster';
-      break;
-    case 'Polkadot':
-      broadcaster = 'polkadotBroadcaster';
-      break;
-    default:
-      break;
-  }
 
   let stopObserving = false;
   const observeBroadcastFailure = observeBadEvents(
@@ -614,24 +598,22 @@ type SwapRate = {
   intermediary: string;
   output: string;
 };
-export async function getSwapRate(from: Asset, to: Asset, amount: string) {
-  function parseAsset(text: Asset) {
-    return text.charAt(0) + text.slice(1).toLowerCase();
+export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
+  function parseAsset(asset: Asset) {
+    return asset.charAt(0) + asset.slice(1).toLowerCase();
   }
   const chainflipApi = await getChainflipApi();
-  let decimal = assetDecimals[from];
 
-  const fineAmount = amountToFineAmount(amount, decimal);
+  const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals[from]);
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
     parseAsset(from),
     parseAsset(to),
-    Number(fineAmount).toString(16),
+    Number(fineFromAmount).toString(16),
   )) as SwapRate;
 
   const finePrice = parseInt(hexPrice.output);
-  decimal = assetDecimals[to];
-  const price = fineAmountToAmount(finePrice.toString(), decimal);
+  const price = fineAmountToAmount(finePrice.toString(), assetDecimals[to]);
 
   return price;
 }
