@@ -177,8 +177,8 @@ async function testRangeOrder() {
 
   assert(mintRangeOrder.length >= 1, `Empty mint range order result`);
   assert(
-    mintRangeOrder[0].size_change.increase.liquidity > 0,
-    `Expected mint of range order to increase liquidity`,
+    mintRangeOrder[0].liquidity_total > 0,
+    `Expected range order to have liquidity after mint`,
   );
 
   // Update the range order
