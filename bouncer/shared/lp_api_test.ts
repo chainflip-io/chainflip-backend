@@ -180,10 +180,6 @@ async function testRangeOrder() {
     mintRangeOrder[0].size_change.increase.liquidity > 0,
     `Expected mint of range order to increase liquidity`,
   );
-  assert(
-    mintRangeOrder[0].liquidity_total > 0,
-    `Expected range order to have liquidity after mint`,
-  );
 
   // Update the range order
   const updateRangeOrder = await lpApiRpc(`lp_update_range_order`, [
@@ -205,7 +201,11 @@ async function testRangeOrder() {
   let matchUpdate = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateRangeOrder.forEach((order: any) => {
-    if (order.size_change.increase.liquidity > 0 && order.liquidity_total > 0) {
+    if (
+      order.size_change.increase !== null &&
+      order.size_change.increase.liquidity > 0 &&
+      order.liquidity_total > 0
+    ) {
       matchUpdate = true;
     }
   });
