@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::ops::Range;
 
+use crate::Event::{BurningLimitOrderFailed, MintingLimitOrderFailed};
 use cf_amm::{
 	common::{Amount, Order, Price, Side, SideMap, Tick},
 	limit_orders,
@@ -624,6 +625,14 @@ pub mod pallet {
 			pair_asset: Asset,
 			fee_hundredth_pips: u32,
 		},
+		MintingLimitOrderFailed {
+			lp: T::AccountId,
+			error: DispatchError,
+		},
+		BurningLimitOrderFailed {
+			lp: T::AccountId,
+			error: DispatchError,
+		},
 	}
 
 	#[pallet::call]
@@ -1014,6 +1023,21 @@ pub mod pallet {
 					option_tick,
 					sell_amount,
 				)?;
+				if let Some(burn_block) = validity.burn_block() {
+					LimitOrderQueue::<T>::append(
+						burn_block,
+						OrderUpdate::Burn {
+							order_details: LimitOrderDetails {
+								lp,
+								sell_asset,
+								buy_asset,
+								id,
+								option_tick,
+								sell_amount,
+							},
+						},
+					);
+				}
 			} else if let Some(mint_block) = validity.mint_block() {
 				LimitOrderQueue::<T>::append(
 					mint_block,
@@ -1216,36 +1240,46 @@ impl<T: Config> Pallet<T> {
 						LimitOrderDetails { lp, sell_asset, buy_asset, id, option_tick, sell_amount },
 					expiry_block,
 				} => {
-					let _ = Self::set_limit_order_inner(
+					match Self::set_limit_order_inner(
 						&lp,
 						sell_asset,
 						buy_asset,
 						id,
 						option_tick,
 						sell_amount,
-					);
-					if let Some(expiry_block) = expiry_block {
-						LimitOrderQueue::<T>::append(
-							expiry_block,
-							OrderUpdate::Burn {
-								order_details: LimitOrderDetails {
-									lp,
-									sell_asset,
-									buy_asset,
-									id,
-									option_tick,
-									sell_amount,
-								},
+					) {
+						Ok(_) =>
+							if let Some(expiry_block) = expiry_block {
+								LimitOrderQueue::<T>::append(
+									expiry_block,
+									OrderUpdate::Burn {
+										order_details: LimitOrderDetails {
+											lp,
+											sell_asset,
+											buy_asset,
+											id,
+											option_tick,
+											sell_amount,
+										},
+									},
+								);
 							},
-						);
+						Err(error) => {
+							log::error!("Error minting limit order: {:?}", error);
+							Self::deposit_event(MintingLimitOrderFailed { lp, error });
+						},
 					}
 				},
 				OrderUpdate::Burn {
 					order_details:
 						LimitOrderDetails { lp, sell_asset, buy_asset, id, option_tick, .. },
 				} => {
-					let _ =
-						Self::set_limit_order_inner(&lp, sell_asset, buy_asset, id, option_tick, 0);
+					if let Err(error) =
+						Self::set_limit_order_inner(&lp, sell_asset, buy_asset, id, option_tick, 0)
+					{
+						log::error!("Error burning limit order: {:?}", error);
+						Self::deposit_event(BurningLimitOrderFailed { lp, error });
+					}
 				},
 			}
 		}
