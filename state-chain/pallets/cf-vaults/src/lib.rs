@@ -66,6 +66,7 @@ pub type KeyHandoverResponseStatus<T, I> =
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PalletSafeMode<I: 'static> {
 	pub slashing_enabled: bool,
+	#[codec(skip)]
 	_phantom: marker::PhantomData<I>,
 }
 
@@ -208,7 +209,7 @@ pub mod pallet {
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
 
 		/// For activating Safe mode: CODE RED for the chain.
-		type SafeMode: Get<PalletSafeMode<Self::Chain>> + SafeMode + SetSafeMode<Self::SafeMode>;
+		type SafeMode: Get<PalletSafeMode<I>> + SafeMode + SetSafeMode<Self::SafeMode>;
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 
