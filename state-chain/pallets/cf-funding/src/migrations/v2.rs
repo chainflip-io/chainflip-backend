@@ -19,23 +19,27 @@ mod old {
 
 	// This is added in 0.7 but then removed in 0.8.
 	#[frame_support::storage_alias]
-	pub type OldPendingRedemptions<T: Config> =
+	pub type PendingRedemptions<T: Config> =
 		StorageMap<Pallet<T>, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let accounts = old::OldPendingRedemptions::<T>::iter_keys().drain().collect::<Vec<_>>();
-		for account in accounts {
-			PendingRedemptions::<T>::insert(account, Pending::Pending);
-		}
+		// let accounts = old::PendingRedemptions::<T>::iter_keys().drain().collect::<Vec<_>>();
+		// for account in accounts {
+		// 	PendingRedemptions::<T>::insert(account, Pending::Pending);
+		// }
+
+		PendingRedemptions::<T>::translate::<(), _>(
+			|_key, ()| Some(Pending::Pending)
+		);
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let pending_redemptions_accounts =
-			old::OldPendingRedemptions::<T>::iter_keys().collect::<Vec<_>>();
+			old::PendingRedemptions::<T>::iter_keys().collect::<Vec<_>>();
 		let num_redemptions = pending_redemptions_accounts.len() as u32;
 		Ok((pending_redemptions_accounts, num_redemptions).encode())
 	}
@@ -63,7 +67,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 #[cfg(test)]
 mod test_runtime_upgrade {
 	use super::*;
-	use crate::migrations::v2::old::OldPendingRedemptions;
 	use mock::Test;
 
 	#[test]
@@ -72,7 +75,7 @@ mod test_runtime_upgrade {
 
 		mock::new_test_ext().execute_with(|| {
 			// pre upgrade
-			OldPendingRedemptions::<Test>::insert(account_id.clone(), ());
+			old::PendingRedemptions::<Test>::insert(account_id.clone(), ());
 
 			#[cfg(feature = "try-runtime")]
 			let state = Migration::<Test>::pre_upgrade().unwrap();
