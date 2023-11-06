@@ -7,12 +7,12 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, EgressId};
+use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
-use pallet_cf_pools::{AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{AssetAmounts, IncreaseOrDecrease, OrderId, OrderValidity, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
@@ -241,6 +241,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
+		validity: Option<OrderValidity<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the burn order
 		let (_tx_hash, events, ..) = self
@@ -250,7 +251,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				id,
 				option_tick,
 				sell_amount,
-				validity: None,
+				validity,
 			})
 			.await
 			.until_in_block()

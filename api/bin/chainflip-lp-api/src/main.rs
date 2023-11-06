@@ -1,3 +1,4 @@
+use cf_primitives::BlockNumber;
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -16,7 +17,7 @@ use chainflip_api::{
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, OrderValidity, RangeOrderSize};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
@@ -142,6 +143,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
+		validity: Option<OrderValidity<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
@@ -281,6 +283,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
+		validity: Option<OrderValidity<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -291,6 +294,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,
+				validity,
 			)
 			.await?)
 	}
