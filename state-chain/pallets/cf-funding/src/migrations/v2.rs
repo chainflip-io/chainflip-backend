@@ -25,14 +25,7 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		// let accounts = old::PendingRedemptions::<T>::iter_keys().drain().collect::<Vec<_>>();
-		// for account in accounts {
-		// 	PendingRedemptions::<T>::insert(account, Pending::Pending);
-		// }
-
-		PendingRedemptions::<T>::translate::<(), _>(
-			|_key, ()| Some(Pending::Pending)
-		);
+		PendingRedemptions::<T>::translate::<(), _>(|_key, ()| Some(Pending::Pending));
 		Weight::zero()
 	}
 
