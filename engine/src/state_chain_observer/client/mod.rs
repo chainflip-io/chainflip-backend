@@ -909,9 +909,7 @@ mod tests {
 			Ok(chain.headers[hash].clone())
 		}));
 
-		let mut sparse_stream = sparse_stream.peekable();
-
-		dbg!(std::pin::Pin::new(&mut sparse_stream).peek().await);
+		let sparse_stream = sparse_stream.peekable();
 
 		let stream = inject_intervening_headers(sparse_stream, Arc::new(rpc)).await?;
 
