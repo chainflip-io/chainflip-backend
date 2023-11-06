@@ -30,19 +30,6 @@ jobs:
     name: Terrafrom ${{ github.event.inputs.command }}
     runs-on: ubuntu-20.04
     steps:
-      - name: Setup Tailscale 🪡 ⚙️
-        id: tailscale
-        uses: tailscale/github-action@main
-        with:
-          authkey: ${{ secrets.CF_TAILSCALE_AUTHKEY }}
-
-      - name: Load secret 🗝👨‍💻
-        uses: 1password/load-secrets-action@v1
-        env:
-          OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
-          OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
-          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: op://github-actions/CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN/password
-
       - name: Checkout chainflip-platform-monorepo
         uses: actions/checkout@v3
         with:
