@@ -489,6 +489,7 @@ pub trait Broadcaster<C: Chain> {
 	/// Request a threshold signature and then build and broadcast the outbound api call.
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
+		pause_broadcasts: bool,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the

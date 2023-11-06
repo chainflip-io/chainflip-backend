@@ -391,7 +391,7 @@ impl TokenholderGovernanceBroadcaster {
 			maybe_old_key,
 			Decode::decode(&mut &new_key[..]).or(Err(()))?,
 		)?;
-		B::threshold_sign_and_broadcast(api_call);
+		B::threshold_sign_and_broadcast(api_call, false);
 		Ok(())
 	}
 
@@ -431,6 +431,7 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
 			None::<RuntimeCall>,
+			false,
 		);
 	}
 }

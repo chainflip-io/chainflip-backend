@@ -38,10 +38,12 @@ impl Broadcaster<AnyChain> for GovKeyBroadcaster {
 			AnyChainApi::Ethereum(eth_api_call) =>
 				<EthereumBroadcaster as Broadcaster<Ethereum>>::threshold_sign_and_broadcast(
 					eth_api_call,
+					false,
 				),
 			AnyChainApi::Polkadot(dot_api_call) =>
 				<PolkadotBroadcaster as Broadcaster<Polkadot>>::threshold_sign_and_broadcast(
 					dot_api_call,
+					false,
 				),
 		}
 	}

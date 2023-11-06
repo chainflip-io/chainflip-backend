@@ -458,7 +458,7 @@ pub mod pallet {
 				Self::deposit_event(Event::RedemptionRequested {
 					account_id,
 					amount: net_amount,
-					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
+					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call, false).0,
 					expiry_time: contract_expiry,
 				});
 			} else {

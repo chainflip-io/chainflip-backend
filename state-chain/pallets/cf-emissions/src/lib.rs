@@ -302,10 +302,13 @@ impl<T: Config> Pallet<T> {
 	) {
 		// Emit a threshold signature request.
 		// TODO: See if we can replace an old request if there is one.
-		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
-			total_supply.unique_saturated_into(),
-			block_number.saturated_into(),
-		));
+		T::Broadcaster::threshold_sign_and_broadcast(
+			T::ApiCall::new_unsigned(
+				total_supply.unique_saturated_into(),
+				block_number.saturated_into(),
+			),
+			false,
+		);
 	}
 }
 

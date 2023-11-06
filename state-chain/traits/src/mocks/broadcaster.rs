@@ -28,6 +28,7 @@ impl<
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
+		_pause_broadcasts: bool,
 	) -> (cf_primitives::BroadcastId, cf_primitives::ThresholdSignatureRequestId) {
 		Self::mutate_value(b"API_CALLS", |api_calls: &mut Option<Vec<A>>| {
 			let api_calls = api_calls.get_or_insert(Default::default());
@@ -51,7 +52,8 @@ impl<
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let ids @ (id, _) = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call);
+		let ids @ (id, _) =
+			<Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call, false);
 		Self::put_storage(b"CALLBACKS", id, callback);
 		ids
 	}
