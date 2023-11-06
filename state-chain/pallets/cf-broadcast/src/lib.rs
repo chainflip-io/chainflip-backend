@@ -15,8 +15,11 @@ use sp_std::marker;
 pub use weights::WeightInfo;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(I))]
 pub struct PalletSafeMode<I: 'static> {
 	pub retry_enabled: bool,
+	#[doc(hidden)]
+	#[codec(skip)]
 	_phantom: marker::PhantomData<I>,
 }
 
@@ -210,7 +213,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode<Self::TargetChain>>;
+		type SafeMode: Get<PalletSafeMode<I>>;
 
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;

@@ -1,7 +1,6 @@
 //! For filtering runtime calls and other related utilities.
 
 use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
-use cf_chains::{Bitcoin, Ethereum, Polkadot};
 use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;

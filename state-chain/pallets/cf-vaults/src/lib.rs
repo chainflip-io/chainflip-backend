@@ -64,8 +64,10 @@ pub type KeyHandoverResponseStatus<T, I> =
 	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(I))]
 pub struct PalletSafeMode<I: 'static> {
 	pub slashing_enabled: bool,
+	#[doc(hidden)]
 	#[codec(skip)]
 	_phantom: marker::PhantomData<I>,
 }
