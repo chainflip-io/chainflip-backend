@@ -17,14 +17,14 @@ tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tempfile = "3.8"
 
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
 codec = { package = "parity-scale-codec", version = "3.6.1", features = [
   "derive",
   "full",
 ] }
 
 # Local dependencies
-chainflip-engine = { path = "../../../engine/"}
+chainflip-engine = { path = "../../../engine/" }
 utilities = { path = "../../../utilities" }
 cf-primitives = { path = "../../../state-chain/primitives" }
 pallet-cf-environment = { path = "../../../state-chain/pallets/cf-environment" }
