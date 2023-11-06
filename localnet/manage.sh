@@ -126,11 +126,15 @@ build-localnet() {
     echo "💚 $NODE's chainflip-node is running!"
     ((RPC_PORT++))
   done
+  
+  NODE_COUNT=$NODE_COUNT \
+  BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
+  SC_RPC_PORT=$INIT_RPC_PORT \
+  LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
+  SELECTED_NODES=${SELECTED_NODES[@]} \
+  ./$LOCALNET_INIT_DIR/scripts/start-all-engines.sh
 
   HEALTH_PORT=5555
-
-  BINARY_ROOT_PATH=$BINARY_ROOT_PATH SC_RPC_PORT=$INIT_RPC_PORT HEALTH_PORT=$HEALTH_PORT LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR SELECTED_NODES=${SELECTED_NODES[@]} ./$LOCALNET_INIT_DIR/scripts/start-all-engines.sh
-
   for NODE in "${SELECTED_NODES[@]}"; do
     while true; do
         output=$(check_endpoint_health "http://localhost:$HEALTH_PORT/health")
