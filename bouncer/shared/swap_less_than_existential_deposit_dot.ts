@@ -1,8 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
-import { getDotBalance } from '../shared/get_dot_balance';
-import { performAndTrackSwap } from '../shared/perform_swap';
+import { getDotBalance } from './get_dot_balance';
+import { performAndTrackSwap } from './perform_swap';
 
-import { getSwapRate, newAddress, runWithTimeout } from '../shared/utils';
+import { getSwapRate, newAddress } from './utils';
 
 export async function swapLessThanED() {
   console.log('=== Testing USDC -> DOT swaps obtaining less than ED ===');
@@ -18,15 +18,15 @@ export async function swapLessThanED() {
       inputAmount = (parseFloat(inputAmount) / 2).toString();
       outputAmount = await getSwapRate('USDC', 'DOT', inputAmount);
     }
-    console.log(`Input amount: ${inputAmount} USDC`);
-    console.log(`Output amount: ${outputAmount} DOT`);
+    console.log(`${tag} Input amount: ${inputAmount} USDC`);
+    console.log(`${tag} Output amount: ${outputAmount} DOT`);
 
     // we want to be sure to have an address with 0 balance, hence we create a new one every time
     const address = await newAddress(
       'DOT',
       '!testing less than ED output for dot swaps!' + inputAmount + outputAmount,
     );
-    console.log('Generated DOT address: ' + address);
+    console.log(`${tag} Generated DOT address: ${address}`);
 
     await performAndTrackSwap('USDC', 'DOT', address, inputAmount, tag);
     if (parseFloat(await getDotBalance(address)) > 0) {
@@ -36,14 +36,5 @@ export async function swapLessThanED() {
       retry = false;
     }
   }
-  console.log('=== Test complete ===');
+  console.log('=== Test USDC -> DOT swaps obtaining less than ED complete ===');
 }
-
-runWithTimeout(swapLessThanED(), 500000)
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error(error);
-    process.exit(-1);
-  });

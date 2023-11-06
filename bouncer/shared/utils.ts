@@ -208,14 +208,13 @@ type EgressId = [Chain, number];
 type BroadcastId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
-  { sourceAsset, destAsset, channelId }: SwapParams,
+  { sourceAsset, destAsset, depositAddress, channelId }: SwapParams,
   api: ApiPromise,
   tag?: string,
   swapType?: SwapType,
   finalized = false,
 ): Promise<BroadcastId | undefined> {
   let eventFound = false;
-
   const subscribeMethod = finalized
     ? api.rpc.chain.subscribeFinalizedHeads
     : api.rpc.chain.subscribeNewHeads;
@@ -250,7 +249,11 @@ export async function observeSwapEvents(
                 destAsset === (expectedEvent.data.destinationAsset.toUpperCase() as Asset) &&
                 swapType
                   ? expectedEvent.data.swapType[swapType] !== undefined
-                  : true
+                  : true &&
+                    depositAddress ===
+                      (Object.values(
+                        expectedEvent.data.origin.DepositChannel.depositAddress,
+                      )[0] as string)
               ) {
                 expectedMethod = swapExecutedEvent;
                 swapId = expectedEvent.data.swapId;
