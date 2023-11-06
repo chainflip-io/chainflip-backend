@@ -9,10 +9,24 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
-use cf_traits::{impl_pallet_safe_mode, GetBlockHeight};
+use cf_traits::{GetBlockHeight, SafeMode};
+use frame_support::RuntimeDebug;
+use sp_std::marker;
 pub use weights::WeightInfo;
 
-impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(I))]
+pub struct PalletSafeMode<I: 'static> {
+	pub retry_enabled: bool,
+	#[doc(hidden)]
+	#[codec(skip)]
+	_phantom: marker::PhantomData<I>,
+}
+
+impl<I: 'static> SafeMode for PalletSafeMode<I> {
+	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
+	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
+}
 
 use cf_chains::{
 	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder, TransactionMetadata as _,
@@ -199,7 +213,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode<I>>;
 
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;

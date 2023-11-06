@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::SemVer;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use sp_core::H256;
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
-use tracing::{trace, warn};
+use tracing::trace;
 use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, OR_CANCEL};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
 use super::{
-	super::{base_rpc_api, storage_api::StorageApi, StateChainStreamApi},
+	super::{base_rpc_api, StateChainStreamApi},
 	common::send_request,
 };
 
@@ -139,9 +139,8 @@ impl SignedExtrinsicClient {
 	>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
+		account_nonce: Nonce,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
-		required_role: AccountRole,
-		wait_for_required_role: bool,
 		check_unfinalized_version: Option<SemVer>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
@@ -150,43 +149,6 @@ impl SignedExtrinsicClient {
 
 		let (request_sender, mut request_receiver) = mpsc::channel(REQUEST_BUFFER);
 		let (dry_run_sender, mut dry_run_receiver) = mpsc::channel(REQUEST_BUFFER);
-
-		let account_nonce = {
-			loop {
-				match base_rpc_client
-					.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
-						state_chain_stream.cache().block_hash,
-						&signer.account_id,
-					)
-					.await?
-				{
-					Some(role) =>
-						if required_role == AccountRole::Unassigned || required_role == role {
-							break
-						} else if wait_for_required_role && role == AccountRole::Unassigned {
-							warn!("Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{required_role:?}' at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
-						} else {
-							bail!("Your Chainflip account {} has the wrong account role '{role:?}'. The '{required_role:?}' account role is required", signer.account_id);
-						},
-					None =>
-						if wait_for_required_role {
-							warn!("Your Chainflip account {} is not funded. Note, it may take some time for your funds to be detected. WAITING for your account to be funded at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
-						} else {
-							bail!("Your Chainflip account {} is not funded", signer.account_id);
-						},
-				}
-
-				state_chain_stream.next().await.expect(OR_CANCEL);
-			}
-
-			base_rpc_client
-				.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
-					state_chain_stream.cache().block_hash,
-					&signer.account_id,
-				)
-				.await?
-				.nonce
-		};
 
 		Ok(Self {
 			account_id: signer.account_id.clone(),
