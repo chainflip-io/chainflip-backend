@@ -555,11 +555,13 @@ pub mod pallet {
 		/// There are no amounts between the specified maximum and minimum that match the required
 		/// ratio of assets
 		AssetRatioUnachieveable,
-		/// Updating Limit Orders is disabled
+		/// Updating Limit Orders is disabled.
 		UpdatingLimitOrdersDisabled,
-		/// Updating Range Orders is disabled
+		/// Updating Range Orders is disabled.
 		UpdatingRangeOrdersDisabled,
+		/// The specified order validity is internally inconsistent.
 		OrderValidityInconsistent,
+		/// The order is expired.
 		OrderValidityExpired,
 	}
 
@@ -1207,8 +1209,8 @@ pub struct UnidirectionalPoolDepth {
 
 impl<T: Config> Pallet<T> {
 	fn mint_or_burn(current_block: BlockNumberFor<T>) -> Weight {
-		for m_o_b in LimitOrderQueue::<T>::take(current_block) {
-			match m_o_b {
+		for limit_order in LimitOrderQueue::<T>::take(current_block) {
+			match limit_order {
 				OrderUpdate::Mint {
 					order_details:
 						LimitOrderDetails { lp, sell_asset, buy_asset, id, option_tick, sell_amount },
