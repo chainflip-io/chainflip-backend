@@ -50,6 +50,9 @@ pub type ThresholdSignatureRequestId = u32;
 
 pub type PolkadotBlockNumber = u32;
 
+const FLIP_DECIMALS: u32 = 18;
+pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
+
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.
 pub const DEFAULT_FEE_SATS_PER_KILO_BYTE: u64 = 102400;
@@ -114,6 +117,11 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 	Serialize,
 	Deserialize,
 )]
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!! IMPORTANT: Care must be taken when changing this !!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! See AccountRoles storage item !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 pub enum AccountRole {
 	/// The default account type - indicates a bare account with no special role or permissions.
 	#[default]

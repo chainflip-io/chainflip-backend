@@ -1,7 +1,6 @@
 #![cfg(test)]
 
-use std::mem;
-
+use super::*;
 use crate::{
 	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
 	Reserve, SlashingRate, TotalIssuance,
@@ -16,6 +15,7 @@ use frame_support::{
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
 use sp_runtime::Permill;
+use std::mem;
 
 impl FlipOperation {
 	pub fn execute(&self) -> bool {
@@ -116,7 +116,6 @@ impl FlipOperation {
 			},
 			// Mint To Reserve
 			FlipOperation::MintToReserve(amount) => {
-				use crate::ReserveId;
 				const TEST_RESERVE: ReserveId = *b"TEST";
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
@@ -138,7 +137,6 @@ impl FlipOperation {
 			},
 			// Burn From Reserve
 			FlipOperation::BurnFromReserve(amount) => {
-				use crate::ReserveId;
 				const TEST_RESERVE: ReserveId = *b"TEST";
 				let previous_issuance = TotalIssuance::<Test>::get();
 				let previous_reserve = Reserve::<Test>::try_get(TEST_RESERVE).unwrap_or(0);
@@ -291,7 +289,7 @@ impl FlipOperation {
 				SlashingRate::<Test>::set(*slashing_rate);
 
 				let attempted_slash: u128 =
-					(*slashing_rate * *bond).saturating_mul((*blocks).into());
+					FlipSlasher::<Test>::calculate_slash_amount(account_id, *blocks);
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash

@@ -27,7 +27,7 @@ const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DO_NOT_LINGER: i32 = 0;
 
 /// How many messages to keep in a "resend" buffer per peer
-const OUTGOING_MESSAGES_BUFFER_SIZE: i32 = 10;
+const OUTGOING_MESSAGES_BUFFER_SIZE: i32 = 100;
 
 /// Socket to be used for connecting to peer on the network
 pub struct OutgoingSocket {
@@ -40,12 +40,6 @@ impl OutgoingSocket {
 
 		// Discard any pending messages when disconnecting a socket
 		socket.set_linger(DO_NOT_LINGER).unwrap();
-
-		// Do not buffer outgoing messages before a connection is
-		// established (this means the messages will be lost, but
-		// this prevents us from buffering messages to peers that
-		// are misconfigured, for example).
-		socket.set_immediate(true).unwrap();
 
 		// Buffer at most OUTGOING_MESSAGES_BUFFER_SIZE messages
 		// per peer (this minimises how much memory we might "leak"

@@ -42,7 +42,7 @@ use utilities::clean_hex_address;
 
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	Percent,
+	Percent, Permill,
 };
 
 pub mod berghain;
@@ -247,6 +247,7 @@ pub fn inner_cf_development_config(
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				devnet::TOTAL_ISSUANCE,
+				common::DAILY_SLASHING_RATE,
 				genesis_funding_amount,
 				min_funding,
 				devnet::REDEMPTION_TAX,
@@ -373,6 +374,7 @@ macro_rules! network_spec {
 							eth_init_agg_key,
 							ethereum_deployment_block,
 							TOTAL_ISSUANCE,
+							DAILY_SLASHING_RATE,
 							genesis_funding_amount,
 							min_funding,
 							REDEMPTION_TAX,
@@ -430,6 +432,7 @@ fn testnet_genesis(
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	total_issuance: FlipBalance,
+	daily_slashing_rate: Permill,
 	genesis_funding_amount: u128,
 	minimum_funding: u128,
 	redemption_tax: u128,
@@ -560,7 +563,7 @@ fn testnet_genesis(
 				.map(|x| (x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone())))
 				.collect::<Vec<_>>(),
 		},
-		flip: FlipConfig { total_issuance },
+		flip: FlipConfig { total_issuance, daily_slashing_rate },
 		funding: FundingConfig {
 			genesis_accounts: Vec::from_iter(all_accounts.clone()),
 			minimum_funding,
@@ -593,17 +596,20 @@ fn testnet_genesis(
 			vault_key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 		},
 
 		polkadot_vault: PolkadotVaultConfig {
 			vault_key: None,
 			deployment_block: 0,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 		},
 		bitcoin_vault: BitcoinVaultConfig {
 			vault_key: None,
 			deployment_block: 0,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+			amount_to_slash: FLIPPERINOS_PER_FLIP,
 		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,

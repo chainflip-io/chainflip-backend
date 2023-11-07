@@ -85,17 +85,18 @@ benchmarks! {
 		Asset::Usdc,
 		0,
 		Some(-100..100),
-		IncreaseOrDecrease::Increase,
-		RangeOrderSize::AssetAmounts {
-			maximum: AssetAmounts {
-				base: 1_000_000,
-				pair: 1_000_000,
-			},
-			minimum: AssetAmounts {
-				base: 500_000,
-				pair: 500_000,
-			},
-		}
+		IncreaseOrDecrease::Increase(
+			RangeOrderSize::AssetAmounts {
+				maximum: AssetAmounts {
+					base: 1_000_000,
+					pair: 1_000_000,
+				},
+				minimum: AssetAmounts {
+					base: 500_000,
+					pair: 500_000,
+				},
+			}
+		)
 	)
 	verify {}
 
@@ -150,8 +151,7 @@ benchmarks! {
 		Asset::Usdc,
 		0,
 		Some(100),
-		IncreaseOrDecrease::Increase,
-		1_000_000
+		IncreaseOrDecrease::Increase(1_000_000)
 	)
 	verify {}
 

@@ -20,6 +20,7 @@ chainflip-engine = { path = "../../../engine/" }
 chainflip-api = { path = "../../lib" }
 cf-chains = { path = "../../../state-chain/chains" }
 utilities = { path = "../../../utilities" }
+custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08+2' }

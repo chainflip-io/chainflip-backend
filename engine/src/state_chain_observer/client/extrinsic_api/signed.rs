@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::SemVer;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use sp_core::H256;
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
-use tracing::{trace, warn};
+use tracing::trace;
 use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, OR_CANCEL};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
 use super::{
-	super::{base_rpc_api, storage_api::StorageApi, StateChainStreamApi},
+	super::{base_rpc_api, StateChainStreamApi},
 	common::send_request,
 };
 
@@ -94,6 +94,18 @@ pub trait SignedExtrinsicApi {
 			+ Sync
 			+ 'static;
 
+	async fn submit_signed_extrinsic_with_dry_run<Call>(
+		&self,
+		call: Call,
+	) -> Result<(H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static;
+
 	async fn finalize_signed_extrinsic<Call>(
 		&self,
 		call: Call,
@@ -115,6 +127,7 @@ pub struct SignedExtrinsicClient {
 		oneshot::Sender<submission_watcher::FinalizationResult>,
 		submission_watcher::RequestStrategy,
 	)>,
+	dry_run_sender: mpsc::Sender<(state_chain_runtime::RuntimeCall, oneshot::Sender<Result<()>>)>,
 	_task_handle: ScopedJoinHandle<()>,
 }
 
@@ -126,9 +139,8 @@ impl SignedExtrinsicClient {
 	>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
+		account_nonce: Nonce,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
-		required_role: AccountRole,
-		wait_for_required_role: bool,
 		check_unfinalized_version: Option<SemVer>,
 		genesis_hash: H256,
 		state_chain_stream: &mut BlockStream,
@@ -136,47 +148,12 @@ impl SignedExtrinsicClient {
 		const REQUEST_BUFFER: usize = 16;
 
 		let (request_sender, mut request_receiver) = mpsc::channel(REQUEST_BUFFER);
-
-		let account_nonce = {
-			loop {
-				match base_rpc_client
-					.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
-						state_chain_stream.cache().block_hash,
-						&signer.account_id,
-					)
-					.await?
-				{
-					Some(role) =>
-						if required_role == AccountRole::None || required_role == role {
-							break
-						} else if wait_for_required_role && role == AccountRole::None {
-							warn!("Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{required_role:?}' at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
-						} else {
-							bail!("Your Chainflip account {} has the wrong account role '{role:?}'. The '{required_role:?}' account role is required", signer.account_id);
-						},
-					None =>
-						if wait_for_required_role {
-							warn!("Your Chainflip account {} is not funded. Note, it may take some time for your funds to be detected. WAITING for your account to be funded at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
-						} else {
-							bail!("Your Chainflip account {} is not funded", signer.account_id);
-						},
-				}
-
-				state_chain_stream.next().await.expect(OR_CANCEL);
-			}
-
-			base_rpc_client
-				.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
-					state_chain_stream.cache().block_hash,
-					&signer.account_id,
-				)
-				.await?
-				.nonce
-		};
+		let (dry_run_sender, mut dry_run_receiver) = mpsc::channel(REQUEST_BUFFER);
 
 		Ok(Self {
 			account_id: signer.account_id.clone(),
 			request_sender,
+			dry_run_sender,
 			_task_handle: scope.spawn_with_handle({
 				let mut state_chain_stream = state_chain_stream.clone();
 
@@ -198,6 +175,9 @@ impl SignedExtrinsicClient {
 					utilities::loop_select! {
 						if let Some((call, until_in_block_sender, until_finalized_sender, strategy)) = request_receiver.recv() => {
 							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
+						} else break Ok(()),
+						if let Some((call, result_sender)) = dry_run_receiver.recv() => {
+							let _ = result_sender.send(submission_watcher.dry_run_extrinsic(call).await.map_err(Into::into));
 						} else break Ok(()),
 						let submission_details = submission_watcher.watch_for_submission_in_block() => {
 							submission_watcher.on_submission_in_block(&mut requests, submission_details).await?;
@@ -256,6 +236,30 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 				UntilFinalizedFuture(until_finalized_receiver),
 			),
 		)
+	}
+
+	/// Dry run the call, and only submit the extrinsic onto the chain
+	/// if dry-run returns Ok(())
+	async fn submit_signed_extrinsic_with_dry_run<Call>(
+		&self,
+		call: Call,
+	) -> Result<(H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
+	{
+		let _ = send_request(&self.dry_run_sender, |result_sender| {
+			(call.clone().into(), result_sender)
+		})
+		.await
+		.await
+		.expect(OR_CANCEL)?;
+
+		Ok(self.submit_signed_extrinsic(call.into()).await)
 	}
 
 	async fn finalize_signed_extrinsic<Call>(

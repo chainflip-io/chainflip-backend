@@ -51,7 +51,7 @@ export async function executeContractSwap(
       destAsset,
       // It is important that this is large enough to result in
       // an amount larger than existential (e.g. on Polkadot):
-      amount: BigInt(amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset])),
+      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
       destAddress,
       srcAsset,
       srcChain: assetChains[srcAsset],
@@ -131,6 +131,10 @@ export async function performSwapViaContract(
       txHash: receipt.hash,
     };
   } catch (err) {
+    console.error('err:', err);
+    if (err instanceof Error) {
+      console.log(err.stack);
+    }
     throw new Error(`${tag} ${err}`);
   }
 }
@@ -144,7 +148,7 @@ export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: strin
   await getNextEthNonce((nextNonce) =>
     approveVault(
       {
-        amount: BigInt(amount),
+        amount,
         srcAsset,
       },
       {
