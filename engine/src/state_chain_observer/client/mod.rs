@@ -782,6 +782,7 @@ pub mod mocks {
 	}
 }
 
+// Note: only to be used with finalized blocks since this asserts that they arrive strictly in order
 async fn inject_intervening_headers<
 	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 >(
@@ -791,7 +792,7 @@ async fn inject_intervening_headers<
 	let mut sparse_block_header_stream = Box::pin(sparse_block_header_stream);
 
 	let first_header: state_chain_runtime::Header =
-		sparse_block_header_stream.next().await.unwrap()?;
+		sparse_block_header_stream.next().await.ok_or(anyhow!("no initial block"))??;
 
 	let mut latest_header = first_header.clone();
 
@@ -888,10 +889,8 @@ mod tests {
 		}
 	}
 
-	#[tokio::test]
-	async fn test_intervening_headers() -> Result<()> {
-		use futures::stream::StreamExt;
-		let chain = Arc::new(TestChain::new(7));
+	fn mock_chain_and_rpc(total_blocks: usize) -> (Arc<TestChain>, Arc<MockBaseRpcApi>) {
+		let chain = Arc::new(TestChain::new(total_blocks));
 		let mut rpc = MockBaseRpcApi::new();
 
 		rpc.expect_block_hash().returning({
@@ -904,21 +903,45 @@ mod tests {
 			move |hash| Ok(chain.headers.get(&hash).expect("unknown hash").clone())
 		});
 
-		let sparse_stream = tokio_stream::iter([0, 1, 3, 6].map(|num| {
-			let hash = &chain.hashes[num];
+		(chain, Arc::new(rpc))
+	}
+
+	// turns a (potentially) sparse block sequence into a contiguous one
+	async fn inject_intervening_headers_with<const N: usize>(
+		block_numbers: [u32; N],
+		chain: Arc<TestChain>,
+		rpc: Arc<MockBaseRpcApi>,
+	) -> Result<Vec<u32>> {
+		let sparse_stream = tokio_stream::iter(block_numbers).map(move |num| {
+			let hash = &chain.hashes[num as usize];
 			Ok(chain.headers[hash].clone())
-		}));
+		});
 
-		let sparse_stream = sparse_stream.peekable();
-
-		let stream = inject_intervening_headers(sparse_stream, Arc::new(rpc)).await?;
+		let stream = inject_intervening_headers(sparse_stream, rpc).await?;
 
 		let headers = stream.collect::<Vec<_>>().await;
 
+		Ok(headers.into_iter().map(|h| h.unwrap().number).collect::<Vec<_>>())
+	}
+
+	#[tokio::test]
+	async fn test_intervening_headers() -> Result<()> {
+		let (chain, rpc) = mock_chain_and_rpc(7);
+
+		// Should fill in the gaps:
 		assert_eq!(
-			&headers.into_iter().map(|h| h.unwrap().number).collect::<Vec<_>>(),
+			&inject_intervening_headers_with([0, 1, 3, 6], chain.clone(), rpc.clone()).await?,
 			&[0, 1, 2, 3, 4, 5, 6]
 		);
+
+		// Already contiguous stream should be left unchanged:
+		assert_eq!(
+			&inject_intervening_headers_with([1, 2, 3, 4], chain.clone(), rpc.clone()).await?,
+			&[1, 2, 3, 4]
+		);
+
+		// Empty stream results in an error (rather than panicking):
+		assert!(&inject_intervening_headers_with([], chain.clone(), rpc.clone()).await.is_err());
 
 		Ok(())
 	}
