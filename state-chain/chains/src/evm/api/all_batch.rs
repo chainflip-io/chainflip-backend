@@ -201,15 +201,15 @@ mod test_all_batch {
 		let all_batch: EthereumApi<MockEnvironment> = AllBatch::new_unsigned(
 			vec![
 				FetchAssetParams {
-					deposit_fetch_id: EvmFetchId::Fetch(eth::Address::from_low_u64_be(CHANNEL_ID)),
+					fetch_params: EvmFetchId::Fetch(eth::Address::from_low_u64_be(CHANNEL_ID)),
 					asset: assets::eth::Asset::Usdc,
 				},
 				FetchAssetParams {
-					deposit_fetch_id: EvmFetchId::DeployAndFetch(CHANNEL_ID),
+					fetch_params: EvmFetchId::DeployAndFetch(CHANNEL_ID),
 					asset: assets::eth::Asset::Eth,
 				},
 				FetchAssetParams {
-					deposit_fetch_id: EvmFetchId::NotRequired,
+					fetch_params: EvmFetchId::NotRequired,
 					asset: assets::eth::Asset::Eth,
 				},
 			],

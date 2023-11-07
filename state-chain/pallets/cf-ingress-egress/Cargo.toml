@@ -20,6 +20,7 @@ cf-runtime-utilities = { path = '../../runtime-utilities', default-features = fa
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
+enum-map = "2.6"
 
 # ==== Parity deps ====
 codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [

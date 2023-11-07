@@ -214,9 +214,9 @@ where
 	) -> Result<Self, AllBatchError> {
 		let mut fetch_only_params = vec![];
 		let mut fetch_deploy_params = vec![];
-		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
+		for FetchAssetParams { fetch_params, asset } in fetch_params {
 			if let Some(token_address) = E::token_address(asset) {
-				match deposit_fetch_id {
+				match fetch_params {
 					EvmFetchId::Fetch(contract_address) => {
 						debug_assert!(
 							asset != assets::eth::Asset::Eth,

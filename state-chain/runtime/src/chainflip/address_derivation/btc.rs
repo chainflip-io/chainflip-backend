@@ -2,7 +2,7 @@ use super::AddressDerivation;
 use crate::BitcoinVault;
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
-	btc::deposit_address::DepositAddress,
+	btc::deposit_address::BitcoinDepositChannel,
 	Bitcoin, Chain,
 };
 use cf_primitives::ChannelId;
@@ -13,34 +13,19 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		source_asset: <Bitcoin as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Bitcoin as Chain>::ChainAccount, AddressDerivationError> {
-		<Self as AddressDerivationApi<Bitcoin>>::generate_address_and_state(
-			source_asset,
-			channel_id,
-		)
-		.map(|(address, _)| address)
-	}
-
-	fn generate_address_and_state(
-		_source_asset: <Bitcoin as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<
-		(<Bitcoin as Chain>::ChainAccount, <Bitcoin as Chain>::DepositChannelState),
-		AddressDerivationError,
-	> {
 		let channel_id: u32 = channel_id
 			.try_into()
 			.map_err(|_| AddressDerivationError::BitcoinChannelIdTooLarge)?;
 
-		let channel_state = DepositAddress::new(
+		Ok(BitcoinDepositChannel::new(
 			// TODO: The key should be passed as an argument (or maybe KeyProvider type arg).
 			BitcoinVault::active_epoch_key()
 				.ok_or(AddressDerivationError::MissingBitcoinVault)?
 				.key
 				.current,
 			channel_id,
-		);
-
-		Ok((channel_state.script_pubkey(), channel_state))
+		)
+		.script_pubkey())
 	}
 }
 

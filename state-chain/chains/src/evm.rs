@@ -534,58 +534,6 @@ pub enum DeploymentStatus {
 	Deployed,
 }
 
-impl ChannelLifecycleHooks for DeploymentStatus {
-	/// Addresses that are Pending cannot be fetched.
-	fn can_fetch(&self) -> bool {
-		*self != Self::Pending
-	}
-
-	/// Undeployed addresses need to be marked as Pending until the fetch is made.
-	fn on_fetch_scheduled(&mut self) -> bool {
-		match self {
-			Self::Undeployed => {
-				*self = Self::Pending;
-				true
-			},
-			_ => false,
-		}
-	}
-
-	/// A completed fetch should be in either the pending or deployed state. Confirmation of a fetch
-	/// implies that the address is now deployed.
-	fn on_fetch_completed(&mut self) -> bool {
-		match self {
-			Self::Pending => {
-				*self = Self::Deployed;
-				true
-			},
-			Self::Deployed => false,
-			Self::Undeployed => {
-				#[cfg(debug_assertions)]
-				{
-					panic!("Cannot finalize fetch to an undeployed address")
-				}
-				#[cfg(not(debug_assertions))]
-				{
-					log::error!("Cannot finalize fetch to an undeployed address");
-					*self = Self::Deployed;
-					false
-				}
-			},
-		}
-	}
-
-	/// Undeployed Addresses should not be recycled.
-	/// Other address types *can* be recycled.
-	fn maybe_recycle(self) -> Option<Self> {
-		if self == Self::Undeployed {
-			None
-		} else {
-			Some(Self::Deployed)
-		}
-	}
-}
-
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EvmFetchId {
 	/// If the contract is not yet deployed, we need to deploy and fetch using the channel id.

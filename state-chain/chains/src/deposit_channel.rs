@@ -1,55 +1,52 @@
 use super::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct DepositChannel<C: Chain> {
-	// TODO: also add pending deposits into this as a Deque.
-	pub channel_id: ChannelId,
-	pub address: C::ChainAccount,
-	pub asset: C::ChainAsset,
-	pub state: C::DepositChannelState,
-}
+pub trait DepositChannel<C: Chain>
+where
+	Self: Sized,
+{
+	type Deposit: Member + Parameter;
 
-impl<C: Chain<DepositFetchId = ChannelId>> From<&DepositChannel<C>> for ChannelId {
-	fn from(channel: &DepositChannel<C>) -> Self {
-		channel.channel_id
-	}
-}
-
-/// Defines the interface for chain-specific aspects of address management.
-pub trait ChannelLifecycleHooks: Sized {
-	/// Returns true if fetches can be made from the channel in the current state.
-	fn can_fetch(&self) -> bool {
-		true
-	}
-
-	/// Called when a fetch is scheduled for broadcast. Should return true if self was mutated.
-	fn on_fetch_scheduled(&mut self) -> bool {
-		false
-	}
-
-	/// Called when a fetch is completed. Should return true if self was mutated.
-	fn on_fetch_completed(&mut self) -> bool {
-		false
-	}
-
-	/// Returns Some(_) if the address can be re-used, otherwise None and the address is discarded.
-	fn maybe_recycle(self) -> Option<Self> {
-		None
-	}
-}
-
-impl ChannelLifecycleHooks for () {}
-
-impl<C: Chain> DepositChannel<C> {
-	pub fn generate_new<A: AddressDerivationApi<C>>(
+	/// Generates a new deposit channel.
+	fn generate_new<E: ChainflipEnvironment>(
 		channel_id: ChannelId,
 		asset: C::ChainAsset,
-	) -> Result<Self, AddressDerivationError> {
-		let (address, state) = A::generate_address_and_state(asset, channel_id)?;
-		Ok(Self { channel_id, address, asset, state })
+	) -> Result<Self, DispatchError>;
+
+	/// The channel id that was used to generate this deposit channel.
+	fn channel_id(&self) -> ChannelId;
+
+	/// If the channel can only be used for a specific asset, returns that asset, otherwise returns
+	/// None to signify that the channel is asset-agnostic.
+	fn asset(&self) -> Option<C::ChainAsset> {
+		None
 	}
 
-	pub fn fetch_id(&self) -> C::DepositFetchId {
-		self.into()
+	/// Returns the address associated with the deposit channel.
+	fn address(&self) -> &C::ChainAccount;
+
+	/// Returns the chain-specific fetch parameters for a specific deposit.
+	fn fetch_params(&self, deposit: Self::Deposit) -> C::FetchParams;
+}
+
+impl<C: Chain> DepositChannel<C> for () {
+	type Deposit = ();
+
+	fn generate_new<E: ChainflipEnvironment>(
+		_channel_id: ChannelId,
+		_asset: <C as Chain>::ChainAsset,
+	) -> Result<Self, AddressDerivationError> {
+		Err(DispatchError::Other("Unimplemented."))
+	}
+
+	fn channel_id(&self) -> ChannelId {
+		unimplemented!()
+	}
+
+	fn address(&self) -> &<C as Chain>::ChainAccount {
+		unimplemented!()
+	}
+
+	fn fetch_params(&self, _deposit: Self::Deposit) -> <C as Chain>::FetchParams {
+		unimplemented!()
 	}
 }

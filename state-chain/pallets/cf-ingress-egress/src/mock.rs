@@ -24,7 +24,7 @@ use cf_traits::{
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
-	DepositApi, DepositHandler, NetworkEnvironmentProvider,
+	DepositApi, NetworkEnvironmentProvider,
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
@@ -70,9 +70,6 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
-pub struct MockDepositHandler;
-impl DepositHandler<Ethereum> for MockDepositHandler {}
-
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
 
@@ -84,16 +81,6 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, AddressDerivationError> {
 		Ok([channel_id as u8; 20].into())
-	}
-
-	fn generate_address_and_state(
-		source_asset: <Ethereum as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<
-		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
-		AddressDerivationError,
-	> {
-		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
 	}
 }
 
@@ -116,7 +103,7 @@ impl crate::Config for Test {
 		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
-	type DepositHandler = MockDepositHandler;
+	type DepositTracker = MockDeposit;
 	type CcmHandler = MockCcmHandler;
 	type ChainTracking = cf_traits::mocks::chain_tracking::ChainTracking<Ethereum>;
 	type WeightInfo = ();

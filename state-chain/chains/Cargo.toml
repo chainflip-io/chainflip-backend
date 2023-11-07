@@ -35,6 +35,9 @@ serde = { version = '1.0.126', default-features = false, features = [
 log = { version = '0.4.16', default-features = false }
 itertools = { version = '0.11.0', default-features = false }
 arrayref = '0.3.6'
+enum-map = '2.6'
+indexmap = { version = '2.0', default-features = false }
+fnv = { version = "1.0.3", default-features = false }
 
 # Substrate packages
 ss58-registry = { version = '1.41', optional = true }
@@ -49,6 +52,7 @@ sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfl
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
 
 [dev-dependencies]
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
 cf-test-utilities = { path = '../test-utilities' }
 rand = { version = '0.8.4' }
@@ -64,9 +68,11 @@ std = [
   'ethabi/full-serde',
   'ethereum/std',
   'ethereum-types/std',
+  'fnv/std',
   'frame-support/std',
   'hex/std',
   'hex/serde',
+  'indexmap/std',
   'libsecp256k1/std',
   'log/std',
   'rlp/std',

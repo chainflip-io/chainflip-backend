@@ -1,17 +1,15 @@
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
-pub mod deposit_tracker;
+mod deposit_tracker;
 pub use deposit_tracker::*;
 pub mod utxo_selection;
 
 extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
-use self::deposit_address::DepositAddress;
-use crate::{
-	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
-};
+use self::deposit_address::BitcoinDepositChannel;
+use crate::{Chain, ChainCrypto, FeeEstimationApi, FeeRefundCalculator, GetAmount, RetryPolicy};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -237,9 +235,9 @@ impl Chain for Bitcoin {
 	type ChainAsset = assets::btc::Asset;
 	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
-	type DepositFetchId = BitcoinFetchId;
-	type DepositChannelState = DepositAddress;
+	type FetchParams = BitcoinFetchParams;
 	type DepositDetails = UtxoId;
+	type DepositChannel = BitcoinDepositChannel;
 	type DepositTracker = BitcoinDepositTracker;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
@@ -359,6 +357,7 @@ fn verify_single_threshold_signature(
 	Encode,
 	Decode,
 	TypeInfo,
+	Copy,
 	Clone,
 	RuntimeDebug,
 	PartialEq,
@@ -375,25 +374,15 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
-	fn from(channel: &DepositChannel<Bitcoin>) -> Self {
-		BitcoinFetchId(channel.channel_id)
-	}
-}
-
-const INTERNAL_PUBKEY: &[u8] =
-	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
 	pub amount: u64,
 	pub id: UtxoId,
-	pub deposit_address: DepositAddress,
 }
 
 impl PartialOrd for Utxo {
@@ -411,13 +400,17 @@ impl Ord for Utxo {
 	}
 }
 
-pub trait GetUtxoAmount {
-	fn amount(&self) -> u64;
-}
-impl GetUtxoAmount for Utxo {
+impl GetAmount<u64> for Utxo {
 	fn amount(&self) -> u64 {
 		self.amount
 	}
+}
+
+/// Contains all the information required to spend an unspent Utxo.
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct BitcoinFetchParams {
+	pub utxo: Utxo,
+	pub deposit_address: BitcoinDepositChannel,
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -712,7 +705,7 @@ impl ScriptPubkey {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
+	inputs: Vec<BitcoinFetchParams>,
 	pub outputs: Vec<BitcoinOutput>,
 	signatures: Vec<Signature>,
 	transaction_bytes: Vec<u8>,
@@ -725,13 +718,13 @@ const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
 fn extend_with_inputs_outputs(
 	bytes: &mut Vec<u8>,
-	inputs: &Vec<Utxo>,
+	inputs: &Vec<BitcoinFetchParams>,
 	outputs: &Vec<BitcoinOutput>,
 ) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.id.tx_id);
-		acc.extend(input.id.vout.to_le_bytes());
+		acc.extend(input.utxo.id.tx_id);
+		acc.extend(input.utxo.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
 		acc
@@ -743,7 +736,7 @@ fn extend_with_inputs_outputs(
 impl BitcoinTransaction {
 	pub fn create_new_unsigned(
 		agg_key: &AggKey,
-		inputs: Vec<Utxo>,
+		inputs: Vec<BitcoinFetchParams>,
 		outputs: Vec<BitcoinOutput>,
 	) -> Self {
 		const SEGWIT_MARKER: u8 = 0u8;
@@ -751,7 +744,7 @@ impl BitcoinTransaction {
 
 		let old_utxo_input_indices = (0..)
 			.zip(&inputs)
-			.filter_map(|(i, Utxo { deposit_address, .. })| {
+			.filter_map(|(i, BitcoinFetchParams { deposit_address, .. })| {
 				if deposit_address.pubkey_x == agg_key.current {
 					None
 				} else {
@@ -801,11 +794,7 @@ impl BitcoinTransaction {
 			transaction_bytes.push(NUM_WITNESSES);
 			transaction_bytes.push(LEN_SIGNATURE);
 			transaction_bytes.extend(self.signatures[i]);
-			transaction_bytes.extend(self.inputs[i].deposit_address.unlock_script_serialized());
-			// Length of tweaked pubkey + leaf version
-			transaction_bytes.push(33u8);
-			transaction_bytes.push(self.inputs[i].deposit_address.leaf_version());
-			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
+			self.inputs[i].deposit_address.btc_encode_to(&mut transaction_bytes);
 		}
 		transaction_bytes.extend(LOCKTIME);
 		transaction_bytes
@@ -828,8 +817,8 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.id.tx_id);
-					acc.extend(input.id.vout.to_le_bytes());
+					acc.extend(input.utxo.id.tx_id);
+					acc.extend(input.utxo.id.vout.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -838,7 +827,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.amount.to_le_bytes());
+					acc.extend(input.utxo.amount.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -1307,15 +1296,17 @@ mod test {
 			&BitcoinNetwork::Mainnet,
 		)
 		.unwrap();
-		let input = Utxo {
-			amount: 100010000,
-			id: UtxoId {
-				tx_id: hex_literal::hex!(
-					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-				),
-				vout: 1,
+		let input = BitcoinFetchParams {
+			utxo: Utxo {
+				amount: 100010000,
+				id: UtxoId {
+					tx_id: hex_literal::hex!(
+						"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
+					),
+					vout: 1,
+				},
 			},
-			deposit_address: DepositAddress::new(pubkey_x, 123),
+			deposit_address: BitcoinDepositChannel::new(pubkey_x, 123),
 		};
 		let agg_key = match sign_with {
 			PreviousOrCurrent::Previous => AggKey { previous: Some(pubkey_x), current: [0xcf; 32] },

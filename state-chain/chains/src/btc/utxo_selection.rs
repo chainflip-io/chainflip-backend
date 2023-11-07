@@ -1,6 +1,7 @@
-use sp_std::{vec, vec::Vec};
-
-use super::{ConsolidationParameters, GetUtxoAmount};
+use super::ConsolidationParameters;
+use crate::GetAmount;
+use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 /// The algorithm for the utxo selection works as follows: In a greedy approach it starts selecting
 /// utxos from the lowest value utxos in a sorted array. It keeps selecting the utxos until the
@@ -19,32 +20,26 @@ use super::{ConsolidationParameters, GetUtxoAmount};
 ///
 /// Note that on failure (when `None` is returned) this may still modify `available_utxos`, which
 /// is not a concern because the caller will ignore that value in that case.
-pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
-	available_utxos: &mut Vec<UTXO>,
-	fee_per_utxo: u64,
-	amount_to_be_spent: u64,
-) -> Option<(Vec<UTXO>, u64)> {
+pub fn select_utxos_from_pool<A: AtLeast32BitUnsigned + Copy, UTXO: GetAmount<A> + Ord + Clone>(
+	available_utxos: &mut BTreeSet<UTXO>,
+	fee_per_utxo: A,
+	amount_to_be_spent: A,
+) -> Option<(Vec<UTXO>, A)> {
 	if available_utxos.is_empty() {
 		return None
 	}
 
-	available_utxos.sort_by_key(|utxo| sp_std::cmp::Reverse(utxo.amount()));
+	let mut withdrawn = Vec::default();
+	let mut skipped = Vec::default();
+	let mut total = A::zero();
 
-	let mut selected_utxos: Vec<UTXO> = vec![];
-	let mut skipped_utxos: Vec<UTXO> = vec![];
-
-	let mut cumulative_amount = 0;
-
-	while cumulative_amount < amount_to_be_spent {
-		if let Some(current_smallest_utxo) = available_utxos.pop() {
-			if current_smallest_utxo.amount() > fee_per_utxo {
-				cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
-				selected_utxos.push(current_smallest_utxo.clone());
-			} else {
-				skipped_utxos.push(current_smallest_utxo.clone());
-			}
+	while total < amount_to_be_spent {
+		let utxo = available_utxos.pop_first()?;
+		if utxo.amount() < fee_per_utxo {
+			skipped.push(utxo);
 		} else {
-			return None
+			total += utxo.amount() - fee_per_utxo;
+			withdrawn.push(utxo);
 		}
 	}
 
@@ -52,10 +47,11 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
 		cumulative_amount += utxo.amount() - fee_per_utxo;
 		selected_utxos.push(utxo);
 	}
+	for utxo in skipped {
+		available_utxos.insert(utxo);
+	}
 
-	available_utxos.append(&mut skipped_utxos);
-
-	Some((selected_utxos, cumulative_amount))
+	Some((withdrawn, total))
 }
 
 pub fn select_utxos_for_consolidation<UTXO: GetUtxoAmount + Clone>(
@@ -84,17 +80,11 @@ pub fn select_utxos_for_consolidation<UTXO: GetUtxoAmount + Clone>(
 
 #[test]
 fn test_utxo_selection() {
-	use super::GetUtxoAmount;
+	use super::*;
 	use std::collections::BTreeSet;
 
 	#[allow(clippy::upper_case_acronyms)]
 	type UTXO = u64;
-
-	impl GetUtxoAmount for UTXO {
-		fn amount(&self) -> u64 {
-			*self
-		}
-	}
 
 	const FEE_PER_UTXO: u64 = 2;
 
@@ -107,7 +97,7 @@ fn test_utxo_selection() {
 		amount_to_be_spent: u64,
 		expected_selection: Option<(Vec<UTXO>, u64)>,
 	) {
-		let mut utxos = initial_available_utxos.to_owned();
+		let mut utxos = initial_available_utxos.iter().cloned().collect();
 		let selected = select_utxos_from_pool(&mut utxos, fee_per_utxo, amount_to_be_spent);
 
 		assert_eq!(selected, expected_selection);
@@ -132,7 +122,14 @@ fn test_utxo_selection() {
 	// cause the function to return no utxos. Note that we don't check
 	// remaining utxos in this case since it will be an "incorrect" value
 	// (which is OK since it will be ignored).
-	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 100000), None);
+	assert_eq!(
+		select_utxos_from_pool(
+			&mut available_utxos.clone().into_iter().collect(),
+			FEE_PER_UTXO,
+			100000
+		),
+		None
+	);
 
 	test_case(&available_utxos, FEE_PER_UTXO, 1, Some((vec![7, 15], 18)));
 

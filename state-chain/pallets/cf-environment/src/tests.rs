@@ -1,5 +1,5 @@
 #![cfg(test)]
-use cf_chains::btc::{api::UtxoSelectionType, deposit_address::DepositAddress, Utxo};
+use cf_chains::btc::{api::UtxoSelectionType, deposit_address::BitcoinDepositChannel, Utxo};
 use cf_traits::SafeMode;
 use frame_support::{assert_ok, traits::OriginTrait};
 
@@ -20,7 +20,7 @@ fn add_utxo_amount(amount: crate::BtcAmount) {
 	Environment::add_bitcoin_utxo_to_list(
 		amount,
 		Default::default(),
-		DepositAddress::new(Default::default(), Default::default()),
+		BitcoinDepositChannel::new(Default::default(), Default::default()),
 	);
 }
 
@@ -29,7 +29,7 @@ fn test_btc_utxo_selection() {
 	let utxo = |amount| Utxo {
 		amount,
 		id: Default::default(),
-		deposit_address: DepositAddress::new(Default::default(), Default::default()),
+		deposit_address: BitcoinDepositChannel::new(Default::default(), Default::default()),
 	};
 
 	new_test_ext().execute_with(|| {

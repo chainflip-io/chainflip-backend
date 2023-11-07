@@ -44,6 +44,7 @@ pub mod any {
 		EnumIter,
 		Serialize,
 		Deserialize,
+		enum_map::Enum,
 	)]
 	#[repr(u32)]
 	#[serde(rename_all = "UPPERCASE")]
@@ -125,8 +126,9 @@ macro_rules! chain_assets {
 
 			pub type Chain = $chain;
 
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, serde::Serialize, serde::Deserialize)]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo, MaxEncodedLen, Hash, serde::Serialize, serde::Deserialize, enum_map::Enum)]
 			pub enum Asset {
+				#[default]
 				$(
 					$asset,
 				)+

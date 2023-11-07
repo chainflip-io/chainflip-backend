@@ -12,8 +12,6 @@ use std::cell::RefCell;
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
-pub type MockEthereumChannelId = u128;
-
 #[derive(Clone)]
 pub enum ChainChoice {
 	Ethereum,
@@ -81,6 +79,35 @@ impl MockEthereumTransactionMetadata {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockEthereumDepositChannel {
+	channel_id: ChannelId,
+	asset: <MockEthereum as Chain>::ChainAsset,
+}
+
+impl DepositChannel<MockEthereum> for MockEthereumDepositChannel {
+	type Deposit = ();
+
+	fn generate_new<E: ChainflipEnvironment>(
+		channel_id: ChannelId,
+		asset: <MockEthereum as Chain>::ChainAsset,
+	) -> Result<Self, DispatchError> {
+		Ok(Self { channel_id, asset })
+	}
+
+	fn channel_id(&self) -> ChannelId {
+		self.channel_id
+	}
+
+	fn address(&self) -> &<MockEthereum as Chain>::ChainAccount {
+		&self.channel_id
+	}
+
+	fn fetch_params(&self, _deposit: Self::Deposit) -> <MockEthereum as Chain>::FetchParams {
+		self.channel_id
+	}
+}
+
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
@@ -88,7 +115,7 @@ impl Chain for MockEthereum {
 
 	type ChainCrypto = MockEthereumChainCrypto;
 
-	type DepositFetchId = MockEthereumChannelId;
+	type FetchParams = ChannelId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TrackedData = MockTrackedData;
@@ -96,9 +123,9 @@ impl Chain for MockEthereum {
 	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
-	type DepositTracker = SimpleDepositTracker<Self>;
+	type DepositChannel = MockEthereumDepositChannel;
+	type DepositTracker = NoDepositTracking<Self>;
 	type Transaction = MockTransaction;
 	type TransactionMetadata = MockEthereumTransactionMetadata;
 	type ReplayProtectionParams = ();
@@ -130,26 +157,6 @@ impl TryFrom<ForeignChainAddress> for u64 {
 impl From<u64> for ForeignChainAddress {
 	fn from(id: u64) -> Self {
 		ForeignChainAddress::Eth(H160::from_low_u64_be(id))
-	}
-}
-
-impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
-	fn from(channel: &DepositChannel<MockEthereum>) -> Self {
-		channel.channel_id as u128
-	}
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct MockLifecycleHooks;
-
-impl ChannelLifecycleHooks for MockLifecycleHooks {
-	// Default implementation is fine.
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValueExtended for MockEthereumChannelId {
-	fn benchmark_value_by_id(id: u8) -> Self {
-		id.into()
 	}
 }
 

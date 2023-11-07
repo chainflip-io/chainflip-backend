@@ -6,8 +6,8 @@ use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	deposit_address::DepositAddress,
-	AggKey, BitcoinFeeInfo, BitcoinFetchId, BitcoinOutput, BitcoinTrackedData,
+	deposit_address::BitcoinDepositChannel,
+	AggKey, BitcoinFeeInfo, BitcoinFetchId, BitcoinFetchParams, BitcoinOutput, BitcoinTrackedData,
 	BitcoinTransactionData, PreviousOrCurrent, ScriptPubkey, Signature, SigningPayload, Utxo,
 	UtxoId,
 };
@@ -67,11 +67,7 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 		BitcoinApi::BatchTransfer(BatchTransfer::new_unsigned(
 			&BenchmarkValue::benchmark_value(),
 			BenchmarkValue::benchmark_value(),
-			vec![Utxo {
-				amount: Default::default(),
-				id: BenchmarkValue::benchmark_value(),
-				deposit_address: DepositAddress::new(Default::default(), Default::default()),
-			}],
+			vec![BitcoinFetchParams::benchmark_value()],
 			vec![BitcoinOutput {
 				amount: Default::default(),
 				script_pubkey: BenchmarkValue::benchmark_value(),
@@ -92,14 +88,53 @@ impl BenchmarkValue for PreviousOrCurrent {
 	}
 }
 
+impl BenchmarkValueExtended for ScriptPubkey {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self::Taproot([id; 32])
+	}
+}
+
 impl BenchmarkValue for ScriptPubkey {
 	fn benchmark_value() -> Self {
 		Self::benchmark_value_by_id(0)
 	}
 }
 
-impl BenchmarkValueExtended for ScriptPubkey {
+impl BenchmarkValue for BitcoinDepositChannel {
+	fn benchmark_value() -> Self {
+		Self::benchmark_value_by_id(0)
+	}
+}
+
+impl BenchmarkValueExtended for BitcoinDepositChannel {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		Self::Taproot([id; 32])
+		BitcoinDepositChannel::new([id; 32], id as u32)
+	}
+}
+
+impl BenchmarkValueExtended for UtxoId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		UtxoId { tx_id: [id; 32], vout: id as u32 }
+	}
+}
+
+impl BenchmarkValueExtended for Utxo {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Utxo { id: UtxoId::benchmark_value_by_id(id), amount: 1_000 }
+	}
+}
+
+impl BenchmarkValueExtended for BitcoinFetchParams {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self {
+			utxo: Utxo::benchmark_value_by_id(id),
+			deposit_address: BitcoinDepositChannel::benchmark_value_by_id(id),
+		}
+	}
+}
+
+impl BenchmarkValue for BitcoinFetchParams {
+	fn benchmark_value() -> Self {
+		Self::benchmark_value_by_id(0)
 	}
 }

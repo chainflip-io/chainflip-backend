@@ -5,7 +5,7 @@ use crate::{
 
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ChannelId,
+	AssetAmount,
 };
 
 impl Chain for AnyChain {
@@ -20,9 +20,9 @@ impl Chain for AnyChain {
 	type ChainAsset = assets::any::Asset;
 	type ChainAccount = ForeignChainAddress;
 	type EpochStartData = ();
-	type DepositFetchId = ChannelId;
-	type DepositChannelState = ();
+	type FetchParams = ();
 	type DepositDetails = ();
+	type DepositChannel = ();
 	type DepositTracker = NoDepositTracking<Self>;
 	type Transaction = ();
 	type TransactionMetadata = ();

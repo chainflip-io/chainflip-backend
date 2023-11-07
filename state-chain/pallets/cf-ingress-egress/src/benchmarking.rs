@@ -60,7 +60,6 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		for i in 1..a {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
-			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
 			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 			let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
 			let mut channel = DepositChannelDetails::<T, I> {

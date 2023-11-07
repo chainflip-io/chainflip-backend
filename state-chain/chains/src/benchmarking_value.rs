@@ -139,3 +139,20 @@ impl BenchmarkValue for EvmTransactionMetadata {
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);
+
+macro_rules! impl_benchmark_value_extended_for_integer {
+	( $i:ty ) => {
+		#[cfg(feature = "runtime-benchmarks")]
+		impl BenchmarkValueExtended for $i {
+			fn benchmark_value_by_id(id: u8) -> Self {
+				id as Self
+			}
+		}
+	};
+}
+
+impl_benchmark_value_extended_for_integer!(u8);
+impl_benchmark_value_extended_for_integer!(u16);
+impl_benchmark_value_extended_for_integer!(u32);
+impl_benchmark_value_extended_for_integer!(u64);
+impl_benchmark_value_extended_for_integer!(u128);

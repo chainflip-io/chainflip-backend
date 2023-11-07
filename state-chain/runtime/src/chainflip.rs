@@ -9,10 +9,11 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
-	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
-	PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System, Validator, YEAR,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
+	BitcoinInstance, BitcoinVault, BlockNumber, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotVault, Runtime, RuntimeCall, System,
+	Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -40,7 +41,7 @@ use cf_chains::{
 	},
 	AnyChain, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
-	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
+	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder, WithdrawalAmount,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
 use cf_traits::{
@@ -59,6 +60,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
+use pallet_cf_ingress_egress::TargetChainDepositTracker;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -349,9 +351,11 @@ impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
 	fn replay_protection(_params: ()) {}
 }
 
-impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEnvironment {
-	fn lookup(utxo_selection_type: UtxoSelectionType) -> Option<SelectedUtxosAndChangeAmount> {
-		Environment::select_and_take_bitcoin_utxos(utxo_selection_type)
+impl ChainEnvironment<(), Vec<Utxo>> for BtcEnvironment {
+	fn lookup(utxo_selection_type: UtxoSelectionType) -> Vec<Utxo> {
+		TargetChainDepositTracker::<Runtime, BitcoinInstance>::mutate(|deposit_tracker| {
+			deposit_tracker.withdraw_all()
+		})
 	}
 }
 
@@ -544,11 +548,11 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				let output_len = outputs.len();
 				let vout = output_len - 1;
 				let change_output = outputs.get(vout).unwrap();
-				Environment::add_bitcoin_change_utxo(
-					change_output.amount,
-					UtxoId { tx_id, vout: vout as u32 },
-					batch_transfer.change_utxo_key,
-				);
+				// Environment::add_bitcoin_change_utxo(
+				// 	change_output.amount,
+				// 	UtxoId { tx_id, vout: vout as u32 },
+				// 	batch_transfer.change_utxo_key,
+				// );
 			},
 			_ => unreachable!(),
 		}

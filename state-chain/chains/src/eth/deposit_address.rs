@@ -1,8 +1,19 @@
-use super::Address as EthereumAddress;
-use cf_primitives::ChannelId;
+use super::{Address as EthereumAddress, DeploymentStatus, EvmFetchId};
+use crate::{ChainflipEnvironment, DepositChannel};
+use cf_primitives::{
+	chains::{assets::eth::Asset, Ethereum},
+	ChannelId,
+};
 use cf_utilities::SliceToArray;
+use codec::{Decode, Encode};
+use core::panic;
 use ethereum_types::H160;
-use frame_support::sp_runtime::traits::{Hash, Keccak256};
+use frame_support::sp_runtime::{
+	traits::{Hash, Keccak256, StaticLookup},
+	DispatchError,
+};
+use scale_info::TypeInfo;
+use sp_core::Get;
 use sp_std::{mem::size_of, vec::Vec};
 
 // From master branch of chainflip-eth-contracts
@@ -49,6 +60,85 @@ const DEPOSIT_CONTRACT_BYTECODE: [u8; 1114] = hex_literal::hex!(
 const PREFIX_BYTE: u8 = 0xff;
 
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = H160([0xEE; 20]);
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct EthereumDepositChannel {
+	pub channel_id: ChannelId,
+	pub address: EthereumAddress,
+	pub asset: Asset,
+	pub deployment_status: DeploymentStatus,
+}
+
+impl core::hash::Hash for EthereumDepositChannel {
+	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+		// Only hash the channel id, since every channel should be uniquely defined by its channel
+		// id.
+		self.channel_id.hash(state);
+	}
+}
+
+impl DepositChannel<Ethereum> for EthereumDepositChannel {
+	type Deposit = ();
+
+	fn generate_new<E: ChainflipEnvironment>(
+		channel_id: ChannelId,
+		asset: <Ethereum as crate::Chain>::ChainAsset,
+	) -> Result<Self, DispatchError> {
+		Ok(Self {
+			channel_id,
+			address: get_create_2_address(
+				<E as Get<EthereumAddress>>::get(),
+				match asset {
+					Asset::Eth => None,
+					token => Some(<E as StaticLookup>::lookup(token).map_err(|_lookup_error| {
+						DispatchError::Other(
+							"Failed to generate new deposit channel: unsupported asset.",
+						)
+					})?),
+				},
+				channel_id,
+			),
+			asset,
+			deployment_status: DeploymentStatus::Undeployed,
+		})
+	}
+
+	fn channel_id(&self) -> ChannelId {
+		self.channel_id
+	}
+
+	/// Before deployment, Ethereum deposit channels can only be used for a specific asset.
+	fn asset(&self) -> Option<<Ethereum as crate::Chain>::ChainAsset> {
+		match self.deployment_status {
+			DeploymentStatus::Undeployed => Some(self.asset),
+			_ => None,
+		}
+	}
+
+	fn address(&self) -> &EthereumAddress {
+		&self.address
+	}
+
+	fn fetch_params(&self, _: ()) -> <Ethereum as crate::Chain>::FetchParams {
+		match self.deployment_status {
+			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(self.channel_id),
+			DeploymentStatus::Pending => {
+				if cfg!(debug_assertions) {
+					panic!("Cannot fetch from a pending address")
+				} else {
+					// Defensively return NotRequired to avoid trying to fetch from a pending
+					// deployment. This should never happen.
+					log::error!("Cannot fetch from a pending address");
+					EvmFetchId::NotRequired
+				}
+			},
+			DeploymentStatus::Deployed => match self.asset {
+				Asset::Eth => EvmFetchId::NotRequired,
+				_erc20 => EvmFetchId::Fetch(self.address),
+			},
+		}
+	}
+}
 
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and channel id.
 /// @param vault_address The address of the Ethereum Vault

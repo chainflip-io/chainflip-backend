@@ -1,62 +1,52 @@
 use super::*;
-use frame_support::{
-	sp_runtime::traits::{Saturating, Zero},
-	DefaultNoBound,
-};
+use frame_support::{sp_runtime::traits::Zero, DefaultNoBound};
 use sp_std::marker::PhantomData;
+
+pub trait GetAmount<A> {
+	fn amount(&self) -> A;
+}
+
+impl<A: AtLeast32BitUnsigned + Copy> GetAmount<A> for A {
+	fn amount(&self) -> A {
+		*self
+	}
+}
 
 pub trait DepositTracker<C: Chain> {
 	fn total(&self) -> C::ChainAmount;
+
 	fn register_deposit(
 		&mut self,
 		amount: C::ChainAmount,
 		deposit_details: &C::DepositDetails,
-		deposit_channel: &DepositChannel<C>,
+		deposit_channel: &C::DepositChannel,
 	);
-	fn register_transfer(&mut self, amount: C::ChainAmount);
-	fn mark_as_fetched(&mut self, amount: C::ChainAmount);
-}
 
-#[derive(
-	CloneNoBound,
-	DefaultNoBound,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-)]
-#[scale_info(skip_type_params(C))]
-pub struct SimpleDepositTracker<C: Chain> {
-	pub unfetched: C::ChainAmount,
-	pub fetched: C::ChainAmount,
-}
-
-impl<C: Chain> DepositTracker<C> for SimpleDepositTracker<C> {
-	fn total(&self) -> C::ChainAmount {
-		self.unfetched.saturating_add(self.fetched)
-	}
-
-	fn register_deposit(
+	fn withdraw_all(
 		&mut self,
-		amount: C::ChainAmount,
-		_: &C::DepositDetails,
-		_: &DepositChannel<C>,
-	) {
-		self.unfetched.saturating_accrue(amount);
+		tracked_data: &C::TrackedData,
+	) -> (Vec<C::FetchParams>, C::ChainAmount);
+
+	/// Some(vec![]) means that we don't need to fetch anything - we already have enough fetched
+	/// funds to cover the withdrawal. `None` means that we can't cover the withdrawal. In this
+	/// case, the update to the deposit tracker should *not* be persisted to storage.
+	///
+	/// The returned amount is the total net spendable amount, ie. fees are already deducted.
+	fn withdraw_at_least(
+		&mut self,
+		amount: <C as Chain>::ChainAmount,
+		tracked_data: &C::TrackedData,
+	) -> Option<(Vec<C::FetchParams>, <C as Chain>::ChainAmount)>;
+
+	/// Called when a channel is closed.
+	///
+	/// Returns Some(_) if the address can be re-used, otherwise None.
+	fn maybe_recycle_channel(&mut self, _channel: C::DepositChannel) -> Option<C::DepositChannel> {
+		None
 	}
 
-	fn register_transfer(&mut self, amount: C::ChainAmount) {
-		self.fetched.saturating_reduce(amount);
-	}
-
-	fn mark_as_fetched(&mut self, amount: C::ChainAmount) {
-		let amount = amount.min(self.unfetched);
-		self.unfetched -= amount;
-		self.fetched.saturating_accrue(amount);
-	}
+	/// Called when a fetch is completed.
+	fn on_fetch_completed(&mut self, _channel: &C::DepositChannel) {}
 }
 
 #[derive(
@@ -81,11 +71,22 @@ impl<C: Chain> DepositTracker<C> for NoDepositTracking<C> {
 		&mut self,
 		_: C::ChainAmount,
 		_: &C::DepositDetails,
-		_: &DepositChannel<C>,
+		_: &C::DepositChannel,
 	) {
 	}
 
-	fn register_transfer(&mut self, _: C::ChainAmount) {}
+	fn withdraw_all(
+		&mut self,
+		_: &C::TrackedData,
+	) -> (Vec<C::FetchParams>, <C as Chain>::ChainAmount) {
+		(vec![], self.total())
+	}
 
-	fn mark_as_fetched(&mut self, _: C::ChainAmount) {}
+	fn withdraw_at_least(
+		&mut self,
+		_: C::ChainAmount,
+		_: &C::TrackedData,
+	) -> Option<(Vec<C::FetchParams>, <C as Chain>::ChainAmount)> {
+		None
+	}
 }

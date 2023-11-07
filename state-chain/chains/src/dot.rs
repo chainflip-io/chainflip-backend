@@ -11,6 +11,10 @@ use cf_utilities::SliceToArray;
 #[cfg(feature = "std")]
 pub use serializable_address::*;
 
+mod deposit_address;
+mod deposit_tracker;
+pub use deposit_tracker::*;
+
 pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
@@ -25,6 +29,8 @@ use frame_support::sp_runtime::{
 };
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
+
+use self::deposit_address::PolkadotDepositChannel;
 
 #[cfg_attr(feature = "std", derive(Hash))]
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -152,7 +158,6 @@ pub struct RuntimeVersion {
 }
 
 pub type PolkadotSpecVersion = u32;
-pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
@@ -327,10 +332,10 @@ impl Chain for Polkadot {
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
-	type DepositFetchId = PolkadotChannelId;
-	type DepositChannelState = PolkadotChannelState;
+	type FetchParams = ChannelId;
 	type DepositDetails = ();
-	type DepositTracker = SimpleDepositTracker<Self>;
+	type DepositChannel = PolkadotDepositChannel;
+	type DepositTracker = PolkadotDepositTracker;
 	type Transaction = PolkadotTransactionData;
 	type TransactionMetadata = ();
 	type ReplayProtectionParams = ResetProxyAccountNonce;
@@ -338,16 +343,6 @@ impl Chain for Polkadot {
 }
 
 pub type ResetProxyAccountNonce = bool;
-
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
-pub struct PolkadotChannelState;
-
-/// Polkadot channels should always be recycled because we are limited to u16::MAX channels.
-impl ChannelLifecycleHooks for PolkadotChannelState {
-	fn maybe_recycle(self) -> Option<Self> {
-		Some(self)
-	}
-}
 
 pub struct PolkadotCrypto;
 impl ChainCrypto for PolkadotCrypto {
@@ -987,13 +982,6 @@ pub struct PolkadotReplayProtection {
 	pub genesis_hash: PolkadotHash,
 	pub signer: PolkadotAccountId,
 	pub nonce: PolkadotIndex,
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValueExtended for PolkadotChannelId {
-	fn benchmark_value_by_id(id: u8) -> Self {
-		Self::from(id)
-	}
 }
 
 #[cfg(debug_assertions)]
