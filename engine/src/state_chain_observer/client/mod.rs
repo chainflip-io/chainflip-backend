@@ -212,7 +212,7 @@ async fn create_finalized_block_subscription<
 				"sparse_finalized_block_header_stream unexpectedly ended"
 			)))));
 
-		let mut sparse_finalized_block_header_stream = Box::pin(
+		let mut finalized_block_header_stream = Box::pin(
 			inject_intervening_headers(
 				sparse_finalized_block_header_stream,
 				base_rpc_client.clone(),
@@ -221,9 +221,9 @@ async fn create_finalized_block_subscription<
 		);
 
 		let latest_finalized_header: state_chain_runtime::Header =
-			sparse_finalized_block_header_stream.next().await.unwrap()?;
+			finalized_block_header_stream.next().await.unwrap()?;
 
-		sparse_finalized_block_header_stream
+		finalized_block_header_stream
 			.make_try_cached(latest_finalized_header, |header| header.clone())
 	};
 
@@ -418,7 +418,6 @@ async fn inject_intervening_headers<
 	let stream_rest = utilities::assert_stream_send(
 		sparse_block_header_stream
 			.and_then({
-				// 1
 				let mut latest_finalized_header = latest_finalized_header.clone();
 				move |next_finalized_header| {
 					assert!(
@@ -432,7 +431,6 @@ async fn inject_intervening_headers<
 					);
 
 					let base_rpc_client = base_rpc_client.clone();
-					// 2
 					async move {
 						let base_rpc_client = &base_rpc_client;
 						let intervening_headers: Vec<_> = futures::stream::iter(
@@ -451,7 +449,6 @@ async fn inject_intervening_headers<
 						.try_collect()
 						.await?;
 
-						// 3
 						for (block_hash, next_block_header) in Iterator::zip(
 							std::iter::once(&prev_finalized_header.hash())
 								.chain(intervening_headers.iter().map(|(hash, _header)| hash)),
@@ -463,7 +460,6 @@ async fn inject_intervening_headers<
 							assert_eq!(*block_hash, next_block_header.parent_hash);
 						}
 
-						// 4
 						Result::<_, anyhow::Error>::Ok(futures::stream::iter(
 							intervening_headers
 								.into_iter()
