@@ -201,8 +201,8 @@ async function testRangeOrder() {
   let matchUpdate = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateRangeOrder.forEach((order: any) => {
-    const liquidity = order.size_change.increase?.liquidity ?? 0;
-    if (liquidity > 0 && order.liquidity_total > 0) {
+    const liquidity_increase = order.size_change?.increase?.liquidity ?? 0;
+    if (liquidity_increase > 0 && order.liquidity_total > 0) {
       matchUpdate = true;
     }
   });
@@ -221,8 +221,9 @@ async function testRangeOrder() {
   let matchBurn = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnRangeOrder.forEach((order: any) => {
-    if (order.size_change.decrease.liquidity > 0 && order.liquidity_total === 0) {
-      matchBurn = true;
+    const liquidity_decrease = order.size_change?.decrease?.liquidity ?? 0;
+    if (liquidity_decrease > 0 && order.liquidity_total === 0) {
+      matchUpdate = true;
     }
   });
   assert.strictEqual(matchBurn, true, `Expected burn of range order to decrease liquidity to 0`);
