@@ -1345,49 +1345,10 @@ impl<T: Config> Pallet<T> {
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
 	) -> DispatchResult {
-		// Self::try_mutate_enabled_pool(sell_asset, buy_asset, |asset_pair, pool| {
-		// 	let tick = match (
-		// 		pool.limit_orders_cache[asset_pair.base_side]
-		// 			.get(lp)
-		// 			.and_then(|limit_orders| limit_orders.get(&id))
-		// 			.cloned(),
-		// 		option_tick,
-		// 	) {
-		// 		(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
-		// 		(None, Some(tick)) => Ok(tick),
-		// 		(Some(previous_tick), option_new_tick) => {
-		// 			Self::inner_update_limit_order(
-		// 				pool,
-		// 				lp,
-		// 				asset_pair,
-		// 				id,
-		// 				previous_tick,
-		// 				IncreaseOrDecrease::Decrease,
-		// 				cf_amm::common::Amount::MAX,
-		// 				/* allow noop */ false,
-		// 			)?;
-
-		// 			Ok(option_new_tick.unwrap_or(previous_tick))
-		// 		},
-		// 	}?;
-		// 	Self::inner_update_limit_order(
-		// 		pool,
-		// 		lp,
-		// 		asset_pair,
-		// 		id,
-		// 		tick,
-		// 		IncreaseOrDecrease::Increase,
-		// 		sell_amount.into(),
-		// 		/* allow noop */ true,
-		// 	)?;
-
-		// 	Ok(())
-		// })
-
-		Self::try_mutate_order(&lp, sell_asset, buy_asset, |asset_pair, pool| {
+		Self::try_mutate_order(lp, sell_asset, buy_asset, |asset_pair, pool| {
 			let tick = match (
 				pool.limit_orders_cache[asset_pair.base_side]
-					.get(&lp)
+					.get(lp)
 					.and_then(|limit_orders| limit_orders.get(&id))
 					.cloned(),
 				option_tick,
@@ -1397,7 +1358,7 @@ impl<T: Config> Pallet<T> {
 				(Some(previous_tick), option_new_tick) => {
 					Self::inner_update_limit_order(
 						pool,
-						&lp,
+						lp,
 						asset_pair,
 						id,
 						previous_tick,
@@ -1410,7 +1371,7 @@ impl<T: Config> Pallet<T> {
 			}?;
 			Self::inner_update_limit_order(
 				pool,
-				&lp,
+				lp,
 				asset_pair,
 				id,
 				tick,
