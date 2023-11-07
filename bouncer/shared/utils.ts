@@ -602,21 +602,18 @@ type SwapRate = {
   output: string;
 };
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
-  function parseAsset(asset: Asset) {
-    return asset.charAt(0) + asset.slice(1).toLowerCase();
-  }
   const chainflipApi = await getChainflipApi();
 
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals[from]);
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
-    parseAsset(from),
-    parseAsset(to),
+    from,
+    to,
     Number(fineFromAmount).toString(16),
   )) as SwapRate;
 
-  const finePrice = parseInt(hexPrice.output);
-  const price = fineAmountToAmount(finePrice.toString(), assetDecimals[to]);
+  const finePriceOutput = parseInt(hexPrice.output);
+  const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals[to]);
 
-  return price;
+  return outputPrice;
 }
