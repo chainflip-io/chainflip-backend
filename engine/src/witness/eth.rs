@@ -69,28 +69,28 @@ where
 {
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-            state_chain_client.latest_finalized_hash(),
+            state_chain_client.latest_finalized_block().hash,
         )
         .await
         .context("Failed to get StateChainGateway address from SC")?;
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.context("Failed to get KeyManager address from SC")?;
 
 	let vault_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.context("Failed to get Vault contract address from SC")?;
 
 	let address_checker_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
@@ -98,7 +98,7 @@ where
 	let supported_erc20_tokens: HashMap<cf_primitives::chains::assets::eth::Asset, H160> =
 		state_chain_client
 			.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
-				state_chain_client.latest_finalized_hash(),
+				state_chain_client.latest_finalized_block().hash,
 			)
 			.await
 			.context("Failed to fetch Ethereum supported assets")?;
