@@ -418,7 +418,6 @@ async fn inject_intervening_headers<
 	let stream_rest = utilities::assert_stream_send(
 		sparse_block_stream
 			.and_then({
-				// 1
 				let mut latest_finalized_block = latest_finalized_block;
 				move |next_finalized_block| {
 					assert!(
@@ -449,7 +448,6 @@ async fn inject_intervening_headers<
 						.try_collect()
 						.await?;
 
-						// 3
 						for (previous_block, next_block) in Iterator::zip(
 							std::iter::once(&prev_finalized_block).chain(intervening_blocks.iter()),
 							intervening_blocks.iter().chain(std::iter::once(&next_finalized_block)),
