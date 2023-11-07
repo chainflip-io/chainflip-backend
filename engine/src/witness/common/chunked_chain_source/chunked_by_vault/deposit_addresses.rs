@@ -93,8 +93,9 @@ where
 
 	pub async fn new<
 		'env,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
+		const FINALIZED: bool,
 	>(
 		inner: Inner,
 		scope: &Scope<'env, anyhow::Error>,
@@ -277,7 +278,12 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn deposit_addresses<'env, StateChainStream, StateChainClient>(
+	pub async fn deposit_addresses<
+		'env,
+		StateChainStream,
+		StateChainClient,
+		const FINALIZED: bool,
+	>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
@@ -285,7 +291,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	) -> ChunkedByVaultBuilder<IngressAddresses<Inner>>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(
