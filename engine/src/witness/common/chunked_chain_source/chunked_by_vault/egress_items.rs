@@ -66,18 +66,15 @@ where
 		state_chain_client: Arc<StateChainClient>,
 	) -> Self {
 		let (sender, receiver) = tokio::sync::watch::channel(
-			Self::get_transaction_out_ids(
-				&*state_chain_client,
-				state_chain_stream.cache().block_hash,
-			)
-			.await,
+			Self::get_transaction_out_ids(&*state_chain_client, state_chain_stream.cache().hash)
+				.await,
 		);
 
 		scope.spawn(async move {
 			utilities::loop_select! {
 				let _ = sender.closed() => { break Ok(()) },
-				if let Some((_block_hash, _block_header)) = state_chain_stream.next() => {
-					let _result = sender.send(Self::get_transaction_out_ids(&*state_chain_client, _block_hash).await);
+				if let Some(block) = state_chain_stream.next() => {
+					let _result = sender.send(Self::get_transaction_out_ids(&*state_chain_client, block.hash).await);
 				} else break Ok(()),
 			}
 		});

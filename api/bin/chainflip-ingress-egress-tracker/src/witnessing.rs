@@ -34,25 +34,30 @@ struct EnvironmentParameters {
 async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> EnvironmentParameters {
 	use state_chain_runtime::Runtime;
 
-	let latest_hash = state_chain_client.latest_finalized_hash();
 	let eth_chain_id = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumChainId<Runtime>>(latest_hash)
+		.storage_value::<pallet_cf_environment::EthereumChainId<Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
 		.await
 		.expect("State Chain client connection failed");
 
 	let eth_vault_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumVaultAddress<Runtime>>(latest_hash)
+		.storage_value::<pallet_cf_environment::EthereumVaultAddress<Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
 		.await
 		.expect("Failed to get Vault contract address from SC");
 
 	let eth_address_checker_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<Runtime>>(latest_hash)
+		.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
 		.await
 		.expect("State Chain client connection failed");
 
 	let supported_erc20_tokens: HashMap<_, _> = state_chain_client
 		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect("Failed to fetch Ethereum supported assets");
@@ -70,14 +75,14 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 
 	let dot_genesis_hash = state_chain_client
 		.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
 	let btc_network = state_chain_client
 		.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_hash(),
+			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
 		.expect(STATE_CHAIN_CONNECTION)
