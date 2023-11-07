@@ -54,7 +54,10 @@ mod test_runtime_upgrade {
 	fn test() {
 		mock::new_test_ext().execute_with(|| {
 			// pre upgrade
-			old::NodeCFEVersion::<Test>::insert(ACCOUNT_ID, SemVer { major: 1, minor: 2, patch: 4 });
+			old::NodeCFEVersion::<Test>::insert(
+				ACCOUNT_ID,
+				SemVer { major: 1, minor: 2, patch: 4 },
+			);
 
 			#[cfg(feature = "try-runtime")]
 			let state = Migration::<Test>::pre_upgrade().unwrap();
