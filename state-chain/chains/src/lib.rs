@@ -187,13 +187,6 @@ pub trait ChainCrypto {
 		Self::UtxoChain::get()
 	}
 
-	/// Determines whether the chain crypto allows for optimistic activation of new aggregate keys.
-	///
-	/// By default, this is true for Utxo-based chains, false otherwise.
-	fn optimistic_activation() -> bool {
-		Self::UtxoChain::get()
-	}
-
 	/// Determines whether the chain crypto supports key handover.
 	///
 	/// By default, this is true for Utxo-based chains, false otherwise.

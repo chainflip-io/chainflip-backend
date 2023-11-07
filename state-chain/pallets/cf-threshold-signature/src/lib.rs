@@ -695,13 +695,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				(
 					match request_instruction.request_type {
 						RequestType::CurrentKey => T::KeyProvider::active_epoch_key()
-							.and_then(|EpochKey { key_state, key, epoch_index }| {
-								if key_state.is_available_for_request(request_id) {
-									Some((key, epoch_index))
-								} else {
-									None
-								}
-							})
+							.map(|EpochKey { key, epoch_index }| (key, epoch_index))
 							.ok_or(Event::<T, I>::CurrentKeyUnavailable {
 								request_id,
 								attempt_count,

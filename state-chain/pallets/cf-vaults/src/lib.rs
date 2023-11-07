@@ -9,9 +9,8 @@ use cf_primitives::{
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult,
-	Broadcaster, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState,
-	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
-	VaultStatus,
+	Broadcaster, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, SafeMode,
+	SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -140,9 +139,8 @@ pub enum PalletOffence {
 }
 
 #[derive(Encode, Decode, TypeInfo)]
-pub struct VaultEpochAndState {
+pub struct VaultEpoch {
 	pub epoch_index: EpochIndex,
-	pub key_state: KeyState,
 }
 
 #[frame_support::pallet]
@@ -358,8 +356,7 @@ pub mod pallet {
 	/// The epoch whose authorities control the current vault key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
-	pub type CurrentVaultEpochAndState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, VaultEpochAndState>;
+	pub type CurrentVaultEpoch<T: Config<I>, I: 'static = ()> = StorageValue<_, VaultEpoch>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -666,35 +663,6 @@ pub mod pallet {
 			)
 		}
 
-		/// A vault rotation event has been witnessed, we update the vault with the new key.
-		///
-		/// ## Events
-		///
-		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
-		///
-		/// ## Errors
-		///
-		/// - [NoActiveRotation](Error::NoActiveRotation)
-		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		///
-		/// ## Dependencies
-		///
-		/// - [Epoch Info Trait](EpochInfo)
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
-		pub fn vault_key_rotated(
-			origin: OriginFor<T>,
-			block_number: ChainBlockNumberFor<T, I>,
-
-			// This field is primarily required to ensure the witness calls are unique per
-			// transaction (on the external chain)
-			_tx_id: TransactionInIdFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-
-			Self::on_new_key_activated(block_number)
-		}
-
 		/// The vault's key has been updated externally, outside of the rotation
 		/// cycle. This is an unexpected event as far as our chain is concerned, and
 		/// the only thing we can do is to halt and wait for further governance
@@ -861,10 +829,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn set_vault_key_for_epoch(epoch_index: EpochIndex, vault: Vault<T::Chain>) {
 		Vaults::<T, I>::insert(epoch_index, vault);
-		CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-			epoch_index,
-			key_state: KeyState::Unlocked,
-		});
+		CurrentVaultEpoch::<T, I>::put(VaultEpoch { epoch_index });
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -973,12 +938,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
 	fn active_epoch_key(
 	) -> Option<EpochKey<<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey>> {
-		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
+		CurrentVaultEpoch::<T, I>::get().map(|current_vault_epoch_and_state| {
 			EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
-					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+					.expect("Key must exist if CurrentVaultEpoch exists since they get set at the same place: set_next_vault()").public_key,
 				epoch_index: current_vault_epoch_and_state.epoch_index,
-				key_state: current_vault_epoch_and_state.key_state,
 			}
 		})
 	}

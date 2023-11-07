@@ -363,40 +363,9 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyState {
-	Unlocked,
-	/// Key is only available to sign this request id.
-	Locked(ThresholdSignatureRequestId),
-}
-
-impl KeyState {
-	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
-		match self {
-			KeyState::Unlocked => true,
-			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
-		}
-	}
-
-	pub fn unlock(&mut self) {
-		*self = KeyState::Unlocked;
-	}
-
-	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
-		*self = KeyState::Locked(request_id);
-	}
-}
-
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
-	pub key_state: KeyState,
-}
-
-impl<Key> EpochKey<Key> {
-	pub fn lock_for_request(&mut self, request_id: ThresholdSignatureRequestId) {
-		self.key_state = KeyState::Locked(request_id);
-	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.

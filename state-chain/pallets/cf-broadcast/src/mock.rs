@@ -17,7 +17,7 @@ use cf_traits::{
 		block_height_provider::BlockHeightProvider, signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
-	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady,
+	AccountRoleRegistry, EpochKey, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -98,7 +98,6 @@ impl cf_traits::KeyProvider<MockEthereumChainCrypto> for MockKeyProvider {
 		Some(EpochKey {
 			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
 			epoch_index: Default::default(),
-			key_state: KeyState::Unlocked,
 		})
 	}
 }

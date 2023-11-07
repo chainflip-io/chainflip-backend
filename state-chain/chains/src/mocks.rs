@@ -16,7 +16,6 @@ pub type MockEthereumChannelId = u128;
 
 thread_local! {
 	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
-	static MOCK_OPTIMISTIC_ACTIVATION: RefCell<bool> = RefCell::new(false);
 	static MOCK_SIGN_WITH_SPECIFIC_KEY: RefCell<bool> = RefCell::new(false);
 	static MOCK_VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
@@ -32,20 +31,6 @@ impl MockKeyHandoverIsRequired {
 impl Get<bool> for MockKeyHandoverIsRequired {
 	fn get() -> bool {
 		MOCK_KEY_HANDOVER_IS_REQUIRED.with(|v| *v.borrow())
-	}
-}
-
-pub struct MockOptimisticActivation;
-
-impl MockOptimisticActivation {
-	pub fn set(value: bool) {
-		MOCK_OPTIMISTIC_ACTIVATION.with(|v| *v.borrow_mut() = value);
-	}
-}
-
-impl Get<bool> for MockOptimisticActivation {
-	fn get() -> bool {
-		MOCK_OPTIMISTIC_ACTIVATION.with(|v| *v.borrow())
 	}
 }
 
@@ -262,10 +247,6 @@ impl ChainCrypto for MockEthereumChainCrypto {
 
 	fn sign_with_specific_key() -> bool {
 		MockFixedKeySigningRequests::get()
-	}
-
-	fn optimistic_activation() -> bool {
-		MockOptimisticActivation::get()
 	}
 
 	fn key_handover_is_required() -> bool {

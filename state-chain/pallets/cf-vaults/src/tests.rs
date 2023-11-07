@@ -517,8 +517,6 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 }
 
 fn do_full_key_rotation() {
-	assert!(!MockOptimisticActivation::get(), "Test expects non-optimistic activation");
-
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 	<VaultsPallet as VaultRotator>::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
@@ -900,31 +898,6 @@ mod vault_key_rotation {
 	}
 
 	#[test]
-	fn non_optimistic_activation() {
-		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![
-				BTC_DUMMY_SIG,
-			]));
-
-			MockOptimisticActivation::set(false);
-			VaultsPallet::activate();
-
-			assert!(matches!(
-				PendingVaultRotation::<Test, _>::get().unwrap(),
-				VaultRotationStatus::AwaitingActivation { .. }
-			));
-
-			assert_ok!(VaultsPallet::vault_key_rotated(
-				RuntimeOrigin::root(),
-				ACTIVATION_BLOCK_NUMBER,
-				TX_HASH,
-			));
-		});
-
-		final_checks(ext, ACTIVATION_BLOCK_NUMBER);
-	}
-
-	#[test]
 	fn optimistic_activation() {
 		const HANDOVER_ACTIVATION_BLOCK: u64 = 420;
 		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
@@ -933,7 +906,6 @@ mod vault_key_rotation {
 			]));
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
-			MockOptimisticActivation::set(true);
 			VaultsPallet::activate();
 
 			// No need to call vault_key_rotated.

@@ -93,7 +93,7 @@ function price2tick(price: number): number {
 async function playLp(asset: string, price: number, liquidity: number) {
   const spread = 0.01 * price;
   const liquidityFine = liquidity * 1e6;
-  for (;;) {
+  for (; ;) {
     const offset = (price * (Math.random() - 0.5)) / 20;
     const buyTick = price2tick(price + offset + spread);
     const sellTick = price2tick(price + offset - spread);
@@ -133,7 +133,7 @@ async function playLp(asset: string, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpochAndState()).toJSON()!
+  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()!
     .epochIndex as number;
   const pubkey = (
     (await chainflip.query.bitcoinVault.vaults(epoch)).toJSON()!.publicKey.current as string
@@ -169,7 +169,7 @@ const swapAmount = new Map<Asset, string>([
 
 async function playSwapper() {
   const assets: Asset[] = ['ETH', 'BTC', 'USDC', 'FLIP', 'DOT'];
-  for (;;) {
+  for (; ;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
       .filter((x) => x !== src)

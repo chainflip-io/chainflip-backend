@@ -313,11 +313,6 @@ impl ChainCrypto for PolkadotCrypto {
 	fn sign_with_specific_key() -> bool {
 		true
 	}
-
-	/// We sign with a specific key, so we can optimistically activate the next one.
-	fn optimistic_activation() -> bool {
-		true
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
