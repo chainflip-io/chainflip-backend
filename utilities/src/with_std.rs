@@ -20,7 +20,7 @@ pub mod rpc;
 pub mod serde_helpers;
 
 mod cached_stream;
-pub use cached_stream::{CachedStream, MakeCachedStream};
+pub use cached_stream::{CachedStream, InnerCachedStream, MakeCachedStream};
 
 mod try_cached_stream;
 pub use try_cached_stream::{MakeTryCachedStream, TryCachedStream};

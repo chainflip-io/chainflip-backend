@@ -22,7 +22,7 @@ pub(super) async fn start<ProcessCall, ProcessingFut>(
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StateChainStreamApi<false> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,
 ) -> anyhow::Result<()>
 where

@@ -59,7 +59,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
-			let (state_chain_stream, state_chain_client) =
+			let (state_chain_stream, _, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,

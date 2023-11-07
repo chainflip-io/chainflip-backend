@@ -100,7 +100,7 @@ pub(super) async fn start(
 	settings: DepositTrackerSettings,
 	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
 ) -> anyhow::Result<()> {
-	let (state_chain_stream, state_chain_client) = {
+	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
 		state_chain_observer::client::StateChainClient::connect_without_account(
 			scope,
 			&settings.state_chain_ws_endpoint,
@@ -131,7 +131,7 @@ pub(super) async fn start(
 	eth::start(
 		scope,
 		state_chain_client.clone(),
-		state_chain_stream.clone(),
+		unfinalized_chain_stream.clone(),
 		settings.clone(),
 		env_params.clone(),
 		epoch_source.clone(),
@@ -145,7 +145,7 @@ pub(super) async fn start(
 		settings.clone(),
 		env_params.clone(),
 		state_chain_client.clone(),
-		state_chain_stream.clone(),
+		unfinalized_chain_stream.clone(),
 		epoch_source.clone(),
 	)
 	.await?;
@@ -156,7 +156,7 @@ pub(super) async fn start(
 		settings,
 		env_params,
 		state_chain_client,
-		state_chain_stream,
+		unfinalized_chain_stream,
 		epoch_source,
 	)
 	.await?;

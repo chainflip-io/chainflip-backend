@@ -4,7 +4,10 @@ use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
-	state_chain_observer::client::{extrinsic_api, StreamCache},
+	state_chain_observer::{
+		client::{extrinsic_api, finalized_stream::FinalizedCachedStream, StreamCache},
+		test_helpers::test_header,
+	},
 };
 use cf_chains::{
 	evm::{SchnorrVerificationComponents, Transaction},
@@ -16,11 +19,11 @@ use futures::{FutureExt, StreamExt};
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_broadcast::BroadcastAttemptId;
-use sp_runtime::{AccountId32, Digest};
+use sp_runtime::AccountId32;
 
 use sp_core::H256;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
+	AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall,
 	RuntimeEvent,
 };
 use utilities::MakeCachedStream;
@@ -37,16 +40,6 @@ use multisig::{
 use utilities::task_scope::task_scope;
 
 use super::crypto_compat::CryptoCompat;
-
-fn test_header(number: u32) -> Header {
-	Header {
-		number,
-		parent_hash: H256::default(),
-		state_root: H256::default(),
-		extrinsics_root: H256::default(),
-		digest: Digest { logs: Vec::new() },
-	}
-}
 
 const MOCK_ETH_TRANSACTION_OUT_ID: SchnorrVerificationComponents =
 	SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [1; 20] };
@@ -90,7 +83,7 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	let block_header = test_header(21);
+	let block_header = test_header(21, None);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()])
 		.map(|block_header| (block_header.hash(), block_header))
 		.make_cached(
@@ -146,7 +139,12 @@ async fn only_encodes_and_signs_when_specified() {
 	let mut eth_mock_clone = MockEthRetryRpcClient::new();
 	eth_mock_clone.expect_clone().return_once(|| eth_rpc_mock_broadcast);
 
-	start_sc_observer(state_chain_client, sc_block_stream, eth_mock_clone).await;
+	start_sc_observer(
+		state_chain_client,
+		FinalizedCachedStream::new(sc_block_stream),
+		eth_mock_clone,
+	)
+	.await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -514,7 +512,7 @@ async fn run_the_sc_observer() {
 		async {
 			let settings = Settings::new_test().unwrap();
 
-			let (sc_block_stream, state_chain_client) =
+			let (sc_block_stream, _, state_chain_client) =
 				crate::state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,

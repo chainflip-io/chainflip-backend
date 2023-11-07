@@ -56,8 +56,9 @@ where
 
 	pub async fn new<
 		'env,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
+		const FINALIZED: bool,
 	>(
 		inner: Inner,
 		scope: &Scope<'env, anyhow::Error>,
@@ -179,7 +180,7 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn egress_items<'env, StateChainStream, StateChainClient>(
+	pub async fn egress_items<'env, StateChainStream, StateChainClient, const FINALIZED: bool>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
@@ -187,7 +188,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	) -> ChunkedByVaultBuilder<EgressItems<Inner>>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(
