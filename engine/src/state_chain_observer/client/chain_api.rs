@@ -1,4 +1,4 @@
 pub trait ChainApi {
-	fn latest_finalized_hash(&self) -> state_chain_runtime::Hash;
-	fn latest_unfinalized_hash(&self) -> state_chain_runtime::Hash;
+	fn latest_finalized_block(&self) -> super::BlockInfo;
+	fn latest_unfinalized_block(&self) -> super::BlockInfo;
 }
