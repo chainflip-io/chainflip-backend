@@ -758,8 +758,6 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: SecretUrl) -> Result<()> {
 		bail!("Invalid scheme: `{scheme}` in endpoint: {url}");
 	}
 	if parsed_url.host().is_none() ||
-		parsed_url.username() != "" ||
-		parsed_url.password().is_some() ||
 		parsed_url.fragment().is_some() ||
 		parsed_url.cannot_be_a_base()
 	{
@@ -1071,8 +1069,16 @@ pub mod tests {
 			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
 				.into()
 		));
+		assert_ok!(validate_websocket_endpoint(
+			"wss://username:password@network.my_eth_node:20000".into()
+		));
+		assert_ok!(validate_websocket_endpoint("ws://username:@END_POINT:20000".into()));
+		assert_ok!(validate_websocket_endpoint("wss://:password@network.my_eth_node:20000".into()));
+		assert_ok!(validate_websocket_endpoint("ws://@network.my_eth_node:20000".into()));
+		assert_ok!(validate_websocket_endpoint("ws://:@network.my_eth_node:20000".into()));
 		assert!(validate_websocket_endpoint("https://wrong_scheme.com".into()).is_err());
 		assert!(validate_websocket_endpoint("".into()).is_err());
+		assert!(validate_websocket_endpoint("wss://username:password@:20000".into()).is_err());
 	}
 
 	#[test]
@@ -1084,8 +1090,16 @@ pub mod tests {
 		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>".into()));
 		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>".into()));
 		assert_ok!(validate_http_endpoint("http://network.my_eth_node".into()));
+		assert_ok!(validate_http_endpoint(
+			"https://username:password@network.my_eth_node:20000".into()
+		));
+		assert_ok!(validate_http_endpoint("http://username:@END_POINT:20000".into()));
+		assert_ok!(validate_http_endpoint("http://:password@network.my_eth_node:20000".into()));
+		assert_ok!(validate_http_endpoint("http://@network.my_eth_node:20000".into()));
+		assert_ok!(validate_http_endpoint("http://:@network.my_eth_node:20000".into()));
 		assert!(validate_http_endpoint("wss://wrong_scheme.com".into()).is_err());
 		assert!(validate_http_endpoint("".into()).is_err());
+		assert!(validate_http_endpoint("https://username:password@:20000".into()).is_err());
 	}
 
 	#[test]

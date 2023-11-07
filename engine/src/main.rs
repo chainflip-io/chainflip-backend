@@ -24,7 +24,6 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use tracing::info;
 use utilities::{metrics, task_scope::task_scope, CachedStream};
 
 lazy_static::lazy_static! {
@@ -33,71 +32,6 @@ lazy_static::lazy_static! {
 		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
 		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
 	};
-}
-
-async fn ensure_cfe_version_record_up_to_date(settings: &Settings) -> anyhow::Result<()> {
-	use subxt::{ext::sp_core::Pair, PolkadotConfig};
-	// We use subxt because it is capable of dynamic decoding of values, which is important because
-	// the SC Client might be incompatible with the current runtime version.
-	let subxt_client =
-		subxt::OnlineClient::<PolkadotConfig>::from_url(&settings.state_chain.ws_endpoint).await?;
-
-	let signer = subxt::tx::PairSigner::new(subxt::ext::sp_core::sr25519::Pair::from_seed(
-		&utilities::read_clean_and_decode_hex_str_file(
-			&settings.state_chain.signing_key_file,
-			"Signing Key",
-			|str| {
-				<[u8; 32]>::try_from(hex::decode(str)?).map_err(|e| {
-					anyhow::anyhow!("Failed to decode signing key: Wrong length. {e:?}")
-				})
-			},
-		)?,
-	));
-
-	let recorded_version = <SemVer as codec::Decode>::decode(
-		&mut subxt_client
-			.storage()
-			.at_latest()
-			.await?
-			.fetch_or_default(&subxt::storage::dynamic(
-				"Validator",
-				"NodeCFEVersion",
-				vec![signer.account_id()],
-			))
-			.await?
-			.encoded(),
-	)
-	.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
-
-	// Note that around CFE upgrade period, the less recent version might still be running (and
-	// can even be *the* "active" instance), so it is important that it doesn't downgrade the
-	// version record:
-	if CFE_VERSION.is_more_recent_than(recorded_version) {
-		info!("Updating CFE version record from {:?} to {:?}", recorded_version, *CFE_VERSION);
-
-		subxt_client
-			.tx()
-			.sign_and_submit_then_watch_default(
-				&subxt::dynamic::tx(
-					"Validator",
-					"cfe_version",
-					vec![(
-						"new_version",
-						vec![
-							("major", CFE_VERSION.major),
-							("minor", CFE_VERSION.minor),
-							("patch", CFE_VERSION.patch),
-						],
-					)],
-				),
-				&signer,
-			)
-			.await?
-			.wait_for_in_block()
-			.await?;
-	}
-
-	Ok(())
 }
 
 #[tokio::main]
@@ -122,8 +56,6 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 		async move {
 			let mut start_logger_server_fn =
 				Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
-
-			ensure_cfe_version_record_up_to_date(&settings).await?;
 
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
