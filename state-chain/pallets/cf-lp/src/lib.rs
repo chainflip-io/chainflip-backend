@@ -68,22 +68,22 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		// The user does not have enough fund.
+		/// The user does not have enough fund.
 		InsufficientBalance,
-		// The user has reached the maximum balance.
+		/// The user has reached the maximum balance.
 		BalanceOverflow,
-		// The caller is not authorized to modify the trading position.
+		/// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
-		// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
-		// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
+		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		// An liquidity refund address must be set by the user for the chain before
-		// deposit address can be requested.
+		/// An liquidity refund address must be set by the user for the chain before
+		/// deposit address can be requested.
 		NoLiquidityRefundAddressRegistered,
-		// Liquidity deposit is disabled due to Safe Mode.
+		/// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
-		// Withdrawals are disabled due to Safe Mode.
+		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 	}
 
@@ -208,11 +208,7 @@ pub mod pallet {
 
 				let destination_address_internal =
 					T::AddressConverter::try_from_encoded_address(destination_address.clone())
-						.map_err(|_| {
-							DispatchError::Other(
-								"Invalid Egress Address, cannot decode the address",
-							)
-						})?;
+						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
 
 				// Check validity of Chain and Asset
 				ensure!(
