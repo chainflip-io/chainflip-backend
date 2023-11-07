@@ -118,6 +118,11 @@ assets = [
     "etc/chainflip/sisyphos.chainspec.json",
     "644",
   ],
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
+  ],
 ]
 
 [package.metadata.deb.variants.perseverance]
@@ -128,15 +133,24 @@ assets = [
     "etc/chainflip/perseverance.chainspec.json",
     "644",
   ],
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
+  ],
 ]
 
 [package.metadata.deb.variants.berghain]
 maintainer-scripts = "package/berghain"
-# TODO: Uncomment during Berghain launch
-#assets = [
-#  [
-#    "chainspecs/berghain.chainspec.raw.json",
-#    "etc/chainflip/berghain.chainspec.json",
-#    "644",
-#  ],
-#]
+assets = [
+  [
+    "chainspecs/berghain.chainspec.raw.json",
+    "etc/chainflip/berghain.chainspec.json",
+    "644",
+  ],
+  [
+    "target/production/chainflip-node",
+    "usr/bin/",
+    "755",
+  ],
+]
