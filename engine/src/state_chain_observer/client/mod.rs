@@ -8,7 +8,7 @@ pub mod storage_api;
 use async_trait::async_trait;
 
 use anyhow::{anyhow, bail, Context, Result};
-use cf_primitives::{AccountRole, SemVer};
+use cf_primitives::{AccountRole, SemVer, Versions};
 use futures::{StreamExt, TryStreamExt};
 
 use futures_core::Stream;
@@ -693,7 +693,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				.nonce
 		};
 
-		if let Some(this_version) = self.update_cfe_version {
+		if let Some(this_cfe_version) = self.update_cfe_version {
 			use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
 			use subxt::{tx::Signer, PolkadotConfig};
 
@@ -723,7 +723,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
 			};
 
-			let recorded_version = <SemVer as codec::Decode>::decode(
+			let recorded_versions = <Versions as codec::Decode>::decode(
 				&mut subxt_client
 					.storage()
 					.at_latest()
@@ -736,15 +736,23 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.await?
 					.encoded(),
 			)
-			.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
+			.map_err(|e| anyhow::anyhow!("Failed to decode recorded_versions: {e:?}"))?;
 
 			// Note that around CFE upgrade period, the less recent version might still be running
 			// (and can even be *the* "active" instance), so it is important that it doesn't
 			// downgrade the version record:
-			if this_version.is_more_recent_than(recorded_version) {
+			if this_cfe_version.is_more_recent_than(recorded_versions.cfe) {
+				// if we need to update CFE version we also update the node version
+				let running_node_version = subxt_client.rpc().system_version().await?;
+				let new_node_version: SemVer = SemVer::parse(running_node_version.as_str())?;
+
 				info!(
 					"Updating CFE version record from {:?} to {:?}",
-					recorded_version, this_version
+					recorded_versions.cfe, this_cfe_version
+				);
+				info!(
+					"Updating Node version record from {:?} to {:?}",
+					recorded_versions.node, new_node_version
 				);
 
 				subxt_client
@@ -752,13 +760,20 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.sign_and_submit_then_watch_default(
 						&subxt::dynamic::tx(
 							"Validator",
-							"cfe_version",
+							"set_node_cfe_version",
 							vec![(
 								"new_version",
 								vec![
-									("major", this_version.major),
-									("minor", this_version.minor),
-									("patch", this_version.patch),
+									vec![
+										("major", new_node_version.major),
+										("minor", new_node_version.minor),
+										("patch", new_node_version.patch),
+									],
+									vec![
+										("major", this_cfe_version.major),
+										("minor", this_cfe_version.minor),
+										("patch", this_cfe_version.patch),
+									],
 								],
 							)],
 						),
