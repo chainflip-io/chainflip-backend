@@ -17,6 +17,12 @@ pub const BITCOIN_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / (10 * 60);
 pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 14;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
 
+pub use super::berghain::{
+	AUCTION_PARAMETERS, BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+	CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL, EPOCH_DURATION_BLOCKS, MINIMUM_SWAP_AMOUNTS,
+	MIN_FUNDING, REDEMPTION_TTL_SECS, SUPPLY_UPDATE_INTERVAL,
+};
+
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
 	eth_usdc_address: hex_literal::hex!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
@@ -29,7 +35,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6"
 	),
 	ethereum_deployment_block: 0u64,
-	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
+	genesis_funding_amount: 4 * FLIPPERINOS_PER_FLIP,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"13d0723c0891a46a0e0931e23fb7c9961c0f87bc73ad965b35cf0f1d84a986b8"
@@ -37,8 +43,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 };
-
-pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
 
 pub const BASHFUL_ACCOUNT_ID: &str = "cFK7GTahm9qeX5Jjct3yfSvV4qLb8LJaArHL2SL6m9HAzc2sq";
 pub const BASHFUL_SR25519: [u8; 32] =
@@ -84,6 +88,12 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 			AccountRole::Broker,
 			100 * FLIPPERINOS_PER_FLIP,
 			Some(b"Chainflip Testnet Broker 2".to_vec()),
+		),
+		(
+			get_account_id_from_seed::<sr25519::Public>("OVERFLOW"),
+			AccountRole::None,
+			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Overflow account".to_vec()),
 		),
 	]
 }
