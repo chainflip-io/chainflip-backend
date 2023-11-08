@@ -21,7 +21,11 @@ export async function send(asset: Asset, address: string, amount?: string) {
     case 'DOT':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
-    case 'USDC':
+    case 'USDC': {
+      const contractAddress = getEthContractAddress(asset);
+      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset));
+      break;
+    }
     case 'FLIP': {
       const contractAddress = getEthContractAddress(asset);
       await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset));

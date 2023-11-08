@@ -59,7 +59,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
-			let (state_chain_stream, state_chain_client) =
+			let (state_chain_stream, unfinalised_state_chain_stream, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
@@ -107,7 +107,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 			) = p2p::start(
 				state_chain_client.clone(),
 				settings.node_p2p.clone(),
-				state_chain_stream.cache().block_hash,
+				state_chain_stream.cache().hash,
 			)
 			.await
 			.context("Failed to start p2p")?;
@@ -124,7 +124,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::EthereumInstance,
-						>>(state_chain_stream.cache().block_hash)
+						>>(state_chain_stream.cache().hash)
 						.await
 						.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
 				);
@@ -141,7 +141,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::PolkadotInstance,
-						>>(state_chain_stream.cache().block_hash)
+						>>(state_chain_stream.cache().hash)
 						.await
 						.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
 				);
@@ -158,7 +158,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::BitcoinInstance,
-						>>(state_chain_stream.cache().block_hash)
+						>>(state_chain_stream.cache().hash)
 						.await
 						.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
 				);
@@ -170,7 +170,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				let expected_eth_chain_id = web3::types::U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_hash(),
+							state_chain_client.latest_finalized_block().hash,
 						)
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
@@ -187,7 +187,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					state_chain_client
 						.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
 							state_chain_runtime::Runtime,
-						>>(state_chain_client.latest_finalized_hash())
+						>>(state_chain_client.latest_finalized_block().hash)
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
@@ -197,7 +197,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				let expected_dot_genesis_hash = PolkadotHash::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_hash(),
+							state_chain_client.latest_finalized_block().hash,
 						)
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
@@ -212,6 +212,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				dot_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
+				unfinalised_state_chain_stream.clone(),
 				db.clone(),
 			)
 			.await?;

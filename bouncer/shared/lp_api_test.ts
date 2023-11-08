@@ -201,11 +201,8 @@ async function testRangeOrder() {
   let matchUpdate = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateRangeOrder.forEach((order: any) => {
-    if (
-      order.size_change.increase !== null &&
-      order.size_change.increase.liquidity > 0 &&
-      order.liquidity_total > 0
-    ) {
+    const liquidityIncrease = order.size_change?.increase?.liquidity ?? 0;
+    if (liquidityIncrease > 0 && order.liquidity_total > 0) {
       matchUpdate = true;
     }
   });
@@ -224,7 +221,8 @@ async function testRangeOrder() {
   let matchBurn = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnRangeOrder.forEach((order: any) => {
-    if (order.size_change.decrease.liquidity > 0 && order.liquidity_total === 0) {
+    const liquidityDecrease = order.size_change?.decrease?.liquidity ?? 0;
+    if (liquidityDecrease > 0 && order.liquidity_total === 0) {
       matchBurn = true;
     }
   });

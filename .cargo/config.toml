@@ -1,6 +1,6 @@
 [env]
 CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
-CF_ETH_CONTRACT_ABI_TAG = "v0.8.0"
+CF_ETH_CONTRACT_ABI_TAG = "v1.0.0"
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
@@ -26,29 +26,25 @@ tree --no-default-features --depth 1 --edges=features,normal
 '''
 
 # The `cf-audit` command is configured to ignore the following advisories:
-# - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
-# - RUSTSEC-2020-0071: This advisory is related to a potential segfault, which can only happen in very specific circumstances.
-# - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
-# - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
-# - RUSTSEC-2021-0145: This advisory only affects the windows platform. It's a transitive dependency of `substrate`.
+# Vulnerabilities:
 # - RUSTSEC-2022-0093: This advisory is related to ed25519-dalek's public api design, which we don't expose.
-# - RUSTSEC-2023-0052: This advisory comes from webpki, a dependency of ethers-rs. CPU denial of service in certificate path building.
-# - RUSTSEC-2023-0053: This advisory comes from rustls-webpki, a dependency of ethers-rs. CPU denial of service in certificate path building.
-# - RUSTSEC-2021-0060: This is a transitive dependency of libp2p and will be fixed in an upcoming release.
+# - RUSTSEC-2023-0052: This advisory comes from webpki, a dependency of ethers-rs. CPU denial of service in certificate path building. We don't use this functionality.
+# Unsound:
+# - RUSTSEC-2021-0145: This advisory only affects the windows platform. It's a transitive dependency of `substrate`.
+# Unmaintained:
+# - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2021-0059: This is a transitive dependency of libp2p and will be fixed in an upcoming release.
-# - RUSTSEC-2023-0063: This is a transitive dependency of libp2p and it is not used.
-# - RUSTSEC-2023-0065: This is a transitive dependency of ethers and is only applicable when using as a server for untrusted traffic.
+# - RUSTSEC-2021-0060: This is a transitive dependency of libp2p and will be fixed in an upcoming release.
+# - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
+# - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
 cf-audit = '''
-audit --ignore RUSTSEC-2022-0061
-      --ignore RUSTSEC-2020-0071
-      --ignore RUSTSEC-2021-0139
-      --ignore RUSTSEC-2020-0168
-      --ignore RUSTSEC-2021-0145
-      --ignore RUSTSEC-2022-0093
-      --ignore RUSTSEC-2023-0052
-      --ignore RUSTSEC-2023-0053
-      --ignore RUSTSEC-2021-0060
-      --ignore RUSTSEC-2021-0059
-      --ignore RUSTSEC-2023-0063
-      --ignore RUSTSEC-2023-0065
+audit -D unmaintained -D unsound
+    --ignore RUSTSEC-2022-0093
+    --ignore RUSTSEC-2023-0052
+    --ignore RUSTSEC-2021-0145
+    --ignore RUSTSEC-2020-0168
+    --ignore RUSTSEC-2021-0059
+    --ignore RUSTSEC-2021-0060
+    --ignore RUSTSEC-2021-0139
+    --ignore RUSTSEC-2022-0061
 '''

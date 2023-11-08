@@ -93,8 +93,9 @@ where
 
 	pub async fn new<
 		'env,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
+		const FINALIZED: bool,
 	>(
 		inner: Inner,
 		scope: &Scope<'env, anyhow::Error>,
@@ -107,7 +108,7 @@ where
 		let (sender, receiver) = watch::channel(
 			Self::get_chain_state_and_addresses(
 				&*state_chain_client,
-				state_chain_stream.cache().block_hash,
+				state_chain_stream.cache().hash,
 			)
 			.await,
 		);
@@ -115,9 +116,9 @@ where
 		scope.spawn(async move {
             utilities::loop_select! {
                 let _ = sender.closed() => { break Ok(()) },
-                if let Some((_block_hash, _block_header)) = state_chain_stream.next() => {
+                if let Some(_block_header) = state_chain_stream.next() => {
 					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries ingress addresses
-                    let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().block_hash).await);
+                    let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().hash).await);
                 } else break Ok(()),
             }
         });
@@ -277,7 +278,12 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn deposit_addresses<'env, StateChainStream, StateChainClient>(
+	pub async fn deposit_addresses<
+		'env,
+		StateChainStream,
+		StateChainClient,
+		const FINALIZED: bool,
+	>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
@@ -285,7 +291,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	) -> ChunkedByVaultBuilder<IngressAddresses<Inner>>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(

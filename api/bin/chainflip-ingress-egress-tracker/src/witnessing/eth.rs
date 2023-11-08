@@ -23,7 +23,7 @@ use super::EnvironmentParameters;
 pub(super) async fn start<ProcessCall, ProcessingFut>(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	state_chain_client: Arc<StateChainClient<()>>,
-	state_chain_stream: impl StateChainStreamApi + Clone,
+	state_chain_stream: impl StateChainStreamApi<false> + Clone,
 	settings: DepositTrackerSettings,
 	env_params: EnvironmentParameters,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient<()>, (), ()>,
@@ -56,7 +56,7 @@ where
 
 	let eth_source_deposit_addresses = eth_source
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream, state_chain_client.clone())
 		.await;
 
 	eth_source_deposit_addresses

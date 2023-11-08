@@ -289,10 +289,10 @@ where
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
-                Some((current_block_hash, current_block_header)) => {
-                    debug!("Processing SC block {} with block hash: {current_block_hash:#x}", current_block_header.number);
+                Some(current_block) => {
+                    debug!("Processing SC block {} with block hash: {:#x}", current_block.number, current_block.hash);
 
-                    match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
+                    match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block.hash).await {
                         Ok(events) => {
                             for event_record in events {
                                 match_event! {event_record.event, {
@@ -590,24 +590,24 @@ where
                                     }
                                 }}}}
                                 Err(error) => {
-                                    error!("Failed to decode events at block {}. {error}", current_block_header.number);
+                                    error!("Failed to decode events at block {}. {error}", current_block.number);
                         }
                     }
 
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
                     // We send it every `blocks_per_heartbeat` from the block they started up at.
-                    if ((current_block_header.number - last_heartbeat_submitted_at) >= blocks_per_heartbeat
+                    if ((current_block.number - last_heartbeat_submitted_at) >= blocks_per_heartbeat
                         // Submitting earlier than one minute in may falsely indicate liveness.
                         ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
-                        info!("Sending heartbeat at block: {}", current_block_header.number);
+                        info!("Sending heartbeat at block: {}", current_block.number);
                         state_chain_client
                             .finalize_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
                             )
                             .await;
 
-                        last_heartbeat_submitted_at = current_block_header.number;
+                        last_heartbeat_submitted_at = current_block.number;
                     }
                 }
                 None => {
