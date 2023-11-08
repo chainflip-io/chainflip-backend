@@ -34,7 +34,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		                                                                      * before launch */
 	),
 	ethereum_deployment_block: 18277081u64, // TODO: Albert to confirm block number before launch
-	genesis_funding_amount: 1_000 * FLIPPERINOS_PER_FLIP,
+	genesis_funding_amount: 4 * FLIPPERINOS_PER_FLIP,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
@@ -73,7 +73,7 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 0;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 0;
 
-pub const SUPPLY_UPDATE_INTERVAL: u32 = 24 * HOURS;
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 30 * 24 * HOURS;
 
 pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
 	(Asset::Eth, 0u128),
@@ -87,8 +87,8 @@ pub const MIN_FUNDING: FlipBalance = FLIPPERINOS_PER_FLIP;
 pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
 
 /// Redemption delay on mainnet is 48 HOURS.
-/// We add an extra 12 hours buffer.
-pub const REDEMPTION_TTL_SECS: u64 = (48 + 12) * 3600;
+/// We add an extra 6 hours buffer.
+pub const REDEMPTION_TTL_SECS: u64 = (48 + 6) * 3600;
 
 pub const AUCTION_PARAMETERS: SetSizeParameters =
 	SetSizeParameters { min_size: 3, max_size: MAX_AUTHORITIES, max_expansion: MAX_AUTHORITIES };
