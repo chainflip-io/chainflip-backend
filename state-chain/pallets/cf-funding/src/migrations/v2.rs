@@ -7,8 +7,8 @@ use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
 use frame_support::dispatch::DispatchError;
 
-/// Runtime Migration for migrating from V0 to V1 based on perseverance at commit `3f3d1ea0` (branch
-/// `release/0.6`).
+/// Runtime Migration for migrating from V1 to V2: updating PendingRedemption to store a more
+/// readable value instead of null
 pub struct Migration<T: Config>(PhantomData<T>);
 
 mod old {
@@ -17,7 +17,6 @@ mod old {
 
 	use frame_support::{pallet_prelude::OptionQuery, Blake2_128Concat};
 
-	// This is added in 0.7 but then removed in 0.8.
 	#[frame_support::storage_alias]
 	pub type PendingRedemptions<T: Config> =
 		StorageMap<Pallet<T>, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
@@ -47,11 +46,10 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			"Redemptions mismatch!"
 		);
 		for account in pending_redemptions_accounts {
-			ensure!(PendingRedemptions::<T>::get(account.clone()).is_some(), "Missing redemption!");
 			ensure!(
-				PendingRedemptions::<T>::get(account).unwrap() == Pending::Pending,
-				"Redemption not containing Pending::Pending!"
-			);
+				PendingRedemptions::<T>::get(&account) == Some(Pending::Pending),
+				"Missing redemption"
+			)
 		}
 		Ok(())
 	}

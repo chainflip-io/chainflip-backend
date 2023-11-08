@@ -122,7 +122,7 @@ pub mod pallet {
 	pub type ActiveBidder<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
-	/// PendingRedemptions stores a Pending (ZST) for the account until the redemption is executed
+	/// PendingRedemptions stores a Pending enum for the account until the redemption is executed
 	/// or the redemption expires.
 	#[pallet::storage]
 	pub type PendingRedemptions<T: Config> =
