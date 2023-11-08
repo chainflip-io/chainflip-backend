@@ -93,7 +93,7 @@ function price2tick(price: number): number {
 async function playLp(asset: Asset, price: number, liquidity: number) {
   const spread = 0.01 * price;
   const liquidityFine = liquidity * 1e6;
-  for (; ;) {
+  for (;;) {
     const offset = (price * (Math.random() - 0.5)) / 20;
     const buyTick = price2tick(price + offset + spread);
     const sellTick = price2tick(price + offset - spread);
@@ -169,7 +169,7 @@ const swapAmount = new Map<Asset, string>([
 
 async function playSwapper() {
   const assets: Asset[] = ['ETH', 'BTC', 'USDC', 'FLIP', 'DOT'];
-  for (; ;) {
+  for (;;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
       .filter((x) => x !== src)
