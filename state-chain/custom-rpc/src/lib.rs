@@ -456,6 +456,12 @@ pub trait CustomApi {
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>>;
+
+	#[method(name = "supported_assets")]
+	fn cf_supported_assets(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAsset>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1032,6 +1038,12 @@ where
 				to_asset.try_into()?,
 			)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_supported_assets(
+		&self,
+	) -> RpcResult<Vec<RpcAsset>> {
+		Ok(Asset::all().iter().map(|asset| RpcAsset::from(*asset)).collect::<Vec<RpcAsset>>())
 	}
 }
 
