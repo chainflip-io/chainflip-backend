@@ -1284,7 +1284,9 @@ pub struct UnidirectionalPoolDepth {
 
 impl<T: Config> Pallet<T> {
 	fn mint_or_burn(current_block: BlockNumberFor<T>) -> Weight {
-		for limit_order in LimitOrderQueue::<T>::take(current_block) {
+		let limit_orders = LimitOrderQueue::<T>::take(current_block);
+		let number_of_processed_orders = limit_orders.len();
+		for limit_order in limit_orders {
 			match limit_order {
 				OrderUpdate::Mint {
 					order_details:
@@ -1334,7 +1336,7 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		}
-		Weight::zero()
+		T::WeightInfo::mint_or_burn(number_of_processed_orders as u32)
 	}
 
 	fn set_limit_order_inner(

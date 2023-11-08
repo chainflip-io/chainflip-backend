@@ -40,6 +40,7 @@ pub trait WeightInfo {
 	fn update_limit_order() -> Weight;
 	fn set_limit_order() -> Weight;
 	fn set_pool_fees() -> Weight;
+	fn mint_or_burn(a: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_pools using the Substrate node and recommended hardware.
@@ -161,10 +162,31 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `1417`
 		//  Estimated: `4882`
-		// Minimum execution time: 50_000_000 picoseconds.
-		Weight::from_parts(51_000_000, 4882)
+		// Minimum execution time: 72_000_000 picoseconds.
+		Weight::from_parts(74_000_000, 4882)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	/// Storage: `LiquidityPools::LimitOrderQueue` (r:2 w:2)
+	/// Proof: `LiquidityPools::LimitOrderQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:2 w:1)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::FreeBalances` (r:1 w:1)
+	/// Proof: `LiquidityProvider::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `a` is `[0, 100]`.
+	fn mint_or_burn(a: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `793 + a * (69 ±0)`
+		//  Estimated: `6734 + a * (78 ±0)`
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(5_000_000, 6734)
+			// Standard Error: 3_039_020
+			.saturating_add(Weight::from_parts(226_758_121, 0).saturating_mul(a.into()))
+			.saturating_add(T::DbWeight::get().reads(5_u64))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
+			.saturating_add(Weight::from_parts(0, 78).saturating_mul(a.into()))
 	}
 }
 
@@ -286,9 +308,30 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `1417`
 		//  Estimated: `4882`
-		// Minimum execution time: 50_000_000 picoseconds.
-		Weight::from_parts(51_000_000, 4882)
+		// Minimum execution time: 72_000_000 picoseconds.
+		Weight::from_parts(74_000_000, 4882)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+	/// Storage: `LiquidityPools::LimitOrderQueue` (r:2 w:2)
+	/// Proof: `LiquidityPools::LimitOrderQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:2 w:1)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::FreeBalances` (r:1 w:1)
+	/// Proof: `LiquidityProvider::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `a` is `[0, 100]`.
+	fn mint_or_burn(a: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `793 + a * (69 ±0)`
+		//  Estimated: `6734 + a * (78 ±0)`
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(5_000_000, 6734)
+			// Standard Error: 3_039_020
+			.saturating_add(Weight::from_parts(226_758_121, 0).saturating_mul(a.into()))
+			.saturating_add(RocksDbWeight::get().reads(5_u64))
+			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(Weight::from_parts(0, 78).saturating_mul(a.into()))
 	}
 }

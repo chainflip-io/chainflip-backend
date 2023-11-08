@@ -230,14 +230,25 @@ benchmarks! {
 
 	// TODO: This benchmark is failing right now but only during the real execution, not during testing.
 	mint_or_burn {
+		let caller = new_lp_account::<T>();
 		let a in 0..100;
 		let mint_block = BlockNumberFor::<T>::from(1_u32);
 		let expire_block = BlockNumberFor::<T>::from(100_u32);
 		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Eth,
+			1_000_000,
+		));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Usdc,
+			1_000_000,
+		));
 		for i in 0..a {
 			LimitOrderQueue::<T>::append(mint_block, OrderUpdate::Mint {
 				order_details: LimitOrderDetails {
-					lp: whitelisted_caller(),
+					lp: caller.clone(),
 					sell_asset: Asset::Eth,
 					buy_asset: Asset::Usdc,
 					id: i as u64,
