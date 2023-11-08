@@ -3,7 +3,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains, chainContractIds, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
@@ -12,6 +12,7 @@ import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './eth_abis';
+import { SwapParams } from './perform_swap';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -203,6 +204,98 @@ export async function observeEvent(
   return result as Event;
 }
 
+type EgressId = [Chain, number];
+type BroadcastId = [Chain, number];
+// Observe multiple events related to the same swap that could be emitted in the same block
+export async function observeSwapEvents(
+  { sourceAsset, destAsset, depositAddress, channelId }: SwapParams,
+  api: ApiPromise,
+  tag?: string,
+  swapType?: SwapType,
+  finalized = false,
+): Promise<BroadcastId | undefined> {
+  let eventFound = false;
+  const subscribeMethod = finalized
+    ? api.rpc.chain.subscribeFinalizedHeads
+    : api.rpc.chain.subscribeNewHeads;
+
+  const swapScheduledEvent = 'SwapScheduled';
+  const swapExecutedEvent = 'SwapExecuted';
+  const swapEgressScheduled = 'SwapEgressScheduled';
+  const batchBroadcastRequested = 'BatchBroadcastRequested';
+  let expectedMethod = swapScheduledEvent;
+
+  let swapId = 0;
+  let egressId: EgressId;
+  let broadcastId;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unsubscribe: any = await subscribeMethod(async (header) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const events: any[] = await api.query.system.events.at(header.hash);
+    events.forEach((record) => {
+      const { event } = record;
+      if (!eventFound && event.method.includes(expectedMethod)) {
+        const expectedEvent = {
+          data: event.toHuman().data,
+        };
+
+        switch (expectedMethod) {
+          case swapScheduledEvent:
+            if ('DepositChannel' in expectedEvent.data.origin) {
+              if (
+                Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
+                sourceAsset === (expectedEvent.data.sourceAsset.toUpperCase() as Asset) &&
+                destAsset === (expectedEvent.data.destinationAsset.toUpperCase() as Asset) &&
+                swapType
+                  ? expectedEvent.data.swapType[swapType] !== undefined
+                  : true &&
+                    depositAddress ===
+                      (Object.values(
+                        expectedEvent.data.origin.DepositChannel.depositAddress,
+                      )[0] as string)
+              ) {
+                expectedMethod = swapExecutedEvent;
+                swapId = expectedEvent.data.swapId;
+                console.log(`${tag} swap scheduled with swapId: ${swapId}`);
+              }
+            }
+            break;
+          case swapExecutedEvent:
+            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+              expectedMethod = swapEgressScheduled;
+              console.log(`${tag} swap executed, with id: ${swapId}`);
+            }
+            break;
+          case swapEgressScheduled:
+            if (Number(expectedEvent.data.swapId) === Number(swapId)) {
+              expectedMethod = batchBroadcastRequested;
+              egressId = expectedEvent.data.egressId as EgressId;
+              console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
+            }
+            break;
+          case batchBroadcastRequested:
+            expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
+              if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
+                broadcastId = [egressId[0], Number(expectedEvent.data.broadcastId)] as BroadcastId;
+                console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
+                eventFound = true;
+                unsubscribe();
+              }
+            });
+            break;
+          default:
+            break;
+        }
+      }
+    });
+  });
+  while (!eventFound) {
+    await sleep(1000);
+  }
+  return broadcastId;
+}
+
 // TODO: To import from the SDK once it's exported
 export enum SwapType {
   Swap = 'Swap',
@@ -248,6 +341,30 @@ export async function observeBadEvents(
       `Unexpected event emited ${event.name.section}:${event.name.method} in block ${event.block}`,
     );
   }
+}
+
+export async function observeBroadcastSuccess(broadcastId: BroadcastId) {
+  const chainflipApi = await getChainflipApi();
+  const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
+  const broadcastIdNumber = broadcastId[1];
+
+  let stopObserving = false;
+  const observeBroadcastFailure = observeBadEvents(
+    broadcaster + ':BroadcastAborted',
+    () => stopObserving,
+    (event) => {
+      if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
+      return false;
+    },
+  );
+
+  await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
+    if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
+    return false;
+  });
+
+  stopObserving = true;
+  await observeBroadcastFailure;
 }
 
 export async function newAddress(
@@ -478,4 +595,25 @@ export function compareSemVer(version1: string, version2: string) {
   }
 
   return 'equal';
+}
+
+type SwapRate = {
+  intermediary: string;
+  output: string;
+};
+export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
+  const chainflipApi = await getChainflipApi();
+
+  const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals[from]);
+  const hexPrice = (await chainflipApi.rpc(
+    'cf_swap_rate',
+    from,
+    to,
+    Number(fineFromAmount).toString(16),
+  )) as SwapRate;
+
+  const finePriceOutput = parseInt(hexPrice.output);
+  const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals[to]);
+
+  return outputPrice;
 }

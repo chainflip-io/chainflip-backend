@@ -5,6 +5,7 @@ import { runWithTimeout, observeBadEvents } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
+import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
 
 async function runAllConcurrentTests() {
   let stopObserving = false;
@@ -12,6 +13,7 @@ async function runAllConcurrentTests() {
   const feeDeficitRefused = observeBadEvents(':TransactionFeeDeficitRefused', () => stopObserving);
 
   await Promise.all([
+    swapLessThanED(),
     testAllSwaps(),
     testEthereumDeposits(),
     testFundRedeem('redeem'),

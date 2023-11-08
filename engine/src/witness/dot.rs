@@ -162,26 +162,19 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	}
 }
 
-pub async fn start<
-	StateChainClient,
-	StateChainStream,
-	ProcessCall,
-	ProcessingFut,
-	PrewitnessCall,
-	PrewitnessFut,
->(
+pub async fn start<StateChainClient, ProcessCall, ProcessingFut, PrewitnessCall, PrewitnessFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: StateChainStream,
+	state_chain_stream: impl StateChainStreamApi + Clone,
+	unfinalized_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -227,7 +220,7 @@ where
 		.strictly_monotonic()
 		.shared(scope)
 		.chunk_by_vault(vaults.clone())
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await
 		.dot_deposits(prewitness_call)
 		.logging("pre-witnessing")
