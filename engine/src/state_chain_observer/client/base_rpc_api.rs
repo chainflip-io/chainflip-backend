@@ -134,6 +134,10 @@ pub trait BaseRpcApi {
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
 
+	async fn subscribe_unfinalized_block_headers(
+		&self,
+	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>>;
+
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
 
 	async fn dry_run(
@@ -250,6 +254,12 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
 		self.raw_rpc_client.subscribe_finalized_heads().await
+	}
+
+	async fn subscribe_unfinalized_block_headers(
+		&self,
+	) -> RpcResult<Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>> {
+		self.raw_rpc_client.subscribe_new_heads().await
 	}
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {

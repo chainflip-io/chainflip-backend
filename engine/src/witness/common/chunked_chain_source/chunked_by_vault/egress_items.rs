@@ -56,8 +56,9 @@ where
 
 	pub async fn new<
 		'env,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
+		const FINALIZED: bool,
 	>(
 		inner: Inner,
 		scope: &Scope<'env, anyhow::Error>,
@@ -65,18 +66,15 @@ where
 		state_chain_client: Arc<StateChainClient>,
 	) -> Self {
 		let (sender, receiver) = tokio::sync::watch::channel(
-			Self::get_transaction_out_ids(
-				&*state_chain_client,
-				state_chain_stream.cache().block_hash,
-			)
-			.await,
+			Self::get_transaction_out_ids(&*state_chain_client, state_chain_stream.cache().hash)
+				.await,
 		);
 
 		scope.spawn(async move {
 			utilities::loop_select! {
 				let _ = sender.closed() => { break Ok(()) },
-				if let Some((_block_hash, _block_header)) = state_chain_stream.next() => {
-					let _result = sender.send(Self::get_transaction_out_ids(&*state_chain_client, _block_hash).await);
+				if let Some(block) = state_chain_stream.next() => {
+					let _result = sender.send(Self::get_transaction_out_ids(&*state_chain_client, block.hash).await);
 				} else break Ok(()),
 			}
 		});
@@ -179,7 +177,7 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn egress_items<'env, StateChainStream, StateChainClient>(
+	pub async fn egress_items<'env, StateChainStream, StateChainClient, const FINALIZED: bool>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
@@ -187,7 +185,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	) -> ChunkedByVaultBuilder<EgressItems<Inner>>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi,
+		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(
