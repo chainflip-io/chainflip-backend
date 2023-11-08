@@ -105,6 +105,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 
 	fn threshold_sign_and_broadcast(
 		_api_call: Self::ApiCall,
+		_pause_broadcasts: bool,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}

@@ -162,6 +162,7 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
+		_pause_broadcasts: bool,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);

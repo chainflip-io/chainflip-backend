@@ -399,12 +399,12 @@ pub mod pallet {
 					retries.retain(|broadcast| {
 						if broadcast.broadcast_attempt_id.broadcast_id > pause_broadcast_id {
 							paused_broadcasts.push(BroadcastAttempt::<T, I> {
-								broadcast_attempt_id: (*broadcast).broadcast_attempt_id.clone(),
-								transaction_payload: (*broadcast).transaction_payload.clone(),
-								threshold_signature_payload: (*broadcast)
+								broadcast_attempt_id: broadcast.broadcast_attempt_id,
+								transaction_payload: broadcast.transaction_payload.clone(),
+								threshold_signature_payload: broadcast
 									.threshold_signature_payload
 									.clone(),
-								transaction_out_id: (*broadcast).transaction_out_id.clone(),
+								transaction_out_id: broadcast.transaction_out_id.clone(),
 							});
 							false
 						} else {

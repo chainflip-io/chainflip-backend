@@ -180,6 +180,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
+		_pause_broadcasts: bool,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::call(api_call);
 		(1, 2)

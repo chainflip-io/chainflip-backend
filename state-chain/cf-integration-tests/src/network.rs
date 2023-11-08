@@ -13,12 +13,11 @@ use frame_support::{
 	traits::{IntegrityTest, OnFinalize, OnIdle},
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
-use pallet_cf_validator::RotationPhase;
 use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, AllPalletsWithSystem, BitcoinInstance, EthereumInstance, PolkadotInstance,
-	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Weight,
+	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PolkadotInstance, Runtime, RuntimeCall,
+	RuntimeEvent, RuntimeOrigin, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -282,26 +281,6 @@ impl Engine {
 								), RuntimeOrigin::none()
 							);
 					}
-					RuntimeEvent::Validator(pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
-						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
-						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
-						// This is a simpler way to represent this in the tests. Representing in this way in the tests also means
-						// that for dot, given we don't have a key to sign with initially, it will work without extra test boilerplate.
-
-						// If we rotating let's witness the keys being rotated on the contract
-						queue_dispatch_extrinsic(
-							RuntimeCall::Witnesser(
-								pallet_cf_witnesser::Call::witness_at_epoch {
-									call: Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-										block_number: 100,
-										tx_id: [1u8; 32].into(),
-									}.into()),
-									epoch_index: Validator::epoch_index(),
-								}),
-							RuntimeOrigin::signed(self.node_id.clone())
-						);
-					}
-
 					RuntimeEvent::PolkadotVault(pallet_cf_vaults::Event::<_, PolkadotInstance>::AwaitingGovernanceActivation { .. }) => {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(pallet_cf_environment::Call::witness_polkadot_vault_creation {
