@@ -1,16 +1,12 @@
-pub use super::{
-	common::*,
-	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
-};
-use super::{parse_account, StateChainEnvironment};
+pub use super::common::*;
+use super::StateChainEnvironment;
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
+use cf_primitives::{
+	AccountId, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, NetworkEnvironment,
+};
 use sc_service::ChainType;
 use sp_core::H256;
-
-// *** Overrides from common
-pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
-// ***
+use state_chain_runtime::SetSizeParameters;
 
 pub struct Config;
 
@@ -18,6 +14,11 @@ pub const NETWORK_NAME: &str = "Chainflip-Berghain";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Mainnet;
 pub const PROTOCOL_ID: &str = "flip-berghain";
+
+// These represent approximately 6 hours on mainnet block times
+pub const BITCOIN_EXPIRY_BLOCKS: u32 = 6 * 60 / 10;
+pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 6 * 3600 / 14;
+pub const POLKADOT_EXPIRY_BLOCKS: u32 = 6 * 3600 / 6;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
@@ -39,9 +40,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 }, /* TODO:
-	                                                                                      * Dan confirm
-	                                                                                      * number */
+	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
@@ -67,21 +66,29 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["f8aca257e6ab69e357984a885121c0ee18fcc50185c77966cdaf063df2f89126"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	[vec![
-		(
-			parse_account("cFHwQ2eJQqRLJWgcHhdgAVCXx2TNRaS3R4Zc98mU2SrkW6AMH"), // TODO: Dan to decide whether we need a Broker API account
-			AccountRole::Broker,
-			1_000 * FLIPPERINOS_PER_FLIP,
-			Some(b"Chainflip Genesis Broker".to_vec()),
-		),
-		(
-			parse_account("cFNaeW7FBpjVxh5haxwmnnATCXriuThVJ8vcyQWKi6SfwWHni"), // TODO: Dan to decide whether we need a Liquidity Provider account
-			AccountRole::LiquidityProvider,
-			1_000 * FLIPPERINOS_PER_FLIP,
-			Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
-		),
-	]]
-	.into_iter()
-	.flatten()
-	.collect()
+	vec![]
 }
+
+// Set to zero initially, will be updated by governance to 7% / 1% annual.
+pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 0;
+pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 0;
+
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 24 * HOURS;
+
+pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
+	(Asset::Eth, 0u128),
+	(Asset::Flip, 0u128),
+	(Asset::Usdc, 0u128),
+	(Asset::Dot, 0u128),
+	(Asset::Btc, 0u128),
+];
+
+pub const MIN_FUNDING: FlipBalance = FLIPPERINOS_PER_FLIP;
+pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
+
+/// Redemption delay on mainnet is 48 HOURS.
+/// We add an extra 12 hours buffer.
+pub const REDEMPTION_TTL_SECS: u64 = (48 + 12) * 3600;
+
+pub const AUCTION_PARAMETERS: SetSizeParameters =
+	SetSizeParameters { min_size: 3, max_size: MAX_AUTHORITIES, max_expansion: MAX_AUTHORITIES };
