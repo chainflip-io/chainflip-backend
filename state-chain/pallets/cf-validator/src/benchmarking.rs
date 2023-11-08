@@ -130,7 +130,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
-		let version = Versions {
+		let version = NodeCFEVersions {
 			node: SemVer {
 				major: 1,
 				minor: 2,

@@ -228,7 +228,7 @@ impl core::fmt::Display for SemVer {
 	MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct Versions {
+pub struct NodeCFEVersions {
 	pub node: SemVer,
 	pub cfe: SemVer,
 }

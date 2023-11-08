@@ -216,69 +216,61 @@ fn send_node_cfe_version() {
 		// We initially submit version
 		let authority = GENESIS_AUTHORITIES[0];
 
-		let version = SemVer { major: 4, ..Default::default() };
+		let cfe_version = SemVer { major: 4, ..Default::default() };
+		let node_version = SemVer { major: 4, minor: 5, patch: 7 };
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(authority),
-			Versions { node: version, cfe: version }
+			NodeCFEVersions { cfe: cfe_version, node: new_node_version }
 		));
 
 		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
 			crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: SemVer::default(),
-				new_version: version,
+				new_version: cfe_version,
 			},
 		));
 		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
 			crate::Event::NodeVersionUpdated {
 				account_id: authority,
 				old_version: SemVer::default(),
-				new_version: version,
+				new_version: node_version,
 			},
 		));
 
 		assert_eq!(
-			version,
-			ValidatorPallet::node_cfe_version(authority).cfe,
-			"cfe version should be stored"
-		);
-		assert_eq!(
-			version,
-			ValidatorPallet::node_cfe_version(authority).node,
-			"node version should be stored"
+			NodeCFEVersions { cfe: cfe_version, node: new_node_version },
+			ValidatorPallet::node_cfe_version(authority),
+			"cfe and node version should be stored"
 		);
 
 		// We submit a new version
-		let new_version = SemVer { major: 5, ..Default::default() };
+		let new_cfe_version = SemVer { major: 5, ..Default::default() };
+		let new_node_version = SemVer { major: 5, minor: 5, patch: 7 };
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(authority),
-			Versions { node: new_version, cfe: new_version }
+			NodeCFEVersions { cfe: new_cfe_version, node: new_node_version }
 		));
 
 		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
 			crate::Event::CFEVersionUpdated {
 				account_id: authority,
-				old_version: version,
-				new_version,
+				old_version: cfe_version,
+				new_version: new_cfe_version,
 			},
 		));
 		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
 			crate::Event::NodeVersionUpdated {
 				account_id: authority,
-				old_version: version,
-				new_version,
+				old_version: node_version,
+				new_version: new_node_version,
 			},
 		));
 
 		assert_eq!(
-			new_version,
-			ValidatorPallet::node_cfe_version(authority).cfe,
-			"cfe new version should be stored"
-		);
-		assert_eq!(
-			new_version,
-			ValidatorPallet::node_cfe_version(authority).node,
-			"node new version should be stored"
+			NodeCFEVersions { cfe: new_cfe_version, node: new_node_version },
+			ValidatorPallet::node_cfe_version(authority),
+			"node and cfe new versions should be stored"
 		);
 
 		// When we submit the same version we should see no `CFEVersionUpdated` event or
@@ -286,7 +278,7 @@ fn send_node_cfe_version() {
 		frame_system::Pallet::<Test>::reset_events();
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(authority),
-			Versions { node: new_version, cfe: new_version }
+			NodeCFEVersions { cfe: new_cfe_version, node: new_node_version }
 		));
 
 		assert_eq!(
@@ -296,14 +288,9 @@ fn send_node_cfe_version() {
 		);
 
 		assert_eq!(
-			new_version,
-			ValidatorPallet::node_cfe_version(authority).cfe,
-			"we should be still on the same cfe version"
-		);
-		assert_eq!(
-			new_version,
-			ValidatorPallet::node_cfe_version(authority).node,
-			"we should be still on the same node version"
+			NodeCFEVersions { cfe: new_cfe_version, node: new_node_version },
+			ValidatorPallet::node_cfe_version(authority),
+			"we should be still on the same node and cfe version"
 		);
 	});
 }
@@ -1033,7 +1020,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 			let _ = ValidatorPallet::register_as_validator(RuntimeOrigin::signed(*id));
 			assert_ok!(ValidatorPallet::set_node_cfe_version(
 				RuntimeOrigin::signed(*id),
-				Versions { node: SemVer { ..Default::default() }, cfe: initial_version }
+				NodeCFEVersions { node: SemVer::default(), cfe: initial_version }
 			));
 		});
 		CurrentAuthorities::<Test>::set(BTreeSet::from(authorities));
@@ -1052,7 +1039,7 @@ fn can_calculate_percentage_cfe_at_target_version() {
 		authorities.iter().for_each(|id| {
 			assert_ok!(ValidatorPallet::set_node_cfe_version(
 				RuntimeOrigin::signed(*id),
-				Versions { node: SemVer { ..Default::default() }, cfe: next_version },
+				NodeCFEVersions { node: SemVer::default(), cfe: next_version },
 			));
 		});
 		assert_eq!(
@@ -1104,8 +1091,8 @@ fn qualification_by_cfe_version() {
 		// Report a version below the minimum:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
-			Versions {
-				node: SemVer { ..Default::default() },
+			NodeCFEVersions {
+				node: SemVer::default(),
 				cfe: SemVer { major: 0, minor: 0, patch: 1 }
 			}
 		));
@@ -1114,8 +1101,8 @@ fn qualification_by_cfe_version() {
 		// Report a version equal to the minimum:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
-			Versions {
-				node: SemVer { ..Default::default() },
+			NodeCFEVersions {
+				node: SemVer::default(),
 				cfe: SemVer { major: 0, minor: 1, patch: 0 }
 			}
 		));
@@ -1124,8 +1111,8 @@ fn qualification_by_cfe_version() {
 		// Report a version greater than the minimum:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
-			Versions {
-				node: SemVer { ..Default::default() },
+			NodeCFEVersions {
+				node: SemVer::default(),
 				cfe: SemVer { major: 0, minor: 1, patch: 1 }
 			}
 		));
@@ -1134,8 +1121,8 @@ fn qualification_by_cfe_version() {
 		// Report a version bumping the minor version:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
-			Versions {
-				node: SemVer { ..Default::default() },
+			NodeCFEVersions {
+				node: SemVer::default(),
 				cfe: SemVer { major: 0, minor: 2, patch: 0 }
 			}
 		));
@@ -1144,15 +1131,14 @@ fn qualification_by_cfe_version() {
 		// Report a version bumping the major version:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
-			Versions {
-				node: SemVer { ..Default::default() },
+			NodeCFEVersions {
+				node: SemVer::default(),
 				cfe: SemVer { major: 1, minor: 0, patch: 0 }
 			}
 		));
 		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 
 		// Raise the minimum:
-
 		assert_ok!(ValidatorPallet::update_pallet_config(
 			OriginTrait::root(),
 			PalletConfigUpdate::MinimumReportedCfeVersion {

@@ -8,7 +8,7 @@ pub mod storage_api;
 use async_trait::async_trait;
 
 use anyhow::{anyhow, bail, Context, Result};
-use cf_primitives::{AccountRole, SemVer, Versions};
+use cf_primitives::{AccountRole, NodeCFEVersions, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
 use futures_core::Stream;
@@ -723,7 +723,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
 			};
 
-			let recorded_versions = <Versions as codec::Decode>::decode(
+			let recorded_versions = <NodeCFEVersions as codec::Decode>::decode(
 				&mut subxt_client
 					.storage()
 					.at_latest()

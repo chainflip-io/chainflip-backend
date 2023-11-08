@@ -17,7 +17,7 @@ mod migrations;
 mod rotation_state;
 pub use auction_resolver::*;
 
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer, Versions, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AuthorityCount, EpochIndex, NodeCFEVersions, SemVer, FLIPPERINOS_PER_FLIP};
 
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
@@ -221,7 +221,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Versions, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, NodeCFEVersions, ValueQuery>;
 
 	/// The last expired epoch index.
 	#[pallet::storage]
@@ -695,7 +695,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
 		pub fn set_node_cfe_version(
 			origin: OriginFor<T>,
-			new_version: Versions,
+			new_version: NodeCFEVersions,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
