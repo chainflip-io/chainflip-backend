@@ -45,7 +45,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 30 * 24 * HOURS;
 
-// TODO: change once nodes have been spun up
 pub const BASHFUL_ACCOUNT_ID: &str = "cFNzzoURRFHx2fw2EmsCvTc7hBFP34EaP2B23oUcFdbp1FMvx";
 pub const BASHFUL_SR25519: [u8; 32] =
 	hex_literal::hex!["e2e8c8d8a2662d11a96ab6cbf8f627e78d6c77ac011ad0ad65b704976c7c5b6c"];
