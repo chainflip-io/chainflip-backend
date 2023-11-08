@@ -108,7 +108,7 @@ where
 		let (sender, receiver) = watch::channel(
 			Self::get_chain_state_and_addresses(
 				&*state_chain_client,
-				state_chain_stream.cache().block_hash,
+				state_chain_stream.cache().hash,
 			)
 			.await,
 		);
@@ -116,9 +116,9 @@ where
 		scope.spawn(async move {
             utilities::loop_select! {
                 let _ = sender.closed() => { break Ok(()) },
-                if let Some((_block_hash, _block_header)) = state_chain_stream.next() => {
+                if let Some(_block_header) = state_chain_stream.next() => {
 					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries ingress addresses
-                    let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().block_hash).await);
+                    let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().hash).await);
                 } else break Ok(()),
             }
         });

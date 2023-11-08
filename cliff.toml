@@ -11,7 +11,7 @@
 #
 # For example, assuming a new tag `0.9.3` containing commits `85654cc..HEAD`:
 #
-# `git cliff -o CHANGELOG.md --tag 0.9.3 85654cc..HEAD`
+# `git cliff --prepend CHANGELOG.md --tag 0.9.3 85654cc..HEAD`
 #
 # Then edit and tidy up the CHANGELOG.md file and commit it.
 
