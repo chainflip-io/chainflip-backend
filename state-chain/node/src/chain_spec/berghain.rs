@@ -1,3 +1,5 @@
+use crate::chain_spec::parse_account;
+
 pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
@@ -65,7 +67,12 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["f8aca257e6ab69e357984a885121c0ee18fcc50185c77966cdaf063df2f89126"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	vec![]
+	vec![(
+		parse_account("cFLNiRxoxwsuc7arQ6dVEgNoHGD5j9kTLXrf14pGXVGzH5AFj"),
+		AccountRole::None,
+		2988 * FLIPPERINOS_PER_FLIP,
+		None,
+	)]
 }
 
 // Set to zero initially, will be updated by governance to 7% / 1% annual.
