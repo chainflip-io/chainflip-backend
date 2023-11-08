@@ -43,7 +43,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
 };
 
-pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
+pub const EPOCH_DURATION_BLOCKS: BlockNumber = 30 * 24 * HOURS;
 
 // TODO: change once nodes have been spun up
 pub const BASHFUL_ACCOUNT_ID: &str = "cFNzzoURRFHx2fw2EmsCvTc7hBFP34EaP2B23oUcFdbp1FMvx";
