@@ -1,12 +1,17 @@
 use cf_primitives::{Asset, AssetAmount, AuthorityCount};
-use sp_runtime::Permill;
+use sp_runtime::{Percent, Permill};
 pub use state_chain_runtime::constants::common::*;
-use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance};
+use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance, SetSizeParameters};
 
 pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
 pub const MIN_AUTHORITIES: AuthorityCount = 2;
+pub const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
+	min_size: MIN_AUTHORITIES,
+	max_size: MAX_AUTHORITIES,
+	max_expansion: MAX_AUTHORITIES,
+};
 
 /// Percent of the epoch we are allowed to redeem
 pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
@@ -51,3 +56,12 @@ pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
 
 /// Daily slashing rate 0.1% (of the bond) for offline authority
 pub const DAILY_SLASHING_RATE: Permill = Permill::from_perthousand(1);
+
+/// Redemption delay on testnets is 2 MINUTES.
+/// We use a ttl of 1 hour to give enough of a buffer.
+pub const REDEMPTION_TTL_SECS: u64 = 2 * 3600;
+
+/// Determines the expiry duration for governance proposals.
+pub const EXPIRY_SPAN_IN_SECONDS: u64 = 24 * 3600;
+
+pub const AUCTION_BID_CUTOFF_PERCENTAGE: Percent = Percent::from_percent(10);

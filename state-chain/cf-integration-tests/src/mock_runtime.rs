@@ -1,4 +1,8 @@
-use chainflip_node::test_account_from_seed;
+use chainflip_node::{
+	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
+	test_account_from_seed,
+};
+use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{Percent, Permill};
@@ -126,7 +130,7 @@ impl ExtBuilder {
 				genesis_accounts: self.genesis_accounts.clone(),
 				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,
-				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
+				redemption_ttl: core::time::Duration::from_secs(REDEMPTION_TTL_SECS),
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
@@ -160,9 +164,12 @@ impl ExtBuilder {
 				),
 				backup_reward_node_percentage: Percent::from_percent(34),
 				authority_set_min_size: self.min_authorities,
-				min_size: self.min_authorities,
-				max_size: self.max_authorities,
-				max_expansion: self.max_authorities,
+				auction_parameters: SetSizeParameters {
+					min_size: self.min_authorities,
+					max_size: self.max_authorities,
+					max_expansion: self.max_authorities,
+				},
+				auction_bid_cutoff_percentage: Percent::from_percent(0),
 			},
 			ethereum_vault: EthereumVaultConfig {
 				vault_key: Some(ethereum_vault_key),
