@@ -78,6 +78,7 @@ pub async fn start<
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
+	unfinalised_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -127,7 +128,7 @@ where
 	strictly_monotonic_source
 		.clone()
 		.chunk_by_vault(vaults.clone())
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
 		.await
 		.btc_deposits(prewitness_call)
 		.logging("pre-witnessing")

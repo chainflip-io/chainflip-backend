@@ -48,6 +48,7 @@ pub async fn start<
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
+	unfinalized_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -135,7 +136,7 @@ where
 
 	let prewitness_source_deposit_addresses = prewitness_source
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await;
 
 	prewitness_source_deposit_addresses
