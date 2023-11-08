@@ -5,6 +5,7 @@ mod socket;
 mod tests;
 
 use std::{
+	cell::Cell,
 	collections::{BTreeMap, HashMap},
 	net::Ipv6Addr,
 	sync::Arc,
@@ -17,6 +18,7 @@ use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use utilities::{
+	make_periodic_tick,
 	metrics::{
 		P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
 	},
@@ -36,6 +38,12 @@ use super::{EdPublicKey, P2PKey, XPublicKey};
 /// this somewhat short to mitigate some attacks where clients
 /// can use system resources without authenticating.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long to wait until some activity on a socket (defined by a need to
+/// send a message) before deeming the connection "stale" (the state in which
+/// we drop the socket and are not actively trying to reconnect)
+pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
+/// How often to check for "stale" connections
+pub const ACTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct X25519KeyPair {
@@ -175,10 +183,17 @@ enum ConnectionState {
 	// want ZMQ's default behavior yet), but we have arranged
 	// for a ZMQ socket to be created again in the future.
 	ReconnectionScheduled,
+	// There hasn't been recent interaction with the node, so we
+	// don't maintain an active connection with it. We will connect
+	// to it lazily if needed.
+	Stale,
 }
 
 struct ConnectionStateInfo {
 	state: ConnectionState,
+	// Last time we received an instruction to send a message
+	// to this node
+	last_activity: Cell<tokio::time::Instant>,
 	info: PeerInfo,
 }
 
@@ -252,10 +267,6 @@ pub(super) async fn start(
 
 	zmq_context.set_max_sockets(65536).expect("should update socket limit");
 
-	// TODO: consider keeping track of "last activity" on any outgoing
-	// socket connection and disconnecting inactive peers (see proxy_expire_idle_peers
-	// in OxenMQ)
-
 	let authenticator = auth::start_authentication_thread(zmq_context.clone());
 
 	let (reconnect_sender, reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -307,6 +318,8 @@ impl P2PContext {
 		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
 	) {
+		let mut check_activity_interval = make_periodic_tick(ACTIVITY_CHECK_INTERVAL, false);
+
 		loop {
 			tokio::select! {
 				Some(messages) = outgoing_message_receiver.recv() => {
@@ -326,11 +339,14 @@ impl P2PContext {
 				Some(account_id) = reconnect_receiver.recv() => {
 					self.reconnect_to_peer(&account_id);
 				}
+				_ = check_activity_interval.tick() => {
+					self.check_activity();
+				}
 			}
 		}
 	}
 
-	fn send_messages(&self, messages: OutgoingMultisigStageMessages) {
+	fn send_messages(&mut self, messages: OutgoingMultisigStageMessages) {
 		match messages {
 			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
 				trace!("Broadcasting a message to all {} peers", account_ids.len());
@@ -347,8 +363,10 @@ impl P2PContext {
 		}
 	}
 
-	fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
+	fn send_message(&mut self, account_id: AccountId, payload: Vec<u8>) {
 		if let Some(peer) = self.active_connections.get(&account_id) {
+			peer.last_activity.set(tokio::time::Instant::now());
+
 			match &peer.state {
 				ConnectionState::Connected(socket) => {
 					socket.send(payload);
@@ -359,6 +377,16 @@ impl P2PContext {
 					warn!(
 						"Failed to send message. Peer is scheduled for reconnection: {account_id}"
 					);
+				},
+				ConnectionState::Stale => {
+					// Connect and try again (there is no infinite loop here
+					// since the state will be `Connected` after this)
+
+					// This is guaranteed by construction of `active_connections`:
+					assert_eq!(peer.info.account_id, account_id);
+
+					self.connect_to_peer(peer.info.clone());
+					self.send_message(account_id, payload);
 				},
 			}
 		} else {
@@ -400,7 +428,6 @@ impl P2PContext {
 		// already connected to our listening ZMQ socket, we can only
 		// prevent future connections from being established and rely
 		// on peer from disconnecting from "client side".
-		// TODO: ensure that stale/inactive connections are terminated
 
 		if account_id == self.our_account_id {
 			warn!("Received peer info deregistration of our own node!");
@@ -414,6 +441,9 @@ impl P2PContext {
 				},
 				ConnectionState::ReconnectionScheduled => {
 					self.reconnect_context.reset(&account_id);
+				},
+				ConnectionState::Stale => {
+					// Nothing to do
 				},
 			}
 
@@ -448,7 +478,7 @@ impl P2PContext {
 		if let Some(peer) = self.active_connections.remove(account_id) {
 			match peer.state {
 				ConnectionState::ReconnectionScheduled => {
-					info!("Reconnecting to peer: {}", account_id);
+					info!("Reconnecting to peer: {account_id}");
 					self.connect_to_peer(peer.info.clone());
 				},
 				ConnectionState::Connected(_) => {
@@ -461,6 +491,12 @@ impl P2PContext {
 					// be in `Connected` state now.
 					debug!(
 						"Reconnection attempt to {} cancelled: ZMQ socket already exists.",
+						account_id
+					);
+				},
+				ConnectionState::Stale => {
+					debug!(
+						"Reconnection attempt to {} cancelled: connection is stale.",
 						account_id
 					);
 				},
@@ -479,22 +515,21 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer.clone());
 
-		if self
-			.active_connections
-			.insert(
-				account_id.clone(),
-				ConnectionStateInfo {
-					state: ConnectionState::Connected(connected_socket),
-					info: peer,
-				},
-			)
-			.is_some()
-		{
-			// This should not happen because we always remove existing connection/socket
-			// prior to connecting, but even if it does, it should be OK to replace the
-			// connection (this doesn't break any invariants and the new peer info is
-			// likely to be more up-to-date).
-			error!("Unexpected existing connection while connecting to {account_id}");
+		if let Some(connection) = self.active_connections.insert(
+			account_id.clone(),
+			ConnectionStateInfo {
+				state: ConnectionState::Connected(connected_socket),
+				info: peer,
+				last_activity: Cell::new(tokio::time::Instant::now()),
+			},
+		) {
+			if !matches!(connection.state, ConnectionState::Stale) {
+				// This should not happen for non-stale sockets because we always remove
+				// existing connection/socket prior to connecting, but even if it does,
+				// it should be OK to replace the connection (this doesn't break any
+				// invariants and the new peer info is likely to be more up-to-date).
+				error!("Unexpected existing connection while connecting to {account_id}");
+			}
 		}
 	}
 
@@ -517,6 +552,9 @@ impl P2PContext {
 				},
 				ConnectionState::ReconnectionScheduled => {
 					self.reconnect_context.reset(&peer.account_id);
+				},
+				ConnectionState::Stale => {
+					// nothing to do
 				},
 			}
 			// Remove any state from previous peer info in case of update:
@@ -587,6 +625,19 @@ impl P2PContext {
 		});
 
 		incoming_message_receiver
+	}
+
+	fn check_activity(&mut self) {
+		for (account_id, state) in &mut self.active_connections.map {
+			if !matches!(state.state, ConnectionState::Stale) &&
+				state.last_activity.get().elapsed() > MAX_INACTIVITY_THRESHOLD
+			{
+				debug!("Peer connection is deemed stale due to inactivity: {}", account_id);
+				self.reconnect_context.reset(account_id);
+				// ZMQ socket is dropped here
+				state.state = ConnectionState::Stale;
+			}
+		}
 	}
 }
 

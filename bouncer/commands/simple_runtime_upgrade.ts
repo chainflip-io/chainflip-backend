@@ -7,7 +7,7 @@
 // Optional args:
 // -test: Run the swap tests after the upgrade.
 //
-// For example ./commands/noop_runtime_upgrade.ts
+// For example ./commands/simple_runtime_upgrade.ts
 // NB: It *must* be run from the bouncer directory.
 
 import path from 'path';

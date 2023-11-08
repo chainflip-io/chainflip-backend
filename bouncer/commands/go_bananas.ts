@@ -90,7 +90,7 @@ function price2tick(price: number): number {
   return Math.round(Math.log(Math.sqrt(price)) / Math.log(Math.sqrt(1.0001)));
 }
 
-async function playLp(asset: string, price: number, liquidity: number) {
+async function playLp(asset: Asset, price: number, liquidity: number) {
   const spread = 0.01 * price;
   const liquidityFine = liquidity * 1e6;
   for (; ;) {
@@ -100,12 +100,12 @@ async function playLp(asset: string, price: number, liquidity: number) {
     const result = await Promise.all([
       call(
         'lp_set_limit_order',
-        ['Usdc', asset, 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        ['USDC', asset, 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
         `Buy ${asset}`,
       ),
       call(
         'lp_set_limit_order',
-        [asset, 'Usdc', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        [asset, 'USDC', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
         `Sell ${asset}`,
       ),
     ]);
@@ -207,22 +207,22 @@ async function bananas() {
 
   await Promise.all([
     playLp(
-      'Eth',
+      'ETH',
       price.get('ETH')! * 10 ** (assetDecimals.USDC - assetDecimals.ETH),
       liquidityUsdc,
     ),
     playLp(
-      'Btc',
+      'BTC',
       price.get('BTC')! * 10 ** (assetDecimals.USDC - assetDecimals.BTC),
       liquidityUsdc,
     ),
     playLp(
-      'Dot',
+      'DOT',
       price.get('DOT')! * 10 ** (assetDecimals.USDC - assetDecimals.DOT),
       liquidityUsdc,
     ),
     playLp(
-      'Flip',
+      'FLIP',
       price.get('FLIP')! * 10 ** (assetDecimals.USDC - assetDecimals.FLIP),
       liquidityUsdc,
     ),

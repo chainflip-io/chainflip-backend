@@ -20,7 +20,10 @@ pub mod rpc;
 pub mod serde_helpers;
 
 mod cached_stream;
-pub use cached_stream::{CachedStream, MakeCachedStream};
+pub use cached_stream::{CachedStream, InnerCachedStream, MakeCachedStream};
+
+mod try_cached_stream;
+pub use try_cached_stream::{MakeTryCachedStream, TryCachedStream};
 
 /// A wrapper around `anyhow::Error` to allow conversion to `jsonrpsee::types::ErrorObjectOwned`
 /// including context and source.
@@ -28,9 +31,9 @@ pub struct AnyhowRpcError {
 	pub error: anyhow::Error,
 }
 
-impl From<anyhow::Error> for AnyhowRpcError {
-	fn from(error: anyhow::Error) -> Self {
-		Self { error }
+impl<E: Into<anyhow::Error>> From<E> for AnyhowRpcError {
+	fn from(error: E) -> Self {
+		Self { error: error.into() }
 	}
 }
 

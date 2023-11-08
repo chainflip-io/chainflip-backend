@@ -207,7 +207,7 @@ impl Slashing for MockSlasher {
 	}
 }
 
-impl_mock_runtime_safe_mode! { vault: PalletSafeMode }
+impl_mock_runtime_safe_mode! { vault: PalletSafeMode<()> }
 
 impl pallet_cf_vaults::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

@@ -8,9 +8,9 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult,
-	Broadcaster, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, SafeMode,
-	SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
+	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, SafeMode, SetSafeMode, Slashing,
+	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -22,6 +22,7 @@ pub use pallet::*;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
+	marker,
 	prelude::*,
 };
 
@@ -62,7 +63,21 @@ pub type KeygenResponseStatus<T, I> =
 pub type KeyHandoverResponseStatus<T, I> =
 	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
 
-impl_pallet_safe_mode!(PalletSafeMode; slashing_enabled);
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(I))]
+pub struct PalletSafeMode<I: 'static> {
+	pub slashing_enabled: bool,
+	#[doc(hidden)]
+	#[codec(skip)]
+	_phantom: marker::PhantomData<I>,
+}
+
+impl<I: 'static> SafeMode for PalletSafeMode<I> {
+	const CODE_RED: Self =
+		PalletSafeMode { slashing_enabled: false, _phantom: marker::PhantomData };
+	const CODE_GREEN: Self =
+		PalletSafeMode { slashing_enabled: true, _phantom: marker::PhantomData };
+}
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant)]
@@ -195,7 +210,7 @@ pub mod pallet {
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = BlockNumberFor<Self>>;
 
 		/// For activating Safe mode: CODE RED for the chain.
-		type SafeMode: Get<PalletSafeMode> + SafeMode + SetSafeMode<Self::SafeMode>;
+		type SafeMode: Get<PalletSafeMode<I>> + SafeMode + SetSafeMode<Self::SafeMode>;
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 

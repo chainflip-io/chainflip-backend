@@ -5,11 +5,15 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use cf_primitives::SemVer;
+use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
-use sp_runtime::{traits::Hash, MultiAddress};
+use sp_runtime::{
+	traits::Hash, transaction_validity::TransactionValidityError, ApplyExtrinsicResult,
+	MultiAddress,
+};
 use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -41,6 +45,18 @@ pub enum ExtrinsicError<OtherError> {
 	Other(OtherError),
 	#[error(transparent)]
 	Dispatch(DispatchError),
+}
+
+#[derive(Error, Debug)]
+pub enum DryRunError {
+	#[error(transparent)]
+	RpcCallError(#[from] jsonrpsee::core::Error),
+	#[error("Unable to decode dry_run RPC result: {0}")]
+	CannotDecodeReply(#[from] codec::Error),
+	#[error("The transaction is invalid: {0}")]
+	InvalidTransaction(#[from] TransactionValidityError),
+	#[error("The transaction failed: {0}")]
+	Dispatch(#[from] DispatchError),
 }
 
 pub type ExtrinsicResult<OtherError> = Result<
@@ -166,6 +182,24 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		)
 	}
 
+	fn build_and_sign_extrinsic(
+		&self,
+		call: state_chain_runtime::RuntimeCall,
+		nonce: Nonce,
+	) -> state_chain_runtime::UncheckedExtrinsic {
+		self.signer
+			.new_signed_extrinsic(
+				call.clone(),
+				&self.runtime_version,
+				self.genesis_hash,
+				self.finalized_block_hash,
+				self.finalized_block_number,
+				self.extrinsic_lifetime,
+				nonce,
+			)
+			.0
+	}
+
 	async fn submit_extrinsic_at_nonce(
 		&mut self,
 		request: &mut Request,
@@ -184,9 +218,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
 
 			let tx_hash: H256 = {
-				use sp_core::{blake2_256, Encode};
 				let encoded = signed_extrinsic.encode();
-				blake2_256(&encoded).into()
+				sp_core::blake2_256(&encoded).into()
 			};
 
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
@@ -269,6 +302,29 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				Err(SubmissionLogicError::NonceTooLow) => {},
 			}
 		})
+	}
+
+	pub async fn dry_run_extrinsic(
+		&mut self,
+		call: state_chain_runtime::RuntimeCall,
+	) -> Result<(), DryRunError> {
+		// Use the nonce from the latest unfinalized block.
+		let hash = self.base_rpc_client.latest_unfinalized_block_hash().await?;
+		let nonce = self
+			.base_rpc_client
+			.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
+				hash,
+				&self.signer.account_id,
+			)
+			.await?
+			.nonce;
+		let uxt = self.build_and_sign_extrinsic(call.clone(), nonce);
+		let result_bytes = self.base_rpc_client.dry_run(Encode::encode(&uxt).into(), None).await?;
+		let dry_run_result: ApplyExtrinsicResult = Decode::decode(&mut &*result_bytes)?;
+
+		debug!(target: "state_chain_client", "Dry run completed. Result: {:?}", &dry_run_result);
+
+		Ok(dry_run_result?.map_err(|e| self.error_decoder.decode_dispatch_error(e))?)
 	}
 
 	pub async fn new_request(

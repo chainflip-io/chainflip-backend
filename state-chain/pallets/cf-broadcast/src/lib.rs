@@ -9,10 +9,24 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
-use cf_traits::{impl_pallet_safe_mode, GetBlockHeight};
+use cf_traits::{GetBlockHeight, SafeMode};
+use frame_support::RuntimeDebug;
+use sp_std::marker;
 pub use weights::WeightInfo;
 
-impl_pallet_safe_mode!(PalletSafeMode; retry_enabled);
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[scale_info(skip_type_params(I))]
+pub struct PalletSafeMode<I: 'static> {
+	pub retry_enabled: bool,
+	#[doc(hidden)]
+	#[codec(skip)]
+	_phantom: marker::PhantomData<I>,
+}
+
+impl<I: 'static> SafeMode for PalletSafeMode<I> {
+	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
+	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
+}
 
 use cf_chains::{
 	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder, TransactionMetadata as _,
@@ -202,7 +216,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode<I>>;
 
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
@@ -322,7 +336,7 @@ pub mod pallet {
 			transaction_out_id: TransactionOutIdFor<T, I>,
 		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
-		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
+		ThresholdSignatureInvalid { broadcast_id: BroadcastId, retry_broadcast_id: BroadcastId },
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
@@ -837,7 +851,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// to retry from the threshold signing stage.
 			else {
 				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(
+				let (retry_broadcast_id, _) = Self::threshold_sign_and_broadcast(
 					api_call,
 					RequestCallbacks::<T, I>::get(broadcast_id),
 					false,
@@ -846,7 +860,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
 				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid {
+					broadcast_id,
+					retry_broadcast_id,
+				});
 			}
 		} else {
 			log::error!("No threshold signature data is available.");

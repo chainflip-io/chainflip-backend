@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = '0.10.0'
+version = '1.0.0'
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -11,13 +11,17 @@ extended-description = """\
 Chainflip Validator Engine Package"""
 maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 maintainer-scripts = "package/"
-name = "chainflip-engine0.10"
+name = "chainflip-engine1.0"
 priority = "required"
 section = "rust"
-systemd-units = [
-  { unit-name = "chainflip-engine0.10", enable = false },
+systemd-units = [{ unit-name = "chainflip-engine1.0", enable = false }]
+assets = [
+  [
+    "target/release/chainflip-engine",
+    "usr/bin/chainflip-engine1.0",
+    "755",
+  ],
 ]
-assets = [["target/release/chainflip-engine", "usr/bin/chainflip-engine0.10", "755"]]
 
 [package.metadata.deb.variants.test]
 maintainer-scripts = "package/test"
@@ -87,7 +91,7 @@ zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v
   "vendored",
 ] }
 warp = { version = "0.3.6" }
-regex = { version = "1"}
+regex = { version = "1" }
 
 # Local deps
 cf-chains = { path = "../state-chain/chains" }
@@ -118,16 +122,16 @@ codec = { package = "parity-scale-codec", version = "3.6.1", features = [
   "derive",
   "full",
 ] }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sc-transaction-pool-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08+2' }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+sc-transaction-pool-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08+3' }
 scale-info = { version = "2.5.0", features = ["derive"] }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
-substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
 
 [dependencies.rocksdb]
 version = "0.21.0"
@@ -149,7 +153,7 @@ utilities = { package = "utilities", path = "../utilities", features = [
 ] }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
 
 [features]
 integration-test = []

@@ -1,7 +1,7 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 name = "chainflip-broker-api"
-version = "0.10.0"
+version = "1.0.0"
 edition = "2021"
 
 [package.metadata.deb]
@@ -21,6 +21,7 @@ name = "chainflip-broker-api"
 [dependencies]
 chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
+custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 anyhow = "1.0.66"
 clap = { version = "3.2.23", features = ["derive"] }
@@ -28,7 +29,7 @@ futures = "0.3"
 hex = "0.4.3"
 jsonrpsee = { version = "0.20", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
-sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+2" }
+sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
 tokio = "1.20.1"
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

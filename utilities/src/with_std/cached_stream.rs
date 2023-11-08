@@ -6,7 +6,7 @@ pub trait CachedStream: Stream {
 	fn cache(&self) -> &Self::Cache;
 }
 
-/// Caches the last mapped last item of a stream according to some map function `f`.
+/// Caches the last item of a stream according to some map function `f`.
 #[derive(Clone)]
 #[pin_project::pin_project]
 pub struct InnerCachedStream<Stream, Cache, F> {
@@ -14,6 +14,11 @@ pub struct InnerCachedStream<Stream, Cache, F> {
 	stream: Stream,
 	cache: Cache,
 	f: F,
+}
+impl<St, Cache, F> InnerCachedStream<St, Cache, F> {
+	pub fn into_inner(self) -> St {
+		self.stream
+	}
 }
 impl<St, Cache, F> Stream for InnerCachedStream<St, Cache, F>
 where

@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use core::panic;
+use core::{marker, panic};
 
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
@@ -1051,14 +1051,14 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 fn dont_slash_in_safe_mode() {
 	new_test_ext().execute_with(|| {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			vault: crate::PalletSafeMode { slashing_enabled: false },
+			vault: crate::PalletSafeMode { slashing_enabled: false, _phantom: marker::PhantomData },
 		});
 		keygen_failure(&[BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 0);
 		assert!(MockSlasher::slash_count(CHARLIE) == 0);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
-			vault: crate::PalletSafeMode { slashing_enabled: true },
+			vault: crate::PalletSafeMode { slashing_enabled: true, _phantom: marker::PhantomData },
 		});
 		keygen_failure(&[BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 1);

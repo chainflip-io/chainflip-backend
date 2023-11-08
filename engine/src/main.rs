@@ -8,7 +8,6 @@ use chainflip_engine::{
 	eth::retry_rpc::EthersRetryRpcClient,
 	health, p2p,
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
-	settings_migrate::migrate_settings0_9_3_to_0_10_0,
 	state_chain_observer::{
 		self,
 		client::{
@@ -22,11 +21,9 @@ use clap::Parser;
 use futures::FutureExt;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::{
-	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use tracing::info;
 use utilities::{metrics, task_scope::task_scope, CachedStream};
 
 lazy_static::lazy_static! {
@@ -37,110 +34,32 @@ lazy_static::lazy_static! {
 	};
 }
 
-async fn ensure_cfe_version_record_up_to_date(settings: &Settings) -> anyhow::Result<()> {
-	use subxt::{ext::sp_core::Pair, PolkadotConfig};
-	// We use subxt because it is capable of dynamic decoding of values, which is important because
-	// the SC Client might be incompatible with the current runtime version.
-	let subxt_client =
-		subxt::OnlineClient::<PolkadotConfig>::from_url(&settings.state_chain.ws_endpoint).await?;
-
-	let signer = subxt::tx::PairSigner::new(subxt::ext::sp_core::sr25519::Pair::from_seed(
-		&utilities::read_clean_and_decode_hex_str_file(
-			&settings.state_chain.signing_key_file,
-			"Signing Key",
-			|str| {
-				<[u8; 32]>::try_from(hex::decode(str)?).map_err(|e| {
-					anyhow::anyhow!("Failed to decode signing key: Wrong length. {e:?}")
-				})
-			},
-		)?,
-	));
-
-	let recorded_version = <SemVer as codec::Decode>::decode(
-		&mut subxt_client
-			.storage()
-			.at_latest()
-			.await?
-			.fetch_or_default(&subxt::storage::dynamic(
-				"Validator",
-				"NodeCFEVersion",
-				vec![signer.account_id()],
-			))
-			.await?
-			.encoded(),
-	)
-	.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
-
-	// Note that around CFE upgrade period, the less recent version might still be running (and
-	// can even be *the* "active" instance), so it is important that it doesn't downgrade the
-	// version record:
-	if CFE_VERSION.is_more_recent_than(recorded_version) {
-		info!("Updating CFE version record from {:?} to {:?}", recorded_version, *CFE_VERSION);
-
-		subxt_client
-			.tx()
-			.sign_and_submit_then_watch_default(
-				&subxt::dynamic::tx(
-					"Validator",
-					"cfe_version",
-					vec![(
-						"new_version",
-						vec![
-							("major", CFE_VERSION.major),
-							("minor", CFE_VERSION.minor),
-							("patch", CFE_VERSION.patch),
-						],
-					)],
-				),
-				&signer,
-			)
-			.await?
-			.wait_for_in_block()
-			.await?;
-	}
-
-	Ok(())
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 
 	let opts = CommandLineOptions::parse();
 
-	let config_root_path = PathBuf::from(&opts.config_root);
-
 	// the settings directory from opts.config_root that we'll use to read the settings file
-	let migrated_settings_dir = migrate_settings0_9_3_to_0_10_0(opts.config_root.clone())?;
-
-	let settings = Settings::new_with_settings_dir(
-		migrated_settings_dir.unwrap_or(DEFAULT_SETTINGS_DIR),
-		opts,
-	)
-	.context("Error reading settings")?;
+	let settings = Settings::new_with_settings_dir(DEFAULT_SETTINGS_DIR, opts)
+		.context("Error reading settings")?;
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
-	utilities::print_start_and_end!(async run_main(settings, config_root_path, migrated_settings_dir));
+	utilities::print_start_and_end!(async run_main(settings));
 
 	Ok(())
 }
 
-async fn run_main(
-	settings: Settings,
-	config_root_path: PathBuf,
-	migrated_settings_dir: Option<&str>,
-) -> anyhow::Result<()> {
+async fn run_main(settings: Settings) -> anyhow::Result<()> {
 	task_scope(|scope| {
 		async move {
 			let mut start_logger_server_fn =
 				Some(utilities::logging::init_json_logger(settings.logging.clone()).await);
 
-			ensure_cfe_version_record_up_to_date(&settings).await?;
-
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
-			let (state_chain_stream, state_chain_client) =
+			let (state_chain_stream, unfinalised_state_chain_stream, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
@@ -157,34 +76,6 @@ async fn run_main(
 
 			// Wait until SCC has started, to ensure old engine has stopped
 			start_logger_server_fn.take().expect("only called once")(scope);
-
-			if *CFE_VERSION == (SemVer { major: 0, minor: 10, patch: 0 })
-			{
-				if let Some(migrated_settings_dir) = migrated_settings_dir {
-					// Back up the old settings.
-					std::fs::copy(
-						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.toml"),
-						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.backup-0.9.3.toml"),
-					)
-					.context("Unable to back up old settings. Please ensure the chainflip-engine has write permissions in the config directories.")?;
-
-					// Replace with the migrated settings.
-					std::fs::rename(
-						config_root_path.join(migrated_settings_dir).join("Settings.toml"),
-						config_root_path.join(DEFAULT_SETTINGS_DIR).join("Settings.toml"),
-					)
-					.context("Unable to replace old settings with migrated settings. Please ensure the chainflip-engine has write permissions in the config directories.")?;
-
-					// Remove the migration dir.
-					std::fs::remove_dir_all(config_root_path.join(migrated_settings_dir))
-						.unwrap_or_else(|e| {
-							tracing::warn!(
-								"Unable to remove migration dir: {e:?}. Please remove it manually.",
-								e = e
-							)
-						});
-				}
-			}
 
 			if let Some(health_check_settings) = &settings.health_check {
 				health::start(scope, health_check_settings, has_completed_initialising.clone())
@@ -216,7 +107,7 @@ async fn run_main(
 			) = p2p::start(
 				state_chain_client.clone(),
 				settings.node_p2p.clone(),
-				state_chain_stream.cache().block_hash,
+				state_chain_stream.cache().hash,
 			)
 			.await
 			.context("Failed to start p2p")?;
@@ -233,7 +124,7 @@ async fn run_main(
 						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::EthereumInstance,
-						>>(state_chain_stream.cache().block_hash)
+						>>(state_chain_stream.cache().hash)
 						.await
 						.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
 				);
@@ -250,7 +141,7 @@ async fn run_main(
 						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::PolkadotInstance,
-						>>(state_chain_stream.cache().block_hash)
+						>>(state_chain_stream.cache().hash)
 						.await
 						.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
 				);
@@ -267,7 +158,7 @@ async fn run_main(
 						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::BitcoinInstance,
-						>>(state_chain_stream.cache().block_hash)
+						>>(state_chain_stream.cache().hash)
 						.await
 						.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
 				);
@@ -279,7 +170,7 @@ async fn run_main(
 				let expected_eth_chain_id = web3::types::U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_hash(),
+							state_chain_client.latest_finalized_block().hash,
 						)
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
@@ -296,7 +187,7 @@ async fn run_main(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
 							state_chain_runtime::Runtime,
-						>>(state_chain_client.latest_finalized_hash())
+						>>(state_chain_client.latest_finalized_block().hash)
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
@@ -306,7 +197,7 @@ async fn run_main(
 				let expected_dot_genesis_hash = PolkadotHash::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::PolkadotGenesisHash<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_hash(),
+							state_chain_client.latest_finalized_block().hash,
 						)
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
@@ -321,6 +212,7 @@ async fn run_main(
 				dot_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
+				unfinalised_state_chain_stream.clone(),
 				db.clone(),
 			)
 			.await?;

@@ -1,6 +1,7 @@
 #![feature(absolute_path)]
 use anyhow::{Context, Result};
 use clap::Parser;
+use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
@@ -27,7 +28,7 @@ async fn main() {
 	std::process::exit(match run_cli().await {
 		Ok(_) => 0,
 		Err(err) => {
-			eprintln!("Error: {err:?}");
+			eprintln!("Error: {err:#}");
 			1
 		},
 	})
@@ -57,13 +58,17 @@ async fn run_cli() -> Result<()> {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
 				Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) => {
+					let destination_asset =
+						RpcAsset::try_from((params.destination_asset, params.destination_chain))?
+							.try_into()?;
 					let SwapDepositAddress { address, .. } = api
 						.broker_api()
 						.request_swap_deposit_address(
-							params.source_asset,
-							params.destination_asset,
+							RpcAsset::try_from((params.source_asset, params.source_chain))?
+								.try_into()?,
+							destination_asset,
 							chainflip_api::clean_foreign_chain_address(
-								params.destination_asset.into(),
+								destination_asset.into(),
 								&params.destination_address,
 							)?,
 							params.broker_commission,
@@ -73,9 +78,11 @@ async fn run_cli() -> Result<()> {
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(
-					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset },
+					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
 				) => {
-					let address = api.lp_api().request_liquidity_deposit_address(asset).await?;
+					let asset = RpcAsset::try_from((asset, chain))?;
+					let address =
+						api.lp_api().request_liquidity_deposit_address(asset.try_into()?).await?;
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(

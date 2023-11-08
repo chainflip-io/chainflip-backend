@@ -615,7 +615,10 @@ impl Network {
 			dispatch_all_pending_extrinsics();
 
 			// Provide very large weight to ensure all on_idle processing can occur
-			AllPalletsWithSystem::on_idle(block_number, Weight::from_parts(1_000_000_000_000, 0));
+			AllPalletsWithSystem::on_idle(
+				block_number,
+				Weight::from_parts(2_000_000_000_000, u64::MAX),
+			);
 
 			// We must finalise this to clear the previous author which is otherwise cached
 			AllPalletsWithSystem::on_finalize(block_number);

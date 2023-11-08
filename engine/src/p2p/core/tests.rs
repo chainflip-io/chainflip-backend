@@ -1,5 +1,8 @@
 use super::{PeerInfo, PeerUpdate};
-use crate::p2p::{OutgoingMultisigStageMessages, P2PKey};
+use crate::p2p::{
+	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
+	OutgoingMultisigStageMessages, P2PKey,
+};
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -196,30 +199,27 @@ async fn can_connect_after_pubkey_change() {
 	send_and_receive_message(&node1, &mut node2b).await.unwrap();
 }
 
-/// Test the behaviour around receiving own registration: at first, if our node
-/// is not registered, we delay connecting to other nodes; once we receive our
-/// own registration, we connect to other registered nodes.
-#[tokio::test]
-async fn connects_after_registration() {
+#[tokio::test(start_paused = true)]
+async fn stale_connections() {
 	let node_key1 = create_keypair();
 	let node_key2 = create_keypair();
 
-	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8092);
-	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8093);
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8094);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8095);
 
-	// Node 1 doesn't get its own peer info at first and will wait for registration
-	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi2.clone()]);
+	let mut node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
 	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
 
-	// For sanity, check that node 1 can't yet communicate with node 2:
-	assert!(send_and_receive_message(&node1, &mut node2).await.is_none());
+	// Sleep long enough for nodes to deem connections "stale" (due to inactivity)
+	tokio::time::sleep(
+		ACTIVITY_CHECK_INTERVAL + MAX_INACTIVITY_THRESHOLD + std::time::Duration::from_secs(1),
+	)
+	.await;
 
-	// Update node 1 with its own peer info
-	node1.peer_update_sender.send(PeerUpdate::Registered(pi1.clone())).unwrap();
+	// Resuming is necessary for timeouts to work correctly
+	tokio::time::resume();
 
-	// Allow some time for the above command to propagate through the channel
-	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-	// It should now be able to communicate with node 2:
-	assert!(send_and_receive_message(&node1, &mut node2).await.is_some());
+	// Ensure that we can re-activate stale connections when needed
+	send_and_receive_message(&node1, &mut node2).await.unwrap();
+	send_and_receive_message(&node2, &mut node1).await.unwrap();
 }

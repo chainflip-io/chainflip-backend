@@ -62,9 +62,9 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Source asset ("eth"|"dot")
+	/// Source asset ("ETH"|"DOT")
 	pub source_asset: Asset,
-	/// Egress asset ("eth"|"dot")
+	/// Egress asset ("ETH"|"DOT")
 	pub destination_asset: Asset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
@@ -73,6 +73,10 @@ pub struct SwapRequestParams {
 	pub destination_address: String,
 	/// Commission to the broker in basis points
 	pub broker_commission: u16,
+	/// Chain of the source asset ("Ethereum"|"Polkadot")
+	pub source_chain: Option<ForeignChain>,
+	/// Chain of the destination asset ("Ethereum"|"Polkadot")
+	pub destination_chain: Option<ForeignChain>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
@@ -85,8 +89,10 @@ pub enum BrokerSubcommands {
 pub enum LiquidityProviderSubcommands {
 	/// Request a liquidity deposit address.
 	RequestLiquidityDepositAddress {
-		/// Asset to deposit.
+		/// Asset to deposit ("ETH"|"DOT")
 		asset: Asset,
+		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
+		chain: Option<ForeignChain>,
 	},
 	/// Register an Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
