@@ -88,7 +88,7 @@ impl TryFrom<(Asset, Option<ForeignChain>)> for RpcAsset {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
-	None {
+	Unregistered {
 		flip_balance: NumberOrHex,
 	},
 	Broker {
@@ -117,8 +117,8 @@ pub enum RpcAccountInfo {
 }
 
 impl RpcAccountInfo {
-	fn none(balance: u128) -> Self {
-		Self::None { flip_balance: balance.into() }
+	fn unregistered(balance: u128) -> Self {
+		Self::Unregistered { flip_balance: balance.into() }
 	}
 
 	fn broker(balance: u128) -> Self {
@@ -641,9 +641,9 @@ where
 			match api
 				.cf_account_role(hash, account_id.clone())
 				.map_err(to_rpc_error)?
-				.unwrap_or(AccountRole::Unassigned)
+				.unwrap_or(AccountRole::Unregistered)
 			{
-				AccountRole::Unassigned => RpcAccountInfo::none(balance),
+				AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
 				AccountRole::Broker => RpcAccountInfo::broker(balance),
 				AccountRole::LiquidityProvider => {
 					let info = api
@@ -1155,7 +1155,9 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::none(0)).unwrap());
+		insta::assert_display_snapshot!(
+			serde_json::to_value(RpcAccountInfo::unregistered(0)).unwrap()
+		);
 	}
 
 	#[test]

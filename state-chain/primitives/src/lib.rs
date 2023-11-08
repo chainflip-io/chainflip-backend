@@ -100,7 +100,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 /// the chain.
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
-/// the initial [AccountRole::Unassigned] state.
+/// the initial [AccountRole::Unregistered] state.
 #[derive(
 	PartialEq,
 	Eq,
@@ -125,7 +125,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 pub enum AccountRole {
 	/// The default account type - account not yet assigned with special role or permissions.
 	#[default]
-	Unassigned,
+	Unregistered,
 	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
 	/// role is required for any node that wishes to participate in auctions.
 	Validator,

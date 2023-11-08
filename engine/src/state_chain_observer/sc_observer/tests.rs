@@ -517,7 +517,7 @@ async fn run_the_sc_observer() {
 					scope,
 					&settings.state_chain.ws_endpoint,
 					&settings.state_chain.signing_key_file,
-					AccountRole::Unassigned,
+					AccountRole::Unregistered,
 					false,
 					None,
 				)

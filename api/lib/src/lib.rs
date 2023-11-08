@@ -109,7 +109,7 @@ impl StateChainApi {
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
-			AccountRole::Unassigned,
+			AccountRole::Unregistered,
 			false,
 			None,
 		)
@@ -192,7 +192,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-			AccountRole::Unassigned => bail!("Cannot register account role None"),
+			AccountRole::Unregistered => bail!("Cannot register account role None"),
 		};
 
 		let (tx_hash, ..) = self
