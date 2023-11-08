@@ -328,7 +328,7 @@ pub mod pallet {
 			transaction_out_id: TransactionOutIdFor<T, I>,
 		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
-		ThresholdSignatureInvalid { broadcast_id: BroadcastId, new_broadcast_id: BroadcastId },
+		ThresholdSignatureInvalid { broadcast_id: BroadcastId, retry_broadcast_id: BroadcastId },
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
@@ -794,7 +794,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// to retry from the threshold signing stage.
 			else {
 				Self::clean_up_broadcast_storage(broadcast_id);
-				let (new_broadcast_id, _) = Self::threshold_sign_and_broadcast(
+				let (retry_broadcast_id, _) = Self::threshold_sign_and_broadcast(
 					api_call,
 					RequestCallbacks::<T, I>::get(broadcast_id),
 				);
@@ -804,7 +804,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid {
 					broadcast_id,
-					new_broadcast_id,
+					retry_broadcast_id,
 				});
 			}
 		} else {
