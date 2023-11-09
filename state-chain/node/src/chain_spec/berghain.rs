@@ -33,7 +33,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_init_agg_key: hex_literal::hex!(
 		"022a1d7efa522ce746bc40a04016178ce38154be1f0537c6957bdeed17057bb955"
 	),
-	ethereum_deployment_block: 18277081u64, // TODO: Albert to confirm block number before launch
+	ethereum_deployment_block: 18277081u64, // TODO: Update to a more recent block before launch
 	genesis_funding_amount: MIN_FUNDING,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
