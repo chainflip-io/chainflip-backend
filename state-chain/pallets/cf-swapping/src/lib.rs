@@ -963,12 +963,16 @@ pub mod pallet {
 			broker_commission_bps: BasisPoints,
 			channel_id: ChannelId,
 		) {
+			// Permill maxes out at 100% so this is safe.
 			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
+			assert!(fee <= amount, "Broker fee cannot be more than the amount");
 
 			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
 				earned_fees.saturating_accrue(fee)
 			});
+
+			let amount = amount.saturating_sub(fee);
 
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
