@@ -1108,6 +1108,16 @@ fn qualification_by_cfe_version() {
 		));
 		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 
+		// Report a version below the minimum:
+		assert_ok!(ValidatorPallet::set_node_cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			NodeCFEVersions {
+				node: SemVer::default(),
+				cfe: SemVer { major: 0, minor: 0, patch: 1 }
+			}
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
 		// Report a version greater than the minimum:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
@@ -1118,6 +1128,16 @@ fn qualification_by_cfe_version() {
 		));
 		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 
+		// Report a version below the minimum:
+		assert_ok!(ValidatorPallet::set_node_cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			NodeCFEVersions {
+				node: SemVer::default(),
+				cfe: SemVer { major: 0, minor: 0, patch: 1 }
+			}
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
 		// Report a version bumping the minor version:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
@@ -1127,6 +1147,16 @@ fn qualification_by_cfe_version() {
 			}
 		));
 		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version below the minimum:
+		assert_ok!(ValidatorPallet::set_node_cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			NodeCFEVersions {
+				node: SemVer::default(),
+				cfe: SemVer { major: 0, minor: 0, patch: 1 }
+			}
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 
 		// Report a version bumping the major version:
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
@@ -1155,5 +1185,73 @@ fn qualification_by_cfe_version() {
 			}
 		));
 		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+	});
+}
+
+#[test]
+fn submitting_multiple_versions_ensuring_compatibility() {
+	new_test_ext().execute_with(|| {
+		const VALIDATOR: u64 = GENESIS_AUTHORITIES[0];
+		// No value reported, no value set:
+		assert!(!NodeCFEVersion::<Test>::contains_key(VALIDATOR));
+		assert!(!MinimumReportedCfeVersion::<Test>::exists());
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			OriginTrait::root(),
+			PalletConfigUpdate::MinimumReportedCfeVersion {
+				version: SemVer { major: 0, minor: 1, patch: 0 }
+			}
+		));
+		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a version equal to the minimum (only cfe version matters):
+		let compatible_version = NodeCFEVersions {
+			node: SemVer { major: 0, minor: 1, patch: 0 },
+			cfe: SemVer { major: 0, minor: 1, patch: 0 },
+		};
+		assert_ok!(ValidatorPallet::set_node_cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			compatible_version
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report the same version:
+		frame_system::Pallet::<Test>::reset_events();
+		assert_ok!(ValidatorPallet::set_node_cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			compatible_version
+		));
+		assert_eq!(
+			0,
+			frame_system::Pallet::<Test>::events().len(),
+			"We should have no events of an update"
+		);
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Report a higher compatible version:
+		let higher_compatible_version = NodeCFEVersions {
+			node: SemVer { major: 0, minor: 1, patch: 1 },
+			cfe: SemVer { major: 1, minor: 1, patch: 0 },
+		};
+		assert_ok!(ValidatorPallet::set_node_cfe_version(
+			RuntimeOrigin::signed(VALIDATOR),
+			higher_compatible_version
+		));
+		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
+			crate::Event::NodeVersionUpdated {
+				account_id: VALIDATOR,
+				old_version: compatible_version.node,
+				new_version: higher_compatible_version.node,
+			},
+		));
+		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
+			crate::Event::CFEVersionUpdated {
+				account_id: VALIDATOR,
+				old_version: compatible_version.cfe,
+				new_version: higher_compatible_version.cfe,
+			},
+		));
+		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
 	});
 }
