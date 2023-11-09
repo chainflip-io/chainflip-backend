@@ -4,6 +4,14 @@ use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config>(PhantomData<T>);
 
+mod old {
+	use super::*;
+
+	#[frame_support::storage_alias]
+	pub type NodeCFEVersion<T: Config> =
+		StorageMap<Pallet<T>, Blake2_128Concat, ValidatorIdOf<T>, SemVer, ValueQuery>;
+}
+
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		NodeCFEVersion::<T>::translate(|_key, cfe_version| {
@@ -15,17 +23,26 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let storage_len: u64 = NodeCFEVersion::<T>::iter_keys().count() as u64;
-		Ok(storage_len.encode())
+		let old_storage: Vec<(<T as Chainflip>::ValidatorId, SemVer)> =
+			old::NodeCFEVersion::<T>::iter().collect();
+		Ok(old_storage.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let old_storage_len = <u64>::decode(&mut &state[..]).unwrap();
+		let old_storage =
+			<Vec<(<T as Chainflip>::ValidatorId, SemVer)>>::decode(&mut &state[..]).unwrap();
 		ensure!(
-			NodeCFEVersion::<T>::iter_keys().count() as u64 == old_storage_len,
+			NodeCFEVersion::<T>::iter_keys().count() == old_storage.len(),
 			"NodeCFEVersion migration failed."
 		);
+		for elem in old_storage.iter() {
+			let (key, cfe_ver) = elem;
+			ensure!(
+				NodeCFEVersion::<T>::get(key) == NodeCFEVersions { cfe: *cfe_ver, node: *cfe_ver },
+				"NodeCFEVersion migration failed."
+			);
+		}
 		Ok(())
 	}
 }
@@ -35,13 +52,7 @@ mod test_runtime_upgrade {
 	use super::*;
 	use mock::Test;
 	pub const ACCOUNT_ID: <mock::Test as frame_system::Config>::AccountId = 12345;
-	mod old {
-		use super::*;
 
-		#[frame_support::storage_alias]
-		pub type NodeCFEVersion<T: Config> =
-			StorageMap<Pallet<T>, Blake2_128Concat, ValidatorIdOf<T>, SemVer, ValueQuery>;
-	}
 	#[test]
 	fn test() {
 		mock::new_test_ext().execute_with(|| {

@@ -220,7 +220,7 @@ fn send_node_cfe_version() {
 		let node_version = SemVer { major: 4, minor: 5, patch: 7 };
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(authority),
-			NodeCFEVersions { cfe: cfe_version, node: new_node_version }
+			NodeCFEVersions { cfe: cfe_version, node: node_version }
 		));
 
 		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
@@ -239,7 +239,7 @@ fn send_node_cfe_version() {
 		));
 
 		assert_eq!(
-			NodeCFEVersions { cfe: cfe_version, node: new_node_version },
+			NodeCFEVersions { cfe: cfe_version, node: node_version },
 			ValidatorPallet::node_cfe_version(authority),
 			"cfe and node version should be stored"
 		);
