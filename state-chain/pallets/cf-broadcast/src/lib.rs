@@ -429,8 +429,8 @@ pub mod pallet {
 
 				if retries.len() > num_retries_that_fit {
 					paused_broadcasts.append(&mut retries.split_off(num_retries_that_fit));
-					BroadcastRetryQueue::<T, I>::put(paused_broadcasts);
 				}
+				BroadcastRetryQueue::<T, I>::put(paused_broadcasts);
 
 				let retries_len = retries.len();
 

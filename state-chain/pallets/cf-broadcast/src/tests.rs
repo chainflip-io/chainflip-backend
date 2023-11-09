@@ -579,3 +579,137 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 		);
 	});
 }
+
+#[test]
+fn broadcast_pause() {
+	new_test_ext().execute_with(|| {
+		const TX_OUT_ID_1: [u8; 4] = [0xaa; 4];
+		const TX_OUT_ID_2: [u8; 4] = [0xbb; 4];
+		const TX_OUT_ID_3: [u8; 4] = [0xcc; 4];
+
+		let api_call1 = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: TX_OUT_ID_1,
+		};
+
+		let api_call2 = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: TX_OUT_ID_2,
+		};
+
+		let api_call3 = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: TX_OUT_ID_3,
+		};
+
+		// create and sign 3 txs that are then ready for broadcast
+
+		let (broadcast_id_1, _) =
+			Broadcaster::threshold_sign_and_broadcast(api_call1.clone(), None, false);
+
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// tx1 emits broadcast request
+		System::assert_last_event(RuntimeEvent::Broadcaster(
+			crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
+				transaction_out_id: TX_OUT_ID_1,
+				broadcast_attempt_id: BroadcastAttemptId {
+					broadcast_id: broadcast_id_1,
+					attempt_count: 0,
+				},
+				transaction_payload: Default::default(),
+				nominee: MockNominator::get_last_nominee().unwrap(),
+			},
+		));
+
+		let (broadcast_id_2, _) =
+			Broadcaster::threshold_sign_and_broadcast(api_call2.clone(), None, true);
+
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// tx2 emits broadcast request and also pauses any further new broadcast requests
+		System::assert_last_event(RuntimeEvent::Broadcaster(
+			crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
+				transaction_out_id: TX_OUT_ID_2,
+				broadcast_attempt_id: BroadcastAttemptId {
+					broadcast_id: broadcast_id_2,
+					attempt_count: 0,
+				},
+				transaction_payload: Default::default(),
+				nominee: MockNominator::get_last_nominee().unwrap(),
+			},
+		));
+
+		let (broadcast_id_3, _) =
+			Broadcaster::threshold_sign_and_broadcast(api_call3.clone(), None, false);
+
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// tx3 is ready for broadcast but since there is a broadcast pause, broadcast request is not
+		// issued, the broadcast is rescheduled instead.
+		System::assert_last_event(RuntimeEvent::Broadcaster(
+			crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+				broadcast_attempt_id: BroadcastAttemptId {
+					broadcast_id: broadcast_id_3,
+					attempt_count: 0,
+				},
+			},
+		));
+
+		// report successful broadcast of tx1
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			TX_OUT_ID_1,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+		));
+
+		// tx3 should still not be broadcasted because the blocking tx (tx2) has still not
+		// succeeded.
+		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
+		assert_eq!(
+			BroadcastRetryQueue::<Test, Instance1>::get()[0]
+				.broadcast_attempt_id
+				.broadcast_id,
+			broadcast_id_3
+		);
+
+		// Now tx2 succeeds which should allow tx3 to be broadcast
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			TX_OUT_ID_2,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+		));
+		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
+
+		System::assert_last_event(RuntimeEvent::Broadcaster(
+			crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
+				transaction_out_id: TX_OUT_ID_3,
+				broadcast_attempt_id: BroadcastAttemptId {
+					broadcast_id: broadcast_id_3,
+					// attempt count is 1 because the previous failure to broadcast because of
+					// broadcast pause is considered an attempt
+					attempt_count: 1,
+				},
+				transaction_payload: Default::default(),
+				nominee: MockNominator::get_last_nominee().unwrap(),
+			},
+		));
+
+		assert!(BroadcastRetryQueue::<Test, Instance1>::get().is_empty());
+
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			TX_OUT_ID_3,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+		));
+	});
+}
