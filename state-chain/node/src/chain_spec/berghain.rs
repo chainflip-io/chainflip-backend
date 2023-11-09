@@ -31,9 +31,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_address_checker_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	ethereum_chain_id: CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
-		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024" /* TODO: Albert to
-		                                                                      * replace AGG key
-		                                                                      * before launch */
+		"022a1d7efa522ce746bc40a04016178ce38154be1f0537c6957bdeed17057bb955"
 	),
 	ethereum_deployment_block: 18277081u64, // TODO: Albert to confirm block number before launch
 	genesis_funding_amount: MIN_FUNDING,
