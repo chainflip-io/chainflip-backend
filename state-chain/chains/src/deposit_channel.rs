@@ -44,7 +44,7 @@ impl<C: Chain> DepositChannel<C> {
 	pub fn generate_new<A: AddressDerivationApi<C>>(
 		channel_id: ChannelId,
 		asset: C::ChainAsset,
-	) -> Result<Self, DispatchError> {
+	) -> Result<Self, AddressDerivationError> {
 		let (address, state) = A::generate_address_and_state(asset, channel_id)?;
 		Ok(Self { channel_id, address, asset, state })
 	}

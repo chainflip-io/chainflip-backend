@@ -1,17 +1,18 @@
 use super::AddressDerivation;
 use crate::BitcoinVault;
 use cf_chains::{
-	address::AddressDerivationApi, btc::deposit_address::DepositAddress, Bitcoin, Chain,
+	address::{AddressDerivationApi, AddressDerivationError},
+	btc::deposit_address::DepositAddress,
+	Bitcoin, Chain,
 };
 use cf_primitives::ChannelId;
 use cf_traits::KeyProvider;
-use frame_support::sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
 		source_asset: <Bitcoin as Chain>::ChainAsset,
 		channel_id: ChannelId,
-	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
+	) -> Result<<Bitcoin as Chain>::ChainAccount, AddressDerivationError> {
 		<Self as AddressDerivationApi<Bitcoin>>::generate_address_and_state(
 			source_asset,
 			channel_id,
@@ -24,16 +25,16 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<
 		(<Bitcoin as Chain>::ChainAccount, <Bitcoin as Chain>::DepositChannelState),
-		DispatchError,
+		AddressDerivationError,
 	> {
 		let channel_id: u32 = channel_id
 			.try_into()
-			.map_err(|_| "Intent ID is too large for BTC address derivation")?;
+			.map_err(|_| AddressDerivationError::BitcoinIntentIdTooLarge)?;
 
 		let channel_state = DepositAddress::new(
 			// TODO: The key should be passed as an argument (or maybe KeyProvider type arg).
 			BitcoinVault::active_epoch_key()
-				.ok_or(DispatchError::Other("No vault for epoch"))?
+				.ok_or(AddressDerivationError::MissingBitcoinVault)?
 				.key
 				.current,
 			channel_id,

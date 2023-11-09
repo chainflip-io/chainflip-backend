@@ -16,7 +16,7 @@ use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade, t
 pub use weights::WeightInfo;
 
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi},
+	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
@@ -409,6 +409,12 @@ pub mod pallet {
 		AssetMismatch,
 		/// Channel ID has reached maximum
 		ChannelIdsExhausted,
+		/// Polkadot's Vault Account does not exist in storage.
+		MissingPolkadotVault,
+		/// Bitcoin's Vault key does not exist for the current epoch.
+		MissingBitcoinVault,
+		/// Intent ID is too large for Bitcoin address derivation
+		BitcoinIntentIdTooLarge,
 	}
 
 	#[pallet::hooks]
@@ -926,10 +932,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Ok(*id)
 				})?;
 			(
-				DepositChannel::generate_new::<T::AddressDerivation>(
-					next_channel_id,
-					source_asset,
-				)?,
+				DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
+					.map_err(|e| match e {
+						AddressDerivationError::MissingPolkadotVault =>
+							Error::<T, I>::MissingPolkadotVault,
+						AddressDerivationError::MissingBitcoinVault =>
+							Error::<T, I>::MissingBitcoinVault,
+						AddressDerivationError::BitcoinIntentIdTooLarge =>
+							Error::<T, I>::BitcoinIntentIdTooLarge,
+					})?,
 				next_channel_id,
 			)
 		};
