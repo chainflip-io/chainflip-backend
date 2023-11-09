@@ -1533,6 +1533,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bitcoin",
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
