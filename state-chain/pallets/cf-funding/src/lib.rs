@@ -39,8 +39,11 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
-
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+#[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
+pub enum Pending {
+	Pending,
+}
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled, start_bidding_enabled, stop_bidding_enabled);
 
@@ -119,11 +122,11 @@ pub mod pallet {
 	pub type ActiveBidder<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
-	/// PendingRedemptions stores a () for the account until the redemption is executed or the
-	/// redemption expires.
+	/// PendingRedemptions stores a Pending enum for the account until the redemption is executed
+	/// or the redemption expires.
 	#[pallet::storage]
 	pub type PendingRedemptions<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, Pending, OptionQuery>;
 
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
@@ -453,7 +456,7 @@ pub mod pallet {
 					executor,
 				);
 
-				PendingRedemptions::<T>::insert(&account_id, ());
+				PendingRedemptions::<T>::insert(&account_id, Pending::Pending);
 
 				Self::deposit_event(Event::RedemptionRequested {
 					account_id,
