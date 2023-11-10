@@ -737,7 +737,12 @@ const AUTHORITIES: Range<u64> = 0..10;
 
 lazy_static::lazy_static! {
 	/// How many candidates can fail without preventing us from re-trying keygen
-	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = CANDIDATES.count().checked_sub(MIN_AUTHORITY_SIZE as usize).unwrap();
+	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = {
+
+		let min_size = std::cmp::max(MIN_AUTHORITY_SIZE, (Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) * AUTHORITIES.count() as u32);
+
+		CANDIDATES.count().checked_sub(min_size as usize).unwrap()
+	};
 
 	/// How many current authorities can fail to leave enough healthy ones to handover the key
 	static ref MAX_ALLOWED_SHARING_OFFENDERS: usize = {
@@ -785,6 +790,29 @@ mod keygen {
 		new_test_ext().execute_with(|| {
 			// Not enough unbanned nodes left after this failure, so we should abort
 			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS + 1));
+			assert_rotation_aborted();
+		});
+	}
+
+	#[test]
+	fn rotation_aborts_if_candidates_below_min_percentage() {
+		new_test_ext().execute_with(|| {
+			// Ban half of the candidates:
+			let failing_count = CANDIDATES.count() / 2;
+			let remaining_count = CANDIDATES.count() - failing_count;
+
+			// We still have enough candidates according to auction resolver parameters:
+			assert!(remaining_count > MIN_AUTHORITY_SIZE as usize);
+
+			// But the rotation should be aborted since authority count would drop too much
+			// compared to the previous set:
+			assert!(
+				remaining_count <
+					(Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) *
+						AUTHORITIES.count()
+			);
+
+			failed_keygen_with_offenders(CANDIDATES.take(failing_count));
 			assert_rotation_aborted();
 		});
 	}

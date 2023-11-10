@@ -216,6 +216,7 @@ cf_test_utilities::impl_test_helpers! {
 			min_size: MIN_AUTHORITY_SIZE,
 			max_size: MAX_AUTHORITY_SIZE,
 			max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+			max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	},
 	||{

@@ -2,7 +2,10 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash},
 	ChainState,
 };
-use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment};
+use cf_primitives::{
+	chains::assets, AccountRole, AssetAmount, AuthorityCount, NetworkEnvironment,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+};
 
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
@@ -231,6 +234,7 @@ pub fn inner_cf_development_config(
 				testnet::SNOW_WHITE_SR25519.into(),
 				1,
 				devnet::MAX_AUTHORITIES,
+				DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
 					eth_usdc_address: eth_usdc_address.into(),
@@ -358,6 +362,7 @@ macro_rules! network_spec {
 							SNOW_WHITE_SR25519.into(),
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
+							DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 							EnvironmentConfig {
 								flip_token_address: flip_token_address.into(),
 								eth_usdc_address: eth_usdc_address.into(),
@@ -428,6 +433,7 @@ fn testnet_genesis(
 	root_key: AccountId,
 	min_authorities: AuthorityCount,
 	max_authorities: AuthorityCount,
+	max_authority_set_contraction_percentage: Percent,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -556,6 +562,7 @@ fn testnet_genesis(
 			min_size: min_authorities,
 			max_size: max_authorities,
 			max_expansion: max_authorities,
+			max_authority_set_contraction_percentage,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
