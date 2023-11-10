@@ -36,6 +36,9 @@ use std::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
+#[serde(
+	expecting = r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
+)]
 pub enum RpcAsset {
 	ImplicitChain(Asset),
 	ExplicitChain { chain: ForeignChain, asset: Asset },
@@ -1292,5 +1295,14 @@ mod test {
 		assert!(try_into_asset(Asset::Dot, ForeignChain::Ethereum).is_err());
 		assert!(try_into_asset(Asset::Usdc, ForeignChain::Bitcoin).is_err());
 		assert!(try_into_asset(Asset::Btc, ForeignChain::Ethereum).is_err());
+	}
+
+	#[test]
+	fn test_failed_parse_error_message() {
+		let error = serde_json::from_str::<RpcAsset>("\"Eth\"").unwrap_err();
+		assert_eq!(
+			error.to_string(),
+			r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
+		);
 	}
 }
