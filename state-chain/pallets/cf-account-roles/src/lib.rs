@@ -57,8 +57,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		/// The account has never been created.
 		UnknownAccount,
-		AccountNotInitialised,
 		/// The account already has a registered role.
 		AccountRoleAlreadyRegistered,
 		/// Initially when swapping features are deployed to the chain, they will be disabled.
