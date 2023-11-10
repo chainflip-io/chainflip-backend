@@ -126,14 +126,21 @@ benchmarks! {
 		assert_eq!(Pallet::<T>::auction_parameters(), parameters)
 	}
 
-	cfe_version {
+	set_node_cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
-		let version = SemVer {
-			major: 1,
-			minor: 2,
-			patch: 3
+		let version = NodeCFEVersions {
+			node: SemVer {
+				major: 1,
+				minor: 2,
+				patch: 3
+			},
+			cfe: SemVer {
+				major: 2,
+				minor: 3,
+				patch: 4
+			},
 		};
 	}: _(RawOrigin::Signed(caller.clone()), version)
 	verify {

@@ -9,6 +9,7 @@ use frame_support::sp_runtime::{
 	MultiSignature, RuntimeDebug,
 };
 use scale_info::TypeInfo;
+use semver::{Error, Version};
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
@@ -195,6 +196,15 @@ impl SemVer {
 		// would be caught by tests).
 		self > &other
 	}
+
+	pub fn parse(text: &str) -> Result<Self, Error> {
+		let version = Version::parse(text)?;
+		Ok(SemVer {
+			major: version.major as u8,
+			minor: version.minor as u8,
+			patch: version.patch as u8,
+		})
+	}
 }
 #[cfg(feature = "std")]
 impl core::fmt::Display for SemVer {
@@ -203,6 +213,25 @@ impl core::fmt::Display for SemVer {
 	}
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct NodeCFEVersions {
+	pub node: SemVer,
+	pub cfe: SemVer,
+}
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(
 	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,

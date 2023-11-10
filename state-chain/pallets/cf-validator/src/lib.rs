@@ -13,10 +13,12 @@ pub use weights::WeightInfo;
 
 mod auction_resolver;
 mod benchmarking;
+mod migrations;
 mod rotation_state;
-
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer, FLIPPERINOS_PER_FLIP};
+
+use cf_primitives::{AuthorityCount, EpochIndex, NodeCFEVersions, SemVer, FLIPPERINOS_PER_FLIP};
+
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -31,7 +33,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, One, Saturating, UniqueSaturatedInto, Zero},
 		Percent, Permill,
 	},
-	traits::{EstimateNextSessionRotation, OnKilledAccount},
+	traits::{EstimateNextSessionRotation, OnKilledAccount, OnRuntimeUpgrade},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -91,7 +93,7 @@ pub enum PalletOffence {
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
-
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -100,6 +102,7 @@ pub mod pallet {
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -218,7 +221,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, NodeCFEVersions, ValueQuery>;
 
 	/// The last expired epoch index.
 	#[pallet::storage]
@@ -294,6 +297,11 @@ pub mod pallet {
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// The CFE version has been updated.
 		CFEVersionUpdated {
+			account_id: ValidatorIdOf<T>,
+			old_version: Version,
+			new_version: Version,
+		},
+		NodeVersionUpdated {
 			account_id: ValidatorIdOf<T>,
 			old_version: Version,
 			new_version: Version,
@@ -460,6 +468,20 @@ pub mod pallet {
 				_ => Weight::from_parts(0, 0),
 			});
 			weight
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
@@ -670,10 +692,10 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(
+		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
+		pub fn set_node_cfe_version(
 			origin: OriginFor<T>,
-			new_version: Version,
+			new_version: NodeCFEVersions,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
@@ -683,8 +705,13 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: *current_version,
-						new_version,
+						old_version: current_version.cfe,
+						new_version: new_version.cfe,
+					});
+					Self::deposit_event(Event::NodeVersionUpdated {
+						account_id: validator_id.clone(),
+						old_version: current_version.node,
+						new_version: new_version.node,
 					});
 					*current_version = new_version;
 				}
@@ -1363,7 +1390,7 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).cfe.is_compatible_with(version)
 				})
 				.count() as u32,
 			authorities_count,
@@ -1375,7 +1402,7 @@ pub struct QualifyByCfeVersion<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
+		NodeCFEVersion::<T>::get(validator_id).cfe >= MinimumReportedCfeVersion::<T>::get()
 	}
 
 	fn filter_unqualified(
@@ -1384,7 +1411,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		let min_version = MinimumReportedCfeVersion::<T>::get();
 		validators
 			.into_iter()
-			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.filter(|id| NodeCFEVersion::<T>::get(id).cfe >= min_version)
 			.collect()
 	}
 }

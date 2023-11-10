@@ -33,7 +33,8 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_validator.
 pub trait WeightInfo {
 	fn update_pallet_config() -> Weight;
-	fn cfe_version() -> Weight;
+	fn set_authority_set_min_size() -> Weight;
+	fn set_node_cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
 	fn set_vanity_name() -> Weight;
 	fn expire_epoch(a: u32, ) -> Weight;
@@ -62,18 +63,21 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `Validator::NodeCFEVersion` (r:1 w:1)
-	/// Proof: `Validator::NodeCFEVersion` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn cfe_version() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `684`
-		//  Estimated: `4149`
-		// Minimum execution time: 21_387_000 picoseconds.
-		Weight::from_parts(21_869_000, 4149)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
+	// Storage: Validator CurrentAuthorities (r:1 w:0)
+	// Storage: Validator AuthoritySetMinSize (r:0 w:1)
+	fn set_authority_set_min_size() -> Weight {
+		// Minimum execution time: 26_000 nanoseconds.
+		Weight::from_parts(26_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
+	// Storage: Validator NodeCFEVersion (r:1 w:1)
+	fn set_node_cfe_version() -> Weight {
+		// Minimum execution time: 27_000 nanoseconds.
+		Weight::from_parts(27_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
@@ -350,18 +354,21 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `Validator::NodeCFEVersion` (r:1 w:1)
-	/// Proof: `Validator::NodeCFEVersion` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn cfe_version() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `684`
-		//  Estimated: `4149`
-		// Minimum execution time: 21_387_000 picoseconds.
-		Weight::from_parts(21_869_000, 4149)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	// Storage: Validator CurrentAuthorities (r:1 w:0)
+	// Storage: Validator AuthoritySetMinSize (r:0 w:1)
+	fn set_authority_set_min_size() -> Weight {
+		// Minimum execution time: 26_000 nanoseconds.
+		Weight::from_parts(26_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
+	// Storage: Validator NodeCFEVersion (r:1 w:1)
+	fn set_node_cfe_version() -> Weight {
+		// Minimum execution time: 27_000 nanoseconds.
+		Weight::from_parts(27_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
