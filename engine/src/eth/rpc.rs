@@ -162,7 +162,9 @@ impl EthRpcApi for EthRpcClient {
 	}
 
 	async fn transaction_receipt(&self, tx_hash: TxHash) -> Result<TransactionReceipt> {
-		Ok(self.signer.get_transaction_receipt(tx_hash).await?.unwrap())
+		self.signer.get_transaction_receipt(tx_hash).await?.ok_or_else(|| {
+			anyhow!("Getting ETH transaction receipt for tx hash {tx_hash} returned None")
+		})
 	}
 
 	/// Gets block, returning error when either:
