@@ -34,7 +34,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"022a1d7efa522ce746bc40a04016178ce38154be1f0537c6957bdeed17057bb955"
 	),
 	ethereum_deployment_block: 18277081u64, // TODO: Update to a more recent block before launch
-	genesis_funding_amount: MIN_FUNDING,
+	genesis_funding_amount: GENESIS_AUTHORITY_FUNDING,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
@@ -65,13 +65,7 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["f8aca257e6ab69e357984a885121c0ee18fcc50185c77966cdaf063df2f89126"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	vec![(
-		// Doc and Dopey get `MIN_FUNDING` each, Bashful gets the rest.
-		parse_account("cFNzzoURRFHx2fw2EmsCvTc7hBFP34EaP2B23oUcFdbp1FMvx"),
-		AccountRole::Validator,
-		STATE_CHAIN_GATEWAY_FLIP_BALANCE - 2 * MIN_FUNDING,
-		None,
-	)]
+	vec![]
 }
 
 // Set to zero initially, will be updated by governance to 7% / 1% annual.
@@ -88,8 +82,8 @@ pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
 	(Asset::Btc, 0u128),
 ];
 
-const STATE_CHAIN_GATEWAY_FLIP_BALANCE: FlipBalance = 3_000 * FLIPPERINOS_PER_FLIP;
 pub const MIN_FUNDING: FlipBalance = 6 * FLIPPERINOS_PER_FLIP;
+pub const GENESIS_AUTHORITY_FUNDING: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
 pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
 
 /// Redemption delay on mainnet is 48 HOURS.
