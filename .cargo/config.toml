@@ -16,7 +16,7 @@ cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,r
 
 cf-build = "build --features runtime-benchmarks"
 cf-build-release = "build --release"
-cf-build-production = "build --production"
+cf-build-production = "build --profile=production"
 # Check for feature inconsistencies.
 check-sc-features = '''
 tree --no-default-features --depth 1 --edges=features,normal
