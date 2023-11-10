@@ -46,7 +46,10 @@ use crate::{
 	threshold_signing::{EthKeyComponents, KeyUtils},
 	GENESIS_KEY_SEED,
 };
-use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance, GENESIS_EPOCH};
+use cf_primitives::{
+	AccountRole, AuthorityCount, BlockNumber, FlipBalance, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	GENESIS_EPOCH,
+};
 
 pub struct ExtBuilder {
 	pub genesis_accounts: Vec<(AccountId, AccountRole, FlipBalance)>,
@@ -170,6 +173,7 @@ impl ExtBuilder {
 					max_expansion: self.max_authorities,
 				},
 				auction_bid_cutoff_percentage: Percent::from_percent(0),
+				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			},
 			ethereum_vault: EthereumVaultConfig {
 				vault_key: Some(ethereum_vault_key),

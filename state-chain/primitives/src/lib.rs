@@ -6,7 +6,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, RuntimeDebug,
+	MultiSignature, Percent, RuntimeDebug,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -73,6 +73,10 @@ pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;
+
+/// Determines the default (genesis) maximum allowed reduction of authority set size in
+/// between two consecutive epochs.
+pub const DEFAULT_MAX_AUTHORITY_SET_CONTRACTION: Percent = Percent::from_percent(30);
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info

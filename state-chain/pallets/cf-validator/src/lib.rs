@@ -16,7 +16,9 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{
+	AuthorityCount, EpochIndex, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
+};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -60,6 +62,7 @@ pub enum PalletConfigUpdate {
 	AuthoritySetMinSize { min_size: AuthorityCount },
 	AuctionParameters { parameters: SetSizeParameters },
 	MinimumReportedCfeVersion { version: SemVer },
+	MaxAuthoritySetContractionPercentage { percentage: Percent },
 }
 
 type RuntimeRotationState<T> =
@@ -91,6 +94,8 @@ pub enum PalletOffence {
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -283,6 +288,13 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_reported_cfe_version)]
 	pub(super) type MinimumReportedCfeVersion<T: Config> = StorageValue<_, SemVer, ValueQuery>;
 
+	/// Determines the maximum allowed reduction of authority set size in percents between two
+	/// consecutive epochs.
+	#[pallet::storage]
+	#[pallet::getter(fn max_authority_set_contraction_percentage)]
+	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
+		StorageValue<_, Percent, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -461,6 +473,15 @@ pub mod pallet {
 			});
 			weight
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			if <Pallet<T> as GetStorageVersion>::on_chain_storage_version() == 0 {
+				MaxAuthoritySetContractionPercentage::<T>::put(
+					DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+				);
+			}
+			Weight::zero()
+		}
 	}
 
 	#[pallet::call]
@@ -510,6 +531,9 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::MinimumReportedCfeVersion { version } => {
 					MinimumReportedCfeVersion::<T>::put(version);
+				},
+				PalletConfigUpdate::MaxAuthoritySetContractionPercentage { percentage } => {
+					MaxAuthoritySetContractionPercentage::<T>::put(percentage);
 				},
 			}
 
@@ -752,6 +776,7 @@ pub mod pallet {
 		pub authority_set_min_size: AuthorityCount,
 		pub auction_parameters: SetSizeParameters,
 		pub auction_bid_cutoff_percentage: Percent,
+		pub max_authority_set_contraction_percentage: Percent,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -771,6 +796,7 @@ pub mod pallet {
 					max_expansion: 5,
 				},
 				auction_bid_cutoff_percentage: Zero::zero(),
+				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
 	}
@@ -786,6 +812,9 @@ pub mod pallet {
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			VanityNames::<T>::put(&self.genesis_vanity_names);
+			MaxAuthoritySetContractionPercentage::<T>::set(
+				self.max_authority_set_contraction_percentage,
+			);
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
@@ -1064,6 +1093,13 @@ impl<T: Config> Pallet<T> {
 	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+
+		let min_size = sp_std::cmp::max(
+			min_size,
+			(Percent::one().saturating_sub(MaxAuthoritySetContractionPercentage::<T>::get())) *
+				Self::current_authority_count(),
+		);
+
 		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
