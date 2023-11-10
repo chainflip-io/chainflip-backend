@@ -11,8 +11,12 @@ use std::{
 use crate::{
 	p2p::core::ed25519_secret_key_to_x25519_secret_key,
 	settings::P2P as P2PSettings,
-	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	state_chain_observer::{
+		client::{
+			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi,
+			storage_api::StorageApi, StateChainStreamApi,
+		},
+		monitor_p2p_registration_events,
 	},
 };
 
@@ -87,8 +91,9 @@ fn pk_to_string(pk: &XPublicKey) -> String {
 	hex::encode(pk.as_bytes())
 }
 
-pub async fn start<StateChainClient>(
+pub async fn start<StateChainClient, BlockStream: StateChainStreamApi>(
 	state_chain_client: Arc<StateChainClient>,
+	sc_block_stream: BlockStream,
 	settings: P2PSettings,
 	initial_block_hash: H256,
 ) -> anyhow::Result<(
@@ -98,7 +103,6 @@ pub async fn start<StateChainClient>(
 	MultisigMessageReceiver<PolkadotCrypto>,
 	MultisigMessageSender<BitcoinCrypto>,
 	MultisigMessageReceiver<BitcoinCrypto>,
-	UnboundedSender<PeerUpdate>,
 	oneshot::Receiver<()>,
 	impl Future<Output = anyhow::Result<()>>,
 )>
@@ -156,10 +160,12 @@ where
 
 	let fut = task_scope(move |scope| {
 		async move {
+			let state_chain_client_cloned = state_chain_client.clone();
+
 			scope.spawn(async move {
 				peer_info_submitter::ensure_peer_info_registered(
 					&node_key,
-					&state_chain_client,
+					&state_chain_client_cloned,
 					settings.ip_address,
 					settings.port,
 					own_peer_info,
@@ -188,6 +194,16 @@ where
 				Ok(())
 			});
 
+			scope.spawn(async move {
+				monitor_p2p_registration_events(
+					state_chain_client,
+					sc_block_stream,
+					peer_update_sender,
+				)
+				.await;
+				Ok(())
+			});
+
 			Ok(())
 		}
 		.boxed()
@@ -200,7 +216,6 @@ where
 		dot_incoming_receiver,
 		btc_outgoing_sender,
 		btc_incoming_receiver,
-		peer_update_sender,
 		p2p_ready_receiver,
 		fut,
 	))

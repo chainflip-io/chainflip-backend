@@ -2,7 +2,7 @@ mod crypto_compat;
 #[cfg(test)]
 mod tests;
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use cf_chains::{
 	btc::{self, PreviousOrCurrent},
 	Chain,
@@ -34,7 +34,7 @@ use crate::{
 			unsigned::UnsignedExtrinsicApi,
 		},
 		storage_api::StorageApi,
-		StateChainStreamApi,
+		BlockInfo, StateChainStreamApi,
 	},
 };
 use multisig::{
@@ -234,7 +234,6 @@ pub async fn start<
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
-	peer_update_sender: UnboundedSender<PeerUpdate>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
@@ -286,7 +285,15 @@ where
 
         info!("Sending heartbeat every {blocks_per_heartbeat} blocks");
 
-        let mut sc_block_stream = Box::pin(sc_block_stream);
+        // Add the initial (cached) block to the stream so we can process the events in it.
+        let mut sc_block_stream =
+        Box::pin(
+            futures::stream::iter(vec![BlockInfo{
+                parent_hash: sc_block_stream.cache().parent_hash, hash: sc_block_stream.cache().hash, number: sc_block_stream.cache().number
+            }])
+                .chain(sc_block_stream)
+        );
+
         loop {
             match sc_block_stream.next().await {
                 Some(current_block) => {
@@ -297,29 +304,13 @@ where
                             for event_record in events {
                                 match_event! {event_record.event, {
                                     state_chain_runtime::RuntimeEvent::Validator(
-                                        pallet_cf_validator::Event::PeerIdRegistered(
-                                            account_id,
-                                            ed25519_pubkey,
-                                            port,
-                                            ip_address,
-                                        ),
-                                    ) => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Registered(
-                                                    PeerInfo::new(account_id, ed25519_pubkey, ip_address.into(), port)
-                                                )
-                                            )
-                                            .unwrap();
-                                    }
+                                        pallet_cf_validator::Event::PeerIdRegistered(..),
+                                    ) |
                                     state_chain_runtime::RuntimeEvent::Validator(
-                                        pallet_cf_validator::Event::PeerIdUnregistered(
-                                            account_id,
-                                            ed25519_pubkey,
-                                        ),
+                                        pallet_cf_validator::Event::PeerIdUnregistered(..),
                                     ) => {
-                                        peer_update_sender
-                                            .send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
-                                            .unwrap();
+                                        // p2p registration is handled in the p2p module.
+                                        // Matching here to log a the event.
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumVault(
                                         pallet_cf_vaults::Event::KeygenRequest {
@@ -588,9 +579,11 @@ where
                                             });
                                         }
                                     }
-                                }}}}
-                                Err(error) => {
-                                    error!("Failed to decode events at block {}. {error}", current_block.number);
+                                }
+                            }}
+                        },
+                        Err(error) => {
+                            error!("Failed to decode events at block {}. {error}", current_block.number);
                         }
                     }
 
@@ -618,4 +611,164 @@ where
         }
         Err(anyhow!("State Chain block stream ended"))
     }.instrument(info_span!("SCObserver")).boxed()).await
+}
+
+pub struct CeremonyIdCounters {
+	pub ethereum: CeremonyId,
+	pub polkadot: CeremonyId,
+	pub bitcoin: CeremonyId,
+}
+
+/// Get the ceremony id counters for each chain at the **start** of the given block without
+/// accessing the previous block
+pub async fn get_ceremony_id_counters_before_block<StateChainClient>(
+	block_hash: state_chain_runtime::Hash,
+	state_chain_client: Arc<StateChainClient>,
+) -> Result<CeremonyIdCounters, anyhow::Error>
+where
+	StateChainClient: SignedExtrinsicApi
+		+ UnsignedExtrinsicApi
+		+ 'static
+		+ Send
+		+ Sync
+		+ super::client::storage_api::StorageApi,
+{
+	// Get the vales of the ceremony id counters at the end of the block
+	let mut ceremony_id_counters = CeremonyIdCounters {
+		ethereum: state_chain_client
+			.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::EthereumInstance,
+			>>(block_hash)
+			.await
+			.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
+
+		polkadot: state_chain_client
+			.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>(block_hash)
+			.await
+			.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
+
+		bitcoin: state_chain_client
+			.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::BitcoinInstance,
+			>>(block_hash)
+			.await
+			.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
+	};
+
+	// Reverse the counters by looking at the events in the block that would of incremented them
+	match state_chain_client
+		.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
+		.await
+	{
+		Ok(events) => {
+			for event_record in events {
+				match event_record.event {
+					state_chain_runtime::RuntimeEvent::EthereumVault(
+						pallet_cf_vaults::Event::KeygenRequest { .. },
+					) |
+					state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest { .. },
+					) => {
+						ceremony_id_counters.ethereum -= 1;
+					},
+
+					state_chain_runtime::RuntimeEvent::PolkadotVault(
+						pallet_cf_vaults::Event::KeygenRequest { .. },
+					) |
+					state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest { .. },
+					) => {
+						ceremony_id_counters.polkadot -= 1;
+					},
+
+					state_chain_runtime::RuntimeEvent::BitcoinVault(
+						pallet_cf_vaults::Event::KeygenRequest { .. },
+					) |
+					state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest { .. },
+					) |
+					state_chain_runtime::RuntimeEvent::BitcoinVault(
+						pallet_cf_vaults::Event::KeyHandoverRequest { .. },
+					) => {
+						ceremony_id_counters.bitcoin -= 1;
+					},
+
+					_ => {
+						// We only care about events that change the Ceremony Id Counter
+					},
+				}
+			}
+		},
+		Err(error) => {
+			bail!("Failed to decode events at block hash {block_hash}. {error}");
+		},
+	}
+
+	Ok(ceremony_id_counters)
+}
+
+pub async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StateChainStreamApi>(
+	state_chain_client: Arc<StateChainClient>,
+	sc_block_stream: BlockStream,
+	peer_update_sender: UnboundedSender<PeerUpdate>,
+) where
+	StateChainClient: StorageApi + 'static + Send + Sync,
+{
+	let mut sc_block_stream = Box::pin(sc_block_stream);
+	loop {
+		match sc_block_stream.next().await {
+			Some(current_block) => {
+				if let Ok(events) = state_chain_client
+					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
+						current_block.hash,
+					)
+					.await
+				{
+					for event_record in events {
+						match event_record.event {
+							state_chain_runtime::RuntimeEvent::Validator(
+								pallet_cf_validator::Event::PeerIdRegistered(
+									account_id,
+									ed25519_pubkey,
+									port,
+									ip_address,
+								),
+							) => {
+								peer_update_sender
+									.send(PeerUpdate::Registered(PeerInfo::new(
+										account_id,
+										ed25519_pubkey,
+										ip_address.into(),
+										port,
+									)))
+									.unwrap();
+							},
+							state_chain_runtime::RuntimeEvent::Validator(
+								pallet_cf_validator::Event::PeerIdUnregistered(
+									account_id,
+									ed25519_pubkey,
+								),
+							) => {
+								peer_update_sender
+									.send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
+									.unwrap();
+							},
+							_ => {
+								// We only care about peer registration events
+							},
+						}
+					}
+				}
+			},
+			None => {
+				error!("Exiting as State Chain block stream ended");
+				break
+			},
+		}
+	}
 }
