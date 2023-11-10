@@ -413,8 +413,8 @@ pub mod pallet {
 		MissingPolkadotVault,
 		/// Bitcoin's Vault key does not exist for the current epoch.
 		MissingBitcoinVault,
-		/// Intent ID is too large for Bitcoin address derivation
-		BitcoinIntentIdTooLarge,
+		/// Channel ID is too large for Bitcoin address derivation
+		BitcoinChannelIdTooLarge,
 	}
 
 	#[pallet::hooks]
@@ -938,8 +938,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::MissingPolkadotVault,
 						AddressDerivationError::MissingBitcoinVault =>
 							Error::<T, I>::MissingBitcoinVault,
-						AddressDerivationError::BitcoinIntentIdTooLarge =>
-							Error::<T, I>::BitcoinIntentIdTooLarge,
+						AddressDerivationError::BitcoinChannelIdTooLarge =>
+							Error::<T, I>::BitcoinChannelIdTooLarge,
 					})?,
 				next_channel_id,
 			)

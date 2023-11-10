@@ -14,7 +14,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
-	BitcoinIntentIdTooLarge,
+	BitcoinChannelIdTooLarge,
 }
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.

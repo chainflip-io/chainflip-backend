@@ -341,7 +341,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The provided asset and withdrawal address are incompatible.
 		IncompatibleAssetAndAddress,
-		/// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed because the destination address is not invalid.
 		InvalidEgressAddress,
 		/// The withdrawal is not possible because not enough funds are available.
 		NoFundsAvailable,

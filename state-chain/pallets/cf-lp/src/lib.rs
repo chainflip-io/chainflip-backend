@@ -74,7 +74,7 @@ pub mod pallet {
 		BalanceOverflow,
 		/// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
-		/// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed because the destination address is not invalid.
 		InvalidEgressAddress,
 		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,

@@ -29,7 +29,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	> {
 		let channel_id: u32 = channel_id
 			.try_into()
-			.map_err(|_| AddressDerivationError::BitcoinIntentIdTooLarge)?;
+			.map_err(|_| AddressDerivationError::BitcoinChannelIdTooLarge)?;
 
 		let channel_state = DepositAddress::new(
 			// TODO: The key should be passed as an argument (or maybe KeyProvider type arg).
