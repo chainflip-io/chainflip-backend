@@ -788,6 +788,29 @@ mod keygen {
 			assert_rotation_aborted();
 		});
 	}
+
+	#[test]
+	fn rotation_aborts_if_candidates_below_min_percentage() {
+		new_test_ext().execute_with(|| {
+			// Ban half of the candidates:
+			let failing_count = CANDIDATES.count() / 2;
+			let remaining_count = CANDIDATES.count() - failing_count;
+
+			// We still have enough candidates according to auction resolver parameters:
+			assert!(remaining_count > MIN_AUTHORITY_SIZE as usize);
+
+			// But the rotation should be aborted since authority count would drop too much
+			// compared to the previous set:
+			assert!(
+				remaining_count <
+					(Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) *
+						AUTHORITIES.count()
+			);
+
+			failed_keygen_with_offenders(CANDIDATES.take(failing_count));
+			assert_rotation_aborted();
+		});
+	}
 }
 
 #[cfg(test)]
