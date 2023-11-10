@@ -29,19 +29,19 @@ pub type Addresses<Inner> = Vec<
 	>,
 >;
 
-/// This helps ensure the set of ingress addresses witnessed at each block are consistent across
+/// This helps ensure the set of deposit addresses witnessed at each block are consistent across
 /// every validator
 
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
-pub struct IngressAddresses<Inner: ChunkedByVault>
+pub struct DepositAddresses<Inner: ChunkedByVault>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
 	inner: Inner,
 	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 }
-impl<Inner: ChunkedByVault> IngressAddresses<Inner>
+impl<Inner: ChunkedByVault> DepositAddresses<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
@@ -117,7 +117,7 @@ where
             utilities::loop_select! {
                 let _ = sender.closed() => { break Ok(()) },
                 if let Some(_block_header) = state_chain_stream.next() => {
-					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries ingress addresses
+					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries deposit addresses
                     let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().hash).await);
                 } else break Ok(()),
             }
@@ -127,7 +127,7 @@ where
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner>
+impl<Inner: ChunkedByVault> ChunkedByVault for DepositAddresses<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
@@ -138,7 +138,7 @@ where
 	type Hash = Inner::Hash;
 	type Data = (Inner::Data, Addresses<Inner>);
 
-	type Client = IngressAddressesClient<Inner>;
+	type Client = DepositAddressesClient<Inner>;
 
 	type Chain = Inner::Chain;
 
@@ -171,14 +171,14 @@ where
 						let chain_state_and_addresses = self.receiver.borrow();
 						let (chain_state, addresses) = &*chain_state_and_addresses;
 						for header in headers {
-							if IngressAddresses::<Inner>::is_header_ready(
+							if DepositAddresses::<Inner>::is_header_ready(
 								header.index,
 								chain_state,
 							) {
 								self.ready_headers.push(header.map_data(|header| {
 									(
 										header.data,
-										IngressAddresses::<Inner>::addresses_for_header(
+										DepositAddresses::<Inner>::addresses_for_header(
 											header.index,
 											addresses,
 										),
@@ -216,7 +216,7 @@ where
 						},
 					)
 					.into_box(),
-					IngressAddressesClient::new(chain_client, self.receiver.clone()),
+					DepositAddressesClient::new(chain_client, self.receiver.clone()),
 				)
 			})
 			.await
@@ -225,7 +225,7 @@ where
 }
 
 #[derive(CloneNoBound)]
-pub struct IngressAddressesClient<Inner: ChunkedByVault>
+pub struct DepositAddressesClient<Inner: ChunkedByVault>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
@@ -233,7 +233,7 @@ where
 	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 }
 
-impl<Inner: ChunkedByVault> IngressAddressesClient<Inner>
+impl<Inner: ChunkedByVault> DepositAddressesClient<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
@@ -245,7 +245,7 @@ where
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChunkedByVault> ChainClient for IngressAddressesClient<Inner>
+impl<Inner: ChunkedByVault> ChainClient for DepositAddressesClient<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
@@ -262,12 +262,12 @@ where
 		let addresses = {
 			let chain_state_and_addresses = receiver
 				.wait_for(|(chain_state, _addresses)| {
-					IngressAddresses::<Inner>::is_header_ready(index, chain_state)
+					DepositAddresses::<Inner>::is_header_ready(index, chain_state)
 				})
 				.await
 				.expect(OR_CANCEL);
 			let (_option_chain_state, addresses) = &*chain_state_and_addresses;
-			IngressAddresses::<Inner>::addresses_for_header(index, addresses)
+			DepositAddresses::<Inner>::addresses_for_header(index, addresses)
 		};
 
 		self.inner_client
@@ -288,14 +288,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
-	) -> ChunkedByVaultBuilder<IngressAddresses<Inner>>
+	) -> ChunkedByVaultBuilder<DepositAddresses<Inner>>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(
-			IngressAddresses::new(self.source, scope, state_chain_stream, state_chain_client).await,
+			DepositAddresses::new(self.source, scope, state_chain_stream, state_chain_client).await,
 			self.parameters,
 		)
 	}
