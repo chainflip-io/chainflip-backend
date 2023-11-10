@@ -243,8 +243,8 @@ fn can_calculate_account_apy() {
 #[test]
 fn apy_can_be_above_100_percent() {
 	const EPOCH_BLOCKS: u32 = 1_000;
-	const MAX_AUTHORITIES: u32 = 1;
-	const NUM_BACKUPS: u32 = 1;
+	const MAX_AUTHORITIES: u32 = 2;
+	const NUM_BACKUPS: u32 = 2;
 	super::genesis::default()
 		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
@@ -266,10 +266,11 @@ fn apy_can_be_above_100_percent() {
 
 			// APY rate of > 100% can be calculated correctly.
 			let total = Flip::balance(&validator);
-			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128;
+			let reward = Emissions::current_authority_emission_per_block() * YEAR as u128 /
+				MAX_AUTHORITIES as u128;
 			let apy_basis_point =
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
-			assert_eq!(apy_basis_point, 242_543_802u32);
+			assert_eq!(apy_basis_point, 241_377_726u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
 		});
 }
