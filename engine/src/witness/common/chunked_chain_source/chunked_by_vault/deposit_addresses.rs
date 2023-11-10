@@ -29,7 +29,7 @@ pub type Addresses<Inner> = Vec<
 	>,
 >;
 
-/// This helps ensure the set of ingress addresses witnessed at each block are consistent across
+/// This helps ensure the set of deposit addresses witnessed at each block are consistent across
 /// every validator
 
 #[derive(Clone)]
@@ -117,7 +117,7 @@ where
             utilities::loop_select! {
                 let _ = sender.closed() => { break Ok(()) },
                 if let Some(_block_header) = state_chain_stream.next() => {
-					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries ingress addresses
+					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries deposit addresses
                     let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().hash).await);
                 } else break Ok(()),
             }
