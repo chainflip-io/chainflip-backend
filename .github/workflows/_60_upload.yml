@@ -41,7 +41,7 @@ jobs:
       - name: Download runtime
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-node-runtime-ubuntu-22.04
+          name: chainflip-node-runtime-production
           path: assets/runtime
 
       - name: Download public images
