@@ -1,5 +1,3 @@
-use crate::chain_spec::parse_account;
-
 pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
