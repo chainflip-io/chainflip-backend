@@ -737,7 +737,12 @@ const AUTHORITIES: Range<u64> = 0..10;
 
 lazy_static::lazy_static! {
 	/// How many candidates can fail without preventing us from re-trying keygen
-	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = CANDIDATES.count().checked_sub(MIN_AUTHORITY_SIZE as usize).unwrap();
+	static ref MAX_ALLOWED_KEYGEN_OFFENDERS: usize = {
+
+		let min_size = std::cmp::max(MIN_AUTHORITY_SIZE, (Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) * AUTHORITIES.count() as u32);
+
+		CANDIDATES.count().checked_sub(min_size as usize).unwrap()
+	};
 
 	/// How many current authorities can fail to leave enough healthy ones to handover the key
 	static ref MAX_ALLOWED_SHARING_OFFENDERS: usize = {
