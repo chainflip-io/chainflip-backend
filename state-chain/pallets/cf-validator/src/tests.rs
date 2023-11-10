@@ -1222,9 +1222,8 @@ fn submitting_multiple_versions_ensuring_compatibility() {
 			RuntimeOrigin::signed(VALIDATOR),
 			compatible_version
 		));
-		assert_eq!(
-			0,
-			frame_system::Pallet::<Test>::events().len(),
+		assert!(
+			frame_system::Pallet::<Test>::events().is_empty(),
 			"We should have no events of an update"
 		);
 		assert!(QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));

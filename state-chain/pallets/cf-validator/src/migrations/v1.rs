@@ -36,10 +36,10 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			NodeCFEVersion::<T>::iter_keys().count() == old_storage.len(),
 			"NodeCFEVersion migration failed."
 		);
-		for elem in old_storage.iter() {
-			let (key, cfe_ver) = elem;
+		for (validator_id, cfe_version) in old_storage.iter() {
 			ensure!(
-				NodeCFEVersion::<T>::get(key) == NodeCFEVersions { cfe: *cfe_ver, node: *cfe_ver },
+				NodeCFEVersion::<T>::get(validator_id) ==
+					NodeCFEVersions { cfe: *cfe_version, node: *cfe_version },
 				"NodeCFEVersion migration failed."
 			);
 		}
