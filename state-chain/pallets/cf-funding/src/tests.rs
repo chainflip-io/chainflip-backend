@@ -6,7 +6,7 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, Chainflip, SetSafeMode,
+	Bonding, SetSafeMode,
 };
 use sp_core::H160;
 
@@ -550,44 +550,69 @@ fn test_redeem_all() {
 #[test]
 fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
+		const TOTAL_FUNDS: u128 = 100;
+		const TO_REDEEM: u128 = 45;
+		const RESTRICTED_AMOUNT: u128 = 60;
+		const RESTRICTED_ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(0x02);
 
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
-			AMOUNT * 2,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			TOTAL_FUNDS - RESTRICTED_AMOUNT,
 			ETH_DUMMY_ADDR,
 			TX_HASH
 		));
-
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			AMOUNT.into(),
-			ETH_DUMMY_ADDR,
+			TO_REDEEM.into(),
+			RESTRICTED_ADDRESS,
 			Default::default()
 		));
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
-				AMOUNT.into(),
+				TO_REDEEM.into(),
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),
 			Error::<Test>::PendingRedemption
 		);
 
+		// Restricted funds and total balance should have been reduced.
+		assert_eq!(Flip::total_balance_of(&ALICE), TOTAL_FUNDS - REDEMPTION_TAX - TO_REDEEM);
+		assert_eq!(
+			*RestrictedBalances::<Test>::get(&ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			RESTRICTED_AMOUNT - REDEMPTION_TAX - TO_REDEEM
+		);
+
 		assert_ok!(Funding::redemption_expired(RuntimeOrigin::root(), ALICE, Default::default()));
 
+		// Tax was paid, rest is returned.
+		assert_eq!(Flip::total_balance_of(&ALICE), TOTAL_FUNDS - REDEMPTION_TAX);
+		// Restricted funds are restricted again, minus redemption tax.
+		assert_eq!(
+			*RestrictedBalances::<Test>::get(&ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			RESTRICTED_AMOUNT - REDEMPTION_TAX
+		);
+
 		assert_noop!(
-			Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH),
+			Funding::redeemed(RuntimeOrigin::root(), ALICE, TOTAL_FUNDS, TX_HASH),
 			Error::<Test>::NoPendingRedemption
 		);
 
 		// Success, can request redemption again since the last one expired.
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			AMOUNT.into(),
-			ETH_DUMMY_ADDR,
+			TO_REDEEM.into(),
+			RESTRICTED_ADDRESS,
 			Default::default()
 		));
 	});

@@ -547,9 +547,13 @@ pub mod pallet {
 				"Pending Redemption should exist since the corresponding redemption existed",
 			);
 
+			// If the address is still restricted, we update the restricted balances again.
 			if RestrictedAddresses::<T>::contains_key(&address) {
-				RestrictedBalances::<T>::mutate(&account_id, |map| {
-					map.entry(address).and_modify(|balance| *balance += amount).or_insert(amount);
+				RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
+					restricted_balances
+						.entry(address)
+						.and_modify(|balance| *balance += amount)
+						.or_insert(amount);
 				});
 			}
 
