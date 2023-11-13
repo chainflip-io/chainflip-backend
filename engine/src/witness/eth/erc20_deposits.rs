@@ -10,8 +10,8 @@ use state_chain_runtime::PalletInstanceAlias;
 use crate::{
 	eth::retry_rpc::EthersRetryRpcApi,
 	witness::common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-		RuntimeHasChain,
+		chunked_chain_source::chunked_by_vault::deposit_addresses_2::Addresses,
+		RuntimeCallHasChain, RuntimeHasChain,
 	},
 };
 

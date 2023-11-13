@@ -143,7 +143,7 @@ where
 		.logging("safe block produced")
 		.shared(scope)
 		.chunk_by_vault(vaults)
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses_2(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(process_call.clone())
 		.egress_items_2(scope, state_chain_stream, state_chain_client.clone())

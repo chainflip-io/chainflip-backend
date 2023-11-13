@@ -56,7 +56,7 @@ where
 
 	let eth_source_deposit_addresses = eth_source
 		.clone()
-		.deposit_addresses(scope, state_chain_stream, state_chain_client.clone())
+		.deposit_addresses_2(scope, state_chain_stream, state_chain_client.clone())
 		.await;
 
 	eth_source_deposit_addresses

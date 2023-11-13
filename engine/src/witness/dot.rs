@@ -108,7 +108,10 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	header: Header<
 		PolkadotBlockNumber,
 		PolkadotHash,
-		((Vec<(Phase, EventWrapper)>, BTreeSet<u32>), Vec<PolkadotSignature>),
+		(
+			(Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
+			Vec<(PolkadotSignature, PolkadotBlockNumber)>,
+		),
 	>,
 	process_call: ProcessCall,
 	dot_client: DotRetryRpcClient,
@@ -120,7 +123,12 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let ((events, mut extrinsic_indices), monitored_egress_ids) = header.data;
+	let ((events, mut extrinsic_indices), monitored_egress_data) = header.data;
+
+	let monitored_egress_ids = monitored_egress_data
+		.into_iter()
+		.map(|(signature, _)| signature)
+		.collect::<BTreeSet<_>>();
 
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
@@ -220,7 +228,7 @@ where
 		.strictly_monotonic()
 		.shared(scope)
 		.chunk_by_vault(vaults.clone())
-		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
+		.deposit_addresses_2(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await
 		.dot_deposits(prewitness_call)
 		.logging("pre-witnessing")
@@ -235,14 +243,14 @@ where
 		})
 		.shared(scope)
 		.chunk_by_vault(vaults)
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses_2(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing
 		.dot_deposits(process_call.clone())
 		// Proxy added witnessing
 		.then(proxy_added_witnessing)
 		// Broadcast success
-		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.egress_items_2(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
 			let process_call = process_call.clone();

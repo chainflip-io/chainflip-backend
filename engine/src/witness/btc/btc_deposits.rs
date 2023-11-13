@@ -11,7 +11,7 @@ use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
 use crate::witness::common::{
-	chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
+	chunked_chain_source::chunked_by_vault::deposit_addresses_2::Addresses, RuntimeCallHasChain,
 	RuntimeHasChain,
 };
 use bitcoin::BlockHash;

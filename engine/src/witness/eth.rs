@@ -136,7 +136,7 @@ where
 
 	let prewitness_source_deposit_addresses = prewitness_source
 		.clone()
-		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
+		.deposit_addresses_2(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await;
 
 	prewitness_source_deposit_addresses
@@ -199,7 +199,7 @@ where
 
 	let eth_safe_vault_source_deposit_addresses = eth_safe_vault_source
 		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses_2(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await;
 
 	eth_safe_vault_source

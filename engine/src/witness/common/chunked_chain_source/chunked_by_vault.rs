@@ -1,8 +1,6 @@
 pub mod builder;
 pub mod continuous;
-pub mod deposit_addresses;
 pub mod deposit_addresses_2;
-pub mod egress_items;
 pub mod egress_items_2;
 pub mod monitored_items;
 
