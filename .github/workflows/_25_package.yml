@@ -40,6 +40,10 @@ jobs:
         run: |
           echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
+      - name: Hacky fix for production build (PLEASE DELETE)
+        if: ${{ inputs.profile == 'production' }}
+        run: cp -R ./target/production ./target/release
+
       - name: Build global packages
         run: |
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
