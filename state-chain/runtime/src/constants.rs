@@ -49,11 +49,6 @@ pub mod common {
 		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
-	pub const SECS_PER_MINUTE: u64 = 60;
-	// This should be the same as the `REDEMPTION_DELAY` in:
-	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StateChainGateway.sol
-	pub const REDEMPTION_DELAY_SECS: u64 = 2 * SECS_PER_MINUTE;
-
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
 	pub const SLOT_DURATION: u64 = MILLISECONDS_PER_BLOCK;
@@ -63,8 +58,6 @@ pub mod common {
 	pub const HOURS: BlockNumber = MINUTES * 60;
 	pub const DAYS: BlockNumber = HOURS * 24;
 	pub const YEAR: BlockNumber = DAYS * 365;
-
-	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
 
 	/// Percent of the epoch we are allowed to redeem
 	pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
@@ -87,18 +80,4 @@ pub mod common {
 	///
 	/// See https://github.com/chainflip-io/chainflip-backend/issues/1629
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
-
-	pub mod eth {
-		use cf_chains::{eth::Ethereum, Chain};
-
-		/// Number of blocks to wait until we deem the block to be safe.
-		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;
-	}
-
-	pub mod btc {
-		use cf_chains::{btc::Bitcoin, Chain};
-
-		/// Number of blocks to wait for until we deem a BTC deposit to be safe.
-		pub const BLOCK_SAFETY_MARGIN: <Bitcoin as Chain>::ChainBlockNumber = 6;
-	}
 }

@@ -86,6 +86,8 @@ pub use cf_primitives::{
 pub use cf_traits::{
 	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
 };
+// Required for genesis config.
+pub use pallet_cf_validator::SetSizeParameters;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
