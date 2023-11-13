@@ -59,7 +59,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(witness_call.clone())
-		.egress_items(scope, state_chain_stream, state_chain_client)
+		.egress_items_2(scope, state_chain_stream, state_chain_client)
 		.await
 		.then(move |epoch, header| process_egress(epoch, header, witness_call.clone()))
 		.logging("witnessing")

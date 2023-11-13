@@ -5,7 +5,7 @@ pub mod btc_source;
 use std::sync::Arc;
 
 use bitcoin::{BlockHash, Transaction};
-use cf_chains::btc::{deposit_address::DepositAddress, CHANGE_ADDRESS_SALT};
+use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 use secp256k1::hashes::Hash;
@@ -32,7 +32,7 @@ const SAFETY_MARGIN: usize = 5;
 
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
-	header: Header<u64, BlockHash, (Vec<Transaction>, Vec<[u8; 32]>)>,
+	header: Header<u64, BlockHash, (Vec<Transaction>, Vec<(btc::Hash, BlockNumber)>)>,
 	process_call: ProcessCall,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -43,6 +43,9 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
 	let (txs, monitored_tx_hashes) = header.data;
+
+	let monitored_tx_hashes =
+		monitored_tx_hashes.into_iter().map(|(tx_hash, _)| tx_hash).collect::<Vec<_>>();
 
 	for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
 		process_call(
@@ -143,7 +146,7 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(process_call.clone())
-		.egress_items(scope, state_chain_stream, state_chain_client.clone())
+		.egress_items_2(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		.then({
 			let process_call = process_call.clone();
@@ -156,7 +159,7 @@ where
 	Ok(())
 }
 
-fn success_witnesses(monitored_tx_hashes: &[[u8; 32]], txs: &Vec<Transaction>) -> Vec<[u8; 32]> {
+fn success_witnesses(monitored_tx_hashes: &[btc::Hash], txs: &Vec<Transaction>) -> Vec<btc::Hash> {
 	let mut successful_witnesses = Vec::new();
 	for tx in txs {
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();

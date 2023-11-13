@@ -47,14 +47,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				scope,
 				state_chain_stream,
 				state_chain_client,
-				|index,
-				 items: &Vec<
-					DepositChannelDetails<
-						state_chain_runtime::Runtime,
-						<Inner::Chain as PalletInstanceAlias>::Instance,
-					>,
-				>| {
-					items
+				|index, addresses: &Addresses<Inner>| {
+					addresses
 						.iter()
 						.filter(|details| details.opened_at <= index && index <= details.expires_at)
 						.cloned()

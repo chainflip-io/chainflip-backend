@@ -214,18 +214,17 @@ where
 						),
 						|(mut chain_stream, mut state)| async move {
 							loop_select!(
-															if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(),
-							(chain_stream, state))), 								if let Some(header) = chain_stream.next() => {
-																state.add_headers(std::iter::once(header));
-															} else disable then if state.pending_headers.is_empty() => break None,
-															let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
-																// headers we weren't yet ready to process, but they might be ready now if the chaint tracking
-							// has changed
-
-																let pending_headers = std::mem::take(&mut state.pending_headers);
-																state.add_headers(pending_headers);
-															},
-														)
+								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), (chain_stream, state))), 								
+								if let Some(header) = chain_stream.next() => {
+									state.add_headers(std::iter::once(header));
+								} else disable then if state.pending_headers.is_empty() => break None,
+								let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
+									// headers we weren't yet ready to process, but they might be ready now if the chaint tracking
+									// has changed
+									let pending_headers = std::mem::take(&mut state.pending_headers);
+									state.add_headers(pending_headers);
+								},
+							)
 						},
 					)
 					.into_box(),
