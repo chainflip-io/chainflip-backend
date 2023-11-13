@@ -178,7 +178,6 @@ where
 						+ Clone
 						+ 'static,
 				{
-					// This needs to take the
 					fn add_headers<
 						It: IntoIterator<Item = Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					>(
