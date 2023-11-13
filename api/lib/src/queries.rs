@@ -43,7 +43,7 @@ impl QueryApi {
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
-			AccountRole::None,
+			AccountRole::Unregistered,
 			false,
 			None,
 		)
