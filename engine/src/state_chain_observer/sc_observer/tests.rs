@@ -508,11 +508,14 @@ async fn should_process_initial_block_first() {
 	let sc_block_stream =
 		tokio_stream::iter([next_block]).make_cached(initial_block, |block| *block);
 
+	let mut seq = mockall::Sequence::new();
+
 	// We expect the SCO to process the initial block first, even though it was not in the stream.
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(initial_block.hash))
 		.once()
+		.in_sequence(&mut seq)
 		.return_once(move |_| Ok(vec![]));
 
 	// Then it should process the block that was in the stream
@@ -520,6 +523,7 @@ async fn should_process_initial_block_first() {
 		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(next_block.hash))
 		.once()
+		.in_sequence(&mut seq)
 		.return_once(move |_| Ok(vec![]));
 
 	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();

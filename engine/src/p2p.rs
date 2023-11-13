@@ -160,33 +160,34 @@ where
 
 	let fut = task_scope(move |scope| {
 		async move {
-			let state_chain_client_cloned = state_chain_client.clone();
+			scope.spawn({
+				let state_chain_client = state_chain_client.clone();
+				async move {
+					peer_info_submitter::ensure_peer_info_registered(
+						&node_key,
+						&state_chain_client,
+						settings.ip_address,
+						settings.port,
+						own_peer_info,
+					)
+					.instrument(info_span!("P2PClient"))
+					.await?;
 
-			scope.spawn(async move {
-				peer_info_submitter::ensure_peer_info_registered(
-					&node_key,
-					&state_chain_client_cloned,
-					settings.ip_address,
-					settings.port,
-					own_peer_info,
-				)
-				.instrument(info_span!("P2PClient"))
-				.await?;
+					p2p_ready_sender.send(()).unwrap();
 
-				p2p_ready_sender.send(()).unwrap();
+					core::start(
+						node_key,
+						settings.port,
+						current_peers,
+						our_account_id,
+						incoming_message_sender,
+						outgoing_message_receiver,
+						peer_update_receiver,
+					)
+					.await;
 
-				core::start(
-					node_key,
-					settings.port,
-					current_peers,
-					our_account_id,
-					incoming_message_sender,
-					outgoing_message_receiver,
-					peer_update_receiver,
-				)
-				.await;
-
-				Ok(())
+					Ok(())
+				}
 			});
 
 			scope.spawn(async move {
