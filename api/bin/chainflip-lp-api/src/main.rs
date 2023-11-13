@@ -138,6 +138,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		validity: Option<OrderValidity<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
@@ -282,6 +283,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
+		validity: Option<OrderValidity<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -292,6 +294,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
+				validity,
 			)
 			.await?)
 	}
