@@ -229,7 +229,7 @@ pub fn inner_cf_development_config(
 				testnet::extra_accounts(),
 				// Governance account - Snow White
 				testnet::SNOW_WHITE_SR25519.into(),
-				1,
+				devnet::MIN_AUTHORITIES,
 				devnet::AUCTION_PARAMETERS,
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
