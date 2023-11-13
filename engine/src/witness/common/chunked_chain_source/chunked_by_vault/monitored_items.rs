@@ -22,7 +22,9 @@ use crate::{
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
-/// every validator
+/// every validator. We only consider a header ready when the chain tracking has passed the block.
+/// Given chain tracking requires a majority of nodes to update, we can use this to pace our
+/// processing.
 fn is_header_ready<Inner: ChunkedByVault>(
 	index: Inner::Index,
 	chain_state: &ChainState<Inner::Chain>,
@@ -30,7 +32,6 @@ fn is_header_ready<Inner: ChunkedByVault>(
 	index < chain_state.block_height
 }
 
-// We need to pass in something that can act as the generic `addresses_for_header`
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct MonitoredSCItems<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
@@ -41,6 +42,8 @@ where
 {
 	inner: Inner,
 	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, MonitoredItems)>,
+	// Filters out the invalid items, based on the current block header we're processing. For
+	// example, if an item has expired, it can be filtered out.
 	filter_fn: ItemFilter,
 }
 
@@ -188,8 +191,10 @@ where
 						let (chain_state, addresses) = &*chain_state_and_addresses;
 						for header in headers {
 							if is_header_ready::<Inner>(header.index, chain_state) {
-								// We're saying the block itself is ready. But the addresses within
-								// that block.
+								// We're saying the block itself is ready. But the items within that header may not be required.
+								// Consider the cases:
+								// 1. An item in the header has expired. Its expiry block is after the current block.
+								// 2. An item in the header has an initiation/starting block after the current block.
 								self.ready_headers.push(header.map_data(|header| {
 									(header.data, (self.filter_fn)(header.index, addresses))
 								}));
@@ -214,13 +219,12 @@ where
 						),
 						|(mut chain_stream, mut state)| async move {
 							loop_select!(
-								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), (chain_stream, state))), 								
+								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), (chain_stream, state))),
 								if let Some(header) = chain_stream.next() => {
 									state.add_headers(std::iter::once(header));
 								} else disable then if state.pending_headers.is_empty() => break None,
 								let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
-									// headers we weren't yet ready to process, but they might be ready now if the chaint tracking
-									// has changed
+									// Headers we weren't yet ready to process might be ready now if the chain tracking has progressed.
 									let pending_headers = std::mem::take(&mut state.pending_headers);
 									state.add_headers(pending_headers);
 								},
@@ -301,6 +305,18 @@ where
 }
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
+	/// This helps ensure a set of items we want to witness are consistent for each block across all
+	/// validators. Without this functionality of holding up blocks and filtering out items, the
+	/// CFEs can go out of sync. Consider the case of 2 CFEs.
+	/// - CFE A is ahead of CFE B with respect to external chain X by 1 block.
+	/// - CFE B witnesses block 10 of X, and is watching for addresses that it fetches from the SC,
+	///   at SC block 50.
+	/// - CFE A witnesses block 11 of X, and is watching for addresses that it fetches from the SC,
+	///   at the same SC block 50.
+	/// - The SC progresses to block 51, revealing that an address is to be witnessed.
+	/// - There is a deposit at block 10 of X, which CFE B witnesses, but CFE A does not.
+	/// If CFE A does not wait until the block is ready to process it can miss witnesses and be out
+	/// of sync with the other CFEs.
 	pub async fn monitored_sc_items<
 		'env,
 		StateChainStream,
