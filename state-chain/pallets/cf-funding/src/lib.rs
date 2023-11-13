@@ -125,8 +125,13 @@ pub mod pallet {
 	/// PendingRedemptions stores a Pending enum for the account until the redemption is executed
 	/// or the redemption expires.
 	#[pallet::storage]
-	pub type PendingRedemptions<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, Pending, OptionQuery>;
+	pub type PendingRedemptions<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		AccountId<T>,
+		(FlipBalance<T>, EthereumAddress),
+		OptionQuery,
+	>;
 
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
@@ -408,9 +413,10 @@ pub mod pallet {
 						restricted_balances.get(&address).copied().unwrap_or_default(),
 				);
 
-			let net_amount = match amount {
-				RedemptionAmount::Max => liquid_balance.saturating_sub(redemption_fee),
-				RedemptionAmount::Exact(amount) => amount,
+			let (debit_amount, redeem_amount) = match amount {
+				RedemptionAmount::Max =>
+					(liquid_balance, liquid_balance.saturating_sub(redemption_fee)),
+				RedemptionAmount::Exact(amount) => (amount.saturating_add(redemption_fee), amount),
 			};
 
 			ensure!(
@@ -420,7 +426,8 @@ pub mod pallet {
 
 			// If necessary, update account restrictions.
 			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
-				restricted_balance.saturating_reduce(net_amount);
+				// Use the full debit amount here - fees are paid by restricted funds by default.
+				restricted_balance.saturating_reduce(debit_amount);
 				if restricted_balance.is_zero() {
 					restricted_balances.remove(&address);
 				}
@@ -428,7 +435,7 @@ pub mod pallet {
 			}
 
 			let remaining_balance = T::Flip::balance(&account_id)
-				.checked_sub(&net_amount)
+				.checked_sub(&redeem_amount)
 				.ok_or(Error::<T>::InsufficientBalance)?;
 
 			ensure!(
@@ -442,25 +449,25 @@ pub mod pallet {
 			);
 
 			// Update the account balance.
-			if net_amount > Zero::zero() {
-				T::Flip::try_initiate_redemption(&account_id, net_amount)?;
+			if redeem_amount > Zero::zero() {
+				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
 
 				// Send the transaction.
 				let contract_expiry =
 					T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
 				let call = T::RegisterRedemption::new_unsigned(
 					<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-					net_amount.unique_saturated_into(),
+					redeem_amount.unique_saturated_into(),
 					address.as_fixed_bytes(),
 					contract_expiry,
 					executor,
 				);
 
-				PendingRedemptions::<T>::insert(&account_id, Pending::Pending);
+				PendingRedemptions::<T>::insert(&account_id, (redeem_amount, address));
 
 				Self::deposit_event(Event::RedemptionRequested {
 					account_id,
-					amount: net_amount,
+					amount: redeem_amount,
 					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
 					expiry_time: contract_expiry,
 				});
@@ -499,7 +506,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+			let _ = PendingRedemptions::<T>::take(&account_id)
+				.ok_or(Error::<T>::NoPendingRedemption)?;
 
 			T::Flip::finalize_redemption(&account_id)
 				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
@@ -532,11 +540,18 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+			let (amount, address) = PendingRedemptions::<T>::take(&account_id)
+				.ok_or(Error::<T>::NoPendingRedemption)?;
 
 			T::Flip::revert_redemption(&account_id).expect(
 				"Pending Redemption should exist since the corresponding redemption existed",
 			);
+
+			if RestrictedAddresses::<T>::contains_key(&address) {
+				RestrictedBalances::<T>::mutate(&account_id, |map| {
+					map.entry(address).and_modify(|balance| *balance += amount).or_insert(amount);
+				});
+			}
 
 			Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
 

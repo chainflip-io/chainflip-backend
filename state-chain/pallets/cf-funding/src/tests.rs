@@ -6,7 +6,7 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, SetSafeMode,
+	Bonding, Chainflip, SetSafeMode,
 };
 use sp_core::H160;
 
@@ -665,7 +665,7 @@ fn can_update_redemption_tax() {
 }
 
 #[test]
-fn restricted_funds_getting_reduced() {
+fn restricted_funds_pay_redemption_tax() {
 	new_test_ext().execute_with(|| {
 		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x42; 20]);
 		const RESTRICTED_AMOUNT: FlipBalance = 50;
@@ -698,7 +698,7 @@ fn restricted_funds_getting_reduced() {
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, REDEEM_AMOUNT, TX_HASH));
 		assert_eq!(
 			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
-			RESTRICTED_AMOUNT - REDEEM_AMOUNT
+			RESTRICTED_AMOUNT - REDEEM_AMOUNT - REDEMPTION_TAX
 		);
 	});
 }
@@ -1080,6 +1080,9 @@ mod test_restricted_balances {
 		});
 	}
 
+	/// Takes a test identifier, a bond amount, and a list of redemption expressions, where each
+	/// expression is of the form `(amount, redeem_address, maybe_error)`, and
+	/// `maybe_err` is Some(error) when an error is expected.
 	macro_rules! test_restricted_balances {
 		( $case:ident, $bond:expr, $( $spec:expr, )+ ) => {
 			#[test]
@@ -1282,6 +1285,30 @@ mod test_restricted_balances {
 			Some(FlipError::InsufficientLiquidity)
 		),
 	];
+
+	#[test]
+	fn can_redeem_max_with_only_restricted_funds() {
+		new_test_ext().execute_with(|| {
+			const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+			const AMOUNT: u128 = 100;
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				AMOUNT,
+				RESTRICTED_ADDRESS,
+				TX_HASH
+			));
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				RESTRICTED_ADDRESS,
+				Default::default()
+			));
+			assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), None);
+			assert_eq!(Flip::balance(&ALICE), 0);
+		});
+	}
 }
 
 #[test]
