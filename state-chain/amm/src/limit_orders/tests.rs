@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::{
 	common::{
 		mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE,

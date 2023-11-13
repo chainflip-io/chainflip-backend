@@ -17,6 +17,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-amm = { path = '../../amm', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
@@ -51,6 +52,7 @@ std = [
   'cf-amm/std',
   'cf-chains/std',
   'cf-primitives/std',
+  'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'codec/std',
   'frame-benchmarking?/std',
@@ -65,6 +67,7 @@ std = [
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',
   'cf-primitives/runtime-benchmarks',
+  'cf-runtime-upgrade-utilities/try-runtime',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',

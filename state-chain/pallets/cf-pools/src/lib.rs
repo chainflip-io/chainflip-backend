@@ -14,6 +14,7 @@ use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, Swappin
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
+	traits::{OnRuntimeUpgrade, StorageVersion},
 	transactional,
 };
 use frame_system::pallet_prelude::OriginFor;
@@ -24,6 +25,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 pub use pallet::*;
 
 mod benchmarking;
+mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -207,6 +209,8 @@ impl<T: Config> AssetPair<T> {
 		self.try_xxx_asset(lp, side, amount, T::LpBalance::try_credit_account)
 	}
 }
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -406,6 +410,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// All the available pools.
@@ -473,6 +478,20 @@ pub mod pallet {
 				}
 			}
 			weight_used
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
