@@ -25,7 +25,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		Pools::<T>::translate::<old::Pool<T>, _>(|_key, old_pool: old::Pool<T>| {
 			Some(Pool::<T> {
-				enabled: old_pool.enabled,
 				range_orders_cache: old_pool.range_orders_cache,
 				limit_orders_cache: old_pool.limit_orders_cache,
 				pool_state: old_pool.pool_state.into(),
