@@ -1,3 +1,6 @@
+use cf_primitives::AuthorityCount;
+use state_chain_runtime::SetSizeParameters;
+
 pub use super::common::*;
 
 // These represent approximately 10 minutes in localnet block times
