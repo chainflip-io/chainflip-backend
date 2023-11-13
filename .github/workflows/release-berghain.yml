@@ -18,6 +18,7 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "berghain"
+      profile: "production"
     secrets: inherit
   docker:
     needs: [build]
