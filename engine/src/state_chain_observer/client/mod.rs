@@ -664,9 +664,11 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.await?
 				{
 					Some(role) =>
-						if self.required_role == AccountRole::None || self.required_role == role {
+						if self.required_role == AccountRole::Unregistered ||
+							self.required_role == role
+						{
 							break
-						} else if self.wait_for_required_role && role == AccountRole::None {
+						} else if self.wait_for_required_role && role == AccountRole::Unregistered {
 							warn!("Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{:?}' at block: {block_hash}", signer.account_id, self.required_role);
 						} else {
 							bail!("Your Chainflip account {} has the wrong account role '{role:?}'. The '{:?}' account role is required", signer.account_id, self.required_role);
