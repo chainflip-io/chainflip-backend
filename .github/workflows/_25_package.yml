@@ -5,6 +5,10 @@ on:
         description: Network being released
         required: true
         type: string
+      profile:
+        description: Profile being released
+        type: string
+        default: "release"
 
 env:
   FORCE_COLOR: 1
@@ -29,7 +33,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
-          path: ./target/release
+          path: ./target/${{ inputs.profile }}
 
       - name: Get date
         id: get-date
