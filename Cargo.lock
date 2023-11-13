@@ -7544,6 +7544,7 @@ dependencies = [
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-application-crypto 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
  "sp-io 23.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",

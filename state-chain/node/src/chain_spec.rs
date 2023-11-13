@@ -27,8 +27,8 @@ use state_chain_runtime::{
 	EthereumChainTrackingConfig, EthereumIngressEgressConfig, EthereumThresholdSignerConfig,
 	EthereumVaultConfig, FlipBalance, FlipConfig, FundingConfig, GovernanceConfig, GrandpaConfig,
 	PolkadotChainTrackingConfig, PolkadotIngressEgressConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, Signature,
-	SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	PolkadotVaultConfig, ReputationConfig, RuntimeGenesisConfig, SessionConfig, SetSizeParameters,
+	Signature, SwappingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use std::{
@@ -229,8 +229,8 @@ pub fn inner_cf_development_config(
 				testnet::extra_accounts(),
 				// Governance account - Snow White
 				testnet::SNOW_WHITE_SR25519.into(),
-				1,
-				devnet::MAX_AUTHORITIES,
+				devnet::MIN_AUTHORITIES,
+				devnet::AUCTION_PARAMETERS,
 				EnvironmentConfig {
 					flip_token_address: flip_token_address.into(),
 					eth_usdc_address: eth_usdc_address.into(),
@@ -252,7 +252,7 @@ pub fn inner_cf_development_config(
 				min_funding,
 				devnet::REDEMPTION_TAX,
 				8 * devnet::HOURS,
-				devnet::REDEMPTION_DELAY_SECS,
+				devnet::REDEMPTION_TTL_SECS,
 				devnet::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				devnet::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				devnet::EXPIRY_SPAN_IN_SECONDS,
@@ -268,6 +268,7 @@ pub fn inner_cf_development_config(
 				devnet::BITCOIN_EXPIRY_BLOCKS,
 				devnet::ETHEREUM_EXPIRY_BLOCKS,
 				devnet::POLKADOT_EXPIRY_BLOCKS,
+				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			)
 		},
 		// Bootnodes
@@ -357,7 +358,7 @@ macro_rules! network_spec {
 							// Governance account - Snow White
 							SNOW_WHITE_SR25519.into(),
 							MIN_AUTHORITIES,
-							MAX_AUTHORITIES,
+							AUCTION_PARAMETERS,
 							EnvironmentConfig {
 								flip_token_address: flip_token_address.into(),
 								eth_usdc_address: eth_usdc_address.into(),
@@ -379,7 +380,7 @@ macro_rules! network_spec {
 							min_funding,
 							REDEMPTION_TAX,
 							EPOCH_DURATION_BLOCKS,
-							REDEMPTION_DELAY_SECS,
+							REDEMPTION_TTL_SECS,
 							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 							EXPIRY_SPAN_IN_SECONDS,
@@ -394,6 +395,7 @@ macro_rules! network_spec {
 							BITCOIN_EXPIRY_BLOCKS,
 							ETHEREUM_EXPIRY_BLOCKS,
 							POLKADOT_EXPIRY_BLOCKS,
+							AUCTION_BID_CUTOFF_PERCENTAGE,
 						)
 					},
 					// Bootnodes
@@ -427,7 +429,7 @@ fn testnet_genesis(
 	extra_accounts: Vec<(AccountId, AccountRole, u128, Option<Vec<u8>>)>,
 	root_key: AccountId,
 	min_authorities: AuthorityCount,
-	max_authorities: AuthorityCount,
+	auction_parameters: SetSizeParameters,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -437,7 +439,7 @@ fn testnet_genesis(
 	minimum_funding: u128,
 	redemption_tax: u128,
 	blocks_per_epoch: BlockNumber,
-	redemption_delay: u64,
+	redemption_ttl_secs: u64,
 	current_authority_emission_inflation_perbill: u32,
 	backup_node_emission_inflation_perbill: u32,
 	expiry_span: u64,
@@ -452,6 +454,7 @@ fn testnet_genesis(
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
 	polkadot_deposit_channel_lifetime: u32,
+	auction_bid_cutoff_percentage: Percent,
 ) -> RuntimeGenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -553,9 +556,8 @@ fn testnet_genesis(
 				})
 				.expect("At least one authority is required"),
 			authority_set_min_size: min_authorities,
-			min_size: min_authorities,
-			max_size: max_authorities,
-			max_expansion: max_authorities,
+			auction_parameters,
+			auction_bid_cutoff_percentage,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
@@ -568,7 +570,7 @@ fn testnet_genesis(
 			genesis_accounts: Vec::from_iter(all_accounts.clone()),
 			minimum_funding,
 			redemption_tax,
-			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
+			redemption_ttl: core::time::Duration::from_secs(redemption_ttl_secs),
 		},
 		// These are set indirectly via the session pallet.
 		aura: AuraConfig { authorities: vec![] },
