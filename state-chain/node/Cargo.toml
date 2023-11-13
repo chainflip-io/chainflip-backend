@@ -149,7 +149,7 @@ assets = [
     "644",
   ],
   [
-    "target/production/chainflip-node",
+    "../../target/production/chainflip-node",
     "usr/bin/",
     "755",
   ],
