@@ -51,6 +51,9 @@ impl<LiquidityProvider: Ord> From<PoolState<LiquidityProvider>>
 					)
 				})
 				.collect(),
+			total_fees_earned: Default::default(),
+			total_swap_inputs: Default::default(),
+			total_swap_outputs: Default::default(),
 		}
 	}
 }

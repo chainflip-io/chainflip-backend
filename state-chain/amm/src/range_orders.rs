@@ -174,6 +174,12 @@ pub struct PoolState<LiquidityProvider> {
 	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
+	/// Total fees earned over all time
+	total_fees_earned: SideMap<Amount>,
+	/// Total of all swap inputs over all time (not including fees)
+	total_swap_inputs: SideMap<Amount>,
+	/// Total of all swap outputs over all time
+	total_swap_outputs: SideMap<Amount>,
 }
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
@@ -471,6 +477,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			]
 			.into(),
 			positions: Default::default(),
+			total_fees_earned: Default::default(),
+			total_swap_inputs: Default::default(),
+			total_swap_outputs: Default::default(),
 		})
 	}
 
@@ -823,6 +832,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					)
 				};
 
+				self.total_swap_inputs[SD::INPUT_SIDE] =
+					self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(amount_swapped);
+				self.total_fees_earned[SD::INPUT_SIDE] =
+					self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees);
+
 				// TODO: Prove this does not underflow
 				amount -= amount_swapped + fees;
 
@@ -860,6 +874,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				self.current_tick = tick_at_sqrt_price(sqrt_price_next);
 			}
 		}
+
+		self.total_swap_outputs[!SD::INPUT_SIDE] =
+			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
 		(total_output_amount, amount)
 	}
