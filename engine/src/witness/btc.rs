@@ -8,7 +8,9 @@ use bitcoin::{BlockHash, Transaction};
 use cf_chains::btc::{deposit_address::DepositAddress, CHANGE_ADDRESS_SALT};
 use cf_primitives::EpochIndex;
 use futures_core::Future;
+use pallet_cf_ingress_egress::DepositChannelDetails;
 use secp256k1::hashes::Hash;
+use state_chain_runtime::BitcoinInstance;
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -23,6 +25,7 @@ use btc_source::BtcSource;
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},
 	epoch_source::{EpochSourceBuilder, Vault},
+	STATE_CHAIN_CONNECTION,
 };
 
 use anyhow::Result;
@@ -125,10 +128,35 @@ where
 		.shared(scope);
 
 	// Pre-witnessing stream.
+	let state_chain_client_c = state_chain_client.clone();
 	strictly_monotonic_source
 		.clone()
 		.chunk_by_vault(vaults.clone())
-		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
+		.monitored_sc_items(
+			scope,
+			unfinalised_state_chain_stream,
+			state_chain_client.clone(),
+			|index,
+			 items: &Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>| {
+				items
+					.iter()
+					.filter(|details| details.opened_at <= index && index <= details.expires_at)
+					.cloned()
+					.collect()
+			},
+			move |block_hash| {
+				let state_chain_client = state_chain_client_c.clone();
+				async move {
+					state_chain_client
+						.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
+							state_chain_runtime::Runtime,
+							BitcoinInstance,
+						>>(block_hash)
+						.await
+						.expect(STATE_CHAIN_CONNECTION)
+				}
+			},
+		)
 		.await
 		.btc_deposits(prewitness_call)
 		.logging("pre-witnessing")
