@@ -194,7 +194,7 @@ where
 
 	unfinalised_source
 		.clone()
-		.chunk_by_time(epoch_source.clone())
+		.chunk_by_time(epoch_source.clone(), scope)
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
@@ -218,8 +218,7 @@ where
 	// Pre-witnessing
 	unfinalised_source
 		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults.clone())
+		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await
 		.dot_deposits(prewitness_call)
@@ -233,8 +232,7 @@ where
 		.then(|header| async move {
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
-		.shared(scope)
-		.chunk_by_vault(vaults)
+		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing

@@ -102,8 +102,7 @@ where
 
 	btc_source
 		.clone()
-		.shared(scope)
-		.chunk_by_time(epoch_source.clone())
+		.chunk_by_time(epoch_source.clone(), scope)
 		.chain_tracking(state_chain_client.clone(), btc_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
@@ -127,7 +126,7 @@ where
 	// Pre-witnessing stream.
 	strictly_monotonic_source
 		.clone()
-		.chunk_by_vault(vaults.clone())
+		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
 		.await
 		.btc_deposits(prewitness_call)
@@ -138,8 +137,7 @@ where
 	strictly_monotonic_source
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
-		.shared(scope)
-		.chunk_by_vault(vaults)
+		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(process_call.clone())

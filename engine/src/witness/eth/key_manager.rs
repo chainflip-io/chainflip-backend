@@ -235,7 +235,7 @@ mod tests {
 						.await;
 
 				EthSource::new(retry_client.clone())
-					.chunk_by_vault(vault_source)
+					.chunk_by_vault(vault_source, scope)
 					.key_manager_witnessing(
 						|call, _| async move {
 							println!("Witnessed call: {:?}", call);

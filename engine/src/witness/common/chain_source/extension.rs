@@ -84,34 +84,41 @@ pub trait ChainSourceExt: ChainSource {
 	/// Chunk the chain source by time (in blocks). Some consumers do not care about the exact
 	/// external chain block number they start and end but we only want to run it for the epoch
 	/// duration (as measured approximately by the State Chain blocks we consume).
-	fn chunk_by_time<Epochs: Into<EpochSource<(), ()>>>(
+	fn chunk_by_time<'env, Epochs: Into<EpochSource<(), ()>>>(
 		self,
 		epochs: Epochs,
-	) -> ChunkedByTimeBuilder<ChunkByTime<Self>>
+		scope: &Scope<'env, anyhow::Error>,
+	) -> ChunkedByTimeBuilder<ChunkByTime<SharedSource<Self>>>
 	where
-		Self: ExternalChainSource + Sized,
+		Self: ExternalChainSource + Sized + 'env,
+		Self::Client: Clone,
+		Self::Data: Clone,
 	{
-		ChunkedByTimeBuilder::new(ChunkByTime::new(self), epochs.into())
+		ChunkedByTimeBuilder::new(ChunkByTime::new(self.shared(scope)), epochs.into())
 	}
 
 	/// Chunk the chain source by vault. We specifically want to chunk the chain source from the
 	/// block the epoch starts at for a particular chain. This ensures we don't miss witnesses, and
 	/// allows us to only run for those epochs we are interested in.
 	fn chunk_by_vault<
+		'env,
 		ExtraInfo,
 		ExtraHistoricInfo,
 		Vaults: Into<VaultSource<Self::Chain, ExtraInfo, ExtraHistoricInfo>>,
 	>(
 		self,
 		vaults: Vaults,
-	) -> ChunkedByVaultBuilder<ChunkByVault<Self, ExtraInfo, ExtraHistoricInfo>>
+		scope: &Scope<'env, anyhow::Error>,
+	) -> ChunkedByVaultBuilder<ChunkByVault<SharedSource<Self>, ExtraInfo, ExtraHistoricInfo>>
 	where
-		Self: ExternalChainSource + Sized,
+		Self: ExternalChainSource + Sized + 'env,
+		Self::Client: Clone,
+		Self::Data: Clone,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
 		ExtraInfo: Clone + Send + Sync + 'static,
 		ExtraHistoricInfo: Clone + Send + Sync + 'static,
 	{
-		ChunkedByVaultBuilder::new(ChunkByVault::new(self), vaults.into())
+		ChunkedByVaultBuilder::new(ChunkByVault::new(self.shared(scope)), vaults.into())
 	}
 }
 impl<T: ChainSource> ChainSourceExt for T {}

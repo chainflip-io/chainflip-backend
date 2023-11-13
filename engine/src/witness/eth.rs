@@ -119,8 +119,7 @@ where
 
 	eth_source
 		.clone()
-		.shared(scope)
-		.chunk_by_time(epoch_source.clone())
+		.chunk_by_time(epoch_source.clone(), scope)
 		.chain_tracking(state_chain_client.clone(), eth_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
@@ -132,7 +131,7 @@ where
 		.clone()
 		.strictly_monotonic()
 		.shared(scope)
-		.chunk_by_vault(vaults.clone());
+		.chunk_by_vault(vaults.clone(), scope);
 
 	let prewitness_source_deposit_addresses = prewitness_source
 		.clone()
@@ -195,7 +194,7 @@ where
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
 		.shared(scope)
-		.chunk_by_vault(vaults);
+		.chunk_by_vault(vaults, scope);
 
 	let eth_safe_vault_source_deposit_addresses = eth_safe_vault_source
 		.clone()
