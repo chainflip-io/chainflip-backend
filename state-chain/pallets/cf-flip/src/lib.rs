@@ -21,7 +21,7 @@ pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
-	traits::{Get, HandleLifetime, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
