@@ -24,7 +24,7 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		PendingRedemptions::<T>::translate::<(), _>(|_key, ()| Some(Pending::Pending));
+		PendingRedemptions::<T>::translate::<(), _>(|_key, ()| Some(Default::default()));
 		Weight::zero()
 	}
 
@@ -47,7 +47,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		);
 		for account in pending_redemptions_accounts {
 			ensure!(
-				PendingRedemptions::<T>::get(&account) == Some(Pending::Pending),
+				PendingRedemptions::<T>::get(&account) == Some(Default::default()),
 				"Missing redemption"
 			)
 		}
@@ -80,7 +80,7 @@ mod test_runtime_upgrade {
 
 			assert_eq!(
 				PendingRedemptions::<Test>::get(account_id).unwrap(),
-				Pending::Pending,
+				Default::default(),
 				"Redemption incorrect, should be Pending"
 			);
 		});
