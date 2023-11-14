@@ -548,7 +548,7 @@ pub mod pallet {
 			);
 
 			// If the address is still restricted, we update the restricted balances again.
-			if RestrictedAddresses::<T>::contains_key(&address) {
+			if RestrictedAddresses::<T>::contains_key(address) {
 				RestrictedBalances::<T>::mutate(&account_id, |restricted_balances| {
 					restricted_balances
 						.entry(address)
