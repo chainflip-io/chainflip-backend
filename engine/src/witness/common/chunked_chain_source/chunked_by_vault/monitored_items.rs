@@ -69,16 +69,16 @@ where
 	async fn get_chain_state_and_items<
 		StateChainClient: StorageApi + Send + Sync + 'static,
 		GetItemsFut,
-		ItemGetterGenerator,
+		GetItemsGenerator,
 	>(
 		state_chain_client: &StateChainClient,
 		block_hash: state_chain_runtime::Hash,
-		get_items: ItemGetterGenerator,
+		get_items: GetItemsGenerator,
 	) -> (ChainState<Inner::Chain>, MonitoredItems)
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		GetItemsFut: Future<Output = MonitoredItems> + Send + 'static,
-		ItemGetterGenerator:
+		GetItemsGenerator:
 			Fn(state_chain_runtime::Hash) -> GetItemsFut + Send + Sync + Clone + 'static,
 	{
 		(
@@ -99,7 +99,7 @@ where
 		StateChainStream: StateChainStreamApi<FINALIZED>,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 		GetItemsFut: Future<Output = MonitoredItems> + Send + 'static,
-		ItemGetterGenerator: Fn(state_chain_runtime::Hash) -> GetItemsFut + Send + Sync + Clone + 'static,
+		GetItemsGenerator: Fn(state_chain_runtime::Hash) -> GetItemsFut + Send + Sync + Clone + 'static,
 		const FINALIZED: bool,
 	>(
 		inner: Inner,
@@ -107,7 +107,7 @@ where
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
 		filter_fn: ItemFilter,
-		get_items: ItemGetterGenerator,
+		get_items: GetItemsGenerator,
 	) -> Self
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
