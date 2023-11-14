@@ -73,7 +73,7 @@ where
 	>(
 		state_chain_client: &StateChainClient,
 		block_hash: state_chain_runtime::Hash,
-		get_items: GetItemsGenerator,
+		get_items: &GetItemsGenerator,
 	) -> (ChainState<Inner::Chain>, MonitoredItems)
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
@@ -116,19 +116,18 @@ where
 			Self::get_chain_state_and_items(
 				&*state_chain_client,
 				state_chain_stream.cache().hash,
-				get_items.clone(),
+				&get_items,
 			)
 			.await,
 		);
 
-		let get_items_c = get_items.clone();
 		scope.spawn(async move {
 			utilities::loop_select! {
 				let _ = sender.closed() => { break Ok(()) },
 				if let Some(_block_header) = state_chain_stream.next() => {
 					// Note it is still possible for engines to inconsistently select addresses to witness for a
 					// block due to how the SC expiries deposit addresses
-				let _result = sender.send(Self::get_chain_state_and_items(&*state_chain_client, state_chain_stream.cache().hash, get_items_c.clone()).await);
+				let _result = sender.send(Self::get_chain_state_and_items(&*state_chain_client, state_chain_stream.cache().hash, &get_items).await);
 				} else break Ok(()),
 			}
 		});
