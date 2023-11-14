@@ -205,12 +205,12 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
-		let seed = RotateSessionKeysApi::rotate_session_keys(self)
+		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self)
 			.await
 			.context("Could not rotate session keys.")?;
 
-		let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
-		let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
+		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
+		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
 
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
