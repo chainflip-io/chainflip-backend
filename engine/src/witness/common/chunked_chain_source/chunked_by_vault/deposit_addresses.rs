@@ -18,7 +18,7 @@ pub type Addresses<Inner> = Vec<
 >;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn deposit_addresses_2<
+	pub async fn deposit_addresses<
 		'env,
 		StateChainStream,
 		StateChainClient,

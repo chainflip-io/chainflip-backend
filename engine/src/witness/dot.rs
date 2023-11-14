@@ -228,7 +228,7 @@ where
 		.strictly_monotonic()
 		.shared(scope)
 		.chunk_by_vault(vaults.clone())
-		.deposit_addresses_2(scope, unfinalized_state_chain_stream, state_chain_client.clone())
+		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await
 		.dot_deposits(prewitness_call)
 		.logging("pre-witnessing")
@@ -243,14 +243,14 @@ where
 		})
 		.shared(scope)
 		.chunk_by_vault(vaults)
-		.deposit_addresses_2(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing
 		.dot_deposits(process_call.clone())
 		// Proxy added witnessing
 		.then(proxy_added_witnessing)
 		// Broadcast success
-		.egress_items_2(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.then({
 			let process_call = process_call.clone();

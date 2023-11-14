@@ -19,7 +19,7 @@ use crate::{
 	},
 };
 
-use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
+use super::ChunkedByVault;
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator. We only consider a header ready when the chain tracking has passed the block.
@@ -32,6 +32,18 @@ fn is_header_ready<Inner: ChunkedByVault>(
 	index < chain_state.block_height
 }
 
+/// This helps ensure a set of items we want to witness are consistent for each block across all
+/// validators. Without this functionality of holding up blocks and filtering out items, the
+/// CFEs can go out of sync. Consider the case of 2 CFEs.
+/// - CFE A is ahead of CFE B with respect to external chain X by 1 block.
+/// - CFE B witnesses block 10 of X, and is watching for addresses that it fetches from the SC, at
+///   SC block 50.
+/// - CFE A witnesses block 11 of X, and is watching for addresses that it fetches from the SC, at
+///   the same SC block 50.
+/// - The SC progresses to block 51, revealing that an address is to be witnessed.
+/// - There is a deposit at block 10 of X, which CFE B witnesses, but CFE A does not.
+/// If CFE A does not wait until the block is ready to process it can miss witnesses and be out
+/// of sync with the other CFEs.
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
 pub struct MonitoredSCItems<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
@@ -301,61 +313,5 @@ where
 			.header_at_index(index)
 			.await
 			.map_data(|header| (header.data, addresses))
-	}
-}
-
-impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	/// This helps ensure a set of items we want to witness are consistent for each block across all
-	/// validators. Without this functionality of holding up blocks and filtering out items, the
-	/// CFEs can go out of sync. Consider the case of 2 CFEs.
-	/// - CFE A is ahead of CFE B with respect to external chain X by 1 block.
-	/// - CFE B witnesses block 10 of X, and is watching for addresses that it fetches from the SC,
-	///   at SC block 50.
-	/// - CFE A witnesses block 11 of X, and is watching for addresses that it fetches from the SC,
-	///   at the same SC block 50.
-	/// - The SC progresses to block 51, revealing that an address is to be witnessed.
-	/// - There is a deposit at block 10 of X, which CFE B witnesses, but CFE A does not.
-	/// If CFE A does not wait until the block is ready to process it can miss witnesses and be out
-	/// of sync with the other CFEs.
-	pub async fn monitored_sc_items<
-		'env,
-		StateChainStream,
-		StateChainClient,
-		MonitoredItems,
-		ItemFilter,
-		GetItemsFut,
-		ItemGetterGenerator,
-		const FINALIZED: bool,
-	>(
-		self,
-		scope: &Scope<'env, anyhow::Error>,
-		state_chain_stream: StateChainStream,
-		state_chain_client: Arc<StateChainClient>,
-		filter_fn: ItemFilter,
-		get_items: ItemGetterGenerator,
-	) -> ChunkedByVaultBuilder<MonitoredSCItems<Inner, MonitoredItems, ItemFilter>>
-	where
-		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		StateChainStream: StateChainStreamApi<FINALIZED>,
-		StateChainClient: StorageApi + Send + Sync + 'static,
-		MonitoredItems: Send + Sync + Unpin + 'static,
-		ItemFilter:
-			Fn(Inner::Index, &MonitoredItems) -> MonitoredItems + Send + Sync + Clone + 'static,
-		GetItemsFut: Future<Output = MonitoredItems> + Send + 'static,
-		ItemGetterGenerator:
-			Fn(state_chain_runtime::Hash) -> GetItemsFut + Send + Sync + Clone + 'static,
-	{
-		ChunkedByVaultBuilder::new(
-			MonitoredSCItems::new(
-				self.source,
-				scope,
-				state_chain_stream,
-				state_chain_client,
-				filter_fn,
-				get_items,
-			)
-			.await,
-			self.parameters,
-		)
 	}
 }

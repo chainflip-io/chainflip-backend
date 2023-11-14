@@ -1,7 +1,7 @@
 pub mod builder;
 pub mod continuous;
-pub mod deposit_addresses_2;
-pub mod egress_items_2;
+pub mod deposit_addresses;
+pub mod egress_items;
 pub mod monitored_items;
 
 use cf_chains::Chain;

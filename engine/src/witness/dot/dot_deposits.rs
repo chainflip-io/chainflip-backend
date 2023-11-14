@@ -8,8 +8,8 @@ use super::super::common::chunked_chain_source::chunked_by_vault::{
 };
 use crate::witness::{
 	common::{
-		chunked_chain_source::chunked_by_vault::deposit_addresses_2::Addresses,
-		RuntimeCallHasChain, RuntimeHasChain,
+		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
+		RuntimeHasChain,
 	},
 	dot::EventWrapper,
 };

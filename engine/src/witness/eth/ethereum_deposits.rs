@@ -10,7 +10,7 @@ use sp_core::H256;
 use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::{
-	common::chunked_chain_source::chunked_by_vault::deposit_addresses_2::Addresses,
+	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
 	eth::vault::VaultEvents,
 };
 

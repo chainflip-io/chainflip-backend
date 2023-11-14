@@ -23,7 +23,7 @@ pub type ChainBlockNumber<Inner> = <<Inner as ChunkedByVault>::Chain as Chain>::
 pub type TxOutIdsInitiatedAt<Inner> = Vec<(TxOutId<Inner>, ChainBlockNumber<Inner>)>;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn egress_items_2<'env, StateChainStream, StateChainClient, const FINALIZED: bool>(
+	pub async fn egress_items<'env, StateChainStream, StateChainClient, const FINALIZED: bool>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
