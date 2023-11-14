@@ -1,5 +1,5 @@
 use cf_chains::{ApiCall, Chain};
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::BroadcastId;
 use core::marker::PhantomData;
 use frame_support::{
 	traits::{OriginTrait, UnfilteredDispatchable},
@@ -29,31 +29,23 @@ impl<
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 		_pause_broadcasts: bool,
-	) -> (cf_primitives::BroadcastId, cf_primitives::ThresholdSignatureRequestId) {
+	) -> cf_primitives::BroadcastId {
 		Self::mutate_value(b"API_CALLS", |api_calls: &mut Option<Vec<A>>| {
 			let api_calls = api_calls.get_or_insert(Default::default());
 			api_calls.push(api_call);
 		});
-		(
-			<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
-				let v = v.get_or_insert(0);
-				*v += 1;
-				*v
-			}),
-			<Self as MockPalletStorage>::mutate_value(b"THRESHOLD_ID", |v: &mut Option<u32>| {
-				let v = v.get_or_insert(0);
-				*v += 1;
-				*v
-			}),
-		)
+		<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
+			let v = v.get_or_insert(0);
+			*v += 1;
+			*v
+		})
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let ids @ (id, _) =
-			<Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call, false);
+	) -> BroadcastId {
+		let ids @ id = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call, false);
 		Self::put_storage(b"CALLBACKS", id, callback);
 		ids
 	}

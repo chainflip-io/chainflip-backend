@@ -1,7 +1,7 @@
 use crate as pallet_cf_funding;
 use crate::PalletSafeMode;
 use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{AccountRole, BroadcastId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::time_source, AccountRoleRegistry, Broadcaster, WaivedFees,
@@ -163,17 +163,17 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 		_pause_broadcasts: bool,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
 		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
-		(0, 1)
+		0
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
 		unimplemented!()
 	}
 }

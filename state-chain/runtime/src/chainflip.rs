@@ -431,7 +431,6 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
 			None::<RuntimeCall>,
-			false,
 		);
 	}
 }

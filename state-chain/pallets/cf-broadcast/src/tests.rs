@@ -2,7 +2,7 @@
 
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
-	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
+	BroadcastRetryQueue, Config, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
 	TransactionMetadata, TransactionOutIdToBroadcastId, WeightInfo,
 };
@@ -17,7 +17,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AsyncResult, Chainflip, EpochInfo, SetSafeMode, ThresholdSigner,
+	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, SetSafeMode,
+	ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -496,8 +497,8 @@ fn threshold_sign_and_broadcast_with_callback() {
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
 
-		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), false);
+		let broadcast_id =
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback));
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
@@ -607,8 +608,9 @@ fn broadcast_pause() {
 
 		// create and sign 3 txs that are then ready for broadcast
 
-		let (broadcast_id_1, _) =
-			Broadcaster::threshold_sign_and_broadcast(api_call1.clone(), None, false);
+		let broadcast_id_1 = <Broadcaster as BroadcasterTrait<
+			<Test as Config<Instance1>>::TargetChain,
+		>>::threshold_sign_and_broadcast(api_call1.clone(), false);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
@@ -625,8 +627,9 @@ fn broadcast_pause() {
 			},
 		));
 
-		let (broadcast_id_2, _) =
-			Broadcaster::threshold_sign_and_broadcast(api_call2.clone(), None, true);
+		let broadcast_id_2 = <Broadcaster as BroadcasterTrait<
+			<Test as Config<Instance1>>::TargetChain,
+		>>::threshold_sign_and_broadcast(api_call2.clone(), true);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
@@ -643,8 +646,9 @@ fn broadcast_pause() {
 			},
 		));
 
-		let (broadcast_id_3, _) =
-			Broadcaster::threshold_sign_and_broadcast(api_call3.clone(), None, false);
+		let broadcast_id_3 = <Broadcaster as BroadcasterTrait<
+			<Test as Config<Instance1>>::TargetChain,
+		>>::threshold_sign_and_broadcast(api_call3.clone(), false);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 

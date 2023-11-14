@@ -643,12 +643,6 @@ fn do_full_key_rotation() {
 	VaultsPallet::activate();
 
 	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
-	// assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
-
-	// assert!(matches!(
-	// 	PendingVaultRotation::<Test, _>::get().unwrap(),
-	// 	VaultRotationStatus::<Test, _>::AwaitingActivation { new_public_key: k } if k ==
-	// NEW_AGG_PUB_KEY_POST_HANDOVER ));
 
 	// Voting has been cleared.
 	assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);

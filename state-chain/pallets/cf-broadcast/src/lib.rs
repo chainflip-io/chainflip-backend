@@ -726,8 +726,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
 		maybe_callback: Option<<T as Config<I>>::BroadcastCallable>,
-		pause_broadcasts: bool,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
@@ -743,7 +742,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let initiated_at = T::ChainTracking::get_block_height();
 
 		let threshold_signature_payload = api_call.threshold_signature_payload();
-		let signature_request_id = T::ThresholdSigner::request_signature_with_callback(
+		T::ThresholdSigner::request_signature_with_callback(
 			threshold_signature_payload.clone(),
 			|threshold_request_id| {
 				Call::on_signature_ready {
@@ -756,11 +755,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.into()
 			},
 		);
-		if pause_broadcasts {
-			BroadcastPause::<T, I>::set(Some(broadcast_id));
-		}
 
-		(broadcast_id, signature_request_id)
+		broadcast_id
 	}
 
 	/// Begin the process of broadcasting a transaction.
@@ -797,16 +793,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if BroadcastPause::<T, I>::get()
-			.and_then(
-				|pause_broadcast_id| {
-					if broadcast_id > pause_broadcast_id {
-						Some(())
-					} else {
-						None
-					}
-				},
-			)
-			.is_some()
+			.is_some_and(|pause_broadcast_id| broadcast_id > pause_broadcast_id)
 		{
 			Self::schedule_for_retry(&broadcast_attempt);
 		} else {
@@ -851,10 +838,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// to retry from the threshold signing stage.
 			else {
 				Self::clean_up_broadcast_storage(broadcast_id);
-				let (retry_broadcast_id, _) = Self::threshold_sign_and_broadcast(
+				let retry_broadcast_id = Self::threshold_sign_and_broadcast(
 					api_call,
 					RequestCallbacks::<T, I>::get(broadcast_id),
-					false,
 				);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
@@ -935,14 +921,18 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 		pause_broadcasts: bool,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, None, pause_broadcasts)
+	) -> BroadcastId {
+		let broadcast_id = Self::threshold_sign_and_broadcast(api_call, None);
+		if pause_broadcasts {
+			BroadcastPause::<T, I>::set(Some(broadcast_id));
+		}
+		broadcast_id
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, Some(callback), false)
+	) -> BroadcastId {
+		Self::threshold_sign_and_broadcast(api_call, Some(callback))
 	}
 }

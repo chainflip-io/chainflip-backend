@@ -7,8 +7,8 @@ use cf_chains::{
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
-	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
-	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+	BroadcastId, SemVer, INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES,
+	OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
@@ -106,14 +106,14 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	fn threshold_sign_and_broadcast(
 		_api_call: Self::ApiCall,
 		_pause_broadcasts: bool,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
 		unimplemented!()
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
 		unimplemented!()
 	}
 }

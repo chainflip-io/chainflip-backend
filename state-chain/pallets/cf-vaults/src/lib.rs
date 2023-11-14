@@ -153,11 +153,6 @@ pub enum PalletOffence {
 	FailedKeyHandover,
 }
 
-#[derive(Encode, Decode, TypeInfo)]
-pub struct VaultEpoch {
-	pub epoch_index: EpochIndex,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -371,7 +366,7 @@ pub mod pallet {
 	/// The epoch whose authorities control the current vault key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
-	pub type CurrentVaultEpoch<T: Config<I>, I: 'static = ()> = StorageValue<_, VaultEpoch>;
+	pub type CurrentVaultEpoch<T: Config<I>, I: 'static = ()> = StorageValue<_, EpochIndex>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -678,6 +673,21 @@ pub mod pallet {
 			)
 		}
 
+		/// Deprecated! This extrinsic does nothing
+		#[pallet::call_index(3)]
+		#[pallet::weight(Weight::zero())]
+		pub fn vault_key_rotated(
+			origin: OriginFor<T>,
+			_block_number: ChainBlockNumberFor<T, I>,
+
+			// This field is primarily required to ensure the witness calls are unique per
+			// transaction (on the external chain)
+			_tx_id: TransactionInIdFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			Ok(().into())
+		}
+
 		/// The vault's key has been updated externally, outside of the rotation
 		/// cycle. This is an unexpected event as far as our chain is concerned, and
 		/// the only thing we can do is to halt and wait for further governance
@@ -844,7 +854,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn set_vault_key_for_epoch(epoch_index: EpochIndex, vault: Vault<T::Chain>) {
 		Vaults::<T, I>::insert(epoch_index, vault);
-		CurrentVaultEpoch::<T, I>::put(VaultEpoch { epoch_index });
+		CurrentVaultEpoch::<T, I>::put(epoch_index);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -953,11 +963,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
 	fn active_epoch_key(
 	) -> Option<EpochKey<<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey>> {
-		CurrentVaultEpoch::<T, I>::get().map(|current_vault_epoch_and_state| {
+		CurrentVaultEpoch::<T, I>::get().map(|current_vault_epoch| {
 			EpochKey {
-				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
-					.expect("Key must exist if CurrentVaultEpoch exists since they get set at the same place: set_next_vault()").public_key,
-				epoch_index: current_vault_epoch_and_state.epoch_index,
+				key: Vaults::<T, I>::get(current_vault_epoch)
+					.expect("Key must exist if CurrentVaultEpoch exists since they get set at the same place: set_vault_key_for_epoch()").public_key,
+				epoch_index: current_vault_epoch,
 			}
 		})
 	}
