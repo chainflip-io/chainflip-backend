@@ -23,8 +23,7 @@ use super::ChunkedByVault;
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator. We only consider a header ready when the chain tracking has passed the block.
-/// Given chain tracking requires a majority of nodes to update, we can use this to pace our
-/// processing.
+/// This gives the CFEs a single point to synchronise against.
 fn is_header_ready<Inner: ChunkedByVault>(
 	index: Inner::Index,
 	chain_state: &ChainState<Inner::Chain>,
