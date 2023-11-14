@@ -39,7 +39,7 @@ async function provideLiquidityAndTestAssetBalances() {
   const fineAmountToProvide = parseInt(
     amountToFineAmount(amountToProvide.toString(), assetDecimals.ETH),
   );
-
+  console.log(fineAmountToProvide);
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
   await provideLiquidity(testAsset, amountToProvide, true);
 
@@ -174,10 +174,10 @@ async function testRangeOrder() {
       },
     },
   ]);
-
+  console.log(testAssetAmount);
   assert(mintRangeOrder.length >= 1, `Empty mint range order result`);
   assert(
-    mintRangeOrder[0].liquidity_total > 0,
+    parseInt(mintRangeOrder[0].liquidity_total) > 0,
     `Expected range order to have liquidity after mint`,
   );
 
@@ -202,7 +202,7 @@ async function testRangeOrder() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateRangeOrder.forEach((order: any) => {
     const liquidityIncrease = order.size_change?.increase?.liquidity ?? 0;
-    if (liquidityIncrease > 0 && order.liquidity_total > 0) {
+    if (liquidityIncrease > 0 && parseInt(order.liquidity_total) > 0) {
       matchUpdate = true;
     }
   });
@@ -222,7 +222,7 @@ async function testRangeOrder() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnRangeOrder.forEach((order: any) => {
     const liquidityDecrease = order.size_change?.decrease?.liquidity ?? 0;
-    if (liquidityDecrease > 0 && order.liquidity_total === 0) {
+    if (liquidityDecrease > 0 && parseInt(order.liquidity_total) === 0) {
       matchBurn = true;
     }
   });
@@ -256,13 +256,13 @@ async function testLimitOrder() {
   ]);
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
   assert(
-    mintLimitOrder[0].amount_change.increase > 0,
+    parseInt(mintLimitOrder[0].amount_change.increase) > 0,
     `Expected mint of limit order to increase liquidity. amount_change: ${JSON.stringify(
       mintLimitOrder[0].amount_change,
     )}`,
   );
   assert.strictEqual(
-    mintLimitOrder[0].amount_total,
+    parseInt(mintLimitOrder[0].amount_total),
     testAssetAmount,
     `Unexpected amount of asset was minted for limit order`,
   );
@@ -283,8 +283,8 @@ async function testLimitOrder() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateLimitOrder.forEach((order: any) => {
     if (
-      order.amount_change.increase === testAssetAmount &&
-      order.amount_total === testAssetAmount * 2
+      parseInt(order.amount_change.increase) === testAssetAmount &&
+      parseInt(order.amount_total) === testAssetAmount * 2
     ) {
       matchUpdate = true;
     }
@@ -308,7 +308,10 @@ async function testLimitOrder() {
   let matchBurn = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnLimitOrder.forEach((order: any) => {
-    if (order.amount_change.decrease === testAssetAmount * 2 && order.amount_total === 0) {
+    if (
+      parseInt(order.amount_change.decrease) === testAssetAmount * 2 &&
+      parseInt(order.amount_total) === 0
+    ) {
       matchBurn = true;
     }
   });
