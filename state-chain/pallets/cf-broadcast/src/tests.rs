@@ -584,27 +584,9 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 #[test]
 fn broadcast_pause() {
 	new_test_ext().execute_with(|| {
-		const TX_OUT_ID_1: [u8; 4] = [0xaa; 4];
-		const TX_OUT_ID_2: [u8; 4] = [0xbb; 4];
-		const TX_OUT_ID_3: [u8; 4] = [0xcc; 4];
-
-		let api_call1 = MockApiCall {
-			payload: Default::default(),
-			sig: Default::default(),
-			tx_out_id: TX_OUT_ID_1,
-		};
-
-		let api_call2 = MockApiCall {
-			payload: Default::default(),
-			sig: Default::default(),
-			tx_out_id: TX_OUT_ID_2,
-		};
-
-		let api_call3 = MockApiCall {
-			payload: Default::default(),
-			sig: Default::default(),
-			tx_out_id: TX_OUT_ID_3,
-		};
+		let (tx_out_id1, api_call1) = api_call(1);
+		let (tx_out_id2, api_call2) = api_call(2);
+		let (tx_out_id3, api_call3) = api_call(3);
 
 		// create and sign 3 txs that are then ready for broadcast
 
@@ -615,17 +597,7 @@ fn broadcast_pause() {
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		// tx1 emits broadcast request
-		System::assert_last_event(RuntimeEvent::Broadcaster(
-			crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
-				transaction_out_id: TX_OUT_ID_1,
-				broadcast_attempt_id: BroadcastAttemptId {
-					broadcast_id: broadcast_id_1,
-					attempt_count: 0,
-				},
-				transaction_payload: Default::default(),
-				nominee: MockNominator::get_last_nominee().unwrap(),
-			},
-		));
+		assert_transaction_broadcast_request_event(broadcast_id_1, 0, tx_out_id1);
 
 		let broadcast_id_2 = <Broadcaster as BroadcasterTrait<
 			<Test as Config<Instance1>>::TargetChain,
@@ -634,17 +606,7 @@ fn broadcast_pause() {
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		// tx2 emits broadcast request and also pauses any further new broadcast requests
-		System::assert_last_event(RuntimeEvent::Broadcaster(
-			crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
-				transaction_out_id: TX_OUT_ID_2,
-				broadcast_attempt_id: BroadcastAttemptId {
-					broadcast_id: broadcast_id_2,
-					attempt_count: 0,
-				},
-				transaction_payload: Default::default(),
-				nominee: MockNominator::get_last_nominee().unwrap(),
-			},
-		));
+		assert_transaction_broadcast_request_event(broadcast_id_2, 0, tx_out_id2);
 
 		let broadcast_id_3 = <Broadcaster as BroadcasterTrait<
 			<Test as Config<Instance1>>::TargetChain,
@@ -666,7 +628,7 @@ fn broadcast_pause() {
 		// report successful broadcast of tx1
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			TX_OUT_ID_1,
+			tx_out_id1,
 			Default::default(),
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
@@ -685,35 +647,45 @@ fn broadcast_pause() {
 		// Now tx2 succeeds which should allow tx3 to be broadcast
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			TX_OUT_ID_2,
+			tx_out_id2,
 			Default::default(),
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
 		));
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
 
-		System::assert_last_event(RuntimeEvent::Broadcaster(
-			crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
-				transaction_out_id: TX_OUT_ID_3,
-				broadcast_attempt_id: BroadcastAttemptId {
-					broadcast_id: broadcast_id_3,
-					// attempt count is 1 because the previous failure to broadcast because of
-					// broadcast pause is considered an attempt
-					attempt_count: 1,
-				},
-				transaction_payload: Default::default(),
-				nominee: MockNominator::get_last_nominee().unwrap(),
-			},
-		));
+		// attempt count is 1 because the previous failure to broadcast because of
+		// broadcast pause is considered an attempt
+		assert_transaction_broadcast_request_event(broadcast_id_3, 1, tx_out_id3);
 
 		assert!(BroadcastRetryQueue::<Test, Instance1>::get().is_empty());
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			TX_OUT_ID_3,
+			tx_out_id3,
 			Default::default(),
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
 		));
 	});
+}
+
+fn api_call(i: u8) -> ([u8; 4], MockApiCall<MockEthereumChainCrypto>) {
+	let tx_out_id = [i; 4];
+	(tx_out_id, MockApiCall { tx_out_id, sig: Default::default(), payload: Default::default() })
+}
+
+fn assert_transaction_broadcast_request_event(
+	broadcast_id: BroadcastId,
+	attempt_count: u32,
+	tx_out_id: [u8; 4],
+) {
+	System::assert_last_event(RuntimeEvent::Broadcaster(
+		crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
+			transaction_out_id: tx_out_id,
+			broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count },
+			transaction_payload: Default::default(),
+			nominee: MockNominator::get_last_nominee().unwrap(),
+		},
+	));
 }
