@@ -255,6 +255,12 @@ pub mod pallet {
 	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
+	/// Maximum amount allowed to be put into a swap. Excess amount are burned from the chain (i.e.
+	/// absorbed by the vault). PRO-964 This is to be removed after Swapping is fully operational.
+	#[pallet::storage]
+	#[pallet::getter(fn maximum_swap_amount)]
+	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -335,6 +341,17 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
+		},
+		MaximumSwapAmountSet {
+			asset: Asset,
+			amount: Option<AssetAmount>,
+		},
+		SwapAmountConfiscated {
+			swap_id: u64,
+			source_asset: Asset,
+			destination_asset: Asset,
+			total_amount: AssetAmount,
+			confiscated_amount: AssetAmount,
 		},
 	}
 	#[pallet::error]
@@ -690,6 +707,31 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::MinimumSwapAmountSet { asset, amount });
 			Ok(())
 		}
+
+		/// Sets the Maximum amount allowed in a single swap for an asset.
+		///
+		/// Requires Governance.
+		///
+		/// ## Events
+		///
+		/// - [On update](Event::MaximumSwapAmountSet)
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::set_maximum_swap_amount())]
+		pub fn set_maximum_swap_amount(
+			origin: OriginFor<T>,
+			asset: Asset,
+			amount: Option<AssetAmount>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			match amount {
+				Some(max) => MaximumSwapAmount::<T>::insert(asset, max),
+				None => MaximumSwapAmount::<T>::remove(asset),
+			};
+
+			Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -859,22 +901,6 @@ pub mod pallet {
 			grouped_swaps
 		}
 
-		fn schedule_swap_internal(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			swap_type: SwapType,
-		) -> u64 {
-			let swap_id = SwapIdCounter::<T>::mutate(|id| {
-				id.saturating_accrue(1);
-				*id
-			});
-
-			SwapQueue::<T>::append(Swap::new(swap_id, from, to, amount, swap_type));
-
-			swap_id
-		}
-
 		/// Schedule the egress of a completed Cross chain message.
 		fn schedule_ccm_egress(
 			ccm_id: u64,
@@ -913,7 +939,40 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 
-		// Schedule and returns the swap id if the swap is valid.
+		/// Schedule the swap, assuming all checks already passed.
+		fn schedule_swap_internal(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			swap_type: SwapType,
+		) -> u64 {
+			let swap_id = SwapIdCounter::<T>::mutate(|id| {
+				id.saturating_accrue(1);
+				*id
+			});
+			let (swap_amount, confiscated_amount) = match MaximumSwapAmount::<T>::get(from) {
+				Some(max) => (sp_std::cmp::min(amount, max), amount.saturating_sub(max)),
+				None => (amount, Zero::zero()),
+			};
+			if !confiscated_amount.is_zero() {
+				CollectedRejectedFunds::<T>::mutate(from, |fund| {
+					*fund = fund.saturating_add(confiscated_amount)
+				});
+				Self::deposit_event(Event::<T>::SwapAmountConfiscated {
+					swap_id,
+					source_asset: from,
+					destination_asset: to,
+					total_amount: amount,
+					confiscated_amount,
+				});
+			}
+
+			SwapQueue::<T>::append(Swap::new(swap_id, from, to, swap_amount, swap_type));
+
+			swap_id
+		}
+
+		/// Schedule and returns the swap id if the swap is valid.
 		fn schedule_swap_with_check(
 			from: Asset,
 			to: Asset,

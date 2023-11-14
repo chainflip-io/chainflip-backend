@@ -136,6 +136,19 @@ benchmarks! {
 		assert_eq!(crate::MinimumSwapAmount::<T>::get(asset), amount);
 	}
 
+	set_maximum_swap_amount {
+		let asset = Asset::Eth;
+		let amount = 1_000;
+		let call = Call::<T>::set_maximum_swap_amount {
+			asset,
+			amount: Some(amount),
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap());
+	} verify {
+		assert_eq!(crate::MaximumSwapAmount::<T>::get(asset), Some(amount));
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),
