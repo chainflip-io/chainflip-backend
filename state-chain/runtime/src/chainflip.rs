@@ -391,7 +391,7 @@ impl TokenholderGovernanceBroadcaster {
 			maybe_old_key,
 			Decode::decode(&mut &new_key[..]).or(Err(()))?,
 		)?;
-		B::threshold_sign_and_broadcast(api_call, false);
+		B::threshold_sign_and_broadcast(api_call);
 		Ok(())
 	}
 

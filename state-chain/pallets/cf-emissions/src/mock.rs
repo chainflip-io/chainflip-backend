@@ -178,10 +178,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-		_pause_broadcasts: bool,
-	) -> BroadcastId {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::call(api_call);
 		1
 	}
@@ -190,6 +187,10 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
 	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
 	}
 }

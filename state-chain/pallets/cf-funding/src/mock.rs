@@ -160,10 +160,7 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	type ApiCall = MockRegisterRedemption;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-		_pause_broadcasts: bool,
-	) -> BroadcastId {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
@@ -174,6 +171,10 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
 	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
 	}
 }

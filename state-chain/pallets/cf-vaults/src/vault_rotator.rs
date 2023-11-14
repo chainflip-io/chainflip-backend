@@ -158,7 +158,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					new_public_key,
 				) {
 					Ok(activation_call) => {
-						T::Broadcaster::threshold_sign_and_broadcast(activation_call, true);
+						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
 
 						Self::activate_new_key(
 							new_public_key,

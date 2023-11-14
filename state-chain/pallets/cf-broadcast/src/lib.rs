@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(extract_if)]
 
 mod benchmarking;
 mod mock;
@@ -410,21 +411,11 @@ pub mod pallet {
 
 				let mut paused_broadcasts = vec![];
 				if let Some(pause_broadcast_id) = BroadcastPause::<T, I>::get() {
-					retries.retain(|broadcast| {
-						if broadcast.broadcast_attempt_id.broadcast_id > pause_broadcast_id {
-							paused_broadcasts.push(BroadcastAttempt::<T, I> {
-								broadcast_attempt_id: broadcast.broadcast_attempt_id,
-								transaction_payload: broadcast.transaction_payload.clone(),
-								threshold_signature_payload: broadcast
-									.threshold_signature_payload
-									.clone(),
-								transaction_out_id: broadcast.transaction_out_id.clone(),
-							});
-							false
-						} else {
-							true
-						}
-					});
+					paused_broadcasts = retries
+						.extract_if(|broadcast| {
+							broadcast.broadcast_attempt_id.broadcast_id > pause_broadcast_id
+						})
+						.collect::<Vec<_>>();
 				}
 
 				if retries.len() > num_retries_that_fit {
@@ -918,15 +909,8 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
 	type Callback = <T as Config<I>>::BroadcastCallable;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-		pause_broadcasts: bool,
-	) -> BroadcastId {
-		let broadcast_id = Self::threshold_sign_and_broadcast(api_call, None);
-		if pause_broadcasts {
-			BroadcastPause::<T, I>::set(Some(broadcast_id));
-		}
-		broadcast_id
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
+		Self::threshold_sign_and_broadcast(api_call, None)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
@@ -934,5 +918,11 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		callback: Self::Callback,
 	) -> BroadcastId {
 		Self::threshold_sign_and_broadcast(api_call, Some(callback))
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+		let broadcast_id = Self::threshold_sign_and_broadcast(api_call, None);
+		BroadcastPause::<T, I>::set(Some(broadcast_id));
+		broadcast_id
 	}
 }

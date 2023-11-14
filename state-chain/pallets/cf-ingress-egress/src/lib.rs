@@ -769,8 +769,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.message.to_vec(),
 			) {
 				Ok(api_call) => {
-					let broadcast_id =
-						T::Broadcaster::threshold_sign_and_broadcast(api_call, false);
+					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(api_call);
 					Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
 						broadcast_id,
 						egress_id: ccm.egress_id,

@@ -456,8 +456,7 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall, pause_broadcasts: bool)
-		-> BroadcastId;
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
@@ -465,6 +464,10 @@ pub trait Broadcaster<C: Chain> {
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> BroadcastId;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call
+	/// specifically for a rotation tx..
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
 }
 
 /// The heartbeat of the network
