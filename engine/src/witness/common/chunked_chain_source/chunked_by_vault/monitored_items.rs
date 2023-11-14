@@ -53,8 +53,6 @@ where
 {
 	inner: Inner,
 	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, MonitoredItems)>,
-	// Filters out the invalid items, based on the current block header we're processing. For
-	// example, if an item has expired, it can be filtered out.
 	filter_fn: ItemFilter,
 }
 
