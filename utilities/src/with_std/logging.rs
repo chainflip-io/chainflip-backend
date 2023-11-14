@@ -110,6 +110,8 @@ pub async fn init_json_logger(
 	let reload_handle = {
 		let builder = tracing_subscriber::fmt()
 			.json()
+			.with_current_span(false)
+			.with_span_list(true)
 			.with_env_filter(
 				EnvFilter::builder()
 					.with_default_directive(LevelFilter::INFO.into())
