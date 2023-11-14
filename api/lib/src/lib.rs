@@ -381,17 +381,22 @@ impl Serialize for KeyPair {
 }
 
 /// Generate a new random node key.
+///
 /// This key is used for secure communication between Validators.
-pub fn generate_node_key() -> KeyPair {
+pub fn generate_node_key() -> Result<(KeyPair, libp2p_identity::PeerId)> {
 	use rand_v7::SeedableRng;
 
 	let mut rng = rand_v7::rngs::StdRng::from_entropy();
 	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
+	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(keypair.secret.to_bytes())?;
 
-	KeyPair {
-		secret_key: keypair.secret.as_bytes().to_vec(),
-		public_key: keypair.public.to_bytes().to_vec(),
-	}
+	Ok((
+		KeyPair {
+			secret_key: keypair.secret.as_bytes().to_vec(),
+			public_key: keypair.public.to_bytes().to_vec(),
+		},
+		libp2p_keypair.public().to_peer_id(),
+	))
 }
 
 /// Generate a signing key (aka. account key).
@@ -530,14 +535,14 @@ mod tests {
 				.unwrap(),
 			);
 			assert_eq!(
-			clean_foreign_chain_address(
-				ForeignChain::Polkadot,
-				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
-			)
-			.unwrap_err()
-			.to_string(),
-			anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
-		);
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
+				)
+				.unwrap_err()
+				.to_string(),
+				anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+			);
 		}
 	}
 }
