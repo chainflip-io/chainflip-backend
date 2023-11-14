@@ -63,10 +63,6 @@ impl_mock_chainflip!(Test);
 impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
