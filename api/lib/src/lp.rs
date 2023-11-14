@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
@@ -12,12 +10,12 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
-use pallet_cf_pools::{
-	AssetAmounts, IncreaseOrDecrease, OrderId, RangeOrderChange, RangeOrderSize,
-};
+use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
+use std::ops::Range;
+use utilities::rpc::NumberOrHex;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RangeOrderReturn {
@@ -25,9 +23,14 @@ pub struct RangeOrderReturn {
 	pair_asset: Asset,
 	id: OrderId,
 	tick_range: Range<Tick>,
-	liquidity_total: Liquidity,
-	collected_fees: AssetAmounts,
-	size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
+	liquidity_total: NumberOrHex,
+	collected_fees: AssetsMap<NumberOrHex>,
+	size_change: Option<IncreaseOrDecrease<RangeOrderChangeReturn>>,
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RangeOrderChangeReturn {
+	pub liquidity: NumberOrHex,
+	pub amounts: AssetsMap<NumberOrHex>,
 }
 
 fn collect_range_order_returns(
@@ -51,10 +54,15 @@ fn collect_range_order_returns(
 				base_asset,
 				pair_asset,
 				id,
-				size_change,
-				liquidity_total,
+				size_change: size_change.map(|increase_or_decrese| {
+					increase_or_decrese.map(|range_order_change| RangeOrderChangeReturn {
+						liquidity: range_order_change.liquidity.into(),
+						amounts: range_order_change.amounts.map(|amount| amount.into()),
+					})
+				}),
+				liquidity_total: liquidity_total.into(),
 				tick_range,
-				collected_fees,
+				collected_fees: collected_fees.map(|amount| amount.into()),
 			}),
 			_ => None,
 		})
@@ -67,10 +75,10 @@ pub struct LimitOrderReturn {
 	buy_asset: Asset,
 	id: OrderId,
 	tick: Tick,
-	amount_total: AssetAmount,
-	collected_fees: AssetAmount,
-	bought_amount: AssetAmount,
-	amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
+	amount_total: NumberOrHex,
+	collected_fees: NumberOrHex,
+	bought_amount: NumberOrHex,
+	amount_change: Option<IncreaseOrDecrease<NumberOrHex>>,
 }
 
 fn collect_limit_order_returns(
@@ -96,10 +104,11 @@ fn collect_limit_order_returns(
 				buy_asset,
 				id,
 				tick,
-				amount_total,
-				collected_fees,
-				bought_amount,
-				amount_change,
+				amount_total: amount_total.into(),
+				collected_fees: collected_fees.into(),
+				bought_amount: bought_amount.into(),
+				amount_change: amount_change
+					.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
 			}),
 			_ => None,
 		})

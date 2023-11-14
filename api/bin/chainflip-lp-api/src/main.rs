@@ -79,7 +79,7 @@ pub mod rpc_types {
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct AssetBalance {
 		pub asset: Asset,
-		pub balance: u128,
+		pub balance: NumberOrHex,
 	}
 }
 
@@ -226,7 +226,7 @@ impl RpcServer for RpcServerImpl {
 			balances
 				.entry(ForeignChain::from(asset))
 				.or_default()
-				.push(AssetBalance { asset, balance });
+				.push(AssetBalance { asset, balance: balance.into() });
 		}
 		Ok(balances)
 	}
