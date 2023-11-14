@@ -106,8 +106,8 @@ where
 		scope: &Scope<'env, anyhow::Error>,
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
-		filter_fn: ItemFilter,
 		get_items: GetItemsGenerator,
+		filter_fn: ItemFilter,
 	) -> Self
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,

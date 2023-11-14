@@ -51,13 +51,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				scope,
 				state_chain_stream,
 				state_chain_client.clone(),
-				|index, tx_out_ids: &TxOutIdsInitiatedAt<Inner>| {
-					tx_out_ids
-						.iter()
-						.filter(|(_, initiated_at)| initiated_at <= &index)
-						.cloned()
-						.collect()
-				},
 				move |block_hash| {
 					let state_chain_client = state_chain_client_c.clone();
 					async move {
@@ -74,6 +67,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							})
 							.collect()
 					}
+				},
+				|index, tx_out_ids: &TxOutIdsInitiatedAt<Inner>| {
+					tx_out_ids
+						.iter()
+						.filter(|(_, initiated_at)| initiated_at <= &index)
+						.cloned()
+						.collect()
 				},
 			)
 			.await,
