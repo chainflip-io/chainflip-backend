@@ -19,7 +19,6 @@ use std::time::Duration;
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
 type AccountId = AccountId32;
-type Balance = u128;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
