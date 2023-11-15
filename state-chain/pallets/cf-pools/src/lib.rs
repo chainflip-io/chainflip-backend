@@ -244,68 +244,32 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub struct OrderValidity<BlockNumber: PartialOrd + Copy> {
 		valid_at: Option<Range<BlockNumber>>,
-		valid_until: Option<BlockNumber>,
-	}
-
-	impl<BlockNumber: PartialOrd + Copy> Default for OrderValidity<BlockNumber> {
-		fn default() -> Self {
-			Self { valid_at: None, valid_until: None }
-		}
+		execute_at: BlockNumber,
 	}
 
 	impl<BlockNumber: PartialOrd + Copy> OrderValidity<BlockNumber> {
 		#[cfg(test)]
-		pub fn new(valid_at: Option<Range<BlockNumber>>, valid_until: Option<BlockNumber>) -> Self {
-			let validity = Self { valid_at, valid_until };
-			assert!(validity.is_internally_consistent());
+		pub fn new(valid_at: Option<Range<BlockNumber>>, execute_at: BlockNumber) -> Self {
+			let validity = Self { valid_at, execute_at };
+			if let Some(window) = validity.valid_at.as_ref() {
+				debug_assert!(window.start < execute_at);
+			}
 			validity
 		}
 
-		/// Returns false if the constructed validity is internally inconsistent.
-		pub fn is_internally_consistent(&self) -> bool {
-			self.valid_at.as_ref().map_or(true, |range| {
-				!range.is_empty() && self.valid_until.map_or(true, |until| until > range.end)
-			})
+		/// Tests if validity is given at a particular block number.
+		pub fn is_valid_at(&self, current_block: BlockNumber) -> bool {
+			(if let Some(window) = self.valid_at.as_ref() {
+				(window.start <= current_block && current_block <= window.end) &&
+					self.execute_at > window.start
+			} else {
+				true
+			}) && self.execute_at > current_block
 		}
 
-		// /// The future block at which the order should be minted.
-		// pub fn mint_block(&self) -> Option<BlockNumber> {
-		// 	self.valid_at.as_ref().map(|range| range.start)
-		// }
-
-		// /// The future block at which the order should be burned.
-		// pub fn burn_block(&self) -> Option<BlockNumber> {
-		// 	self.valid_until
-		// }
-
+		/// Returns the block number at which the order is getting executed.
 		pub fn execute_at(&self) -> BlockNumber {
-			self.valid_at.as_ref().map_or(self.valid_until.unwrap(), |range| range.start)
-		}
-
-		/// Whether this validity will *ever* be ready.
-		pub fn is_valid_at(&self, block_number: BlockNumber) -> bool {
-			debug_assert!(self.is_internally_consistent());
-			let entry_window_not_past = match self.valid_at {
-				Some(ref range) => range.end > block_number,
-				None => true,
-			};
-			let expiry_not_past = match self.valid_until {
-				Some(expiry_block) => expiry_block > block_number,
-				None => true,
-			};
-			entry_window_not_past && expiry_not_past
-		}
-
-		/// Whether this validity is ready at a given block number.
-		pub fn is_ready_at(&self, block_number: BlockNumber) -> bool {
-			debug_assert!(self.is_internally_consistent());
-			match self.valid_at {
-				Some(ref range) => range.contains(&block_number),
-				None => match self.valid_until {
-					Some(until) => block_number < until,
-					None => true,
-				},
-			}
+			self.execute_at
 		}
 	}
 
@@ -620,6 +584,8 @@ pub mod pallet {
 		OrderValidityExpired,
 		/// Unsupported call.
 		UnsupportedCall,
+		/// The order is not valid at the current block.
+		OrderValidityNotValidAtCurrentBlock,
 	}
 
 	#[pallet::event]
@@ -1165,13 +1131,20 @@ pub mod pallet {
 			validity: OrderValidity<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let current_block = <frame_system::Pallet<T>>::block_number();
+			ensure!(
+				validity.is_valid_at(current_block),
+				Error::<T>::OrderValidityNotValidAtCurrentBlock
+			);
 			match *call {
 				Call::update_limit_order { .. } | Call::set_limit_order { .. } => {
-					let execute_at = validity.execute_at();
-					ScheduledLimitOrders::<T>::append(execute_at, OrderUpdate { lp, call: *call });
+					ScheduledLimitOrders::<T>::append(
+						validity.execute_at(),
+						OrderUpdate { lp, call: *call },
+					);
 					Ok(())
 				},
-				_ => return Err(Error::<T>::UnsupportedCall)?,
+				_ => Err(Error::<T>::UnsupportedCall)?,
 			}
 		}
 	}
