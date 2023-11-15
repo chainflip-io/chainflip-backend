@@ -73,4 +73,5 @@ runtime-benchmarks = [
 try-runtime = [
   'cf-runtime-upgrade-utilities/try-runtime',
   'frame-support/try-runtime',
+  'frame-system/try-runtime',
 ]
