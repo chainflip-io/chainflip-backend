@@ -21,7 +21,7 @@ pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
-	traits::{Get, HandleLifetime, Hooks, Imbalance, OnKilledAccount, SignedImbalance},
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -61,10 +61,6 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ Debug
 			+ From<u128>;
-
-		/// The minimum amount required to keep an account open.
-		#[pallet::constant]
-		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -147,32 +143,6 @@ pub mod pallet {
 		InsufficientReserves,
 		/// No pending redemption for this ID.
 		NoPendingRedemptionForThisID,
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Reap any accounts that are below `T::ExistentialDeposit`, and burn the dust.
-		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let max_accounts_to_reap = remaining_weight
-				.ref_time()
-				.checked_div(T::WeightInfo::reap_one_account().ref_time())
-				.unwrap_or_default();
-			if max_accounts_to_reap == 0 {
-				return Weight::zero()
-			}
-
-			let mut number_of_accounts_reaped = 0u64;
-			Account::<T>::iter()
-				.filter(|(_account_id, flip_account)| {
-					flip_account.total() < T::ExistentialDeposit::get()
-				})
-				.take(max_accounts_to_reap as usize)
-				.for_each(|(account_id, _flip_account)| {
-					let _reap_result = frame_system::Provider::<T>::killed(&account_id);
-					number_of_accounts_reaped += 1u64;
-				});
-			T::WeightInfo::reap_one_account().saturating_mul(number_of_accounts_reaped)
-		}
 	}
 
 	#[pallet::call]
