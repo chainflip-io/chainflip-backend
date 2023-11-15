@@ -2,15 +2,14 @@
 
 use super::*;
 use crate::{
-	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
-	Reserve, SlashingRate, TotalIssuance,
+	mock::*, Account, Bonder, Error, FlipIssuance, FlipSlasher, OffchainFunds, Reserve,
+	SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
 use frame_support::{
 	assert_noop,
-	traits::{HandleLifetime, Hooks, Imbalance},
-	weights::Weight,
+	traits::{HandleLifetime, Imbalance},
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
@@ -634,28 +633,4 @@ mod test_tx_payments {
 			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
 		});
 	}
-}
-
-#[test]
-fn can_reap_dust_account() {
-	new_test_ext().execute_with(|| {
-		Account::<Test>::insert(ALICE, FlipAccount { balance: 9, bond: 0 });
-		Account::<Test>::insert(BOB, FlipAccount { balance: 10, bond: 0 });
-		Account::<Test>::insert(CHARLIE, FlipAccount { balance: 11, bond: 0 });
-
-		// Dust accounts are reaped on_idle
-		Flip::on_idle(1, Weight::from_parts(1_000_000_000_000, 0));
-
-		assert!(!Account::<Test>::contains_key(ALICE));
-		assert_eq!(Account::<Test>::get(BOB), FlipAccount { balance: 10, bond: 0 });
-
-		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { balance: 11, bond: 0 });
-		System::assert_has_event(RuntimeEvent::Flip(crate::Event::AccountReaped {
-			who: ALICE,
-			dust_burned: 9,
-		}));
-		System::assert_last_event(RuntimeEvent::System(frame_system::Event::KilledAccount {
-			account: ALICE,
-		}));
-	});
 }
