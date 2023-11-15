@@ -39,7 +39,6 @@ async function provideLiquidityAndTestAssetBalances() {
   const fineAmountToProvide = parseInt(
     amountToFineAmount(amountToProvide.toString(), assetDecimals.ETH),
   );
-  console.log(fineAmountToProvide);
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
   await provideLiquidity(testAsset, amountToProvide, true);
 
@@ -174,7 +173,6 @@ async function testRangeOrder() {
       },
     },
   ]);
-  console.log(testAssetAmount);
   assert(mintRangeOrder.length >= 1, `Empty mint range order result`);
   assert(
     parseInt(mintRangeOrder[0].liquidity_total) > 0,
