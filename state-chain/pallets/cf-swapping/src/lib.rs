@@ -255,8 +255,7 @@ pub mod pallet {
 	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Maximum amount allowed to be put into a swap. Excess amount are burned from the chain (i.e.
-	/// absorbed by the vault). PRO-964 This is to be removed after Swapping is fully operational.
+	/// Maximum amount allowed to be put into a swap. Excess amounts are confiscated.
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_swap_amount)]
 	pub type MaximumSwapAmount<T: Config> = StorageMap<_, Twox64Concat, Asset, AssetAmount>;
