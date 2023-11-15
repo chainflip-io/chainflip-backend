@@ -20,8 +20,9 @@ use cf_traits::{
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
-
 use frame_support::traits::Hooks;
+
+const GAS_BUDGET: AssetAmount = 1_000u128;
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -105,7 +106,7 @@ fn insert_swaps(swaps: &[Swap]) {
 fn generate_ccm_channel() -> CcmChannelMetadata {
 	CcmChannelMetadata {
 		message: vec![0x01].try_into().unwrap(),
-		gas_budget: 1_000u128,
+		gas_budget: GAS_BUDGET,
 		cf_parameters: Default::default(),
 	}
 }
@@ -332,7 +333,7 @@ fn can_swap_using_witness_origin() {
 #[test]
 fn reject_invalid_ccm_deposit() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let ccm = generate_ccm_deposit();
 
 		assert_noop!(
@@ -464,7 +465,7 @@ fn rejects_invalid_swap_by_witnesser() {
 #[test]
 fn can_process_ccms_via_swap_deposit_address() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let request_ccm = generate_ccm_channel();
 		let ccm = generate_ccm_deposit();
@@ -549,7 +550,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 #[test]
 fn can_process_ccms_via_extrinsic() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 1_000_000;
 		let ccm = generate_ccm_deposit();
 
@@ -633,7 +634,7 @@ fn can_process_ccms_via_extrinsic() {
 #[test]
 fn can_handle_ccms_with_non_native_gas_asset() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let ccm = generate_ccm_deposit();
 		assert_ok!(Swapping::ccm_deposit(
@@ -715,7 +716,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 #[test]
 fn can_handle_ccms_with_native_gas_asset() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let ccm = generate_ccm_deposit();
 
@@ -792,7 +793,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 #[test]
 fn can_handle_ccms_with_no_swaps_needed() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let ccm = generate_ccm_deposit();
 
@@ -1021,7 +1022,7 @@ fn swap_by_deposit_happy_path() {
 #[test]
 fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
@@ -1092,7 +1093,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 #[test]
 fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
@@ -1160,7 +1161,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 #[test]
 fn ccm_without_principal_swaps_are_accepted() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 10_000;
 		let eth: Asset = Asset::Eth;
 		let flip: Asset = Asset::Flip;
@@ -1245,7 +1246,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 #[test]
 fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let flip: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
 
@@ -1684,7 +1685,7 @@ fn can_set_maximum_swap_amount() {
 #[test]
 fn swap_excess_are_confiscated_ccm_via_deposit() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 1_000;
 		let max_swap = 100;
 		let from: Asset = Asset::Usdc;
@@ -1761,7 +1762,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 #[test]
 fn swap_excess_are_confiscated_ccm_via_extrinsic() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 1_000;
 		let max_swap = 100;
 		let from: Asset = Asset::Usdc;
@@ -1983,6 +1984,95 @@ fn max_swap_amount_can_be_removed() {
 			]
 		);
 		// No no funds are confiscated.
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
+	});
+}
+
+#[test]
+fn can_swap_below_max_amount() {
+	new_test_ext().execute_with(|| {
+		let max_swap = 1_001u128;
+		let amount = 1_000u128;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+
+		// Initial max swap amount is set.
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		assert_ok!(Swapping::schedule_swap_from_contract(
+			RuntimeOrigin::signed(ALICE),
+			from,
+			to,
+			amount,
+			EncodedAddress::Eth(Default::default()),
+			Default::default(),
+		));
+
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![Swap {
+				swap_id: 1u64,
+				from,
+				to,
+				amount,
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+				stable_amount: Some(amount),
+				final_output: None,
+				fee_taken: false
+			},]
+		);
+	});
+}
+
+#[test]
+fn can_swap_ccm_below_max_amount() {
+	new_test_ext().execute_with(|| {
+		let gas_budget = GAS_BUDGET;
+		let principal_amount = 999;
+		let max_swap = 1_001;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+		let ccm = generate_ccm_deposit();
+
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+
+		// Register CCM via Swap deposit
+		assert_ok!(Swapping::ccm_deposit(
+			RuntimeOrigin::root(),
+			from,
+			gas_budget + principal_amount,
+			to,
+			EncodedAddress::Eth(Default::default()),
+			ccm,
+			Default::default(),
+		));
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 1u64,
+					from,
+					to,
+					amount: principal_amount,
+					swap_type: SwapType::CcmPrincipal(1),
+					stable_amount: Some(principal_amount),
+					final_output: None,
+					fee_taken: false
+				},
+				Swap {
+					swap_id: 2u64,
+					from,
+					to: Asset::Eth,
+					amount: gas_budget,
+					swap_type: SwapType::CcmGas(1),
+					stable_amount: Some(gas_budget),
+					final_output: None,
+					fee_taken: false
+				}
+			]
+		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
 }
