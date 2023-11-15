@@ -81,6 +81,9 @@ pub trait Chainflip: frame_system::Config {
 	type AccountRoleRegistry: AccountRoleRegistry<Self>;
 	/// For checking nodes' current balances.
 	type FundingInfo: FundingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
+	/// Used to access the current Chainflip runtime's release version (distinct from the
+	/// substrate RuntimeVersion)
+	type CurrentReleaseVersion: Get<SemVer>;
 }
 
 pub trait EpochInfo {

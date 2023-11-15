@@ -193,21 +193,12 @@ impl pallet_cf_validator::Config for Runtime {
 	type ReputationResetter = Reputation;
 }
 
-parameter_types! {
-	pub CurrentReleaseVersion: SemVer = SemVer {
-		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
-		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
-		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
-	};
-}
-
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = RuntimeSafeMode;
-	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 

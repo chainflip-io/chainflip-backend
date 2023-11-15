@@ -13,7 +13,7 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
-use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, SafeMode};
+use cf_traits::{Chainflip, CompatibleCfeVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -73,11 +73,6 @@ pub mod pallet {
 
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
-
-		/// Used to access the current Chainflip runtime's release version (distinct from the
-		/// substrate RuntimeVersion)
-		#[pallet::constant]
-		type CurrentReleaseVersion: Get<SemVer>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -157,8 +152,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn current_release_version)]
-	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
-	/// constant to allow querying the value by block hash.
+	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` runtime
+	/// property here to allow querying the value by block hash.
 	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
 
 	#[pallet::storage]
@@ -343,7 +338,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	pub fn update_current_release_version() {
-		CurrentReleaseVersion::<T>::set(T::CurrentReleaseVersion::get());
+		CurrentReleaseVersion::<T>::set(<T as Chainflip>::CurrentReleaseVersion::get());
 	}
 
 	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
