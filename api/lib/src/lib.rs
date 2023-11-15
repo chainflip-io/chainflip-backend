@@ -109,7 +109,7 @@ impl StateChainApi {
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
-			AccountRole::None,
+			AccountRole::Unregistered,
 			false,
 			None,
 		)
@@ -192,7 +192,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-			AccountRole::None => bail!("Cannot register account role None"),
+			AccountRole::Unregistered => bail!("Cannot register account role None"),
 		};
 
 		let (tx_hash, ..) = self
@@ -205,12 +205,12 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
-		let seed = RotateSessionKeysApi::rotate_session_keys(self)
+		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self)
 			.await
 			.context("Could not rotate session keys.")?;
 
-		let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
-		let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
+		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
+		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
 
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
@@ -381,17 +381,22 @@ impl Serialize for KeyPair {
 }
 
 /// Generate a new random node key.
+///
 /// This key is used for secure communication between Validators.
-pub fn generate_node_key() -> KeyPair {
+pub fn generate_node_key() -> Result<(KeyPair, libp2p_identity::PeerId)> {
 	use rand_v7::SeedableRng;
 
 	let mut rng = rand_v7::rngs::StdRng::from_entropy();
 	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
+	let libp2p_keypair = libp2p_identity::Keypair::ed25519_from_bytes(keypair.secret.to_bytes())?;
 
-	KeyPair {
-		secret_key: keypair.secret.as_bytes().to_vec(),
-		public_key: keypair.public.to_bytes().to_vec(),
-	}
+	Ok((
+		KeyPair {
+			secret_key: keypair.secret.as_bytes().to_vec(),
+			public_key: keypair.public.to_bytes().to_vec(),
+		},
+		libp2p_keypair.public().to_peer_id(),
+	))
 }
 
 /// Generate a signing key (aka. account key).
@@ -530,14 +535,14 @@ mod tests {
 				.unwrap(),
 			);
 			assert_eq!(
-			clean_foreign_chain_address(
-				ForeignChain::Polkadot,
-				"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
-			)
-			.unwrap_err()
-			.to_string(),
-			anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
-		);
+				clean_foreign_chain_address(
+					ForeignChain::Polkadot,
+					"126PaS7kDWTdtiojd556gD4ZPcxj7KbjrMJj7xZ5i6XKfARF"
+				)
+				.unwrap_err()
+				.to_string(),
+				anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+			);
 		}
 	}
 }

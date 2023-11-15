@@ -50,6 +50,7 @@ default = ['std']
 std = [
   'cf-chains/std',
   'cf-primitives/std',
+  'cf-runtime-utilities/std',
   'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'codec/std',
@@ -76,4 +77,7 @@ runtime-benchmarks = [
 try-runtime = [
   'cf-runtime-upgrade-utilities/try-runtime',
   'frame-support/try-runtime',
+  'frame-system/try-runtime',
+  'pallet-cf-reputation/try-runtime',
+  'pallet-cf-validator/try-runtime',
 ]

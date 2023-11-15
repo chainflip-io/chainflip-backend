@@ -127,6 +127,7 @@ runtime-benchmarks = [
   'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-vaults/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
+  'pallet-grandpa/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
 ]
@@ -220,4 +221,5 @@ try-runtime = [
   'pallet-grandpa/try-runtime',
   'pallet-session/try-runtime',
   'pallet-authorship/try-runtime',
+  'sp-runtime/try-runtime',
 ]

@@ -49,6 +49,7 @@ std = [
   'cf-primitives/std',
   'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
+  'cf-runtime-utilities/std',
   'codec/std',
   'frame-benchmarking?/std',
   'frame-support/std',
@@ -56,6 +57,7 @@ std = [
   'scale-info/std',
   'sp-runtime/std',
   'sp-std/std',
+  'log/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',
@@ -65,8 +67,11 @@ runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
+  'sp-runtime/runtime-benchmarks',
 ]
 try-runtime = [
   'frame-support/try-runtime',
+  'frame-system/try-runtime',
+  'sp-runtime/try-runtime',
   'cf-runtime-upgrade-utilities/try-runtime',
 ]

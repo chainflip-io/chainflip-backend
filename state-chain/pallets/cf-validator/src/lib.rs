@@ -791,9 +791,8 @@ pub mod pallet {
 		pub redemption_period_as_percentage: Percent,
 		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
-		pub min_size: AuthorityCount,
-		pub max_size: AuthorityCount,
-		pub max_expansion: AuthorityCount,
+		pub auction_parameters: SetSizeParameters,
+		pub auction_bid_cutoff_percentage: Percent,
 		pub max_authority_set_contraction_percentage: Percent,
 	}
 
@@ -808,9 +807,12 @@ pub mod pallet {
 				redemption_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
-				min_size: 3,
-				max_size: 15,
-				max_expansion: 5,
+				auction_parameters: SetSizeParameters {
+					min_size: 3,
+					max_size: 15,
+					max_expansion: 5,
+				},
+				auction_bid_cutoff_percentage: Zero::zero(),
 				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
@@ -833,12 +835,10 @@ pub mod pallet {
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
-			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
-				min_size: self.min_size,
-				max_size: self.max_size,
-				max_expansion: self.max_expansion,
-			})
-			.expect("we should provide valid auction parameters at genesis");
+			Pallet::<T>::try_update_auction_parameters(self.auction_parameters)
+				.expect("we should provide valid auction parameters at genesis");
+
+			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,

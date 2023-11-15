@@ -308,6 +308,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	#[derive(Serialize)]
 	struct Keys {
 		node_key: KeyPair,
+		peer_id: String,
 		seed_phrase: String,
 		ethereum_key: KeyPair,
 		#[serde(with = "hex")]
@@ -319,6 +320,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	impl std::fmt::Display for Keys {
 		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 			writeln!(f, "🔑 Node Public Key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(f, "👤 Node Peer ID: {}", self.peer_id)?;
 			writeln!(
 				f,
 				"🔑 Ethereum Public Key: 0x{}",
@@ -346,8 +348,12 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				api::generate_ethereum_key(Some(&seed_phrase))
 					.context("Error while generating Ethereum key.")?;
 			assert_eq!(seed_phrase, seed_phrase_eth);
+			let (node_key, peer_id) =
+				api::generate_node_key().context("Error while generating node key.")?;
+
 			Ok(Keys {
-				node_key: api::generate_node_key(),
+				node_key,
+				peer_id: peer_id.to_string(),
 				seed_phrase,
 				ethereum_key,
 				ethereum_address,

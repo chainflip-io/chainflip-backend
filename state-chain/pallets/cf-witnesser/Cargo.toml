@@ -55,6 +55,7 @@ std = [
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
+  'hex/std',
   'scale-info/std',
   'sp-std/std',
 ]
@@ -65,4 +66,4 @@ runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = ['frame-support/try-runtime', 'frame-system/try-runtime']

@@ -86,6 +86,8 @@ pub use cf_primitives::{
 pub use cf_traits::{
 	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
 };
+// Required for genesis config.
+pub use pallet_cf_validator::SetSizeParameters;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -506,7 +508,6 @@ impl pallet_authorship::Config for Runtime {
 impl pallet_cf_flip::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
-	type ExistentialDeposit = ConstU128<500>;
 	type BlocksPerDay = ConstU32<DAYS>;
 	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
