@@ -191,14 +191,18 @@ pub mod pallet {
 			Self::update_current_release_version();
 			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
-
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
+			log::info!("Pre-upgrade hooks called for the enviornment pallet");
+			let result = migrations::PalletMigration::<T>::pre_upgrade();
+
+			log::info!("Result of pre-upgrade: {:?}", result);
+			result
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
+			log::info!("Post upgrade hooks called for the enviornment pallet");
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}

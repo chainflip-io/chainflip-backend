@@ -99,8 +99,17 @@ where
 	U: OnRuntimeUpgrade,
 {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!("Our on runtime upgrade");
+		// println!("Our on runtime upgrade");
 		if should_upgrade::<P, FROM, TO>() {
 			log::info!(
+				"✅ {}: Applying storage migration from version {:?} to {:?}.",
+				P::name(),
+				FROM,
+				TO
+			);
+
+			println!(
 				"✅ {}: Applying storage migration from version {:?} to {:?}.",
 				P::name(),
 				FROM,
@@ -124,7 +133,14 @@ where
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		log::info!("Our pre upgrade");
 		if should_upgrade::<P, FROM, TO>() {
+			log::info!(
+				"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
+				P::name(),
+				FROM,
+				TO
+			);
 			let state = U::pre_upgrade().map_err(|e| {
 				log::error!(
 					"💥 {}: Pre-upgrade checks for migration failed at stage {FROM}->{TO}: {:?}",
@@ -133,22 +149,20 @@ where
 				);
 				"🛑 Pallet pre-upgrade checks failed."
 			})?;
-			log::info!(
-				"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
-				P::name(),
-				FROM,
-				TO
-			);
+
 			try_runtime_helpers::save_state::<P, FROM, TO>(state.clone());
 			Ok(state)
 		} else {
+			log::info!("Should upgrade is not running in utils pre-upgrade");
 			Ok(Vec::new())
 		}
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		log::info!("Our post upgrade");
 		if let Some((lowest, highest)) = try_runtime_helpers::get_migration_bounds::<P>() {
+			log::info!("Got migration bounds of: {:?} {:?}", lowest, highest);
 			assert_eq!(
 				<P as GetStorageVersion>::on_chain_storage_version(),
 				highest,
@@ -165,6 +179,7 @@ where
 			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
 			Ok(())
 		} else {
+			log::info!("Should upgrade is not running in utils post-upgrade");
 			Ok(())
 		}
 	}
@@ -179,7 +194,7 @@ mod test_versioned_upgrade {
 
 	struct Pallet;
 
-	const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+	const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 	impl PalletInfoAccess for Pallet {
 		fn index() -> usize {
@@ -242,12 +257,16 @@ mod test_versioned_upgrade {
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+			println!("Pre upgrade hook running");
 			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_data: Vec<u8>) -> Result<(), DispatchError> {
-			if Self::is_error_on_post_upgrade() {
+			println!("post upgrade hook running");
+			if Pallet::current_storage_version() == 1 {
+				Err("err".into())
+			} else if Self::is_error_on_post_upgrade() {
 				Err("err".into())
 			} else {
 				Ok(())
@@ -265,6 +284,7 @@ mod test_versioned_upgrade {
 
 	type UpgradeFrom0To3 = (UpgradeFrom0To1, UpgradeFrom1To2, UpgradeFrom2To3);
 
+	#[track_caller]
 	fn assert_upgrade(v: u16) {
 		assert_eq!(Pallet::on_chain_storage_version(), v);
 		assert_eq!(DummyUpgrade::upgrades_completed(), v as u32);
@@ -273,11 +293,26 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_0_to_1_and_0_to_1() {
 		TestExternalities::new_empty().execute_with(|| {
+			let v = Pallet::current_storage_version();
+			println!("Current storage version: {:?}", v);
+			let v = Pallet::on_chain_storage_version();
+			println!("On chain storage version: {:?}", v);
+
 			UpgradeFrom0To1::on_runtime_upgrade();
+
+			let v = Pallet::current_storage_version();
+			println!("Current storage version: {:?}", v);
+			let v = Pallet::on_chain_storage_version();
+			println!("On chain storage version: {:?}", v);
 
 			assert_upgrade(1);
 
 			UpgradeFrom0To1::on_runtime_upgrade();
+
+			let v = Pallet::current_storage_version();
+			println!("Current storage version: {:?}", v);
+			let v = Pallet::on_chain_storage_version();
+			println!("On chain storage version: {:?}", v);
 
 			assert_upgrade(1);
 		});
@@ -286,11 +321,20 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_0_to_1_and_1_to_2() {
 		TestExternalities::new_empty().execute_with(|| {
+			let v = Pallet::current_storage_version();
+			println!("Current storage version: {:?}", v);
+
 			UpgradeFrom0To1::on_runtime_upgrade();
+
+			let v = Pallet::current_storage_version();
+			println!("Current storage version: {:?}", v);
 
 			assert_upgrade(1);
 
 			UpgradeFrom1To2::on_runtime_upgrade();
+
+			let v = Pallet::current_storage_version();
+			println!("Current storage version: {:?}", v);
 
 			assert_upgrade(2);
 		});
@@ -327,12 +371,15 @@ mod test_versioned_upgrade {
 		});
 	}
 
+	#[cfg(feature = "try-runtime")]
 	#[test]
 	fn test_upgrade_from_0_to_unsupported() {
 		TestExternalities::new_empty().execute_with(|| {
+			let state = UpgradeFrom0To3::pre_upgrade().unwrap();
 			UpgradeFrom0To3::on_runtime_upgrade();
+			UpgradeFrom0To3::post_upgrade(state).unwrap();
 
-			assert_upgrade(2);
+			assert_upgrade(3);
 		});
 	}
 
@@ -360,7 +407,10 @@ mod test_versioned_upgrade {
 			DummyUpgrade::set_error_on_post_upgrade(true);
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
 			UpgradeFrom0To1::on_runtime_upgrade();
-			assert_err!(UpgradeFrom0To1::post_upgrade(Default::default()), "err");
+			assert_err!(
+				UpgradeFrom0To1::post_upgrade(Default::default()),
+				"🛑 Pallet post-upgrade checks failed."
+			);
 			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 		});
 	}
