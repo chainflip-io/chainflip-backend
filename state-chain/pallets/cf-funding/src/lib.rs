@@ -838,5 +838,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		ActiveBidder::<T>::remove(account_id);
 		RestrictedBalances::<T>::remove(account_id);
+		BoundExecutorAddress::<T>::remove(account_id);
+		BoundRedeemAddress::<T>::remove(account_id);
 	}
 }
