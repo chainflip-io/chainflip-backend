@@ -32,7 +32,7 @@ pub use eth_source::EthSource;
 
 use anyhow::{Context, Result};
 
-const SAFETY_MARGIN: usize = 7;
+const SAFETY_MARGIN: usize = 6;
 
 pub async fn start<
 	StateChainClient,
