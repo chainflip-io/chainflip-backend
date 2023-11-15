@@ -312,11 +312,6 @@ pub mod pallet {
 			old_version: Version,
 			new_version: Version,
 		},
-		NodeVersionUpdated {
-			account_id: ValidatorIdOf<T>,
-			old_version: Version,
-			new_version: Version,
-		},
 		/// An authority has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
@@ -689,7 +684,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow a validator to report their current cfe version. Update storage and emmit event if
+		/// Allow a validator to report their current cfe version. Update storage and emit event if
 		/// version is different from storage.
 		///
 		/// The dispatch origin of this function must be signed.
@@ -706,28 +701,23 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
-		pub fn set_node_cfe_version(
+		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
+		pub fn cfe_version(
 			origin: OriginFor<T>,
-			new_version: NodeCFEVersions,
+			new_version: Version,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 			NodeCFEVersion::<T>::try_mutate(validator_id, |current_version| {
-				if *current_version != new_version {
+				if current_version.cfe != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
 						old_version: current_version.cfe,
-						new_version: new_version.cfe,
+						new_version,
 					});
-					Self::deposit_event(Event::NodeVersionUpdated {
-						account_id: validator_id.clone(),
-						old_version: current_version.node,
-						new_version: new_version.node,
-					});
-					*current_version = new_version;
+					current_version.cfe = new_version;
 				}
 				Ok(().into())
 			})
@@ -778,6 +768,45 @@ pub mod pallet {
 				);
 			}
 			T::AccountRoleRegistry::register_as_validator(&account_id)
+		}
+
+		/// Allow a validator to report their current cfe and node version. Update storage and emit
+		/// event if version is different from storage.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// ## Events
+		///
+		/// - [CFEVersionUpdated](Event::CFEVersionUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::error::BadOrigin)
+		///
+		/// ## Dependencies
+		///
+		/// - None
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
+		pub fn set_node_cfe_version(
+			origin: OriginFor<T>,
+			new_version: NodeCFEVersions,
+		) -> DispatchResultWithPostInfo {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+			NodeCFEVersion::<T>::try_mutate(validator_id, |current_version| {
+				if *current_version != new_version {
+					Self::deposit_event(Event::CFEVersionUpdated {
+						account_id: validator_id.clone(),
+						old_version: current_version.cfe,
+						new_version: new_version.cfe,
+					});
+					*current_version = new_version;
+				}
+				Ok(().into())
+			})
 		}
 	}
 

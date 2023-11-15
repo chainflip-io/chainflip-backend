@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn update_pallet_config() -> Weight;
 	fn set_authority_set_min_size() -> Weight;
 	fn set_node_cfe_version() -> Weight;
+	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
 	fn set_vanity_name() -> Weight;
 	fn expire_epoch(a: u32, ) -> Weight;
@@ -74,6 +75,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn set_node_cfe_version() -> Weight {
+		// Minimum execution time: 27_000 nanoseconds.
+		Weight::from_parts(27_000_000, 0)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
+	// Storage: Validator NodeCFEVersion (r:1 w:1)
+	fn cfe_version() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
 		Weight::from_parts(27_000_000, 0)
 			.saturating_add(T::DbWeight::get().reads(2))
@@ -365,6 +374,14 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn set_node_cfe_version() -> Weight {
+		// Minimum execution time: 27_000 nanoseconds.
+		Weight::from_parts(27_000_000, 0)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
+	// Storage: Validator NodeCFEVersion (r:1 w:1)
+	fn cfe_version() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
 		Weight::from_parts(27_000_000, 0)
 			.saturating_add(RocksDbWeight::get().reads(2))

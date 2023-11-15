@@ -230,13 +230,6 @@ fn send_node_cfe_version() {
 				new_version: cfe_version,
 			},
 		));
-		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
-			crate::Event::NodeVersionUpdated {
-				account_id: authority,
-				old_version: SemVer::default(),
-				new_version: node_version,
-			},
-		));
 
 		assert_eq!(
 			NodeCFEVersions { cfe: cfe_version, node: node_version },
@@ -259,13 +252,6 @@ fn send_node_cfe_version() {
 				new_version: new_cfe_version,
 			},
 		));
-		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
-			crate::Event::NodeVersionUpdated {
-				account_id: authority,
-				old_version: node_version,
-				new_version: new_node_version,
-			},
-		));
 
 		assert_eq!(
 			NodeCFEVersions { cfe: new_cfe_version, node: new_node_version },
@@ -273,8 +259,7 @@ fn send_node_cfe_version() {
 			"node and cfe new versions should be stored"
 		);
 
-		// When we submit the same version we should see no `CFEVersionUpdated` event or
-		// `NodeVersionUpdated`
+		// When we submit the same version, we should see no `CFEVersionUpdated` event
 		frame_system::Pallet::<Test>::reset_events();
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(authority),
@@ -1264,13 +1249,6 @@ fn submitting_multiple_versions_ensuring_compatibility() {
 		assert_ok!(ValidatorPallet::set_node_cfe_version(
 			RuntimeOrigin::signed(VALIDATOR),
 			higher_compatible_version
-		));
-		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
-			crate::Event::NodeVersionUpdated {
-				account_id: VALIDATOR,
-				old_version: compatible_version.node,
-				new_version: higher_compatible_version.node,
-			},
 		));
 		assert_has_event::<Test>(mock::RuntimeEvent::ValidatorPallet(
 			crate::Event::CFEVersionUpdated {
