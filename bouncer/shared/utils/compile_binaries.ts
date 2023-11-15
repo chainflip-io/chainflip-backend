@@ -20,3 +20,8 @@ export async function compileBinaries(type: 'runtime' | 'all', projectRoot: stri
 
   console.log('Build complete.');
 }
+
+try-runtime--runtime / Users / kylezs / Documents / cf - repos / chainflip - backend / target / debug / wbuild / state - chain - runtime / state_chain_runtime.wasm \
+on - runtime - upgrade \
+live--uri ws://localhost:9944
+

@@ -31,7 +31,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 
 type SignatureNonce = u64;
 
@@ -160,6 +160,10 @@ pub mod pallet {
 	/// Always set to the current release version. We duplicate the `CurrentReleaseVersion` pallet
 	/// constant to allow querying the value by block hash.
 	pub type CurrentReleaseVersion<T> = StorageValue<_, SemVer, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn temp_storage_item)]
+	pub type TempStorageItem<T> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn network_environment)]
