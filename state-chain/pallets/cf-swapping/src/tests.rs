@@ -19,8 +19,7 @@ use cf_traits::{
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
-use frame_support::{assert_noop, assert_ok, sp_std::iter};
-use frame_support::traits::Hooks;
+use frame_support::{assert_noop, assert_ok, sp_std::iter, traits::Hooks};
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
 
