@@ -94,6 +94,8 @@ pub trait ChainSourceExt: ChainSource {
 		Self::Client: Clone,
 		Self::Data: Clone,
 	{
+		// Note the use of the shared adapter which ensures that chunked adapter uses
+		// the same underlying stream and client for each epoch:
 		ChunkedByTimeBuilder::new(ChunkByTime::new(self.shared(scope)), epochs.into())
 	}
 
@@ -118,6 +120,8 @@ pub trait ChainSourceExt: ChainSource {
 		ExtraInfo: Clone + Send + Sync + 'static,
 		ExtraHistoricInfo: Clone + Send + Sync + 'static,
 	{
+		// Note the use of the shared adapter which ensures that chunked adapter uses
+		// the same underlying stream and client for each epoch:
 		ChunkedByVaultBuilder::new(ChunkByVault::new(self.shared(scope)), vaults.into())
 	}
 }

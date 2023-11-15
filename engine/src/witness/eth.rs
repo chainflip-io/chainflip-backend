@@ -127,11 +127,8 @@ where
 	let vaults = epoch_source.vaults().await;
 
 	// ===== Prewitnessing stream =====
-	let prewitness_source = eth_source
-		.clone()
-		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults.clone(), scope);
+	let prewitness_source =
+		eth_source.clone().strictly_monotonic().chunk_by_vault(vaults.clone(), scope);
 
 	let prewitness_source_deposit_addresses = prewitness_source
 		.clone()
@@ -193,7 +190,6 @@ where
 		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
 		.logging("safe block produced")
-		.shared(scope)
 		.chunk_by_vault(vaults, scope);
 
 	let eth_safe_vault_source_deposit_addresses = eth_safe_vault_source
