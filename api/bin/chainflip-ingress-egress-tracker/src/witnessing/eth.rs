@@ -51,8 +51,7 @@ where
 	let vaults = epoch_source.vaults().await;
 	let eth_source = EthSource::new(eth_client.clone())
 		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults);
+		.chunk_by_vault(vaults, scope);
 
 	let eth_source_deposit_addresses = eth_source
 		.clone()
