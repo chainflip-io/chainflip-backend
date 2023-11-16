@@ -976,7 +976,7 @@ impl_runtime_apis! {
 
 		fn cf_auction_state() -> AuctionState {
 			let auction_params = Validator::auction_parameters();
-			let auction_mab = match SetSizeMaximisingAuctionResolver::try_new(
+			let min_active_bid = SetSizeMaximisingAuctionResolver::try_new(
 				<Runtime as Chainflip>::EpochInfo::current_authority_count(),
 				auction_params,
 			)
@@ -985,19 +985,16 @@ impl_runtime_apis! {
 					<Runtime as pallet_cf_validator::Config>::BidderProvider::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
 					Validator::auction_bid_cutoff_percentage(),
 				)
-			}) {
-				Ok(auction_outcome) => {
-					Some(auction_outcome.bond)
-				}
-				Err(_e) => { None }
-			};
+			})
+			.ok()
+			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size),
-				min_active_bid: auction_mab,
+				min_active_bid,
 			}
 		}
 
