@@ -274,7 +274,6 @@ pub trait LpApi: SignedExtrinsicApi {
 		sell_amount: AssetAmount,
 		details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>> {
-		// Submit the burn order
 		let events = if let Some(details) = details {
 			let (_tx_hash, events, ..) = self
 				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {

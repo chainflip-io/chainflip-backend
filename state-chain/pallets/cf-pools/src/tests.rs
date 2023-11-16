@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
-use cf_test_utilities::{assert_events_match, assert_has_event};
+use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::Permill;
@@ -708,33 +708,40 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 }
 
 #[test]
-fn can_mint_limit_order_with_validity() {
+fn can_execute_scheduled_limit_order() {
 	new_test_ext().execute_with(|| {
-		let old_fee = 400_000u32;
-		let tick = 100;
+		let order_id = 0;
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			Asset::Flip,
 			STABLE_ASSET,
-			old_fee,
+			400_000u32,
 			price_at_tick(0).unwrap(),
 		));
-
-		let details = OrderScheduleDetails::new(Some(1..5), 6);
-		let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-			sell_asset: STABLE_ASSET,
-			buy_asset: Asset::Flip,
-			id: 0,
-			option_tick: Some(tick),
-			sell_amount: 55,
-		});
-		assert_ok!(LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, details));
+		assert_ok!(LiquidityPools::schedule(
+			RuntimeOrigin::signed(ALICE),
+			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
+				sell_asset: STABLE_ASSET,
+				buy_asset: Asset::Flip,
+				id: order_id,
+				option_tick: Some(100),
+				sell_amount: 55,
+			}),
+			OrderScheduleDetails::new(Some(1..5), 6)
+		));
 		assert!(!ScheduledLimitOrders::<Test>::get(6).is_empty());
 		LiquidityPools::on_initialize(6);
 		assert!(
 			ScheduledLimitOrders::<Test>::get(6).is_empty(),
 			"Should be empty, but is {:?}",
 			ScheduledLimitOrders::<Test>::get(6)
+		);
+		assert_eq!(
+			last_event::<Test>(),
+			RuntimeEvent::LiquidityPools(crate::Event::SuccessfullyExecutedLimitOrder {
+				lp: ALICE,
+				order_id,
+			})
 		);
 	});
 }
