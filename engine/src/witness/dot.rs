@@ -108,7 +108,10 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	header: Header<
 		PolkadotBlockNumber,
 		PolkadotHash,
-		((Vec<(Phase, EventWrapper)>, BTreeSet<u32>), Vec<PolkadotSignature>),
+		(
+			(Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
+			Vec<(PolkadotSignature, PolkadotBlockNumber)>,
+		),
 	>,
 	process_call: ProcessCall,
 	dot_client: DotRetryRpcClient,
@@ -120,7 +123,12 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let ((events, mut extrinsic_indices), monitored_egress_ids) = header.data;
+	let ((events, mut extrinsic_indices), monitored_egress_data) = header.data;
+
+	let monitored_egress_ids = monitored_egress_data
+		.into_iter()
+		.map(|(signature, _)| signature)
+		.collect::<BTreeSet<_>>();
 
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
