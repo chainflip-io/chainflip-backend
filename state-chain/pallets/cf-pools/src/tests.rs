@@ -720,7 +720,7 @@ fn can_mint_limit_order_with_validity() {
 			price_at_tick(0).unwrap(),
 		));
 
-		let validity = OrderScheduleDetails::new(Some(1..5), 6);
+		let details = OrderScheduleDetails::new(Some(1..5), 6);
 		let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 			sell_asset: STABLE_ASSET,
 			buy_asset: Asset::Flip,
@@ -728,7 +728,7 @@ fn can_mint_limit_order_with_validity() {
 			option_tick: Some(tick),
 			sell_amount: 55,
 		});
-		assert_ok!(LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, validity));
+		assert_ok!(LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, details));
 		assert!(!ScheduledLimitOrders::<Test>::get(6).is_empty());
 		LiquidityPools::on_initialize(6);
 		assert!(
@@ -751,7 +751,7 @@ fn gets_rejected_if_order_window_has_already_passed() {
 			price_at_tick(0).unwrap(),
 		));
 		System::set_block_number(1);
-		let validity = OrderScheduleDetails::new(Some(0..1), 1);
+		let details = OrderScheduleDetails::new(Some(0..1), 1);
 		let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 			sell_asset: STABLE_ASSET,
 			buy_asset: Asset::Flip,
@@ -760,7 +760,7 @@ fn gets_rejected_if_order_window_has_already_passed() {
 			sell_amount: 55,
 		});
 		assert_noop!(
-			LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, validity),
+			LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, details),
 			Error::<Test>::OrderScheduleDetailsNotValidAtCurrentBlock
 		);
 	});
@@ -768,11 +768,11 @@ fn gets_rejected_if_order_window_has_already_passed() {
 
 #[test]
 fn test_validity_window() {
-	let validity = OrderScheduleDetails::new(Some(2..4), 5);
-	assert!(validity.is_valid_at(2));
-	assert!(validity.is_valid_at(3));
-	assert!(validity.is_valid_at(4));
-	assert!(!validity.is_valid_at(5));
+	let details = OrderScheduleDetails::new(Some(2..4), 5);
+	assert!(details.is_valid_at(2));
+	assert!(details.is_valid_at(3));
+	assert!(details.is_valid_at(4));
+	assert!(!details.is_valid_at(5));
 
 	let no_validity = OrderScheduleDetails::new(None, 4);
 	assert!(no_validity.is_valid_at(2));

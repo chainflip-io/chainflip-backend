@@ -229,10 +229,10 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
-		validity: Option<OrderScheduleDetails<BlockNumber>>,
+		details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the mint order
-		let events = if let Some(validity) = validity {
+		let events = if let Some(details) = details {
 			let (_tx_hash, events, ..) = self
 				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {
 					call: Box::new(pallet_cf_pools::Call::update_limit_order {
@@ -242,7 +242,7 @@ pub trait LpApi: SignedExtrinsicApi {
 						option_tick,
 						amount_change,
 					}),
-					validity,
+					details,
 				})
 				.await
 				.until_in_block()
@@ -272,10 +272,10 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
-		validity: Option<OrderScheduleDetails<BlockNumber>>,
+		details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the burn order
-		let events = if let Some(validity) = validity {
+		let events = if let Some(details) = details {
 			let (_tx_hash, events, ..) = self
 				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {
 					call: Box::new(pallet_cf_pools::Call::set_limit_order {
@@ -285,7 +285,7 @@ pub trait LpApi: SignedExtrinsicApi {
 						option_tick,
 						sell_amount,
 					}),
-					validity,
+					details,
 				})
 				.await
 				.until_in_block()

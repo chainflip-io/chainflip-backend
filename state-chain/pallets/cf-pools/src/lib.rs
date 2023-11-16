@@ -254,11 +254,11 @@ pub mod pallet {
 	impl<BlockNumber: PartialOrd + Copy> OrderScheduleDetails<BlockNumber> {
 		#[cfg(test)]
 		pub fn new(valid_at: Option<Range<BlockNumber>>, execute_at: BlockNumber) -> Self {
-			let validity = Self { valid_at, execute_at };
-			if let Some(window) = validity.valid_at.as_ref() {
+			let details = Self { valid_at, execute_at };
+			if let Some(window) = details.valid_at.as_ref() {
 				debug_assert!(window.start < execute_at);
 			}
-			validity
+			details
 		}
 
 		/// Tests if validity is given at a particular block number.
@@ -534,7 +534,6 @@ pub mod pallet {
 			}
 			let scheduled_limit_orders = ScheduledLimitOrders::<T>::take(current_block);
 			for order_update in scheduled_limit_orders {
-				// TODO: Fire an event if the execution fails.
 				if let Err(err) = order_update
 					.clone()
 					.call
@@ -1161,25 +1160,25 @@ pub mod pallet {
 		pub fn schedule(
 			origin: OriginFor<T>,
 			call: Box<Call<T>>,
-			validity: OrderScheduleDetails<BlockNumberFor<T>>,
+			details: OrderScheduleDetails<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let current_block = <frame_system::Pallet<T>>::block_number();
 			ensure!(
-				validity.is_valid_at(current_block),
+				details.is_valid_at(current_block),
 				Error::<T>::OrderScheduleDetailsNotValidAtCurrentBlock
 			);
 			match *call {
 				Call::update_limit_order { id, .. } => {
 					ScheduledLimitOrders::<T>::append(
-						validity.execute_at(),
+						details.execute_at(),
 						OrderUpdate { lp, id, call: *call },
 					);
 					Ok(())
 				},
 				Call::set_limit_order { id, .. } => {
 					ScheduledLimitOrders::<T>::append(
-						validity.execute_at(),
+						details.execute_at(),
 						OrderUpdate { lp, id, call: *call },
 					);
 					Ok(())
