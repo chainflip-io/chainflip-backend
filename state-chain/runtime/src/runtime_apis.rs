@@ -64,6 +64,7 @@ pub struct AuctionState {
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,
 	pub auction_size_range: (u32, u32),
+	pub min_active_bid: Option<u128>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
