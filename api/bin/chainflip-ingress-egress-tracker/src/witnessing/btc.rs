@@ -54,8 +54,7 @@ where
 				}
 			}
 		})
-		.shared(scope)
-		.chunk_by_vault(vaults)
+		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(witness_call.clone())
