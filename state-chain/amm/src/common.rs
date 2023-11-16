@@ -244,7 +244,7 @@ pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 ///
 /// Will panic for `sqrt_price`'s outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`
 pub(super) fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
-	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
+	assert!(is_sqrt_price_valid(sqrt_price));
 
 	// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so sqrt_price
 	// will always include a bit pass the 64th bit that is set, so when we shift down below that set
@@ -305,7 +305,7 @@ pub(super) const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 	U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]);
 
 pub(super) fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
-	(MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price)
+	(MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price)
 }
 
 pub fn is_tick_valid(tick: Tick) -> bool {
@@ -721,5 +721,6 @@ mod test {
 			276324
 		);
 		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
+		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE), MAX_TICK);
 	}
 }
