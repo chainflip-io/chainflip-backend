@@ -162,7 +162,9 @@ impl EthRpcApi for EthRpcClient {
 	}
 
 	async fn transaction_receipt(&self, tx_hash: TxHash) -> Result<TransactionReceipt> {
-		Ok(self.signer.get_transaction_receipt(tx_hash).await?.unwrap())
+		self.signer.get_transaction_receipt(tx_hash).await?.ok_or_else(|| {
+			anyhow!("Getting ETH transaction receipt for tx hash {tx_hash} returned None")
+		})
 	}
 
 	/// Gets block, returning error when either:
@@ -170,13 +172,13 @@ impl EthRpcApi for EthRpcClient {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
 		self.signer.get_block(block_number).await?.ok_or_else(|| {
-			anyhow!("Getting ETH block for block number {} returned None", block_number)
+			anyhow!("Getting ETH block for block number {block_number} returned None")
 		})
 	}
 
 	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
 		self.signer.get_block_with_txs(block_number).await?.ok_or_else(|| {
-			anyhow!("Getting ETH block with txs for block number {} returned None", block_number)
+			anyhow!("Getting ETH block with txs for block number {block_number} returned None")
 		})
 	}
 
@@ -193,7 +195,7 @@ impl EthRpcApi for EthRpcClient {
 		self.signer
 			.get_transaction(tx_hash)
 			.await?
-			.ok_or_else(|| anyhow!("Getting ETH transaction for tx hash {} returned None", tx_hash))
+			.ok_or_else(|| anyhow!("Getting ETH transaction for tx hash {tx_hash} returned None"))
 	}
 }
 
