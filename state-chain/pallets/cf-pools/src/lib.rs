@@ -227,6 +227,7 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct OrderUpdate<T: Config> {
 		pub lp: T::AccountId,
+		pub id: OrderId,
 		pub call: Call<T>,
 	}
 
@@ -240,14 +241,17 @@ pub mod pallet {
 		pub sell_amount: AssetAmount,
 	}
 
+	/// Represents the operational details of a scheduled limit order.
 	#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub struct OrderValidity<BlockNumber: PartialOrd + Copy> {
-		valid_at: Option<Range<BlockNumber>>,
-		execute_at: BlockNumber,
+	pub struct OrderScheduleDetails<BlockNumber: PartialOrd + Copy> {
+		/// The block number range during which the order is valid on entering state-chain.
+		pub valid_at: Option<Range<BlockNumber>>,
+		/// The block number at which the order is getting executed.
+		pub execute_at: BlockNumber,
 	}
 
-	impl<BlockNumber: PartialOrd + Copy> OrderValidity<BlockNumber> {
+	impl<BlockNumber: PartialOrd + Copy> OrderScheduleDetails<BlockNumber> {
 		#[cfg(test)]
 		pub fn new(valid_at: Option<Range<BlockNumber>>, execute_at: BlockNumber) -> Self {
 			let validity = Self { valid_at, execute_at };
@@ -531,9 +535,23 @@ pub mod pallet {
 			let scheduled_limit_orders = ScheduledLimitOrders::<T>::take(current_block);
 			for order_update in scheduled_limit_orders {
 				// TODO: Fire an event if the execution fails.
-				let _ = order_update
+				if let Err(err) = order_update
+					.clone()
 					.call
-					.dispatch_bypass_filter(RawOrigin::Signed(order_update.lp).into());
+					.dispatch_bypass_filter(RawOrigin::Signed(order_update.clone().lp).into())
+				{
+					log::error!("Unable to execute scheduled limit order: {:?}", err);
+					Self::deposit_event(Event::<T>::ExecutingLimitOrderFailed {
+						lp: order_update.lp,
+						order_id: order_update.id,
+						error: err.error,
+					});
+				} else {
+					Self::deposit_event(Event::<T>::SuccessfullyExecutedLimitOrder {
+						lp: order_update.lp,
+						order_id: order_update.id,
+					});
+				}
 			}
 			weight_used
 		}
@@ -579,13 +597,13 @@ pub mod pallet {
 		/// Updating Range Orders is disabled.
 		UpdatingRangeOrdersDisabled,
 		/// The specified order validity is internally inconsistent.
-		OrderValidityInconsistent,
+		OrderScheduleDetailsInconsistent,
 		/// The order is expired.
-		OrderValidityExpired,
+		OrderScheduleDetailsExpired,
 		/// Unsupported call.
 		UnsupportedCall,
 		/// The order is not valid at the current block.
-		OrderValidityNotValidAtCurrentBlock,
+		OrderScheduleDetailsNotValidAtCurrentBlock,
 	}
 
 	#[pallet::event]
@@ -646,12 +664,13 @@ pub mod pallet {
 			pair_asset: Asset,
 			fee_hundredth_pips: u32,
 		},
-		MintingLimitOrderFailed {
+		SuccessfullyExecutedLimitOrder {
 			lp: T::AccountId,
-			error: DispatchError,
+			order_id: OrderId,
 		},
-		BurningLimitOrderFailed {
+		ExecutingLimitOrderFailed {
 			lp: T::AccountId,
+			order_id: OrderId,
 			error: DispatchError,
 		},
 	}
@@ -1123,24 +1142,45 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Schedules a call to be executed at a later block.
+		///
+		/// This extrinsic is used to schedule the execution of either the set_limit_order or the
+		/// update_limit_order extrinsic at a later block. The call is executed at the specified
+		/// block number, and the validity of the order is checked at the block number it enters
+		/// the state-chain. If the order details are not valid at that block number, the extrinsic
+		/// will fail. If the order is valid, the extrinsic will succeed and the call will be
+		/// scheduled at the provided block number in *executes_at*.
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
+		/// - [OrderScheduleDetailsInconsistent](pallet_cf_pools::Error::OrderScheduleDetailsInconsistent)
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::set_pool_fees())]
+		#[pallet::weight(T::WeightInfo::schedule())]
 		pub fn schedule(
 			origin: OriginFor<T>,
 			call: Box<Call<T>>,
-			validity: OrderValidity<BlockNumberFor<T>>,
+			validity: OrderScheduleDetails<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let current_block = <frame_system::Pallet<T>>::block_number();
 			ensure!(
 				validity.is_valid_at(current_block),
-				Error::<T>::OrderValidityNotValidAtCurrentBlock
+				Error::<T>::OrderScheduleDetailsNotValidAtCurrentBlock
 			);
 			match *call {
-				Call::update_limit_order { .. } | Call::set_limit_order { .. } => {
+				Call::update_limit_order { id, .. } => {
 					ScheduledLimitOrders::<T>::append(
 						validity.execute_at(),
-						OrderUpdate { lp, call: *call },
+						OrderUpdate { lp, id, call: *call },
+					);
+					Ok(())
+				},
+				Call::set_limit_order { id, .. } => {
+					ScheduledLimitOrders::<T>::append(
+						validity.execute_at(),
+						OrderUpdate { lp, id, call: *call },
 					);
 					Ok(())
 				},

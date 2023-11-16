@@ -1,7 +1,8 @@
 use crate::{
 	self as pallet_cf_pools, mock::*, utilities, AssetAmounts, AssetPair, AssetsMap,
 	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn,
-	OrderValidity, PoolInfo, PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrders, STABLE_ASSET,
+	OrderScheduleDetails, PoolInfo, PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrders,
+	STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -719,7 +720,7 @@ fn can_mint_limit_order_with_validity() {
 			price_at_tick(0).unwrap(),
 		));
 
-		let validity = OrderValidity::new(Some(1..5), 6);
+		let validity = OrderScheduleDetails::new(Some(1..5), 6);
 		let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 			sell_asset: STABLE_ASSET,
 			buy_asset: Asset::Flip,
@@ -750,7 +751,7 @@ fn gets_rejected_if_order_window_has_already_passed() {
 			price_at_tick(0).unwrap(),
 		));
 		System::set_block_number(1);
-		let validity = OrderValidity::new(Some(0..1), 1);
+		let validity = OrderScheduleDetails::new(Some(0..1), 1);
 		let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 			sell_asset: STABLE_ASSET,
 			buy_asset: Asset::Flip,
@@ -760,21 +761,21 @@ fn gets_rejected_if_order_window_has_already_passed() {
 		});
 		assert_noop!(
 			LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, validity),
-			Error::<Test>::OrderValidityNotValidAtCurrentBlock
+			Error::<Test>::OrderScheduleDetailsNotValidAtCurrentBlock
 		);
 	});
 }
 
 #[test]
 fn test_validity_window() {
-	let validity = OrderValidity::new(Some(2..4), 5);
+	let validity = OrderScheduleDetails::new(Some(2..4), 5);
 	assert!(validity.is_valid_at(2));
 	assert!(validity.is_valid_at(3));
 	assert!(validity.is_valid_at(4));
 	assert!(!validity.is_valid_at(5));
 
-	let default_validity = OrderValidity::new(None, 4);
-	assert!(default_validity.is_valid_at(2));
-	assert!(default_validity.is_valid_at(3));
-	assert!(!default_validity.is_valid_at(4));
+	let no_validity = OrderScheduleDetails::new(None, 4);
+	assert!(no_validity.is_valid_at(2));
+	assert!(no_validity.is_valid_at(3));
+	assert!(!no_validity.is_valid_at(4));
 }

@@ -13,7 +13,8 @@ use chainflip_engine::state_chain_observer::client::{
 	StateChainClient,
 };
 use pallet_cf_pools::{
-	AssetAmounts, IncreaseOrDecrease, OrderId, OrderValidity, RangeOrderChange, RangeOrderSize,
+	AssetAmounts, IncreaseOrDecrease, OrderId, OrderScheduleDetails, RangeOrderChange,
+	RangeOrderSize,
 };
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -228,7 +229,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
-		validity: Option<OrderValidity<BlockNumber>>,
+		validity: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the mint order
 		let events = if let Some(validity) = validity {
@@ -271,7 +272,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
-		validity: Option<OrderValidity<BlockNumber>>,
+		validity: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>> {
 		// Submit the burn order
 		let events = if let Some(validity) = validity {

@@ -18,7 +18,7 @@ use clap::Parser;
 use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, OrderValidity, RangeOrderSize};
+use pallet_cf_pools::{IncreaseOrDecrease, OrderId, OrderScheduleDetails, RangeOrderSize};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
@@ -138,7 +138,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
-		validity: Option<OrderValidity<BlockNumber>>,
+		validity: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
@@ -149,7 +149,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
-		validity: Option<OrderValidity<BlockNumber>>,
+		validity: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
@@ -283,7 +283,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
-		validity: Option<OrderValidity<BlockNumber>>,
+		validity: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -306,7 +306,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
-		validity: Option<OrderValidity<BlockNumber>>,
+		validity: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
 		Ok(self
 			.api
