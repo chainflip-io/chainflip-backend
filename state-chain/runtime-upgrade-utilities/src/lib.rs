@@ -116,6 +116,7 @@ where
 	}
 }
 
+#[cfg(feature = "try-runtime")]
 #[cfg(test)]
 mod test_versioned_upgrade {
 	use super::*;
