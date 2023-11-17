@@ -16,7 +16,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::retry_rpc::EthersRetryRpcClient,
+	eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcSigningClient},
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 		StateChainStreamApi,
@@ -43,7 +43,7 @@ pub async fn start<
 	PrewitnessFut,
 >(
 	scope: &Scope<'_, anyhow::Error>,
-	eth_client: EthersRetryRpcClient,
+	eth_client: EthersRetryRpcClient<EthRpcSigningClient>,
 	process_call: ProcessCall,
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,

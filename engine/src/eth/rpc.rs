@@ -178,7 +178,7 @@ impl EthRpcSigningClient {
 }
 
 #[async_trait::async_trait]
-pub trait EthRpcApi: Send {
+pub trait EthRpcApi: Send + Sync + Clone + 'static {
 	async fn estimate_gas(&self, req: &Eip1559TransactionRequest) -> Result<U256>;
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;

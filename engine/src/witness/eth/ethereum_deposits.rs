@@ -226,7 +226,10 @@ pub fn eth_ingresses_at_block<
 #[cfg(test)]
 mod tests {
 	use crate::{
-		eth::retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
+		eth::{
+			retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
+			rpc::EthRpcSigningClient,
+		},
 		settings::Settings,
 		witness::common::chain_source::Header,
 	};
@@ -315,7 +318,7 @@ mod tests {
 					"e7f1725E7734CE288F8367e1Bb143E90bb3F0512".parse::<Address>().unwrap();
 
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRetryRpcClient::new(
+				let client = EthersRetryRpcClient::<EthRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,

@@ -4,7 +4,7 @@ use cf_primitives::chains::assets::eth::Asset;
 use utilities::task_scope;
 
 use chainflip_engine::{
-	eth::retry_rpc::EthersRetryRpcClient,
+	eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcSigningClient},
 	settings::NodeContainer,
 	state_chain_observer::client::{StateChainClient, StateChainStreamApi},
 	witness::{
@@ -40,7 +40,7 @@ where
 	let eth_client = {
 		let nodes = NodeContainer { primary: settings.eth_node.clone(), backup: None };
 
-		EthersRetryRpcClient::new(
+		EthersRetryRpcClient::<EthRpcSigningClient>::new(
 			scope,
 			settings.eth_key_path,
 			nodes,

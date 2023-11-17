@@ -48,11 +48,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn key_manager_witnessing<
 		ProcessCall,
 		ProcessingFut,
-		EthRpcSigningClient: EthersRetryRpcApi + ChainClient + Clone,
+		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
 	>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRpcSigningClient,
+		eth_rpc: EthRpcClient,
 		contract_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
@@ -186,7 +186,7 @@ mod tests {
 	use super::super::eth_source::EthSource;
 
 	use crate::{
-		eth::retry_rpc::EthersRetryRpcClient,
+		eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcSigningClient},
 		settings::{self, NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
@@ -208,7 +208,7 @@ mod tests {
 					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
 				};
 
-				let retry_client = EthersRetryRpcClient::new(
+				let retry_client = EthersRetryRpcClient::<EthRpcSigningClient>::new(
 					scope,
 					eth_settings.private_key_file,
 					eth_settings.nodes,

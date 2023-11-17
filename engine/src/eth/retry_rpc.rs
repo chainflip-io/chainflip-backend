@@ -5,10 +5,10 @@ use ethers::{
 	types::{transaction::eip2930::AccessList, TransactionReceipt},
 };
 
+use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
-	common::option_inner,
 	eth::rpc::{EthRpcApi, EthSigningRpcApi},
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
@@ -17,7 +17,7 @@ use crate::{
 use std::{path::PathBuf, time::Duration};
 
 use super::{
-	rpc::{EthRpcSigningClient, ReconnectSubscriptionClient},
+	rpc::{EthRpcClient, EthRpcSigningClient, ReconnectSubscriptionClient},
 	ConscientiousEthWebsocketBlockHeaderStream,
 };
 use crate::eth::rpc::ReconnectSubscribeApi;
@@ -26,8 +26,8 @@ use cf_chains::Ethereum;
 use anyhow::{Context, Result};
 
 #[derive(Clone)]
-pub struct EthersRetryRpcClient {
-	rpc_retry_client: RetrierClient<EthRpcSigningClient>,
+pub struct EthersRetryRpcClient<Rpc: EthRpcApi> {
+	rpc_retry_client: RetrierClient<Rpc>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
@@ -36,29 +36,23 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
 
-impl EthersRetryRpcClient {
-	pub fn new(
+impl<Rpc: EthRpcApi> EthersRetryRpcClient<Rpc> {
+	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
-		private_key_file: PathBuf,
 		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_chain_id: U256,
-	) -> Result<Self> {
-		let f_create_clients = |endpoints: WsHttpEndpoints| {
-			Result::<_, anyhow::Error>::Ok((
-				EthRpcSigningClient::new(
-					private_key_file.clone(),
-					endpoints.http_endpoint,
-					expected_chain_id.as_u64(),
-				)?,
-				ReconnectSubscriptionClient::new(endpoints.ws_endpoint, expected_chain_id),
-			))
-		};
+		rpc_client: ClientFut,
+		backup_rpc_client: Option<ClientFut>,
+	) -> Self {
+		let sub_client =
+			ReconnectSubscriptionClient::new(nodes.primary.ws_endpoint, expected_chain_id);
 
-		let (rpc_client, sub_client) = f_create_clients(nodes.primary)?;
-		let (backup_rpc_client, backup_sub_client) =
-			option_inner(nodes.backup.map(f_create_clients).transpose()?);
+		let backup_sub_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| ReconnectSubscriptionClient::new(ep.ws_endpoint.clone(), expected_chain_id));
 
-		Ok(Self {
+		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"eth_rpc",
@@ -75,7 +69,55 @@ impl EthersRetryRpcClient {
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-		})
+		}
+	}
+}
+
+impl EthersRetryRpcClient<EthRpcClient> {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_chain_id: U256,
+	) -> Result<Self> {
+		let rpc_client =
+			EthRpcClient::new(nodes.primary.http_endpoint.clone(), expected_chain_id.as_u64())?;
+
+		let backup_rpc_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| EthRpcClient::new(ep.http_endpoint.clone(), expected_chain_id.as_u64()))
+			.transpose()?;
+
+		Ok(Self::from_inner_clients(scope, nodes, expected_chain_id, rpc_client, backup_rpc_client))
+	}
+}
+
+impl EthersRetryRpcClient<EthRpcSigningClient> {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		private_key_file: PathBuf,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_chain_id: U256,
+	) -> Result<Self> {
+		let rpc_client = EthRpcSigningClient::new(
+			private_key_file.clone(),
+			nodes.primary.http_endpoint.clone(),
+			expected_chain_id.as_u64(),
+		)?;
+
+		let backup_rpc_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| {
+				EthRpcSigningClient::new(
+					private_key_file.clone(),
+					ep.http_endpoint.clone(),
+					expected_chain_id.as_u64(),
+				)
+			})
+			.transpose()?;
+
+		Ok(Self::from_inner_clients(scope, nodes, expected_chain_id, rpc_client, backup_rpc_client))
 	}
 }
 
@@ -110,7 +152,7 @@ pub trait EthersRetrySigningRpcApi: EthersRetryRpcApi {
 }
 
 #[async_trait::async_trait]
-impl EthersRetryRpcApi for EthersRetryRpcClient {
+impl<Rpc: EthRpcApi> EthersRetryRpcApi for EthersRetryRpcClient<Rpc> {
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(
@@ -218,7 +260,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-impl EthersRetrySigningRpcApi for EthersRetryRpcClient {
+impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthersRetryRpcClient<Rpc> {
 	/// Estimates gas and then sends the transaction to the network.
 	async fn broadcast_transaction(
 		&self,
@@ -287,7 +329,7 @@ pub trait EthersRetrySubscribeApi {
 }
 
 #[async_trait::async_trait]
-impl EthersRetrySubscribeApi for EthersRetryRpcClient {
+impl<Rpc: EthRpcApi> EthersRetrySubscribeApi for EthersRetryRpcClient<Rpc> {
 	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
@@ -302,7 +344,7 @@ impl EthersRetrySubscribeApi for EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-impl ChainClient for EthersRetryRpcClient {
+impl<Rpc: EthRpcApi> ChainClient for EthersRetryRpcClient<Rpc> {
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;
@@ -403,7 +445,7 @@ mod tests {
 			async move {
 				let settings = Settings::new_test().unwrap();
 
-				let retry_client = EthersRetryRpcClient::new(
+				let retry_client = EthersRetryRpcClient::<EthRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,

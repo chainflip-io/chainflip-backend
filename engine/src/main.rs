@@ -5,7 +5,7 @@ use chainflip_engine::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
 	dot::retry_rpc::DotRetryRpcClient,
-	eth::retry_rpc::EthersRetryRpcClient,
+	eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcSigningClient},
 	health, p2p,
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	state_chain_observer::{
@@ -175,7 +175,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EthersRetryRpcClient::new(
+				EthersRetryRpcClient::<EthRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
