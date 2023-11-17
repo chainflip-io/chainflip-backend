@@ -47,14 +47,14 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 	}
 }
 
-pub async fn events_at_block<EventParameters, EthRpcClient>(
+pub async fn events_at_block<EventParameters, EthRpcSigningClient>(
 	header: Header<u64, H256, Bloom>,
 	contract_address: H160,
-	eth_rpc: &EthRpcClient,
+	eth_rpc: &EthRpcSigningClient,
 ) -> Result<Vec<Event<EventParameters>>>
 where
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EthRpcClient: EthersRetryRpcApi,
+	EthRpcSigningClient: EthersRetryRpcApi,
 {
 	let mut contract_bloom = Bloom::default();
 	contract_bloom.accrue(BloomInput::Raw(&contract_address.0));

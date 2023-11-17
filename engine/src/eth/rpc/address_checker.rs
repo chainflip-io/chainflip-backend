@@ -2,7 +2,7 @@ use ethers::prelude::*;
 
 use anyhow::{Ok, Result};
 
-use super::EthRpcClient;
+use super::EthRpcSigningClient;
 
 abigen!(AddressChecker, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IAddressChecker.json");
 
@@ -24,7 +24,7 @@ pub trait AddressCheckerRpcApi {
 }
 
 #[async_trait::async_trait]
-impl AddressCheckerRpcApi for EthRpcClient {
+impl AddressCheckerRpcApi for EthRpcSigningClient {
 	async fn address_states(
 		&self,
 		block_hash: H256,

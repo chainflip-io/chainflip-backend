@@ -189,13 +189,13 @@ pub fn call_from_event(
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn vault_witnessing<
-		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		EthRpcSigningClient: EthersRetryRpcApi + ChainClient + Clone,
 		ProcessCall,
 		ProcessingFut,
 	>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRpcClient,
+		eth_rpc: EthRpcSigningClient,
 		contract_address: EthereumAddress,
 		native_asset: Asset,
 		source_chain: ForeignChain,

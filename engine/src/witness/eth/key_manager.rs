@@ -48,11 +48,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn key_manager_witnessing<
 		ProcessCall,
 		ProcessingFut,
-		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
+		EthRpcSigningClient: EthersRetryRpcApi + ChainClient + Clone,
 	>(
 		self,
 		process_call: ProcessCall,
-		eth_rpc: EthRpcClient,
+		eth_rpc: EthRpcSigningClient,
 		contract_address: H160,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where

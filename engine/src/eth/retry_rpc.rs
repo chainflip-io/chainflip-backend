@@ -9,7 +9,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	common::option_inner,
-	eth::rpc::EthRpcApi,
+	eth::rpc::{EthRpcApi, EthSigningRpcApi},
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -17,7 +17,7 @@ use crate::{
 use std::{path::PathBuf, time::Duration};
 
 use super::{
-	rpc::{EthRpcClient, ReconnectSubscriptionClient},
+	rpc::{EthRpcSigningClient, ReconnectSubscriptionClient},
 	ConscientiousEthWebsocketBlockHeaderStream,
 };
 use crate::eth::rpc::ReconnectSubscribeApi;
@@ -27,7 +27,7 @@ use anyhow::{Context, Result};
 
 #[derive(Clone)]
 pub struct EthersRetryRpcClient {
-	rpc_retry_client: RetrierClient<EthRpcClient>,
+	rpc_retry_client: RetrierClient<EthRpcSigningClient>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
@@ -45,7 +45,7 @@ impl EthersRetryRpcClient {
 	) -> Result<Self> {
 		let f_create_clients = |endpoints: WsHttpEndpoints| {
 			Result::<_, anyhow::Error>::Ok((
-				EthRpcClient::new(
+				EthRpcSigningClient::new(
 					private_key_file.clone(),
 					endpoints.http_endpoint,
 					expected_chain_id.as_u64(),
