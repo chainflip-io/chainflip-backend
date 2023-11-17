@@ -229,7 +229,7 @@ pub mod pallet {
 		///
 		/// - [NotMember](Error::NotMember)
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
+		#[pallet::weight((T::WeightInfo::propose_governance_extrinsic(), DispatchClass::Operational))]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -327,7 +327,7 @@ pub mod pallet {
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::approve())]
+		#[pallet::weight((T::WeightInfo::approve(), DispatchClass::Operational))]
 		pub fn approve(
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
@@ -352,7 +352,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight((T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -399,7 +399,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [CallHashNotWhitelisted](Error::CallHashNotWhitelisted)
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight((T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
