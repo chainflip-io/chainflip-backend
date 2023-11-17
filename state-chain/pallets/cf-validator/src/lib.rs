@@ -587,7 +587,7 @@ pub mod pallet {
 		///
 		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::call_index(2)]
-		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())] // TODO: check if this is really valid
+		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(
 			origin: OriginFor<T>,
 			keys: T::Keys,

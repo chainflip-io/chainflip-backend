@@ -598,7 +598,7 @@ pub mod pallet {
 		///
 		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
 		#[pallet::call_index(4)]
-		#[pallet::weight((T::WeightInfo::stop_bidding(), DispatchClass::Operational))]
+		#[pallet::weight(T::WeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
 
@@ -629,7 +629,7 @@ pub mod pallet {
 		///
 		/// - [AlreadyBidding](Error::AlreadyBidding)
 		#[pallet::call_index(5)]
-		#[pallet::weight((T::WeightInfo::start_bidding(), DispatchClass::Operational))]
+		#[pallet::weight(T::WeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;

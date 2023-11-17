@@ -32,6 +32,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+macro_rules! ensure_governance_member {
+	(origin:ident) => {
+		let account_id = ensure_signed($origin)?;
+		ensure!(Members::<T>::get().contains(&account_id), Error::<T>::NotMember);
+		account_id
+	};
+}
+
 pub type ProposalId = u32;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
@@ -235,13 +243,12 @@ pub mod pallet {
 			call: Box<<T as Config>::RuntimeCall>,
 			execution: ExecutionMode,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			let account_id = ensure_governance_member!(origin);
 
 			let id = Self::push_proposal(call, execution);
 			Self::deposit_event(Event::Proposed(id));
 
-			Self::inner_approve(who, id)?;
+			Self::inner_approve(account_id, id)?;
 
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
@@ -332,9 +339,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			Self::inner_approve(who, approved_id)?;
+			let account_id = ensure_governance_member!(origin);
+			Self::inner_approve(account_id, approved_id)?;
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
@@ -352,7 +358,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(4)]
-		#[pallet::weight((T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]
+		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -432,8 +438,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			approved_id: ProposalId,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			ensure_governance_member!(origin);
 			if let Some(call) = PreAuthorisedGovCalls::<T>::take(approved_id) {
 				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
 					Self::deposit_event(match Self::dispatch_governance_call(call) {

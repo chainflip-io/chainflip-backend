@@ -1072,7 +1072,7 @@ pub mod pallet {
 		///
 		/// - [Threshold Signer Trait](ThresholdSigner)
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::Weights::report_keygen_outcome())]
+		#[pallet::weight((T::Weights::report_keygen_outcome(), DispatchClass::Operational))]
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
