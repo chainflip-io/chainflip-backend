@@ -4,7 +4,7 @@ use cf_primitives::chains::assets::eth::Asset;
 use utilities::task_scope;
 
 use chainflip_engine::{
-	eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcSigningClient},
+	eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcClient},
 	settings::NodeContainer,
 	state_chain_observer::client::{StateChainClient, StateChainStreamApi},
 	witness::{
@@ -40,12 +40,7 @@ where
 	let eth_client = {
 		let nodes = NodeContainer { primary: settings.eth_node.clone(), backup: None };
 
-		EthersRetryRpcClient::<EthRpcSigningClient>::new(
-			scope,
-			settings.eth_key_path,
-			nodes,
-			env_params.eth_chain_id.into(),
-		)?
+		EthersRetryRpcClient::<EthRpcClient>::new(scope, nodes, env_params.eth_chain_id.into())?
 	};
 
 	let vaults = epoch_source.vaults().await;

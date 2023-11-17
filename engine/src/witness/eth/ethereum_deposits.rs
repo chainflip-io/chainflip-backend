@@ -228,7 +228,7 @@ mod tests {
 	use crate::{
 		eth::{
 			retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
-			rpc::EthRpcSigningClient,
+			rpc::EthRpcClient,
 		},
 		settings::Settings,
 		witness::common::chain_source::Header,
@@ -307,7 +307,7 @@ mod tests {
 		);
 	}
 
-	#[ignore = "requries connection to a node"]
+	#[ignore = "requires connection to a node"]
 	#[tokio::test]
 	async fn test_get_ingress_contract() {
 		task_scope::task_scope(|scope| {
@@ -318,9 +318,8 @@ mod tests {
 					"e7f1725E7734CE288F8367e1Bb143E90bb3F0512".parse::<Address>().unwrap();
 
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRetryRpcClient::<EthRpcSigningClient>::new(
+				let client = EthersRetryRpcClient::<EthRpcClient>::new(
 					scope,
-					settings.eth.private_key_file,
 					settings.eth.nodes,
 					U256::from(1337u64),
 				)

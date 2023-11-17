@@ -186,8 +186,8 @@ mod tests {
 	use super::super::eth_source::EthSource;
 
 	use crate::{
-		eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcSigningClient},
-		settings::{self, NodeContainer, WsHttpEndpoints},
+		eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcClient},
+		settings::{NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
@@ -197,21 +197,15 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let eth_settings = settings::Eth {
-					nodes: NodeContainer {
+				let retry_client = EthersRetryRpcClient::<EthRpcClient>::new(
+					scope,
+					NodeContainer {
 						primary: WsHttpEndpoints {
 							ws_endpoint: "ws://localhost:8546".into(),
 							http_endpoint: "http://localhost:8545".into(),
 						},
 						backup: None,
 					},
-					private_key_file: PathBuf::from_str("/some/key/file").unwrap(),
-				};
-
-				let retry_client = EthersRetryRpcClient::<EthRpcSigningClient>::new(
-					scope,
-					eth_settings.private_key_file,
-					eth_settings.nodes,
 					U256::from(1337u64),
 				)
 				.unwrap();

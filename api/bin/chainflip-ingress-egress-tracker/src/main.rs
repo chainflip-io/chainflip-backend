@@ -1,7 +1,7 @@
 use chainflip_engine::settings::{HttpBasicAuthEndpoint, WsHttpEndpoints};
 use futures::FutureExt;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
-use std::{env, io::Write, net::SocketAddr, path::PathBuf};
+use std::{env, net::SocketAddr};
 use tracing::log;
 use utilities::task_scope;
 
@@ -11,7 +11,6 @@ mod witnessing;
 pub struct DepositTrackerSettings {
 	eth_node: WsHttpEndpoints,
 	// The key shouldn't be necessary, but the current witnesser wants this
-	eth_key_path: PathBuf,
 	dot_node: WsHttpEndpoints,
 	state_chain_ws_endpoint: String,
 	btc: HttpBasicAuthEndpoint,
@@ -83,13 +82,6 @@ async fn start(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	// Temporary hack: we don't actually use eth key, but the current witnesser is
-	// expecting a path with a valid key, so we create a temporary dummy key file here:
-	let mut eth_key_temp_file = tempfile::NamedTempFile::new()?;
-	eth_key_temp_file
-		.write_all(b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-		.unwrap();
-
 	let settings = DepositTrackerSettings {
 		eth_node: WsHttpEndpoints {
 			ws_endpoint: env::var("ETH_WS_ENDPOINT")
@@ -99,7 +91,6 @@ async fn main() -> anyhow::Result<()> {
 				.unwrap_or("http://localhost:8545".to_string())
 				.into(),
 		},
-		eth_key_path: eth_key_temp_file.path().into(),
 		dot_node: WsHttpEndpoints {
 			ws_endpoint: env::var("DOT_WS_ENDPOINT")
 				.unwrap_or("ws://localhost:9947".to_string())
