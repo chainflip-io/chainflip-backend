@@ -92,7 +92,7 @@ pub mod pallet {
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, KeyProvider, OnBroadcastReady};
 	use frame_support::{
 		ensure,
-		pallet_prelude::{OptionQuery, *},
+		pallet_prelude::{OptionQuery, ValueQuery, *},
 		traits::EnsureOrigin,
 	};
 	use frame_system::pallet_prelude::*;
@@ -312,7 +312,7 @@ pub mod pallet {
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
 	#[pallet::getter(fn broadcast_pause)]
-	pub type BroadcastPause<T, I = ()> = StorageValue<_, BroadcastId, OptionQuery>;
+	pub type BroadcastBarriers<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -337,7 +337,7 @@ pub mod pallet {
 			transaction_out_id: TransactionOutIdFor<T, I>,
 		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
-		ThresholdSignatureInvalid { broadcast_id: BroadcastId, retry_broadcast_id: BroadcastId },
+		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
@@ -410,10 +410,10 @@ pub mod pallet {
 				let mut retries = BroadcastRetryQueue::<T, I>::take();
 
 				let mut paused_broadcasts = vec![];
-				if let Some(pause_broadcast_id) = BroadcastPause::<T, I>::get() {
+				if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().last() {
 					paused_broadcasts = retries
 						.extract_if(|broadcast| {
-							broadcast.broadcast_attempt_id.broadcast_id > pause_broadcast_id
+							broadcast.broadcast_attempt_id.broadcast_id > *broadcast_barrier_id
 						})
 						.collect::<Vec<_>>();
 				}
@@ -527,7 +527,7 @@ pub mod pallet {
 			threshold_request_id: ThresholdSignatureRequestId,
 			threshold_signature_payload: PayloadFor<T, I>,
 			api_call: Box<<T as Config<I>>::ApiCall>,
-			broadcast_id: BroadcastId,
+			broadcast_attempt_id: BroadcastAttemptId,
 			initiated_at: ChainBlockNumberFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -550,7 +550,7 @@ pub mod pallet {
 				T::TransactionBuilder::build_transaction(&signed_api_call),
 				signed_api_call,
 				threshold_signature_payload,
-				broadcast_id,
+				broadcast_attempt_id,
 				initiated_at,
 			);
 			Ok(().into())
@@ -585,9 +585,11 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
-			if let Some(pause_broadcast_id) = BroadcastPause::<T, I>::get() {
-				if pause_broadcast_id == broadcast_id {
-					BroadcastPause::<T, I>::set(None);
+			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().last() {
+				if *broadcast_barrier_id == broadcast_id {
+					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
+						broadcast_barriers.pop();
+					});
 				}
 			}
 
@@ -740,7 +742,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					threshold_request_id,
 					threshold_signature_payload,
 					api_call: Box::new(api_call),
-					broadcast_id,
+					broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
 					initiated_at,
 				}
 				.into()
@@ -760,7 +762,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		transaction_payload: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
 		threshold_signature_payload: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		broadcast_id: BroadcastId,
+		broadcast_attempt_id: BroadcastAttemptId,
 		initiated_at: ChainBlockNumberFor<T, I>,
 	) -> BroadcastAttemptId {
 		let transaction_out_id = api_call.transaction_out_id();
@@ -769,12 +771,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		TransactionOutIdToBroadcastId::<T, I>::insert(
 			&transaction_out_id,
-			(broadcast_id, initiated_at),
+			(broadcast_attempt_id.broadcast_id, initiated_at),
 		);
 
-		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
-
-		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
+		ThresholdSignatureData::<T, I>::insert(
+			broadcast_attempt_id.broadcast_id,
+			(api_call, signature),
+		);
 
 		let broadcast_attempt = BroadcastAttempt::<T, I> {
 			broadcast_attempt_id,
@@ -783,9 +786,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			transaction_out_id,
 		};
 
-		if BroadcastPause::<T, I>::get()
-			.is_some_and(|pause_broadcast_id| broadcast_id > pause_broadcast_id)
-		{
+		if BroadcastBarriers::<T, I>::get().last().is_some_and(|broadcast_barrier_id| {
+			broadcast_attempt_id.broadcast_id > *broadcast_barrier_id
+		}) {
 			Self::schedule_for_retry(&broadcast_attempt);
 		} else {
 			Self::start_broadcast_attempt(broadcast_attempt);
@@ -800,26 +803,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let EpochKey { key, .. } = T::KeyProvider::active_epoch_key()
 				.expect("Epoch key must exist if we made a broadcast.");
 
+			let next_broadcast_attempt_id = broadcast_attempt.broadcast_attempt_id.next_attempt();
+
+			BroadcastAttemptCount::<T, I>::mutate(
+				broadcast_id,
+				|attempt_count: &mut AttemptCount| {
+					*attempt_count += 1;
+				},
+			);
+			debug_assert_eq!(
+				BroadcastAttemptCount::<T, I>::get(broadcast_id),
+				next_broadcast_attempt_id.attempt_count,
+			);
+
 			if T::TransactionBuilder::is_valid_for_rebroadcast(
 				&api_call,
 				&broadcast_attempt.threshold_signature_payload,
 				&key,
 				&signature,
 			) {
-				let next_broadcast_attempt_id =
-					broadcast_attempt.broadcast_attempt_id.next_attempt();
-
-				BroadcastAttemptCount::<T, I>::mutate(
-					broadcast_id,
-					|attempt_count: &mut AttemptCount| {
-						*attempt_count += 1;
-					},
-				);
-				debug_assert_eq!(
-					BroadcastAttemptCount::<T, I>::get(broadcast_id),
-					next_broadcast_attempt_id.attempt_count,
-				);
-
 				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 					broadcast_attempt_id: next_broadcast_attempt_id,
 					..broadcast_attempt
@@ -828,19 +830,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the signature verification fails, we want
 			// to retry from the threshold signing stage.
 			else {
-				Self::clean_up_broadcast_storage(broadcast_id);
-				let retry_broadcast_id = Self::threshold_sign_and_broadcast(
-					api_call,
-					RequestCallbacks::<T, I>::get(broadcast_id),
+				// Only storage to be removed, the other storages corresponding to this broadcast
+				// are either still valid or will get overwritten on re-threshold sign and
+				// broadcast.
+				TransactionOutIdToBroadcastId::<T, I>::remove(broadcast_attempt.transaction_out_id);
+
+				// We update the initiated_at here since as the tx is resigned and broadcast, it is
+				// not possible for it to be successfully broadcasted before this point.
+				let initiated_at = T::ChainTracking::get_block_height();
+
+				let threshold_signature_payload = api_call.threshold_signature_payload();
+				T::ThresholdSigner::request_signature_with_callback(
+					threshold_signature_payload.clone(),
+					|threshold_request_id| {
+						Call::on_signature_ready {
+							threshold_request_id,
+							threshold_signature_payload,
+							api_call: Box::new(api_call),
+							broadcast_attempt_id: next_broadcast_attempt_id,
+							initiated_at,
+						}
+						.into()
+					},
 				);
+
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
 				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid {
-					broadcast_id,
-					retry_broadcast_id,
-				});
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
@@ -922,7 +940,11 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 
 	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
 		let broadcast_id = Self::threshold_sign_and_broadcast(api_call, None);
-		BroadcastPause::<T, I>::set(Some(broadcast_id));
+		let mut broadcast_barriers = <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(
+			broadcast_id,
+		);
+		broadcast_barriers.reverse();
+		BroadcastBarriers::<T, I>::set(broadcast_barriers);
 		broadcast_id
 	}
 }

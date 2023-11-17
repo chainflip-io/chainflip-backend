@@ -130,7 +130,7 @@ fn start_mock_broadcast_tx_out_id(
 		MockTransaction,
 		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
 		Default::default(),
-		1,
+		BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 },
 		100u64,
 	)
 }

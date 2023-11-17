@@ -248,6 +248,13 @@ impl ChainCrypto for BitcoinCrypto {
 	fn handover_key_matches(current_key: &Self::AggKey, new_key: &Self::AggKey) -> bool {
 		new_key.previous.is_some_and(|previous| current_key.current == previous)
 	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		_rotation_broadcast_id: cf_primitives::BroadcastId,
+	) -> Vec<cf_primitives::BroadcastId> {
+		// we dont need to put broadcast barriers for Bitcoin
+		vec![]
+	}
 }
 
 fn verify_single_threshold_signature(

@@ -49,7 +49,7 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 		threshold_request_id,
 		threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 		api_call: Box::new(ApiCallFor::<T, I>::benchmark_value()),
-		broadcast_id: 1,
+		broadcast_attempt_id: BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 },
 		initiated_at: INITIATED_AT.into(),
 	}
 }
@@ -115,7 +115,7 @@ benchmarks_instance_pallet! {
 			BenchmarkValue::benchmark_value(),
 			signed_api_call,
 			BenchmarkValue::benchmark_value(),
-			1,
+			BroadcastAttemptId{broadcast_id: 1, attempt_count: 0},
 			INITIATED_AT.into(),
 		);
 

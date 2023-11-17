@@ -5,7 +5,7 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -193,6 +193,11 @@ pub trait ChainCrypto {
 	fn key_handover_is_required() -> bool {
 		Self::UtxoChain::get()
 	}
+
+	/// Provides chain specific functionality for providing the broadcast barriers on rotation tx
+	/// broadcast
+	fn maybe_broadcast_barriers_on_rotation(rotation_broadcast_id: BroadcastId)
+		-> Vec<BroadcastId>;
 }
 
 /// Provides chain-specific replay protection data.

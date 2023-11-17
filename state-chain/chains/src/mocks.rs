@@ -252,6 +252,12 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	fn key_handover_is_required() -> bool {
 		MockKeyHandoverIsRequired::get()
 	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		_rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		unimplemented!()
+	}
 }
 
 impl_default_benchmark_value!(MockAggKey);

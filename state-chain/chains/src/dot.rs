@@ -313,6 +313,14 @@ impl ChainCrypto for PolkadotCrypto {
 	fn sign_with_specific_key() -> bool {
 		true
 	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		// For polkadot, we need to pause future epoch broadcasts until all the previous epoch
+		// broadcasts (including the rotation tx) has successfully broadcasted.
+		vec![rotation_broadcast_id]
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
