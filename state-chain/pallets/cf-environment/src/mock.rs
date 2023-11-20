@@ -7,7 +7,7 @@ use cf_chains::{
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
-	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
+	BroadcastId, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_traits::{
