@@ -48,7 +48,7 @@ jobs:
         with:
           repository: chainflip-io/chainflip-platform-monorepo
           ref: main
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
