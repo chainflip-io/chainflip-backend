@@ -424,3 +424,52 @@ fn safe_mode_code_amber_can_filter_calls() {
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 	});
 }
+
+#[test]
+fn safe_mode_recovery_ignores_duplicates() {
+	new_test_ext().execute_with(|| {
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CODE_RED,
+		});
+
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(ALISSA),
+			call.clone(),
+			MockEpochInfo::epoch_index()
+		));
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(BOBSON),
+			call.clone(),
+			MockEpochInfo::epoch_index()
+		));
+		MockEpochInfo::next_epoch(MockEpochInfo::current_authorities());
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(ALISSA),
+			call.clone(),
+			MockEpochInfo::epoch_index()
+		));
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(BOBSON),
+			call.clone(),
+			MockEpochInfo::epoch_index()
+		));
+
+		// The call should not be dispatched
+		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
+
+		// The same call is stored twice.
+		assert_eq!(WitnessedCallsScheduledForDispatch::<Test>::get().len(), 2);
+
+		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
+			witnesser: PalletSafeMode::CODE_GREEN,
+		});
+		Witnesser::on_idle(1, Weight::zero().set_ref_time(1_000_000_000_000u64));
+
+		assert!(WitnessedCallsScheduledForDispatch::<Test>::get().is_empty());
+
+		// The call was only applied once.
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
+	});
+}
