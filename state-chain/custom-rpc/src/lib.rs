@@ -204,6 +204,7 @@ pub struct RpcAuctionState {
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
+	min_active_bid: Option<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -749,6 +750,7 @@ where
 			redemption_period_as_percentage: auction_state.redemption_period_as_percentage,
 			min_funding: auction_state.min_funding.into(),
 			auction_size_range: auction_state.auction_size_range,
+			min_active_bid: auction_state.min_active_bid.map(|bond| bond.into()),
 		})
 	}
 
