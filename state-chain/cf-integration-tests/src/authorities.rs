@@ -296,6 +296,47 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 }
 
 #[test]
+fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on_safe_mode_enabled()
+{
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+
+			// Resolve Auction
+			testnet.move_to_the_end_of_epoch();
+
+			// Run until key handover starts
+			testnet.move_forward_blocks(5);
+			assert!(
+				matches!(AllVaults::status(), AsyncResult::Ready(VaultStatus::KeyHandoverComplete)),
+				"Key handover should be complete but is {:?}",
+				AllVaults::status()
+			);
+
+			assert_ok!(Environment::update_safe_mode(
+				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+				SafeModeUpdate::CodeRed
+			));
+
+			testnet.move_forward_blocks(3);
+
+			// Authority rotation is stalled while in Code Red because of disabling dispatching
+			// witness extrinsics and so witnessing vault rotation will be stalled.
+			assert!(matches!(
+				AllVaults::status(),
+				AsyncResult::Ready(VaultStatus::RotationComplete)
+			));
+			testnet.move_forward_blocks(3);
+			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
+		});
+}
+
+#[test]
 fn authority_rotation_can_recover_after_keygen_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
