@@ -27,7 +27,7 @@ jobs:
           workflow: release-sisyphos.yml
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           branch: release/${{ env.MAJOR_MINOR }}
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           search_artifacts: true
           check_artifacts: true
 
@@ -37,7 +37,7 @@ jobs:
           workflow: release-sisyphos.yml
           name: chainflip-node-runtime-production
           branch: release/${{ env.MAJOR_MINOR }}
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           search_artifacts: true
           check_artifacts: true
 
