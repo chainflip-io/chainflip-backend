@@ -8,9 +8,7 @@ use cf_traits::{
 	EgressApi, PoolApi,
 };
 
-#[cfg(feature = "try-runtime")]
-use frame_support::dispatch::Vec;
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
@@ -141,23 +139,6 @@ pub mod pallet {
 		ForeignChain,
 		ForeignChainAddress,
 	>;
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
-	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {

@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::{
-	pallet_prelude::GetStorageVersion,
+	pallet_prelude::{Decode, Encode, GetStorageVersion},
 	traits::{OnRuntimeUpgrade, PalletInfoAccess, StorageVersion},
 	weights::RuntimeDbWeight,
 };
@@ -29,59 +29,14 @@ pub struct VersionedMigration<
 	const TO: u16,
 >(PhantomData<(P, U)>);
 
-#[cfg(feature = "try-runtime")]
-mod try_runtime_helpers {
-	use frame_support::{pallet_prelude::ValueQuery, storage_alias, traits::PalletInfoAccess};
-	use sp_std::{
-		cmp::{max, min},
-		collections::btree_map::BTreeMap,
-		vec::Vec,
-	};
-
-	#[storage_alias]
-	pub type MigrationBounds =
-		StorageValue<CfUpgradeUtilities, BTreeMap<Vec<u8>, (u16, u16)>, ValueQuery>;
-
-	#[storage_alias]
-	pub type MigrationState = StorageValue<
-		CfUpgradeUtilities,
-		BTreeMap<Vec<u8>, BTreeMap<(u16, u16), Vec<u8>>>,
-		ValueQuery,
-	>;
-
-	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
-		MigrationBounds::mutate(|bounds| {
-			bounds
-				.entry(T::name().as_bytes().to_vec())
-				.and_modify(|(from, to)| {
-					*from = min(*from, FROM);
-					*to = max(*to, TO);
-				})
-				.or_insert((FROM, TO));
-		});
-	}
-
-	pub fn get_migration_bounds<T: PalletInfoAccess>() -> Option<(u16, u16)> {
-		MigrationBounds::get().get(T::name().as_bytes()).copied()
-	}
-
-	pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
-		MigrationState::mutate(|state| {
-			state.entry(T::name().as_bytes().to_vec()).or_default().insert((FROM, TO), s)
-		});
-	}
-
-	pub fn restore_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>() -> Vec<u8> {
-		MigrationState::mutate(|state| {
-			state
-				.get(T::name().as_bytes())
-				.cloned()
-				.unwrap_or_default()
-				.get(&(FROM, TO))
-				.cloned()
-				.unwrap_or_default()
-		})
-	}
+/// A helper enum to wrap the pre_upgrade bytes like an Option before passing them to post_upgrade.
+/// This enum is used rather than an Option to make the API clearer to the developer.
+#[derive(Encode, Decode)]
+pub enum VersionedPostUpgradeData {
+	/// The migration ran, inner vec contains pre_upgrade data.
+	MigrationExecuted(sp_std::vec::Vec<u8>),
+	/// This migration is a noop, do not run post_upgrade checks.
+	Noop,
 }
 
 fn should_upgrade<
@@ -93,11 +48,33 @@ fn should_upgrade<
 		<P as GetStorageVersion>::current_storage_version() >= TO
 }
 
-impl<P, U, const FROM: u16, const TO: u16> OnRuntimeUpgrade for VersionedMigration<P, U, FROM, TO>
+// TODO: Replace this with the `VersionedMigration` that will be merged to polkadot-sdk soon.
+// This is close to a copy of that code from `liam-migrations-reference-docs` branch on the
+// `polkadot-sdk` repo.
+impl<P, Inner, const FROM: u16, const TO: u16> OnRuntimeUpgrade
+	for VersionedMigration<P, Inner, FROM, TO>
 where
 	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
-	U: OnRuntimeUpgrade,
+	Inner: OnRuntimeUpgrade,
 {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		if should_upgrade::<P, FROM, TO>() {
+			let pre_upgrade_state = Inner::pre_upgrade()?;
+
+			log::info!(
+				"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
+				P::name(),
+				FROM,
+				TO
+			);
+
+			Ok(VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_state).encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		if should_upgrade::<P, FROM, TO>() {
 			log::info!(
@@ -106,11 +83,9 @@ where
 				FROM,
 				TO
 			);
-			let w = U::on_runtime_upgrade();
+			let w = Inner::on_runtime_upgrade();
 			StorageVersion::new(TO).put::<P>();
-			#[cfg(feature = "try-runtime")]
-			try_runtime_helpers::update_migration_bounds::<P, FROM, TO>();
-			w + RuntimeDbWeight::default().reads_writes(1, 1)
+			w.saturating_add(RuntimeDbWeight::default().reads_writes(1, 1))
 		} else {
 			log::info!(
 				"⏭ {}: Skipping storage migration from version {:?} to {:?} - consider removing this from the pallet.",
@@ -122,54 +97,26 @@ where
 		}
 	}
 
+	/// Executes `Inner::post_upgrade` if the migration just ran.
+	///
+	/// pre_upgrade passes [`VersionedPostUpgradeData::MigrationExecuted`] to post_upgrade if
+	/// the migration ran, and [`VersionedPostUpgradeData::Noop`] otherwise.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		if should_upgrade::<P, FROM, TO>() {
-			let state = U::pre_upgrade().map_err(|e| {
-				log::error!(
-					"💥 {}: Pre-upgrade checks for migration failed at stage {FROM}->{TO}: {:?}",
-					P::name(),
-					e
-				);
-				"🛑 Pallet pre-upgrade checks failed."
-			})?;
-			log::info!(
-				"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
-				P::name(),
-				FROM,
-				TO
-			);
-			try_runtime_helpers::save_state::<P, FROM, TO>(state.clone());
-			Ok(state)
-		} else {
-			Ok(Vec::new())
-		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		if let Some((lowest, highest)) = try_runtime_helpers::get_migration_bounds::<P>() {
-			assert_eq!(
-				<P as GetStorageVersion>::on_chain_storage_version(),
-				highest,
-				"Runtime upgrade expected to process all pre-checks, then upgrade, then all post-checks.",
-			);
-			U::post_upgrade(try_runtime_helpers::restore_state::<P, FROM, TO>()).map_err(|e| {
-					log::error!(
-					"💥 {}: Post-upgrade checks for migration from version {lowest} to {highest} failed at stage {FROM}->{TO}: {:?}",
-					P::name(),
-					e
-				);
-					"🛑 Pallet post-upgrade checks failed."
-				})?;
-			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
-			Ok(())
-		} else {
-			Ok(())
+	fn post_upgrade(
+		versioned_post_upgrade_data_bytes: sp_std::vec::Vec<u8>,
+	) -> Result<(), DispatchError> {
+		use codec::DecodeAll;
+		match <VersionedPostUpgradeData>::decode_all(&mut &versioned_post_upgrade_data_bytes[..])
+			.map_err(|_| "VersionedMigration post_upgrade failed to decode PreUpgradeData")?
+		{
+			VersionedPostUpgradeData::MigrationExecuted(inner_bytes) =>
+				Inner::post_upgrade(inner_bytes),
+			VersionedPostUpgradeData::Noop => Ok(()),
 		}
 	}
 }
 
+#[cfg(feature = "try-runtime")]
 #[cfg(test)]
 mod test_versioned_upgrade {
 	use super::*;
@@ -273,11 +220,11 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_0_to_1_and_0_to_1() {
 		TestExternalities::new_empty().execute_with(|| {
-			UpgradeFrom0To1::on_runtime_upgrade();
+			UpgradeFrom0To1::try_on_runtime_upgrade(true).unwrap();
 
 			assert_upgrade(1);
 
-			UpgradeFrom0To1::on_runtime_upgrade();
+			UpgradeFrom0To1::try_on_runtime_upgrade(true).unwrap();
 
 			assert_upgrade(1);
 		});
@@ -299,11 +246,11 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_0_to_1_and_0_to_2() {
 		TestExternalities::new_empty().execute_with(|| {
-			UpgradeFrom0To1::on_runtime_upgrade();
+			UpgradeFrom0To1::try_on_runtime_upgrade(true).unwrap();
 
 			assert_upgrade(1);
 
-			UpgradeFrom0To2::on_runtime_upgrade();
+			UpgradeFrom0To2::try_on_runtime_upgrade(true).unwrap();
 
 			assert_upgrade(2);
 		});
@@ -312,8 +259,20 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_0_to_2() {
 		TestExternalities::new_empty().execute_with(|| {
-			UpgradeFrom0To2::on_runtime_upgrade();
+			UpgradeFrom0To2::try_on_runtime_upgrade(true).unwrap();
 
+			assert_upgrade(2);
+		});
+	}
+
+	#[test]
+	fn test_upgrade_from_0_to_2_checks_fail() {
+		TestExternalities::new_empty().execute_with(|| {
+			DummyUpgrade::set_error_on_post_upgrade(true);
+			assert!(UpgradeFrom0To2::try_on_runtime_upgrade(true).is_err());
+
+			// 2 upgrades are run as part of the try_on_runtime_upgrade. Even though the first
+			// fails, the second is still run.
 			assert_upgrade(2);
 		});
 	}
@@ -321,7 +280,7 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_1_to_2() {
 		TestExternalities::new_empty().execute_with(|| {
-			UpgradeFrom1To2::on_runtime_upgrade();
+			UpgradeFrom1To2::try_on_runtime_upgrade(true).unwrap();
 
 			assert_upgrade(0);
 		});
@@ -330,38 +289,10 @@ mod test_versioned_upgrade {
 	#[test]
 	fn test_upgrade_from_0_to_unsupported() {
 		TestExternalities::new_empty().execute_with(|| {
-			UpgradeFrom0To3::on_runtime_upgrade();
+			// This is what's called for the upgrades within the executive pallet.
+			UpgradeFrom0To3::try_on_runtime_upgrade(true).unwrap();
 
 			assert_upgrade(2);
-		});
-	}
-
-	#[cfg(feature = "try-runtime")]
-	#[test]
-	fn test_pre_post_upgrade() {
-		use frame_support::{assert_err, assert_ok};
-
-		TestExternalities::new_empty().execute_with(|| {
-			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			UpgradeFrom0To1::on_runtime_upgrade();
-			assert_ok!(UpgradeFrom0To1::post_upgrade(Default::default()));
-			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
-
-			// Post-migration runs even if upgrade is out of bounds.
-			DummyUpgrade::set_error_on_post_upgrade(true);
-			assert_ok!(UpgradeFrom2To3::pre_upgrade());
-			UpgradeFrom2To3::on_runtime_upgrade();
-			assert!(UpgradeFrom2To3::post_upgrade(Default::default()).is_err());
-			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
-		});
-
-		// Error on post-upgrade is propagated.
-		TestExternalities::new_empty().execute_with(|| {
-			DummyUpgrade::set_error_on_post_upgrade(true);
-			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			UpgradeFrom0To1::on_runtime_upgrade();
-			assert_err!(UpgradeFrom0To1::post_upgrade(Default::default()), "err");
-			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 		});
 	}
 }
