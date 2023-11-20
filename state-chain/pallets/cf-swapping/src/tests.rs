@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChain, NetworkEnvironment};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnvironment};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -20,6 +20,7 @@ use cf_traits::{
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter, traits::Hooks};
+use sp_arithmetic::Permill;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
 
@@ -2076,60 +2077,62 @@ fn can_swap_ccm_below_max_amount() {
 	});
 }
 
+fn swap_with_custom_broker_fee(
+	from: Asset,
+	to: Asset,
+	amount: AssetAmount,
+	broker_fee: BasisPoints,
+	broker_id: u64,
+) {
+	<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
+		ForeignChainAddress::Eth([2; 20].into()),
+		Default::default(),
+		from,
+		to,
+		amount,
+		ForeignChainAddress::Eth([2; 20].into()),
+		broker_id,
+		broker_fee,
+		1,
+	);
+}
+
 #[test]
 fn swap_broker_fee_calculated_correctly() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
+		let fees: [BasisPoints; 12] =
+			[1, 5, 10, 100, 200, 500, 1000, 1500, 2000, 5000, 7500, 10000];
+		const AMOUNT: AssetAmount = 100000;
+		const BASIS_POINTS_PER_MILLION: u32 = 100;
+
 		// Flip fees
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Flip,
-			Asset::Usdc,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			1000, //10%
-			1,
-		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 10);
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Flip,
-			Asset::Usdc,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			2000, //20%
-			1,
-		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 30);
+		let total_fees: u128 = fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
+			swap_with_custom_broker_fee(Asset::Flip, Asset::Usdc, AMOUNT, *fee_bps, ALICE);
+			total_fees + Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
+		});
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), total_fees);
+
 		// Usdc fees
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			5000, //50%
-			1,
-		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 50);
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			10000, //100%
-			1,
-		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
+		let total_fees: u128 = fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
+			swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, AMOUNT, *fee_bps, ALICE);
+			total_fees + Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
+		});
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), total_fees);
+
+		// Eth fees
+		let total_fees: u128 = fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
+			swap_with_custom_broker_fee(Asset::Eth, Asset::Usdc, AMOUNT, *fee_bps, ALICE);
+			total_fees + Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
+		});
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Eth), total_fees);
+
+		// Dot fees
+		let total_fees: u128 = fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
+			swap_with_custom_broker_fee(Asset::Dot, Asset::Flip, AMOUNT, *fee_bps, ALICE);
+			total_fees + Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
+		});
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Dot), total_fees);
 	});
 }
 
@@ -2137,17 +2140,7 @@ fn swap_broker_fee_calculated_correctly() {
 fn swap_broker_fee_cannot_exceed_amount() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			15000, //150%
-			1,
-		);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 15000, ALICE);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 100);
 	});
 }
@@ -2157,17 +2150,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
 		// Swap is scheduled with amount - fees
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			1000,
-			1,
-		);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 1000, ALICE);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 10);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
@@ -2184,17 +2167,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 			broker_commission: Some(10),
 		}));
 
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			100,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			10000,
-			1,
-		);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 10000, ALICE);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 110);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 2,
@@ -2220,7 +2193,7 @@ fn swap_fail_if_below_minimum_swap_amount() {
 		let amount = 1_000u128;
 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
 
-		// Set the new minimum swap_amount
+		// Set the new minimum swap_amount (1000 USDC)
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, amount));
 
 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), amount);
@@ -2233,17 +2206,7 @@ fn swap_fail_if_below_minimum_swap_amount() {
 
 		const ALICE: u64 = 2_u64;
 		//swap with amount > MinimumAmount is scheduled
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			1500,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			1000,
-			1,
-		);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 1500, 1000, ALICE);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
@@ -2261,17 +2224,7 @@ fn swap_fail_if_below_minimum_swap_amount() {
 		}));
 
 		//Swap with amount < MinimumAmount fails
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			1000,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			1000,
-			1,
-		);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 1000, 1000, ALICE);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
 			asset: Asset::Usdc,
@@ -2285,17 +2238,7 @@ fn swap_fail_if_below_minimum_swap_amount() {
 		}));
 
 		//Swap with amount < MinimumAmount fails
-		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20].into()),
-			Default::default(),
-			Asset::Usdc,
-			Asset::Flip,
-			999,
-			ForeignChainAddress::Eth([2; 20].into()),
-			ALICE,
-			0,
-			1,
-		);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 999, 0, ALICE);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
 			asset: Asset::Usdc,
