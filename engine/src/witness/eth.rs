@@ -30,9 +30,7 @@ use super::common::{
 };
 pub use eth_source::EthSource;
 
-use anyhow::{Context, Result};
-
-const SAFETY_MARGIN: usize = 6;
+use anyhow::{anyhow, Context, Result};
 
 pub async fn start<
 	StateChainClient,
@@ -186,9 +184,19 @@ where
 
 	// ===== Full witnessing stream =====
 
+	let eth_safety_margin = state_chain_client
+		.storage_value::<pallet_cf_ingress_egress::WitnessSafetyMargin<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::EthereumInstance,
+		>>(state_chain_stream.cache().hash)
+		.await?
+		.ok_or_else(|| anyhow!("Safety margin for Ethereum must be set"))?;
+
+	tracing::info!("Safety margin for Ethereum is set to {eth_safety_margin} blocks.",);
+
 	let eth_safe_vault_source = eth_source
 		.strictly_monotonic()
-		.lag_safety(SAFETY_MARGIN)
+		.lag_safety(eth_safety_margin as usize)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope);
 

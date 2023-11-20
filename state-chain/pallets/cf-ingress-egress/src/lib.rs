@@ -209,11 +209,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
+		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deposit_channel_lifetime: Default::default() }
+			Self { deposit_channel_lifetime: Default::default(), witness_safety_margin: None }
 		}
 	}
 
@@ -221,6 +222,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
+			WitnessSafetyMargin::<T, I>::put(self.witness_safety_margin);
 		}
 	}
 
@@ -342,6 +344,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
+
+	// Determines the number of block confirmations is required for a block on
+	// an external chain before CFE can submit any witness extrinsics for it.
+	#[pallet::storage]
+	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Option<TargetChainBlockNumber<T, I>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
