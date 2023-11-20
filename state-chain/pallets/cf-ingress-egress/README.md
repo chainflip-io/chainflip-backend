@@ -21,13 +21,15 @@ There are two reasons we recycle Ethereum addresses:
 a) We have a smart contract vault, therefore even across rotations, the addresses are still valid.
 b) It costs a lot of gas to to deploy a new deposit contract.
 
+Note that we only recycle Ethereum addresses if they have been used. This means that a Deposit contract has been deployed to that address, making it cheaper to recycle than to deploy a new contract.
+
 ### Bitcoin
 
 We don't recycle Bitcoin addresses because the aggregate key changes across rotations, and it's cheap to generate new addresses.
 
 ### Polkadot
 
-We recycle Polkadot addresses because it's cheap to generate new addresses and we only have u16::MAX addresses.
+We recycle Polkadot addresses because we can and because if we keep the number of addresses below u16::MAX, it's a little cheaper to fetch funds.
 
 ## Terminology
 
