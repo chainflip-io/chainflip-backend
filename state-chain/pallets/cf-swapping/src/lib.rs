@@ -622,6 +622,7 @@ pub mod pallet {
 				from,
 				to,
 				deposit_amount,
+				deposit_amount,
 				destination_address_internal.clone(),
 				&swap_origin,
 			) {
@@ -976,14 +977,17 @@ pub mod pallet {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
+			net_amount: AssetAmount,
 			destination_address: ForeignChainAddress,
 			swap_origin: &SwapOrigin,
 		) -> Option<u64> {
+			// We want to check the amount before the fees are taken to avoid decreasing the minimum
+			// swap amount.
 			if amount < MinimumSwapAmount::<T>::get(from) {
 				// If the swap amount is less than the minimum required,
 				// confiscate the fund and emit an event
 				CollectedRejectedFunds::<T>::mutate(from, |fund| {
-					*fund = fund.saturating_add(amount)
+					*fund = fund.saturating_add(net_amount)
 				});
 				Self::deposit_event(Event::<T>::SwapAmountTooLow {
 					asset: from,
@@ -999,7 +1003,7 @@ pub mod pallet {
 				Some(Self::schedule_swap_internal(
 					from,
 					to,
-					amount,
+					net_amount,
 					SwapType::Swap(destination_address),
 				))
 			}
@@ -1030,6 +1034,8 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
+			let net_amount = amount.saturating_sub(fee);
+
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			let swap_origin = SwapOrigin::DepositChannel {
@@ -1042,13 +1048,14 @@ pub mod pallet {
 				from,
 				to,
 				amount,
+				net_amount,
 				destination_address.clone(),
 				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset: from,
-					deposit_amount: amount.saturating_sub(fee),
+					deposit_amount: net_amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
 					origin: swap_origin,
