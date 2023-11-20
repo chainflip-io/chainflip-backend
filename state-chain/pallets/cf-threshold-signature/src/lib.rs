@@ -9,7 +9,7 @@ pub mod mock;
 mod tests;
 
 mod benchmarking;
-mod migrations;
+pub mod migrations;
 
 pub mod weights;
 
@@ -30,10 +30,10 @@ use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
 	sp_runtime::{
-		traits::{BlockNumberProvider, Saturating, Zero},
+		traits::{BlockNumberProvider, Saturating},
 		RuntimeDebug,
 	},
-	traits::{DefensiveOption, EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
+	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -456,25 +456,6 @@ pub mod pallet {
 
 			T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
 				T::Weights::report_offenders(num_offenders as AuthorityCount)
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			// For new pallet instances, this always needs to be set.
-			ThresholdSignatureResponseTimeout::<T, I>::mutate(|timeout| {
-				if timeout.is_zero() {
-					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
-				}
-			});
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 

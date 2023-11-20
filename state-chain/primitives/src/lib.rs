@@ -6,9 +6,10 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	MultiSignature, RuntimeDebug,
+	MultiSignature, Percent, RuntimeDebug,
 };
 use scale_info::TypeInfo;
+use semver::{Error, Version};
 use serde::{Deserialize, Serialize};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
@@ -74,6 +75,10 @@ pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
+/// Determines the default (genesis) maximum allowed reduction of authority set size in
+/// between two consecutive epochs.
+pub const DEFAULT_MAX_AUTHORITY_SET_CONTRACTION: Percent = Percent::from_percent(30);
+
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -100,7 +105,7 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 /// the chain.
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
-/// the initial [AccountRole::None] state.
+/// the initial [AccountRole::Unregistered] state.
 #[derive(
 	PartialEq,
 	Eq,
@@ -123,9 +128,9 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 /// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! See AccountRoles storage item !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 /// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 pub enum AccountRole {
-	/// The default account type - indicates a bare account with no special role or permissions.
+	/// The default account type - account not yet assigned with special role or permissions.
 	#[default]
-	None,
+	Unregistered,
 	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
 	/// role is required for any node that wishes to participate in auctions.
 	Validator,
@@ -195,6 +200,15 @@ impl SemVer {
 		// would be caught by tests).
 		self > &other
 	}
+
+	pub fn parse(text: &str) -> Result<Self, Error> {
+		let version = Version::parse(text)?;
+		Ok(SemVer {
+			major: version.major as u8,
+			minor: version.minor as u8,
+			patch: version.patch as u8,
+		})
+	}
 }
 #[cfg(feature = "std")]
 impl core::fmt::Display for SemVer {
@@ -203,6 +217,25 @@ impl core::fmt::Display for SemVer {
 	}
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct NodeCFEVersions {
+	pub node: SemVer,
+	pub cfe: SemVer,
+}
 /// The network environment, used to determine which chains the Chainflip network is connected to.
 #[derive(
 	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,

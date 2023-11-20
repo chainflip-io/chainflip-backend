@@ -8,9 +8,7 @@ use cf_traits::{
 	EgressApi, PoolApi,
 };
 
-#[cfg(feature = "try-runtime")]
-use frame_support::dispatch::Vec;
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
@@ -68,22 +66,22 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		// The user does not have enough fund.
+		/// The user does not have enough fund.
 		InsufficientBalance,
-		// The user has reached the maximum balance.
+		/// The user has reached the maximum balance.
 		BalanceOverflow,
-		// The caller is not authorized to modify the trading position.
+		/// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
-		// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed because the destination address is not invalid.
 		InvalidEgressAddress,
-		// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
+		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		// An liquidity refund address must be set by the user for the chain before
-		// deposit address can be requested.
+		/// An liquidity refund address must be set by the user for the chain before
+		/// deposit address can be requested.
 		NoLiquidityRefundAddressRegistered,
-		// Liquidity deposit is disabled due to Safe Mode.
+		/// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
-		// Withdrawals are disabled due to Safe Mode.
+		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 	}
 
@@ -142,23 +140,6 @@ pub mod pallet {
 		ForeignChainAddress,
 	>;
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
-	}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
@@ -208,11 +189,7 @@ pub mod pallet {
 
 				let destination_address_internal =
 					T::AddressConverter::try_from_encoded_address(destination_address.clone())
-						.map_err(|_| {
-							DispatchError::Other(
-								"Invalid Egress Address, cannot decode the address",
-							)
-						})?;
+						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
 
 				// Check validity of Chain and Asset
 				ensure!(

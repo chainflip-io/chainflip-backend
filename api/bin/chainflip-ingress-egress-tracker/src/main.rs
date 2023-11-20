@@ -102,10 +102,10 @@ async fn main() -> anyhow::Result<()> {
 		eth_key_path: eth_key_temp_file.path().into(),
 		dot_node: WsHttpEndpoints {
 			ws_endpoint: env::var("DOT_WS_ENDPOINT")
-				.unwrap_or("ws://localhost:9945".to_string())
+				.unwrap_or("ws://localhost:9947".to_string())
 				.into(),
 			http_endpoint: env::var("DOT_HTTP_ENDPOINT")
-				.unwrap_or("http://localhost:9945".to_string())
+				.unwrap_or("http://localhost:9947".to_string())
 				.into(),
 		},
 		state_chain_ws_endpoint: env::var("SC_WS_ENDPOINT")

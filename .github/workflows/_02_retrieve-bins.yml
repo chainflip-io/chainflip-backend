@@ -35,7 +35,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-sisyphos.yml
-          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-node-runtime-production
           branch: release/${{ env.MAJOR_MINOR }}
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           search_artifacts: true
@@ -66,6 +66,6 @@ jobs:
       - name: Re-upload runtime artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
+          name: chainflip-node-runtime-production
           path: |
             ./state_chain_runtime*.wasm

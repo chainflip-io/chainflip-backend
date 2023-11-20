@@ -322,7 +322,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		let result_bytes = self.base_rpc_client.dry_run(Encode::encode(&uxt).into(), None).await?;
 		let dry_run_result: ApplyExtrinsicResult = Decode::decode(&mut &*result_bytes)?;
 
-		debug!(target: "state_chain_client", "Dry run completed. Result: {:?}", &dry_run_result);
+		debug!(target: "state_chain_client", "Dry run completed. \nCall:{:?} \nResult: {:?}", call, &dry_run_result);
 
 		Ok(dry_run_result?.map_err(|e| self.error_decoder.decode_dispatch_error(e))?)
 	}

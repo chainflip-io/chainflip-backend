@@ -127,7 +127,6 @@ impl Cli {
 	}
 
 	pub fn register_as_validator(account: &NodeId) {
-		System::inc_providers(account);
 		assert_ok!(<AccountRoles as AccountRoleRegistry<Runtime>>::register_account_role(
 			account,
 			AccountRole::Validator

@@ -213,7 +213,7 @@ mod tests {
 						scope,
 						"ws://localhost:9944",
 						PathBuf::from_str("/some/sc/key/bashful-key").unwrap().as_path(),
-						AccountRole::None,
+						AccountRole::Unregistered,
 						false,
 						None,
 					)
@@ -227,7 +227,7 @@ mod tests {
 						.await;
 
 				EthSource::new(retry_client.clone())
-					.chunk_by_vault(vault_source)
+					.chunk_by_vault(vault_source, scope)
 					.key_manager_witnessing(
 						|call, _| async move {
 							println!("Witnessed call: {:?}", call);

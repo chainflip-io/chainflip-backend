@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 mod benchmarking;
-mod migrations;
+pub mod migrations;
 mod mock;
 mod tests;
 
@@ -44,23 +44,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
-		}
-	}
 
 	/// The tracked state of the external chain.
 	/// It is safe to unwrap() this value. We set it at genesis and it is only ever updated

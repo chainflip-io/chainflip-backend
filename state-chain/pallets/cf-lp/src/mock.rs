@@ -1,6 +1,9 @@
 use crate as pallet_cf_lp;
 use crate::PalletSafeMode;
-use cf_chains::{address::AddressDerivationApi, AnyChain, Chain, Ethereum};
+use cf_chains::{
+	address::{AddressDerivationApi, AddressDerivationError},
+	AnyChain, Chain, Ethereum,
+};
 use cf_primitives::{chains::assets, AccountId, ChannelId};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -26,7 +29,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
 		_source_asset: assets::eth::Asset,
 		_channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+	) -> Result<<Ethereum as Chain>::ChainAccount, AddressDerivationError> {
 		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())
 	}
 
@@ -35,7 +38,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<
 		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
-		sp_runtime::DispatchError,
+		AddressDerivationError,
 	> {
 		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
 	}

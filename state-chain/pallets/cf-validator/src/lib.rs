@@ -13,10 +13,15 @@ pub use weights::WeightInfo;
 
 mod auction_resolver;
 mod benchmarking;
+pub mod migrations;
 mod rotation_state;
-
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex, SemVer, FLIPPERINOS_PER_FLIP};
+
+use cf_primitives::{
+	AuthorityCount, EpochIndex, NodeCFEVersions, SemVer, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	FLIPPERINOS_PER_FLIP,
+};
+
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
 	Bid, BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -60,6 +65,7 @@ pub enum PalletConfigUpdate {
 	AuthoritySetMinSize { min_size: AuthorityCount },
 	AuctionParameters { parameters: SetSizeParameters },
 	MinimumReportedCfeVersion { version: SemVer },
+	MaxAuthoritySetContractionPercentage { percentage: Percent },
 }
 
 type RuntimeRotationState<T> =
@@ -91,7 +97,7 @@ pub enum PalletOffence {
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
 impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
-
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -100,6 +106,7 @@ pub mod pallet {
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -218,7 +225,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn node_cfe_version)]
 	pub type NodeCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, NodeCFEVersions, ValueQuery>;
 
 	/// The last expired epoch index.
 	#[pallet::storage]
@@ -283,6 +290,13 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_reported_cfe_version)]
 	pub(super) type MinimumReportedCfeVersion<T: Config> = StorageValue<_, SemVer, ValueQuery>;
 
+	/// Determines the maximum allowed reduction of authority set size in percents between two
+	/// consecutive epochs.
+	#[pallet::storage]
+	#[pallet::getter(fn max_authority_set_contraction_percentage)]
+	pub(super) type MaxAuthoritySetContractionPercentage<T: Config> =
+		StorageValue<_, Percent, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -294,6 +308,11 @@ pub mod pallet {
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// The CFE version has been updated.
 		CFEVersionUpdated {
+			account_id: ValidatorIdOf<T>,
+			old_version: Version,
+			new_version: Version,
+		},
+		NodeVersionUpdated {
 			account_id: ValidatorIdOf<T>,
 			old_version: Version,
 			new_version: Version,
@@ -511,6 +530,9 @@ pub mod pallet {
 				PalletConfigUpdate::MinimumReportedCfeVersion { version } => {
 					MinimumReportedCfeVersion::<T>::put(version);
 				},
+				PalletConfigUpdate::MaxAuthoritySetContractionPercentage { percentage } => {
+					MaxAuthoritySetContractionPercentage::<T>::put(percentage);
+				},
 			}
 
 			Self::deposit_event(Event::PalletConfigUpdated { update });
@@ -670,10 +692,10 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(
+		#[pallet::weight(T::ValidatorWeightInfo::set_node_cfe_version())]
+		pub fn set_node_cfe_version(
 			origin: OriginFor<T>,
-			new_version: Version,
+			new_version: NodeCFEVersions,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
@@ -683,8 +705,13 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: *current_version,
-						new_version,
+						old_version: current_version.cfe,
+						new_version: new_version.cfe,
+					});
+					Self::deposit_event(Event::NodeVersionUpdated {
+						account_id: validator_id.clone(),
+						old_version: current_version.node,
+						new_version: new_version.node,
 					});
 					*current_version = new_version;
 				}
@@ -750,9 +777,9 @@ pub mod pallet {
 		pub redemption_period_as_percentage: Percent,
 		pub backup_reward_node_percentage: Percent,
 		pub authority_set_min_size: AuthorityCount,
-		pub min_size: AuthorityCount,
-		pub max_size: AuthorityCount,
-		pub max_expansion: AuthorityCount,
+		pub auction_parameters: SetSizeParameters,
+		pub auction_bid_cutoff_percentage: Percent,
+		pub max_authority_set_contraction_percentage: Percent,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -766,9 +793,13 @@ pub mod pallet {
 				redemption_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
-				min_size: 3,
-				max_size: 15,
-				max_expansion: 5,
+				auction_parameters: SetSizeParameters {
+					min_size: 3,
+					max_size: 15,
+					max_expansion: 5,
+				},
+				auction_bid_cutoff_percentage: Zero::zero(),
+				max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 			}
 		}
 	}
@@ -784,15 +815,16 @@ pub mod pallet {
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			VanityNames::<T>::put(&self.genesis_vanity_names);
+			MaxAuthoritySetContractionPercentage::<T>::set(
+				self.max_authority_set_contraction_percentage,
+			);
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
-			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
-				min_size: self.min_size,
-				max_size: self.max_size,
-				max_expansion: self.max_expansion,
-			})
-			.expect("we should provide valid auction parameters at genesis");
+			Pallet::<T>::try_update_auction_parameters(self.auction_parameters)
+				.expect("we should provide valid auction parameters at genesis");
+
+			AuctionBidCutoffPercentage::<T>::set(self.auction_bid_cutoff_percentage);
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -1064,6 +1096,13 @@ impl<T: Config> Pallet<T> {
 	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+
+		let min_size = sp_std::cmp::max(
+			min_size,
+			(Percent::one().saturating_sub(MaxAuthoritySetContractionPercentage::<T>::get())) *
+				Self::current_authority_count(),
+		);
+
 		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
@@ -1363,7 +1402,7 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 			current_authorities
 				.into_iter()
 				.filter(|validator_id| {
-					NodeCFEVersion::<T>::get(validator_id).is_compatible_with(version)
+					NodeCFEVersion::<T>::get(validator_id).cfe.is_compatible_with(version)
 				})
 				.count() as u32,
 			authorities_count,
@@ -1375,7 +1414,7 @@ pub struct QualifyByCfeVersion<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersion<T> {
 	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
-		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
+		NodeCFEVersion::<T>::get(validator_id).cfe >= MinimumReportedCfeVersion::<T>::get()
 	}
 
 	fn filter_unqualified(
@@ -1384,7 +1423,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		let min_version = MinimumReportedCfeVersion::<T>::get();
 		validators
 			.into_iter()
-			.filter(|id| NodeCFEVersion::<T>::get(id) >= min_version)
+			.filter(|id| NodeCFEVersion::<T>::get(id).cfe >= min_version)
 			.collect()
 	}
 }

@@ -38,7 +38,7 @@ use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
 pub use frame_support::{
 	construct_runtime, debug,
-	instances::{Instance1, Instance2},
+	instances::{Instance1, Instance2, Instance3},
 	parameter_types,
 	traits::{
 		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
@@ -86,6 +86,8 @@ pub use cf_primitives::{
 pub use cf_traits::{
 	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
 };
+// Required for genesis config.
+pub use pallet_cf_validator::SetSizeParameters;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -506,7 +508,6 @@ impl pallet_authorship::Config for Runtime {
 impl pallet_cf_flip::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
-	type ExistentialDeposit = ConstU128<500>;
 	type BlocksPerDay = ConstU32<DAYS>;
 	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
@@ -819,8 +820,36 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	(),
+	PalletMigrations,
 >;
+
+// Pallet Migrations for each pallet.
+// We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
+// for tuple migrations (like these).
+type PalletMigrations = (
+	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_funding::migrations::PalletMigration<Runtime>,
+	pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	pallet_cf_governance::migrations::PalletMigration<Runtime>,
+	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
