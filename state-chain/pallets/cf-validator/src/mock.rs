@@ -219,6 +219,7 @@ cf_test_utilities::impl_test_helpers! {
 				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
 			},
 			auction_bid_cutoff_percentage: Percent::from_percent(0),
+			max_authority_set_contraction_percentage: DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 		},
 	},
 	||{

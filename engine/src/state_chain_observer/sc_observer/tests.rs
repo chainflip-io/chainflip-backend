@@ -5,7 +5,7 @@ use crate::{
 	dot::retry_rpc::mocks::MockDotHttpRpcClient,
 	eth::retry_rpc::mocks::MockEthRetryRpcClient,
 	state_chain_observer::{
-		client::{extrinsic_api, finalized_stream::FinalizedCachedStream, StreamCache},
+		client::{extrinsic_api, finalized_stream::FinalizedCachedStream},
 		test_helpers::test_header,
 	},
 };
@@ -15,7 +15,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
-use futures::{FutureExt, StreamExt};
+use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_broadcast::BroadcastAttemptId;
@@ -73,7 +73,6 @@ async fn start_sc_observer<
 // historical epochs we were a part of
 #[tokio::test]
 async fn only_encodes_and_signs_when_specified() {
-	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
 	let mut state_chain_client = MockStateChainClient::new();
@@ -83,20 +82,13 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	let block_header = test_header(21, None);
-	let sc_block_stream = tokio_stream::iter([block_header.clone()])
-		.map(|block_header| (block_header.hash(), block_header))
-		.make_cached(
-			StreamCache { block_hash: initial_block_hash, block_number: 20 },
-			|(block_hash, block_header): &(
-				state_chain_runtime::Hash,
-				state_chain_runtime::Header,
-			)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
-		);
+	let block = test_header(21, None);
+	let sc_block_stream =
+		tokio_stream::iter([block]).make_cached(test_header(20, None), |block| *block);
 
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<Runtime>>()
-		.with(eq(block_header.hash()))
+		.with(eq(block.hash))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![
@@ -517,7 +509,7 @@ async fn run_the_sc_observer() {
 					scope,
 					&settings.state_chain.ws_endpoint,
 					&settings.state_chain.signing_key_file,
-					AccountRole::None,
+					AccountRole::Unregistered,
 					false,
 					None,
 				)

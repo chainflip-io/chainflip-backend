@@ -108,7 +108,10 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	header: Header<
 		PolkadotBlockNumber,
 		PolkadotHash,
-		((Vec<(Phase, EventWrapper)>, BTreeSet<u32>), Vec<PolkadotSignature>),
+		(
+			(Vec<(Phase, EventWrapper)>, BTreeSet<u32>),
+			Vec<(PolkadotSignature, PolkadotBlockNumber)>,
+		),
 	>,
 	process_call: ProcessCall,
 	dot_client: DotRetryRpcClient,
@@ -120,7 +123,12 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let ((events, mut extrinsic_indices), monitored_egress_ids) = header.data;
+	let ((events, mut extrinsic_indices), monitored_egress_data) = header.data;
+
+	let monitored_egress_ids = monitored_egress_data
+		.into_iter()
+		.map(|(signature, _)| signature)
+		.collect::<BTreeSet<_>>();
 
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
@@ -162,26 +170,19 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	}
 }
 
-pub async fn start<
-	StateChainClient,
-	StateChainStream,
-	ProcessCall,
-	ProcessingFut,
-	PrewitnessCall,
-	PrewitnessFut,
->(
+pub async fn start<StateChainClient, ProcessCall, ProcessingFut, PrewitnessCall, PrewitnessFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: StateChainStream,
+	state_chain_stream: impl StateChainStreamApi + Clone,
+	unfinalized_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi + Clone,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -201,7 +202,7 @@ where
 
 	unfinalised_source
 		.clone()
-		.chunk_by_time(epoch_source.clone())
+		.chunk_by_time(epoch_source.clone(), scope)
 		.chain_tracking(state_chain_client.clone(), dot_client.clone())
 		.logging("chain tracking")
 		.spawn(scope);
@@ -225,9 +226,8 @@ where
 	// Pre-witnessing
 	unfinalised_source
 		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults.clone())
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.chunk_by_vault(vaults.clone(), scope)
+		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await
 		.dot_deposits(prewitness_call)
 		.logging("pre-witnessing")
@@ -240,8 +240,7 @@ where
 		.then(|header| async move {
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
-		.shared(scope)
-		.chunk_by_vault(vaults)
+		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing

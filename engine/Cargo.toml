@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = '1.0.0'
+version = '1.0.1'
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -34,13 +34,7 @@ maintainer-scripts = "package/perseverance"
 
 [package.metadata.deb.variants.berghain]
 maintainer-scripts = "package/berghain"
-assets = [
-  [
-    "../target/production/chainflip-engine",
-    "usr/bin/",
-    "755",
-  ],
-]
+assets = [["../target/production/chainflip-engine", "usr/bin/", "755"]]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

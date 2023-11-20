@@ -64,8 +64,7 @@ where
 	DotUnfinalisedSource::new(dot_client.clone())
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.strictly_monotonic()
-		.shared(scope)
-		.chunk_by_vault(vaults.clone())
+		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		// Deposit witnessing

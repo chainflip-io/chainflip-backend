@@ -1,14 +1,14 @@
 [env]
 CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
-CF_ETH_CONTRACT_ABI_TAG = "v0.8.0"
+CF_ETH_CONTRACT_ABI_TAG = "v1.0.0"
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
 # `rustup completions --help` to find out how to set this up.
 
 [alias]
-cf-test = "test --lib --features runtime-benchmarks"
-cf-test-ci = "test --lib --features runtime-benchmarks,slow-tests"
+cf-test = "test --lib --features runtime-benchmarks,try-runtime"
+cf-test-ci = "test --lib --features runtime-benchmarks,slow-tests,try-runtime"
 cf-test-cfe = "test --lib --package chainflip-engine --package multisig"
 
 cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"

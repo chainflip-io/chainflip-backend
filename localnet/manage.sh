@@ -66,16 +66,17 @@ get-workflow() {
     fi
     echo "You have chosen $NODE_COUNT node(s) network"
     NODE_COUNT="$NODE_COUNT-node"
-fi
-}
 
-build-localnet() {
-  if [[ -z "${BINARY_ROOT_PATH}" ]]; then
+    if [[ -z "${BINARY_ROOT_PATH}" ]]; then
       echo "💻 Please provide the location to the binaries you would like to use."
       read -p "(default: ./target/debug/) " BINARY_ROOT_PATH
       echo
       export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}
+    fi
   fi
+}
+
+build-localnet() {
 
   if [[ ! -d $BINARY_ROOT_PATH ]]; then
     echo "❌  Couldn't find directory at $BINARY_ROOT_PATH"

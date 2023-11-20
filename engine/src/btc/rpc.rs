@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde;
 use serde_json::json;
 
-use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
+use bitcoin::{block::Version, Amount, Block, BlockHash, Transaction, Txid};
 use tracing::error;
 use utilities::make_periodic_tick;
 
@@ -69,29 +69,31 @@ pub struct BtcRpcClient {
 impl BtcRpcClient {
 	pub fn new(
 		endpoint: HttpBasicAuthEndpoint,
-		expected_btc_network: BitcoinNetwork,
+		expected_btc_network: Option<BitcoinNetwork>,
 	) -> Result<impl Future<Output = Self>> {
 		let client = Client::builder().build()?;
 
 		Ok(async move {
-			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
-			loop {
-				poll_interval.tick().await;
-				match get_bitcoin_network(&client, &endpoint).await {
-					Ok(network) if network == expected_btc_network => break,
-					Ok(network) => {
-						error!(
-								"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
-								configuration file...",
-								endpoint.http_endpoint
-							);
-					},
-					Err(e) => error!(
-						"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
-							configuration file. Retrying in {:?}...",
-						endpoint.http_endpoint,
-						poll_interval.period()
-					),
+			if let Some(expected_btc_network) = expected_btc_network {
+				let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
+				loop {
+					poll_interval.tick().await;
+					match get_bitcoin_network(&client, &endpoint).await {
+						Ok(network) if network == expected_btc_network => break,
+						Ok(network) => {
+							error!(
+									"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
+									configuration file...",
+									endpoint.http_endpoint
+								);
+						},
+						Err(e) => error!(
+							"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
+								configuration file. Retrying in {:?}...",
+							endpoint.http_endpoint,
+							poll_interval.period()
+						),
+					}
 				}
 			}
 			Self { client, endpoint }
@@ -101,25 +103,48 @@ impl BtcRpcClient {
 	async fn call_rpc<T: for<'a> serde::de::Deserialize<'a>>(
 		&self,
 		method: &str,
-		params: Vec<serde_json::Value>,
-	) -> Result<T> {
-		T::deserialize(call_rpc_raw(&self.client, &self.endpoint, method, params).await?)
-			.map_err(anyhow::Error::msg)
+		params: ReqParams,
+	) -> Result<Vec<T>> {
+		call_rpc_raw(&self.client, &self.endpoint, method, params)
+			.await?
+			.into_iter()
+			.map(|v| T::deserialize(v).map_err(anyhow::Error::msg))
+			.collect::<Result<_>>()
 	}
+}
+
+#[derive(Clone, Debug)]
+enum ReqParams {
+	Empty,
+	Batch(Vec<serde_json::Value>),
 }
 
 async fn call_rpc_raw(
 	client: &Client,
 	endpoint: &HttpBasicAuthEndpoint,
 	method: &str,
-	params: Vec<serde_json::Value>,
-) -> Result<serde_json::Value, Error> {
-	let request_body = json!({
-		"jsonrpc": "1.0",
-		"id":"1",
-		"method": method,
-		"params": params
-	});
+	params: ReqParams,
+) -> Result<Vec<serde_json::Value>, Error> {
+	let request_body = match params.clone() {
+		ReqParams::Empty => vec![json!({
+			"jsonrpc": "1.0",
+			"id": 0,
+			"method": method,
+			"params": []
+		})],
+		ReqParams::Batch(params) => params
+			.into_iter()
+			.enumerate()
+			.map(|(i, p)| {
+				json!({
+					"jsonrpc": "1.0",
+					"id": i,
+					"method": method,
+					"params": p
+				})
+			})
+			.collect::<Vec<serde_json::Value>>(),
+	};
 
 	let response = client
 		.post(endpoint.http_endpoint.as_ref())
@@ -127,17 +152,38 @@ async fn call_rpc_raw(
 		.json(&request_body)
 		.send()
 		.await
-		.map_err(Error::Transport)?
-		.json::<serde_json::Value>()
-		.await
 		.map_err(Error::Transport)?;
 
-	let error = &response["error"];
-	if !error.is_null() {
-		Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
-	} else {
-		Ok(response["result"].to_owned())
-	}
+	let response = response
+		.json::<Vec<serde_json::Value>>()
+		.await
+		.map_err(Error::Transport)
+		.and_then(|result| match params {
+			ReqParams::Batch(params) =>
+				if params.len() == result.len() {
+					// a bunch of json result values containing an error and a result field.
+					Ok(result)
+				} else {
+					Err(Error::Rpc(RpcError {
+						code: -1,
+						message: "Incorrect response number for batch request".to_string(),
+						data: None,
+					}))
+				},
+			ReqParams::Empty => Ok(result),
+		})?;
+
+	response
+		.into_iter()
+		.map(|r| {
+			let error = &r["error"];
+			if !error.is_null() {
+				Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+			} else {
+				Ok(r["result"].to_owned())
+			}
+		})
+		.collect::<Result<_, Error>>()
 }
 
 /// Get the BitcoinNetwork by calling the `getblockchaininfo` RPC.
@@ -146,9 +192,12 @@ async fn get_bitcoin_network(
 	endpoint: &HttpBasicAuthEndpoint,
 ) -> anyhow::Result<BitcoinNetwork> {
 	// Using `call_rpc_raw` so we don't have to deserialize the whole response.
-	let json_value = call_rpc_raw(client, endpoint, "getblockchaininfo", vec![])
+	let json_value = call_rpc_raw(client, endpoint, "getblockchaininfo", ReqParams::Empty)
 		.await
-		.map_err(anyhow::Error::msg)?;
+		.map_err(anyhow::Error::msg)?
+		.into_iter()
+		.next()
+		.ok_or(anyhow!("Missing response from getblockchaininfo"))?;
 	let network_name = json_value["chain"]
 		.as_str()
 		.ok_or(anyhow!("Missing or empty `chain` field in getblockchaininfo response"))?;
@@ -205,6 +254,10 @@ pub trait BtcRpcApi {
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
+
+	async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
+
+	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<Transaction>>;
 }
 
 #[async_trait::async_trait]
@@ -212,8 +265,13 @@ impl BtcRpcApi for BtcRpcClient {
 	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<bitcoin::Block> {
 		// The 0 arg means we get the response as a hex string, which we use in the custom
 		// deserialization.
-		let hex_block: String =
-			self.call_rpc("getblock", vec![json!(block_hash), json!(0)]).await?;
+		let hex_block: Vec<String> = self
+			.call_rpc("getblock", ReqParams::Batch(vec![json!([json!(block_hash), json!(0)])]))
+			.await?;
+		let hex_block = hex_block
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing hex block"))?;
 		let hex_bytes = hex::decode(hex_block).context("Response not valid hex")?;
 		Ok(bitcoin::consensus::encode::deserialize(&hex_bytes)?)
 	}
@@ -222,18 +280,37 @@ impl BtcRpcApi for BtcRpcClient {
 		&self,
 		block_number: cf_chains::btc::BlockNumber,
 	) -> anyhow::Result<BlockHash> {
-		Ok(self.call_rpc("getblockhash", vec![json!(block_number)]).await?)
+		Ok(self
+			.call_rpc("getblockhash", ReqParams::Batch(vec![json!([json!(block_number)])]))
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing block hash"))?)
 	}
 
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
 		Ok(self
-			.call_rpc("sendrawtransaction", vec![json!(hex::encode(transaction_bytes))])
-			.await?)
+			.call_rpc(
+				"sendrawtransaction",
+				ReqParams::Batch(vec![json!([json!(hex::encode(transaction_bytes))])]),
+			)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing txid"))?)
 	}
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>> {
-		let fee_rate_response: FeeRateResponse =
-			self.call_rpc("estimatesmartfee", vec![json!(1), json!("CONSERVATIVE")]).await?;
+		let fee_rate_response = self
+			.call_rpc::<FeeRateResponse>(
+				"estimatesmartfee",
+				ReqParams::Batch(vec![json!([json!(1), json!("CONSERVATIVE")])]),
+			)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing fee rate"))?;
+
 		Ok(fee_rate_response.feerate.map(|f| f.to_sat()))
 	}
 
@@ -249,23 +326,70 @@ impl BtcRpcApi for BtcRpcClient {
 		}
 
 		let block_stats: BlockStats = self
-			.call_rpc("getblockstats", vec![json!(block_hash), json!(["avgfeerate"])])
-			.await?;
+			.call_rpc(
+				"getblockstats",
+				ReqParams::Batch(vec![json!([json!(block_hash), json!(["avgfeerate"])])]),
+			)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing block stats"))?;
 
 		Ok(block_stats.avgfeerate.to_sat().saturating_mul(1024))
 	}
 
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
-		Ok(self.call_rpc("getbestblockhash", vec![]).await?)
+		Ok(self
+			.call_rpc("getbestblockhash", ReqParams::Empty)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing best block hash"))?)
 	}
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader> {
-		Ok(self.call_rpc("getblockheader", vec![json!(block_hash)]).await?)
+		Ok(self
+			.call_rpc("getblockheader", ReqParams::Batch(vec![json!([json!(block_hash)])]))
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing block header"))?)
+	}
+
+	async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+		Ok(self
+			.call_rpc("getrawmempool", ReqParams::Empty)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow!("Response missing raw mempool"))?)
+	}
+
+	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<Transaction>> {
+		let params = tx_hashes
+			.iter()
+			.map(|tx_hash| json!([json!(tx_hash), json!(false)]))
+			.collect::<Vec<serde_json::Value>>();
+
+		let hex_txs: Vec<String> =
+			self.call_rpc("getrawtransaction", ReqParams::Batch(params)).await?;
+
+		hex_txs
+			.into_iter()
+			.map(|hex| hex::decode(hex).context("Response not valid hex"))
+			.collect::<Result<Vec<Vec<u8>>>>()?
+			.into_iter()
+			.map(|bytes| {
+				bitcoin::consensus::encode::deserialize(&bytes)
+					.map_err(|_| anyhow!("Failed to deserialize transaction"))
+			})
+			.collect::<Result<_>>()
 	}
 }
 
 #[cfg(test)]
 mod tests {
+
 	use utilities::testing::logging::init_test_logger;
 
 	use super::*;
@@ -281,7 +405,7 @@ mod tests {
 				basic_auth_user: "flip".to_string(),
 				basic_auth_password: "flip".to_string(),
 			},
-			BitcoinNetwork::Regtest,
+			Some(BitcoinNetwork::Regtest),
 		)
 		.unwrap()
 		.await;

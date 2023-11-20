@@ -43,7 +43,7 @@ impl QueryApi {
 			scope,
 			&state_chain_settings.ws_endpoint,
 			&state_chain_settings.signing_key_file,
-			AccountRole::None,
+			AccountRole::Unregistered,
 			false,
 			None,
 		)
@@ -61,7 +61,7 @@ impl QueryApi {
 			pallet_cf_ingress_egress::Config<C::Instance, TargetChain = C>,
 	{
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
 		let (channel_details, network_environment) = tokio::try_join!(
 			self.state_chain_client
@@ -99,7 +99,7 @@ impl QueryApi {
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> Result<BTreeMap<Asset, AssetAmount>> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
 		futures::future::join_all(Asset::all().iter().map(|asset| async {
 			Ok((
@@ -125,7 +125,7 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<Option<EthereumAddress>, anyhow::Error> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		Ok(self
@@ -143,7 +143,7 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<Option<EthereumAddress>, anyhow::Error> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		Ok(self
@@ -161,7 +161,7 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<BTreeMap<EthereumAddress, FlipBalance>> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		Ok(self
@@ -179,7 +179,7 @@ impl QueryApi {
 		account_id: Option<state_chain_runtime::AccountId>,
 	) -> Result<PreUpdateStatus, anyhow::Error> {
 		let block_hash =
-			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
 
 		let mut result =

@@ -8,7 +8,7 @@ license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '1.0.0'
+version = '1.0.1'
 
 [[bin]]
 name = 'chainflip-node'
@@ -88,8 +88,20 @@ runtime-benchmarks = [
   "state-chain-runtime/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-benchmarking-cli/runtime-benchmarks",
+  "cf-chains/runtime-benchmarks",
+  "cf-primitives/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "sc-service/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
-try-runtime = ["state-chain-runtime/try-runtime", "try-runtime-cli/try-runtime"]
+try-runtime = [
+  "state-chain-runtime/try-runtime",
+  "try-runtime-cli/try-runtime",
+  "frame-system/try-runtime",
+  "pallet-transaction-payment/try-runtime",
+  "sp-runtime/try-runtime",
+
+]
 
 [package.metadata.deb]
 depends = "$auto, systemd"
