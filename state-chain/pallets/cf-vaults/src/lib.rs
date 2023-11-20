@@ -40,7 +40,7 @@ mod migrations;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
 
