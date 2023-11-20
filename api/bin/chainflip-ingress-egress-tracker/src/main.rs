@@ -10,7 +10,6 @@ mod witnessing;
 #[derive(Clone)]
 pub struct DepositTrackerSettings {
 	eth_node: WsHttpEndpoints,
-	// The key shouldn't be necessary, but the current witnesser wants this
 	dot_node: WsHttpEndpoints,
 	state_chain_ws_endpoint: String,
 	btc: HttpBasicAuthEndpoint,

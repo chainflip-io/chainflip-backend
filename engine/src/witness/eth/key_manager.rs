@@ -186,7 +186,7 @@ mod tests {
 	use super::super::eth_source::EthSource;
 
 	use crate::{
-		eth::{retry_rpc::EthersRetryRpcClient, rpc::EthRpcClient},
+		eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
 		settings::{NodeContainer, WsHttpEndpoints},
 		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
@@ -197,7 +197,7 @@ mod tests {
 	async fn test_key_manager_witnesser() {
 		task_scope(|scope| {
 			async {
-				let retry_client = EthersRetryRpcClient::<EthRpcClient>::new(
+				let retry_client = EthRetryRpcClient::<EthRpcClient>::new(
 					scope,
 					NodeContainer {
 						primary: WsHttpEndpoints {
