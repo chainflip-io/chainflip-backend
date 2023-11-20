@@ -17,25 +17,41 @@ use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
 use utilities::rpc::NumberOrHex;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RangeOrderReturn {
-	base_asset: Asset,
-	pair_asset: Asset,
-	id: OrderId,
-	tick_range: Range<Tick>,
-	liquidity_total: NumberOrHex,
-	collected_fees: AssetsMap<NumberOrHex>,
-	size_change: Option<IncreaseOrDecrease<RangeOrderChangeReturn>>,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RangeOrderChangeReturn {
-	pub liquidity: NumberOrHex,
-	pub amounts: AssetsMap<NumberOrHex>,
+pub mod types {
+	use super::*;
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct RangeOrder {
+		pub base_asset: Asset,
+		pub pair_asset: Asset,
+		pub id: OrderId,
+		pub tick_range: Range<Tick>,
+		pub liquidity_total: NumberOrHex,
+		pub collected_fees: AssetsMap<NumberOrHex>,
+		pub size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
+	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct RangeOrderChange {
+		pub liquidity: NumberOrHex,
+		pub amounts: AssetsMap<NumberOrHex>,
+	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub struct LimitOrder {
+		pub sell_asset: Asset,
+		pub buy_asset: Asset,
+		pub id: OrderId,
+		pub tick: Tick,
+		pub amount_total: NumberOrHex,
+		pub collected_fees: NumberOrHex,
+		pub bought_amount: NumberOrHex,
+		pub amount_change: Option<IncreaseOrDecrease<NumberOrHex>>,
+	}
 }
 
 fn collect_range_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<RangeOrderReturn> {
+) -> Vec<types::RangeOrder> {
 	events
 		.into_iter()
 		.filter_map(|event| match event {
@@ -50,40 +66,28 @@ fn collect_range_order_returns(
 					id,
 					..
 				},
-			) => Some(RangeOrderReturn {
+			) => Some(types::RangeOrder {
 				base_asset,
 				pair_asset,
 				id,
 				size_change: size_change.map(|increase_or_decrese| {
-					increase_or_decrese.map(|range_order_change| RangeOrderChangeReturn {
+					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
 						liquidity: range_order_change.liquidity.into(),
 						amounts: range_order_change.amounts.map(|amount| amount.into()),
 					})
 				}),
 				liquidity_total: liquidity_total.into(),
 				tick_range,
-				collected_fees: collected_fees.map(|amount| amount.into()),
+				collected_fees: collected_fees.map(Into::into),
 			}),
 			_ => None,
 		})
 		.collect()
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct LimitOrderReturn {
-	sell_asset: Asset,
-	buy_asset: Asset,
-	id: OrderId,
-	tick: Tick,
-	amount_total: NumberOrHex,
-	collected_fees: NumberOrHex,
-	bought_amount: NumberOrHex,
-	amount_change: Option<IncreaseOrDecrease<NumberOrHex>>,
-}
-
 fn collect_limit_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<LimitOrderReturn> {
+) -> Vec<types::LimitOrder> {
 	events
 		.into_iter()
 		.filter_map(|event| match event {
@@ -99,7 +103,7 @@ fn collect_limit_order_returns(
 					id,
 					..
 				},
-			) => Some(LimitOrderReturn {
+			) => Some(types::LimitOrder {
 				sell_asset,
 				buy_asset,
 				id,
@@ -189,7 +193,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSize>,
-	) -> Result<Vec<RangeOrderReturn>> {
+	) -> Result<Vec<types::RangeOrder>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::update_range_order {
@@ -213,7 +217,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<Vec<RangeOrderReturn>> {
+	) -> Result<Vec<types::RangeOrder>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::set_range_order {
@@ -237,7 +241,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
-	) -> Result<Vec<LimitOrderReturn>> {
+	) -> Result<Vec<types::LimitOrder>> {
 		// Submit the mint order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::update_limit_order {
@@ -261,7 +265,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
-	) -> Result<Vec<LimitOrderReturn>> {
+	) -> Result<Vec<types::LimitOrder>> {
 		// Submit the burn order
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::set_limit_order {

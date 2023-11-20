@@ -5,7 +5,10 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	lp::{LimitOrderReturn, LpApi, RangeOrderReturn, Tick},
+	lp::{
+		types::{LimitOrder, RangeOrder},
+		LpApi, Tick,
+	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash,
@@ -117,7 +120,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
+	) -> Result<Vec<RangeOrder>, AnyhowRpcError>;
 
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
@@ -127,7 +130,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
-	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError>;
+	) -> Result<Vec<RangeOrder>, AnyhowRpcError>;
 
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
@@ -137,7 +140,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
-	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
+	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
@@ -147,7 +150,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
-	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError>;
+	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
 	async fn asset_balances(
@@ -238,7 +241,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
+	) -> Result<Vec<RangeOrder>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -259,7 +262,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
-	) -> Result<Vec<RangeOrderReturn>, AnyhowRpcError> {
+	) -> Result<Vec<RangeOrder>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -280,7 +283,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
-	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
+	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -301,7 +304,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
-	) -> Result<Vec<LimitOrderReturn>, AnyhowRpcError> {
+	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
