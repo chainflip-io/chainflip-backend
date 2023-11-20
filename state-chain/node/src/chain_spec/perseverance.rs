@@ -103,4 +103,4 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 }
 
 pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
-pub const ETHEREUM_SAFETY_MARGIN: u64 = 5;
+pub const ETHEREUM_SAFETY_MARGIN: u64 = 6;

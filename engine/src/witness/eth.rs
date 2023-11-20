@@ -30,7 +30,9 @@ use super::common::{
 };
 pub use eth_source::EthSource;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
+
+use chainflip_node::chain_spec::berghain::ETHEREUM_SAFETY_MARGIN;
 
 pub async fn start<
 	StateChainClient,
@@ -190,7 +192,8 @@ where
 			state_chain_runtime::EthereumInstance,
 		>>(state_chain_stream.cache().hash)
 		.await?
-		.ok_or_else(|| anyhow!("Safety margin for Ethereum must be set"))?;
+		// Default to berghain in case the value is missing (e.g. during initial upgrade)
+		.unwrap_or(ETHEREUM_SAFETY_MARGIN);
 
 	tracing::info!("Safety margin for Ethereum is set to {eth_safety_margin} blocks.",);
 

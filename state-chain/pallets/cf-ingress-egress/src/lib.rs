@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{sp_runtime::SaturatedConversion, transactional};
+use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
@@ -222,7 +222,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
-			WitnessSafetyMargin::<T, I>::put(self.witness_safety_margin);
+			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
 		}
 	}
 
@@ -349,7 +349,7 @@ pub mod pallet {
 	// an external chain before CFE can submit any witness extrinsics for it.
 	#[pallet::storage]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Option<TargetChainBlockNumber<T, I>>, ValueQuery>;
+		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

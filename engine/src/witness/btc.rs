@@ -7,6 +7,7 @@ use std::sync::Arc;
 use bitcoin::{BlockHash, Transaction};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::EpochIndex;
+use chainflip_node::chain_spec::berghain::BITCOIN_SAFETY_MARGIN;
 use futures_core::Future;
 use secp256k1::hashes::Hash;
 use utilities::task_scope::Scope;
@@ -25,7 +26,7 @@ use super::common::{
 	epoch_source::{EpochSourceBuilder, Vault},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
@@ -138,7 +139,8 @@ where
 			state_chain_runtime::BitcoinInstance,
 		>>(state_chain_stream.cache().hash)
 		.await?
-		.ok_or_else(|| anyhow!("Safety margin for Bitcoin must be set"))?;
+		// Default to berghain in case the value is missing (e.g. during initial upgrade)
+		.unwrap_or(BITCOIN_SAFETY_MARGIN);
 
 	tracing::info!("Safety margin for Bitcoin is set to {btc_safety_margin} blocks.",);
 
