@@ -31,6 +31,7 @@ use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
+use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
@@ -84,7 +85,8 @@ pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
+	AccountInfo, BidderProvider, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -1003,13 +1005,25 @@ impl_runtime_apis! {
 
 		fn cf_auction_state() -> AuctionState {
 			let auction_params = Validator::auction_parameters();
-
+			let min_active_bid = SetSizeMaximisingAuctionResolver::try_new(
+				<Runtime as Chainflip>::EpochInfo::current_authority_count(),
+				auction_params,
+			)
+			.and_then(|resolver| {
+				resolver.resolve_auction(
+					<Runtime as pallet_cf_validator::Config>::BidderProvider::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
+					Validator::auction_bid_cutoff_percentage(),
+				)
+			})
+			.ok()
+			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
-				auction_size_range: (auction_params.min_size, auction_params.max_size)
+				auction_size_range: (auction_params.min_size, auction_params.max_size),
+				min_active_bid,
 			}
 		}
 
