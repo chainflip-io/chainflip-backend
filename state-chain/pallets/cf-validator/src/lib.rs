@@ -13,6 +13,7 @@ pub use weights::WeightInfo;
 
 mod auction_resolver;
 mod benchmarking;
+pub mod migrations;
 mod rotation_state;
 
 pub use auction_resolver::*;
@@ -472,15 +473,6 @@ pub mod pallet {
 				_ => Weight::from_parts(0, 0),
 			});
 			weight
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			if <Pallet<T> as GetStorageVersion>::on_chain_storage_version() == 0 {
-				MaxAuthoritySetContractionPercentage::<T>::put(
-					DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-				);
-			}
-			Weight::zero()
 		}
 	}
 
