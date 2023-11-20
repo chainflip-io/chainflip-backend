@@ -78,5 +78,3 @@ Chainflip has commissioned the following audits of the code in this repository:
 
 - [Multisig TSS - Kudelski, Q1 2022](./audits/Multisig-Kudelski-Q1-2022.pdf)
 - [Trail of Bits - Q3 2023](https://github.com/trailofbits/publications/blob/master/reviews/2023-04-chainflip-securityreview.pdf)
-
-Last updated: 20Nov23
