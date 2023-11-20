@@ -566,16 +566,16 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
+			let broadcast_attempt = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+				broadcast_id,
+				attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+			})
+			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
+			.broadcast_attempt;
+
 			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
-					let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
-						broadcast_id,
-						attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
-					})
-					.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
-					.broadcast_attempt
-					.transaction_payload
-					.return_fee_refund(tx_fee);
+					let to_refund = broadcast_attempt.transaction_payload.return_fee_refund(tx_fee);
 
 					TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
 						*fee_deficit = fee_deficit.saturating_add(to_refund);
@@ -624,7 +624,7 @@ pub mod pallet {
 				);
 			}
 
-			Self::clean_up_broadcast_storage(broadcast_id);
+			Self::clean_up_broadcast_storage(broadcast_attempt);
 
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
 				broadcast_id,
@@ -651,18 +651,12 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
+	pub fn clean_up_broadcast_storage(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let first_attempt = AttemptCount::default();
 
-		if let Some(transaction_signing_attempt) =
-			AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
-				broadcast_id,
-				attempt_count: first_attempt,
-			}) {
-			TransactionOutIdToBroadcastId::<T, I>::remove(
-				transaction_signing_attempt.broadcast_attempt.transaction_out_id,
-			);
-		};
+		TransactionOutIdToBroadcastId::<T, I>::remove(broadcast_attempt.transaction_out_id);
+
+		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 
 		for attempt_count in first_attempt..=(BroadcastAttemptCount::<T, I>::take(broadcast_id)) {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
@@ -793,7 +787,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the signature verification fails, we want
 			// to retry from the threshold signing stage.
 			else {
-				Self::clean_up_broadcast_storage(broadcast_id);
+				Self::clean_up_broadcast_storage(broadcast_attempt);
 				let (retry_broadcast_id, _) = Self::threshold_sign_and_broadcast(
 					api_call,
 					RequestCallbacks::<T, I>::get(broadcast_id),
