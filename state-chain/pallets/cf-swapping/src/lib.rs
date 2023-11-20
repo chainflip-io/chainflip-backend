@@ -622,6 +622,7 @@ pub mod pallet {
 				from,
 				to,
 				deposit_amount,
+				0,
 				destination_address_internal.clone(),
 				&swap_origin,
 			) {
@@ -976,10 +977,15 @@ pub mod pallet {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
+			fee: AssetAmount,
 			destination_address: ForeignChainAddress,
 			swap_origin: &SwapOrigin,
 		) -> Option<u64> {
-			if amount < MinimumSwapAmount::<T>::get(from) {
+			// We have to ensure the minimum swap amount for Polkadot is **not** under the
+			// existential deposit.
+			let netto_swap_amount =
+				if to == Asset::Dot { amount.saturating_sub(fee) } else { amount };
+			if netto_swap_amount < MinimumSwapAmount::<T>::get(from) {
 				// If the swap amount is less than the minimum required,
 				// confiscate the fund and emit an event
 				CollectedRejectedFunds::<T>::mutate(from, |fund| {
@@ -1030,8 +1036,6 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
-			let amount = amount.saturating_sub(fee);
-
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 			let swap_origin = SwapOrigin::DepositChannel {
@@ -1044,13 +1048,14 @@ pub mod pallet {
 				from,
 				to,
 				amount,
+				fee,
 				destination_address.clone(),
 				&swap_origin,
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset: from,
-					deposit_amount: amount,
+					deposit_amount: amount.saturating_sub(fee),
 					destination_asset: to,
 					destination_address: encoded_destination_address,
 					origin: swap_origin,
