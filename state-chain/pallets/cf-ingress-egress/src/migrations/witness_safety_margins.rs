@@ -37,7 +37,19 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		let margin = WitnessSafetyMargin::<T, I>::get();
+
+		match T::TargetChain::NAME {
+			"Bitcoin" | "Ethereum" => {
+				assert!(margin.is_some())
+			},
+			"Polkadot" => {
+				assert!(margin.is_none())
+			},
+			_ => unreachable!("Unsupported chain"),
+		}
+
 		Ok(())
 	}
 }
