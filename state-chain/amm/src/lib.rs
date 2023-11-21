@@ -7,13 +7,15 @@ use core::convert::Infallible;
 
 use codec::{Decode, Encode};
 use common::{
-	price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price, SetFeesError, Side,
-	SideMap, SqrtPriceQ64F96, Tick, ZeroToOne,
+	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, Amount, OneToZero, Order, Price,
+	SetFeesError, Side, SideMap, SqrtPriceQ64F96, SwapDirection, Tick, ZeroToOne,
 };
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+
+use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
 
 pub mod common;
 pub mod limit_orders;
@@ -50,19 +52,104 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns the current price for a given direction of swap. The price is measured in units of
 	/// the specified Side argument
 	pub fn current_price(&mut self, side: Side, order: Order) -> Option<Price> {
+		self.current_sqrt_price(side, order).map(sqrt_price_to_price)
+	}
+
+	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
+	/// of the specified Side argument
+	pub fn current_sqrt_price(&mut self, side: Side, order: Order) -> Option<SqrtPriceQ64F96> {
 		match (side, order) {
-			(Side::Zero, Order::Buy) => self.inner_current_price::<OneToZero>(),
-			(Side::Zero, Order::Sell) => self.inner_current_price::<ZeroToOne>(),
-			(Side::One, Order::Sell) => self.inner_current_price::<OneToZero>(),
-			(Side::One, Order::Buy) => self.inner_current_price::<ZeroToOne>(),
+			(Side::Zero, Order::Buy) => self.inner_current_sqrt_price::<OneToZero>(),
+			(Side::Zero, Order::Sell) => self.inner_current_sqrt_price::<ZeroToOne>(),
+			(Side::One, Order::Sell) => self.inner_current_sqrt_price::<OneToZero>(),
+			(Side::One, Order::Buy) => self.inner_current_sqrt_price::<ZeroToOne>(),
 		}
 	}
 
-	fn inner_current_price<
+	fn inner_worst_price(side: Side, order: Order) -> SqrtPriceQ64F96 {
+		match (side, order) {
+			(Side::Zero, Order::Buy) | (Side::One, Order::Sell) => OneToZero::WORST_SQRT_PRICE,
+			(Side::Zero, Order::Sell) | (Side::One, Order::Buy) => ZeroToOne::WORST_SQRT_PRICE,
+		}
+	}
+
+	pub fn logarithm_sqrt_price_sequence(
+		&mut self,
+		side: Side,
+		order: Order,
+		count: u32,
+	) -> Vec<SqrtPriceQ64F96> {
+		let worst_sqrt_price = Self::inner_worst_price(side, order);
+		if let Some(current_sqrt_price) = self
+			.current_sqrt_price(side, order)
+			.filter(|current_sqrt_price| *current_sqrt_price != worst_sqrt_price)
+		{
+			if worst_sqrt_price < current_sqrt_price {
+				Some(count)
+					.filter(move |count| *count > 1)
+					.into_iter()
+					.flat_map(|count| {
+						let root = nth_root_of_integer_as_fixed_point(
+							current_sqrt_price / worst_sqrt_price,
+							count,
+						);
+
+						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
+							*sqrt_price =
+								mul_div_floor(*sqrt_price, SqrtPriceQ64F96::one() << 128, root);
+							Some(*sqrt_price)
+						})
+					})
+					.chain(sp_std::iter::once(worst_sqrt_price))
+					.collect()
+			} else {
+				Some(count)
+					.filter(move |count| *count > 1)
+					.into_iter()
+					.flat_map(|count| {
+						let root = nth_root_of_integer_as_fixed_point(
+							worst_sqrt_price / current_sqrt_price,
+							count,
+						);
+
+						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
+							*sqrt_price =
+								mul_div_floor(*sqrt_price, root, SqrtPriceQ64F96::one() << 128);
+							Some(*sqrt_price)
+						})
+					})
+					.chain(sp_std::iter::once(worst_sqrt_price))
+					.collect()
+			}
+		} else {
+			Default::default()
+		}
+	}
+
+	pub fn relative_sqrt_price(
+		&self,
+		side: Side,
+		order: Order,
+		sqrt_price: SqrtPriceQ64F96,
+		delta: Tick,
+	) -> Option<SqrtPriceQ64F96> {
+		if is_sqrt_price_valid(sqrt_price) {
+			Some(match (side, order) {
+				(Side::Zero, Order::Buy) | (Side::One, Order::Sell) =>
+					OneToZero::increase_sqrt_price(sqrt_price, delta),
+				(Side::Zero, Order::Sell) | (Side::One, Order::Buy) =>
+					ZeroToOne::increase_sqrt_price(sqrt_price, delta),
+			})
+		} else {
+			None
+		}
+	}
+
+	fn inner_current_sqrt_price<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(
 		&mut self,
-	) -> Option<Price> {
+	) -> Option<SqrtPriceQ64F96> {
 		match (
 			self.limit_orders.current_sqrt_price::<SD>(),
 			self.range_orders.current_sqrt_price::<SD>(),
@@ -77,16 +164,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			(None, Some(range_order_sqrt_price)) => Some(range_order_sqrt_price),
 			(None, None) => None,
 		}
-		.map(sqrt_price_to_price)
 	}
 
 	/// Performs a swap to sell or buy an amount of either side/asset.
 	///
 	/// This function never panics.
-	pub fn swap(&mut self, side: Side, order: Order, amount: Amount) -> (Amount, Amount) {
+	pub fn swap(
+		&mut self,
+		side: Side,
+		order: Order,
+		amount: Amount,
+		sqrt_price_limit: Option<SqrtPriceQ64F96>,
+	) -> (Amount, Amount) {
 		match (side, order) {
-			(Side::Zero, Order::Sell) => self.inner_swap::<ZeroToOne>(amount, None),
-			(Side::One, Order::Sell) => self.inner_swap::<OneToZero>(amount, None),
+			(Side::Zero, Order::Sell) => self.inner_swap::<ZeroToOne>(amount, sqrt_price_limit),
+			(Side::One, Order::Sell) => self.inner_swap::<OneToZero>(amount, sqrt_price_limit),
 			(_, Order::Buy) => unimplemented!(), // We don't support exact buy swaps at the moment
 		}
 	}

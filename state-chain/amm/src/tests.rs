@@ -22,9 +22,12 @@ fn test_basic_swaps() {
 				range_orders: range_orders::PoolState::new(0, MIN_SQRT_PRICE).unwrap(),
 			};
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
-			assert_eq!(pool_state.swap(asset, Order::Sell, Amount::MAX), (0.into(), Amount::MAX));
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into(), None), (0.into(), 0.into()));
+			assert_eq!(
+				pool_state.swap(asset, Order::Sell, Amount::MAX, None),
+				(0.into(), Amount::MAX)
+			);
+			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into(), None), (0.into(), 0.into()));
 		}
 
 		{
@@ -46,9 +49,9 @@ fn test_basic_swaps() {
 				(Default::default(), limit_orders::PositionInfo::new(amount))
 			);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(asset, Order::Sell, Amount::MAX, None),
 				(amount, Amount::MAX - amount)
 			);
 		}
@@ -82,9 +85,9 @@ fn test_basic_swaps() {
 			);
 			assert_eq!(position_info.liquidity, liquidity);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(asset, Order::Sell, Amount::MAX, None),
 				(
 					minted_amounts[!asset] - 1, /* -1 is due to rounding down */
 					Amount::MAX - minted_amounts[!asset]
@@ -134,9 +137,9 @@ fn test_basic_swaps() {
 				(Default::default(), limit_orders::PositionInfo::new(limit_order_liquidity))
 			);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(asset, Order::Sell, Amount::MAX, None),
 				(
 					limit_order_liquidity + range_order_minted_amounts[!asset] - 1, /* -1 is due
 					                                                                 * to rounding
@@ -192,9 +195,9 @@ fn test_basic_swaps() {
 				(Default::default(), limit_orders::PositionInfo::new(limit_order_liquidity))
 			);
 
-			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
+			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into(), None), (0.into(), 0.into()));
 			assert_eq!(
-				pool_state.swap(asset, Order::Sell, Amount::MAX),
+				pool_state.swap(asset, Order::Sell, Amount::MAX, None),
 				(
 					limit_order_liquidity + range_order_minted_amounts[!asset] - 2, /* -2 is due
 					                                                                 * to rounding

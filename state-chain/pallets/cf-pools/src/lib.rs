@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, Tick},
+	common::{Amount, Order, Price, Side, SideMap, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -1032,8 +1032,12 @@ impl<T: Config> SwappingApi for Pallet<T> {
 			to,
 			|_| Ok(()),
 			|asset_pair, pool| {
-				let (output_amount, remaining_amount) =
-					pool.pool_state.swap(asset_pair.base_side, Order::Sell, input_amount.into());
+				let (output_amount, remaining_amount) = pool.pool_state.swap(
+					asset_pair.base_side,
+					Order::Sell,
+					input_amount.into(),
+					None,
+				);
 				remaining_amount
 					.is_zero()
 					.then_some(())
@@ -1124,6 +1128,18 @@ pub struct UnidirectionalPoolDepth {
 	pub limit_orders: UnidirectionalSubPoolDepth,
 	/// The depth of the range order pool.
 	pub range_orders: UnidirectionalSubPoolDepth,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolOrder {
+	pub amount: Amount,
+	pub sqrt_price: SqrtPriceQ64F96,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolOrderbook {
+	pub bids: Vec<PoolOrder>,
+	pub asks: Vec<PoolOrder>,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1473,6 +1489,92 @@ impl<T: Config> Pallet<T> {
 				})
 				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
 		)
+	}
+
+	pub fn pool_orderbook(
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		orders: u32,
+	) -> Option<PoolOrderbook> {
+		let orders = sp_std::cmp::min(orders, 16384);
+
+		let asset_pair = AssetPair::<T>::new(base_asset, quote_asset).ok()?;
+		let pool_state = Pools::<T>::get(asset_pair.canonical_asset_pair)?.pool_state;
+
+		// TODO: Need to change limit order pool implmentation so Amount::MAX is guaranteed to drain
+		// pool (so the calculated amounts here are guaranteed to reflect the accurate
+		// maximum_bough_amounts)
+
+		Some(PoolOrderbook {
+			asks: {
+				let mut pool_state = pool_state.clone();
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(
+					!asset_pair.base_side,
+					Order::Sell,
+					orders,
+				);
+
+				sqrt_prices
+					.into_iter()
+					.filter_map(|sqrt_price| {
+						let (sold_base_amount, remaining_quote_amount) = pool_state.swap(
+							!asset_pair.base_side,
+							Order::Sell,
+							Amount::MAX,
+							Some(sqrt_price),
+						);
+
+						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
+
+						if sold_base_amount.is_zero() || bought_quote_amount.is_zero() {
+							None
+						} else {
+							Some(PoolOrder {
+								amount: sold_base_amount,
+								sqrt_price: cf_amm::common::approximate_sqrt_price(
+									bought_quote_amount,
+									sold_base_amount,
+								),
+							})
+						}
+					})
+					.collect()
+			},
+			bids: {
+				let mut pool_state = pool_state;
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(
+					asset_pair.base_side,
+					Order::Sell,
+					orders,
+				);
+
+				sqrt_prices
+					.into_iter()
+					.filter_map(|sqrt_price| {
+						let (sold_quote_amount, remaining_base_amount) = pool_state.swap(
+							asset_pair.base_side,
+							Order::Sell,
+							Amount::MAX,
+							Some(sqrt_price),
+						);
+
+						let bought_base_amount = Amount::MAX - remaining_base_amount;
+
+						if sold_quote_amount.is_zero() || bought_base_amount.is_zero() {
+							None
+						} else {
+							Some(PoolOrder {
+								amount: bought_base_amount,
+								sqrt_price: cf_amm::common::approximate_sqrt_price(
+									sold_quote_amount,
+									bought_base_amount,
+								),
+							})
+						}
+					})
+					.collect()
+			},
+		})
 	}
 
 	pub fn pool_depth(

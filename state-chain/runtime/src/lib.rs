@@ -28,7 +28,7 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, PoolOrderbook, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
@@ -1065,6 +1065,14 @@ impl_runtime_apis! {
 			tick_range: Range<cf_amm::common::Tick>,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		}
+
+		fn cf_pool_orderbook(
+			base_asset: Asset,
+			quote_asset: Asset,
+			orders: u32,
+		) -> Option<PoolOrderbook> {
+			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
 		}
 
 		fn cf_pool_orders(
