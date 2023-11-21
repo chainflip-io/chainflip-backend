@@ -55,11 +55,6 @@ jobs:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
-      - name: Configure aptly
-        run: |
-          aptly config show
-          jq --argjson S3PublishEndpoints "$(<.github/aptly_${{ inputs.environment }}_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
-
       - name: Import prod GPG package signing key
         id: import_gpg_prod
         if: inputs.environment == 'release'
@@ -81,12 +76,19 @@ jobs:
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
+            echo "APTLY_CONFIG_FILE=aptly_production_s3.json" >> $GITHUB_ENV
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX={user}:{pass}@" >> $GITHUB_ENV
             echo "REPO_BASIC_AUTH=flip:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
+            echo "APTLY_CONFIG_FILE=aptly_development_s3.json" >> $GITHUB_ENV
           fi
+
+      - name: Configure aptly
+        run: |
+          aptly config show
+          jq --argjson S3PublishEndpoints "$(<.github/$APTLY_CONFIG_FILE)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
 
       - name: List keys
         run: gpg -K
