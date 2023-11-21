@@ -1496,7 +1496,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		orders: u32,
 	) -> Option<PoolOrderbook> {
-		let orders = sp_std::cmp::min(orders, 16384);
+		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
 
 		let asset_pair = AssetPair::<T>::new(base_asset, quote_asset).ok()?;
 		let pool_state = Pools::<T>::get(asset_pair.canonical_asset_pair)?.pool_state;
