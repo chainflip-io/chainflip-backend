@@ -311,8 +311,13 @@ pub mod pallet {
 
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
-	#[pallet::getter(fn broadcast_pause)]
+	#[pallet::getter(fn broadcast_barriers)]
 	pub type BroadcastBarriers<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
+
+	/// List of broadcasts that are initiated but not witnessed on the external chain.
+	#[pallet::storage]
+	#[pallet::getter(fn pending_broadcasts)]
+	pub type PendingBroadcasts<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -571,8 +576,16 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
+			PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
+				pending_broadcasts.remove(pending_broadcasts.binary_search(&broadcast_id).expect("The broadcast_id should exist in the pending broadcasts list since we added it to the last when the broadcast was initated"))
+			});
+
 			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().last() {
-				if *broadcast_barrier_id == broadcast_id {
+				let maybe_earliest_pending_broadcast =
+					PendingBroadcasts::<T, I>::get().first().copied();
+				if maybe_earliest_pending_broadcast.is_none() ||
+					(maybe_earliest_pending_broadcast.unwrap() > *broadcast_barrier_id)
+				{
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop();
 					});
@@ -710,6 +723,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
+		PendingBroadcasts::<T, I>::append(broadcast_id);
+
 		if let Some(callback) = maybe_callback {
 			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
