@@ -76,12 +76,12 @@ reload_systemctl() {
 # Main entry point
 main() {
     check_upgrade "$1"
-    check_version
-    stop_service
-    backup_and_remove_systemd_overrides
-    remove_old_logs
-    purge_chaindata
-    reload_systemctl
+    # check_version
+    # stop_service
+    # backup_and_remove_systemd_overrides
+    # remove_old_logs
+    # purge_chaindata
+    # reload_systemctl
     exit 0
 }
 
