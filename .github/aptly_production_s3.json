@@ -1,5 +1,5 @@
 {
-    "chainflip-production": {
+    "chainflip-release": {
       "region": "eu-central-1",
       "bucket": "repo.chainflip.io",
       "endpoint": "",
