@@ -62,7 +62,7 @@ jobs:
 
       - name: Import prod GPG package signing key
         id: import_gpg_prod
-        if: inputs.environment == 'production'
+        if: inputs.environment == 'release'
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
