@@ -113,12 +113,7 @@ where
 		if let Some(start_instant) = ceremony_start {
 			let duration = start_instant.elapsed().as_millis();
 			runner.metrics.ceremony_duration.set(duration);
-			tracing::info!(
-				"Ceremony {} ({}) took {}ms to complete",
-				Ceremony::CEREMONY_TYPE,
-				ceremony_id,
-				duration
-			);
+			span.in_scope(|| tracing::info!("Ceremony took {}ms to complete", duration));
 		}
 		let _result = runner.outcome_sender.send((ceremony_id, outcome));
 		Ok(())
@@ -222,7 +217,8 @@ where
 	}
 
 	/// Process message from a peer, returning ceremony outcome if
-	/// the ceremony stage machine cannot progress any further
+	/// the ceremony stage machine cannot progress any further.
+	/// Note: this is only public because of tests.
 	pub async fn process_or_delay_message(
 		&mut self,
 		sender_id: AccountId,

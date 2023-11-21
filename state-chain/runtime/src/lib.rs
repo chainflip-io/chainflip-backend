@@ -31,6 +31,7 @@ use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
 use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
+use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
@@ -38,7 +39,7 @@ use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
 pub use frame_support::{
 	construct_runtime, debug,
-	instances::{Instance1, Instance2},
+	instances::{Instance1, Instance2, Instance3},
 	parameter_types,
 	traits::{
 		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
@@ -84,8 +85,11 @@ pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
+	AccountInfo, BidderProvider, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
+// Required for genesis config.
+pub use pallet_cf_validator::SetSizeParameters;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -506,7 +510,6 @@ impl pallet_authorship::Config for Runtime {
 impl pallet_cf_flip::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
-	type ExistentialDeposit = ConstU128<500>;
 	type BlocksPerDay = ConstU32<DAYS>;
 	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
@@ -819,8 +822,36 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	(),
+	PalletMigrations,
 >;
+
+// Pallet Migrations for each pallet.
+// We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
+// for tuple migrations (like these).
+type PalletMigrations = (
+	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_funding::migrations::PalletMigration<Runtime>,
+	pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	pallet_cf_governance::migrations::PalletMigration<Runtime>,
+	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -974,13 +1005,25 @@ impl_runtime_apis! {
 
 		fn cf_auction_state() -> AuctionState {
 			let auction_params = Validator::auction_parameters();
-
+			let min_active_bid = SetSizeMaximisingAuctionResolver::try_new(
+				<Runtime as Chainflip>::EpochInfo::current_authority_count(),
+				auction_params,
+			)
+			.and_then(|resolver| {
+				resolver.resolve_auction(
+					<Runtime as pallet_cf_validator::Config>::BidderProvider::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
+					Validator::auction_bid_cutoff_percentage(),
+				)
+			})
+			.ok()
+			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
-				auction_size_range: (auction_params.min_size, auction_params.max_size)
+				auction_size_range: (auction_params.min_size, auction_params.max_size),
+				min_active_bid,
 			}
 		}
 

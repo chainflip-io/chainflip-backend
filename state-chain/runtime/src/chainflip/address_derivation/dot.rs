@@ -1,11 +1,12 @@
 use crate::Vec;
-use cf_chains::{address::AddressDerivationApi, dot::PolkadotAccountId, Chain, Polkadot};
+use cf_chains::{
+	address::{AddressDerivationApi, AddressDerivationError},
+	dot::PolkadotAccountId,
+	Chain, Polkadot,
+};
 use cf_primitives::ChannelId;
 use cf_utilities::SliceToArray;
-use frame_support::sp_runtime::{
-	traits::{BlakeTwo256, Hash},
-	DispatchError,
-};
+use frame_support::sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_std::mem::size_of;
 
 use crate::Environment;
@@ -16,13 +17,13 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 	fn generate_address(
 		_source_asset: <Polkadot as Chain>::ChainAsset,
 		channel_id: ChannelId,
-	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
+	) -> Result<<Polkadot as Chain>::ChainAccount, AddressDerivationError> {
 		const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
 		const RAW_PUBLIC_KEY_SIZE: usize = 32;
 		const PAYLOAD_LENGTH: usize = PREFIX.len() + RAW_PUBLIC_KEY_SIZE + size_of::<u16>();
 
 		let master_account = Environment::polkadot_vault_account()
-			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
+			.ok_or(AddressDerivationError::MissingPolkadotVault)?;
 
 		let mut layers = channel_id
 			.to_be_bytes()
@@ -55,7 +56,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<
 		(<Polkadot as Chain>::ChainAccount, <Polkadot as Chain>::DepositChannelState),
-		DispatchError,
+		AddressDerivationError,
 	> {
 		Ok((
 			<Self as AddressDerivationApi<Polkadot>>::generate_address(source_asset, channel_id)?,

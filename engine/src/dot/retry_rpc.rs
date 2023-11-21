@@ -206,7 +206,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.subscribe_best_heads().await })
 				}),
-				RequestLog::new("subscribe_best_head".to_string(), None),
+				RequestLog::new("subscribe_best_heads".to_string(), None),
 			)
 			.await
 	}

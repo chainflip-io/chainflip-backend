@@ -19,7 +19,6 @@ use std::time::Duration;
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
 type AccountId = AccountId32;
-type Balance = u128;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -69,10 +68,6 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: Balance = 10;
-}
-
-parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
@@ -82,7 +77,6 @@ impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
-	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
 	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();

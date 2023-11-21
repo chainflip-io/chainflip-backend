@@ -1,70 +1,27 @@
 use std::{
 	collections::{HashMap, HashSet},
+	str::FromStr,
 	sync::{Arc, Mutex},
 	time::Duration,
 };
 
 use anyhow::anyhow;
-use async_trait::async_trait;
-use chainflip_engine::settings::HttpBasicAuthEndpoint;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use bitcoin::{address::NetworkUnchecked, Amount, BlockHash, ScriptBuf, Transaction, Txid};
+use chainflip_engine::{
+	btc::rpc::{BtcRpcApi, BtcRpcClient},
+	settings::HttpBasicAuthEndpoint,
+};
+use serde::Serialize;
 use tracing::{error, info};
 use utilities::task_scope;
-
-type TxHash = String;
-type BlockHash = String;
-type Address = String;
-
-#[derive(Deserialize)]
-struct BestBlockResult {
-	result: BlockHash,
-}
-
-#[derive(Deserialize)]
-struct MemPoolResult {
-	result: Vec<TxHash>,
-}
-
-#[derive(Deserialize, Clone)]
-struct ScriptPubKey {
-	address: Option<Address>,
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct Vout {
-	value: f64,
-	script_pub_key: ScriptPubKey,
-}
-
-#[derive(Deserialize, Clone)]
-struct RawTx {
-	txid: TxHash,
-	vout: Vec<Vout>,
-}
-
-#[derive(Deserialize)]
-struct RawTxResult {
-	result: Option<RawTx>,
-}
-
-#[derive(Deserialize, Clone)]
-struct Block {
-	previousblockhash: BlockHash,
-	tx: Vec<RawTx>,
-}
-
-#[derive(Deserialize)]
-struct BlockResult {
-	result: Block,
-}
 
 #[derive(Clone, Serialize)]
 pub struct QueryResult {
 	confirmations: u32,
-	destination: Address,
+	// we use ScriptBuf of the address since this is how it shows on the blockchain itself.
+	destination: ScriptBuf,
 	value: f64,
-	tx_hash: TxHash,
+	tx_hash: Txid,
 }
 
 #[derive(Default, Clone)]
@@ -75,158 +32,85 @@ enum CacheStatus {
 	Down,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct Cache {
 	status: CacheStatus,
 	best_block_hash: BlockHash,
-	transactions: HashMap<Address, QueryResult>,
-	known_tx_hashes: HashSet<TxHash>,
+	transactions: HashMap<ScriptBuf, QueryResult>,
+	known_tx_hashes: HashSet<Txid>,
+}
+
+impl Default for Cache {
+	fn default() -> Self {
+		Self {
+			best_block_hash: BlockHash::from_str(
+				"0000000000000000000000000000000000000000000000000000000000000000",
+			)
+			.unwrap(),
+			status: CacheStatus::Init,
+			transactions: Default::default(),
+			known_tx_hashes: Default::default(),
+		}
+	}
 }
 
 const SAFETY_MARGIN: u32 = 10;
 const REFRESH_INTERVAL: u64 = 10;
 
-#[async_trait]
-trait BtcNode {
-	async fn getrawmempool(&self) -> anyhow::Result<Vec<TxHash>>;
-	async fn getrawtransactions(
-		&self,
-		tx_hashes: Vec<TxHash>,
-	) -> anyhow::Result<Vec<Option<RawTx>>>;
-	async fn getbestblockhash(&self) -> anyhow::Result<BlockHash>;
-	async fn getblock(&self, block_hash: BlockHash) -> anyhow::Result<Block>;
-}
+async fn get_updated_cache<T: BtcRpcApi>(btc: &T, previous_cache: Cache) -> anyhow::Result<Cache> {
+	let all_mempool_transactions: Vec<Txid> = btc.get_raw_mempool().await?;
 
-struct BtcRpc {
-	settings: HttpBasicAuthEndpoint,
-}
-
-impl BtcRpc {
-	async fn call<T: DeserializeOwned>(
-		&self,
-		method: &str,
-		params: Vec<&str>,
-	) -> anyhow::Result<Vec<T>> {
-		info!("Calling {} with batch size of {}", method, params.len());
-		let body = params
-			.iter()
-			.map(|param| {
-				format!(r#"{{"jsonrpc":"1.0","id":0,"method":"{}","params":[{}]}}"#, method, param)
-			})
-			.collect::<Vec<String>>()
-			.join(",");
-
-		reqwest::Client::new()
-			.post(self.settings.http_endpoint.as_ref())
-			.basic_auth(&self.settings.basic_auth_user, Some(&self.settings.basic_auth_password))
-			.header("Content-Type", "text/plain")
-			.body(format!("[{}]", body))
-			.send()
-			.await?
-			.json::<Vec<T>>()
-			.await
-			.map_err(|err| anyhow!(err))
-			.and_then(|result| {
-				if result.len() == params.len() {
-					Ok(result)
-				} else {
-					Err(anyhow!("Batched request returned an incorrect number of results"))
-				}
-			})
-	}
-}
-
-#[async_trait]
-impl BtcNode for BtcRpc {
-	async fn getrawmempool(&self) -> anyhow::Result<Vec<TxHash>> {
-		self.call::<MemPoolResult>("getrawmempool", vec![""])
-			.await
-			.map(|x| x[0].result.clone())
-	}
-	async fn getrawtransactions(
-		&self,
-		tx_hashes: Vec<TxHash>,
-	) -> anyhow::Result<Vec<Option<RawTx>>> {
-		let params = tx_hashes
-			.iter()
-			.map(|tx_hash| format!("\"{}\",  true", tx_hash))
-			.collect::<Vec<String>>();
-		Ok(self
-			.call::<RawTxResult>(
-				"getrawtransaction",
-				params.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-			)
-			.await?
-			.into_iter()
-			.map(|x| x.result)
-			.collect::<Vec<Option<RawTx>>>())
-	}
-	async fn getbestblockhash(&self) -> anyhow::Result<BlockHash> {
-		self.call::<BestBlockResult>("getbestblockhash", vec![""])
-			.await
-			.map(|x| x[0].result.clone())
-	}
-	async fn getblock(&self, block_hash: String) -> anyhow::Result<Block> {
-		self.call::<BlockResult>("getblock", vec![&format!("\"{}\", 2", block_hash)])
-			.await
-			.map(|x| x[0].result.clone())
-	}
-}
-
-async fn get_updated_cache<T: BtcNode>(btc: &T, previous_cache: Cache) -> anyhow::Result<Cache> {
-	let all_mempool_transactions: Vec<TxHash> = btc.getrawmempool().await?;
-	let mut new_transactions: HashMap<Address, QueryResult> = Default::default();
-	let mut new_known_tx_hashes: HashSet<TxHash> = Default::default();
-	let previous_mempool: HashMap<TxHash, QueryResult> = previous_cache
+	let mut new_transactions: HashMap<ScriptBuf, QueryResult> = Default::default();
+	let mut new_known_tx_hashes: HashSet<Txid> = Default::default();
+	let previous_mempool: HashMap<Txid, QueryResult> = previous_cache
 		.clone()
 		.transactions
 		.into_iter()
 		.filter_map(|(_, query_result)| {
 			if query_result.confirmations == 0 {
-				Some((query_result.tx_hash.clone(), query_result))
+				Some((query_result.tx_hash, query_result))
 			} else {
 				None
 			}
 		})
 		.collect();
-	let unknown_mempool_transactions: Vec<TxHash> = all_mempool_transactions
+	let unknown_mempool_transactions: Vec<Txid> = all_mempool_transactions
 		.into_iter()
 		.filter(|tx_hash| {
 			if let Some(known_transaction) = previous_mempool.get(tx_hash) {
-				new_known_tx_hashes.insert(tx_hash.clone());
+				new_known_tx_hashes.insert(*tx_hash);
 				new_transactions
 					.insert(known_transaction.destination.clone(), known_transaction.clone());
 			} else if previous_cache.known_tx_hashes.contains(tx_hash) {
-				new_known_tx_hashes.insert(tx_hash.clone());
+				new_known_tx_hashes.insert(*tx_hash);
 			} else {
 				return true
 			}
 			false
 		})
 		.collect();
-	let transactions: Vec<RawTx> = btc
-		.getrawtransactions(unknown_mempool_transactions)
-		.await?
-		.iter()
-		.filter_map(|x| x.clone())
-		.collect();
+
+	let transactions: Vec<Transaction> =
+		btc.get_raw_transactions(unknown_mempool_transactions).await?;
+
 	for tx in transactions {
-		for vout in tx.vout {
-			new_known_tx_hashes.insert(tx.txid.clone());
-			if let Some(destination) = vout.script_pub_key.address {
-				new_transactions.insert(
-					destination.clone(),
-					QueryResult {
-						destination,
-						confirmations: 0,
-						value: vout.value,
-						tx_hash: tx.txid.clone(),
-					},
-				);
-			}
+		let txid = tx.txid();
+		for txout in tx.output {
+			new_known_tx_hashes.insert(txid);
+
+			new_transactions.insert(
+				txout.script_pubkey.clone(),
+				QueryResult {
+					destination: txout.script_pubkey,
+					confirmations: 0,
+					value: Amount::from_sat(txout.value).to_btc(),
+					tx_hash: txid,
+				},
+			);
 		}
 	}
-	let block_hash = btc.getbestblockhash().await?;
+	let block_hash = btc.best_block_hash().await?;
+
 	if previous_cache.best_block_hash == block_hash {
 		for entry in previous_cache.transactions {
 			if entry.1.confirmations > 0 {
@@ -235,25 +119,24 @@ async fn get_updated_cache<T: BtcNode>(btc: &T, previous_cache: Cache) -> anyhow
 		}
 	} else {
 		info!("New block found: {}", block_hash);
-		let mut block_hash_to_query = block_hash.clone();
+		let mut block_hash_to_query = block_hash;
 		for confirmations in 1..SAFETY_MARGIN {
-			let block = btc.getblock(block_hash_to_query).await?;
-			for tx in block.tx {
-				for vout in tx.vout {
-					if let Some(destination) = vout.script_pub_key.address {
-						new_transactions.insert(
-							destination.clone(),
-							QueryResult {
-								destination,
-								confirmations,
-								value: vout.value,
-								tx_hash: tx.txid.clone(),
-							},
-						);
-					}
+			let block = btc.block(block_hash_to_query).await?;
+			for tx in block.txdata {
+				let tx_hash = tx.txid();
+				for txout in tx.output {
+					new_transactions.insert(
+						txout.script_pubkey.clone(),
+						QueryResult {
+							destination: txout.script_pubkey,
+							confirmations,
+							value: Amount::from_sat(txout.value).to_btc(),
+							tx_hash,
+						},
+					);
 				}
 			}
-			block_hash_to_query = block.previousblockhash;
+			block_hash_to_query = block.header.prev_blockhash;
 		}
 	}
 	Ok(Cache {
@@ -268,8 +151,19 @@ fn lookup_transactions(
 	cache: &Cache,
 	addresses: &[String],
 ) -> anyhow::Result<Vec<Option<QueryResult>>> {
+	let script_addresses: Vec<_> = addresses
+		.iter()
+		.map(|a| {
+			bitcoin::Address::<NetworkUnchecked>::from_str(a)
+				.map_err(|e| anyhow!("Invalid address: {e}"))
+		})
+		.collect::<anyhow::Result<Vec<_>>>()?
+		.into_iter()
+		.map(|a| a.payload.script_pubkey())
+		.collect();
+
 	match cache.status {
-		CacheStatus::Ready => Ok(addresses
+		CacheStatus::Ready => Ok(script_addresses
 			.iter()
 			.map(|address| cache.transactions.get(address).map(Clone::clone))
 			.collect::<Vec<Option<QueryResult>>>()),
@@ -300,13 +194,13 @@ pub async fn start(
 	scope.spawn({
 		let cache = cache.clone();
 		async move {
-			let btc_rpc = BtcRpc { settings: endpoint };
+			let client = BtcRpcClient::new(endpoint, None).unwrap().await;
 			let mut interval = tokio::time::interval(Duration::from_secs(REFRESH_INTERVAL));
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 			loop {
 				interval.tick().await;
 				let cache_copy = cache.lock().unwrap().clone();
-				match get_updated_cache(&btc_rpc, cache_copy).await {
+				match get_updated_cache(&client, cache_copy).await {
 					Ok(updated_cache) => {
 						let mut cache = cache.lock().unwrap();
 						*cache = updated_cache;
@@ -327,210 +221,275 @@ pub async fn start(
 #[cfg(test)]
 mod tests {
 
+	use std::collections::BTreeMap;
+
+	use bitcoin::{
+		absolute::LockTime,
+		address::{self},
+		block::{Header, Version},
+		hash_types::TxMerkleNode,
+		hashes::Hash,
+		Block, TxOut,
+	};
+	use chainflip_engine::btc::rpc::BlockHeader;
+
 	use super::*;
 
 	#[derive(Clone)]
 	struct MockBtcRpc {
-		mempool: Vec<RawTx>,
-		latest_block_hash: String,
-		blocks: HashMap<String, Block>,
+		mempool: Vec<Transaction>,
+		latest_block_hash: BlockHash,
+		blocks: BTreeMap<BlockHash, Block>,
 	}
 
-	#[async_trait]
-	impl BtcNode for MockBtcRpc {
-		async fn getrawmempool(&self) -> anyhow::Result<Vec<String>> {
-			Ok(self.mempool.iter().map(|x| x.txid.clone()).collect())
+	#[async_trait::async_trait]
+	impl BtcRpcApi for MockBtcRpc {
+		async fn block(&self, block_hash: BlockHash) -> anyhow::Result<Block> {
+			self.blocks.get(&block_hash).cloned().ok_or(anyhow!("Block missing"))
 		}
-		async fn getrawtransactions(
+		async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
+			Ok(self.latest_block_hash)
+		}
+		async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
+			Ok(self.mempool.iter().map(|x| x.txid()).collect())
+		}
+
+		async fn get_raw_transactions(
 			&self,
-			tx_hashes: Vec<String>,
-		) -> anyhow::Result<Vec<Option<RawTx>>> {
-			let mut result: Vec<Option<RawTx>> = Default::default();
+			tx_hashes: Vec<Txid>,
+		) -> anyhow::Result<Vec<Transaction>> {
+			let mut result: Vec<Transaction> = Default::default();
 			for hash in tx_hashes {
 				for tx in self.mempool.clone() {
-					if tx.txid == hash {
-						result.push(Some(tx))
-					} else {
-						result.push(None)
+					if tx.txid() == hash {
+						result.push(tx)
 					}
 				}
 			}
 			Ok(result)
 		}
-		async fn getbestblockhash(&self) -> anyhow::Result<String> {
-			Ok(self.latest_block_hash.clone())
+
+		async fn block_hash(
+			&self,
+			_block_number: cf_chains::btc::BlockNumber,
+		) -> anyhow::Result<BlockHash> {
+			unimplemented!()
 		}
-		async fn getblock(&self, block_hash: String) -> anyhow::Result<Block> {
-			self.blocks.get(&block_hash).cloned().ok_or(anyhow!("Block missing"))
+
+		async fn send_raw_transaction(&self, _transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
+			unimplemented!()
+		}
+
+		async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>> {
+			unimplemented!()
+		}
+
+		async fn average_block_fee_rate(
+			&self,
+			_block_hash: BlockHash,
+		) -> anyhow::Result<cf_chains::btc::BtcAmount> {
+			unimplemented!()
+		}
+
+		async fn block_header(&self, _block_hash: BlockHash) -> anyhow::Result<BlockHeader> {
+			unimplemented!()
+		}
+	}
+
+	fn i_to_block_hash(i: u8) -> BlockHash {
+		BlockHash::from_byte_array([i; 32])
+	}
+
+	fn header_with_prev_hash(i: u8) -> Header {
+		Header {
+			version: Version::from_consensus(0),
+			prev_blockhash: i_to_block_hash(i),
+			merkle_root: TxMerkleNode::from_byte_array([0u8; 32]),
+			time: 0,
+			bits: Default::default(),
+			nonce: 0,
+		}
+	}
+
+	fn init_blocks() -> BTreeMap<BlockHash, Block> {
+		let mut blocks: BTreeMap<BlockHash, Block> = Default::default();
+		for i in 1..16 {
+			blocks.insert(
+				i_to_block_hash(i),
+				Block { header: header_with_prev_hash(i - 1), txdata: vec![] },
+			);
+		}
+		blocks
+	}
+
+	// This creates one tx out in one transaction for each item in txdata
+	fn block_prev_hash_tx_outs(i: u8, txdata: Vec<(Amount, String)>) -> Block {
+		Block {
+			header: header_with_prev_hash(i),
+			txdata: txdata
+				.into_iter()
+				.map(|(value, destination)| bitcoin::Transaction {
+					output: vec![TxOut {
+						value: value.to_sat(),
+						script_pubkey: bitcoin::Address::from_str(&destination)
+							.unwrap()
+							.payload
+							.script_pubkey(),
+					}],
+					input: Default::default(),
+					version: 0,
+					lock_time: LockTime::from_consensus(0),
+				})
+				.collect(),
+		}
+	}
+
+	fn tx_with_outs(tx_outs: Vec<TxOut>) -> Transaction {
+		Transaction {
+			output: tx_outs,
+			version: 0,
+			lock_time: LockTime::from_consensus(0),
+			input: Default::default(),
 		}
 	}
 
 	#[tokio::test]
 	async fn multiple_outputs_in_one_tx() {
-		let mempool = vec![RawTx {
-			txid: "tx1".into(),
-			vout: vec![
-				Vout {
-					value: 0.8,
-					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-				},
-				Vout {
-					value: 1.2,
-					script_pub_key: ScriptPubKey { address: Some("address2".into()) },
-				},
-			],
-		}];
-		let latest_block_hash = "15".to_string();
-		let mut blocks: HashMap<String, Block> = Default::default();
-		for i in 1..16 {
-			blocks.insert(
-				i.to_string(),
-				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
-			);
-		}
-		let btc = MockBtcRpc { mempool, latest_block_hash, blocks };
+		let address1 = "3KhCRZchNv46uHwBXUZo4ALCUCjGT1v7fd".to_string();
+		let address2 = "1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX".to_string();
+
+		let a1_script = address::Address::from_str(&address1).unwrap().payload.script_pubkey();
+		let a2_script = address::Address::from_str(&address2).unwrap().payload.script_pubkey();
+
+		let mempool = vec![tx_with_outs(vec![
+			TxOut {
+				value: Amount::from_btc(0.8).unwrap().to_sat(),
+				script_pubkey: a1_script.clone(),
+			},
+			TxOut {
+				value: Amount::from_btc(1.2).unwrap().to_sat(),
+				script_pubkey: a2_script.clone(),
+			},
+		])];
+		let blocks = init_blocks();
+		let btc = MockBtcRpc { mempool, latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(&btc, cache).await.unwrap();
-		let result = lookup_transactions(&cache, &["address1".into(), "address2".into()]).unwrap();
-		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
+		let result = lookup_transactions(&cache, &[address1, address2]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, a1_script);
+		assert_eq!(result[1].as_ref().unwrap().destination, a2_script);
 	}
 
 	#[tokio::test]
 	async fn mempool_updates() {
+		let address1 = "3KhCRZchNv46uHwBXUZo4ALCUCjGT1v7fd".to_string();
+		let address2 = "1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX".to_string();
+		let address3 = "bc1qrtwkf6jdda74ngjv6zgmxvx4jkckxkl2dafpm3".to_string();
+
+		let a1_script = address::Address::from_str(&address1).unwrap().payload.script_pubkey();
+		let a2_script = address::Address::from_str(&address2).unwrap().payload.script_pubkey();
+		let a3_script = address::Address::from_str(&address3).unwrap().payload.script_pubkey();
+
 		let mempool = vec![
-			RawTx {
-				txid: "tx1".into(),
-				vout: vec![Vout {
-					value: 0.8,
-					script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-				}],
-			},
-			RawTx {
-				txid: "tx2".into(),
-				vout: vec![Vout {
-					value: 0.8,
-					script_pub_key: ScriptPubKey { address: Some("address2".into()) },
-				}],
-			},
+			tx_with_outs(vec![TxOut {
+				value: Amount::from_btc(0.8).unwrap().to_sat(),
+				script_pubkey: a1_script.clone(),
+			}]),
+			tx_with_outs(vec![TxOut {
+				value: Amount::from_btc(0.8).unwrap().to_sat(),
+				script_pubkey: a2_script.clone(),
+			}]),
 		];
-		let latest_block_hash = "15".to_string();
-		let mut blocks: HashMap<String, Block> = Default::default();
-		for i in 1..16 {
-			blocks.insert(
-				i.to_string(),
-				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
-			);
-		}
-		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+		let blocks = init_blocks();
+		let mut rpc: MockBtcRpc =
+			MockBtcRpc { mempool: mempool.clone(), latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
-		let cache = get_updated_cache(&btc, cache).await.unwrap();
+		let cache = get_updated_cache(&rpc, cache).await.unwrap();
 		let result =
-			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
+			lookup_transactions(&cache, &[address1.clone(), address2.clone(), address3.clone()])
 				.unwrap();
-		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
+		assert_eq!(result[0].as_ref().unwrap().destination, a1_script);
+		assert_eq!(result[1].as_ref().unwrap().destination, a2_script);
 		assert!(result[2].is_none());
 
-		btc.mempool.append(&mut vec![RawTx {
-			txid: "tx3".into(),
-			vout: vec![Vout {
-				value: 0.8,
-				script_pub_key: ScriptPubKey { address: Some("address3".into()) },
-			}],
-		}]);
-		let cache = get_updated_cache(&btc, cache.clone()).await.unwrap();
-		let result =
-			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
-				.unwrap();
-		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
-		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
-		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
+		rpc.mempool.append(&mut vec![tx_with_outs(vec![TxOut {
+			value: Amount::from_btc(0.8).unwrap().to_sat(),
+			script_pubkey: a3_script.clone(),
+		}])]);
 
-		btc.mempool.remove(0);
-		let cache = get_updated_cache(&btc, cache.clone()).await.unwrap();
+		let cache = get_updated_cache(&rpc, cache.clone()).await.unwrap();
 		let result =
-			lookup_transactions(&cache, &["address1".into(), "address2".into(), "address3".into()])
+			lookup_transactions(&cache, &[address1.clone(), address2.clone(), address3.clone()])
 				.unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, a1_script);
+		assert_eq!(result[1].as_ref().unwrap().destination, a2_script);
+		assert_eq!(result[2].as_ref().unwrap().destination, a3_script);
+
+		rpc.mempool.remove(0);
+		let cache = get_updated_cache(&rpc, cache.clone()).await.unwrap();
+		let result = lookup_transactions(&cache, &[address1, address2, address3]).unwrap();
 		assert!(result[0].is_none());
-		assert_eq!(result[1].as_ref().unwrap().destination, "address2".to_string());
-		assert_eq!(result[2].as_ref().unwrap().destination, "address3".to_string());
+		assert_eq!(result[1].as_ref().unwrap().destination, a2_script);
+		assert_eq!(result[2].as_ref().unwrap().destination, a3_script);
 	}
 
 	#[tokio::test]
 	async fn blocks() {
+		let address1 = "bc1qrtwkf6jdda74ngjv6zgmxvx4jkckxkl2dafpm3".to_string();
+		let a1_script = address::Address::from_str(&address1).unwrap().payload.script_pubkey();
+
 		let mempool = vec![];
-		let latest_block_hash = "15".to_string();
-		let mut blocks: HashMap<String, Block> = Default::default();
+
+		let mut blocks: BTreeMap<BlockHash, Block> = Default::default();
 		for i in 1..19 {
-			blocks.insert(
-				i.to_string(),
-				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
-			);
+			blocks.insert(i_to_block_hash(i), block_prev_hash_tx_outs(i - 1, vec![]));
 		}
+
 		blocks.insert(
-			"15".to_string(),
-			Block {
-				previousblockhash: "14".to_string(),
-				tx: vec![RawTx {
-					txid: "tx1".into(),
-					vout: vec![Vout {
-						value: 12.5,
-						script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-					}],
-				}],
-			},
+			i_to_block_hash(15),
+			block_prev_hash_tx_outs(14, vec![(Amount::from_btc(12.5).unwrap(), address1.clone())]),
 		);
-		let mut btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+		let mut btc =
+			MockBtcRpc { mempool: mempool.clone(), latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(&btc, cache).await.unwrap();
-		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
-		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		let result = lookup_transactions(&cache, &[address1.clone()]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, a1_script);
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 1);
 
-		btc.latest_block_hash = "16".to_string();
+		btc.latest_block_hash = i_to_block_hash(16);
 		let cache = get_updated_cache(&btc, cache.clone()).await.unwrap();
-		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
-		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		let result = lookup_transactions(&cache, &[address1]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, a1_script);
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 2);
 	}
 
 	#[tokio::test]
 	async fn report_oldest_tx_only() {
-		let mempool = vec![RawTx {
-			txid: "tx2".into(),
-			vout: vec![Vout {
-				value: 0.8,
-				script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-			}],
-		}];
-		let latest_block_hash = "15".to_string();
-		let mut blocks: HashMap<String, Block> = Default::default();
-		for i in 1..16 {
-			blocks.insert(
-				i.to_string(),
-				Block { previousblockhash: (i - 1).to_string(), tx: vec![] },
-			);
-		}
+		let address1 = "bc1qrtwkf6jdda74ngjv6zgmxvx4jkckxkl2dafpm3".to_string();
+		let a1_script = address::Address::from_str(&address1).unwrap().payload.script_pubkey();
+
+		let tx_value: Amount = Amount::from_btc(12.5).unwrap();
+
+		let mempool = vec![tx_with_outs(vec![TxOut {
+			value: Amount::from_btc(0.8).unwrap().to_sat(),
+			script_pubkey: a1_script.clone(),
+		}])];
+
+		let mut blocks = init_blocks();
+
 		blocks.insert(
-			"13".to_string(),
-			Block {
-				previousblockhash: "12".to_string(),
-				tx: vec![RawTx {
-					txid: "tx1".into(),
-					vout: vec![Vout {
-						value: 12.5,
-						script_pub_key: ScriptPubKey { address: Some("address1".into()) },
-					}],
-				}],
-			},
+			i_to_block_hash(13),
+			block_prev_hash_tx_outs(12, vec![(tx_value, address1.clone())]),
 		);
-		let btc = MockBtcRpc { mempool: mempool.clone(), latest_block_hash, blocks };
+
+		let btc =
+			MockBtcRpc { mempool: mempool.clone(), latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
 		let cache = get_updated_cache(&btc, cache).await.unwrap();
-		let result = lookup_transactions(&cache, &["address1".into()]).unwrap();
-		assert_eq!(result[0].as_ref().unwrap().destination, "address1".to_string());
+		let result = lookup_transactions(&cache, &[address1]).unwrap();
+		assert_eq!(result[0].as_ref().unwrap().destination, a1_script);
 		assert_eq!(result[0].as_ref().unwrap().confirmations, 3);
-		assert_eq!(result[0].as_ref().unwrap().value, 12.5);
+		assert_eq!(result[0].as_ref().unwrap().value, tx_value.to_btc());
 	}
 }

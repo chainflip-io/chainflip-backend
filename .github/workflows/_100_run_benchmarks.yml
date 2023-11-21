@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: "Which Commit SHA should we get the binaries from? (Use 'sisyphos' for release branches and 'perseverance' for tags)"
+        description: "Which Commit SHA should we get the binaries from?"
         required: true
         type: string
       base_branch_name:
@@ -28,12 +28,22 @@ on:
         options:
           - 4vCPU-8GB
           - 4vCPU-16GB
+      profile:
+        description: "Which profile should we use?"
+        required: false
+        type: choice
+        options:
+          - production
+          - release
 
 env:
   FORCE_COLOR: 1
 
 jobs:
   run_benchmarks:
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on:
       [
         self-hosted,
@@ -45,22 +55,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Download binary to benchmark
-        run: |
-          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
-          echo "deb https://${{ secrets.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/${{ inputs.commit_sha }}/$(lsb_release -c -s) $(lsb_release -c -s) main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
-          sudo apt update
-          sudo apt install chainflip-node
+      - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ci-benchmarks.yml
+          workflow_conclusion: completed
+          name: chainflip-node-ubuntu-20.04-benchmarks-${{ inputs.profile }}
+          commit: ${{ inputs.commit_sha }}
+          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
+
+      - name: Update permissions on chainflip-node
+        run: chmod +x ./chainflip-node
 
       - name: Run benchmarks
         run: >
           ./state-chain/scripts/benchmark-all.sh
-          --binary /usr/bin/chainflip-node
+          --binary ./chainflip-node
           --steps ${{ github.event.inputs.steps }}
           --repetitions ${{ github.event.inputs.repetitions }}
 
+      - name: Cleanup
+        run: >
+          rm ./chainflip-node
+
       - name: Make a pull request with the changed weight files
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v5
         with:
           base: ${{ inputs.base_branch_name }}
           title: "[AUTOMATED] Benchmark results"
@@ -68,4 +89,4 @@ jobs:
           body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
           delete-branch: true
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}

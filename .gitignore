@@ -46,3 +46,5 @@ graph
 *terraform.tfstate*
 tfplan
 .tfvars
+
+*rustc-ice*

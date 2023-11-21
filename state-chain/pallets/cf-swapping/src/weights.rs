@@ -38,6 +38,7 @@ pub trait WeightInfo {
 	fn schedule_swap_from_contract() -> Weight;
 	fn ccm_deposit() -> Weight;
 	fn set_minimum_swap_amount() -> Weight;
+	fn set_maximum_swap_amount() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -150,6 +151,16 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(10_718_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: `Swapping::MinimumSwapAmount` (r:0 w:1)
+	/// Proof: `Swapping::MinimumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn set_maximum_swap_amount() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 10_400_000 picoseconds.
+		Weight::from_parts(10_718_000, 0)
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -254,6 +265,16 @@ impl WeightInfo for () {
 	/// Storage: `Swapping::MinimumSwapAmount` (r:0 w:1)
 	/// Proof: `Swapping::MinimumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn set_minimum_swap_amount() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 10_400_000 picoseconds.
+		Weight::from_parts(10_718_000, 0)
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: `Swapping::MinimumSwapAmount` (r:0 w:1)
+	/// Proof: `Swapping::MinimumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn set_maximum_swap_amount() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`

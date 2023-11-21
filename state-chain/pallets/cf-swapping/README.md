@@ -63,3 +63,10 @@ The Gas budgets are exempt from this threshold (as gas budgets are expected to b
 ### Minimum Ccm Gas Budget
 
 Ccm messages' Gas budget must be higher than this threshold, or the message will be rejected. This check is done regardless if the Gas needs to be swapped.
+
+### Maximum Swap Threshold
+At the onset of the chain, there's a upper limit to a single swap. This is configured by governance via `set_maximum_swap_amount`. Once the Swapping feature is stabilized, this threshold may be increased or removed in the future.
+
+This threshold applies to all swaps, including both normal swaps and CCM gas and principal amount - though realistically this threshold should be set high enough that it does not impact most users.
+
+If the swap amount is higher than the maximum swap threshold, the excess is confiscated by the chain into `CollectedRejectedFunds`, and the `SwapAmountConfiscated` event is emitted. This can be used to trace the confiscation and we may refund the user accordingly.

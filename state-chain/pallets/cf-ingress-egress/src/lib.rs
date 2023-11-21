@@ -12,11 +12,11 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade, transactional};
+use frame_support::{sp_runtime::SaturatedConversion, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi},
+	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
@@ -409,6 +409,12 @@ pub mod pallet {
 		AssetMismatch,
 		/// Channel ID has reached maximum
 		ChannelIdsExhausted,
+		/// Polkadot's Vault Account does not exist in storage.
+		MissingPolkadotVault,
+		/// Bitcoin's Vault key does not exist for the current epoch.
+		MissingBitcoinVault,
+		/// Channel ID is too large for Bitcoin address derivation
+		BitcoinChannelIdTooLarge,
 	}
 
 	#[pallet::hooks]
@@ -455,19 +461,6 @@ pub mod pallet {
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
@@ -926,10 +919,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Ok(*id)
 				})?;
 			(
-				DepositChannel::generate_new::<T::AddressDerivation>(
-					next_channel_id,
-					source_asset,
-				)?,
+				DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
+					.map_err(|e| match e {
+						AddressDerivationError::MissingPolkadotVault =>
+							Error::<T, I>::MissingPolkadotVault,
+						AddressDerivationError::MissingBitcoinVault =>
+							Error::<T, I>::MissingBitcoinVault,
+						AddressDerivationError::BitcoinChannelIdTooLarge =>
+							Error::<T, I>::BitcoinChannelIdTooLarge,
+					})?,
 				next_channel_id,
 			)
 		};

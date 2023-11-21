@@ -1,16 +1,12 @@
-pub use super::{
-	common::*,
-	testnet::{BITCOIN_EXPIRY_BLOCKS, ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS},
-};
-use super::{parse_account, StateChainEnvironment};
+pub use super::common::*;
+use super::StateChainEnvironment;
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_MAINNET};
-use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
+use cf_primitives::{
+	AccountId, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, NetworkEnvironment,
+};
 use sc_service::ChainType;
 use sp_core::H256;
-
-// *** Overrides from common
-pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
-// ***
+use state_chain_runtime::SetSizeParameters;
 
 pub struct Config;
 
@@ -19,7 +15,11 @@ pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Mainnet;
 pub const PROTOCOL_ID: &str = "flip-berghain";
 
-// TODO: Change spec
+// These represent approximately 24 hours on mainnet block times
+pub const BITCOIN_EXPIRY_BLOCKS: u32 = 24 * 60 / 10;
+pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
+pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
+
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
 	eth_usdc_address: hex_literal::hex!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
@@ -29,60 +29,64 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_address_checker_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	ethereum_chain_id: CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
-		"0250f648bae0db9366550d041e163c9b23b79b1b06be7fac83ba4f338bd02e4024" /* TODO: Albert to
-		                                                                      * replace AGG key
-		                                                                      * before launch */
+		"022a1d7efa522ce746bc40a04016178ce38154be1f0537c6957bdeed17057bb955"
 	),
-	ethereum_deployment_block: 18277081u64, // TODO: Albert to confirm block number before launch
-	genesis_funding_amount: 1_000 * FLIPPERINOS_PER_FLIP,
+	ethereum_deployment_block: 18562942,
+	genesis_funding_amount: GENESIS_AUTHORITY_FUNDING,
 	min_funding: MIN_FUNDING,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3" // Polkadot mainnet
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 }, /* TODO:
-	                                                                                      * Dan confirm
-	                                                                                      * number */
+	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
 
-// TODO: change once nodes have been spun up
-pub const BASHFUL_ACCOUNT_ID: &str = "cFNBWrx4Wx68hVugPVX3KAtKwbsmHjw6ozAXE3d663bwtYF5R";
+pub const BASHFUL_ACCOUNT_ID: &str = "cFNzzoURRFHx2fw2EmsCvTc7hBFP34EaP2B23oUcFdbp1FMvx";
 pub const BASHFUL_SR25519: [u8; 32] =
-	hex_literal::hex!["beb23228343fc71c913a10299f577cbc20ee0eb44dcf8a698ab861c76223495b"];
+	hex_literal::hex!["e2e8c8d8a2662d11a96ab6cbf8f627e78d6c77ac011ad0ad65b704976c7c5b6c"];
 pub const BASHFUL_ED25519: [u8; 32] =
-	hex_literal::hex!["92e620fa4cc3736bbef778b5852309936c0ce640ad50c1f4f36fc15eba7f4ed8"];
-pub const DOC_ACCOUNT_ID: &str = "cFJHNnou7QwegcEEhL3xeD1aUrjeaL5Ydqtrfyd7ousKoiLPU";
+	hex_literal::hex!["c2729cfb8507558af71474e9610071585e4ae02c5418e053cdc25106628f9810"];
+pub const DOC_ACCOUNT_ID: &str = "cFP2cGErEhxzJfVUxk1gHVuE1ALxHJQx335o19bT7QoSWwjhU";
 pub const DOC_SR25519: [u8; 32] =
-	hex_literal::hex!["123990561086190def905deab1f5c3fe1f7dd08585e677ff4fe3196e1201a82e"];
+	hex_literal::hex!["e42367696495e88be9b78e7e639bc0a870139bfe43aafb46ea5f934c69903b02"];
 pub const DOC_ED25519: [u8; 32] =
-	hex_literal::hex!["4a11427487645aade5f5134904668a9dcde93e493f668f0b347f23d3cd4d7c76"];
-pub const DOPEY_ACCOUNT_ID: &str = "cFJyZdYw1p9bkYNUuwDppkfKrGinn8r4ZWaPvSaxSvrpiSTa2";
+	hex_literal::hex!["5e52d11949673e9ba3a6e3e11c0fc0537bc588de8ac61d41cf04e0ff43dc39a1"];
+pub const DOPEY_ACCOUNT_ID: &str = "cFKzr7DwLCRtSkou5H5moKri7g9WwJ4tAbVJv6dZGhLb811Tc";
 pub const DOPEY_SR25519: [u8; 32] =
-	hex_literal::hex!["30dfdf38642c300105e2ac604b92d08f1e26f01459539bfd7f8c51cf60e0ce68"];
+	hex_literal::hex!["5e16d155cf85815a0ba8957762e1e007eec4d5c6fe0b32b4719ca4435c36eb57"];
 pub const DOPEY_ED25519: [u8; 32] =
-	hex_literal::hex!["39df8c764fb991819aeb94bfb2e7809a2728660113e6ec0758e751d3c00f4fcd"];
-pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFKsNoWaviRPS5s4xPxHxEXWBwAm3Q4JGXoXY3HXcsfWgun1D";
+	hex_literal::hex!["99cca386ea50fb33d2eee5ebd5574759facb17ddd55241e246b59567f6878242"];
+pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFPVXzCyCxKbxJEHhDN1yXrU3VcDPZswHSVHh8HnoGsJsAVYS";
 pub const SNOW_WHITE_SR25519: [u8; 32] =
-	hex_literal::hex!["58642e85c7889f9cda6e5d87249c6ab4c6d9b2f6bad8c5986cab81c6317d4e61"];
+	hex_literal::hex!["f8aca257e6ab69e357984a885121c0ee18fcc50185c77966cdaf063df2f89126"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
-	[vec![
-		(
-			parse_account("cFHwQ2eJQqRLJWgcHhdgAVCXx2TNRaS3R4Zc98mU2SrkW6AMH"),
-			AccountRole::Broker,
-			1_000 * FLIPPERINOS_PER_FLIP,
-			Some(b"Chainflip Genesis Broker".to_vec()),
-		),
-		(
-			parse_account("cFNaeW7FBpjVxh5haxwmnnATCXriuThVJ8vcyQWKi6SfwWHni"),
-			AccountRole::LiquidityProvider,
-			1_000 * FLIPPERINOS_PER_FLIP,
-			Some(b"Chainflip Genesis Liquidity Provider".to_vec()),
-		),
-	]]
-	.into_iter()
-	.flatten()
-	.collect()
+	vec![]
 }
+
+// Set to zero initially, will be updated by governance to 7% / 1% annual.
+pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 0;
+pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 0;
+
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 30 * 24 * HOURS;
+
+pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
+	(Asset::Eth, 0u128),
+	(Asset::Flip, 0u128),
+	(Asset::Usdc, 0u128),
+	(Asset::Dot, 0u128),
+	(Asset::Btc, 0u128),
+];
+
+pub const MIN_FUNDING: FlipBalance = 6 * FLIPPERINOS_PER_FLIP;
+pub const GENESIS_AUTHORITY_FUNDING: FlipBalance = 1_000 * FLIPPERINOS_PER_FLIP;
+pub const REDEMPTION_TAX: FlipBalance = 5 * FLIPPERINOS_PER_FLIP;
+
+/// Redemption delay on mainnet is 48 HOURS.
+/// We add an extra 24 hours buffer.
+pub const REDEMPTION_TTL_SECS: u64 = (48 + 24) * 3600;
+
+pub const AUCTION_PARAMETERS: SetSizeParameters =
+	SetSizeParameters { min_size: 3, max_size: MAX_AUTHORITIES, max_expansion: MAX_AUTHORITIES };

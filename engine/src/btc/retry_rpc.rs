@@ -29,11 +29,11 @@ impl BtcRetryRpcClient {
 		nodes: NodeContainer<HttpBasicAuthEndpoint>,
 		expected_btc_network: BitcoinNetwork,
 	) -> Result<Self> {
-		let rpc_client = BtcRpcClient::new(nodes.primary, expected_btc_network)?;
+		let rpc_client = BtcRpcClient::new(nodes.primary, Some(expected_btc_network))?;
 
 		let backup_rpc_client = nodes
 			.backup
-			.map(|backup_endpoint| BtcRpcClient::new(backup_endpoint, expected_btc_network))
+			.map(|backup_endpoint| BtcRpcClient::new(backup_endpoint, Some(expected_btc_network)))
 			.transpose()?;
 
 		Ok(Self {
