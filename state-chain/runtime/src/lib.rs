@@ -292,6 +292,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type NetworkEnvironment = Environment;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -308,6 +309,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type DepositHandler = chainflip::DotDepositHandler;
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -324,6 +326,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type DepositHandler = chainflip::BtcDepositHandler;
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
 }
 
 parameter_types! {

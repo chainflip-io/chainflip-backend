@@ -26,7 +26,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, GetBlockHeight, SwapDepositHandler,
+	EgressApi, GetBlockHeight, NetworkEnvironmentProvider, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -91,7 +91,7 @@ pub struct VaultTransfer<C: Chain> {
 	destination_address: C::ChainAccount,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -275,6 +275,8 @@ pub mod pallet {
 
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: DepositHandler<Self::TargetChain>;
+
+		type NetworkEnvironment: NetworkEnvironmentProvider;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
