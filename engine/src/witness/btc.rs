@@ -98,7 +98,7 @@ where
 		+ 'static,
 	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
-	let btc_source = BtcSource::new(btc_client.clone()).shared(scope);
+	let btc_source = BtcSource::new(btc_client.clone()).strictly_monotonic().shared(scope);
 
 	btc_source
 		.clone()
@@ -109,8 +109,7 @@ where
 
 	let vaults = epoch_source.vaults().await;
 
-	let strictly_monotonic_source = btc_source
-		.strictly_monotonic()
+	let block_source = btc_source
 		.then({
 			let btc_client = btc_client.clone();
 			move |header| {
@@ -124,7 +123,7 @@ where
 		.shared(scope);
 
 	// Pre-witnessing stream.
-	strictly_monotonic_source
+	block_source
 		.clone()
 		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
@@ -145,7 +144,7 @@ where
 	tracing::info!("Safety margin for Bitcoin is set to {btc_safety_margin} blocks.",);
 
 	// Full witnessing stream.
-	strictly_monotonic_source
+	block_source
 		.lag_safety(btc_safety_margin as usize)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope)

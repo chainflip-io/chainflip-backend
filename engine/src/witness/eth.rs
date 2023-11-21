@@ -115,7 +115,7 @@ where
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
 
-	let eth_source = EthSource::new(eth_client.clone()).shared(scope);
+	let eth_source = EthSource::new(eth_client.clone()).strictly_monotonic().shared(scope);
 
 	eth_source
 		.clone()
@@ -127,8 +127,7 @@ where
 	let vaults = epoch_source.vaults().await;
 
 	// ===== Prewitnessing stream =====
-	let prewitness_source =
-		eth_source.clone().strictly_monotonic().chunk_by_vault(vaults.clone(), scope);
+	let prewitness_source = eth_source.clone().chunk_by_vault(vaults.clone(), scope);
 
 	let prewitness_source_deposit_addresses = prewitness_source
 		.clone()
@@ -198,7 +197,6 @@ where
 	tracing::info!("Safety margin for Ethereum is set to {eth_safety_margin} blocks.",);
 
 	let eth_safe_vault_source = eth_source
-		.strictly_monotonic()
 		.lag_safety(eth_safety_margin as usize)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope);
