@@ -19,7 +19,7 @@ jobs:
     uses: ./.github/workflows/_24_docker.yml
     with:
       network: "perseverance"
-      environment: "production"
+      environment: "release"
       publish_public_images: true
     secrets: inherit
   package:
@@ -33,7 +33,7 @@ jobs:
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "perseverance/"
-      environment: "production"
+      environment: "release"
     secrets: inherit
   release:
     needs: [publish]
