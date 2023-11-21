@@ -36,7 +36,7 @@ export async function tryRuntimeUpgrade(
 
     console.log('Running migrations until we reach block with hash: ' + latestBlock);
 
-    let blockNumber = 536;
+    let blockNumber = 1;
     let blockHash = await api.rpc.chain.getBlockHash(blockNumber);
     while (!blockHash.eq(latestBlock)) {
       blockHash = await api.rpc.chain.getBlockHash(blockNumber);
