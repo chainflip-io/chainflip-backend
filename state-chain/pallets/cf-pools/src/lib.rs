@@ -14,7 +14,7 @@ use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, Swappin
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
-	traits::{OnRuntimeUpgrade, StorageVersion},
+	traits::StorageVersion,
 	transactional,
 };
 use frame_system::pallet_prelude::OriginFor;
@@ -25,7 +25,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 pub use pallet::*;
 
 mod benchmarking;
-mod migrations;
+pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -477,20 +477,6 @@ pub mod pallet {
 				}
 			}
 			weight_used
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 

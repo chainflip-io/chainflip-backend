@@ -851,6 +851,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
