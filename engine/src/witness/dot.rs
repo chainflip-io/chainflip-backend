@@ -197,6 +197,7 @@ where
 	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let unfinalised_source = DotUnfinalisedSource::new(dot_client.clone())
+		.strictly_monotonic()
 		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.shared(scope);
 
@@ -225,7 +226,6 @@ where
 
 	// Pre-witnessing
 	unfinalised_source
-		.strictly_monotonic()
 		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
 		.await
