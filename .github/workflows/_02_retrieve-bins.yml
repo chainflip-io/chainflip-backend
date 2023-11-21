@@ -35,7 +35,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-sisyphos.yml
-          name: chainflip-node-runtime-production
+          name: chainflip-node-runtime-release
           branch: release/${{ env.MAJOR_MINOR }}
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           search_artifacts: true
@@ -66,6 +66,6 @@ jobs:
       - name: Re-upload runtime artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-node-runtime-production
+          name: chainflip-node-runtime-release
           path: |
             ./state_chain_runtime*.wasm
