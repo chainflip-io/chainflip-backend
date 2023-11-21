@@ -42,7 +42,7 @@ use cf_chains::{
 	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
 	SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId};
+use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, SemVer};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster,
 	Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat,
@@ -51,6 +51,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	parameter_types,
 	sp_runtime::{
 		traits::{BlockNumberProvider, One, UniqueSaturatedFrom, UniqueSaturatedInto},
 		FixedPointNumber, FixedU64,
@@ -64,6 +65,14 @@ pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 use sp_std::prelude::*;
 
+parameter_types! {
+	pub CurrentReleaseVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
+	};
+}
+
 impl Chainflip for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type Amount = FlipBalance;
@@ -74,7 +83,9 @@ impl Chainflip for Runtime {
 	type EpochInfo = Validator;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
+	type CurrentReleaseVersion = CurrentReleaseVersion;
 }
+
 struct BackupNodeEmissions;
 
 impl RewardsDistribution for BackupNodeEmissions {

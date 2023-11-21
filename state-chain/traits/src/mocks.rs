@@ -52,6 +52,14 @@ macro_rules! impl_mock_chainflip {
 			cf_primitives::AuthorityCount,
 		);
 
+		frame_support::parameter_types! {
+			pub CurrentReleaseVersion: cf_primitives::SemVer = cf_primitives::SemVer {
+				major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
+				minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
+				patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
+			};
+		}
+
 		impl Chainflip for $runtime {
 			type Amount = u128;
 			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
@@ -62,6 +70,7 @@ macro_rules! impl_mock_chainflip {
 			type EpochInfo = MockEpochInfo;
 			type AccountRoleRegistry = MockAccountRoleRegistry;
 			type FundingInfo = MockFundingInfo<Self>;
+			type CurrentReleaseVersion = CurrentReleaseVersion;
 		}
 	};
 }
