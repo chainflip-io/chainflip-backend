@@ -1030,10 +1030,6 @@ pub mod pallet {
 				amount;
 			assert!(fee <= amount, "Broker fee cannot be more than the amount");
 
-			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
-				earned_fees.saturating_accrue(fee)
-			});
-
 			let net_amount = amount.saturating_sub(fee);
 
 			let encoded_destination_address =
@@ -1052,10 +1048,13 @@ pub mod pallet {
 				destination_address.clone(),
 				&swap_origin,
 			) {
+				EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
+					earned_fees.saturating_accrue(fee)
+				});
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset: from,
-					deposit_amount: net_amount,
+					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
 					origin: swap_origin,
