@@ -54,16 +54,13 @@ fn test_basic_swaps() {
 		}
 
 		{
+			let initial_sqrt_price = match asset {
+				common::Side::Zero => MAX_SQRT_PRICE - 1,
+				common::Side::One => MIN_SQRT_PRICE,
+			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
-				range_orders: range_orders::PoolState::new(
-					0,
-					match asset {
-						common::Side::Zero => MAX_SQRT_PRICE - 1,
-						common::Side::One => MIN_SQRT_PRICE,
-					},
-				)
-				.unwrap(),
+				range_orders: range_orders::PoolState::new(0, initial_sqrt_price).unwrap(),
 			};
 
 			let liquidity: range_orders::Liquidity = 10000;
@@ -76,8 +73,14 @@ fn test_basic_swaps() {
 					Result::<_, Infallible>::Ok
 				));
 			assert_eq!(minted_liquidity, liquidity);
-			assert_eq!(collected_fees, Default::default());
-			assert_eq!(position_info, range_orders::PositionInfo::new(liquidity));
+			assert_eq!(
+				collected_fees,
+				range_orders::Collected {
+					original_sqrt_price: initial_sqrt_price,
+					..Default::default()
+				}
+			);
+			assert_eq!(position_info.liquidity, liquidity);
 
 			assert_eq!(pool_state.swap(asset, Order::Sell, 0.into()), (0.into(), 0.into()));
 			assert_eq!(
@@ -90,16 +93,13 @@ fn test_basic_swaps() {
 		}
 
 		{
+			let initial_sqrt_price = match asset {
+				Side::Zero => MAX_SQRT_PRICE - 1,
+				Side::One => MIN_SQRT_PRICE,
+			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
-				range_orders: range_orders::PoolState::new(
-					0,
-					match asset {
-						Side::Zero => MAX_SQRT_PRICE - 1,
-						Side::One => MIN_SQRT_PRICE,
-					},
-				)
-				.unwrap(),
+				range_orders: range_orders::PoolState::new(0, initial_sqrt_price).unwrap(),
 			};
 
 			let range_order_liquidity: Liquidity = 10000;
@@ -112,8 +112,14 @@ fn test_basic_swaps() {
 					Result::<_, Infallible>::Ok
 				));
 			assert_eq!(minted_liquidity, range_order_liquidity);
-			assert_eq!(collected_fees, Default::default());
-			assert_eq!(position_info, range_orders::PositionInfo::new(range_order_liquidity));
+			assert_eq!(
+				collected_fees,
+				range_orders::Collected {
+					original_sqrt_price: initial_sqrt_price,
+					..Default::default()
+				}
+			);
+			assert_eq!(position_info.liquidity, range_order_liquidity);
 
 			let limit_order_liquidity: Amount = 10000.into();
 
@@ -141,16 +147,13 @@ fn test_basic_swaps() {
 		}
 
 		{
+			let initial_sqrt_price = match asset {
+				Side::Zero => MAX_SQRT_PRICE - 1,
+				Side::One => MIN_SQRT_PRICE,
+			};
 			let mut pool_state = PoolState {
 				limit_orders: limit_orders::PoolState::new(0).unwrap(),
-				range_orders: range_orders::PoolState::new(
-					0,
-					match asset {
-						Side::Zero => MAX_SQRT_PRICE - 1,
-						Side::One => MIN_SQRT_PRICE,
-					},
-				)
-				.unwrap(),
+				range_orders: range_orders::PoolState::new(0, initial_sqrt_price).unwrap(),
 			};
 
 			let mut mint_range_order = |lower_tick, upper_tick| {
@@ -163,8 +166,14 @@ fn test_basic_swaps() {
 						Result::<_, Infallible>::Ok
 					));
 				assert_eq!(minted_liquidity, liquidity);
-				assert_eq!(collected_fees, Default::default());
-				assert_eq!(position_info, range_orders::PositionInfo::new(100000));
+				assert_eq!(
+					collected_fees,
+					range_orders::Collected {
+						original_sqrt_price: initial_sqrt_price,
+						..Default::default()
+					}
+				);
+				assert_eq!(position_info.liquidity, 100000);
 
 				range_order_minted_amounts
 			};

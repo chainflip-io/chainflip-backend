@@ -19,6 +19,7 @@
 
 #[cfg(test)]
 mod tests;
+pub mod v1;
 
 use core::convert::Infallible;
 
@@ -294,6 +295,12 @@ pub struct Collected {
 	/// The amount of assets purchased by the LP using the liquidity in this position since the
 	/// last collect.
 	pub bought_amount: Amount,
+	/// The accumulative fees earned by this position since the last modification of the position
+	/// i.e. non-zero mint or burn.
+	pub accumulative_fees: Amount,
+	/// The amount of liquidity in the position when it was created/last updated (a non-zero mint
+	/// or burn) prior to the operation that which returned this value.
+	pub original_amount: Amount,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -331,6 +338,13 @@ struct Position {
 	/// position. It is the percent_remaining of the FixedPool when the position was last
 	/// updated/collected from.
 	last_percent_remaining: FloatBetweenZeroAndOne,
+	/// This is the total fees earned by this position since the last non-zero mint or burn on the
+	/// position, as of the last operation on the position. I.e. this value is not updated when
+	/// swaps occur, only when the LP updates their position in some way.
+	accumulative_fees: Amount,
+	/// This is the original amount of liquidity provider by this position as of its creation. This
+	/// value is updated if a non-zero mint or burn is performed on the position.
+	original_amount: Amount,
 }
 
 /// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
@@ -369,6 +383,12 @@ pub(super) struct PoolState<LiquidityProvider> {
 	/// that are selling asset `Zero` and all those that are selling asset `One` used the SideMap.
 	/// Therefore there can be positions stored here that don't provide any liquidity.
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	/// Total fees earned over all time
+	total_fees_earned: SideMap<Amount>,
+	/// Total of all swap inputs over all time (not including fees)
+	total_swap_inputs: SideMap<Amount>,
+	/// Total of all swap outputs over all time
+	total_swap_outputs: SideMap<Amount>,
 }
 
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
@@ -386,6 +406,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			next_pool_instance: 0,
 			fixed_pools: Default::default(),
 			positions: Default::default(),
+			total_fees_earned: Default::default(),
+			total_swap_inputs: Default::default(),
+			total_swap_outputs: Default::default(),
 		})
 	}
 
@@ -480,18 +503,21 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let amount_required_to_consume_pool =
 				SD::input_amount_ceil(fixed_pool.available, price);
 
-			let output_amount = if amount_minus_fees >= amount_required_to_consume_pool {
+			let (output_amount, swapped_amount, fees_taken) = if amount_minus_fees >=
+				amount_required_to_consume_pool
+			{
 				let fixed_pool = fixed_pool_entry.remove();
 
-				// Cannot underflow as amount_minus_fees >= amount_required_to_consume_pool
-				amount -= amount_required_to_consume_pool +
-					mul_div_ceil(
-						amount_required_to_consume_pool,
-						U256::from(self.fee_hundredth_pips),
-						U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-					); /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
+				let fees = mul_div_ceil(
+					amount_required_to_consume_pool,
+					U256::from(self.fee_hundredth_pips),
+					U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
+				); /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
 
-				fixed_pool.available
+				// Cannot underflow as amount_minus_fees >= amount_required_to_consume_pool
+				amount -= amount_required_to_consume_pool + fees;
+
+				(fixed_pool.available, amount_required_to_consume_pool, fees)
 			} else {
 				let initial_output_amount = SD::output_amount_floor(amount_minus_fees, price);
 
@@ -524,13 +550,23 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 				fixed_pool.percent_remaining = next_percent_remaining;
 				fixed_pool.available -= output_amount;
+
+				let fees_taken = amount - amount_minus_fees;
 				amount = Amount::zero();
 
-				output_amount
+				(output_amount, amount_minus_fees, fees_taken)
 			};
+
+			self.total_swap_inputs[SD::INPUT_SIDE] =
+				self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(swapped_amount);
+			self.total_fees_earned[SD::INPUT_SIDE] =
+				self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees_taken);
 
 			total_output_amount = total_output_amount.saturating_add(output_amount);
 		}
+
+		self.total_swap_outputs[!SD::INPUT_SIDE] =
+			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
 		(total_output_amount, amount)
 	}
@@ -541,6 +577,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		price: Price,
 		fee_hundredth_pips: u32,
 	) -> (Collected, Option<Position>) {
+		let previous_position = position.clone();
 		let (used_liquidity, option_position) = if let Some(fixed_pool) =
 			fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance)
 		{
@@ -555,8 +592,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				// We under-estimate used liquidity so that lp's don't receive more
 				// bought_amount and fees than may exist in the pool
 				position.amount - remaining_amount_ceil,
-				// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
-				// than truly exists in the pool
+				// We under-estimate remaining liquidity so that lp's cannot burn more
+				// liquidity than truly exists in the pool
 				if remaining_amount_floor.is_zero() {
 					None
 				} else {
@@ -570,16 +607,23 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		};
 
 		let bought_amount = SD::input_amount_floor(used_liquidity, price);
+		let fees = /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */ mul_div_floor(
+			bought_amount,
+			U256::from(fee_hundredth_pips),
+			U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
+		);
+		let accumulative_fees = previous_position.accumulative_fees.saturating_add(fees);
 		(
 			Collected {
-				fees: /* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */ mul_div_floor(
-					bought_amount,
-					U256::from(fee_hundredth_pips),
-					U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
-				),
+				fees,
 				bought_amount,
+				accumulative_fees,
+				original_amount: previous_position.original_amount,
 			},
-			option_position,
+			option_position.map(|mut position| {
+				position.accumulative_fees = accumulative_fees;
+				position
+			}),
 		)
 	}
 
@@ -645,8 +689,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				(
 					Position {
 						pool_instance: fixed_pool.pool_instance,
-						amount: U256::zero(),
+						amount: Amount::zero(),
 						last_percent_remaining: fixed_pool.percent_remaining.clone(),
+						accumulative_fees: Amount::zero(),
+						original_amount: Amount::zero(),
 					},
 					fixed_pool,
 					next_pool_instance,
@@ -658,6 +704,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				Err(PositionError::Other(MintError::MaximumLiquidity))
 			} else {
 				position.amount += amount;
+				position.original_amount = position.amount;
 
 				let position_info = PositionInfo::from(&position);
 
@@ -717,6 +764,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 				let amount = core::cmp::min(position.amount, amount);
 				position.amount -= amount;
+				position.original_amount = position.amount;
 				fixed_pool.available -= amount;
 
 				let position_info = PositionInfo::from(&position);
