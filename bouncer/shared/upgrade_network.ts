@@ -90,6 +90,9 @@ export async function upgradeNetworkGit(
   bumpByIfEqual: SemVerLevel = 'patch',
   numberOfNodes: 1 | 3 = 1,
 ) {
+
+  console.log('Upgrading network to git ref: ' + toGitRef);
+
   const currentVersionWorkspacePath = path.dirname(process.cwd());
 
   const fromTomlVersion = await readPackageTomlVersion(currentVersionWorkspacePath);

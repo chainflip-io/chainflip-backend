@@ -11,37 +11,56 @@
 // --bump <patch/minor/major>: If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
 // --nodes <1 or 3>: The number of nodes running on your localnet. Defaults to 1.
 //
-// For example: ./commands/upgrade_network.ts v0.10.1
-// or: ./commands/upgrade_network.ts --git 0.10.1 --bump major --nodes 3
+// For example: 
+// ./commands/upgrade_network.ts git --ref 0.10.1 --bump major --nodes 3
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import { upgradeNetworkGit } from '../shared/upgrade_network';
+import { upgradeNetworkGit } from '../shared/upgrade_network_git';
 import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const argv = yargs(hideBin(process.argv)).command('git', "specify a git reference to test the new version you wish to upgrade to", async () => {
-    console.log('git selected');
-    const upgradeTo = argv.git;
+  await yargs(hideBin(process.argv)).command('git', "specify a git reference to test the new version you wish to upgrade to", (args) => {
+    console.log('git selected, parsing options');
 
-    if (!upgradeTo) {
-      console.error('Please provide a git reference to upgrade to.');
-      process.exit(-1);
+    return args.option('ref', {
+      describe: "git reference to test the new version you wish to upgrade to",
+      type: 'string',
+      demandOption: true,
+      requiresArg: true,
+    }).option('bump', {
+      describe: "If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.",
+      type: 'string',
+      default: 'patch',
+    }).option('nodes', {
+      describe: "The number of nodes running on your localnet. Defaults to 1.",
+      type: 'number',
+      default: 1,
+    })
+  }, async (argv) => {
+    console.log("git subcommand with args: " + argv.ref);
+    try {
+      await upgradeNetworkGit(argv.ref, argv.bump, argv.nodes);
+    } catch (error) {
+      console.error(`Error: ${error}`);
     }
-
-    const optBumptTo: string = argv.bump ? argv.bump.toString().toLowerCase() : 'patch';
-    if (optBumptTo !== 'patch' && optBumptTo !== 'minor' && optBumptTo !== 'major') {
-      console.error('Please provide a valid bump level: patch, minor, or major.');
-      process.exit(-1);
-    }
-
-    let numberOfNodes = argv.nodes ? argv.nodes : 1;
-    numberOfNodes = numberOfNodes === 1 || numberOfNodes === 3 ? numberOfNodes : 1;
-
-    await upgradeNetworkGit(upgradeTo, optBumptTo, numberOfNodes);
-  }).command('bins', "specify paths to the binaries and runtime you wish to upgrade to", async () => {
-    console.log('bins selected');
+  }).command('prebuilt', "specify paths to the prebuilt binaries and runtime you wish to upgrade to", (args) => {
+    console.log('prebuilt selected');
+    return args.option('bins', {
+      describe: "paths to the binaries and runtime you wish to upgrade to",
+      type: 'string',
+      demandOption: true,
+      requiresArg: true
+    }).option('runtime', {
+      describe: "paths to the binaries and runtime you wish to upgrade to",
+      type: 'string',
+      demandOption: true,
+      requiresArg: true,
+    })
+  }, async (args) => {
+    console.log("prebuilt subcommand with args: " + args.bins + " " + args.runtime);
+    console.log("Not implemented yet.");
   }).demandCommand(1).help().argv;
 
   process.exit(0);
