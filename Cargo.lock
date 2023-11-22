@@ -7499,6 +7499,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "itertools 0.11.0",
  "log",
  "pallet-cf-account-roles",
  "parity-scale-codec",
