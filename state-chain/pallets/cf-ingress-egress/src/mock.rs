@@ -23,7 +23,7 @@ use cf_traits::{
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
-	DepositApi, DepositHandler,
+	DepositApi, DepositHandler, NetworkEnvironmentProvider,
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
@@ -96,6 +96,14 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
+pub struct MockNetworkEnvironmentProvider {}
+
+impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
+	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
+		cf_primitives::NetworkEnvironment::Development
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -111,6 +119,7 @@ impl crate::Config for Test {
 	type CcmHandler = MockCcmHandler;
 	type ChainTracking = BlockHeightProvider<Ethereum>;
 	type WeightInfo = ();
+	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
