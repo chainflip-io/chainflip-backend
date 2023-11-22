@@ -20,6 +20,11 @@ mod old {
 		pub limit_orders_cache: SideMap<BTreeMap<T::AccountId, BTreeMap<OrderId, Tick>>>,
 		pub pool_state: cf_amm::v1::PoolState<(T::AccountId, OrderId)>,
 	}
+
+	#[cfg(feature = "try-runtime")]
+	#[frame_support::storage_alias]
+	pub type Pools<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, CanonicalAssetPair<T>, Pool<T>, OptionQuery>;
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
@@ -37,11 +42,17 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(Default::default())
+		let number_of_pools = old::Pools::<T>::iter_keys().count() as u32;
+		Ok(number_of_pools.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let number_of_pools_pre_migration = <u32>::decode(&mut &state[..]).unwrap();
+		ensure!(
+			Pools::<T>::iter_keys().count() as u32 == number_of_pools_pre_migration,
+			"Pools migration failed"
+		);
 		Ok(())
 	}
 }
