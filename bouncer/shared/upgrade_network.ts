@@ -85,7 +85,7 @@ async function incompatibleUpgrade(
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
 // If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
 // Only the incompatible upgrade requires the number of nodes.
-export async function upgradeNetwork(
+export async function upgradeNetworkGit(
   toGitRef: string,
   bumpByIfEqual: SemVerLevel = 'patch',
   numberOfNodes: 1 | 3 = 1,

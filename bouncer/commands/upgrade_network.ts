@@ -17,29 +17,32 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import { upgradeNetwork } from '../shared/upgrade_network';
+import { upgradeNetworkGit } from '../shared/upgrade_network';
 import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const argv = yargs(hideBin(process.argv)).argv;
+  const argv = yargs(hideBin(process.argv)).command('git', "specify a git reference to test the new version you wish to upgrade to", async () => {
+    console.log('git selected');
+    const upgradeTo = argv.git;
 
-  const upgradeTo = argv.git;
+    if (!upgradeTo) {
+      console.error('Please provide a git reference to upgrade to.');
+      process.exit(-1);
+    }
 
-  if (!upgradeTo) {
-    console.error('Please provide a git reference to upgrade to.');
-    process.exit(-1);
-  }
+    const optBumptTo: string = argv.bump ? argv.bump.toString().toLowerCase() : 'patch';
+    if (optBumptTo !== 'patch' && optBumptTo !== 'minor' && optBumptTo !== 'major') {
+      console.error('Please provide a valid bump level: patch, minor, or major.');
+      process.exit(-1);
+    }
 
-  const optBumptTo: string = argv.bump ? argv.bump.toString().toLowerCase() : 'patch';
-  if (optBumptTo !== 'patch' && optBumptTo !== 'minor' && optBumptTo !== 'major') {
-    console.error('Please provide a valid bump level: patch, minor, or major.');
-    process.exit(-1);
-  }
+    let numberOfNodes = argv.nodes ? argv.nodes : 1;
+    numberOfNodes = numberOfNodes === 1 || numberOfNodes === 3 ? numberOfNodes : 1;
 
-  let numberOfNodes = argv.nodes ? argv.nodes : 1;
-  numberOfNodes = numberOfNodes === 1 || numberOfNodes === 3 ? numberOfNodes : 1;
-
-  await upgradeNetwork(upgradeTo, optBumptTo, numberOfNodes);
+    await upgradeNetworkGit(upgradeTo, optBumptTo, numberOfNodes);
+  }).command('bins', "specify paths to the binaries and runtime you wish to upgrade to", async () => {
+    console.log('bins selected');
+  }).demandCommand(1).help().argv;
 
   process.exit(0);
 }
