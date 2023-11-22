@@ -5,11 +5,11 @@ use ethers::{
 	types::{transaction::eip2930::AccessList, TransactionReceipt},
 };
 
+use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::{
-	common::option_inner,
-	eth::rpc::EthRpcApi,
+	eth::rpc::{EthRpcApi, EthSigningRpcApi},
 	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
@@ -17,7 +17,7 @@ use crate::{
 use std::{path::PathBuf, time::Duration};
 
 use super::{
-	rpc::{EthRpcClient, ReconnectSubscriptionClient},
+	rpc::{EthRpcClient, EthRpcSigningClient, ReconnectSubscriptionClient},
 	ConscientiousEthWebsocketBlockHeaderStream,
 };
 use crate::eth::rpc::ReconnectSubscribeApi;
@@ -26,8 +26,8 @@ use cf_chains::Ethereum;
 use anyhow::{Context, Result};
 
 #[derive(Clone)]
-pub struct EthersRetryRpcClient {
-	rpc_retry_client: RetrierClient<EthRpcClient>,
+pub struct EthRetryRpcClient<Rpc: EthRpcApi> {
+	rpc_retry_client: RetrierClient<Rpc>,
 	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
@@ -36,29 +36,23 @@ const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
 
-impl EthersRetryRpcClient {
-	pub fn new(
+impl<Rpc: EthRpcApi> EthRetryRpcClient<Rpc> {
+	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
-		private_key_file: PathBuf,
 		nodes: NodeContainer<WsHttpEndpoints>,
 		expected_chain_id: U256,
-	) -> Result<Self> {
-		let f_create_clients = |endpoints: WsHttpEndpoints| {
-			Result::<_, anyhow::Error>::Ok((
-				EthRpcClient::new(
-					private_key_file.clone(),
-					endpoints.http_endpoint,
-					expected_chain_id.as_u64(),
-				)?,
-				ReconnectSubscriptionClient::new(endpoints.ws_endpoint, expected_chain_id),
-			))
-		};
+		rpc_client: ClientFut,
+		backup_rpc_client: Option<ClientFut>,
+	) -> Self {
+		let sub_client =
+			ReconnectSubscriptionClient::new(nodes.primary.ws_endpoint, expected_chain_id);
 
-		let (rpc_client, sub_client) = f_create_clients(nodes.primary)?;
-		let (backup_rpc_client, backup_sub_client) =
-			option_inner(nodes.backup.map(f_create_clients).transpose()?);
+		let backup_sub_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| ReconnectSubscriptionClient::new(ep.ws_endpoint.clone(), expected_chain_id));
 
-		Ok(Self {
+		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
 				"eth_rpc",
@@ -75,17 +69,60 @@ impl EthersRetryRpcClient {
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-		})
+		}
+	}
+}
+
+impl EthRetryRpcClient<EthRpcClient> {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_chain_id: U256,
+	) -> Result<Self> {
+		let rpc_client =
+			EthRpcClient::new(nodes.primary.http_endpoint.clone(), expected_chain_id.as_u64())?;
+
+		let backup_rpc_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| EthRpcClient::new(ep.http_endpoint.clone(), expected_chain_id.as_u64()))
+			.transpose()?;
+
+		Ok(Self::from_inner_clients(scope, nodes, expected_chain_id, rpc_client, backup_rpc_client))
+	}
+}
+
+impl EthRetryRpcClient<EthRpcSigningClient> {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		private_key_file: PathBuf,
+		nodes: NodeContainer<WsHttpEndpoints>,
+		expected_chain_id: U256,
+	) -> Result<Self> {
+		let rpc_client = EthRpcSigningClient::new(
+			private_key_file.clone(),
+			nodes.primary.http_endpoint.clone(),
+			expected_chain_id.as_u64(),
+		)?;
+
+		let backup_rpc_client = nodes
+			.backup
+			.as_ref()
+			.map(|ep| {
+				EthRpcSigningClient::new(
+					private_key_file.clone(),
+					ep.http_endpoint.clone(),
+					expected_chain_id.as_u64(),
+				)
+			})
+			.transpose()?;
+
+		Ok(Self::from_inner_clients(scope, nodes, expected_chain_id, rpc_client, backup_rpc_client))
 	}
 }
 
 #[async_trait::async_trait]
 pub trait EthersRetryRpcApi: Clone {
-	async fn broadcast_transaction(
-		&self,
-		tx: cf_chains::evm::Transaction,
-	) -> anyhow::Result<TxHash>;
-
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
@@ -107,68 +144,15 @@ pub trait EthersRetryRpcApi: Clone {
 }
 
 #[async_trait::async_trait]
-impl EthersRetryRpcApi for EthersRetryRpcClient {
-	/// Estimates gas and then sends the transaction to the network.
+pub trait EthersRetrySigningRpcApi: EthersRetryRpcApi {
 	async fn broadcast_transaction(
 		&self,
 		tx: cf_chains::evm::Transaction,
-	) -> anyhow::Result<TxHash> {
-		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
-		self.rpc_retry_client
-			.request_with_limit(
-				Box::pin(move |client| {
-					let tx = tx.clone();
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move {
-						let mut transaction_request = Eip1559TransactionRequest {
-							to: Some(NameOrAddress::Address(tx.contract)),
-							data: Some(tx.data.into()),
-							chain_id: Some(tx.chain_id.into()),
-							value: Some(tx.value),
-							max_fee_per_gas: tx.max_fee_per_gas,
-							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
-							// geth uses the latest block gas limit as an upper bound
-							gas: None,
-							access_list: AccessList::default(),
-							from: Some(client.address()),
-							nonce: None,
-						};
+	) -> anyhow::Result<TxHash>;
+}
 
-						let estimated_gas = client
-							.estimate_gas(&transaction_request)
-							.await
-							.context("Failed to estimate gas")?;
-
-						transaction_request.gas = Some(match tx.gas_limit {
-							Some(gas_limit) =>
-								if estimated_gas > gas_limit {
-									return Err(anyhow::anyhow!(
-										"Estimated gas is greater than the gas limit"
-									))
-								} else {
-									gas_limit
-								},
-							None => {
-								// increase the estimate by 33% for normal transactions
-								estimated_gas
-									.saturating_mul(U256::from(4u64))
-									.checked_div(U256::from(3u64))
-									.unwrap()
-							},
-						});
-
-						client
-							.send_transaction(transaction_request)
-							.await
-							.context("Failed to send ETH transaction")
-					})
-				}),
-				log,
-				MAX_BROADCAST_RETRIES,
-			)
-			.await
-	}
-
+#[async_trait::async_trait]
+impl<Rpc: EthRpcApi> EthersRetryRpcApi for EthRetryRpcClient<Rpc> {
 	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(
@@ -276,12 +260,76 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
+impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> {
+	/// Estimates gas and then sends the transaction to the network.
+	async fn broadcast_transaction(
+		&self,
+		tx: cf_chains::evm::Transaction,
+	) -> anyhow::Result<TxHash> {
+		let log = RequestLog::new("broadcast_transaction".to_string(), Some(format!("{tx:?}")));
+		self.rpc_retry_client
+			.request_with_limit(
+				Box::pin(move |client| {
+					let tx = tx.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						let mut transaction_request = Eip1559TransactionRequest {
+							to: Some(NameOrAddress::Address(tx.contract)),
+							data: Some(tx.data.into()),
+							chain_id: Some(tx.chain_id.into()),
+							value: Some(tx.value),
+							max_fee_per_gas: tx.max_fee_per_gas,
+							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+							// geth uses the latest block gas limit as an upper bound
+							gas: None,
+							access_list: AccessList::default(),
+							from: Some(client.address()),
+							nonce: None,
+						};
+
+						let estimated_gas = client
+							.estimate_gas(&transaction_request)
+							.await
+							.context("Failed to estimate gas")?;
+
+						transaction_request.gas = Some(match tx.gas_limit {
+							Some(gas_limit) =>
+								if estimated_gas > gas_limit {
+									return Err(anyhow::anyhow!(
+										"Estimated gas is greater than the gas limit"
+									))
+								} else {
+									gas_limit
+								},
+							None => {
+								// increase the estimate by 33% for normal transactions
+								estimated_gas
+									.saturating_mul(U256::from(4u64))
+									.checked_div(U256::from(3u64))
+									.unwrap()
+							},
+						});
+
+						client
+							.send_transaction(transaction_request)
+							.await
+							.context("Failed to send ETH transaction")
+					})
+				}),
+				log,
+				MAX_BROADCAST_RETRIES,
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
 pub trait EthersRetrySubscribeApi {
 	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream;
 }
 
 #[async_trait::async_trait]
-impl EthersRetrySubscribeApi for EthersRetryRpcClient {
+impl<Rpc: EthRpcApi> EthersRetrySubscribeApi for EthRetryRpcClient<Rpc> {
 	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(
@@ -296,7 +344,7 @@ impl EthersRetrySubscribeApi for EthersRetryRpcClient {
 }
 
 #[async_trait::async_trait]
-impl ChainClient for EthersRetryRpcClient {
+impl<Rpc: EthRpcApi> ChainClient for EthRetryRpcClient<Rpc> {
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;
@@ -349,11 +397,16 @@ pub mod mocks {
 		}
 
 		#[async_trait::async_trait]
-		impl EthersRetryRpcApi for EthRetryRpcClient {
+		impl EthersRetrySigningRpcApi for EthRetryRpcClient {
 			async fn broadcast_transaction(
 				&self,
 				tx: cf_chains::evm::Transaction,
 			) -> anyhow::Result<TxHash>;
+
+		}
+
+		#[async_trait::async_trait]
+		impl EthersRetryRpcApi for EthRetryRpcClient {
 
 			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
@@ -392,7 +445,7 @@ mod tests {
 			async move {
 				let settings = Settings::new_test().unwrap();
 
-				let retry_client = EthersRetryRpcClient::new(
+				let retry_client = EthRetryRpcClient::<EthRpcSigningClient>::new(
 					scope,
 					settings.eth.private_key_file,
 					settings.eth.nodes,
