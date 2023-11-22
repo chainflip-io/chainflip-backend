@@ -1,3 +1,4 @@
+use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
@@ -2084,8 +2085,6 @@ fn swap_with_custom_broker_fee(
 	amount: AssetAmount,
 	broker_fee: BasisPoints,
 ) {
-	const ALICE: u64 = 2_u64;
-
 	<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 		ForeignChainAddress::Eth([2; 20].into()),
 		Default::default(),
@@ -2102,11 +2101,10 @@ fn swap_with_custom_broker_fee(
 #[test]
 fn swap_broker_fee_calculated_correctly() {
 	new_test_ext().execute_with(|| {
-		const ALICE: u64 = 2_u64;
 		let fees: [BasisPoints; 12] =
 			[1, 5, 10, 100, 200, 500, 1000, 1500, 2000, 5000, 7500, 10000];
 		const AMOUNT: AssetAmount = 100000;
-		const BASIS_POINTS_PER_MILLION: u32 = 100;
+
 		// calculate broker fees for each asset available
 		Asset::all().iter().for_each(|asset| {
 			let total_fees: u128 =
@@ -2123,7 +2121,6 @@ fn swap_broker_fee_calculated_correctly() {
 #[test]
 fn swap_broker_fee_cannot_exceed_amount() {
 	new_test_ext().execute_with(|| {
-		const ALICE: u64 = 2_u64;
 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 15000);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 100);
 	});
@@ -2134,7 +2131,7 @@ fn swap_scheduled_event_witnessed(
 	source_asset: Asset,
 	deposit_amount: AssetAmount,
 	destination_asset: Asset,
-	broker_commission: Option<AssetAmount>,
+	broker_commission: AssetAmount,
 ) {
 	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 		swap_id,
@@ -2148,16 +2145,14 @@ fn swap_scheduled_event_witnessed(
 			deposit_block_height: Default::default(),
 		},
 		swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
-		broker_commission,
+		broker_commission: Some(broker_commission),
 	}));
 }
 #[test]
 fn swap_broker_fee_subtracted_from_swap_amount() {
 	new_test_ext().execute_with(|| {
-		const ALICE: u64 = 2_u64;
 		let amounts: [AssetAmount; 6] = [50, 100, 200, 500, 1000, 10000];
 		let fees: [BasisPoints; 4] = [100, 1000, 5000, 10000];
-		const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 		let combinations = amounts.iter().cartesian_product(fees);
 		let mut swap_id = 1;
@@ -2174,7 +2169,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 					*asset,
 					*amount,
 					Asset::Flip,
-					Some(broker_commission),
+					broker_commission,
 				);
 				swap_id += 1;
 			})
@@ -2198,35 +2193,34 @@ fn swap_amount_too_low_witnessed(asset: Asset, amount: AssetAmount) {
 fn swap_fail_if_below_minimum_swap_amount() {
 	new_test_ext().execute_with(|| {
 		let asset = Asset::Usdc;
-		let amount = 1_000u128;
+		let minimum_amount = 1_000u128;
 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
 
 		// Set the new minimum swap_amount (1000 USDC)
-		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, amount));
+		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, minimum_amount));
 
-		assert_eq!(MinimumSwapAmount::<Test>::get(asset), amount);
-		assert_eq!(Swapping::minimum_swap_amount(asset), amount);
+		assert_eq!(MinimumSwapAmount::<Test>::get(asset), minimum_amount);
+		assert_eq!(Swapping::minimum_swap_amount(asset), minimum_amount);
 
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
 			asset,
-			amount,
+			amount: minimum_amount,
 		}));
 
-		const ALICE: u64 = 2_u64;
 		//swap with amount >= MinimumAmount is scheduled
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 1500, 1000);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount + 500, 1000);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
-		swap_scheduled_event_witnessed(1, Asset::Usdc, 1500, Asset::Flip, Some(150));
+		swap_scheduled_event_witnessed(1, Asset::Usdc, 1500, Asset::Flip, 150);
 
 		//Swap with amount == MinimumAmount completes (even after subtracting brokerFee, netAmount
 		// is < minAmount)
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 1000, 1000);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount, 1000);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
-		swap_scheduled_event_witnessed(2, Asset::Usdc, 1000, Asset::Flip, Some(100));
+		swap_scheduled_event_witnessed(2, Asset::Usdc, 1000, Asset::Flip, 100);
 
 		//Swap with amount < MinimumAmount fails
-		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 999, 0);
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount - 500, 0);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
-		swap_amount_too_low_witnessed(Asset::Usdc, 999);
+		swap_amount_too_low_witnessed(Asset::Usdc, 500);
 	});
 }
