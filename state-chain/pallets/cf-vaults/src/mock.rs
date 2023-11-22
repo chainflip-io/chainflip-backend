@@ -161,8 +161,8 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 		unimplemented!()
 	}
 
-	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
-		unimplemented!()
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+		Self::threshold_sign_and_broadcast(api_call)
 	}
 }
 

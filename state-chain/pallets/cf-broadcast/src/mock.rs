@@ -163,7 +163,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
-		MockEpochInfo::next_epoch((0..3).collect());
+		MockEpochInfo::next_epoch((0..4).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		for id in &MockEpochInfo::current_authorities() {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();

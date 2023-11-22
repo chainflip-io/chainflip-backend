@@ -14,10 +14,18 @@ pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
 
+#[derive(Clone)]
+pub enum ChainChoice {
+	Ethereum,
+	Polkadot,
+	Bitcoin,
+}
+
 thread_local! {
 	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
 	static MOCK_SIGN_WITH_SPECIFIC_KEY: RefCell<bool> = RefCell::new(false);
 	static MOCK_VALID_METADATA: RefCell<bool> = RefCell::new(true);
+	static MOCK_BROADCAST_BARRIERS: RefCell<ChainChoice> = RefCell::new(ChainChoice::Ethereum);
 }
 
 pub struct MockKeyHandoverIsRequired;
@@ -31,6 +39,20 @@ impl MockKeyHandoverIsRequired {
 impl Get<bool> for MockKeyHandoverIsRequired {
 	fn get() -> bool {
 		MOCK_KEY_HANDOVER_IS_REQUIRED.with(|v| *v.borrow())
+	}
+}
+
+pub struct MockBroadcastBarriers;
+
+impl MockBroadcastBarriers {
+	pub fn set(value: ChainChoice) {
+		MOCK_BROADCAST_BARRIERS.with(|v| *v.borrow_mut() = value);
+	}
+}
+
+impl Get<ChainChoice> for MockBroadcastBarriers {
+	fn get() -> ChainChoice {
+		MOCK_BROADCAST_BARRIERS.with(|v| (*v.borrow()).clone())
 	}
 }
 
@@ -254,9 +276,18 @@ impl ChainCrypto for MockEthereumChainCrypto {
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
-		_rotation_broadcast_id: BroadcastId,
+		rotation_broadcast_id: BroadcastId,
 	) -> Vec<BroadcastId> {
-		unimplemented!()
+		match MockBroadcastBarriers::get() {
+			ChainChoice::Ethereum =>
+				if rotation_broadcast_id > 1 {
+					vec![rotation_broadcast_id - 1, rotation_broadcast_id]
+				} else {
+					vec![rotation_broadcast_id]
+				},
+			ChainChoice::Polkadot => vec![rotation_broadcast_id],
+			ChainChoice::Bitcoin => vec![],
+		}
 	}
 }
 
