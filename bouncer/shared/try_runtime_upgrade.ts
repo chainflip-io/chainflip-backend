@@ -7,7 +7,7 @@ import { compileBinaries } from './utils/compile_binaries';
 
 function tryRuntimeCommand(projectRoot: string, blockParam: string, networkUrl: string) {
   execSync(
-    `try-runtime --runtime ${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm on-runtime-upgrade --checks all ${blockParam} --uri ${networkUrl}`,
+    `try-runtime --runtime ${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm on-runtime-upgrade --disable-spec-version-check --checks all ${blockParam} --uri ${networkUrl}`,
     { stdio: 'ignore' },
   );
 }
