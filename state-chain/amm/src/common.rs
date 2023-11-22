@@ -561,6 +561,14 @@ mod test {
 		assert_eq!(mul_div(2.into(), 2.into(), 6), (0.into(), 1.into()));
 	}
 
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_conversion_sqrt_price_back_and_forth() {
+		for tick in MIN_TICK..=MAX_TICK {
+			assert_eq!(tick, tick_at_sqrt_price(sqrt_price_at_tick(tick)));
+		}
+	}
+
 	#[test]
 	fn test_sqrt_price_at_tick() {
 		assert_eq!(sqrt_price_at_tick(MIN_TICK), MIN_SQRT_PRICE);
