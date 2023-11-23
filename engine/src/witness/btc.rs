@@ -6,8 +6,7 @@ use std::sync::Arc;
 
 use bitcoin::{BlockHash, Transaction};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
-use cf_primitives::EpochIndex;
-use chainflip_node::chain_spec::berghain::BITCOIN_SAFETY_MARGIN;
+use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
 use secp256k1::hashes::Hash;
 use utilities::task_scope::Scope;
@@ -132,14 +131,28 @@ where
 		.logging("pre-witnessing")
 		.spawn(scope);
 
-	let btc_safety_margin = state_chain_client
+	let btc_safety_margin = match state_chain_client
 		.storage_value::<pallet_cf_ingress_egress::WitnessSafetyMargin<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::BitcoinInstance,
 		>>(state_chain_stream.cache().hash)
 		.await?
-		// Default to berghain in case the value is missing (e.g. during initial upgrade)
-		.unwrap_or(BITCOIN_SAFETY_MARGIN);
+	{
+		Some(margin) => margin,
+		None => {
+			use chainflip_node::chain_spec::{berghain, devnet, perseverance};
+			match state_chain_client
+				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+					state_chain_stream.cache().hash,
+				)
+				.await?
+			{
+				NetworkEnvironment::Mainnet => berghain::BITCOIN_SAFETY_MARGIN,
+				NetworkEnvironment::Testnet => perseverance::BITCOIN_SAFETY_MARGIN,
+				NetworkEnvironment::Development => devnet::BITCOIN_SAFETY_MARGIN,
+			}
+		},
+	};
 
 	tracing::info!("Safety margin for Bitcoin is set to {btc_safety_margin} blocks.",);
 
