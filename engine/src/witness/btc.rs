@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use bitcoin::{BlockHash, Transaction};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
-use cf_primitives::EpochIndex;
+use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
 use secp256k1::hashes::Hash;
 use utilities::task_scope::Scope;
@@ -26,9 +26,6 @@ use super::common::{
 };
 
 use anyhow::Result;
-
-// safety margin of 5 implies 6 block confirmations
-const SAFETY_MARGIN: usize = 5;
 
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
@@ -134,9 +131,34 @@ where
 		.logging("pre-witnessing")
 		.spawn(scope);
 
+	let btc_safety_margin = match state_chain_client
+		.storage_value::<pallet_cf_ingress_egress::WitnessSafetyMargin<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>(state_chain_stream.cache().hash)
+		.await?
+	{
+		Some(margin) => margin,
+		None => {
+			use chainflip_node::chain_spec::{berghain, devnet, perseverance};
+			match state_chain_client
+				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+					state_chain_stream.cache().hash,
+				)
+				.await?
+			{
+				NetworkEnvironment::Mainnet => berghain::BITCOIN_SAFETY_MARGIN,
+				NetworkEnvironment::Testnet => perseverance::BITCOIN_SAFETY_MARGIN,
+				NetworkEnvironment::Development => devnet::BITCOIN_SAFETY_MARGIN,
+			}
+		},
+	};
+
+	tracing::info!("Safety margin for Bitcoin is set to {btc_safety_margin} blocks.",);
+
 	// Full witnessing stream.
 	block_source
-		.lag_safety(SAFETY_MARGIN)
+		.lag_safety(btc_safety_margin as usize)
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
