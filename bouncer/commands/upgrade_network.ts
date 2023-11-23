@@ -17,7 +17,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import { upgradeNetworkGit } from '../shared/upgrade_network_git';
+import { upgradeNetworkGit, upgradeNetworkPrebuilt } from '../shared/upgrade_network';
 import { runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
     })
   }, async (args) => {
     console.log("prebuilt subcommand with args: " + args.bins + " " + args.runtime);
-    console.log("Not implemented yet.");
+    await upgradeNetworkPrebuilt(args.bins, args.runtime, "1.0.0");
   }).demandCommand(1).help().argv;
 
   process.exit(0);
@@ -70,3 +70,9 @@ runWithTimeout(main(), 15 * 60 * 1000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });
+
+
+// /Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm
+
+
+// ./commands/upgrade_network.ts prebuilt --bins /Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug --runtime /Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm

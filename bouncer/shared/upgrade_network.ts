@@ -7,7 +7,7 @@ import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
 import { compareSemVer, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/bump_spec_version';
 import { compileBinaries } from './utils/compile_binaries';
-import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
+import { submitRuntimeUpgrade, submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -43,14 +43,10 @@ function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string
   }
 }
 
-async function incompatibleUpgrade(
-  currentVersionWorkspacePath: string,
+async function incompatibleUpgradeNoBuild(currentVersionWorkspacePath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await bumpSpecVersionAgainstNetwork(nextVersionWorkspacePath);
-
-  await compileBinaries('all', nextVersionWorkspacePath);
 
   let selectedNodes;
   if (numberOfNodes === 1) {
@@ -80,6 +76,19 @@ async function incompatibleUpgrade(
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
+}
+
+async function incompatibleUpgrade(
+  // could we pass localnet/init instead of this.
+  currentVersionWorkspacePath: string,
+  nextVersionWorkspacePath: string,
+  numberOfNodes: 1 | 3,
+) {
+  await bumpSpecVersionAgainstNetwork(nextVersionWorkspacePath);
+
+  await compileBinaries('all', nextVersionWorkspacePath);
+
+  await incompatibleUpgradeNoBuild(currentVersionWorkspacePath, nextVersionWorkspacePath, numberOfNodes);
 }
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
@@ -142,4 +151,56 @@ export async function upgradeNetworkGit(
   console.log('Cleaning up...');
   execSync(`cd ${nextVersionWorkspacePath} && git worktree remove . --force`);
   console.log('Done.');
+}
+
+// How to get the old version? Could use the same method --version, or query the chain?
+export async function upgradeNetworkPrebuilt(
+  // Directory where the node and CFE binaries of the new version are located
+  binariesPath: string,
+  // Path to the runtime we will upgrade to
+  runtimePath: string,
+
+  old_version: string,
+
+  numberOfNodes: 1 | 3 = 1,
+) {
+
+  const versionRegex = /\d+\.\d+\.\d+/;
+
+  let cfe_binary_version = execSync(`${binariesPath}/chainflip-engine --version`).toString();
+
+  const cfe_version = cfe_binary_version.match(versionRegex)[0];
+  console.log("CFE version we're upgrading to: " + cfe_version);
+
+
+  let node_binary_version = execSync(`${binariesPath}/chainflip-node --version`).toString();
+  const node_version = node_binary_version.match(versionRegex)[0];
+  console.log("Node version we're upgrading to: " + node_version);
+
+  if (cfe_version !== node_version) {
+    throw new Error(
+      "The CFE version and the node version don't match. Ensure you selected the correct binaries.",
+    );
+  }
+
+  const isCompatible = isCompatibleWith(old_version, cfe_version);
+
+  if (!isCompatible) {
+    console.log('The versions are incompatible.');
+    console.log("Upgrading with a number of nodes: " + numberOfNodes);
+    // await incompatibleUpgrade(currentVersionWorkspacePath, nextVersionWorkspacePath, numberOfNodes);
+  } else {
+    console.log('The versions are compatible.');
+
+    await submitRuntimeUpgradeWithRestrictions(runtimePath);
+    console.log('Upgrade complete.');
+  }
+
+  console.log("Versions match, we're good to go.");
+
+
+  // run --version on the binaries to get the compatible/incompatible status
+
+  // format of --version
+  // chainflip-node 1.0.0-b316890d931
 }
