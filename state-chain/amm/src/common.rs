@@ -553,15 +553,6 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 	}
 }
 
-/// Takes a Q128 fixed point number and raises it to the nth power, if the result is larger than the
-/// maximum U256 this function will panic.
-///
-/// The result will be equal or less than the true value, and is not necessarily within 1 of the
-/// true value.
-pub(super) fn fixed_point_to_power_as_integer(x: U256, n: u32) -> U256 {
-	(fixed_point_to_power_as_fixed_point(x, n) >> 128).try_into().unwrap()
-}
-
 /// Takes a Q128 fixed point number and raises it to the nth power, and returns it as a Q128 fixed
 /// point number. If the result is larger than the maximum U384 this function will panic.
 ///
@@ -676,24 +667,27 @@ mod test {
 
 	#[cfg(feature = "slow-tests")]
 	#[test]
-	fn test_fixed_point_to_power_as_integer() {
+	fn test_fixed_point_to_power_as_fixed_point() {
 		for n in 0..9u32 {
 			for e in 0..9u32 {
 				assert_eq!(
-					U256::from(n.pow(e)),
-					fixed_point_to_power_as_integer(U256::from(n) << 128, e)
+					U512::from(n.pow(e)) << 128,
+					fixed_point_to_power_as_fixed_point(U256::from(n) << 128, e)
 				);
 			}
 		}
 
-		assert_eq!(U256::from(57), fixed_point_to_power_as_integer(U256::from(3) << 127, 10));
 		assert_eq!(
-			U256::from(1) << 128,
-			fixed_point_to_power_as_integer(U256::from(2) << 128, 128)
+			U512::from(57),
+			fixed_point_to_power_as_fixed_point(U256::from(3) << 127, 10) >> 128
 		);
 		assert_eq!(
-			U256::from(1) << 255,
-			fixed_point_to_power_as_integer(U256::from(2) << 128, 255)
+			U512::from(1) << 128,
+			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 128) >> 128
+		);
+		assert_eq!(
+			U512::from(1) << 255,
+			fixed_point_to_power_as_fixed_point(U256::from(2) << 128, 255) >> 128
 		);
 	}
 
@@ -741,8 +735,9 @@ mod test {
 			let n = U256::from(n);
 			for e in 2..10 {
 				let root = nth_root_of_integer_as_fixed_point(n, e);
-				let x = fixed_point_to_power_as_integer(root, e);
-				assert!((n.saturating_sub(1.into())..=n + 1).contains(&x), "{n} {e} {x} {root}");
+				let x =
+					U256::try_from(fixed_point_to_power_as_fixed_point(root, e) >> 128).unwrap();
+				assert!((n.saturating_sub(1.into())..=n + 1).contains(&x));
 			}
 		}
 	}

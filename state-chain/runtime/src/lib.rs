@@ -1071,7 +1071,7 @@ impl_runtime_apis! {
 			base_asset: Asset,
 			quote_asset: Asset,
 			orders: u32,
-		) -> Option<PoolOrderbook> {
+		) -> Result<PoolOrderbook, DispatchError> {
 			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
 		}
 

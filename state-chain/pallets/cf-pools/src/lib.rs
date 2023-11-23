@@ -1495,17 +1495,20 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		orders: u32,
-	) -> Option<PoolOrderbook> {
+	) -> Result<PoolOrderbook, DispatchError> {
 		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
 
-		let asset_pair = AssetPair::<T>::new(base_asset, quote_asset).ok()?;
-		let pool_state = Pools::<T>::get(asset_pair.canonical_asset_pair)?.pool_state;
+		let asset_pair = AssetPair::<T>::new(base_asset, quote_asset)
+			.map_err(|_| Error::<T>::PoolDoesNotExist)?;
+		let pool_state = Pools::<T>::get(asset_pair.canonical_asset_pair)
+			.ok_or(Error::<T>::PoolDoesNotExist)?
+			.pool_state;
 
 		// TODO: Need to change limit order pool implmentation so Amount::MAX is guaranteed to drain
 		// pool (so the calculated amounts here are guaranteed to reflect the accurate
 		// maximum_bough_amounts)
 
-		Some(PoolOrderbook {
+		Ok(PoolOrderbook {
 			asks: {
 				let mut pool_state = pool_state.clone();
 				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(

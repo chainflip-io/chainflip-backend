@@ -124,7 +124,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			orders: u32,
-		) -> Option<PoolOrderbook>;
+		) -> Result<PoolOrderbook, DispatchError>;
 		fn cf_pool_orders(base: Asset, pair: Asset, lp: AccountId32) -> Option<PoolOrders>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,

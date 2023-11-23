@@ -422,7 +422,7 @@ pub trait CustomApi {
 		quote_asset: RpcAsset,
 		orders: u32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolOrderbook>>;
+	) -> RpcResult<PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -916,7 +916,7 @@ where
 		quote_asset: RpcAsset,
 		orders: u32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolOrderbook>> {
+	) -> RpcResult<PoolOrderbook> {
 		self.client
 			.runtime_api()
 			.cf_pool_orderbook(
@@ -925,8 +925,8 @@ where
 				quote_asset.try_into()?,
 				orders,
 			)
-			.map(|option_orderbook| option_orderbook.map(Into::into))
 			.map_err(to_rpc_error)
+			.and_then(|result| result.map(Into::into).map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_orders(
