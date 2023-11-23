@@ -164,7 +164,7 @@ pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	)
 }
 
-pub fn approximate_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
+pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
 	assert_ne!(quote, Amount::zero());
 	assert_ne!(base, Amount::zero());
 
@@ -559,9 +559,17 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 /// The result will be equal or less than the true value, and is not necessarily within 1 of the
 /// true value.
 pub(super) fn fixed_point_to_power_as_integer(x: U256, n: u32) -> U256 {
+	(fixed_point_to_power_as_fixed_point(x, n) >> 128).try_into().unwrap()
+}
+
+/// Takes a Q128 fixed point number and raises it to the nth power, and returns it as a Q128 fixed
+/// point number. If the result is larger than the maximum U384 this function will panic.
+///
+/// The result will be equal or less than the true value.
+pub(super) fn fixed_point_to_power_as_fixed_point(x: U256, n: u32) -> U512 {
 	let x = U512::from(x);
 
-	((0..(32 - n.leading_zeros()))
+	(0..(32 - n.leading_zeros()))
 		.zip(
 			// This is zipped second and therefore it is not polled if there are no more bits, so
 			// we don't calculate x * x one more time than we need, as it may overflow.
@@ -579,9 +587,7 @@ pub(super) fn fixed_point_to_power_as_integer(x: U256, n: u32) -> U256 {
 			} else {
 				total
 			}
-		}) >> 128)
-		.try_into()
-		.unwrap()
+		})
 }
 
 pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
@@ -593,16 +599,18 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 	)
 	.unwrap();
 
+	let x = U512::from(x) << 128;
+
 	for _ in 0..128 {
-		let f = fixed_point_to_power_as_integer(root, n);
+		let f = fixed_point_to_power_as_fixed_point(root, n);
 		let diff = f.abs_diff(x);
-		if diff <= f >> 16 {
+		if diff <= f >> 20 {
 			break
 		} else {
 			let delta = mul_div_floor(
-				diff,
+				U256::try_from(diff).unwrap(),
 				(U256::one() << 128) / U256::from(n),
-				fixed_point_to_power_as_integer(root, n - 1),
+				fixed_point_to_power_as_fixed_point(root, n - 1),
 			);
 			root = if f >= x { root - delta } else { root + delta };
 		}
@@ -613,21 +621,129 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 
 #[cfg(test)]
 mod test {
-	use rand::SeedableRng;
-
-	use crate::test_utilities::rng_u256_inclusive_bound;
-
 	use super::*;
 
+	#[cfg(feature = "slow-tests")]
+	use rand::SeedableRng;
+
+	#[cfg(feature = "slow-tests")]
+	use crate::test_utilities::rng_u256_inclusive_bound;
+
+	#[cfg(feature = "slow-tests")]
 	#[test]
-	fn test_approximate_sqrt_price() {
+	fn test_sqrt_price() {
 		let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
 
 		for _i in 0..10000000 {
-			approximate_sqrt_price(
-				rng_u256_inclusive_bound(&mut rng, Default::default()..=Amount::MAX),
-				rng_u256_inclusive_bound(&mut rng, Default::default()..=Amount::MAX),
+			assert!(is_sqrt_price_valid(bounded_sqrt_price(
+				rng_u256_inclusive_bound(&mut rng, Amount::one()..=Amount::MAX),
+				rng_u256_inclusive_bound(&mut rng, Amount::one()..=Amount::MAX),
+			)));
+		}
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_increase_sqrt_price() {
+		fn inner<SD: SwapDirection>() {
+			assert_eq!(SD::increase_sqrt_price(SD::WORST_SQRT_PRICE, 0), SD::WORST_SQRT_PRICE);
+			assert_eq!(SD::increase_sqrt_price(SD::WORST_SQRT_PRICE, 1), SD::WORST_SQRT_PRICE);
+
+			let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
+
+			for _i in 0..10000000 {
+				let sqrt_price =
+					rng_u256_inclusive_bound(&mut rng, (MIN_SQRT_PRICE + 1)..=(MAX_SQRT_PRICE - 1));
+				assert!(SD::sqrt_price_op_more_than(
+					SD::increase_sqrt_price(sqrt_price, 1),
+					sqrt_price
+				));
+				assert!(SD::sqrt_price_op_more_than(
+					SD::increase_sqrt_price(sqrt_price, 10000000),
+					sqrt_price
+				));
+			}
+
+			for tick in MIN_TICK..=MAX_TICK {
+				let sqrt_price = sqrt_price_at_tick(tick);
+				assert_eq!(sqrt_price, SD::increase_sqrt_price(sqrt_price, 0));
+			}
+		}
+
+		inner::<ZeroToOne>();
+		inner::<OneToZero>();
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_fixed_point_to_power_as_integer() {
+		for n in 0..9u32 {
+			for e in 0..9u32 {
+				assert_eq!(
+					U256::from(n.pow(e)),
+					fixed_point_to_power_as_integer(U256::from(n) << 128, e)
+				);
+			}
+		}
+
+		assert_eq!(U256::from(57), fixed_point_to_power_as_integer(U256::from(3) << 127, 10));
+		assert_eq!(
+			U256::from(1) << 128,
+			fixed_point_to_power_as_integer(U256::from(2) << 128, 128)
+		);
+		assert_eq!(
+			U256::from(1) << 255,
+			fixed_point_to_power_as_integer(U256::from(2) << 128, 255)
+		);
+	}
+
+	#[cfg(feature = "slow-tests")]
+	#[test]
+	fn test_nth_root_of_integer_as_fixed_point() {
+		fn fixed_point_to_float(x: U256) -> f64 {
+			x.0.into_iter()
+				.fold(0.0f64, |acc, n| (acc / 2.0f64.powi(64)) + (n as f64) * 2.0f64.powi(64))
+		}
+
+		for i in 1..100 {
+			assert_eq!(
+				U256::from(i) << 128,
+				nth_root_of_integer_as_fixed_point(U256::from(i * i), 2)
 			);
+		}
+
+		for n in (0..1000000).step_by(5) {
+			for i in 2..100 {
+				let root_float = (n as f64).powf(1.0f64 / (i as f64));
+				let root = fixed_point_to_float(nth_root_of_integer_as_fixed_point(n.into(), i));
+
+				assert!(
+					(root_float - root).abs() <= root_float * 0.000001f64,
+					"{root_float} {root}"
+				);
+			}
+		}
+
+		assert_eq!(
+			U256::from(2) << 128,
+			nth_root_of_integer_as_fixed_point(U256::one() << 128, 128)
+		);
+		assert_eq!(
+			U256::from_dec_str("1198547750512063821665753418683415504682").unwrap(),
+			nth_root_of_integer_as_fixed_point(U256::from(83434), 9)
+		);
+		assert_eq!(
+			U256::from_dec_str("70594317847877622574934944024871574448634").unwrap(),
+			nth_root_of_integer_as_fixed_point(U256::from(384283294283u128), 5)
+		);
+
+		for n in 0..100000u32 {
+			let n = U256::from(n);
+			for e in 2..10 {
+				let root = nth_root_of_integer_as_fixed_point(n, e);
+				let x = fixed_point_to_power_as_integer(root, e);
+				assert!((n.saturating_sub(1.into())..=n + 1).contains(&x), "{n} {e} {x} {root}");
+			}
 		}
 	}
 

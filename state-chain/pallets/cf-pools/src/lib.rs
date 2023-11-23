@@ -1531,7 +1531,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: sold_base_amount,
-								sqrt_price: cf_amm::common::approximate_sqrt_price(
+								sqrt_price: cf_amm::common::bounded_sqrt_price(
 									bought_quote_amount,
 									sold_base_amount,
 								),
@@ -1565,7 +1565,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: bought_base_amount,
-								sqrt_price: cf_amm::common::approximate_sqrt_price(
+								sqrt_price: cf_amm::common::bounded_sqrt_price(
 									sold_quote_amount,
 									bought_base_amount,
 								),
