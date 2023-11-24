@@ -588,22 +588,39 @@ mod bond_expiry {
 	#[test]
 	fn increasing_bond() {
 		new_test_ext().execute_with(|| {
+			const BOND: u128 = 100;
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![1, 2], Some(100)));
-			assert_eq!(ValidatorPallet::bond(), 100);
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![1, 2],
+				Some(BOND),
+			));
+			assert_eq!(ValidatorPallet::bond(), BOND);
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![2, 3], Some(101)));
-			assert_eq!(ValidatorPallet::bond(), 101);
+			// Ensure the new bond is set for each authority
+			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
+				assert_eq!(MockBonder::get_bond(account_id), BOND);
+			});
+
+			const NEXT_BOND: u128 = BOND + 1;
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![2, 3],
+				Some(NEXT_BOND),
+			));
+			assert_eq!(ValidatorPallet::bond(), NEXT_BOND);
+
+			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
+				assert_eq!(MockBonder::get_bond(account_id), NEXT_BOND);
+			});
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
-			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
+			assert_eq!(EpochHistory::<Test>::active_bond(&1), BOND);
 			assert_eq!(
 				EpochHistory::<Test>::active_epochs_for_authority(&2),
 				[initial_epoch + 1, initial_epoch + 2]
 			);
-			assert_eq!(EpochHistory::<Test>::active_bond(&2), 101);
+			assert_eq!(EpochHistory::<Test>::active_bond(&2), NEXT_BOND);
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&3), [initial_epoch + 2]);
-			assert_eq!(EpochHistory::<Test>::active_bond(&3), 101);
+			assert_eq!(EpochHistory::<Test>::active_bond(&3), NEXT_BOND);
 		});
 	}
 
@@ -611,11 +628,27 @@ mod bond_expiry {
 	fn decreasing_bond() {
 		new_test_ext().execute_with(|| {
 			let initial_epoch = ValidatorPallet::current_epoch();
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![1, 2], Some(100)));
+			const AUTHORITY_IN_BOTH_EPOCHS: u64 = 2;
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![1, AUTHORITY_IN_BOTH_EPOCHS],
+				Some(100),
+			));
 			assert_eq!(ValidatorPallet::bond(), 100);
 
-			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(vec![2, 3], Some(99)));
+			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
+				assert_eq!(MockBonder::get_bond(account_id), 100);
+			});
+
+			ValidatorPallet::transition_to_next_epoch(simple_rotation_state(
+				vec![AUTHORITY_IN_BOTH_EPOCHS, 3],
+				Some(99),
+			));
 			assert_eq!(ValidatorPallet::bond(), 99);
+
+			// Keeps the highest bond of all the epochs it's been active in
+			assert_eq!(MockBonder::get_bond(&AUTHORITY_IN_BOTH_EPOCHS), 100);
+			// Uses the new bond
+			assert_eq!(MockBonder::get_bond(&3), 99);
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);
