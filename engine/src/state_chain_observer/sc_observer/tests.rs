@@ -547,41 +547,16 @@ async fn should_process_initial_block_first() {
 }
 
 #[tokio::test]
-async fn test_get_ceremony_id_counters() {
-	const ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK: CeremonyId = 10;
-	const DOT_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK: CeremonyId = 20;
-	const BTC_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK: CeremonyId = 30;
+async fn test_get_ceremony_id_counters_with_events() {
+	const ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 10;
+	const DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 20;
+	const BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 30;
 	let block_hash = H256::default();
 	let mut state_chain_client = MockStateChainClient::new();
 
-	// First it will get the ceremony id counter for each chain at the given block hash
-	state_chain_client
-		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
-		.with(eq(block_hash))
-		.once()
-		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK));
-	state_chain_client
-		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
-		.with(eq(block_hash))
-		.once()
-		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK));
-	state_chain_client
-		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
-		.with(eq(block_hash))
-		.once()
-		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK));
-
-	// Then it will get the events from the block. We will give it some events that would cause the
-	// ceremony id counters to be updated
+	// Load up the block with events that would cause the ceremony id counters to be updated.
+	// Note: The events must be in order (lowest ceremony id per chain first), just like in a real
+	// SC stream.
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(block_hash))
@@ -605,7 +580,7 @@ async fn test_get_ceremony_id_counters() {
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: RuntimeEvent::EthereumVault(pallet_cf_vaults::Event::KeygenRequest {
-						ceremony_id: ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK,
+						ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 						participants: Default::default(),
 						epoch_index: 1,
 					}),
@@ -616,7 +591,7 @@ async fn test_get_ceremony_id_counters() {
 					event: RuntimeEvent::EthereumThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: 1,
-							ceremony_id: ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK - 1,
+							ceremony_id: ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
 							epoch: 1,
 							key: Default::default(),
 							signatories: Default::default(),
@@ -628,7 +603,7 @@ async fn test_get_ceremony_id_counters() {
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: RuntimeEvent::PolkadotVault(pallet_cf_vaults::Event::KeygenRequest {
-						ceremony_id: DOT_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK,
+						ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 						participants: Default::default(),
 						epoch_index: 1,
 					}),
@@ -639,7 +614,7 @@ async fn test_get_ceremony_id_counters() {
 					event: RuntimeEvent::PolkadotThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: 1,
-							ceremony_id: DOT_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK - 1,
+							ceremony_id: DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
 							epoch: 1,
 							key: Default::default(),
 							signatories: Default::default(),
@@ -650,9 +625,18 @@ async fn test_get_ceremony_id_counters() {
 				}),
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: RuntimeEvent::BitcoinVault(pallet_cf_vaults::Event::KeygenRequest {
+						ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+						epoch_index: 1,
+						participants: Default::default(),
+					}),
+					topics: vec![Default::default()],
+				}),
+				Box::new(frame_system::EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: RuntimeEvent::BitcoinVault(
 						pallet_cf_vaults::Event::KeyHandoverRequest {
-							ceremony_id: BTC_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK,
+							ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 2,
 							from_epoch: 1,
 							key_to_share: cf_chains::btc::AggKey::default(),
 							sharing_participants: Default::default(),
@@ -668,7 +652,7 @@ async fn test_get_ceremony_id_counters() {
 					event: RuntimeEvent::BitcoinThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: 1,
-							ceremony_id: BTC_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK - 1,
+							ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 3,
 							epoch: 1,
 							key: Default::default(),
 							signatories: Default::default(),
@@ -685,10 +669,79 @@ async fn test_get_ceremony_id_counters() {
 			.await
 			.unwrap();
 
-	// Check the each ceremony id counter decreased by the correct amount
-	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK - 2);
-	assert_eq!(ceremony_id_counters.polkadot, ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK - 2);
-	assert_eq!(ceremony_id_counters.bitcoin, ETH_CEREMONY_ID_COUNTER_AFTER_INITIAL_BLOCK - 2);
+	// Check the each ceremony id counter is set to the value before the initial block
+	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+	assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+	assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+}
+
+#[tokio::test]
+async fn test_get_ceremony_id_counters_without_events() {
+	const ETH_CEREMONY_ID_COUNTER: CeremonyId = 10;
+	const DOT_CEREMONY_ID_COUNTER: CeremonyId = 20;
+	const BTC_CEREMONY_ID_COUNTER: CeremonyId = 30;
+	let block_hash = H256::default();
+	let mut state_chain_client = MockStateChainClient::new();
+
+	// Because the block has no events, we expect it to grab the ceremony id counter for each chain
+	// from storage.
+	state_chain_client
+		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::EthereumInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(ETH_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(DOT_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(BTC_CEREMONY_ID_COUNTER));
+
+	// No events in the stream that would change the ceremony id counters
+	state_chain_client
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| {
+			Ok(vec![
+				// TransactionBroadcastRequest should not effect the ceremony id counter
+				Box::new(frame_system::EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: RuntimeEvent::EthereumBroadcaster(
+						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+							broadcast_attempt_id: BroadcastAttemptId::default(),
+							nominee: AccountId32::new([1; 32]),
+							transaction_payload: Default::default(),
+							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
+						},
+					),
+					topics: vec![Default::default()],
+				}),
+			])
+		});
+
+	let ceremony_id_counters =
+		get_ceremony_id_counters_before_block(block_hash, Arc::new(state_chain_client))
+			.await
+			.unwrap();
+
+	// Check the each ceremony id counter is the same as the one in storage
+	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER);
 }
 
 #[tokio::test]

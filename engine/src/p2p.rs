@@ -11,12 +11,9 @@ use std::{
 use crate::{
 	p2p::core::ed25519_secret_key_to_x25519_secret_key,
 	settings::P2P as P2PSettings,
-	state_chain_observer::{
-		client::{
-			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi,
-			storage_api::StorageApi, StateChainStreamApi,
-		},
-		monitor_p2p_registration_events,
+	state_chain_observer::client::{
+		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+		StateChainStreamApi,
 	},
 };
 
@@ -29,7 +26,7 @@ pub use self::{
 use anyhow::Context;
 use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, ChainCrypto};
 use cf_primitives::AccountId;
-use futures::{Future, FutureExt};
+use futures::{Future, FutureExt, StreamExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
 use muxer::P2PMuxer;
 use sp_core::{ed25519, H256};
@@ -37,7 +34,7 @@ use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
 };
-use tracing::{info_span, Instrument};
+use tracing::{error, info_span, Instrument};
 use zeroize::Zeroizing;
 
 use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
@@ -220,4 +217,65 @@ where
 		p2p_ready_receiver,
 		fut,
 	))
+}
+
+async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StateChainStreamApi>(
+	state_chain_client: Arc<StateChainClient>,
+	sc_block_stream: BlockStream,
+	peer_update_sender: UnboundedSender<PeerUpdate>,
+) where
+	StateChainClient: StorageApi + 'static + Send + Sync,
+{
+	let mut sc_block_stream = Box::pin(sc_block_stream);
+	loop {
+		match sc_block_stream.next().await {
+			Some(current_block) => {
+				if let Ok(events) = state_chain_client
+					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
+						current_block.hash,
+					)
+					.await
+				{
+					for event_record in events {
+						match event_record.event {
+							state_chain_runtime::RuntimeEvent::Validator(
+								pallet_cf_validator::Event::PeerIdRegistered(
+									account_id,
+									ed25519_pubkey,
+									port,
+									ip_address,
+								),
+							) => {
+								peer_update_sender
+									.send(PeerUpdate::Registered(PeerInfo::new(
+										account_id,
+										ed25519_pubkey,
+										ip_address.into(),
+										port,
+									)))
+									.unwrap();
+							},
+							state_chain_runtime::RuntimeEvent::Validator(
+								pallet_cf_validator::Event::PeerIdUnregistered(
+									account_id,
+									ed25519_pubkey,
+								),
+							) => {
+								peer_update_sender
+									.send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
+									.unwrap();
+							},
+							_ => {
+								// We only care about peer registration events
+							},
+						}
+					}
+				}
+			},
+			None => {
+				error!("Exiting as State Chain block stream ended");
+				break
+			},
+		}
+	}
 }
