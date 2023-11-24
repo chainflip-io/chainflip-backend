@@ -43,7 +43,7 @@ function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string
   }
 }
 
-async function incompatibleUpgradeNoBuild(currentVersionWorkspacePath: string,
+async function incompatibleUpgradeNoBuild(localnetInitPath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
 ) {
@@ -63,7 +63,7 @@ async function incompatibleUpgradeNoBuild(currentVersionWorkspacePath: string,
   execSync(
     `LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES="${selectedNodes.join(
       ' ',
-    )}" LOCALNET_INIT_DIR=${currentVersionWorkspacePath}/localnet/init BINARY_ROOT_PATH=${nextVersionWorkspacePath}/target/release ${currentVersionWorkspacePath}/localnet/init/scripts/start-all-engines.sh`,
+    )}" LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${nextVersionWorkspacePath}/target/release ${localnetInitPath}/scripts/start-all-engines.sh`,
   );
 
   // let the engines do what they gotta do
@@ -80,7 +80,7 @@ async function incompatibleUpgradeNoBuild(currentVersionWorkspacePath: string,
 
 async function incompatibleUpgrade(
   // could we pass localnet/init instead of this.
-  currentVersionWorkspacePath: string,
+  localnetInitPath: string,
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
 ) {
@@ -88,7 +88,7 @@ async function incompatibleUpgrade(
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
-  await incompatibleUpgradeNoBuild(currentVersionWorkspacePath, nextVersionWorkspacePath, numberOfNodes);
+  await incompatibleUpgradeNoBuild(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
 }
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
@@ -145,7 +145,7 @@ export async function upgradeNetworkGit(
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
     console.log('The versions are incompatible.');
-    await incompatibleUpgrade(currentVersionWorkspacePath, nextVersionWorkspacePath, numberOfNodes);
+    await incompatibleUpgrade(`${currentVersionWorkspacePath}/localnet/init`, nextVersionWorkspacePath, numberOfNodes);
   }
 
   console.log('Cleaning up...');
