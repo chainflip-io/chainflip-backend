@@ -357,6 +357,25 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			CurrentAuthorities::<T>::get().iter().for_each(|account_id| {
+				T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
+			});
+			Weight::zero()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_data: Vec<u8>) -> Result<(), DispatchError> {
+			CurrentAuthorities::<T>::get().iter().for_each(|account_id| {
+				assert_eq!(
+					EpochHistory::<T>::active_bond(account_id),
+					Bond::<T>::get(),
+					"Account bond not equal to pallet bond"
+				);
+			});
+			Ok(())
+		}
+
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
 			let mut weight = Weight::zero();
