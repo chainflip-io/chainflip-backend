@@ -18,6 +18,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
+pub mod v1;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState<LiquidityProvider> {

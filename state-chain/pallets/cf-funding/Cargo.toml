@@ -55,6 +55,7 @@ std = [
   'frame-system/std',
   'log/std',
   'scale-info/std',
+  'sp-std/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',

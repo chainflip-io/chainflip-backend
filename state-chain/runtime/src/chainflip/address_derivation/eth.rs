@@ -1,17 +1,18 @@
 use super::AddressDerivation;
 use crate::{Environment, EthEnvironment};
 use cf_chains::{
-	address::AddressDerivationApi, eth::deposit_address::get_create_2_address,
-	evm::api::EthEnvironmentProvider, Chain, Ethereum,
+	address::{AddressDerivationApi, AddressDerivationError},
+	eth::deposit_address::get_create_2_address,
+	evm::api::EthEnvironmentProvider,
+	Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};
-use frame_support::sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Ethereum> for AddressDerivation {
 	fn generate_address(
 		source_asset: eth::Asset,
 		channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
+	) -> Result<<Ethereum as Chain>::ChainAccount, AddressDerivationError> {
 		Ok(get_create_2_address(
 			Environment::eth_vault_address(),
 			EthEnvironment::token_address(source_asset),
@@ -24,7 +25,7 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<
 		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
-		DispatchError,
+		AddressDerivationError,
 	> {
 		Ok((
 			<Self as AddressDerivationApi<Ethereum>>::generate_address(source_asset, channel_id)?,

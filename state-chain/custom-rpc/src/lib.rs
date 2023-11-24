@@ -36,6 +36,9 @@ use std::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
+#[serde(
+	expecting = r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
+)]
 pub enum RpcAsset {
 	ImplicitChain(Asset),
 	ExplicitChain { chain: ForeignChain, asset: Asset },
@@ -88,7 +91,7 @@ impl TryFrom<(Asset, Option<ForeignChain>)> for RpcAsset {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
-	None {
+	Unregistered {
 		flip_balance: NumberOrHex,
 	},
 	Broker {
@@ -117,8 +120,8 @@ pub enum RpcAccountInfo {
 }
 
 impl RpcAccountInfo {
-	fn none(balance: u128) -> Self {
-		Self::None { flip_balance: balance.into() }
+	fn unregistered(balance: u128) -> Self {
+		Self::Unregistered { flip_balance: balance.into() }
 	}
 
 	fn broker(balance: u128) -> Self {
@@ -201,6 +204,7 @@ pub struct RpcAuctionState {
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
+	min_active_bid: Option<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -456,6 +460,9 @@ pub trait CustomApi {
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>>;
+
+	#[method(name = "supported_assets")]
+	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -641,9 +648,9 @@ where
 			match api
 				.cf_account_role(hash, account_id.clone())
 				.map_err(to_rpc_error)?
-				.unwrap_or(AccountRole::None)
+				.unwrap_or(AccountRole::Unregistered)
 			{
-				AccountRole::None => RpcAccountInfo::none(balance),
+				AccountRole::Unregistered => RpcAccountInfo::unregistered(balance),
 				AccountRole::Broker => RpcAccountInfo::broker(balance),
 				AccountRole::LiquidityProvider => {
 					let info = api
@@ -746,6 +753,7 @@ where
 			redemption_period_as_percentage: auction_state.redemption_period_as_percentage,
 			min_funding: auction_state.min_funding.into(),
 			auction_size_range: auction_state.auction_size_range,
+			min_active_bid: auction_state.min_active_bid.map(|bond| bond.into()),
 		})
 	}
 
@@ -1033,6 +1041,17 @@ where
 			)
 			.map_err(to_rpc_error)
 	}
+
+	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>> {
+		let mut chain_to_asset: HashMap<ForeignChain, Vec<Asset>> = HashMap::new();
+		Asset::all().iter().for_each(|asset| {
+			chain_to_asset
+				.entry((*asset).into())
+				.and_modify(|asset_vec| asset_vec.push(*asset))
+				.or_insert(vec![*asset]);
+		});
+		Ok(chain_to_asset)
+	}
 }
 
 impl<C, B> CustomRpc<C, B>
@@ -1155,7 +1174,9 @@ mod test {
 
 	#[test]
 	fn test_no_account_serialization() {
-		insta::assert_display_snapshot!(serde_json::to_value(RpcAccountInfo::none(0)).unwrap());
+		insta::assert_display_snapshot!(
+			serde_json::to_value(RpcAccountInfo::unregistered(0)).unwrap()
+		);
 	}
 
 	#[test]
@@ -1292,5 +1313,14 @@ mod test {
 		assert!(try_into_asset(Asset::Dot, ForeignChain::Ethereum).is_err());
 		assert!(try_into_asset(Asset::Usdc, ForeignChain::Bitcoin).is_err());
 		assert!(try_into_asset(Asset::Btc, ForeignChain::Ethereum).is_err());
+	}
+
+	#[test]
+	fn test_failed_parse_error_message() {
+		let error = serde_json::from_str::<RpcAsset>("\"Eth\"").unwrap_err();
+		assert_eq!(
+			error.to_string(),
+			r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
+		);
 	}
 }

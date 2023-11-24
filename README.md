@@ -122,7 +122,7 @@ You can use either release or debug builds.
 From the repo root, run the following:
 
 ```shell
-cargo cf-build # or cargo cf-build-ci
+cargo cf-build # or cargo cf-build-release
 ./localnet/manage.sh
 ```
 

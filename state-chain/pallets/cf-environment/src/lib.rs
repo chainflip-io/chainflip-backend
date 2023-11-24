@@ -13,7 +13,7 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, NetworkEnvironment, SemVer};
-use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, SafeMode};
+use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, NetworkEnvironmentProvider, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -29,7 +29,7 @@ mod tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
-mod migrations;
+pub mod migrations;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
@@ -179,24 +179,6 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			Self::update_current_release_version();
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T>::post_upgrade(state)
-		}
 	}
 
 	#[pallet::call]
@@ -442,5 +424,11 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 	fn current_release_version() -> SemVer {
 		Self::current_release_version()
+	}
+}
+
+impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
+	fn get_network_environment() -> NetworkEnvironment {
+		Self::network_environment()
 	}
 }

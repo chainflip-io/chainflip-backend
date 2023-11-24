@@ -2,7 +2,7 @@ pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositBalances, DepositWitness};
 
 pub use cf_chains::{
-	address::{AddressDerivationApi, ForeignChainAddress},
+	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::{api::EthereumApi, Address as EthereumAddress},
 	CcmDepositMetadata, Chain, ChainEnvironment, DepositChannel,
 };
@@ -23,7 +23,7 @@ use cf_traits::{
 		lp_balance::MockBalance,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
-	DepositApi, DepositHandler,
+	DepositApi, DepositHandler, NetworkEnvironmentProvider,
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
@@ -81,7 +81,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
 		_source_asset: assets::eth::Asset,
 		channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+	) -> Result<<Ethereum as Chain>::ChainAccount, AddressDerivationError> {
 		Ok([channel_id as u8; 20].into())
 	}
 
@@ -90,9 +90,17 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<
 		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
-		sp_runtime::DispatchError,
+		AddressDerivationError,
 	> {
 		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
+	}
+}
+
+pub struct MockNetworkEnvironmentProvider {}
+
+impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
+	fn get_network_environment() -> cf_primitives::NetworkEnvironment {
+		cf_primitives::NetworkEnvironment::Development
 	}
 }
 
@@ -111,6 +119,7 @@ impl crate::Config for Test {
 	type CcmHandler = MockCcmHandler;
 	type ChainTracking = BlockHeightProvider<Ethereum>;
 	type WeightInfo = ();
+	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -120,7 +129,7 @@ impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100 },
+		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2) },
 	}
 }
 

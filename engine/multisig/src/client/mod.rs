@@ -371,6 +371,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoSchem
 						(reported_parties, failure_reason)
 					})
 			}
+			.instrument(span.clone())
 			.boxed()
 		} else {
 			// No key was found for the given key_id

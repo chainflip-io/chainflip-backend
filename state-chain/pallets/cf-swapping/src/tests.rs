@@ -1,8 +1,9 @@
+use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
-	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumSwapAmount, Pallet, PendingCcms,
-	Swap, SwapOrigin, SwapQueue, SwapType,
+	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MaximumSwapAmount, MinimumSwapAmount,
+	Pallet, PendingCcms, Swap, SwapOrigin, SwapQueue, SwapType,
 };
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -10,7 +11,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChain, NetworkEnvironment};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ForeignChain, NetworkEnvironment};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{
@@ -19,9 +20,11 @@ use cf_traits::{
 	},
 	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
-use frame_support::{assert_noop, assert_ok, sp_std::iter};
+use frame_support::{assert_noop, assert_ok, sp_std::iter, traits::Hooks};
+use itertools::Itertools;
+use sp_arithmetic::Permill;
 
-use frame_support::traits::Hooks;
+const GAS_BUDGET: AssetAmount = 1_000u128;
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -105,7 +108,7 @@ fn insert_swaps(swaps: &[Swap]) {
 fn generate_ccm_channel() -> CcmChannelMetadata {
 	CcmChannelMetadata {
 		message: vec![0x01].try_into().unwrap(),
-		gas_budget: 1_000u128,
+		gas_budget: GAS_BUDGET,
 		cf_parameters: Default::default(),
 	}
 }
@@ -332,7 +335,7 @@ fn can_swap_using_witness_origin() {
 #[test]
 fn reject_invalid_ccm_deposit() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let ccm = generate_ccm_deposit();
 
 		assert_noop!(
@@ -464,7 +467,7 @@ fn rejects_invalid_swap_by_witnesser() {
 #[test]
 fn can_process_ccms_via_swap_deposit_address() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let request_ccm = generate_ccm_channel();
 		let ccm = generate_ccm_deposit();
@@ -549,7 +552,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 #[test]
 fn can_process_ccms_via_extrinsic() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 1_000_000;
 		let ccm = generate_ccm_deposit();
 
@@ -633,7 +636,7 @@ fn can_process_ccms_via_extrinsic() {
 #[test]
 fn can_handle_ccms_with_non_native_gas_asset() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let ccm = generate_ccm_deposit();
 		assert_ok!(Swapping::ccm_deposit(
@@ -715,7 +718,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 #[test]
 fn can_handle_ccms_with_native_gas_asset() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let ccm = generate_ccm_deposit();
 
@@ -792,7 +795,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 #[test]
 fn can_handle_ccms_with_no_swaps_needed() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let deposit_amount = 10_000;
 		let ccm = generate_ccm_deposit();
 
@@ -1021,7 +1024,7 @@ fn swap_by_deposit_happy_path() {
 #[test]
 fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
@@ -1092,7 +1095,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 #[test]
 fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
@@ -1160,7 +1163,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 #[test]
 fn ccm_without_principal_swaps_are_accepted() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let principal_amount = 10_000;
 		let eth: Asset = Asset::Eth;
 		let flip: Asset = Asset::Flip;
@@ -1245,7 +1248,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 #[test]
 fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 	new_test_ext().execute_with(|| {
-		let gas_budget = 1_000;
+		let gas_budget = GAS_BUDGET;
 		let flip: Asset = Asset::Flip;
 		let ccm = generate_ccm_deposit();
 
@@ -1651,4 +1654,573 @@ fn can_handle_swaps_with_zero_outputs() {
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 0);
 		});
+}
+
+#[test]
+fn can_set_maximum_swap_amount() {
+	new_test_ext().execute_with(|| {
+		let asset = Asset::Eth;
+		let amount = Some(1_000u128);
+		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
+
+		// Set the new maximum swap_amount
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), asset, amount));
+
+		assert_eq!(MaximumSwapAmount::<Test>::get(asset), amount);
+		assert_eq!(Swapping::maximum_swap_amount(asset), amount);
+
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
+			asset,
+			amount,
+		}));
+
+		// Can remove maximum swap amount
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), asset, None));
+		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
+			asset,
+			amount: None,
+		}));
+	});
+}
+
+#[test]
+fn swap_excess_are_confiscated_ccm_via_deposit() {
+	new_test_ext().execute_with(|| {
+		let gas_budget = GAS_BUDGET;
+		let principal_amount = 1_000;
+		let max_swap = 100;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+		let request_ccm = generate_ccm_channel();
+		let ccm = generate_ccm_deposit();
+
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+
+		// Register CCM via Swap deposit
+		assert_ok!(Swapping::request_swap_deposit_address(
+			RuntimeOrigin::signed(ALICE),
+			from,
+			to,
+			EncodedAddress::Eth(Default::default()),
+			0,
+			Some(request_ccm)
+		));
+
+		Swapping::on_ccm_deposit(
+			from,
+			gas_budget + principal_amount,
+			to,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm.clone(),
+			SwapOrigin::Vault { tx_hash: Default::default() },
+		);
+
+		// Excess fee is confiscated
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
+			swap_id: 1,
+			source_asset: from,
+			destination_asset: to,
+			total_amount: 1_000,
+			confiscated_amount: 900,
+		}));
+
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
+			swap_id: 2,
+			source_asset: from,
+			destination_asset: Asset::Eth,
+			total_amount: 1_000,
+			confiscated_amount: 900,
+		}));
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 1u64,
+					from,
+					to,
+					amount: max_swap,
+					swap_type: SwapType::CcmPrincipal(1),
+					stable_amount: Some(max_swap),
+					final_output: None,
+					fee_taken: false
+				},
+				Swap {
+					swap_id: 2u64,
+					from,
+					to: Asset::Eth,
+					amount: max_swap,
+					swap_type: SwapType::CcmGas(1),
+					stable_amount: Some(max_swap),
+					final_output: None,
+					fee_taken: false
+				}
+			]
+		);
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900 * 2);
+	});
+}
+
+#[test]
+fn swap_excess_are_confiscated_ccm_via_extrinsic() {
+	new_test_ext().execute_with(|| {
+		let gas_budget = GAS_BUDGET;
+		let principal_amount = 1_000;
+		let max_swap = 100;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+		let ccm = generate_ccm_deposit();
+
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+
+		// Register CCM via Swap deposit
+		assert_ok!(Swapping::ccm_deposit(
+			RuntimeOrigin::root(),
+			from,
+			gas_budget + principal_amount,
+			to,
+			EncodedAddress::Eth(Default::default()),
+			ccm,
+			Default::default(),
+		));
+
+		// Excess fee is confiscated
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
+			swap_id: 1,
+			source_asset: from,
+			destination_asset: to,
+			total_amount: 1_000,
+			confiscated_amount: 900,
+		}));
+
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
+			swap_id: 2,
+			source_asset: from,
+			destination_asset: Asset::Eth,
+			total_amount: 1_000,
+			confiscated_amount: 900,
+		}));
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 1u64,
+					from,
+					to,
+					amount: max_swap,
+					swap_type: SwapType::CcmPrincipal(1),
+					stable_amount: Some(max_swap),
+					final_output: None,
+					fee_taken: false
+				},
+				Swap {
+					swap_id: 2u64,
+					from,
+					to: Asset::Eth,
+					amount: max_swap,
+					swap_type: SwapType::CcmGas(1),
+					stable_amount: Some(max_swap),
+					final_output: None,
+					fee_taken: false
+				}
+			]
+		);
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900 * 2);
+	});
+}
+
+#[test]
+fn swap_excess_are_confiscated_for_swap_via_extrinsic() {
+	new_test_ext().execute_with(|| {
+		let max_swap = 100;
+		let amount = 1_000;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+
+		assert_ok!(Swapping::schedule_swap_from_contract(
+			RuntimeOrigin::signed(ALICE),
+			from,
+			to,
+			amount,
+			EncodedAddress::Eth(Default::default()),
+			Default::default(),
+		));
+
+		// Excess fee is confiscated
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
+			swap_id: 1,
+			source_asset: from,
+			destination_asset: to,
+			total_amount: 1_000,
+			confiscated_amount: 900,
+		}));
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![Swap {
+				swap_id: 1u64,
+				from,
+				to,
+				amount: max_swap,
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+				stable_amount: Some(max_swap),
+				final_output: None,
+				fee_taken: false
+			}]
+		);
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
+	});
+}
+
+#[test]
+fn swap_excess_are_confiscated_for_swap_via_deposit() {
+	new_test_ext().execute_with(|| {
+		let max_swap = 100;
+		let amount = 1_000;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+
+		Swapping::schedule_swap_from_channel(
+			ForeignChainAddress::Eth(Default::default()),
+			1,
+			from,
+			to,
+			amount,
+			ForeignChainAddress::Eth(Default::default()),
+			ALICE,
+			0,
+			0,
+		);
+
+		// Excess fee is confiscated
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountConfiscated {
+			swap_id: 1,
+			source_asset: from,
+			destination_asset: to,
+			total_amount: 1_000,
+			confiscated_amount: 900,
+		}));
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![Swap {
+				swap_id: 1u64,
+				from,
+				to,
+				amount: max_swap,
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+				stable_amount: Some(max_swap),
+				final_output: None,
+				fee_taken: false
+			}]
+		);
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
+	});
+}
+
+#[test]
+fn max_swap_amount_can_be_removed() {
+	new_test_ext().execute_with(|| {
+		let max_swap = 100;
+		let amount = 1_000;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+
+		// Initial max swap amount is set.
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		assert_ok!(Swapping::schedule_swap_from_contract(
+			RuntimeOrigin::signed(ALICE),
+			from,
+			to,
+			amount,
+			EncodedAddress::Eth(Default::default()),
+			Default::default(),
+		));
+
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900u128);
+
+		// Reset event and confiscated funds.
+		CollectedRejectedFunds::<Test>::set(from, 0u128);
+		System::reset_events();
+
+		// Max is removed.
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, None));
+
+		assert_ok!(Swapping::schedule_swap_from_contract(
+			RuntimeOrigin::signed(ALICE),
+			from,
+			to,
+			amount,
+			EncodedAddress::Eth(Default::default()),
+			Default::default(),
+		));
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 1u64,
+					from,
+					to,
+					amount: max_swap,
+					swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+					stable_amount: Some(max_swap),
+					final_output: None,
+					fee_taken: false
+				},
+				// New swap takes the full amount.
+				Swap {
+					swap_id: 2u64,
+					from,
+					to,
+					amount,
+					swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+					stable_amount: Some(amount),
+					final_output: None,
+					fee_taken: false
+				}
+			]
+		);
+		// No no funds are confiscated.
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
+	});
+}
+
+#[test]
+fn can_swap_below_max_amount() {
+	new_test_ext().execute_with(|| {
+		let max_swap = 1_001u128;
+		let amount = 1_000u128;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+
+		// Initial max swap amount is set.
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+		assert_ok!(Swapping::schedule_swap_from_contract(
+			RuntimeOrigin::signed(ALICE),
+			from,
+			to,
+			amount,
+			EncodedAddress::Eth(Default::default()),
+			Default::default(),
+		));
+
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![Swap {
+				swap_id: 1u64,
+				from,
+				to,
+				amount,
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+				stable_amount: Some(amount),
+				final_output: None,
+				fee_taken: false
+			},]
+		);
+	});
+}
+
+#[test]
+fn can_swap_ccm_below_max_amount() {
+	new_test_ext().execute_with(|| {
+		let gas_budget = GAS_BUDGET;
+		let principal_amount = 999;
+		let max_swap = 1_001;
+		let from: Asset = Asset::Usdc;
+		let to: Asset = Asset::Flip;
+		let ccm = generate_ccm_deposit();
+
+		assert_ok!(Swapping::set_maximum_swap_amount(RuntimeOrigin::root(), from, Some(max_swap)));
+
+		// Register CCM via Swap deposit
+		assert_ok!(Swapping::ccm_deposit(
+			RuntimeOrigin::root(),
+			from,
+			gas_budget + principal_amount,
+			to,
+			EncodedAddress::Eth(Default::default()),
+			ccm,
+			Default::default(),
+		));
+
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 1u64,
+					from,
+					to,
+					amount: principal_amount,
+					swap_type: SwapType::CcmPrincipal(1),
+					stable_amount: Some(principal_amount),
+					final_output: None,
+					fee_taken: false
+				},
+				Swap {
+					swap_id: 2u64,
+					from,
+					to: Asset::Eth,
+					amount: gas_budget,
+					swap_type: SwapType::CcmGas(1),
+					stable_amount: Some(gas_budget),
+					final_output: None,
+					fee_taken: false
+				}
+			]
+		);
+		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
+	});
+}
+
+fn swap_with_custom_broker_fee(
+	from: Asset,
+	to: Asset,
+	amount: AssetAmount,
+	broker_fee: BasisPoints,
+) {
+	<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
+		ForeignChainAddress::Eth([2; 20].into()),
+		Default::default(),
+		from,
+		to,
+		amount,
+		ForeignChainAddress::Eth([2; 20].into()),
+		ALICE,
+		broker_fee,
+		1,
+	);
+}
+
+#[test]
+fn swap_broker_fee_calculated_correctly() {
+	new_test_ext().execute_with(|| {
+		let fees: [BasisPoints; 12] =
+			[1, 5, 10, 100, 200, 500, 1000, 1500, 2000, 5000, 7500, 10000];
+		const AMOUNT: AssetAmount = 100000;
+
+		// calculate broker fees for each asset available
+		Asset::all().iter().for_each(|asset| {
+			let total_fees: u128 =
+				fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
+					swap_with_custom_broker_fee(*asset, Asset::Usdc, AMOUNT, *fee_bps);
+					total_fees +
+						Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
+				});
+			assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, asset), total_fees);
+		});
+	});
+}
+
+#[test]
+fn swap_broker_fee_cannot_exceed_amount() {
+	new_test_ext().execute_with(|| {
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, 100, 15000);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 100);
+	});
+}
+
+fn swap_scheduled_event_witnessed(
+	swap_id: u64,
+	source_asset: Asset,
+	deposit_amount: AssetAmount,
+	destination_asset: Asset,
+	broker_commission: AssetAmount,
+) {
+	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
+		swap_id,
+		source_asset,
+		deposit_amount,
+		destination_asset,
+		destination_address: EncodedAddress::Eth([2; 20]),
+		origin: SwapOrigin::DepositChannel {
+			deposit_address: EncodedAddress::Eth([2; 20]),
+			channel_id: 1,
+			deposit_block_height: Default::default(),
+		},
+		swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
+		broker_commission: Some(broker_commission),
+	}));
+}
+#[test]
+fn swap_broker_fee_subtracted_from_swap_amount() {
+	new_test_ext().execute_with(|| {
+		let amounts: [AssetAmount; 6] = [50, 100, 200, 500, 1000, 10000];
+		let fees: [BasisPoints; 4] = [100, 1000, 5000, 10000];
+
+		let combinations = amounts.iter().cartesian_product(fees);
+		let mut swap_id = 1;
+		Asset::all().iter().for_each(|asset| {
+			let mut total_fees = 0;
+			combinations.clone().for_each(|(amount, fee)| {
+				swap_with_custom_broker_fee(*asset, Asset::Flip, *amount, fee);
+				let broker_commission =
+					Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
+				total_fees += broker_commission;
+				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, *asset), total_fees);
+				swap_scheduled_event_witnessed(
+					swap_id,
+					*asset,
+					*amount,
+					Asset::Flip,
+					broker_commission,
+				);
+				swap_id += 1;
+			})
+		});
+	});
+}
+
+fn swap_amount_too_low_witnessed(asset: Asset, amount: AssetAmount) {
+	System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
+		asset,
+		amount,
+		destination_address: EncodedAddress::Eth([2; 20]),
+		origin: SwapOrigin::DepositChannel {
+			deposit_address: EncodedAddress::Eth([2; 20]),
+			channel_id: 1,
+			deposit_block_height: Default::default(),
+		},
+	}));
+}
+#[test]
+fn swap_fail_if_below_minimum_swap_amount() {
+	new_test_ext().execute_with(|| {
+		let asset = Asset::Usdc;
+		let minimum_amount = 1_000u128;
+		assert_eq!(MinimumSwapAmount::<Test>::get(asset), 0);
+
+		// Set the new minimum swap_amount (1000 USDC)
+		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), asset, minimum_amount));
+
+		assert_eq!(MinimumSwapAmount::<Test>::get(asset), minimum_amount);
+		assert_eq!(Swapping::minimum_swap_amount(asset), minimum_amount);
+
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
+			asset,
+			amount: minimum_amount,
+		}));
+
+		//swap with amount >= MinimumAmount is scheduled
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount + 500, 1000);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 150);
+		swap_scheduled_event_witnessed(1, Asset::Usdc, 1500, Asset::Flip, 150);
+
+		//Swap with amount == MinimumAmount completes (even after subtracting brokerFee, netAmount
+		// is < minAmount)
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount, 1000);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
+		swap_scheduled_event_witnessed(2, Asset::Usdc, 1000, Asset::Flip, 100);
+
+		//Swap with amount < MinimumAmount fails
+		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount - 500, 0);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
+		swap_amount_too_low_witnessed(Asset::Usdc, 500);
+	});
 }

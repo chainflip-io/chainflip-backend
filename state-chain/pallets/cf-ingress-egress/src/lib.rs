@@ -12,11 +12,11 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{sp_runtime::SaturatedConversion, traits::OnRuntimeUpgrade, transactional};
+use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi},
+	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
@@ -26,7 +26,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, GetBlockHeight, SwapDepositHandler,
+	EgressApi, GetBlockHeight, NetworkEnvironmentProvider, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -91,7 +91,7 @@ pub struct VaultTransfer<C: Chain> {
 	destination_address: C::ChainAccount,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -209,11 +209,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
+		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deposit_channel_lifetime: Default::default() }
+			Self { deposit_channel_lifetime: Default::default(), witness_safety_margin: None }
 		}
 	}
 
@@ -221,6 +222,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
+			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
 		}
 	}
 
@@ -273,6 +275,8 @@ pub mod pallet {
 
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: DepositHandler<Self::TargetChain>;
+
+		type NetworkEnvironment: NetworkEnvironmentProvider;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -343,6 +347,12 @@ pub mod pallet {
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
 
+	// Determines the number of block confirmations is required for a block on
+	// an external chain before CFE can submit any witness extrinsics for it.
+	#[pallet::storage]
+	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -409,6 +419,12 @@ pub mod pallet {
 		AssetMismatch,
 		/// Channel ID has reached maximum
 		ChannelIdsExhausted,
+		/// Polkadot's Vault Account does not exist in storage.
+		MissingPolkadotVault,
+		/// Bitcoin's Vault key does not exist for the current epoch.
+		MissingBitcoinVault,
+		/// Channel ID is too large for Bitcoin address derivation
+		BitcoinChannelIdTooLarge,
 	}
 
 	#[pallet::hooks]
@@ -455,19 +471,6 @@ pub mod pallet {
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, DispatchError> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), DispatchError> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
@@ -926,10 +929,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Ok(*id)
 				})?;
 			(
-				DepositChannel::generate_new::<T::AddressDerivation>(
-					next_channel_id,
-					source_asset,
-				)?,
+				DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
+					.map_err(|e| match e {
+						AddressDerivationError::MissingPolkadotVault =>
+							Error::<T, I>::MissingPolkadotVault,
+						AddressDerivationError::MissingBitcoinVault =>
+							Error::<T, I>::MissingBitcoinVault,
+						AddressDerivationError::BitcoinChannelIdTooLarge =>
+							Error::<T, I>::BitcoinChannelIdTooLarge,
+					})?,
 				next_channel_id,
 			)
 		};
