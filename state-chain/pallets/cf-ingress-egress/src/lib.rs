@@ -550,7 +550,7 @@ pub mod pallet {
 							"Unexpected CCM message for current epoch. Broadcast Id: {:?}, Egress Id: {:?}",
 							ccm.broadcast_id,
 							ccm.egress_id
-						)
+						);
 					},
 				}
 			}
