@@ -37,9 +37,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
   console.log('Runtime upgrade completed.');
 }
 
-export async function submitRuntimeUpgradeWasmPath(
-  wasmPath: string,
-) {
+export async function submitRuntimeUpgradeWasmPath(wasmPath: string) {
   await submitRuntimeUpgradeWithRestrictions(wasmPath);
 }
 

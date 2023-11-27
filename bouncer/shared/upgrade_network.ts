@@ -49,7 +49,6 @@ async function incompatibleUpgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-
   let selectedNodes;
   if (numberOfNodes === 1) {
     selectedNodes = ['bashful'];
@@ -90,7 +89,12 @@ async function incompatibleUpgrade(
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
-  await incompatibleUpgradeNoBuild(localnetInitPath, `${nextVersionWorkspacePath}/target/release`, `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`, numberOfNodes);
+  await incompatibleUpgradeNoBuild(
+    localnetInitPath,
+    `${nextVersionWorkspacePath}/target/release`,
+    `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
+    numberOfNodes,
+  );
 }
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
@@ -101,7 +105,6 @@ export async function upgradeNetworkGit(
   bumpByIfEqual: SemVerLevel = 'patch',
   numberOfNodes: 1 | 3 = 1,
 ) {
-
   console.log('Upgrading network to git ref: ' + toGitRef);
 
   const currentVersionWorkspacePath = path.dirname(process.cwd());
@@ -147,7 +150,11 @@ export async function upgradeNetworkGit(
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
     console.log('The versions are incompatible.');
-    await incompatibleUpgrade(`${currentVersionWorkspacePath}/localnet/init`, nextVersionWorkspacePath, numberOfNodes);
+    await incompatibleUpgrade(
+      `${currentVersionWorkspacePath}/localnet/init`,
+      nextVersionWorkspacePath,
+      numberOfNodes,
+    );
   }
 
   console.log('Cleaning up...');
@@ -168,20 +175,18 @@ export async function upgradeNetworkPrebuilt(
 
   numberOfNodes: 1 | 3 = 1,
 ) {
-
   const versionRegex = /\d+\.\d+\.\d+/;
 
-  let cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
+  const cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
 
   const cfeVersion = cfeBinaryVersion.match(versionRegex)[0];
   console.log("CFE version we're upgrading to: " + cfeVersion);
 
+  const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
+  const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
+  console.log("Node version we're upgrading to: " + nodeVersion);
 
-  let nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
-  const node_version = nodeBinaryVersion.match(versionRegex)[0];
-  console.log("Node version we're upgrading to: " + node_version);
-
-  if (cfeVersion !== node_version) {
+  if (cfeVersion !== nodeVersion) {
     throw new Error(
       "The CFE version and the node version don't match. Ensure you selected the correct binaries.",
     );
