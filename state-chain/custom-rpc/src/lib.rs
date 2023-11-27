@@ -7,7 +7,8 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -26,7 +27,9 @@ use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{CustomRuntimeApi, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
+	runtime_apis::{
+		CustomRuntimeApi, FailedCcmCall, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+	},
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -505,6 +508,9 @@ pub trait CustomApi {
 
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
+
+	#[method(name = "failed_ccm")]
+	fn cf_failed_ccm_call(&self, broadcast_id: BroadcastId) -> RpcResult<Option<FailedCcmCall>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1112,6 +1118,13 @@ where
 				.or_insert(vec![*asset]);
 		});
 		Ok(chain_to_asset)
+	}
+
+	fn cf_failed_ccm_call(&self, broadcast_id: BroadcastId) -> RpcResult<Option<FailedCcmCall>> {
+		self.client
+			.runtime_api()
+			.cf_failed_ccm_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
 	}
 }
 

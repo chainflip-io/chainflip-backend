@@ -77,7 +77,7 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct FailedCcmCall {
 	pub failed_epoch: EpochIndex,
 	pub broadcast_id: BroadcastId,
