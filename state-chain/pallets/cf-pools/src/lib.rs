@@ -15,6 +15,7 @@ use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
+	storage::with_storage_layer,
 	transactional,
 };
 
@@ -526,21 +527,25 @@ pub mod pallet {
 			let scheduled_limit_orders = ScheduledLimitOrders::<T>::take(current_block);
 			weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 			for OrderUpdate { lp, id, call } in scheduled_limit_orders {
-				if let Err(err) =
-					call.clone().dispatch_bypass_filter(RawOrigin::Signed(lp.clone()).into())
-				{
+				let call_weight = call.clone().get_dispatch_info().weight;
+				let lp_account_id = lp.clone();
+				let _result = with_storage_layer(move || {
+					call.dispatch_bypass_filter(RawOrigin::Signed(lp.clone()).into())
+				})
+				.map(|_| {
+					Self::deposit_event(Event::<T>::SuccessfullyExecutedLimitOrder {
+						lp: lp_account_id.clone(),
+						order_id: id,
+					});
+				})
+				.map_err(|err| {
 					Self::deposit_event(Event::<T>::ExecutingLimitOrderFailed {
-						lp: lp.clone(),
+						lp: lp_account_id,
 						order_id: id,
 						error: err.error,
 					});
-				} else {
-					Self::deposit_event(Event::<T>::SuccessfullyExecutedLimitOrder {
-						lp,
-						order_id: id,
-					});
-				}
-				weight_used.saturating_accrue(call.get_dispatch_info().weight);
+				});
+				weight_used.saturating_accrue(call_weight);
 			}
 			weight_used
 		}
