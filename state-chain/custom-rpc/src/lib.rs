@@ -272,6 +272,40 @@ pub struct RpcEnvironment {
 	pools: PoolsEnvironment,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrder {
+	amount: NumberOrHex,
+	sqrt_price: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrderbook {
+	asks: Vec<PoolOrder>,
+	bids: Vec<PoolOrder>,
+}
+impl From<pallet_cf_pools::PoolOrderbook> for PoolOrderbook {
+	fn from(value: pallet_cf_pools::PoolOrderbook) -> Self {
+		Self {
+			asks: value
+				.asks
+				.into_iter()
+				.map(|ask| PoolOrder {
+					amount: ask.amount.into(),
+					sqrt_price: ask.sqrt_price.into(),
+				})
+				.collect(),
+			bids: value
+				.bids
+				.into_iter()
+				.map(|bid| PoolOrder {
+					amount: bid.amount.into(),
+					sqrt_price: bid.sqrt_price.into(),
+				})
+				.collect(),
+		}
+	}
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -381,6 +415,14 @@ pub trait CustomApi {
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	#[method(name = "pool_orderbook")]
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -866,6 +908,25 @@ where
 			.map_err(to_rpc_error)?
 			.transpose()
 			.map_err(map_dispatch_error)
+	}
+
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolOrderbook> {
+		self.client
+			.runtime_api()
+			.cf_pool_orderbook(
+				self.unwrap_or_best(at),
+				base_asset.try_into()?,
+				quote_asset.try_into()?,
+				orders,
+			)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map(Into::into).map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_orders(
