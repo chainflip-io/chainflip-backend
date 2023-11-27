@@ -6,13 +6,23 @@
 // PRE-REQUISITES:
 // - cargo workspaces must be installed - `cargo install cargo-workspaces`
 //
-// Optional args:
-// --git <git ref>: The git reference (commit, branch, tag) you wish to upgrade to.
-// --bump <patch/minor/major>: If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
+// Subcommands:
+// git: Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
+// Args:
+// --ref <git ref>: The git reference (commit, branch, tag) you wish to upgrade to.
+// --bump <patch/minor/major>: If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level. Defaults to patch.
 // --nodes <1 or 3>: The number of nodes running on your localnet. Defaults to 1.
+// 
+// prebuilt: Upgrades a bouncer network from the commit currently running on localnet to the provided prebuilt binaries and runtime.
+// Args:
+// --bins <path to directory containing node and CFE binaries>.
+// --runtime <path to runtime wasm>.
+// --localnet_init <path to localnet init directory>.
+// --oldVersion <version of the network you wish to upgrade *from*>.
 //
 // For example: 
 // ./commands/upgrade_network.ts git --ref 0.10.1 --bump major --nodes 3
+// ./commands/upgrade_network.ts prebuilt --runtime ./target/debug/wbuild/state-chain-runtime/state_chain_runtime.compact.wasm --bins ./target/debug --localnet_init ./localnet/init --oldVersion 0.10.1 --nodes 3
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -84,9 +94,3 @@ runWithTimeout(main(), 15 * 60 * 1000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });
-
-
-// /Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm
-
-
-// ./commands/upgrade_network.ts prebuilt --bins /Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug --runtime /Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm
