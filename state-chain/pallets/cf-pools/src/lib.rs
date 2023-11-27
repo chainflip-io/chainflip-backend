@@ -977,7 +977,7 @@ pub mod pallet {
 						.set_fees(fee_hundredth_pips)
 						.map_err(|_| Error::<T>::InvalidFeeAmount)?
 						.try_map(|side, collected_fees| {
-							for ((tick, (lp, order)), (collected, position_info)) in
+							for ((lp, order), tick, collected, position_info) in
 								collected_fees.into_iter()
 							{
 								Self::process_limit_order_update(

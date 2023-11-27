@@ -37,7 +37,7 @@ num-traits = { version = "0.2", optional = true }
 scopeguard = { version = "1.2.0" }
 prometheus = { version = "0.13.0", default-features = false }
 lazy_static = "1.4"
-jsonrpsee = { version = "0.20", features = [
+jsonrpsee = { version = "0.20.3", features = [
   "jsonrpsee-types",
 ], optional = true }
 regex = { version = "1", optional = true }

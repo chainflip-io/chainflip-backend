@@ -13,15 +13,15 @@ use common::{
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::vec::Vec;
 
 pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
 pub mod v1;
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState<LiquidityProvider> {
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub struct PoolState<LiquidityProvider: Ord> {
 	limit_orders: limit_orders::PoolState<LiquidityProvider>,
 	range_orders: range_orders::PoolState<LiquidityProvider>,
 }
@@ -350,10 +350,33 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<SideMap<BTreeMap<(Tick, LiquidityProvider), (Collected, PositionInfo)>>, SetFeesError>
+	) -> Result<SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
 	{
 		self.range_orders.set_fees(fee_hundredth_pips)?;
 		self.limit_orders.set_fees(fee_hundredth_pips)
+	}
+
+	pub fn collect_all_range_orders(
+		&mut self,
+	) -> Vec<(
+		LiquidityProvider,
+		core::ops::Range<Tick>,
+		range_orders::Collected,
+		range_orders::PositionInfo,
+	)> {
+		self.range_orders
+			.collect_all()
+			.map(|((lp, lower_tick, upper_tick), (collected, position_info))| {
+				(lp, lower_tick..upper_tick, collected, position_info)
+			})
+			.collect()
+	}
+
+	pub fn collect_all_limit_orders(
+		&mut self,
+	) -> SideMap<Vec<(LiquidityProvider, Tick, limit_orders::Collected, limit_orders::PositionInfo)>>
+	{
+		self.limit_orders.collect_all()
 	}
 
 	// Returns if the pool fee is valid.

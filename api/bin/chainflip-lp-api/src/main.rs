@@ -1,3 +1,4 @@
+use cf_primitives::{AccountId, BlockNumber};
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -14,13 +15,22 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
-	OperatorApi, StateChainApi,
+	ChainApi, OperatorApi, StateChainApi, StorageApi,
 };
 use clap::Parser;
 use custom_rpc::RpcAsset;
-use futures::FutureExt;
-use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+use futures::{FutureExt, StreamExt};
+use jsonrpsee::{
+	core::{async_trait, SubscriptionResult},
+	proc_macros::rpc,
+	server::ServerBuilder,
+	PendingSubscriptionSink,
+	SubscriptionMessage, //, SubscriptionMessage, types::error::SERVER_ERROR_MSG,
+};
+use pallet_cf_pools::{
+	AssetPair, AssetsMap, /* , Pools */
+	IncreaseOrDecrease, OrderId, RangeOrderSize,
+};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
@@ -159,6 +169,9 @@ pub trait Rpc {
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
+
+	#[subscription(name = "subscribe_order_updates", item = PoolsActivity)]
+	async fn subscribe_order_updates(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl {
@@ -175,6 +188,60 @@ impl RpcServerImpl {
 				.await?,
 		})
 	}
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct PoolsActivity {
+	hash: Hash,
+	number: BlockNumber,
+	order_updates: Vec<OrderUpdated>,
+	order_fills: Vec<OrderFilled>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderUpdated {
+	RangeOrder {
+		lp: AccountId,
+		base_asset: Asset,
+		pair_asset: Asset,
+		id: NumberOrHex,
+		range: Range<Tick>,
+		liquidity: NumberOrHex,
+	},
+	LimitOrder {
+		lp: AccountId,
+		sell_asset: Asset,
+		buy_asset: Asset,
+		id: NumberOrHex,
+		tick: Tick,
+		amount: NumberOrHex,
+	},
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderFilled {
+	LimitOrder {
+		lp: AccountId,
+		sell_asset: Asset,
+		buy_asset: Asset,
+		id: NumberOrHex,
+		tick: Tick,
+		sold: NumberOrHex,
+		bought: NumberOrHex,
+		fees: NumberOrHex,
+		remaining: NumberOrHex,
+	},
+	RangeOrder {
+		lp: AccountId,
+		base_asset: Asset,
+		pair_asset: Asset,
+		id: NumberOrHex,
+		range: Range<Tick>,
+		fees: AssetsMap<NumberOrHex>,
+		liquidity: NumberOrHex,
+	},
 }
 
 #[async_trait]
@@ -336,6 +403,82 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Polkadot>(None),
 		)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
+	}
+
+	async fn subscribe_order_updates(&self, sink: PendingSubscriptionSink) -> SubscriptionResult {
+		let sink = sink.accept().await?;
+		let state_chain_client = self.api.state_chain_client.clone();
+
+		tokio::spawn(async move {
+			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
+
+			while let Some(block) = finalized_block_stream.next().await {
+				sink.send(SubscriptionMessage::from_json(&PoolsActivity { hash: block.hash, number: block.number, order_updates: state_chain_client.storage_value::<frame_system::Events::<chainflip_api::primitives::state_chain_runtime::Runtime>>(block.hash).await.unwrap().iter().filter_map(|event_record| {
+					match &event_record.event {
+						chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::RangeOrderUpdated {
+							lp,
+							base_asset,
+							pair_asset,
+							id,
+							tick_range,
+							size_change: Some(_),
+							liquidity_total,
+							collected_fees: _
+						}) => {
+							Some(OrderUpdated::RangeOrder { lp: lp.clone(), base_asset: *base_asset, pair_asset: *pair_asset, id: (*id).into(), range: tick_range.clone(), liquidity: (*liquidity_total).into() })
+						},
+						chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+							lp,
+							sell_asset,
+							buy_asset,
+							id,
+							tick,
+							amount_total,
+							collected_fees: _,
+
+							..
+						}) => {
+							Some(OrderUpdated::LimitOrder { lp: lp.clone(), sell_asset: *sell_asset, buy_asset: *buy_asset, id: (*id).into(), tick: *tick, amount: (*amount_total).into() })
+						},
+						_ => {
+							None
+						}
+					}
+				}).collect(), order_fills: {
+					let mut pools = state_chain_client.storage_map::<pallet_cf_pools::Pools<chainflip_api::primitives::state_chain_runtime::Runtime>, Vec<_>>(block.hash).await.unwrap();
+					itertools::chain!(
+						pools.iter_mut().flat_map(|(canonical_asset_pair, pool)| {
+							pool.pool_state.collect_all_range_orders().into_iter().filter(|((_lp, _id), _range, collected, _position_info)| collected.fees != Default::default()).map(move |((lp, id), range, collected, position_info)| {
+								let asset_pair = AssetPair::<chainflip_api::primitives::state_chain_runtime::Runtime>::new(canonical_asset_pair.side_to_asset(Side::Zero), canonical_asset_pair.side_to_asset(Side::One)).unwrap();
+								OrderFilled::RangeOrder { lp, base_asset: asset_pair.base_asset(), pair_asset: asset_pair.pair_asset(), id: id.into(), range, fees: asset_pair.side_map_to_assets_map(collected.fees.map(|_side, fees| fees.into())), liquidity: position_info.liquidity.into() }
+							})
+						}).collect::<Vec<_>>(),
+						pools.iter_mut().flat_map(|(canonical_asset_pair, pool)| {
+							let canonical_asset_pair = *canonical_asset_pair;
+							pool.pool_state.collect_all_limit_orders().into_iter().flat_map(move |(side, limit_orders)| limit_orders.into_iter().filter(|((_lp, _id), _tick, collected, _position_info)| collected.fees != Default::default()).map(move |((lp, id), tick, collected, position_info)| {
+								OrderFilled::LimitOrder { lp, sell_asset: canonical_asset_pair.side_to_asset(side), buy_asset: canonical_asset_pair.side_to_asset(!side), id: id.into(), tick, sold: collected.sold_amount.into(), bought: collected.bought_amount.into(), fees: collected.fees.into(), remaining: position_info.amount.into() }
+							}))
+						}).collect::<Vec<_>>(),
+					).collect()
+				} }).unwrap()).await.unwrap();
+			}
+		});
+
+		Ok(())
+	}
+}
+
+#[tokio::test]
+async fn test() {
+	let a = jsonrpsee::ws_client::WsClientBuilder::default()
+		.build("ws://127.0.0.1:10589")
+		.await
+		.unwrap();
+
+	let mut sub = RpcClient::subscribe_order_updates(&a).await.unwrap();
+
+	while let Some(i) = sub.next().await {
+		println!("{:?}", i);
 	}
 }
 

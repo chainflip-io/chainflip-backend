@@ -68,6 +68,9 @@ impl core::ops::Not for Side {
 	TypeInfo,
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
+	Hash,
 	Encode,
 	Decode,
 	MaxEncodedLen,
@@ -312,7 +315,7 @@ pub fn is_tick_valid(tick: Tick) -> bool {
 	(MIN_TICK..=MAX_TICK).contains(&tick)
 }
 
-pub(super) fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
+pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	assert!(is_tick_valid(tick));
 
 	let abs_tick = tick.unsigned_abs();
