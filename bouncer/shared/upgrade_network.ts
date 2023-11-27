@@ -68,11 +68,11 @@ async function incompatibleUpgradeNoBuild(
   );
 
   // let the engines do what they gotta do
-  sleep(7000);
+  await sleep(7000);
 
   console.log('Engines started');
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
@@ -143,7 +143,7 @@ export async function upgradeNetworkGit(
 
   if (isCompatible) {
     console.log('The versions are compatible.');
-    await simpleRuntimeUpgrade(nextVersionWorkspacePath);
+    await simpleRuntimeUpgrade(nextVersionWorkspacePath, true);
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
     console.log('The versions are incompatible.');
@@ -201,7 +201,7 @@ export async function upgradeNetworkPrebuilt(
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
     console.log('The versions are compatible.');
-    await submitRuntimeUpgradeWithRestrictions(runtimePath);
+    await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
   }
 
   console.log('Upgrade complete.');
