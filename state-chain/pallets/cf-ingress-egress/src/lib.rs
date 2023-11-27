@@ -37,7 +37,7 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
 
-/// Type alias for the payload hash
+/// Type alias for the threshold signature.
 pub type ThresholdSignatureFor<T, I> =
 	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
