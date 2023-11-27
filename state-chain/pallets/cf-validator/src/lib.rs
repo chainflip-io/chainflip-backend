@@ -987,6 +987,8 @@ impl<T: Config> Pallet<T> {
 
 		Bond::<T>::set(new_bond);
 
+		HistoricalBonds::<T>::insert(new_epoch, new_bond);
+
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
 			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
@@ -994,8 +996,6 @@ impl<T: Config> Pallet<T> {
 		});
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
-
-		HistoricalBonds::<T>::insert(new_epoch, new_bond);
 
 		// We've got new authorities, which means the backups may have changed.
 		Backups::<T>::put(backup_map);
