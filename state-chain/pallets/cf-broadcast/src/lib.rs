@@ -540,11 +540,11 @@ pub mod pallet {
 				.expect("signature can not be unavailable");
 
 			let signed_api_call = api_call.signed(&signature);
+			ThresholdSignatureData::<T, I>::insert(broadcast_id, (signed_api_call, signature));
 
 			// If a signed call already exists, update the storage and do not broadcast.
 			if should_broadcast {
 				Self::start_broadcast(
-					&signature,
 					T::TransactionBuilder::build_transaction(&signed_api_call),
 					signed_api_call,
 					threshold_signature_payload,
@@ -552,7 +552,6 @@ pub mod pallet {
 					initiated_at,
 				);
 			} else {
-				ThresholdSignatureData::<T, I>::insert(broadcast_id, (signed_api_call, signature));
 				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
 			}
 
@@ -769,7 +768,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - [TransactionBroadcastRequest](Event::TransactionBroadcastRequest)
 	fn start_broadcast(
-		signature: &ThresholdSignatureFor<T, I>,
 		transaction_payload: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
 		threshold_signature_payload: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload,
@@ -784,8 +782,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&transaction_out_id,
 			(broadcast_id, initiated_at),
 		);
-
-		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
