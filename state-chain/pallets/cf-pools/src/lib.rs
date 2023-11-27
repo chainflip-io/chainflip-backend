@@ -585,8 +585,6 @@ pub mod pallet {
 		UpdatingLimitOrdersDisabled,
 		/// Updating Range Orders is disabled.
 		UpdatingRangeOrdersDisabled,
-		/// The order is expired.
-		OrderScheduleDetailsExpired,
 		/// Unsupported call.
 		UnsupportedCall,
 		/// The order is not valid at the current block.
