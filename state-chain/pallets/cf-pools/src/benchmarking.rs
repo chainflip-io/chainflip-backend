@@ -211,7 +211,7 @@ benchmarks! {
 		);
 	}
 
-	schedule {
+	schedule_limit_order_update {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
 		assert_ok!(T::LpBalance::try_credit_account(

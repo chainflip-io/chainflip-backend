@@ -652,7 +652,7 @@ fn can_execute_scheduled_limit_order() {
 			400_000u32,
 			price_at_tick(0).unwrap(),
 		));
-		assert_ok!(LiquidityPools::schedule(
+		assert_ok!(LiquidityPools::schedule_limit_order_update(
 			RuntimeOrigin::signed(ALICE),
 			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
 				sell_asset: STABLE_ASSET,
@@ -672,7 +672,7 @@ fn can_execute_scheduled_limit_order() {
 		);
 		assert_eq!(
 			last_event::<Test>(),
-			RuntimeEvent::LiquidityPools(crate::Event::SuccessfullyExecutedLimitOrder {
+			RuntimeEvent::LiquidityPools(crate::Event::ScheduledLimitOrderUpdateDispatchSuccess {
 				lp: ALICE,
 				order_id,
 			})
@@ -684,7 +684,7 @@ fn can_execute_scheduled_limit_order() {
 fn schedule_rejects_unsupported_calls() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			LiquidityPools::schedule(
+			LiquidityPools::schedule_limit_order_update(
 				RuntimeOrigin::signed(ALICE),
 				Box::new(pallet_cf_pools::Call::<Test>::set_pool_fees {
 					base_asset: Asset::Eth,
@@ -694,6 +694,26 @@ fn schedule_rejects_unsupported_calls() {
 				6
 			),
 			Error::<Test>::UnsupportedCall
+		);
+	});
+}
+
+#[test]
+fn cant_schedule_in_the_past() {
+	new_test_ext().then_execute_at_block(10u32, |_| {
+		assert_noop!(
+			LiquidityPools::schedule_limit_order_update(
+				RuntimeOrigin::signed(ALICE),
+				Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
+					sell_asset: STABLE_ASSET,
+					buy_asset: Asset::Flip,
+					id: 0,
+					option_tick: Some(0),
+					sell_amount: 55,
+				}),
+				9
+			),
+			Error::<Test>::LimitOrderUpdateExpired
 		);
 	});
 }

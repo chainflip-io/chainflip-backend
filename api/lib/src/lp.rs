@@ -285,7 +285,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<types::LimitOrder>> {
 		let events = if let Some(dispatch_at) = dispatch_at {
 			let (_tx_hash, events, ..) = self
-				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {
+				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule_limit_order_update {
 					call: Box::new(call),
 					dispatch_at,
 				})
