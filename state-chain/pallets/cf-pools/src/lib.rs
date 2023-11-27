@@ -1130,13 +1130,13 @@ pub struct UnidirectionalPoolDepth {
 	pub range_orders: UnidirectionalSubPoolDepth,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub struct PoolOrder {
 	pub amount: Amount,
 	pub sqrt_price: SqrtPriceQ64F96,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub struct PoolOrderbook {
 	pub bids: Vec<PoolOrder>,
 	pub asks: Vec<PoolOrder>,
