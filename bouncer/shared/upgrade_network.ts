@@ -43,8 +43,10 @@ function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string
   }
 }
 
-async function incompatibleUpgradeNoBuild(localnetInitPath: string,
-  nextVersionWorkspacePath: string,
+async function incompatibleUpgradeNoBuild(
+  localnetInitPath: string,
+  binaryPath: string,
+  runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
 
@@ -63,7 +65,7 @@ async function incompatibleUpgradeNoBuild(localnetInitPath: string,
   execSync(
     `LOG_SUFFIX="-upgrade" NODE_COUNT=${nodeCount} SELECTED_NODES="${selectedNodes.join(
       ' ',
-    )}" LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${nextVersionWorkspacePath}/target/release ${localnetInitPath}/scripts/start-all-engines.sh`,
+    )}" LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
   );
 
   // let the engines do what they gotta do
@@ -71,7 +73,7 @@ async function incompatibleUpgradeNoBuild(localnetInitPath: string,
 
   console.log('Engines started');
 
-  await submitRuntimeUpgrade(nextVersionWorkspacePath);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
@@ -88,7 +90,7 @@ async function incompatibleUpgrade(
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
-  await incompatibleUpgradeNoBuild(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
+  await incompatibleUpgradeNoBuild(localnetInitPath, `${nextVersionWorkspacePath}/target/release`, `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`, numberOfNodes);
 }
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
@@ -160,6 +162,8 @@ export async function upgradeNetworkPrebuilt(
   // Path to the runtime we will upgrade to
   runtimePath: string,
 
+  localnetInitPath: string,
+
   old_version: string,
 
   numberOfNodes: 1 | 3 = 1,
@@ -188,7 +192,7 @@ export async function upgradeNetworkPrebuilt(
   if (!isCompatible) {
     console.log('The versions are incompatible.');
     console.log("Upgrading with a number of nodes: " + numberOfNodes);
-    // await incompatibleUpgrade(currentVersionWorkspacePath, nextVersionWorkspacePath, numberOfNodes);
+    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
     console.log('The versions are compatible.');
 
