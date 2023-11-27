@@ -517,30 +517,41 @@ pub mod pallet {
 			// Process any failed CCM requires resigning or culling.
 			let current_epoch = T::EpochInfo::epoch_index();
 			for ccm in FailedCcms::<T, I>::take(current_epoch.saturating_sub(1)) {
-				if current_epoch.saturating_sub(ccm.original_epoch) == 1 {
-					// If the failed CCM is from the previous epoch, request a resign.
-					if let Some(threshold_signature_id) =
-						T::Broadcaster::threshold_resign(ccm.broadcast_id)
-					{
-						Self::deposit_event(Event::<T, I>::FailedCcmCallResigned {
+				match current_epoch.saturating_sub(ccm.original_epoch) {
+					// The CCM message is stale, clean up storage.
+					n if n >= 2 => {
+						T::Broadcaster::clean_up_broadcast_storage(ccm.broadcast_id);
+						T::CcmHandler::remove_gas_budget(ccm.egress_id);
+						Self::deposit_event(Event::<T, I>::FailedCcmExpired {
 							broadcast_id: ccm.broadcast_id,
-							threshold_signature_id,
+							egress_id: ccm.egress_id,
 						});
-						FailedCcms::<T, I>::append(current_epoch, ccm);
-					} else {
-						// We are here if the CCM needs to be resigned, yet no API call data is
-						// available to use. In this situation, there's nothing else that can be
-						// done.
-						log::error!("Ccm message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}, Egress Id: {:?}", ccm.broadcast_id, ccm.egress_id);
-					}
-				} else {
-					// Otherwise the failed CCM is cleaned up from broadcast storage.
-					T::Broadcaster::clean_up_broadcast_storage(ccm.broadcast_id);
-					T::CcmHandler::remove_gas_budget(ccm.egress_id);
-					Self::deposit_event(Event::<T, I>::FailedCcmExpired {
-						broadcast_id: ccm.broadcast_id,
-						egress_id: ccm.egress_id,
-					});
+					},
+					// Previous epoch, signature is invalid. Re-sign and store.
+					n if n == 1 => {
+						if let Some(threshold_signature_id) =
+							T::Broadcaster::threshold_resign(ccm.broadcast_id)
+						{
+							Self::deposit_event(Event::<T, I>::FailedCcmCallResigned {
+								broadcast_id: ccm.broadcast_id,
+								threshold_signature_id,
+							});
+							FailedCcms::<T, I>::append(current_epoch, ccm);
+						} else {
+							// We are here if the CCM needs to be resigned, yet no API call data is
+							// available to use. In this situation, there's nothing else that can be
+							// done.
+							log::error!("Ccm message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}, Egress Id: {:?}", ccm.broadcast_id, ccm.egress_id);
+						}
+					},
+					// Current epoch, shouldn't be possible.
+					_ => {
+						log_or_panic!(
+							"Unexpected CCM message for current epoch. Broadcast Id: {:?}, Egress Id: {:?}",
+							ccm.broadcast_id,
+							ccm.egress_id
+						)
+					},
 				}
 			}
 		}
