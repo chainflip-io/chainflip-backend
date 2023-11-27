@@ -141,11 +141,8 @@ export async function upgradeNetworkGit(
   const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
   console.log('Is compatible: ' + isCompatible);
 
-  // For some reason shit isn't working here. Keeps thinking it's compatible or something.
   if (isCompatible) {
-    // The CFE could be upgraded too. But an incompatible CFE upgrade would mean it's... incompatible, so covered in the other path.
     console.log('The versions are compatible.');
-
     await simpleRuntimeUpgrade(nextVersionWorkspacePath);
     console.log('Upgrade complete.');
   } else if (!isCompatible) {
@@ -162,7 +159,6 @@ export async function upgradeNetworkGit(
   console.log('Done.');
 }
 
-// How to get the old version? Could use the same method --version, or query the chain?
 export async function upgradeNetworkPrebuilt(
   // Directory where the node and CFE binaries of the new version are located
   binariesPath: string,
