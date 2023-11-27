@@ -92,5 +92,20 @@ benchmarks_instance_pallet! {
 		}]);
 	}
 
+	ccm_broadcast_failed {
+		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
+		let egress_id = (ForeignChain::Ethereum, Default::default());
+	}: { let _ = Pallet::<T, I>::ccm_broadcast_failed(origin, Default::default(), egress_id); }
+	verify {
+		let current_epoch = T::EpochInfo::epoch_index();
+		assert_eq!(
+			FailedCcms::<T, I>::get(current_epoch),
+			vec![FailedCcm {
+				broadcast_id:Default::default(),
+				egress_id,
+				original_epoch: current_epoch
+			}]);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

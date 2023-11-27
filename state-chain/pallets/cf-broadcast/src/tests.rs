@@ -3,8 +3,8 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
-	TransactionMetadata, TransactionOutIdToBroadcastId, WeightInfo,
+	PalletOffence, RequestSuccessCallbacks, ThresholdSignatureData, Timeouts,
+	TransactionFeeDeficit, TransactionMetadata, TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -497,11 +497,16 @@ fn threshold_sign_and_broadcast_with_callback() {
 		};
 
 		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback));
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), |_| {
+				None
+			});
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
-		assert_eq!(RequestCallbacks::<Test, Instance1>::get(broadcast_id), Some(MockCallback));
+		assert_eq!(
+			RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id),
+			Some(MockCallback)
+		);
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
 			MOCK_TRANSACTION_OUT_ID,
@@ -509,7 +514,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
 		));
-		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
+		assert!(RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();
 		assert_eq!(
 			events.pop().expect("an event").event,

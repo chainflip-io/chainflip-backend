@@ -233,7 +233,7 @@ pub mod pallet {
 
 	/// Storage for storing gas budget for each CCM.
 	#[pallet::storage]
-	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, u64, (Asset, AssetAmount)>;
+	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, EgressId, AssetAmount>;
 
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
@@ -350,6 +350,9 @@ pub mod pallet {
 			destination_asset: Asset,
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
+		},
+		CcmGasBudgetRemoved {
+			egress_id: EgressId,
 		},
 	}
 	#[pallet::error]
@@ -892,12 +895,6 @@ pub mod pallet {
 			ccm_swap: CcmSwap,
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
-			let gas_asset = ForeignChain::from(ccm_swap.destination_asset).gas_asset();
-			// If gas is non-zero, insert gas budget into storage.
-			if !ccm_output_gas.is_zero() {
-				CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
-			}
-
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
 				ccm_swap.destination_asset,
@@ -905,6 +902,13 @@ pub mod pallet {
 				ccm_swap.destination_address.clone(),
 				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
 			);
+
+			let gas_asset = ForeignChain::from(ccm_swap.destination_asset).gas_asset();
+			// If gas is non-zero, insert gas budget into storage.
+			if !ccm_output_gas.is_zero() {
+				CcmGasBudget::<T>::insert(egress_id, ccm_output_gas);
+			}
+
 			if let Some(swap_id) = ccm_swap.principal_swap_id {
 				Self::deposit_event(Event::<T>::SwapEgressScheduled {
 					swap_id,
@@ -1166,6 +1170,15 @@ pub mod pallet {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
+		}
+
+		fn gas_budget(egress_id: EgressId) -> Option<AssetAmount> {
+			CcmGasBudget::<T>::get(egress_id)
+		}
+
+		fn remove_gas_budget(egress_id: EgressId) {
+			CcmGasBudget::<T>::remove(egress_id);
+			Self::deposit_event(Event::<T>::CcmGasBudgetRemoved { egress_id });
 		}
 	}
 }

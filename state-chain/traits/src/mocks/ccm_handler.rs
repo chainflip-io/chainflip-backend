@@ -1,7 +1,7 @@
 use crate::CcmHandler;
 use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, SwapOrigin};
 
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 
@@ -54,4 +54,9 @@ impl CcmHandler for MockCcmHandler {
 			})
 		});
 	}
+
+	fn gas_budget(_: (ForeignChain, u64)) -> std::option::Option<u128> {
+		None
+	}
+	fn remove_gas_budget(_: (ForeignChain, u64)) {}
 }

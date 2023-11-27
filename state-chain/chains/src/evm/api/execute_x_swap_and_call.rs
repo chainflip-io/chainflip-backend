@@ -11,7 +11,7 @@ use sp_std::{vec, vec::Vec};
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct ExecutexSwapAndCall {
-	/// The egress Id. Used to query Gas budge stored in the Ccm Pallet.
+	/// The egress Id. Used to query Gas budge stored in the Swapping Pallet.
 	egress_id: EgressId,
 	/// A single transfer that need to be made to given addresses.
 	transfer_param: EncodableTransferAssetParams,

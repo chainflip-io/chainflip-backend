@@ -18,15 +18,16 @@ pub use weights::WeightInfo;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	Chain, ChainCrypto, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
+	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
+	ForeignChain, ThresholdSignatureRequestId,
 };
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, GetBlockHeight, NetworkEnvironmentProvider, SwapDepositHandler,
+	EgressApi, EpochInfo, GetBlockHeight, NetworkEnvironmentProvider, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -35,6 +36,10 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
+
+/// Type alias for the payload hash
+pub type ThresholdSignatureFor<T, I> =
+	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -92,12 +97,24 @@ pub struct VaultTransfer<C: Chain> {
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+/// Struct that contains information about a CCM transaction that has failed to broadcast.
+/// User can use information stored here to query for relevant information.
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct FailedCcm {
+	/// Broadcast ID used in the broadcast pallet. Use it to query broadcast information,
+	/// such as the threshold signature, the API call etc.
+	pub broadcast_id: BroadcastId,
+	/// Egress ID for the CCM message. Use it to query Gas budget in the Swapping pallet.
+	pub egress_id: EgressId,
+	/// The epoch the call originally failed in. Calls are cleaned from storage 2 epochs.
+	pub original_epoch: EpochIndex,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::ExecutexSwapAndCall;
-	use cf_primitives::BroadcastId;
+	use cf_primitives::{BroadcastId, EpochIndex};
 	use core::marker::PhantomData;
 	use frame_support::{
 		storage::with_transaction,
@@ -282,7 +299,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	/// Lookup table for addresses to correpsponding deposit channels.
+	/// Lookup table for addresses to corresponding deposit channels.
 	#[pallet::storage]
 	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -338,6 +355,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FailedVaultTransfers<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
+
+	/// Stores information about CCM messages that have failed to be broadcasted.
+	/// User can broadcast the call themselves using the signature stored on the State chain.
+	/// The messages will be re-threshold-signed once during the next epoch, and removed
+	/// from storage in the epoch after that.
+	/// Hashmap: last_signed_epoch -> Vec<FailedCcm>
+	#[pallet::storage]
+	pub type FailedCcms<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, EpochIndex, Vec<FailedCcm>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
@@ -409,6 +435,22 @@ pub mod pallet {
 			reason: DispatchError,
 			deposit_witness: DepositWitness<T::TargetChain>,
 		},
+		/// A CCM has failed to broadcast.
+		CcmBroadcastFailed {
+			broadcast_id: BroadcastId,
+			egress_id: EgressId,
+		},
+		/// A failed CCM call has been re-threshold-signed for the current epoch.
+		FailedCcmCallResigned {
+			broadcast_id: BroadcastId,
+			threshold_signature_id: ThresholdSignatureRequestId,
+		},
+		/// A failed CCM has been in the system storage for more than 1 epoch.
+		/// It's broadcast data has been cleaned from storage.
+		FailedCcmExpired {
+			broadcast_id: BroadcastId,
+			egress_id: EgressId,
+		},
 	}
 
 	#[pallet::error]
@@ -471,6 +513,36 @@ pub mod pallet {
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
+
+			// Process any failed CCM requires resigning or culling.
+			let current_epoch = T::EpochInfo::epoch_index();
+			for ccm in FailedCcms::<T, I>::take(current_epoch.saturating_sub(1)) {
+				if current_epoch.saturating_sub(ccm.original_epoch) == 1 {
+					// If the failed CCM is from the previous epoch, request a resign.
+					if let Some(threshold_signature_id) =
+						T::Broadcaster::threshold_resign(ccm.broadcast_id)
+					{
+						Self::deposit_event(Event::<T, I>::FailedCcmCallResigned {
+							broadcast_id: ccm.broadcast_id,
+							threshold_signature_id,
+						});
+						FailedCcms::<T, I>::append(current_epoch, ccm);
+					} else {
+						// We are here if the CCM needs to be resigned, yet no API call data is
+						// available to use. In this situation, there's nothing else that can be
+						// done.
+						log::error!("Ccm message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}, Egress Id: {:?}", ccm.broadcast_id, ccm.egress_id);
+					}
+				} else {
+					// Otherwise the failed CCM is cleaned up from broadcast storage.
+					T::Broadcaster::clean_up_broadcast_storage(ccm.broadcast_id);
+					T::CcmHandler::remove_gas_budget(ccm.egress_id);
+					Self::deposit_event(Event::<T, I>::FailedCcmExpired {
+						broadcast_id: ccm.broadcast_id,
+						egress_id: ccm.egress_id,
+					});
+				}
+			}
 		}
 	}
 
@@ -617,6 +689,35 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		/// Callback for when CCMs failed to be broadcasted. We will resign the call
+		/// so the user can broadcast the CCM themselves.
+		/// Requires Witness origin.
+		///
+		/// ## Events
+		///
+		/// - [on_success](Event::CcmBroadcastFailed)
+		#[pallet::weight(T::WeightInfo::ccm_broadcast_failed())]
+		#[pallet::call_index(5)]
+		pub fn ccm_broadcast_failed(
+			origin: OriginFor<T>,
+			broadcast_id: BroadcastId,
+			egress_id: EgressId,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let current_epoch = T::EpochInfo::epoch_index();
+
+			// Stores the broadcast ID, so the user can use it to query for
+			// information such as Threshold Signature etc.
+			FailedCcms::<T, I>::append(
+				current_epoch,
+				FailedCcm { broadcast_id, egress_id, original_epoch: current_epoch },
+			);
+
+			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id, egress_id });
+			Ok(())
+		}
 	}
 }
 
@@ -733,7 +834,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(egress_transaction) => {
 				let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 					egress_transaction,
-					Call::finalise_ingress { addresses }.into(),
+					Some(Call::finalise_ingress { addresses }.into()),
+					|_| None,
 				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
@@ -772,7 +874,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.message.to_vec(),
 			) {
 				Ok(api_call) => {
-					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					let (broadcast_id, _) =
+						T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+							api_call,
+							None,
+							|broadcast_id| {
+								Some(
+									Call::ccm_broadcast_failed {
+										broadcast_id,
+										egress_id: ccm.egress_id,
+									}
+									.into(),
+								)
+							},
+						);
 					Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
 						broadcast_id,
 						egress_id: ccm.egress_id,
@@ -960,6 +1075,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		Ok((channel_id, deposit_address, expiry_height))
+	}
+
+	pub fn get_failed_ccm(broadcast_id: BroadcastId) -> Option<FailedCcm> {
+		let epoch = T::EpochInfo::epoch_index();
+		FailedCcms::<T, I>::get(epoch)
+			.iter()
+			.find(|ccm| ccm.broadcast_id == broadcast_id)
+			.cloned()
 	}
 }
 

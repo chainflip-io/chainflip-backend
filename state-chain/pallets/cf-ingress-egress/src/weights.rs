@@ -37,6 +37,7 @@ pub trait WeightInfo {
 	fn set_minimum_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
 	fn vault_transfer_failed() -> Weight;
+	fn ccm_broadcast_failed() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -109,6 +110,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn ccm_broadcast_failed() -> Weight {
+		Weight::from_parts(1_000_000, 1_000)
+	}
 }
 
 // For backwards compatibility and tests
@@ -179,5 +184,8 @@ impl WeightInfo for () {
 		Weight::from_parts(13_716_000, 1559)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn ccm_broadcast_failed() -> Weight {
+		Weight::from_parts(1_000_000, 1_000)
 	}
 }

@@ -495,8 +495,15 @@ pub trait Broadcaster<C: Chain> {
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
+
+	/// Resign a call, and update the signature data storage, but do not broadcast.
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network
@@ -781,6 +788,12 @@ pub trait CcmHandler {
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 	);
+
+	/// Gets the gas budget for a given Ccm message.
+	fn gas_budget(egress_id: EgressId) -> Option<AssetAmount>;
+
+	/// Clear the gas budget storage for a given Ccm message.
+	fn remove_gas_budget(egress_id: EgressId);
 }
 
 impl CcmHandler for () {
@@ -793,6 +806,13 @@ impl CcmHandler for () {
 		_origin: SwapOrigin,
 	) {
 	}
+	/// Gets the gas budget for a given Ccm message.
+	fn gas_budget(_egress_id: EgressId) -> Option<AssetAmount> {
+		None
+	}
+
+	/// Clear the gas budget storage for a given Ccm message.
+	fn remove_gas_budget(_egress_id: EgressId) {}
 }
 
 pub trait OnBroadcastReady<C: Chain> {

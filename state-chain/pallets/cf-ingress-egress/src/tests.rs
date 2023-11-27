@@ -347,7 +347,7 @@ fn addresses_are_getting_reused() {
 			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
-				MockEgressBroadcaster::dispatch_callback(id);
+				MockEgressBroadcaster::dispatch_success_callback(id);
 			}
 			channels
 		})
@@ -762,7 +762,7 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			let pending_callbacks = MockEgressBroadcaster::get_success_pending_callbacks();
 			assert!(scheduled_fetches.len() == 1);
 			assert!(pending_api_calls.len() == 1);
 			assert!(pending_callbacks.len() == 1);
@@ -797,7 +797,7 @@ fn multi_use_deposit_same_block() {
 			));
 		})
 		.then_execute_at_next_block(|ctx| {
-			MockEgressBroadcaster::dispatch_all_callbacks();
+			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
 		.inspect_storage(|(_, _, deposit_address)| {
@@ -810,7 +810,7 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			let pending_callbacks = MockEgressBroadcaster::get_success_pending_callbacks();
 			assert!(scheduled_fetches.is_empty());
 			assert!(pending_api_calls.len() == 2);
 			assert!(pending_callbacks.len() == 1);
@@ -966,7 +966,7 @@ fn channel_reuse_with_different_assets() {
 		.map_context(|mut result| result.pop().unwrap())
 		.then_execute_at_next_block(|ctx| {
 			// Dispatch callbacks to finalise the ingress.
-			MockEgressBroadcaster::dispatch_all_callbacks();
+			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
 		.inspect_storage(|(request, _, address)| {

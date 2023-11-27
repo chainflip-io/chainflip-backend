@@ -51,6 +51,7 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 		api_call: Box::new(ApiCallFor::<T, I>::benchmark_value()),
 		broadcast_id: 1,
 		initiated_at: INITIATED_AT.into(),
+		should_broadcast: true,
 	}
 }
 

@@ -536,7 +536,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
+		assert_eq!(CcmGasBudget::<Test>::get((ForeignChain::Ethereum, 1)), Some(gas_budget));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -612,7 +612,7 @@ fn can_process_ccms_via_extrinsic() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
+		assert_eq!(CcmGasBudget::<Test>::get((ForeignChain::Ethereum, 1)), Some(gas_budget));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -694,7 +694,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
+		assert_eq!(CcmGasBudget::<Test>::get((ForeignChain::Ethereum, 1)), Some(gas_budget));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -771,7 +771,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
+		assert_eq!(CcmGasBudget::<Test>::get((ForeignChain::Ethereum, 1)), Some(gas_budget));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -817,7 +817,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
+		assert_eq!(CcmGasBudget::<Test>::get((ForeignChain::Ethereum, 1)), Some(gas_budget));
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -1595,7 +1595,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);
 
 			// Zero gas budget are not stored.
-			assert_eq!(CcmGasBudget::<Test>::get(1), None);
+			assert_eq!(CcmGasBudget::<Test>::get((ForeignChain::Ethereum, 1)), None);
 		});
 }
 
