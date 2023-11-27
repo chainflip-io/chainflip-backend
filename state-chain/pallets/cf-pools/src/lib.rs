@@ -12,11 +12,12 @@ use cf_amm::{
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
+	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
 	transactional,
 };
+
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
@@ -523,8 +524,10 @@ pub mod pallet {
 				}
 			}
 			let scheduled_limit_orders = ScheduledLimitOrders::<T>::take(current_block);
+			weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 			for OrderUpdate { lp, id, call } in scheduled_limit_orders {
-				if let Err(err) = call.dispatch_bypass_filter(RawOrigin::Signed(lp.clone()).into())
+				if let Err(err) =
+					call.clone().dispatch_bypass_filter(RawOrigin::Signed(lp.clone()).into())
 				{
 					Self::deposit_event(Event::<T>::ExecutingLimitOrderFailed {
 						lp: lp.clone(),
@@ -537,6 +540,7 @@ pub mod pallet {
 						order_id: id,
 					});
 				}
+				weight_used.saturating_accrue(call.get_dispatch_info().weight);
 			}
 			weight_used
 		}
