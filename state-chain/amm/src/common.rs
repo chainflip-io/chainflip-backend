@@ -165,21 +165,24 @@ pub(super) fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 }
 
 pub fn bounded_sqrt_price(quote: Amount, base: Amount) -> SqrtPriceQ64F96 {
-	assert_ne!(quote, Amount::zero());
-	assert_ne!(base, Amount::zero());
+	assert!(!quote.is_zero() || !base.is_zero());
 
-	let unbounded_sqrt_price = SqrtPriceQ64F96::try_from(
-		((U512::from(quote) << 256) / U512::from(base)).integer_sqrt() >>
-			(128 - SQRT_PRICE_FRACTIONAL_BITS),
-	)
-	.unwrap();
-
-	if unbounded_sqrt_price < MIN_SQRT_PRICE {
-		MIN_SQRT_PRICE
-	} else if unbounded_sqrt_price > MAX_SQRT_PRICE {
+	if base.is_zero() {
 		MAX_SQRT_PRICE
 	} else {
-		unbounded_sqrt_price
+		let unbounded_sqrt_price = SqrtPriceQ64F96::try_from(
+			((U512::from(quote) << 256) / U512::from(base)).integer_sqrt() >>
+				(128 - SQRT_PRICE_FRACTIONAL_BITS),
+		)
+		.unwrap();
+
+		if unbounded_sqrt_price < MIN_SQRT_PRICE {
+			MIN_SQRT_PRICE
+		} else if unbounded_sqrt_price > MAX_SQRT_PRICE {
+			MAX_SQRT_PRICE
+		} else {
+			unbounded_sqrt_price
+		}
 	}
 }
 
