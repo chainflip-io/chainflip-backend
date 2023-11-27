@@ -247,10 +247,7 @@ benchmarks! {
 			option_tick: Some(0),
 			sell_amount: 100,
 		}),
-		OrderScheduleDetails {
-			valid_at: Some(BlockNumberFor::<T>::from(1u32)..BlockNumberFor::<T>::from(4u32)),
-			dispatch_at: BlockNumberFor::<T>::from(5u32),
-		}
+		BlockNumberFor::<T>::from(5u32)
 	) verify {
 		assert!(!ScheduledLimitOrders::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
 	}

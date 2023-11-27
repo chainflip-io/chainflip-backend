@@ -10,9 +10,7 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
 };
-use pallet_cf_pools::{
-	AssetsMap, IncreaseOrDecrease, OrderId, OrderScheduleDetails, RangeOrderSize,
-};
+use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
@@ -243,7 +241,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
-		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
+		dispatch_at: Option<BlockNumber>,
 	) -> Result<Vec<types::LimitOrder>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::update_limit_order {
@@ -253,7 +251,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				option_tick,
 				amount_change,
 			},
-			schedule_details,
+			dispatch_at,
 		)
 		.await
 	}
@@ -265,7 +263,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
-		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
+		dispatch_at: Option<BlockNumber>,
 	) -> Result<Vec<types::LimitOrder>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::set_limit_order {
@@ -275,7 +273,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				option_tick,
 				sell_amount,
 			},
-			schedule_details,
+			dispatch_at,
 		)
 		.await
 	}
@@ -283,13 +281,13 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn scheduled_or_immediate(
 		&self,
 		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
-		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
+		dispatch_at: Option<BlockNumber>,
 	) -> Result<Vec<types::LimitOrder>> {
-		let events = if let Some(schedule_details) = schedule_details {
+		let events = if let Some(dispatch_at) = dispatch_at {
 			let (_tx_hash, events, ..) = self
 				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {
 					call: Box::new(call),
-					schedule_details,
+					dispatch_at,
 				})
 				.await
 				.until_in_block()

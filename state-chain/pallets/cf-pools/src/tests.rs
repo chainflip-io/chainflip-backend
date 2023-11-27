@@ -1,8 +1,7 @@
 use crate::{
 	self as pallet_cf_pools, mock::*, utilities, AssetAmounts, AssetPair, AssetsMap,
-	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn,
-	OrderScheduleDetails, PoolInfo, PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrders,
-	STABLE_ASSET,
+	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, PoolInfo,
+	PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrders, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -727,7 +726,7 @@ fn can_execute_scheduled_limit_order() {
 				option_tick: Some(100),
 				sell_amount: 55,
 			}),
-			OrderScheduleDetails::new(Some(1..5), 6)
+			6
 		));
 		assert!(!ScheduledLimitOrders::<Test>::get(6).is_empty());
 		LiquidityPools::on_initialize(6);
@@ -744,45 +743,4 @@ fn can_execute_scheduled_limit_order() {
 			})
 		);
 	});
-}
-
-#[test]
-fn gets_rejected_if_order_window_has_already_passed() {
-	new_test_ext().execute_with(|| {
-		let tick = 100;
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			Asset::Flip,
-			STABLE_ASSET,
-			Default::default(),
-			price_at_tick(0).unwrap(),
-		));
-		System::set_block_number(1);
-		let details = OrderScheduleDetails::new(Some(0..1), 1);
-		let call = Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
-			sell_asset: STABLE_ASSET,
-			buy_asset: Asset::Flip,
-			id: 0,
-			option_tick: Some(tick),
-			sell_amount: 55,
-		});
-		assert_noop!(
-			LiquidityPools::schedule(RuntimeOrigin::signed(ALICE), call, details),
-			Error::<Test>::OrderScheduleDetailsNotValidAtCurrentBlock
-		);
-	});
-}
-
-#[test]
-fn test_validity_window() {
-	let details = OrderScheduleDetails::new(Some(2..4), 5);
-	assert!(details.is_valid_at(2));
-	assert!(details.is_valid_at(3));
-	assert!(details.is_valid_at(4));
-	assert!(!details.is_valid_at(5));
-
-	let no_validity = OrderScheduleDetails::new(None, 4);
-	assert!(no_validity.is_valid_at(2));
-	assert!(no_validity.is_valid_at(3));
-	assert!(!no_validity.is_valid_at(4));
 }

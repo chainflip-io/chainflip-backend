@@ -233,42 +233,6 @@ pub mod pallet {
 		pub call: Call<T>,
 	}
 
-	/// Represents the operational details of a scheduled limit order.
-	#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub struct OrderScheduleDetails<BlockNumber: PartialOrd + Copy> {
-		/// The block number range during which the order is valid on entering state-chain.
-		pub valid_at: Option<Range<BlockNumber>>,
-		/// The block number at which the order is getting dispatched.
-		pub dispatch_at: BlockNumber,
-	}
-
-	impl<BlockNumber: PartialOrd + Copy> OrderScheduleDetails<BlockNumber> {
-		#[cfg(test)]
-		pub fn new(valid_at: Option<Range<BlockNumber>>, dispatch_at: BlockNumber) -> Self {
-			let details = Self { valid_at, dispatch_at };
-			if let Some(window) = details.valid_at.as_ref() {
-				debug_assert!(window.start < dispatch_at);
-			}
-			details
-		}
-
-		/// Tests if validity is given at a particular block number.
-		pub fn is_valid_at(&self, current_block: BlockNumber) -> bool {
-			(if let Some(window) = self.valid_at.as_ref() {
-				(window.start <= current_block && current_block <= window.end) &&
-					self.dispatch_at > window.start
-			} else {
-				true
-			}) && self.dispatch_at > current_block
-		}
-
-		/// Returns the block number at which the order is getting executed.
-		pub fn dispatch_at(&self) -> BlockNumber {
-			self.dispatch_at
-		}
-	}
-
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
@@ -1150,25 +1114,20 @@ pub mod pallet {
 		pub fn schedule(
 			origin: OriginFor<T>,
 			call: Box<Call<T>>,
-			schedule_details: OrderScheduleDetails<BlockNumberFor<T>>,
+			dispatch_at: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let current_block = <frame_system::Pallet<T>>::block_number();
-			ensure!(
-				schedule_details.is_valid_at(current_block),
-				Error::<T>::OrderScheduleDetailsNotValidAtCurrentBlock
-			);
 			match *call {
 				Call::update_limit_order { id, .. } => {
 					ScheduledLimitOrders::<T>::append(
-						schedule_details.dispatch_at(),
+						dispatch_at,
 						OrderUpdate { lp, id, call: *call },
 					);
 					Ok(())
 				},
 				Call::set_limit_order { id, .. } => {
 					ScheduledLimitOrders::<T>::append(
-						schedule_details.dispatch_at(),
+						dispatch_at,
 						OrderUpdate { lp, id, call: *call },
 					);
 					Ok(())
