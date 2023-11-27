@@ -18,7 +18,7 @@ use sp_runtime::{
 	testing::UintAuthorityId,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 pub type Amount = u128;
 pub type ValidatorId = u64;
@@ -127,13 +127,27 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
+thread_local! {
+	pub static AUTHORITY_BONDS: RefCell<HashMap<ValidatorId, Amount>> = RefCell::new(HashMap::default());
+}
+
 pub struct MockBonder;
+
+impl MockBonder {
+	pub fn get_bond(account_id: &ValidatorId) -> Amount {
+		AUTHORITY_BONDS.with(|cell| cell.borrow().get(account_id).copied().unwrap_or(0))
+	}
+}
 
 impl Bonding for MockBonder {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
+	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
+		AUTHORITY_BONDS.with(|cell| {
+			cell.borrow_mut().insert(*account_id, bond);
+		})
+	}
 }
 
 pub type MockOffenceReporter =

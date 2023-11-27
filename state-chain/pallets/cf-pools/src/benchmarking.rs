@@ -39,20 +39,6 @@ benchmarks! {
 		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
 	}
 
-	update_pool_enabled {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap());
-		let call =  Call::<T>::update_pool_enabled{
-			base_asset: Asset::Eth,
-			pair_asset: Asset::Usdc,
-			enabled: false,
-		};
-	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap());
-	} verify {
-		assert!(!Pools::<T>::get(CanonicalAssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()).unwrap().enabled);
-	}
-
 	new_pool {
 		let call =  Call::<T>::new_pool {
 			base_asset: Asset::Eth,

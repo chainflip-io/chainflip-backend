@@ -2,7 +2,7 @@
 use core::ops::Range;
 
 use cf_amm::{
-	common::{Amount, Order, Price, Side, SideMap, Tick},
+	common::{Amount, Order, Price, Side, SideMap, SqrtPriceQ64F96, Tick},
 	limit_orders,
 	limit_orders::{Collected, PositionInfo},
 	range_orders,
@@ -16,6 +16,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
 	storage::with_storage_layer,
+	traits::StorageVersion,
 	transactional,
 };
 
@@ -27,6 +28,7 @@ use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 pub use pallet::*;
 
 mod benchmarking;
+pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -211,6 +213,8 @@ impl<T: Config> AssetPair<T> {
 	}
 }
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
@@ -236,7 +240,6 @@ pub mod pallet {
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
-		pub enabled: bool,
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool.
 		pub range_orders_cache: BTreeMap<T::AccountId, BTreeMap<OrderId, Range<Tick>>>,
@@ -417,6 +420,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// All the available pools.
@@ -566,11 +570,6 @@ pub mod pallet {
 		UpdatedBuyInterval {
 			buy_interval: BlockNumberFor<T>,
 		},
-		PoolStateUpdated {
-			base_asset: Asset,
-			pair_asset: Asset,
-			enabled: bool,
-		},
 		NewPoolCreated {
 			base_asset: Asset,
 			pair_asset: Asset,
@@ -654,43 +653,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Enable or disable an exchange pool.
-		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::PoolStateUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
-		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::update_pool_enabled())]
-		pub fn update_pool_enabled(
-			origin: OriginFor<T>,
-			base_asset: any::Asset,
-			pair_asset: any::Asset,
-			enabled: bool,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::try_mutate_pool(
-				base_asset,
-				pair_asset,
-				|_| Ok(()),
-				|_asset_pair, pool| {
-					pool.enabled = enabled;
-					Self::deposit_event(Event::<T>::PoolStateUpdated {
-						base_asset,
-						pair_asset,
-						enabled,
-					});
-					Ok(())
-				},
-			)
-		}
-
-		/// Create a new pool. Pools are enabled by default.
+		/// Create a new pool.
 		/// Requires Governance.
 		///
 		/// ## Events
@@ -720,7 +683,6 @@ pub mod pallet {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
 				*maybe_pool = Some(Pool {
-					enabled: true,
 					range_orders_cache: Default::default(),
 					limit_orders_cache: Default::default(),
 					pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(|e| {
@@ -1058,7 +1020,7 @@ pub mod pallet {
 				PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips),
 				Error::<T>::InvalidFeeAmount
 			);
-			Self::try_mutate_enabled_pool(
+			Self::try_mutate_pool(
 				base_asset,
 				pair_asset,
 				|_| Ok(()),
@@ -1157,13 +1119,17 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		to: any::Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		Self::try_mutate_enabled_pool(
+		Self::try_mutate_pool(
 			from,
 			to,
 			|_| Ok(()),
 			|asset_pair, pool| {
-				let (output_amount, remaining_amount) =
-					pool.pool_state.swap(asset_pair.base_side, Order::Sell, input_amount.into());
+				let (output_amount, remaining_amount) = pool.pool_state.swap(
+					asset_pair.base_side,
+					Order::Sell,
+					input_amount.into(),
+					None,
+				);
 				remaining_amount
 					.is_zero()
 					.then_some(())
@@ -1254,6 +1220,18 @@ pub struct UnidirectionalPoolDepth {
 	pub limit_orders: UnidirectionalSubPoolDepth,
 	/// The depth of the range order pool.
 	pub range_orders: UnidirectionalSubPoolDepth,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub struct PoolOrder {
+	pub amount: Amount,
+	pub sqrt_price: SqrtPriceQ64F96,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub struct PoolOrderbook {
+	pub bids: Vec<PoolOrder>,
+	pub asks: Vec<PoolOrder>,
 }
 
 impl<T: Config> Pallet<T> {
@@ -1562,23 +1540,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn try_mutate_enabled_pool<
-		R,
-		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair<T>) -> Result<(), E>,
-		G: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
-	>(
-		base_asset: any::Asset,
-		pair_asset: any::Asset,
-		f: F,
-		g: G,
-	) -> Result<R, E> {
-		Self::try_mutate_pool(base_asset, pair_asset, f, |asset_pair, pool| {
-			ensure!(pool.enabled, Error::<T>::PoolDisabled);
-			g(asset_pair, pool)
-		})
-	}
-
 	fn try_mutate_order<R, F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, DispatchError>>(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
@@ -1586,7 +1547,7 @@ impl<T: Config> Pallet<T> {
 		f: F,
 	) -> Result<R, DispatchError> {
 		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, pair_asset)?;
-		Self::try_mutate_enabled_pool(
+		Self::try_mutate_pool(
 			base_asset,
 			pair_asset,
 			|asset_pair| Self::inner_sweep(lp, asset_pair.base_side),
@@ -1620,6 +1581,95 @@ impl<T: Config> Pallet<T> {
 				})
 				.map(|side_map| asset_pair.side_map_to_assets_map(side_map)),
 		)
+	}
+
+	pub fn pool_orderbook(
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		orders: u32,
+	) -> Result<PoolOrderbook, DispatchError> {
+		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
+
+		let asset_pair = AssetPair::<T>::new(base_asset, quote_asset)
+			.map_err(|_| Error::<T>::PoolDoesNotExist)?;
+		let pool_state = Pools::<T>::get(asset_pair.canonical_asset_pair)
+			.ok_or(Error::<T>::PoolDoesNotExist)?
+			.pool_state;
+
+		// TODO: Need to change limit order pool implmentation so Amount::MAX is guaranteed to drain
+		// pool (so the calculated amounts here are guaranteed to reflect the accurate
+		// maximum_bough_amounts)
+
+		Ok(PoolOrderbook {
+			asks: {
+				let mut pool_state = pool_state.clone();
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(
+					!asset_pair.base_side,
+					Order::Sell,
+					orders,
+				);
+
+				sqrt_prices
+					.into_iter()
+					.filter_map(|sqrt_price| {
+						let (sold_base_amount, remaining_quote_amount) = pool_state.swap(
+							!asset_pair.base_side,
+							Order::Sell,
+							Amount::MAX,
+							Some(sqrt_price),
+						);
+
+						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
+
+						if sold_base_amount.is_zero() || bought_quote_amount.is_zero() {
+							None
+						} else {
+							Some(PoolOrder {
+								amount: sold_base_amount,
+								sqrt_price: cf_amm::common::bounded_sqrt_price(
+									bought_quote_amount,
+									sold_base_amount,
+								),
+							})
+						}
+					})
+					.collect()
+			},
+			bids: {
+				let mut pool_state = pool_state;
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(
+					asset_pair.base_side,
+					Order::Sell,
+					orders,
+				);
+
+				sqrt_prices
+					.into_iter()
+					.filter_map(|sqrt_price| {
+						let (sold_quote_amount, remaining_base_amount) = pool_state.swap(
+							asset_pair.base_side,
+							Order::Sell,
+							Amount::MAX,
+							Some(sqrt_price),
+						);
+
+						let bought_base_amount = Amount::MAX - remaining_base_amount;
+
+						if sold_quote_amount.is_zero() || bought_base_amount.is_zero() {
+							None
+						} else {
+							Some(PoolOrder {
+								amount: bought_base_amount,
+								sqrt_price: cf_amm::common::bounded_sqrt_price(
+									sold_quote_amount,
+									bought_base_amount,
+								),
+							})
+						}
+					})
+					.collect()
+			},
+		})
 	}
 
 	pub fn pool_depth(

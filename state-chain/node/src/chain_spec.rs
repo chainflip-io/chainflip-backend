@@ -272,6 +272,8 @@ pub fn inner_cf_development_config(
 				devnet::BITCOIN_EXPIRY_BLOCKS,
 				devnet::ETHEREUM_EXPIRY_BLOCKS,
 				devnet::POLKADOT_EXPIRY_BLOCKS,
+				devnet::BITCOIN_SAFETY_MARGIN,
+				devnet::ETHEREUM_SAFETY_MARGIN,
 				devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
 			)
 		},
@@ -400,6 +402,8 @@ macro_rules! network_spec {
 							BITCOIN_EXPIRY_BLOCKS,
 							ETHEREUM_EXPIRY_BLOCKS,
 							POLKADOT_EXPIRY_BLOCKS,
+							BITCOIN_SAFETY_MARGIN,
+							ETHEREUM_SAFETY_MARGIN,
 							AUCTION_BID_CUTOFF_PERCENTAGE,
 						)
 					},
@@ -460,6 +464,8 @@ fn testnet_genesis(
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
 	polkadot_deposit_channel_lifetime: u32,
+	bitcoin_safety_margin: u64,
+	ethereum_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
 ) -> RuntimeGenesisConfig {
 	// Sanity Checks
@@ -667,15 +673,18 @@ fn testnet_genesis(
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
 		swapping: SwappingConfig { minimum_swap_amounts, _phantom: PhantomData },
-		// These are set to ~2 hours at average block times.
+		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
+			witness_safety_margin: Some(bitcoin_safety_margin),
 		},
 		ethereum_ingress_egress: EthereumIngressEgressConfig {
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
+			witness_safety_margin: Some(ethereum_safety_margin),
 		},
 		polkadot_ingress_egress: PolkadotIngressEgressConfig {
 			deposit_channel_lifetime: polkadot_deposit_channel_lifetime,
+			witness_safety_margin: None,
 		},
 	}
 }

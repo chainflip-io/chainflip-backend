@@ -28,7 +28,7 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, PoolOrderbook, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
@@ -292,6 +292,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type NetworkEnvironment = Environment;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -308,6 +309,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type DepositHandler = chainflip::DotDepositHandler;
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -324,6 +326,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type DepositHandler = chainflip::BtcDepositHandler;
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
 }
 
 parameter_types! {
@@ -851,6 +854,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1064,6 +1068,14 @@ impl_runtime_apis! {
 			tick_range: Range<cf_amm::common::Tick>,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		}
+
+		fn cf_pool_orderbook(
+			base_asset: Asset,
+			quote_asset: Asset,
+			orders: u32,
+		) -> Result<PoolOrderbook, DispatchError> {
+			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
 		}
 
 		fn cf_pool_orders(

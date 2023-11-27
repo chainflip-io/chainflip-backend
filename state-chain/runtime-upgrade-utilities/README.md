@@ -58,7 +58,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
        (VersionedMigration<crate::Pallet<T>, my_migration::Migration<T>, 0, 1>,);
    ```
 
-4. Now create `migrations/my_migration.rs` with an implemtation of `OnRuntimeUpgrade`:
+4. Now create `migrations/my_migration.rs` with an implementation of `OnRuntimeUpgrade`:
 
    ```rust
    use crate::*;
@@ -84,7 +84,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
    }
    ```
 
-5. If this is the first migration for this pallet, ensure that thie `PalletMigration` for this pallet is added to the tuple of PalletMigrations in `state-chain/runtime/src/lib.rs`. Remember to add all the pallet's instances!
+5. If this is the first migration for this pallet, ensure that the `PalletMigration` for this pallet is added to the tuple of PalletMigrations in `state-chain/runtime/src/lib.rs`. Remember to add all the pallet's instances!
 
    ```rust
    type PalletMigrations = (
