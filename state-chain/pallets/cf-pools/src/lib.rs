@@ -231,7 +231,7 @@ pub mod pallet {
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct OrderUpdate<T: Config> {
+	pub struct LimitOrderUpdate<T: Config> {
 		pub lp: T::AccountId,
 		pub id: OrderId,
 		pub call: Call<T>,
@@ -442,8 +442,8 @@ pub mod pallet {
 
 	/// Queue of limit orders, indexed by block number waiting to get minted or burned.
 	#[pallet::storage]
-	pub(super) type ScheduledLimitOrders<T: Config> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<OrderUpdate<T>>, ValueQuery>;
+	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -492,23 +492,24 @@ pub mod pallet {
 					}
 				}
 			}
-			let scheduled_limit_orders = ScheduledLimitOrders::<T>::take(current_block);
+
 			weight_used.saturating_accrue(T::DbWeight::get().reads(1));
-			for OrderUpdate { lp, id, call } in scheduled_limit_orders {
-				let call_weight = call.clone().get_dispatch_info().weight;
-				let lp_account_id = lp.clone();
+			for LimitOrderUpdate { ref lp, id, call } in
+				ScheduledLimitOrderUpdates::<T>::take(current_block)
+			{
+				let call_weight = call.get_dispatch_info().weight;
 				let _result = with_storage_layer(move || {
-					call.dispatch_bypass_filter(RawOrigin::Signed(lp.clone()).into())
+					call.dispatch_bypass_filter(OriginTrait::signed(lp.clone()))
 				})
 				.map(|_| {
-					Self::deposit_event(Event::<T>::SuccessfullyExecutedLimitOrder {
-						lp: lp_account_id.clone(),
+					Self::deposit_event(Event::<T>::ScheduledLimitOrderUpdateDispatchSuccess {
+						lp: lp.clone(),
 						order_id: id,
 					});
 				})
 				.map_err(|err| {
-					Self::deposit_event(Event::<T>::ExecutingLimitOrderFailed {
-						lp: lp_account_id,
+					Self::deposit_event(Event::<T>::ScheduledLimitOrderUpdateDispatchFailure {
+						lp: lp.clone(),
 						order_id: id,
 						error: err.error,
 					});
@@ -617,11 +618,13 @@ pub mod pallet {
 			pair_asset: Asset,
 			fee_hundredth_pips: u32,
 		},
-		SuccessfullyExecutedLimitOrder {
+		/// A scheduled update to a limit order succeeded.
+		ScheduledLimitOrderUpdateDispatchSuccess {
 			lp: T::AccountId,
 			order_id: OrderId,
 		},
-		ExecutingLimitOrderFailed {
+		/// A scheduled update to a limit order failed.
+		ScheduledLimitOrderUpdateDispatchFailure {
 			lp: T::AccountId,
 			order_id: OrderId,
 			error: DispatchError,

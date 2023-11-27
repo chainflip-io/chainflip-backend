@@ -235,7 +235,7 @@ benchmarks! {
 		}),
 		BlockNumberFor::<T>::from(5u32)
 	) verify {
-		assert!(!ScheduledLimitOrders::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
+		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
 	}
 
 	impl_benchmark_test_suite!(

@@ -1,7 +1,7 @@
 use crate::{
 	self as pallet_cf_pools, mock::*, utilities, AssetAmounts, AssetPair, AssetsMap,
 	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, PoolInfo,
-	PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrders, STABLE_ASSET,
+	PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -663,12 +663,12 @@ fn can_execute_scheduled_limit_order() {
 			}),
 			6
 		));
-		assert!(!ScheduledLimitOrders::<Test>::get(6).is_empty());
+		assert!(!ScheduledLimitOrderUpdates::<Test>::get(6).is_empty());
 		LiquidityPools::on_initialize(6);
 		assert!(
-			ScheduledLimitOrders::<Test>::get(6).is_empty(),
+			ScheduledLimitOrderUpdates::<Test>::get(6).is_empty(),
 			"Should be empty, but is {:?}",
-			ScheduledLimitOrders::<Test>::get(6)
+			ScheduledLimitOrderUpdates::<Test>::get(6)
 		);
 		assert_eq!(
 			last_event::<Test>(),

@@ -169,8 +169,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `LiquidityPools::ScheduledLimitOrders` (r:1 w:1)
-	/// Proof: `LiquidityPools::ScheduledLimitOrders` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::ScheduledLimitOrderUpdates` (r:1 w:1)
+	/// Proof: `LiquidityPools::ScheduledLimitOrderUpdates` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn schedule() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `403`
@@ -307,8 +307,8 @@ impl WeightInfo for () {
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: Some(33), added: 2508, mode: `MaxEncodedLen`)
-	/// Storage: `LiquidityPools::ScheduledLimitOrders` (r:1 w:1)
-	/// Proof: `LiquidityPools::ScheduledLimitOrders` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::ScheduledLimitOrderUpdates` (r:1 w:1)
+	/// Proof: `LiquidityPools::ScheduledLimitOrderUpdates` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn schedule() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `403`
