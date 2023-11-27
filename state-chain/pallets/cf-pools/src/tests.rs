@@ -744,3 +744,21 @@ fn can_execute_scheduled_limit_order() {
 		);
 	});
 }
+
+#[test]
+fn schedule_rejects_unsupported_calls() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			LiquidityPools::schedule(
+				RuntimeOrigin::signed(ALICE),
+				Box::new(pallet_cf_pools::Call::<Test>::set_pool_fees {
+					base_asset: Asset::Eth,
+					pair_asset: STABLE_ASSET,
+					fee_hundredth_pips: 0,
+				}),
+				6
+			),
+			Error::<Test>::UnsupportedCall
+		);
+	});
+}
