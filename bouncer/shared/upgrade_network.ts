@@ -7,7 +7,7 @@ import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
 import { compareSemVer, sleep } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/bump_spec_version';
 import { compileBinaries } from './utils/compile_binaries';
-import { submitRuntimeUpgrade, submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
+import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -69,7 +69,7 @@ async function incompatibleUpgradeNoBuild(
   );
 
   // let the engines do what they gotta do
-  sleep(6000);
+  sleep(7000);
 
   console.log('Engines started');
 
@@ -164,47 +164,44 @@ export async function upgradeNetworkPrebuilt(
 
   localnetInitPath: string,
 
-  old_version: string,
+  oldVersion: string,
 
   numberOfNodes: 1 | 3 = 1,
 ) {
 
   const versionRegex = /\d+\.\d+\.\d+/;
 
-  let cfe_binary_version = execSync(`${binariesPath}/chainflip-engine --version`).toString();
+  let cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
 
-  const cfe_version = cfe_binary_version.match(versionRegex)[0];
-  console.log("CFE version we're upgrading to: " + cfe_version);
+  const cfeVersion = cfeBinaryVersion.match(versionRegex)[0];
+  console.log("CFE version we're upgrading to: " + cfeVersion);
 
 
-  let node_binary_version = execSync(`${binariesPath}/chainflip-node --version`).toString();
-  const node_version = node_binary_version.match(versionRegex)[0];
+  let nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
+  const node_version = nodeBinaryVersion.match(versionRegex)[0];
   console.log("Node version we're upgrading to: " + node_version);
 
-  if (cfe_version !== node_version) {
+  if (cfeVersion !== node_version) {
     throw new Error(
       "The CFE version and the node version don't match. Ensure you selected the correct binaries.",
     );
   }
 
-  const isCompatible = isCompatibleWith(old_version, cfe_version);
+  if (compareSemVer(oldVersion, cfeVersion) === 'greater') {
+    throw new Error(
+      "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
+    );
+  }
+
+  const isCompatible = isCompatibleWith(oldVersion, cfeVersion);
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');
-    console.log("Upgrading with a number of nodes: " + numberOfNodes);
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
     console.log('The versions are compatible.');
-
     await submitRuntimeUpgradeWithRestrictions(runtimePath);
-    console.log('Upgrade complete.');
   }
 
-  console.log("Versions match, we're good to go.");
-
-
-  // run --version on the binaries to get the compatible/incompatible status
-
-  // format of --version
-  // chainflip-node 1.0.0-b316890d931
+  console.log('Upgrade complete.');
 }

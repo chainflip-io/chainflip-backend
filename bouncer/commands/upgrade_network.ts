@@ -57,10 +57,24 @@ async function main(): Promise<void> {
       type: 'string',
       demandOption: true,
       requiresArg: true,
+    }).option('localnet_init', {
+      describe: "path to the localnet init directory",
+      type: 'string',
+      demandOption: true,
+      requiresArg: true,
+    }).option('nodes', {
+      describe: "The number of nodes running on your localnet. Defaults to 1.",
+      type: 'number',
+      default: 1,
+    }).option('oldVersion', {
+      describe: "The version of the network you wish to upgrade *from*.",
+      type: 'string',
+      demandOption: true,
+      requiresArg: true,
     })
   }, async (args) => {
     console.log("prebuilt subcommand with args: " + args.bins + " " + args.runtime);
-    await upgradeNetworkPrebuilt(args.bins, args.runtime, "1.0.0");
+    await upgradeNetworkPrebuilt(args.bins, args.runtime, args.localnet_init, args.oldVersion, args.nodes);
   }).demandCommand(1).help().argv;
 
   process.exit(0);
