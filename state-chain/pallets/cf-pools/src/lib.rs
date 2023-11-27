@@ -16,7 +16,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
 	storage::with_storage_layer,
-	traits::StorageVersion,
+	traits::{OriginTrait, StorageVersion},
 	transactional,
 };
 
@@ -224,7 +224,7 @@ pub mod pallet {
 		NewError,
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
-	use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
 	use super::*;
@@ -561,8 +561,8 @@ pub mod pallet {
 		UpdatingRangeOrdersDisabled,
 		/// Unsupported call.
 		UnsupportedCall,
-		/// The order is not valid at the current block.
-		OrderScheduleDetailsNotValidAtCurrentBlock,
+		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
+		LimitOrderUpdateExpired,
 	}
 
 	#[pallet::event]
@@ -1061,14 +1061,14 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Schedules a call to be executed at a later block.
+		/// Schedules a limit order update to be executed at a later block.
 		///
-		/// This extrinsic is used to schedule the execution of either the set_limit_order or the
-		/// update_limit_order extrinsic at a later block. The call is executed at the specified
+		/// The update is defined by the passed call, which can be one either `set_limit_order` or
+		/// `update_limit_order` extrinsic at a later block. The call is executed at the specified
 		/// block number, and the validity of the order is checked at the block number it enters
-		/// the state-chain. If the order details are not valid at that block number, the extrinsic
-		/// will fail. If the order is valid, the extrinsic will succeed and the call will be
-		/// scheduled at the provided block number in *executes_at*.
+		/// the state-chain.
+		///
+		/// `dispatch_at` specifies the block at which to schedule the update. If the
 		///
 		/// ## Errors
 		///
@@ -1076,27 +1076,30 @@ pub mod pallet {
 		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::schedule())]
-		pub fn schedule(
+		pub fn schedule_limit_order_update(
 			origin: OriginFor<T>,
 			call: Box<Call<T>>,
 			dispatch_at: BlockNumberFor<T>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let current_block_number = frame_system::Pallet::<T>::block_number();
+			ensure!(dispatch_at >= current_block_number, Error::<T>::LimitOrderUpdateExpired);
+
+			let schedule_or_dispatch = |call: Call<T>, id: OrderId| {
+				if current_block_number == dispatch_at {
+					call.dispatch_bypass_filter(OriginTrait::signed(lp))
+				} else {
+					ScheduledLimitOrderUpdates::<T>::append(
+						dispatch_at,
+						LimitOrderUpdate { lp, id, call },
+					);
+					Ok(().into())
+				}
+			};
+
 			match *call {
-				Call::update_limit_order { id, .. } => {
-					ScheduledLimitOrders::<T>::append(
-						dispatch_at,
-						OrderUpdate { lp, id, call: *call },
-					);
-					Ok(())
-				},
-				Call::set_limit_order { id, .. } => {
-					ScheduledLimitOrders::<T>::append(
-						dispatch_at,
-						OrderUpdate { lp, id, call: *call },
-					);
-					Ok(())
-				},
+				Call::update_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+				Call::set_limit_order { id, .. } => schedule_or_dispatch(*call, id),
 				_ => Err(Error::<T>::UnsupportedCall)?,
 			}
 		}
