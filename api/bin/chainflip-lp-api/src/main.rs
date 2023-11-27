@@ -141,7 +141,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
-		details: Option<OrderScheduleDetails<BlockNumber>>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
@@ -152,7 +152,7 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
-		details: Option<OrderScheduleDetails<BlockNumber>>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
@@ -286,7 +286,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
-		details: Option<OrderScheduleDetails<BlockNumber>>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -297,7 +297,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
-				details,
+				schedule_details,
 			)
 			.await?)
 	}
@@ -309,7 +309,7 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
-		details: Option<OrderScheduleDetails<BlockNumber>>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
 		Ok(self
 			.api
@@ -320,7 +320,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,
-				details,
+				schedule_details,
 			)
 			.await?)
 	}

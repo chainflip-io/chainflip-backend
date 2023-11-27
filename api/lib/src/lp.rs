@@ -243,40 +243,19 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
-		details: Option<OrderScheduleDetails<BlockNumber>>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<types::LimitOrder>> {
-		// Submit the mint order
-		let events = if let Some(details) = details {
-			let (_tx_hash, events, ..) = self
-				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {
-					call: Box::new(pallet_cf_pools::Call::update_limit_order {
-						sell_asset,
-						buy_asset,
-						id,
-						option_tick,
-						amount_change,
-					}),
-					details,
-				})
-				.await
-				.until_in_block()
-				.await?;
-			events
-		} else {
-			let (_tx_hash, events, ..) = self
-				.submit_signed_extrinsic(pallet_cf_pools::Call::update_limit_order {
-					sell_asset,
-					buy_asset,
-					id,
-					option_tick,
-					amount_change,
-				})
-				.await
-				.until_in_block()
-				.await?;
-			events
-		};
-		Ok(collect_limit_order_returns(events))
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::update_limit_order {
+				sell_asset,
+				buy_asset,
+				id,
+				option_tick,
+				amount_change,
+			},
+			schedule_details,
+		)
+		.await
 	}
 
 	async fn set_limit_order(
@@ -286,36 +265,39 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
-		details: Option<OrderScheduleDetails<BlockNumber>>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
 	) -> Result<Vec<types::LimitOrder>> {
-		let events = if let Some(details) = details {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::set_limit_order {
+				sell_asset,
+				buy_asset,
+				id,
+				option_tick,
+				sell_amount,
+			},
+			schedule_details,
+		)
+		.await
+	}
+
+	async fn scheduled_or_immediate(
+		&self,
+		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
+		schedule_details: Option<OrderScheduleDetails<BlockNumber>>,
+	) -> Result<Vec<types::LimitOrder>> {
+		let events = if let Some(schedule_details) = schedule_details {
 			let (_tx_hash, events, ..) = self
 				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule {
-					call: Box::new(pallet_cf_pools::Call::set_limit_order {
-						sell_asset,
-						buy_asset,
-						id,
-						option_tick,
-						sell_amount,
-					}),
-					details,
+					call: Box::new(call),
+					schedule_details,
 				})
 				.await
 				.until_in_block()
 				.await?;
 			events
 		} else {
-			let (_tx_hash, events, ..) = self
-				.submit_signed_extrinsic(pallet_cf_pools::Call::set_limit_order {
-					sell_asset,
-					buy_asset,
-					id,
-					option_tick,
-					sell_amount,
-				})
-				.await
-				.until_in_block()
-				.await?;
+			let (_tx_hash, events, ..) =
+				self.submit_signed_extrinsic(call).await.until_in_block().await?;
 			events
 		};
 		Ok(collect_limit_order_returns(events))
