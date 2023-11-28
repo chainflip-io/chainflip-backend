@@ -14,7 +14,7 @@ cf-test-cfe = "test --lib --package chainflip-engine --package multisig"
 cf-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 
-cf-build = "build --features runtime-benchmarks"
+cf-build = "build --features runtime-benchmarks,try-runtime"
 cf-build-release = "build --release"
 cf-build-production = "build --profile=production"
 # Check for feature inconsistencies.
