@@ -663,6 +663,14 @@ fn can_execute_scheduled_limit_order() {
 			}),
 			6
 		));
+		assert_eq!(
+			last_event::<Test>(),
+			RuntimeEvent::LiquidityPools(crate::Event::LimitOrderSetOrUpdateScheduled {
+				lp: ALICE,
+				order_id,
+				dispatch_at: 6,
+			})
+		);
 		assert!(!ScheduledLimitOrderUpdates::<Test>::get(6).is_empty());
 		LiquidityPools::on_initialize(6);
 		assert!(

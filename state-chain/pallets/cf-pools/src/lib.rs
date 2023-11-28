@@ -629,6 +629,12 @@ pub mod pallet {
 			order_id: OrderId,
 			error: DispatchError,
 		},
+		/// A limit order set or update was scheduled.
+		LimitOrderSetOrUpdateScheduled {
+			lp: T::AccountId,
+			order_id: OrderId,
+			dispatch_at: BlockNumberFor<T>,
+		},
 	}
 
 	#[pallet::call]
@@ -1091,8 +1097,13 @@ pub mod pallet {
 				} else {
 					ScheduledLimitOrderUpdates::<T>::append(
 						dispatch_at,
-						LimitOrderUpdate { lp, id, call },
+						LimitOrderUpdate { lp: lp.clone(), id, call },
 					);
+					Self::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
+						lp,
+						order_id: id,
+						dispatch_at,
+					});
 					Ok(().into())
 				}
 			};
