@@ -123,11 +123,19 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 fn start_mock_broadcast_tx_out_id(
 	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
 ) -> BroadcastAttemptId {
+	let api_call =
+		MockApiCall { tx_out_id, payload: Default::default(), sig: Some(Default::default()) };
+	let broadcast_id = 1;
+	// Insert threshold signature into storage.
+	ThresholdSignatureData::<Test, Instance1>::insert(
+		broadcast_id,
+		(api_call.clone(), api_call.sig.unwrap()),
+	);
 	Broadcaster::start_broadcast(
 		MockTransaction,
-		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
+		api_call,
 		Default::default(),
-		1,
+		broadcast_id,
 		100u64,
 	)
 }
