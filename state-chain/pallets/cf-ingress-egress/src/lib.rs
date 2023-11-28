@@ -104,8 +104,6 @@ pub struct FailedCcm {
 	/// Broadcast ID used in the broadcast pallet. Use it to query broadcast information,
 	/// such as the threshold signature, the API call etc.
 	pub broadcast_id: BroadcastId,
-	/// Egress ID for the CCM message. Use it to query Gas budget in the Swapping pallet.
-	pub egress_id: EgressId,
 	/// The epoch the call originally failed in. Calls are cleaned from storage 2 epochs.
 	pub original_epoch: EpochIndex,
 }
@@ -438,7 +436,6 @@ pub mod pallet {
 		/// A CCM has failed to broadcast.
 		CcmBroadcastFailed {
 			broadcast_id: BroadcastId,
-			egress_id: EgressId,
 		},
 		/// A failed CCM call has been re-threshold-signed for the current epoch.
 		FailedCcmCallResigned {
@@ -449,7 +446,6 @@ pub mod pallet {
 		/// It's broadcast data has been cleaned from storage.
 		FailedCcmExpired {
 			broadcast_id: BroadcastId,
-			egress_id: EgressId,
 		},
 	}
 
@@ -514,17 +510,18 @@ pub mod pallet {
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
 
-			// Process any failed CCM requires resigning or culling.
+			// Process failed CCM requires resigning or culling. Take 1 call per block to avoid
+			// spike.
 			let current_epoch = T::EpochInfo::epoch_index();
-			for ccm in FailedCcms::<T, I>::take(current_epoch.saturating_sub(1)) {
+			if let Some(ccm) =
+				FailedCcms::<T, I>::mutate(current_epoch.saturating_sub(1), |ccms| ccms.pop())
+			{
 				match current_epoch.saturating_sub(ccm.original_epoch) {
 					// The CCM message is stale, clean up storage.
 					n if n >= 2 => {
 						T::Broadcaster::clean_up_broadcast_storage(ccm.broadcast_id);
-						T::CcmHandler::remove_gas_budget(ccm.egress_id);
 						Self::deposit_event(Event::<T, I>::FailedCcmExpired {
 							broadcast_id: ccm.broadcast_id,
-							egress_id: ccm.egress_id,
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign and store.
@@ -541,15 +538,14 @@ pub mod pallet {
 							// We are here if the CCM needs to be resigned, yet no API call data is
 							// available to use. In this situation, there's nothing else that can be
 							// done.
-							log::error!("Ccm message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}, Egress Id: {:?}", ccm.broadcast_id, ccm.egress_id);
+							log::error!("Ccm message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}", ccm.broadcast_id);
 						}
 					},
 					// Current epoch, shouldn't be possible.
 					_ => {
 						log_or_panic!(
-							"Unexpected CCM message for current epoch. Broadcast Id: {:?}, Egress Id: {:?}",
+							"Unexpected CCM message for current epoch. Broadcast Id: {:?}",
 							ccm.broadcast_id,
-							ccm.egress_id
 						);
 					},
 				}
@@ -703,7 +699,7 @@ pub mod pallet {
 
 		/// Callback for when CCMs failed to be broadcasted. We will resign the call
 		/// so the user can broadcast the CCM themselves.
-		/// Requires Witness origin.
+		/// Requires Root origin.
 		///
 		/// ## Events
 		///
@@ -713,9 +709,8 @@ pub mod pallet {
 		pub fn ccm_broadcast_failed(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
-			egress_id: EgressId,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			ensure_root(origin)?;
 
 			let current_epoch = T::EpochInfo::epoch_index();
 
@@ -723,10 +718,10 @@ pub mod pallet {
 			// information such as Threshold Signature etc.
 			FailedCcms::<T, I>::append(
 				current_epoch,
-				FailedCcm { broadcast_id, egress_id, original_epoch: current_epoch },
+				FailedCcm { broadcast_id, original_epoch: current_epoch },
 			);
 
-			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id, egress_id });
+			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
 			Ok(())
 		}
 	}
@@ -873,7 +868,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 		for ccm in ccms_to_send {
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
-				ccm.egress_id,
 				TransferAssetParams {
 					asset: ccm.asset,
 					amount: ccm.amount,
@@ -889,15 +883,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 							api_call,
 							None,
-							|broadcast_id| {
-								Some(
-									Call::ccm_broadcast_failed {
-										broadcast_id,
-										egress_id: ccm.egress_id,
-									}
-									.into(),
-								)
-							},
+							|broadcast_id| Some(Call::ccm_broadcast_failed { broadcast_id }.into()),
 						);
 					Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
 						broadcast_id,

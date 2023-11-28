@@ -324,9 +324,7 @@ impl Tokenizable for AggKey {
 	}
 }
 
-#[derive(
-	Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],

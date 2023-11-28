@@ -557,7 +557,6 @@ fn can_egress_ccm() {
 
 		// Check that the CCM should be egressed
 		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
-			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,

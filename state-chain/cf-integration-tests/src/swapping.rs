@@ -679,7 +679,6 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 
 		let make_ccm_call = |gas_budget: u128| {
 			<EthereumApi<EthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
-				(ForeignChain::Ethereum, 1),
 				TransferAssetParams::<Ethereum> {
 					asset: EthAsset::Flip,
 					amount: 1_000,

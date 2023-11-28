@@ -3,12 +3,10 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{
-	eth::Address as EthereumAddress, evm::EvmCrypto, Chain, ChainCrypto, ForeignChainAddress,
-};
+use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BroadcastId, EgressId, EpochIndex, ForeignChain,
-	NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
+	SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -77,16 +75,6 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
-pub struct FailedCcmCall {
-	pub failed_epoch: EpochIndex,
-	pub broadcast_id: BroadcastId,
-	pub egress_id: EgressId,
-	pub gas_budget: AssetAmount,
-	pub threshold_signature: <EvmCrypto as ChainCrypto>::ThresholdSignature,
-	pub transaction: <cf_chains::Ethereum as Chain>::Transaction,
-}
-
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -151,6 +139,8 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
-		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<FailedCcmCall>;
+		fn cf_failed_ccm_call(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
 	}
 );

@@ -10,8 +10,7 @@ use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
 		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockEthereumTransactionMetadata,
-		MockThresholdSignature, MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
-		MOCK_TX_METADATA,
+		MockTransaction, MockTransactionBuilder, ETH_TX_FEE, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -125,7 +124,6 @@ fn start_mock_broadcast_tx_out_id(
 	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
 ) -> BroadcastAttemptId {
 	Broadcaster::start_broadcast(
-		&MockThresholdSignature::default(),
 		MockTransaction,
 		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
 		Default::default(),

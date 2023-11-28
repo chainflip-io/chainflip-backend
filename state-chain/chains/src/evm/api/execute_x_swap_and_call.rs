@@ -1,6 +1,6 @@
 use super::*;
 use crate::address::ForeignChainAddress;
-use cf_primitives::{EgressId, ForeignChain};
+use cf_primitives::ForeignChain;
 use codec::{Decode, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
@@ -11,8 +11,6 @@ use sp_std::{vec, vec::Vec};
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct ExecutexSwapAndCall {
-	/// The egress Id. Used to query Gas budge stored in the Swapping Pallet.
-	egress_id: EgressId,
 	/// A single transfer that need to be made to given addresses.
 	transfer_param: EncodableTransferAssetParams,
 	/// The source chain of the transfer.
@@ -28,7 +26,6 @@ pub struct ExecutexSwapAndCall {
 impl ExecutexSwapAndCall {
 	#[allow(clippy::too_many_arguments)]
 	pub(crate) fn new(
-		egress_id: EgressId,
 		transfer_param: EncodableTransferAssetParams,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -37,7 +34,7 @@ impl ExecutexSwapAndCall {
 	) -> Self {
 		let (source_chain, source_address) =
 			Self::destructure_address(source_chain, source_address);
-		Self { egress_id, transfer_param, source_chain, source_address, gas_budget, message }
+		Self { transfer_param, source_chain, source_address, gas_budget, message }
 	}
 
 	fn destructure_address(
@@ -53,10 +50,6 @@ impl ExecutexSwapAndCall {
 			Some(ForeignChainAddress::Btc(script)) =>
 				(ForeignChain::Bitcoin as u32, script.bytes()),
 		}
-	}
-
-	pub fn egress_id(&self) -> EgressId {
-		self.egress_id
 	}
 }
 
@@ -139,7 +132,6 @@ mod test_execute_x_swap_and_execute {
 				contract_address: FAKE_VAULT_ADDR.into(),
 			},
 			super::ExecutexSwapAndCall::new(
-				(ForeignChain::Ethereum, 0),
 				dummy_transfer_asset_param.clone(),
 				dummy_src_chain,
 				Some(dummy_src_address),

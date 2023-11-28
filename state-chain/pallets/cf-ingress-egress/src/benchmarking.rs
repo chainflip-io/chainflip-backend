@@ -7,6 +7,7 @@ use cf_chains::{
 	DepositChannel,
 };
 use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_support::traits::OriginTrait;
 
 pub(crate) type TargetChainBlockNumber<T, I> =
 	<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
@@ -93,16 +94,13 @@ benchmarks_instance_pallet! {
 	}
 
 	ccm_broadcast_failed {
-		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
-		let egress_id = (ForeignChain::Ethereum, Default::default());
-	}: { let _ = Pallet::<T, I>::ccm_broadcast_failed(origin, Default::default(), egress_id); }
+	}: { let _ = Pallet::<T, I>::ccm_broadcast_failed(OriginTrait::root(), Default::default()); }
 	verify {
 		let current_epoch = T::EpochInfo::epoch_index();
 		assert_eq!(
 			FailedCcms::<T, I>::get(current_epoch),
 			vec![FailedCcm {
 				broadcast_id:Default::default(),
-				egress_id,
 				original_epoch: current_epoch
 			}]);
 	}

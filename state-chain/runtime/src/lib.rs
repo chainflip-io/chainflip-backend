@@ -35,7 +35,7 @@ use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
-use crate::runtime_apis::{FailedCcmCall, RuntimeApiAccountInfoV2};
+use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
 pub use frame_support::{
 	construct_runtime, debug,
@@ -1268,17 +1268,10 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<FailedCcmCall> {
-			if let Some(ccm) = EthereumIngressEgress::get_failed_ccm(broadcast_id) {
-				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, threshold_signature)|{
-					FailedCcmCall {
-						failed_epoch: ccm.original_epoch,
-						broadcast_id: ccm.broadcast_id,
-						egress_id: ccm.egress_id,
-						gas_budget: Swapping::gas_budget(ccm.egress_id).unwrap_or_default(),
-						threshold_signature,
-						transaction: chainflip::EthTransactionBuilder::build_transaction(&api_call),
-					}
+		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+			if EthereumIngressEgress::get_failed_ccm(broadcast_id).is_some() {
+				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+					chainflip::EthTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
 				None

@@ -788,12 +788,6 @@ pub trait CcmHandler {
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 	);
-
-	/// Gets the gas budget for a given Ccm message.
-	fn gas_budget(egress_id: EgressId) -> Option<AssetAmount>;
-
-	/// Clear the gas budget storage for a given Ccm message.
-	fn remove_gas_budget(egress_id: EgressId);
 }
 
 impl CcmHandler for () {
@@ -806,13 +800,6 @@ impl CcmHandler for () {
 		_origin: SwapOrigin,
 	) {
 	}
-	/// Gets the gas budget for a given Ccm message.
-	fn gas_budget(_egress_id: EgressId) -> Option<AssetAmount> {
-		None
-	}
-
-	/// Clear the gas budget storage for a given Ccm message.
-	fn remove_gas_budget(_egress_id: EgressId) {}
 }
 
 pub trait OnBroadcastReady<C: Chain> {

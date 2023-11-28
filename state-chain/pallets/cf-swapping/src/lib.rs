@@ -231,10 +231,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CcmIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
-	/// Storage for storing gas budget for each CCM.
-	#[pallet::storage]
-	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, EgressId, AssetAmount>;
-
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
 	pub(crate) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
@@ -350,9 +346,6 @@ pub mod pallet {
 			destination_asset: Asset,
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
-		},
-		CcmGasBudgetRemoved {
-			egress_id: EgressId,
 		},
 	}
 	#[pallet::error]
@@ -903,12 +896,6 @@ pub mod pallet {
 				Some((ccm_swap.deposit_metadata, ccm_output_gas)),
 			);
 
-			let gas_asset = ForeignChain::from(ccm_swap.destination_asset).gas_asset();
-			// If gas is non-zero, insert gas budget into storage.
-			if !ccm_output_gas.is_zero() {
-				CcmGasBudget::<T>::insert(egress_id, ccm_output_gas);
-			}
-
 			if let Some(swap_id) = ccm_swap.principal_swap_id {
 				Self::deposit_event(Event::<T>::SwapEgressScheduled {
 					swap_id,
@@ -921,7 +908,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapEgressScheduled {
 					swap_id,
 					egress_id,
-					asset: gas_asset,
+					asset: ForeignChain::from(ccm_swap.destination_asset).gas_asset(),
 					amount: ccm_output_gas,
 				});
 			}
@@ -1170,15 +1157,6 @@ pub mod pallet {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
-		}
-
-		fn gas_budget(egress_id: EgressId) -> Option<AssetAmount> {
-			CcmGasBudget::<T>::get(egress_id)
-		}
-
-		fn remove_gas_budget(egress_id: EgressId) {
-			CcmGasBudget::<T>::remove(egress_id);
-			Self::deposit_event(Event::<T>::CcmGasBudgetRemoved { egress_id });
 		}
 	}
 }
