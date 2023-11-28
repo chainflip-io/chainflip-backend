@@ -24,7 +24,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
 
   if (tryRuntime) {
     console.log('Running try-runtime before submitting the runtime upgrade.');
-    await tryRuntimeUpgrade("last-n", chainflip, networkUrl, wasmPath);
+    await tryRuntimeUpgrade('last-n', chainflip, networkUrl, wasmPath);
   }
 
   let versionPercentRestriction;
@@ -39,7 +39,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
     chainflip.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
 
-  console.log("Submitted runtime upgrade. Waiting for the runtime upgrade to complete.");
+  console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
 
   // TODO: Check if there were any errors in the submission, like `UpgradeConditionsNotMet` and `NotEnoughAuthoritiesCfesAtTargetVersion`.
   // and exit with error.

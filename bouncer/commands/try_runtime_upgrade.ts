@@ -19,18 +19,22 @@
 import path from 'path';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { tryRuntimeUpgrade, tryRuntimeUpgradeWithCompileRuntime } from '../shared/try_runtime_upgrade';
+import {
+  tryRuntimeUpgrade,
+  tryRuntimeUpgradeWithCompileRuntime,
+} from '../shared/try_runtime_upgrade';
 import { getChainflipApi, runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const argv = yargs(hideBin(process.argv)).boolean('compile').default('compile', false)
+  const argv = yargs(hideBin(process.argv))
+    .boolean('compile')
+    .default('compile', false)
     .option('runtime', {
       describe: 'path to the runtime wasm file. Required when compile is not set.',
       type: 'string',
       demandOption: false,
       requiresArg: true,
-    })
-    .argv;
+    }).argv;
 
   const block = argv.block;
 
@@ -47,7 +51,7 @@ async function main(): Promise<void> {
   const lastN = argv.lastN ?? 100;
 
   if (argv.compile) {
-    console.log("Try runtime after compiling.");
+    console.log('Try runtime after compiling.');
     await tryRuntimeUpgradeWithCompileRuntime(
       block,
       chainflipApi,
@@ -56,17 +60,9 @@ async function main(): Promise<void> {
       lastN,
     );
   } else {
-    console.log("Try runtime using runtime at " + argv.runtime);
-    await tryRuntimeUpgrade(
-      block,
-      chainflipApi,
-      endpoint,
-      argv.runtime,
-      lastN,
-    );
+    console.log('Try runtime using runtime at ' + argv.runtime);
+    await tryRuntimeUpgrade(block, chainflipApi, endpoint, argv.runtime, lastN);
   }
-
-
 
   process.exit(0);
 }

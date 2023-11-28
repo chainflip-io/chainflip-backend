@@ -76,8 +76,6 @@ export async function tryRuntimeUpgrade(
   console.log('try-runtime upgrade successful.');
 }
 
-
-
 export async function tryRuntimeUpgradeWithCompileRuntime(
   block: number | 'latest' | 'all' | 'last-n',
   api: ApiPromise,
@@ -86,5 +84,11 @@ export async function tryRuntimeUpgradeWithCompileRuntime(
   lastN = 50,
 ) {
   compileBinaries('runtime', projectRoot);
-  tryRuntimeUpgrade(block, api, networkUrl, `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm`, lastN);
+  tryRuntimeUpgrade(
+    block,
+    api,
+    networkUrl,
+    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm`,
+    lastN,
+  );
 }
