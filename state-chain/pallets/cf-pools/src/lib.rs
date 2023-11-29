@@ -47,32 +47,31 @@ enum Stability {
 // nature.
 /// Represents a pair of assets in a canonical ordering, so given two different assets they are
 /// always the same way around. In this case the unstable asset is `zero` and the stable is `one`.
-#[derive(
-	Clone, DebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEqNoBound, EqNoBound,
-)]
-#[scale_info(skip_type_params(T))]
-pub struct CanonicalAssetPair<T: Config> {
+#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
+pub struct CanonicalAssetPair {
 	assets: cf_amm::common::SideMap<Asset>,
-	#[doc(hidden)]
-	#[codec(skip)]
-	_phantom: core::marker::PhantomData<T>,
 }
-impl<T: Config> Copy for CanonicalAssetPair<T> {}
-impl<T: Config> CanonicalAssetPair<T> {
-	pub fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
+impl CanonicalAssetPair {
+	pub fn new(base_asset: Asset, pair_asset: Asset) -> Option<Self> {
 		match (base_asset, pair_asset) {
-			(STABLE_ASSET, STABLE_ASSET) => Err(Error::<T>::PoolDoesNotExist),
-			(STABLE_ASSET, unstable_asset) | (unstable_asset, STABLE_ASSET) => Ok(Self {
+			(STABLE_ASSET, STABLE_ASSET) => None,
+			(STABLE_ASSET, unstable_asset) | (unstable_asset, STABLE_ASSET) => Some(Self {
 				assets: cf_amm::common::SideMap::<()>::default().map(|side, _| {
 					match Self::side_to_stability(side) {
 						Stability::Stable => STABLE_ASSET,
 						Stability::Unstable => unstable_asset,
 					}
 				}),
-				_phantom: Default::default(),
 			}),
-			_ => Err(Error::<T>::PoolDoesNotExist),
+			_ => None,
 		}
+	}
+
+	pub fn new_with_result<T: Config>(
+		base_asset: Asset,
+		pair_asset: Asset,
+	) -> Result<Self, Error<T>> {
+		Self::new(base_asset, pair_asset).ok_or(Error::<T>::PoolDoesNotExist)
 	}
 
 	fn side_to_asset(&self, side: Side) -> Asset {
@@ -96,21 +95,28 @@ impl<T: Config> CanonicalAssetPair<T> {
 	}
 }
 
-pub struct AssetPair<T: Config> {
-	canonical_asset_pair: CanonicalAssetPair<T>,
+pub struct AssetPair {
+	canonical_asset_pair: CanonicalAssetPair,
 	base_side: Side,
 }
-impl<T: Config> AssetPair<T> {
-	pub fn new(base_asset: Asset, pair_asset: Asset) -> Result<Self, Error<T>> {
-		Ok(Self {
+impl AssetPair {
+	pub fn new(base_asset: Asset, pair_asset: Asset) -> Option<Self> {
+		Some(Self {
 			canonical_asset_pair: CanonicalAssetPair::new(base_asset, pair_asset)?,
-			base_side: CanonicalAssetPair::<T>::stability_to_side(match (base_asset, pair_asset) {
-				(STABLE_ASSET, STABLE_ASSET) => Err(Error::<T>::PoolDoesNotExist),
-				(STABLE_ASSET, _unstable_asset) => Ok(Stability::Stable),
-				(_unstable_asset, STABLE_ASSET) => Ok(Stability::Unstable),
-				_ => Err(Error::<T>::PoolDoesNotExist),
+			base_side: CanonicalAssetPair::stability_to_side(match (base_asset, pair_asset) {
+				(STABLE_ASSET, STABLE_ASSET) => None,
+				(STABLE_ASSET, _unstable_asset) => Some(Stability::Stable),
+				(_unstable_asset, STABLE_ASSET) => Some(Stability::Unstable),
+				_ => None,
 			}?),
 		})
+	}
+
+	pub fn new_with_result<T: Config>(
+		base_asset: Asset,
+		pair_asset: Asset,
+	) -> Result<Self, Error<T>> {
+		Self::new(base_asset, pair_asset).ok_or(Error::<T>::PoolDoesNotExist)
 	}
 
 	/// Remaps the amounts into a SideMap, assuming the base and pair are the same way around as the
@@ -143,7 +149,7 @@ impl<T: Config> AssetPair<T> {
 		}
 	}
 
-	fn try_xxx_assets<F: Fn(&T::AccountId, Asset, AssetAmount) -> DispatchResult>(
+	fn try_xxx_assets<T: Config, F: Fn(&T::AccountId, Asset, AssetAmount) -> DispatchResult>(
 		&self,
 		lp: &T::AccountId,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
@@ -157,25 +163,25 @@ impl<T: Config> AssetPair<T> {
 
 	/// Debits the specified amounts, and returns the amounts debited. If the requested amounts
 	/// couldn't be debited this is a noop and returns an error.
-	fn try_debit_assets(
+	fn try_debit_assets<T: Config>(
 		&self,
 		lp: &T::AccountId,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
 	) -> Result<AssetAmounts, DispatchError> {
-		self.try_xxx_assets(lp, side_map, T::LpBalance::try_debit_account)
+		self.try_xxx_assets::<T, _>(lp, side_map, T::LpBalance::try_debit_account)
 	}
 
 	/// Credits the specified amounts, and returns the amounts credited. If the requested amounts
 	/// couldn't be credited this is a noop and returns an error.
-	fn try_credit_assets(
+	fn try_credit_assets<T: Config>(
 		&self,
 		lp: &T::AccountId,
 		side_map: cf_amm::common::SideMap<cf_amm::common::Amount>,
 	) -> Result<AssetAmounts, DispatchError> {
-		self.try_xxx_assets(lp, side_map, T::LpBalance::try_credit_account)
+		self.try_xxx_assets::<T, _>(lp, side_map, T::LpBalance::try_credit_account)
 	}
 
-	fn try_xxx_asset<F: FnOnce(&T::AccountId, Asset, AssetAmount) -> DispatchResult>(
+	fn try_xxx_asset<T: Config, F: FnOnce(&T::AccountId, Asset, AssetAmount) -> DispatchResult>(
 		&self,
 		lp: &T::AccountId,
 		side: Side,
@@ -189,24 +195,24 @@ impl<T: Config> AssetPair<T> {
 
 	/// Debits the specified amount, and returns the amount debited. If the requested amount
 	/// couldn't be debited this is a noop and returns an error.
-	fn try_debit_asset(
+	fn try_debit_asset<T: Config>(
 		&self,
 		lp: &T::AccountId,
 		side: Side,
 		amount: cf_amm::common::Amount,
 	) -> Result<AssetAmount, DispatchError> {
-		self.try_xxx_asset(lp, side, amount, T::LpBalance::try_debit_account)
+		self.try_xxx_asset::<T, _>(lp, side, amount, T::LpBalance::try_debit_account)
 	}
 
 	/// Credits the specified amount, and returns the amount credited. If the requested amount
 	/// couldn't be credited this is a noop and returns an error.
-	fn try_credit_asset(
+	fn try_credit_asset<T: Config>(
 		&self,
 		lp: &T::AccountId,
 		side: Side,
 		amount: cf_amm::common::Amount,
 	) -> Result<AssetAmount, DispatchError> {
-		self.try_xxx_asset(lp, side, amount, T::LpBalance::try_credit_account)
+		self.try_xxx_asset::<T, _>(lp, side, amount, T::LpBalance::try_credit_account)
 	}
 }
 
@@ -270,9 +276,9 @@ pub mod pallet {
 			AssetsMap { base: f(self.base), pair: f(self.pair) }
 		}
 
-		pub fn map_with_side<T: Config, R, F: FnMut(Side, S) -> R>(
+		pub fn map_with_side<R, F: FnMut(Side, S) -> R>(
 			self,
-			asset_pair: &AssetPair<T>,
+			asset_pair: &AssetPair,
 			mut f: F,
 		) -> AssetsMap<R> {
 			AssetsMap {
@@ -281,9 +287,9 @@ pub mod pallet {
 			}
 		}
 
-		pub fn try_map_with_asset<T: Config, R, E, F: FnMut(Asset, S) -> Result<R, E>>(
+		pub fn try_map_with_asset<R, E, F: FnMut(Asset, S) -> Result<R, E>>(
 			self,
-			asset_pair: &AssetPair<T>,
+			asset_pair: &AssetPair,
 			mut f: F,
 		) -> Result<AssetsMap<R>, E> {
 			Ok(AssetsMap {
@@ -415,7 +421,7 @@ pub mod pallet {
 	/// All the available pools.
 	#[pallet::storage]
 	pub type Pools<T: Config> =
-		StorageMap<_, Twox64Concat, CanonicalAssetPair<T>, Pool<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, CanonicalAssetPair, Pool<T>, OptionQuery>;
 
 	/// FLIP ready to be burned.
 	#[pallet::storage]
@@ -626,7 +632,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let canonical_asset_pair = CanonicalAssetPair::<T>::new(base_asset, pair_asset)?;
+			let canonical_asset_pair =
+				CanonicalAssetPair::new_with_result::<T>(base_asset, pair_asset)?;
 			Pools::<T>::try_mutate(canonical_asset_pair, |maybe_pool| {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
@@ -972,7 +979,7 @@ pub mod pallet {
 				base_asset,
 				pair_asset,
 				|_| Ok(()),
-				|asset_pair: &AssetPair<T>, pool| {
+				|asset_pair: &AssetPair, pool| {
 					pool.pool_state
 						.set_fees(fee_hundredth_pips)
 						.map_err(|_| Error::<T>::InvalidFeeAmount)?
@@ -1204,7 +1211,7 @@ impl<T: Config> Pallet<T> {
 	fn inner_update_limit_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
-		asset_pair: &AssetPair<T>,
+		asset_pair: &AssetPair,
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
@@ -1238,7 +1245,7 @@ impl<T: Config> Pallet<T> {
 				}?;
 
 				let debited_asset_amount =
-					asset_pair.try_debit_asset(lp, asset_pair.base_side, amount)?;
+					asset_pair.try_debit_asset::<T>(lp, asset_pair.base_side, amount)?;
 
 				(IncreaseOrDecrease::Increase(debited_asset_amount), position_info, collected)
 			},
@@ -1265,7 +1272,7 @@ impl<T: Config> Pallet<T> {
 					}?;
 
 				let withdrawn_asset_amount =
-					asset_pair.try_credit_asset(lp, asset_pair.base_side, withdrawn_amount)?;
+					asset_pair.try_credit_asset::<T>(lp, asset_pair.base_side, withdrawn_amount)?;
 
 				(IncreaseOrDecrease::Decrease(withdrawn_asset_amount), position_info, collected)
 			},
@@ -1291,7 +1298,7 @@ impl<T: Config> Pallet<T> {
 	fn inner_update_range_order(
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
-		asset_pair: &AssetPair<T>,
+		asset_pair: &AssetPair,
 		id: OrderId,
 		tick_range: Range<cf_amm::common::Tick>,
 		size_change: IncreaseOrDecrease<range_orders::Size>,
@@ -1304,7 +1311,7 @@ impl<T: Config> Pallet<T> {
 						&(lp.clone(), id),
 						tick_range.clone(),
 						size,
-						|required_amounts| asset_pair.try_debit_assets(lp, required_amounts),
+						|required_amounts| asset_pair.try_debit_assets::<T>(lp, required_amounts),
 					) {
 						Ok(ok) => Ok(ok),
 						Err(error) => Err(match error {
@@ -1357,7 +1364,7 @@ impl<T: Config> Pallet<T> {
 					}),
 				}?;
 
-				let assets_withdrawn = asset_pair.try_credit_assets(lp, assets_withdrawn)?;
+				let assets_withdrawn = asset_pair.try_credit_assets::<T>(lp, assets_withdrawn)?;
 
 				(
 					IncreaseOrDecrease::Decrease(burnt_liquidity),
@@ -1368,7 +1375,7 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		let collected_fees = asset_pair.try_credit_assets(lp, collected.fees)?;
+		let collected_fees = asset_pair.try_credit_assets::<T>(lp, collected.fees)?;
 
 		if position_info.liquidity == 0 {
 			if let Some(range_orders) = pool.range_orders_cache.get_mut(lp) {
@@ -1432,15 +1439,16 @@ impl<T: Config> Pallet<T> {
 	fn try_mutate_pool<
 		R,
 		E: From<pallet::Error<T>>,
-		F: FnOnce(&AssetPair<T>) -> Result<(), E>,
-		G: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, E>,
+		F: FnOnce(&AssetPair) -> Result<(), E>,
+		G: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, E>,
 	>(
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 		f: F,
 		g: G,
 	) -> Result<R, E> {
-		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
+		let asset_pair =
+			AssetPair::new(base_asset, pair_asset).ok_or(Error::<T>::PoolDoesNotExist)?;
 		f(&asset_pair)?;
 		Pools::<T>::try_mutate(asset_pair.canonical_asset_pair, |maybe_pool| {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1448,7 +1456,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn try_mutate_order<R, F: FnOnce(&AssetPair<T>, &mut Pool<T>) -> Result<R, DispatchError>>(
+	fn try_mutate_order<R, F: FnOnce(&AssetPair, &mut Pool<T>) -> Result<R, DispatchError>>(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
@@ -1464,7 +1472,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn current_price(from: Asset, to: Asset) -> Option<Price> {
-		let asset_pair = AssetPair::new(from, to).ok()?;
+		let asset_pair = AssetPair::new(from, to)?;
 		Pools::<T>::get(asset_pair.canonical_asset_pair)
 			.and_then(|mut pool| pool.pool_state.current_price(asset_pair.base_side, Order::Sell))
 	}
@@ -1474,7 +1482,7 @@ impl<T: Config> Pallet<T> {
 		pair_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 	) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
 		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 
 		Some(
@@ -1498,8 +1506,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<PoolOrderbook, DispatchError> {
 		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
 
-		let asset_pair = AssetPair::<T>::new(base_asset, quote_asset)
-			.map_err(|_| Error::<T>::PoolDoesNotExist)?;
+		let asset_pair = AssetPair::new_with_result::<T>(base_asset, quote_asset)?;
 		let pool_state = Pools::<T>::get(asset_pair.canonical_asset_pair)
 			.ok_or(Error::<T>::PoolDoesNotExist)?
 			.pool_state;
@@ -1585,7 +1592,7 @@ impl<T: Config> Pallet<T> {
 		pair_asset: any::Asset,
 		tick_range: Range<cf_amm::common::Tick>,
 	) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
-		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset).ok()?;
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 
 		let limit_orders = pool.pool_state.limit_order_depth(tick_range.clone()).map_err(|error| {
@@ -1622,7 +1629,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		pair_asset: any::Asset,
 	) -> Result<BTreeSet<T::AccountId>, Error<T>> {
-		let asset_pair = AssetPair::<T>::new(base_asset, pair_asset)?;
+		let asset_pair = AssetPair::new_with_result(base_asset, pair_asset)?;
 		let pool =
 			Pools::<T>::get(asset_pair.canonical_asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 
@@ -1658,7 +1665,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn pool_info(base_asset: any::Asset, pair_asset: any::Asset) -> Option<PoolInfo> {
-		let pool = Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset).ok()?)?;
+		let pool = Pools::<T>::get(CanonicalAssetPair::new(base_asset, pair_asset)?)?;
 		Some(PoolInfo {
 			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
@@ -1666,7 +1673,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn pool_liquidity(base_asset: any::Asset, pair_asset: any::Asset) -> Option<PoolLiquidity> {
-		let asset_pair = AssetPair::new(base_asset, pair_asset).ok()?;
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
 		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 		Some(PoolLiquidity {
 			limit_orders: AssetsMap::<()>::default().map_with_side(&asset_pair, |side, ()| {
@@ -1681,7 +1688,7 @@ impl<T: Config> Pallet<T> {
 		pair_asset: any::Asset,
 		lp: &T::AccountId,
 	) -> Option<PoolOrders> {
-		let asset_pair = AssetPair::new(base_asset, pair_asset).ok()?;
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
 		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 		Some(PoolOrders {
 			limit_orders: AssetsMap::<()>::default().map_with_side(&asset_pair, |side, ()| {
@@ -1722,7 +1729,7 @@ impl<T: Config> Pallet<T> {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 	) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-		let asset_pair = AssetPair::new(base_asset, pair_asset).ok()?;
+		let asset_pair = AssetPair::new(base_asset, pair_asset)?;
 		let pool = Pools::<T>::get(asset_pair.canonical_asset_pair)?;
 		Some(
 			pool.pool_state
@@ -1747,7 +1754,7 @@ impl<T: Config> Pallet<T> {
 	#[allow(clippy::too_many_arguments)]
 	fn process_limit_order_update(
 		pool: &mut Pool<T>,
-		asset_pair: &AssetPair<T>,
+		asset_pair: &AssetPair,
 		lp: &T::AccountId,
 		side: Side,
 		order: OrderId,
@@ -1756,8 +1763,8 @@ impl<T: Config> Pallet<T> {
 		position_info: PositionInfo,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
-		let collected_fees = asset_pair.try_credit_asset(lp, !side, collected.fees)?;
-		let bought_amount = asset_pair.try_credit_asset(lp, !side, collected.bought_amount)?;
+		let collected_fees = asset_pair.try_credit_asset::<T>(lp, !side, collected.fees)?;
+		let bought_amount = asset_pair.try_credit_asset::<T>(lp, !side, collected.bought_amount)?;
 		let limit_orders = &mut pool.limit_orders_cache[side];
 		if position_info.amount.is_zero() {
 			if let Some(lp_limit_orders) = limit_orders.get_mut(lp) {

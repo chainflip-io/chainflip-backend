@@ -24,7 +24,7 @@ mod old {
 	#[cfg(feature = "try-runtime")]
 	#[frame_support::storage_alias]
 	pub type Pools<T: Config> =
-		StorageMap<Pallet<T>, Twox64Concat, CanonicalAssetPair<T>, Pool<T>, OptionQuery>;
+		StorageMap<Pallet<T>, Twox64Concat, CanonicalAssetPair, Pool<T>, OptionQuery>;
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
