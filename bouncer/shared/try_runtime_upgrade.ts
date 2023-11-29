@@ -88,7 +88,7 @@ export async function tryRuntimeUpgradeWithCompileRuntime(
     block,
     api,
     networkUrl,
-    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm`,
+    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     lastN,
   );
 }

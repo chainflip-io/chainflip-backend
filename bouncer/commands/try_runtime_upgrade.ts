@@ -55,8 +55,8 @@ async function main(): Promise<void> {
     await tryRuntimeUpgradeWithCompileRuntime(
       block,
       chainflipApi,
-      endpoint,
       path.dirname(process.cwd()),
+      endpoint,
       lastN,
     );
   } else {
