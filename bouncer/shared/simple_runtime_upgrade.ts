@@ -3,12 +3,12 @@ import { bumpSpecVersionAgainstNetwork, getCurrentSpecVersion } from './utils/bu
 import { compileBinaries } from './utils/compile_binaries';
 
 // Do a runtime upgrade using the code in the projectRoot directory.
-export async function simpleRuntimeUpgrade(projectRoot: string): Promise<void> {
+export async function simpleRuntimeUpgrade(projectRoot: string, tryRuntime = false): Promise<void> {
   const nextSpecVersion = await bumpSpecVersionAgainstNetwork(projectRoot);
 
   await compileBinaries('runtime', projectRoot);
 
-  await submitRuntimeUpgrade(projectRoot);
+  await submitRuntimeUpgrade(projectRoot, tryRuntime);
 
   const newSpecVersion = await getCurrentSpecVersion();
   console.log('New spec_version: ' + newSpecVersion);

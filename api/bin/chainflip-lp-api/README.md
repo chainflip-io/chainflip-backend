@@ -50,7 +50,7 @@ It will print `🎙 Server is listening on 0.0.0.0:80.` and continue to run.
 
 2. In another terminal:
 
-Register as an liquidity provider if you are not already.
+Register as a liquidity provider if you are not already.
 
 ```bash copy
 curl -H "Content-Type: application/json" \

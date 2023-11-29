@@ -94,7 +94,7 @@ pub enum LiquidityProviderSubcommands {
 		/// Chain of the deposit asset ("Ethereum"|"Polkadot")
 		chain: Option<ForeignChain>,
 	},
-	/// Register an Liquidity Refund Address for the given chain. An address must be
+	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
 	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
 }

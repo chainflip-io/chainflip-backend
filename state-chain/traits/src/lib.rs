@@ -19,8 +19,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, FlipBalance, ForeignChain, SemVer,
-	ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
+	SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -735,6 +735,10 @@ pub trait DepositHandler<C: Chain> {
 		_channel: DepositChannel<C>,
 	) {
 	}
+}
+
+pub trait NetworkEnvironmentProvider {
+	fn get_network_environment() -> NetworkEnvironment;
 }
 
 /// Trait for handling cross chain messages.

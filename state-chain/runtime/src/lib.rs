@@ -29,9 +29,10 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, PoolOrderbook, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
+use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use sp_runtime::DispatchError;
 
@@ -85,7 +86,8 @@ pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
+	AccountInfo, BidderProvider, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -291,6 +293,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type CcmHandler = Swapping;
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type NetworkEnvironment = Environment;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -307,6 +310,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type DepositHandler = chainflip::DotDepositHandler;
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -323,6 +327,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type DepositHandler = chainflip::BtcDepositHandler;
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
+	type NetworkEnvironment = Environment;
 }
 
 parameter_types! {
@@ -854,6 +859,7 @@ type PalletMigrations = (
 		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
 		101,
 	>,
+	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1008,13 +1014,25 @@ impl_runtime_apis! {
 
 		fn cf_auction_state() -> AuctionState {
 			let auction_params = Validator::auction_parameters();
-
+			let min_active_bid = SetSizeMaximisingAuctionResolver::try_new(
+				<Runtime as Chainflip>::EpochInfo::current_authority_count(),
+				auction_params,
+			)
+			.and_then(|resolver| {
+				resolver.resolve_auction(
+					<Runtime as pallet_cf_validator::Config>::BidderProvider::get_qualified_bidders::<<Runtime as pallet_cf_validator::Config>::KeygenQualification>(),
+					Validator::auction_bid_cutoff_percentage(),
+				)
+			})
+			.ok()
+			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
-				auction_size_range: (auction_params.min_size, auction_params.max_size)
+				auction_size_range: (auction_params.min_size, auction_params.max_size),
+				min_active_bid,
 			}
 		}
 
@@ -1055,6 +1073,14 @@ impl_runtime_apis! {
 			tick_range: Range<cf_amm::common::Tick>,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		}
+
+		fn cf_pool_orderbook(
+			base_asset: Asset,
+			quote_asset: Asset,
+			orders: u32,
+		) -> Result<PoolOrderbook, DispatchError> {
+			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
 		}
 
 		fn cf_pool_orders(

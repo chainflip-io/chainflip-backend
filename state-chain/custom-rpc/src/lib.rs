@@ -204,6 +204,7 @@ pub struct RpcAuctionState {
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
+	min_active_bid: Option<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -269,6 +270,40 @@ pub struct RpcEnvironment {
 	swapping: SwappingEnvironment,
 	funding: FundingEnvironment,
 	pools: PoolsEnvironment,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrder {
+	amount: NumberOrHex,
+	sqrt_price: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrderbook {
+	asks: Vec<PoolOrder>,
+	bids: Vec<PoolOrder>,
+}
+impl From<pallet_cf_pools::PoolOrderbook> for PoolOrderbook {
+	fn from(value: pallet_cf_pools::PoolOrderbook) -> Self {
+		Self {
+			asks: value
+				.asks
+				.into_iter()
+				.map(|ask| PoolOrder {
+					amount: ask.amount.into(),
+					sqrt_price: ask.sqrt_price.into(),
+				})
+				.collect(),
+			bids: value
+				.bids
+				.into_iter()
+				.map(|bid| PoolOrder {
+					amount: bid.amount.into(),
+					sqrt_price: bid.sqrt_price.into(),
+				})
+				.collect(),
+		}
+	}
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -380,6 +415,14 @@ pub trait CustomApi {
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	#[method(name = "pool_orderbook")]
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -459,6 +502,9 @@ pub trait CustomApi {
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Vec<AssetAmount>>>;
+
+	#[method(name = "supported_assets")]
+	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -749,6 +795,7 @@ where
 			redemption_period_as_percentage: auction_state.redemption_period_as_percentage,
 			min_funding: auction_state.min_funding.into(),
 			auction_size_range: auction_state.auction_size_range,
+			min_active_bid: auction_state.min_active_bid.map(|bond| bond.into()),
 		})
 	}
 
@@ -861,6 +908,25 @@ where
 			.map_err(to_rpc_error)?
 			.transpose()
 			.map_err(map_dispatch_error)
+	}
+
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolOrderbook> {
+		self.client
+			.runtime_api()
+			.cf_pool_orderbook(
+				self.unwrap_or_best(at),
+				base_asset.try_into()?,
+				quote_asset.try_into()?,
+				orders,
+			)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map(Into::into).map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_orders(
@@ -1035,6 +1101,17 @@ where
 				to_asset.try_into()?,
 			)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>> {
+		let mut chain_to_asset: HashMap<ForeignChain, Vec<Asset>> = HashMap::new();
+		Asset::all().iter().for_each(|asset| {
+			chain_to_asset
+				.entry((*asset).into())
+				.and_modify(|asset_vec| asset_vec.push(*asset))
+				.or_insert(vec![*asset]);
+		});
+		Ok(chain_to_asset)
 	}
 }
 

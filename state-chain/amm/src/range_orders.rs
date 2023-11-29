@@ -19,7 +19,9 @@
 //! doesn't exist we use U256 of SqrtPriceQ64F96. It is relatively simply to verify that all
 //! instances of SqrtPriceQ64F96 are <=U160::MAX.
 
+#[cfg(test)]
 mod tests;
+pub mod v1;
 
 use sp_std::{collections::btree_map::BTreeMap, convert::Infallible, vec::Vec};
 
@@ -54,6 +56,8 @@ pub struct Position {
 	/// the amount of assets that make up the order.
 	liquidity: Liquidity,
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
+	accumulative_fees: SideMap<Amount>,
+	original_sqrt_price: SqrtPriceQ64F96,
 }
 
 impl Position {
@@ -80,22 +84,28 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let collected_fees = Collected {
-			fees: SideMap::default().map(|side, ()| {
-				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
-				// calculate fees, therefore it is not possible to overflow the fees here.
+		let fees = SideMap::default().map(|side, ()| {
+			// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
+			// calculate fees, therefore it is not possible to overflow the fees here.
 
-				/*
-					Proof that `mul_div_floor` does not overflow:
-					Note position.liquidity: u128
-					U512::one() << 128 > u128::MAX
-				*/
-				mul_div_floor(
-					fee_growth_inside[side] - self.last_fee_growth_inside[side],
-					self.liquidity.into(),
-					U512::one() << 128,
-				)
-			}),
+			/*
+				Proof that `mul_div_floor` does not overflow:
+				Note position.liquidity: u128
+				U512::one() << 128 > u128::MAX
+			*/
+			mul_div_floor(
+				fee_growth_inside[side] - self.last_fee_growth_inside[side],
+				self.liquidity.into(),
+				U512::one() << 128,
+			)
+		});
+		self.accumulative_fees = self
+			.accumulative_fees
+			.map(|side, accumulative_fees| accumulative_fees.saturating_add(fees[side]));
+		let collected_fees = Collected {
+			fees,
+			accumulative_fees: self.accumulative_fees,
+			original_sqrt_price: self.original_sqrt_price,
 		};
 		self.last_fee_growth_inside = fee_growth_inside;
 		collected_fees
@@ -115,7 +125,11 @@ impl Position {
 		// meaningful while liquidity is constant.
 		let collected_fees =
 			self.collect_fees(pool_state, lower_tick, lower_delta, upper_tick, upper_delta);
-		self.liquidity = new_liquidity;
+		if self.liquidity != new_liquidity {
+			self.liquidity = new_liquidity;
+			self.original_sqrt_price = pool_state.current_sqrt_price;
+			self.accumulative_fees = Default::default();
+		}
 		(collected_fees, PositionInfo::from(&*self))
 	}
 }
@@ -160,6 +174,12 @@ pub struct PoolState<LiquidityProvider> {
 	/// ticks where liquidity_gross is non-zero.
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
+	/// Total fees earned over all time
+	total_fees_earned: SideMap<Amount>,
+	/// Total of all swap inputs over all time (not including fees)
+	total_swap_inputs: SideMap<Amount>,
+	/// Total of all swap outputs over all time
+	total_swap_outputs: SideMap<Amount>,
 }
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
@@ -395,6 +415,8 @@ pub enum LiquidityToAmountsError {
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Collected {
 	pub fees: SideMap<Amount>,
+	pub accumulative_fees: SideMap<Amount>,
+	pub original_sqrt_price: SqrtPriceQ64F96,
 }
 
 #[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
@@ -406,11 +428,6 @@ pub enum Size {
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct PositionInfo {
 	pub liquidity: Liquidity,
-}
-impl PositionInfo {
-	pub fn new(liquidity: Liquidity) -> Self {
-		Self { liquidity }
-	}
 }
 impl<'a> From<&'a Position> for PositionInfo {
 	fn from(value: &'a Position) -> Self {
@@ -460,6 +477,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			]
 			.into(),
 			positions: Default::default(),
+			total_fees_earned: Default::default(),
+			total_swap_inputs: Default::default(),
+			total_swap_outputs: Default::default(),
 		})
 	}
 
@@ -537,6 +557,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let mut position = option_position.cloned().unwrap_or_else(|| Position {
 				liquidity: 0,
 				last_fee_growth_inside: Default::default(),
+				accumulative_fees: Default::default(),
+				original_sqrt_price: self.current_sqrt_price,
 			});
 
 			let tick_delta_with_updated_gross_liquidity =
@@ -810,6 +832,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					)
 				};
 
+				self.total_swap_inputs[SD::INPUT_SIDE] =
+					self.total_swap_inputs[SD::INPUT_SIDE].saturating_add(amount_swapped);
+				self.total_fees_earned[SD::INPUT_SIDE] =
+					self.total_fees_earned[SD::INPUT_SIDE].saturating_add(fees);
+
 				// TODO: Prove this does not underflow
 				amount -= amount_swapped + fees;
 
@@ -847,6 +874,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				self.current_tick = tick_at_sqrt_price(sqrt_price_next);
 			}
 		}
+
+		self.total_swap_outputs[!SD::INPUT_SIDE] =
+			self.total_swap_outputs[!SD::INPUT_SIDE].saturating_add(total_output_amount);
 
 		(total_output_amount, amount)
 	}

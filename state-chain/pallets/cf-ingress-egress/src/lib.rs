@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 pub mod weights;
 use cf_runtime_utilities::log_or_panic;
-use frame_support::{sp_runtime::SaturatedConversion, transactional};
+use frame_support::{pallet_prelude::OptionQuery, sp_runtime::SaturatedConversion, transactional};
 pub use weights::WeightInfo;
 
 use cf_chains::{
@@ -26,7 +26,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, GetBlockHeight, SwapDepositHandler,
+	EgressApi, GetBlockHeight, NetworkEnvironmentProvider, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -91,7 +91,7 @@ pub struct VaultTransfer<C: Chain> {
 	destination_address: C::ChainAccount,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -209,11 +209,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
+		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { deposit_channel_lifetime: Default::default() }
+			Self { deposit_channel_lifetime: Default::default(), witness_safety_margin: None }
 		}
 	}
 
@@ -221,6 +222,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			DepositChannelLifetime::<T, I>::put(self.deposit_channel_lifetime);
+			WitnessSafetyMargin::<T, I>::set(self.witness_safety_margin);
 		}
 	}
 
@@ -273,6 +275,8 @@ pub mod pallet {
 
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: DepositHandler<Self::TargetChain>;
+
+		type NetworkEnvironment: NetworkEnvironmentProvider;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -342,6 +346,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
+
+	// Determines the number of block confirmations is required for a block on
+	// an external chain before CFE can submit any witness extrinsics for it.
+	#[pallet::storage]
+	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
