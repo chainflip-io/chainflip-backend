@@ -4,7 +4,10 @@ import { compileBinaries } from './utils/compile_binaries';
 
 // Do a runtime upgrade using the code in the projectRoot directory.
 export async function simpleRuntimeUpgrade(projectRoot: string, tryRuntime = false): Promise<void> {
-  const nextSpecVersion = await bumpSpecVersionAgainstNetwork(projectRoot);
+  const nextSpecVersion = await bumpSpecVersionAgainstNetwork(
+    `${projectRoot}/state-chain/runtime/src/lib.rs`,
+    9944,
+  );
 
   await compileBinaries('runtime', projectRoot);
 
