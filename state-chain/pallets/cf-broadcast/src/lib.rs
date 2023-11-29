@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 #![feature(extract_if)]
+#![feature(is_sorted)]
 
 mod benchmarking;
 mod mock;
@@ -574,14 +575,18 @@ pub mod pallet {
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
 			PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
-				pending_broadcasts.remove(pending_broadcasts.binary_search(&broadcast_id).expect("The broadcast_id should exist in the pending broadcasts list since we added it to the last when the broadcast was initated"))
+				debug_assert!(pending_broadcasts.iter().is_sorted());
+				if let Ok(id) = pending_broadcasts.binary_search(&broadcast_id) {
+					pending_broadcasts.remove(id);
+				} else {
+					log::error!("The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated");
+				}
 			});
 
 			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().front() {
-				let maybe_earliest_pending_broadcast =
-					PendingBroadcasts::<T, I>::get().first().copied();
-				if maybe_earliest_pending_broadcast.is_none() ||
-					(maybe_earliest_pending_broadcast.unwrap() > *broadcast_barrier_id)
+				if PendingBroadcasts::<T, I>::get()
+					.first()
+					.map_or(true, |id| *id > *broadcast_barrier_id)
 				{
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop_front();
