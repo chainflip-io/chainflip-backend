@@ -18,8 +18,8 @@ pub use weights::WeightInfo;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChainCrypto, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
@@ -36,10 +36,6 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
-
-/// Type alias for the threshold signature.
-pub type ThresholdSignatureFor<T, I> =
-	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]

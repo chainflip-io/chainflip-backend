@@ -20,7 +20,8 @@ impl<T> MockPallet for MockBroadcaster<T> {
 impl<
 		Api: Chain,
 		A: ApiCall<Api::ChainCrypto> + Member + Parameter,
-		C: UnfilteredDispatchable + Member + Parameter,
+		O: OriginTrait,
+		C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + Parameter,
 	> Broadcaster<Api> for MockBroadcaster<(A, C)>
 {
 	type ApiCall = A;
@@ -39,11 +40,7 @@ impl<
 				*v += 1;
 				*v
 			}),
-			<Self as MockPalletStorage>::mutate_value(b"THRESHOLD_ID", |v: &mut Option<u32>| {
-				let v = v.get_or_insert(0);
-				*v += 1;
-				*v
-			}),
+			Self::next_threshold_id(),
 		)
 	}
 
@@ -62,14 +59,13 @@ impl<
 		ids
 	}
 
-	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
-		unimplemented!()
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
+		Some(Self::next_threshold_id())
 	}
 
 	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
-		unimplemented!()
-	}
+	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {}
 }
 
 impl<
@@ -130,12 +126,29 @@ impl<
 		Self::pending_failed_callbacks(Self::get_storage)
 	}
 
-	fn pending_success_callbacks(mut f: impl FnMut(&[u8], u32) -> Option<C> + 'static) -> Vec<C> {
+	pub fn pending_success_callbacks(
+		mut f: impl FnMut(&[u8], u32) -> Option<C> + 'static,
+	) -> Vec<C> {
 		let max = Self::get_value(b"BROADCAST_ID").unwrap_or(1);
 		(0u32..=max).filter_map(move |id| f(b"SUCCESS_CALLBACKS", id)).collect()
 	}
-	fn pending_failed_callbacks(mut f: impl FnMut(&[u8], u32) -> Option<C> + 'static) -> Vec<C> {
+
+	pub fn pending_failed_callbacks(
+		mut f: impl FnMut(&[u8], u32) -> Option<C> + 'static,
+	) -> Vec<C> {
 		let max = Self::get_value(b"BROADCAST_ID").unwrap_or(1);
 		(0u32..=max).filter_map(move |id| f(b"FAILED_CALLBACKS", id)).collect()
+	}
+
+	fn next_threshold_id() -> ThresholdSignatureRequestId {
+		<Self as MockPalletStorage>::mutate_value(b"THRESHOLD_ID", |v: &mut Option<u32>| {
+			let v = v.get_or_insert(0);
+			*v += 1;
+			*v
+		})
+	}
+
+	pub fn resigned_call() -> Option<ThresholdSignatureRequestId> {
+		Self::get_value(b"RESIGNED_CALLBACKS")
 	}
 }
