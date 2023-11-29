@@ -658,7 +658,7 @@ fn retry_and_success_in_same_block() {
 					(
 						OriginTrait::signed(*nominee),
 						RuntimeCall::Broadcaster(crate::Call::transaction_signing_failure {
-							broadcast_attempt_id: broadcast_attempt_id.clone(),
+							broadcast_attempt_id: *broadcast_attempt_id,
 						}),
 						Ok(()),
 					),
