@@ -1,8 +1,10 @@
 //! Chainflip runtime storage migrations.
 use crate::System;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use sp_std::{marker::PhantomData, vec::Vec};
+use sp_std::marker::PhantomData;
 
+#[cfg(feature = "try-runtime")]
+use sp_std::{vec, vec::Vec};
 pub mod threshold_signature_callbacks;
 
 #[cfg(feature = "try-runtime")]
