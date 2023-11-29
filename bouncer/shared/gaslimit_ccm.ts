@@ -12,7 +12,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { BtcAddressType } from './new_btc_address';
-import { signAndSendTxEthSilent } from './send_eth';
+import { signAndSendTxEth } from './send_eth';
 
 // This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
 // the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
@@ -255,7 +255,13 @@ let spam = true;
 
 async function spamEthereum() {
   while (spam) {
-    signAndSendTxEthSilent('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', '1');
+    signAndSendTxEth(
+      '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      '1',
+      undefined,
+      undefined,
+      false,
+    );
     await sleep(500);
   }
 }
