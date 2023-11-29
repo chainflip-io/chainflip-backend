@@ -211,6 +211,33 @@ benchmarks! {
 		);
 	}
 
+	schedule_limit_order_update {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::try_successful_origin().unwrap(), Asset::Eth, Asset::Usdc, 0, price_at_tick(0).unwrap()));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Eth,
+			1_000_000,
+		));
+		assert_ok!(T::LpBalance::try_credit_account(
+			&caller,
+			Asset::Usdc,
+			1_000_000,
+		));
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		Box::new(Call::<T>::set_limit_order {
+			sell_asset: Asset::Eth,
+			buy_asset: Asset::Usdc,
+			id: 0,
+			option_tick: Some(0),
+			sell_amount: 100,
+		}),
+		BlockNumberFor::<T>::from(5u32)
+	) verify {
+		assert!(!ScheduledLimitOrderUpdates::<T>::get(BlockNumberFor::<T>::from(5u32)).is_empty());
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),
