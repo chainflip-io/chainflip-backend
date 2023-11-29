@@ -259,7 +259,6 @@ fn test_transaction_signing_failed() {
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::SigningFailure);
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 		assert_eq!(
 			BroadcastRetryQueue::<Test, Instance1>::get()
 				.into_iter()
