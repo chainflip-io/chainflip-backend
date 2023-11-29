@@ -83,8 +83,8 @@ export async function tryRuntimeUpgradeWithCompileRuntime(
   networkUrl: string,
   lastN = 50,
 ) {
-  compileBinaries('runtime', projectRoot);
-  tryRuntimeUpgrade(
+  await compileBinaries('runtime', projectRoot);
+  await tryRuntimeUpgrade(
     block,
     api,
     networkUrl,
