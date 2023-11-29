@@ -19,7 +19,11 @@ use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
 	AsyncResult, Chainflip, EpochInfo, SetSafeMode, ThresholdSigner,
 };
-use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
+use frame_support::{
+	assert_noop, assert_ok,
+	dispatch::Weight,
+	traits::{Hooks, OriginTrait},
+};
 use frame_system::RawOrigin;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -634,4 +638,47 @@ fn callback_is_called_upon_broadcast_failure() {
 		// This should trigger the failed callback
 		assert!(MockCallback::was_called());
 	});
+}
+
+#[test]
+fn retry_and_success_in_same_block() {
+	new_test_ext()
+		.execute_with(|| {
+			// Setup
+			let broadcast_attempt_id = start_mock_broadcast();
+			(
+				MockNominator::get_last_nominee().unwrap(),
+				AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
+					.unwrap()
+					.broadcast_attempt,
+			)
+		})
+		.then_apply_extrinsics(
+			|(nominee, BroadcastAttempt { broadcast_attempt_id, transaction_out_id, .. })| {
+				[
+					(
+						OriginTrait::signed(*nominee),
+						RuntimeCall::Broadcaster(crate::Call::transaction_signing_failure {
+							broadcast_attempt_id: broadcast_attempt_id.clone(),
+						}),
+						Ok(()),
+					),
+					(
+						OriginTrait::root(),
+						RuntimeCall::Broadcaster(
+							crate::Call::<Test, Instance1>::transaction_succeeded {
+								tx_out_id: *transaction_out_id,
+								signer_id: Default::default(),
+								tx_fee: cf_chains::evm::TransactionFee {
+									effective_gas_price: Default::default(),
+									gas_used: Default::default(),
+								},
+								tx_metadata: Default::default(),
+							},
+						),
+						Ok(()),
+					),
+				]
+			},
+		);
 }
