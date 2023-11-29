@@ -308,12 +308,6 @@ impl ChainCrypto for PolkadotCrypto {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
 	}
 
-	/// Once authored, polkadot extrinsic must be signed by the key whose nonce was incorporated
-	/// into the extrinsic.
-	fn sign_with_specific_key() -> bool {
-		true
-	}
-
 	fn maybe_broadcast_barriers_on_rotation(
 		rotation_broadcast_id: BroadcastId,
 	) -> Vec<BroadcastId> {

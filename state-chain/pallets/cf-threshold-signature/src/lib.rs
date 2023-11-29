@@ -422,11 +422,7 @@ pub mod pallet {
 								request_id,
 								attempt_count.wrapping_add(1),
 								payload,
-								if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
-									RequestType::SpecificKey(key, epoch)
-								} else {
-									RequestType::CurrentKey
-								},
+								RequestType::SpecificKey(key, epoch),
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
@@ -810,14 +806,11 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		let request_type = if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
-			T::KeyProvider::active_epoch_key().defensive_map_or_else(
-				|| RequestType::CurrentKey,
-				|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
-			)
-		} else {
-			RequestType::CurrentKey
-		};
+		let request_type = T::KeyProvider::active_epoch_key().defensive_map_or_else(
+			|| RequestType::SpecificKey(Default::default(), Default::default()),
+			|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
+		);
+
 		Self::inner_request_signature(payload, request_type)
 	}
 

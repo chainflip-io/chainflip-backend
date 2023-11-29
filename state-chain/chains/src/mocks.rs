@@ -23,7 +23,6 @@ pub enum ChainChoice {
 
 thread_local! {
 	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
-	static MOCK_SIGN_WITH_SPECIFIC_KEY: RefCell<bool> = RefCell::new(false);
 	static MOCK_VALID_METADATA: RefCell<bool> = RefCell::new(true);
 	static MOCK_BROADCAST_BARRIERS: RefCell<ChainChoice> = RefCell::new(ChainChoice::Ethereum);
 }
@@ -53,20 +52,6 @@ impl MockBroadcastBarriers {
 impl Get<ChainChoice> for MockBroadcastBarriers {
 	fn get() -> ChainChoice {
 		MOCK_BROADCAST_BARRIERS.with(|v| (*v.borrow()).clone())
-	}
-}
-
-pub struct MockFixedKeySigningRequests;
-
-impl MockFixedKeySigningRequests {
-	pub fn set(value: bool) {
-		MOCK_SIGN_WITH_SPECIFIC_KEY.with(|v| *v.borrow_mut() = value);
-	}
-}
-
-impl Get<bool> for MockFixedKeySigningRequests {
-	fn get() -> bool {
-		MOCK_SIGN_WITH_SPECIFIC_KEY.with(|v| *v.borrow())
 	}
 }
 
@@ -265,10 +250,6 @@ impl ChainCrypto for MockEthereumChainCrypto {
 		// In tests we don't look to the current key, but instead
 		// compare to some "bad" value for simplicity
 		new_key != &BAD_AGG_KEY_POST_HANDOVER
-	}
-
-	fn sign_with_specific_key() -> bool {
-		MockFixedKeySigningRequests::get()
 	}
 
 	fn key_handover_is_required() -> bool {
