@@ -374,6 +374,8 @@ pub mod pallet {
 		DepositsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
 		BrokerRegistrationDisabled,
+		/// Broker commission bps is limited to 1000 points.
+		BrokerCommissionBpsTooHigh,
 	}
 
 	#[pallet::genesis_config]
@@ -508,6 +510,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().deposits_enabled, Error::<T>::DepositsDisabled);
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			ensure!(broker_commission_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
