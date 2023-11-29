@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
+pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
@@ -849,6 +850,10 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	migrations::VersionedMigration<
+		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
+		101,
+	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
