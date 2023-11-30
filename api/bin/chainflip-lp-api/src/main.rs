@@ -15,14 +15,16 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash,
 	},
 	settings::StateChain,
-	OperatorApi, StateChainApi,
+	EthereumAddress, OperatorApi, StateChainApi,
 };
 use clap::Parser;
 use custom_rpc::RpcAsset;
 use futures::FutureExt;
 use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
 use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
-use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use rpc_types::{
+	AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson, RedemptionAmount,
+};
 use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 use tracing::log;
 
@@ -84,6 +86,26 @@ pub mod rpc_types {
 	pub struct AssetBalance {
 		pub asset: Asset,
 		pub balance: NumberOrHex,
+	}
+
+	#[derive(Deserialize, Serialize)]
+	pub enum RedemptionAmount {
+		Max,
+		#[serde(untagged)]
+		Exact(NumberOrHex),
+	}
+
+	impl TryFrom<RedemptionAmount> for chainflip_api::primitives::RedemptionAmount {
+		type Error = anyhow::Error;
+		fn try_from(value: RedemptionAmount) -> Result<Self, Self::Error> {
+			match value {
+				RedemptionAmount::Max => Ok(chainflip_api::primitives::RedemptionAmount::Max),
+				RedemptionAmount::Exact(amount) =>
+					Ok(chainflip_api::primitives::RedemptionAmount::Exact(
+						amount.try_into().map_err(anyhow::Error::msg)?,
+					)),
+			}
+		}
 	}
 }
 
@@ -162,6 +184,14 @@ pub trait Rpc {
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
+
+	#[method(name = "request_redemption")]
+	async fn request_redemption(
+		&self,
+		amount: RedemptionAmount,
+		supplied_redeem_address: EthereumAddress,
+		supplied_executor_address: Option<EthereumAddress>,
+	) -> Result<Hash, AnyhowRpcError>;
 }
 
 pub struct RpcServerImpl {
@@ -343,6 +373,19 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Polkadot>(None),
 		)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
+	}
+
+	async fn request_redemption(
+		&self,
+		amount: RedemptionAmount,
+		redeem_address: EthereumAddress,
+		executor_address: Option<EthereumAddress>,
+	) -> Result<Hash, AnyhowRpcError> {
+		Ok(self
+			.api
+			.operator_api()
+			.request_redemption(amount.try_into()?, redeem_address, executor_address)
+			.await?)
 	}
 }
 
