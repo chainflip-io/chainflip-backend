@@ -19,7 +19,11 @@ use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
 	AsyncResult, Chainflip, EpochInfo, SetSafeMode, ThresholdSigner,
 };
-use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
+use frame_support::{
+	assert_noop, assert_ok,
+	dispatch::Weight,
+	traits::{Hooks, OriginTrait},
+};
 use frame_system::RawOrigin;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -255,7 +259,6 @@ fn test_transaction_signing_failed() {
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::SigningFailure);
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 		assert_eq!(
 			BroadcastRetryQueue::<Test, Instance1>::get()
 				.into_iter()
@@ -634,4 +637,124 @@ fn callback_is_called_upon_broadcast_failure() {
 		// This should trigger the failed callback
 		assert!(MockCallback::was_called());
 	});
+}
+
+#[test]
+fn retry_and_success_in_same_block() {
+	new_test_ext()
+		.execute_with(|| {
+			// Setup
+			let broadcast_attempt_id = start_mock_broadcast();
+			(
+				MockNominator::get_last_nominee().unwrap(),
+				AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
+					.unwrap()
+					.broadcast_attempt,
+			)
+		})
+		.then_apply_extrinsics(
+			|(nominee, BroadcastAttempt { broadcast_attempt_id, transaction_out_id, .. })| {
+				[
+					(
+						OriginTrait::signed(*nominee),
+						RuntimeCall::Broadcaster(crate::Call::transaction_signing_failure {
+							broadcast_attempt_id: *broadcast_attempt_id,
+						}),
+						Ok(()),
+					),
+					(
+						OriginTrait::root(),
+						RuntimeCall::Broadcaster(
+							crate::Call::<Test, Instance1>::transaction_succeeded {
+								tx_out_id: *transaction_out_id,
+								signer_id: Default::default(),
+								tx_fee: cf_chains::evm::TransactionFee {
+									effective_gas_price: Default::default(),
+									gas_used: Default::default(),
+								},
+								tx_metadata: Default::default(),
+							},
+						),
+						Ok(()),
+					),
+				]
+			},
+		);
+}
+
+// When we retry threshold signing, we want to make sure that the storage remains valid such that if
+// there is transaction_succeeded witnessed late due to some delay, the success still goes through.
+// We use the second attempt to ensure that we are not pulling the default of 0 for `ValueQuery` of
+// `BroadcastAttemptCount`.
+// Note: At time of writing there is a bug here, that the tx fee is not refunded in the case we
+// re-threshold sign and then witness success.
+#[test]
+fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt() {
+	let mut expected_expiry_block = 0;
+	new_test_ext()
+		.execute_with(|| {
+			let broadcast_attempt_id = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
+
+			let awaiting_broadcast =
+				AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+
+			assert_eq!(
+				BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+				0
+			);
+			let nominee = MockNominator::get_last_nominee().unwrap();
+
+			let current_block = frame_system::Pallet::<Test>::block_number();
+
+			expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
+
+			assert_eq!(
+				Timeouts::<Test, Instance1>::get(expected_expiry_block)
+					.into_iter()
+					.next()
+					.unwrap(),
+				broadcast_attempt_id
+			);
+
+			// We want to run test test on the second attempt.
+			MockCfe::respond(Scenario::SigningFailure);
+			(nominee, awaiting_broadcast)
+		})
+		// on idle runs and the retry is kicked off.
+		.then_execute_at_next_block(|p| p)
+		.then_execute_at_next_block(|(nominee, awaiting_broadcast)| {
+			assert_eq!(
+				BroadcastAttemptCount::<Test, Instance1>::get(
+					awaiting_broadcast.broadcast_attempt.broadcast_attempt_id.broadcast_id
+				),
+				1
+			);
+			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
+			MockCfe::respond(Scenario::Timeout);
+			(nominee, awaiting_broadcast)
+		})
+		// The broadcast times out
+		.then_execute_at_block(expected_expiry_block, |p| p)
+		.then_execute_at_next_block(|(nominee, awaiting_broadcast)| {
+			// Taking the invalid signature code path results in the metadata being removed, so the
+			// check for the fee is ignored, however, the transaction_succeeded should still pass.
+			assert_ok!(Broadcaster::transaction_succeeded(
+				OriginTrait::root(),
+				MOCK_TRANSACTION_OUT_ID,
+				nominee,
+				ETH_TX_FEE,
+				MOCK_TX_METADATA,
+			));
+
+			// This is a bug. If this bug didn't exist, this would be assert_eq!().
+			// Leaving this assert here so when the code changes, whoever changes it, thinks about
+			// this case.
+			assert_ne!(
+				TransactionFeeDeficit::<Test, Instance1>::get(nominee),
+				awaiting_broadcast
+					.broadcast_attempt
+					.transaction_payload
+					.return_fee_refund(ETH_TX_FEE)
+			);
+		});
 }
