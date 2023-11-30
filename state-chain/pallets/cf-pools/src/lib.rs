@@ -1201,13 +1201,30 @@ pub struct PoolInfo {
 	pub range_order_fee_hundredth_pips: u32,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub struct LimitOrder {
+	pub id: OrderId,
+	pub tick: Tick,
+	pub amount: Amount,
+	pub fees_earned: Amount,
+	pub original_amount: Amount,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub struct RangeOrder {
+	pub id: OrderId,
+	pub range: Range<Tick>,
+	pub liquidity: Liquidity,
+	pub fees_earned: AssetsMap<Amount>,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub struct PoolOrders {
 	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AssetsMap<Vec<(OrderId, Tick, Amount)>>,
+	pub limit_orders: AssetsMap<Vec<LimitOrder>>,
 	/// Range orders can be both buy and/or sell therefore they not split. The current range order
 	/// price determines if they are buy and/or sell.
-	pub range_orders: Vec<(OrderId, Range<Tick>, Liquidity)>,
+	pub range_orders: Vec<RangeOrder>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
@@ -1799,11 +1816,17 @@ impl<T: Config> Pallet<T> {
 					.into_iter()
 					.flat_map(|limit_orders| {
 						limit_orders.iter().map(|(id, tick)| {
-							let (_collected, position_info) = pool
+							let (collected, position_info) = pool
 								.pool_state
 								.limit_order(&(lp.clone(), *id), side, Order::Sell, *tick)
 								.unwrap();
-							(*id, *tick, position_info.amount)
+							LimitOrder {
+								id: *id,
+								tick: *tick,
+								amount: position_info.amount,
+								fees_earned: collected.accumulative_fees,
+								original_amount: collected.original_amount,
+							}
 						})
 					})
 					.collect()
@@ -1814,11 +1837,17 @@ impl<T: Config> Pallet<T> {
 				.into_iter()
 				.flat_map(|range_orders| {
 					range_orders.iter().map(|(id, tick_range)| {
-						let (_collected, position_info) = pool
+						let (collected, position_info) = pool
 							.pool_state
 							.range_order(&(lp.clone(), *id), tick_range.clone())
 							.unwrap();
-						(*id, tick_range.clone(), position_info.liquidity)
+						RangeOrder {
+							id: *id,
+							range: tick_range.clone(),
+							liquidity: position_info.liquidity,
+							fees_earned: asset_pair
+								.side_map_to_assets_map(collected.accumulative_fees),
+						}
 					})
 				})
 				.collect(),

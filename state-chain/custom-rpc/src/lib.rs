@@ -20,7 +20,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -272,6 +272,32 @@ pub struct RpcEnvironment {
 	swapping: SwappingEnvironment,
 	funding: FundingEnvironment,
 	pools: PoolsEnvironment,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LimitOrder {
+	id: NumberOrHex,
+	tick: Tick,
+	amount: NumberOrHex,
+	fees_earned: NumberOrHex,
+	original_amount: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RangeOrder {
+	id: NumberOrHex,
+	range: Range<Tick>,
+	liquidity: NumberOrHex,
+	fees_earned: AssetsMap<NumberOrHex>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrders {
+	/// Limit orders are groups by which asset they are selling.
+	pub limit_orders: AssetsMap<Vec<LimitOrder>>,
+	/// Range orders can be both buy and/or sell therefore they not split. The current range order
+	/// price determines if they are buy and/or sell.
+	pub range_orders: Vec<RangeOrder>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -952,6 +978,34 @@ where
 				pair_asset.try_into()?,
 				lp,
 			)
+			.map(|option_pool_orders| {
+				option_pool_orders.map(|pool_orders| PoolOrders {
+					limit_orders: pool_orders.limit_orders.map(|limit_orders| {
+						limit_orders
+							.into_iter()
+							.map(|limit_order| LimitOrder {
+								id: limit_order.id.into(),
+								tick: limit_order.tick,
+								amount: limit_order.amount.into(),
+								fees_earned: limit_order.fees_earned.into(),
+								original_amount: limit_order.original_amount.into(),
+							})
+							.collect()
+					}),
+					range_orders: pool_orders
+						.range_orders
+						.into_iter()
+						.map(|range_order| RangeOrder {
+							id: range_order.id.into(),
+							range: range_order.range,
+							liquidity: range_order.liquidity.into(),
+							fees_earned: range_order
+								.fees_earned
+								.map(|fees_earned| fees_earned.into()),
+						})
+						.collect(),
+				})
+			})
 			.map_err(to_rpc_error)
 	}
 
