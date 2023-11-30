@@ -26,10 +26,7 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		migration::move_prefix(
-			&frame_support::storage::storage_prefix(
-				Pallet::<T, I>::name().as_bytes(),
-				b"RequestCallbacks",
-			)[..],
+			old::RequestCallbacks::<T, I>::storage_prefix(),
 			RequestSuccessCallbacks::<T, I>::storage_prefix(),
 		);
 		Weight::zero()
