@@ -1,6 +1,6 @@
-pub mod add_initiated_at;
+pub mod v2;
 
 use cf_runtime_upgrade_utilities::VersionedMigration;
 
 pub type PalletMigration<T, I> =
-	(VersionedMigration<crate::Pallet<T, I>, add_initiated_at::Migration<T, I>, 0, 1>,);
+	(VersionedMigration<crate::Pallet<T, I>, v2::Migration<T, I>, 1, 2>,);

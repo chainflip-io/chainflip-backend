@@ -5,9 +5,11 @@ use cf_amm::{
 use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
+	Chain,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -505,6 +507,12 @@ pub trait CustomApi {
 
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
+
+	#[method(name = "failed_ccm")]
+	fn cf_failed_ccm_call(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1112,6 +1120,16 @@ where
 				.or_insert(vec![*asset]);
 		});
 		Ok(chain_to_asset)
+	}
+
+	fn cf_failed_ccm_call(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>> {
+		self.client
+			.runtime_api()
+			.cf_failed_ccm_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
 	}
 }
 

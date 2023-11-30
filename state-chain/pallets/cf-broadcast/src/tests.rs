@@ -1,17 +1,17 @@
 #![cfg(test)]
 
 use crate::{
-	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
-	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
-	TransactionMetadata, TransactionOutIdToBroadcastId, WeightInfo,
+	mock::*, AwaitingBroadcast, BroadcastAttempt, BroadcastAttemptCount, BroadcastAttemptId,
+	BroadcastId, BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters,
+	Instance1, PalletOffence, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionMetadata,
+	TransactionOutIdToBroadcastId, TransactionSigningAttempt, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
 		MockApiCall, MockEthereum, MockEthereumChainCrypto, MockEthereumTransactionMetadata,
-		MockThresholdSignature, MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
-		MOCK_TX_METADATA,
+		MockTransaction, MockTransactionBuilder, ETH_TX_FEE, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -124,12 +124,19 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 fn start_mock_broadcast_tx_out_id(
 	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
 ) -> BroadcastAttemptId {
+	let api_call =
+		MockApiCall { tx_out_id, payload: Default::default(), sig: Some(Default::default()) };
+	let broadcast_id = 1;
+	// Insert threshold signature into storage.
+	ThresholdSignatureData::<Test, Instance1>::insert(
+		broadcast_id,
+		(api_call.clone(), api_call.sig.unwrap()),
+	);
 	Broadcaster::start_broadcast(
-		&MockThresholdSignature::default(),
 		MockTransaction,
-		MockApiCall { tx_out_id, payload: Default::default(), sig: Default::default() },
+		api_call,
 		Default::default(),
-		1,
+		broadcast_id,
 		100u64,
 	)
 }
@@ -497,11 +504,16 @@ fn threshold_sign_and_broadcast_with_callback() {
 		};
 
 		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback));
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), |_| {
+				None
+			});
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
-		assert_eq!(RequestCallbacks::<Test, Instance1>::get(broadcast_id), Some(MockCallback));
+		assert_eq!(
+			RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id),
+			Some(MockCallback)
+		);
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
 			MOCK_TRANSACTION_OUT_ID,
@@ -509,7 +521,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			ETH_TX_FEE,
 			MOCK_TX_METADATA,
 		));
-		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
+		assert!(RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();
 		assert_eq!(
 			events.pop().expect("an event").event,
@@ -577,5 +589,49 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 				beneficiary: Default::default(),
 			})
 		);
+	});
+}
+
+#[test]
+fn callback_is_called_upon_broadcast_failure() {
+	new_test_ext().execute_with(|| {
+		let api_call = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: MOCK_TRANSACTION_OUT_ID,
+		};
+		let (broadcast_id, _threshold_request_id) =
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
+				Some(MockCallback)
+			});
+
+		assert_eq!(
+			RequestFailureCallbacks::<Test, Instance1>::get(broadcast_id),
+			Some(MockCallback)
+		);
+		assert!(!MockCallback::was_called());
+
+		// Skip to the final broadcast attempt to trigger broadcast failure without retry.
+		let attempt_count = MockEpochInfo::current_authority_count() - 1;
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count };
+		AwaitingBroadcast::<Test, Instance1>::insert(
+			broadcast_attempt_id,
+			TransactionSigningAttempt {
+				broadcast_attempt: BroadcastAttempt {
+					broadcast_attempt_id,
+					transaction_payload: Default::default(),
+					threshold_signature_payload: Default::default(),
+					transaction_out_id: Default::default(),
+				},
+				nominee: 0,
+			},
+		);
+		assert_ok!(Broadcaster::transaction_signing_failure(
+			RawOrigin::Signed(0).into(),
+			broadcast_attempt_id,
+		));
+
+		// This should trigger the failed callback
+		assert!(MockCallback::was_called());
 	});
 }

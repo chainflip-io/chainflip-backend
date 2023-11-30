@@ -428,9 +428,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 
 impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 	fn broadcast(new_key: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::GovKey) {
-		EthereumBroadcaster::threshold_sign_and_broadcast(
+		<EthereumBroadcaster as Broadcaster<Ethereum>>::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<EvmCrypto>::new_unsigned(new_key),
-			None::<RuntimeCall>,
 		);
 	}
 }

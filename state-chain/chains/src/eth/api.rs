@@ -259,7 +259,6 @@ where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
-		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -275,7 +274,6 @@ where
 		Ok(Self::ExecutexSwapAndCall(EvmTransactionBuilder::new_unsigned(
 			E::replay_protection(E::contract_address(EthereumContract::Vault)),
 			execute_x_swap_and_call::ExecutexSwapAndCall::new(
-				egress_id,
 				transfer_param,
 				source_chain,
 				source_address,

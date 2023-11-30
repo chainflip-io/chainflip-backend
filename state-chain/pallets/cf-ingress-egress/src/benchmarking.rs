@@ -7,6 +7,7 @@ use cf_chains::{
 	DepositChannel,
 };
 use frame_benchmarking::{account, benchmarks_instance_pallet};
+use frame_support::traits::OriginTrait;
 
 pub(crate) type TargetChainBlockNumber<T, I> =
 	<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
@@ -90,6 +91,18 @@ benchmarks_instance_pallet! {
 		vec![VaultTransfer {
 			asset, amount, destination_address,
 		}]);
+	}
+
+	ccm_broadcast_failed {
+	}: { let _ = Pallet::<T, I>::ccm_broadcast_failed(OriginTrait::root(), Default::default()); }
+	verify {
+		let current_epoch = T::EpochInfo::epoch_index();
+		assert_eq!(
+			FailedCcms::<T, I>::get(current_epoch),
+			vec![FailedCcm {
+				broadcast_id:Default::default(),
+				original_epoch: current_epoch
+			}]);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
