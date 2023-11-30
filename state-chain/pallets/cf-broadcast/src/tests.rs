@@ -690,63 +690,71 @@ fn retry_and_success_in_same_block() {
 // re-threshold sign and then witness success.
 #[test]
 fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt() {
-	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
+	let mut expected_expiry_block = 0;
+	new_test_ext()
+		.execute_with(|| {
+			let broadcast_attempt_id = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 
-		let awaiting_broadcast =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+			let awaiting_broadcast =
+				AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
-		assert_eq!(
-			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
-			0
-		);
-		let nominee = MockNominator::get_last_nominee().unwrap();
+			assert_eq!(
+				BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+				0
+			);
+			let nominee = MockNominator::get_last_nominee().unwrap();
 
-		let current_block = frame_system::Pallet::<Test>::block_number();
+			let current_block = frame_system::Pallet::<Test>::block_number();
 
-		let expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
+			expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
 
-		assert_eq!(
-			Timeouts::<Test, Instance1>::get(expected_expiry_block)
-				.into_iter()
-				.next()
-				.unwrap(),
-			broadcast_attempt_id
-		);
+			assert_eq!(
+				Timeouts::<Test, Instance1>::get(expected_expiry_block)
+					.into_iter()
+					.next()
+					.unwrap(),
+				broadcast_attempt_id
+			);
 
-		// We want to run test test on the second attempt.
-		MockCfe::respond(Scenario::SigningFailure);
-		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
-		assert_eq!(
-			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
-			1
-		);
+			// We want to run test test on the second attempt.
+			MockCfe::respond(Scenario::SigningFailure);
+			(nominee, awaiting_broadcast)
+		})
+		// on idle runs and the retry is kicked off.
+		.then_execute_at_next_block(|p| p)
+		.then_execute_at_next_block(|(nominee, awaiting_broadcast)| {
+			assert_eq!(
+				BroadcastAttemptCount::<Test, Instance1>::get(
+					awaiting_broadcast.broadcast_attempt.broadcast_attempt_id.broadcast_id
+				),
+				1
+			);
+			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
+			MockCfe::respond(Scenario::Timeout);
+			(nominee, awaiting_broadcast)
+		})
+		// The broadcast times out
+		.then_execute_at_block(expected_expiry_block, |p| p)
+		.then_execute_at_next_block(|(nominee, awaiting_broadcast)| {
+			// Taking the invalid signature code path results in the metadata being removed, so the
+			// check for the fee is ignored, however, the transaction_succeeded should still pass.
+			assert_ok!(Broadcaster::transaction_succeeded(
+				OriginTrait::root(),
+				MOCK_TRANSACTION_OUT_ID,
+				nominee,
+				ETH_TX_FEE,
+				MOCK_TX_METADATA,
+			));
 
-		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
-
-		// Retry will be triggered on timeout, and it'll take the invalid signature code path.
-		Broadcaster::on_initialize(expected_expiry_block);
-		MockCfe::respond(Scenario::Timeout);
-
-		// Taking the invalid signature code path results in the metadata being removed, so the
-		// check for the fee is ignore however, the call still passes.
-		assert_ok!(Broadcaster::transaction_succeeded(
-			OriginTrait::root(),
-			MOCK_TRANSACTION_OUT_ID,
-			nominee,
-			ETH_TX_FEE,
-			MOCK_TX_METADATA,
-		));
-
-		// This is a bug. If this bug didn't exist, this would be assert_eq!().
-		// Leaving this assert here so when the code changes, whoever changes it, thinks about this
-		// case.
-		assert_ne!(
-			TransactionFeeDeficit::<Test, Instance1>::get(nominee),
-			awaiting_broadcast
-				.broadcast_attempt
-				.transaction_payload
-				.return_fee_refund(ETH_TX_FEE)
-		);
-	});
+			// This is a bug. If this bug didn't exist, this would be assert_eq!().
+			// Leaving this assert here so when the code changes, whoever changes it, thinks about
+			// this case.
+			assert_ne!(
+				TransactionFeeDeficit::<Test, Instance1>::get(nominee),
+				awaiting_broadcast
+					.broadcast_attempt
+					.transaction_payload
+					.return_fee_refund(ETH_TX_FEE)
+			);
+		});
 }
