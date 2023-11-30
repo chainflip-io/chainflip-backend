@@ -800,7 +800,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
-		Self::take_awaiting_broadcast(broadcast_attempt.broadcast_attempt_id);
 
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let EpochKey { key, .. } = T::KeyProvider::active_epoch_key()
