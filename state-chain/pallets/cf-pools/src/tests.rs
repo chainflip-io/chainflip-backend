@@ -1,7 +1,8 @@
 use crate::{
 	self as pallet_cf_pools, mock::*, utilities, AssetAmounts, AssetPair, AssetsMap,
-	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, PoolInfo,
-	PoolOrders, Pools, RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
+	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder,
+	PoolInfo, PoolOrders, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates,
+	STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
@@ -315,8 +316,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 5000u128.into())],
-					pair: vec![(1, 0, 1000u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 5000u128.into(),
+						fees_earned: 0.into(),
+						original_amount: 5000u128.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 1000.into(),
+						fees_earned: 0.into(),
+						original_amount: 1000u128.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -325,8 +338,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 10_000u128.into())],
-					pair: vec![(1, 0, 10_000u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 10000u128.into(),
+						fees_earned: 0.into(),
+						original_amount: 10000u128.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 10000.into(),
+						fees_earned: 0.into(),
+						original_amount: 10000u128.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -378,8 +403,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 3_000u128.into())],
-					pair: vec![(1, 0, 454u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 3000.into(),
+						fees_earned: 1333.into(),
+						original_amount: 5000.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 454.into(),
+						fees_earned: 363.into(),
+						original_amount: 1000.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -388,8 +425,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 6_000u128.into())],
-					pair: vec![(1, 0, 4_545u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 6_000u128.into(),
+						fees_earned: 2666.into(),
+						original_amount: 10000.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 4_545.into(),
+						fees_earned: 3636.into(),
+						original_amount: 10000u128.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -459,7 +508,16 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
-				limit_orders: AssetsMap { base: vec![(0, 0, 100u128.into())], pair: vec![] },
+				limit_orders: AssetsMap {
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 100.into(),
+						fees_earned: 0.into(),
+						original_amount: 100.into()
+					}],
+					pair: vec![]
+				},
 				range_orders: vec![]
 			})
 		);
@@ -598,14 +656,24 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap { base: vec![], pair: vec![] },
-				range_orders: vec![(0, range.clone(), 1_000_000)]
+				range_orders: vec![RangeOrder {
+					id: 0,
+					range: range.clone(),
+					liquidity: 1_000_000,
+					fees_earned: AssetsMap { base: 999.into(), pair: 999.into() }
+				}]
 			})
 		);
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap { base: vec![], pair: vec![] },
-				range_orders: vec![(0, range.clone(), 1_000_000)]
+				range_orders: vec![RangeOrder {
+					id: 0,
+					range: range.clone(),
+					liquidity: 1_000_000,
+					fees_earned: AssetsMap { base: 999.into(), pair: 999.into() }
+				}]
 			})
 		);
 
