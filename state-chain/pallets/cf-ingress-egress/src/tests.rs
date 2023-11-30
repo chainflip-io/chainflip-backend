@@ -1227,6 +1227,9 @@ fn failed_ccm_is_stored() {
 			FailedCcms::<Test>::get(epoch),
 			vec![FailedCcm { broadcast_id, original_epoch: epoch }]
 		);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::CcmBroadcastFailed { broadcast_id },
+		));
 	});
 }
 
@@ -1265,6 +1268,12 @@ fn on_finalize_handles_failed_ccms() {
 
 		// Resign 1 call per block
 		IngressEgress::on_finalize(1);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmCallResigned {
+				broadcast_id: 2,
+				threshold_signature_id: 1,
+			},
+		));
 		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(2u32));
 		assert_eq!(
 			FailedCcms::<Test>::get(epoch),
@@ -1277,6 +1286,12 @@ fn on_finalize_handles_failed_ccms() {
 
 		// Resign the 2nd call
 		IngressEgress::on_finalize(2);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmCallResigned {
+				broadcast_id: 1,
+				threshold_signature_id: 2,
+			},
+		));
 		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(1u32));
 		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
 		assert_eq!(
@@ -1290,6 +1305,9 @@ fn on_finalize_handles_failed_ccms() {
 		// Failed calls are removed in the next epoch, 1 at a time.
 		MockEpochInfo::set_epoch(epoch + 2);
 		IngressEgress::on_finalize(3);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmExpired { broadcast_id: 1 },
+		));
 		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
 		assert_eq!(
 			FailedCcms::<Test>::get(epoch + 1),
@@ -1297,6 +1315,9 @@ fn on_finalize_handles_failed_ccms() {
 		);
 
 		IngressEgress::on_finalize(4);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmExpired { broadcast_id: 2 },
+		));
 		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
 		assert_eq!(FailedCcms::<Test>::get(epoch + 1), vec![]);
 	});
