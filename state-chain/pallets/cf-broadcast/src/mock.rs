@@ -9,7 +9,7 @@ use cf_chains::{
 	mocks::{
 		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
 	},
-	Chain, ChainCrypto,
+	Chain, ChainCrypto, RetryPolicy,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -135,6 +135,21 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+pub struct MockRetryPolicy;
+
+impl RetryPolicy for MockRetryPolicy {
+	type BlockNumber = u64;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
+		1
+	}
+
+	fn attempt_slowdown_threshold() -> Self::AttemptCount {
+		151
+	}
+}
+
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -157,6 +172,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type RetryPolicy = MockRetryPolicy;
 }
 
 impl_mock_chainflip!(Test);

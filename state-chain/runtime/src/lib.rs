@@ -21,7 +21,7 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
+	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
 };
 use cf_primitives::NetworkEnvironment;
 use core::ops::Range;
@@ -676,6 +676,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = EthereumVault;
 	type ChainTracking = EthereumChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
 }
 
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
@@ -699,6 +700,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = PolkadotVault;
 	type ChainTracking = PolkadotChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
 }
 
 impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
@@ -722,6 +724,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = BitcoinVault;
 	type ChainTracking = BitcoinChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {

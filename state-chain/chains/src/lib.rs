@@ -471,3 +471,33 @@ pub struct ChainState<C: Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub tracked_data: C::TrackedData,
 }
+
+/// Defines an interface for a retry policy.
+pub trait RetryPolicy {
+	// type BlockNumber: From<u32> + AtLeast32BitUnsigned + Bounded + Copy + Debug + Ord;
+	// type AttemptCount: From<u32> + AtLeast32BitUnsigned + Bounded + Copy + Debug + Ord;
+	type BlockNumber;
+	type AttemptCount;
+	/// Returns the delay for the given attempt count. The next retry will be scheduled at this
+	/// block.
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Self::BlockNumber;
+	/// Returns the defined threshold for the number of attempts before we slow down the retry
+	/// frequency.
+	fn attempt_slowdown_threshold() -> Self::AttemptCount;
+}
+
+pub struct DefaultRetryPolicy;
+
+impl RetryPolicy for DefaultRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
+		1
+	}
+
+	fn attempt_slowdown_threshold() -> Self::AttemptCount {
+		// This would never change the retry frequency.
+		151
+	}
+}

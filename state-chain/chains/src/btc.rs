@@ -7,7 +7,7 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator};
+use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator, RetryPolicy};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -996,6 +996,29 @@ impl SerializeBtc for BitcoinOp {
 	}
 }
 
+pub struct BitcoinRetryPolicy;
+
+impl RetryPolicy for BitcoinRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
+		let next_block = 2u32.pow(retry_attempts - Self::attempt_slowdown_threshold());
+		// Cap it at 1024 blocks thats about 100 minutes.
+		if next_block > 1024 {
+			// 1200 blocks are 2 hours - the maximum time we want to wait between retries.
+			1200
+		} else {
+			next_block
+		}
+	}
+
+	fn attempt_slowdown_threshold() -> Self::AttemptCount {
+		// 25 * 6 = 150 seconds / 2.5 minutes
+		25
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -1308,5 +1331,15 @@ mod test {
 			BitcoinNetwork::try_from(BitcoinNetwork::Regtest.to_string().as_str()).unwrap(),
 			BitcoinNetwork::Regtest
 		);
+	}
+
+	#[test]
+	fn retry_ramp_off() {
+		assert!(BitcoinRetryPolicy::next_attempt_delay(26) == 2);
+		assert!(BitcoinRetryPolicy::next_attempt_delay(27) == 4);
+		assert!(BitcoinRetryPolicy::next_attempt_delay(28) == 8);
+		assert!(BitcoinRetryPolicy::next_attempt_delay(29) == 16);
+		assert!(BitcoinRetryPolicy::next_attempt_delay(30) == 32);
+		assert!(BitcoinRetryPolicy::next_attempt_delay(40) == 1200);
 	}
 }

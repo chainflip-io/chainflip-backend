@@ -8,9 +8,11 @@ mod tests;
 
 pub mod migrations;
 pub mod weights;
+use cf_chains::RetryPolicy;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{GetBlockHeight, SafeMode};
 use frame_support::RuntimeDebug;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::marker;
 pub use weights::WeightInfo;
 
@@ -218,6 +220,12 @@ pub mod pallet {
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
 
+		/// The policy on which decide when we slow down the retry of a broadcast.
+		type RetryPolicy: RetryPolicy<
+			BlockNumber = BlockNumberFor<Self>,
+			AttemptCount = AttemptCount,
+		>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -278,6 +286,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type SlowBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
 
 	/// A mapping from block number to a list of signing or broadcast attempts that expire at that
 	/// block number.
@@ -369,6 +381,7 @@ pub mod pallet {
 			// eventually. For outlying, unknown unknowns, these can be something governance can
 			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
+			let slow_retries = SlowBroadcastRetryQueue::<T, I>::take(block_number);
 			if T::SafeMode::get().retry_enabled {
 				for attempt_id in expiries.iter() {
 					if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
@@ -378,10 +391,17 @@ pub mod pallet {
 						Self::start_next_broadcast_attempt(attempt);
 					}
 				}
+				for attempt in slow_retries {
+					Self::start_next_broadcast_attempt(attempt);
+				}
 			} else {
 				Timeouts::<T, I>::insert(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
 					expiries.clone(),
+				);
+				SlowBroadcastRetryQueue::<T, I>::insert(
+					block_number.saturating_add(T::SafeModeBlockMargin::get()),
+					slow_retries,
 				);
 			}
 			T::WeightInfo::on_initialize(expiries.len() as u32)
@@ -849,7 +869,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>) {
-		BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
+		if broadcast_attempt.broadcast_attempt_id.attempt_count >
+			T::RetryPolicy::attempt_slowdown_threshold()
+		{
+			let next_retry = frame_system::Pallet::<T>::block_number().saturating_add(
+				T::RetryPolicy::next_attempt_delay(
+					broadcast_attempt.broadcast_attempt_id.attempt_count,
+				),
+			);
+			SlowBroadcastRetryQueue::<T, I>::append(next_retry, broadcast_attempt);
+		} else {
+			BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
+		}
 		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
 			broadcast_attempt_id: broadcast_attempt.broadcast_attempt_id,
 		});
