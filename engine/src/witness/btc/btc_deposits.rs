@@ -81,30 +81,26 @@ fn deposit_witnesses(
 	for tx in txs {
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
 
-		let mut deposits_for_this_tx = vec![];
-		for (vout, tx_out) in (0..).zip(&tx.output) {
-			if tx_out.value > 0 {
+		if let Some(deposit) = (0..)
+			.zip(&tx.output)
+			.filter(|(_vout, tx_out)| tx_out.value > 0)
+			.filter_map(|(vout, tx_out)| {
 				let tx_script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
-				if let Some(bitcoin_script) = script_addresses.get(&tx_script_pubkey_bytes) {
-					// we have a deposit to our address
-					deposits_for_this_tx.push(DepositWitness {
+				script_addresses.get(&tx_script_pubkey_bytes).map(
+					|bitcoin_script| DepositWitness::<Bitcoin> {
 						deposit_address: bitcoin_script.clone(),
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
 						deposit_details: UtxoId { tx_id: tx_hash, vout },
-					});
-				}
-			}
-		}
-
-		// We only take the largest output of a tx as a deposit witness. This is to avoid attackers
-		// spamming us with many small outputs in a tx. Inputs are more expensive than outputs -
-		// thus, the attacker could send many outputs (cheap for them) which results in us needing
-		// to sign many *inputs*, expensive for us. sort by descending by amount
-		deposits_for_this_tx.sort_by(|a: &DepositWitness<Bitcoin>, b: &DepositWitness<Bitcoin>| {
-			b.amount.cmp(&a.amount)
-		});
-		if let Some(deposit) = deposits_for_this_tx.get(0) {
+					},
+				)
+			})
+			// We only take the largest output of a tx as a deposit witness. This is to avoid
+			// attackers spamming us with many small outputs in a tx. Inputs are more expensive than
+			// outputs - thus, the attacker could send many outputs (cheap for them) which results
+			// in us needing to sign many *inputs*, expensive for us. sort by descending by amount
+			.max_by_key(|d| d.amount)
+		{
 			deposit_witnesses.push(deposit.clone());
 		}
 	}
