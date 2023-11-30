@@ -2206,3 +2206,20 @@ fn swap_fail_if_below_minimum_swap_amount() {
 		swap_amount_too_low_witnessed(Asset::Usdc, 500);
 	});
 }
+
+#[test]
+fn broker_bps_is_limited() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Swapping::request_swap_deposit_address(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Eth,
+				Asset::Usdc,
+				EncodedAddress::Eth(Default::default()),
+				1001,
+				None,
+			),
+			Error::<Test>::BrokerCommissionBpsTooHigh
+		);
+	});
+}

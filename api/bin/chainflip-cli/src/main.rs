@@ -193,7 +193,8 @@ async fn request_redemption(
 		.await?;
 
 	println!(
-		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
+		"Your redemption request has State Chain transaction hash: `{tx_hash:#x}`.\n
+		View your redemption's progress on the Auctions app."
 	);
 
 	Ok(())

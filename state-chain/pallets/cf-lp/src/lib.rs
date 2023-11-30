@@ -76,7 +76,7 @@ pub mod pallet {
 		InvalidEgressAddress,
 		/// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
 		InvalidEncodedAddress,
-		/// An liquidity refund address must be set by the user for the chain before
+		/// A liquidity refund address must be set by the user for the chain before a
 		/// deposit address can be requested.
 		NoLiquidityRefundAddressRegistered,
 		/// Liquidity deposit is disabled due to Safe Mode.
@@ -229,8 +229,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Registers an Liquidity Refund Address(LRA) for an account.
-		/// To request deposit address for a chain, an LRA must be registered for that chain.
+		/// Registers a Liquidity Refund Address(LRA) for an account.
+		///
+		/// To request a deposit address for a chain, an LRA must be registered for that chain.
 		///
 		/// ## Events
 		///

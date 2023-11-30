@@ -5,7 +5,7 @@ pub use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, EgressId};
+use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 	StateChainClient,
@@ -241,21 +241,19 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
+		dispatch_at: Option<BlockNumber>,
 	) -> Result<Vec<types::LimitOrder>> {
-		// Submit the mint order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::update_limit_order {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::update_limit_order {
 				sell_asset,
 				buy_asset,
 				id,
 				option_tick,
 				amount_change,
-			})
-			.await
-			.until_in_block()
-			.await?;
-
-		Ok(collect_limit_order_returns(events))
+			},
+			dispatch_at,
+		)
+		.await
 	}
 
 	async fn set_limit_order(
@@ -265,20 +263,41 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
+		dispatch_at: Option<BlockNumber>,
 	) -> Result<Vec<types::LimitOrder>> {
-		// Submit the burn order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::set_limit_order {
+		self.scheduled_or_immediate(
+			pallet_cf_pools::Call::set_limit_order {
 				sell_asset,
 				buy_asset,
 				id,
 				option_tick,
 				sell_amount,
-			})
-			.await
-			.until_in_block()
-			.await?;
+			},
+			dispatch_at,
+		)
+		.await
+	}
 
+	async fn scheduled_or_immediate(
+		&self,
+		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
+		dispatch_at: Option<BlockNumber>,
+	) -> Result<Vec<types::LimitOrder>> {
+		let events = if let Some(dispatch_at) = dispatch_at {
+			let (_tx_hash, events, ..) = self
+				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule_limit_order_update {
+					call: Box::new(call),
+					dispatch_at,
+				})
+				.await
+				.until_in_block()
+				.await?;
+			events
+		} else {
+			let (_tx_hash, events, ..) =
+				self.submit_signed_extrinsic(call).await.until_in_block().await?;
+			events
+		};
 		Ok(collect_limit_order_returns(events))
 	}
 }
