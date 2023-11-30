@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use bitcoin::Transaction;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
+use itertools::Itertools;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use secp256k1::hashes::Hash as secp256k1Hash;
 use state_chain_runtime::BitcoinInstance;
@@ -81,7 +82,7 @@ fn deposit_witnesses(
 	for tx in txs {
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
 
-		if let Some(deposit) = (0..)
+		let deposits_in_tx = (0..)
 			.zip(&tx.output)
 			.filter(|(_vout, tx_out)| tx_out.value > 0)
 			.filter_map(|(vout, tx_out)| {
@@ -95,13 +96,16 @@ fn deposit_witnesses(
 					},
 				)
 			})
+			// convert to bytes so it's Hashable
+			.into_grouping_map_by(|d| d.deposit_address.bytes())
 			// We only take the largest output of a tx as a deposit witness. This is to avoid
 			// attackers spamming us with many small outputs in a tx. Inputs are more expensive than
 			// outputs - thus, the attacker could send many outputs (cheap for them) which results
 			// in us needing to sign many *inputs*, expensive for us. sort by descending by amount
-			.max_by_key(|d| d.amount)
-		{
-			deposit_witnesses.push(deposit.clone());
+			.max_by_key(|_address, d| d.amount);
+
+		for (_script_pubkey, deposit) in deposits_in_tx {
+			deposit_witnesses.push(deposit);
 		}
 	}
 	deposit_witnesses
@@ -216,6 +220,51 @@ mod tests {
 			deposit_witnesses(&txs, script_addresses(vec![fake_details(btc_deposit_script)]));
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
+	}
+
+	#[test]
+	fn deposit_witnesses_to_different_deposit_addresses_same_tx_is_witnessed() {
+		const LARGEST_UTXO_TO_DEPOSIT: u64 = 2324;
+		const UTXO_TO_DEPOSIT_2: u64 = 1234;
+		const UTXO_FOR_SECOND_DEPOSIT: u64 = 2000;
+
+		let btc_deposit_script_1: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
+		let btc_deposit_script_2: ScriptPubkey = DepositAddress::new([0; 32], 1232).script_pubkey();
+
+		let txs = vec![
+			fake_transaction(vec![
+				TxOut {
+					value: UTXO_TO_DEPOSIT_2,
+					script_pubkey: ScriptBuf::from(btc_deposit_script_1.bytes()),
+				},
+				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
+				TxOut {
+					value: LARGEST_UTXO_TO_DEPOSIT,
+					script_pubkey: ScriptBuf::from(btc_deposit_script_1.bytes()),
+				},
+				TxOut {
+					value: UTXO_FOR_SECOND_DEPOSIT,
+					script_pubkey: ScriptBuf::from(btc_deposit_script_2.bytes()),
+				},
+			]),
+			fake_transaction(vec![]),
+		];
+
+		let deposit_witnesses = deposit_witnesses(
+			&txs,
+			// watching 2 addresses
+			script_addresses(vec![
+				fake_details(btc_deposit_script_1.clone()),
+				fake_details(btc_deposit_script_2.clone()),
+			]),
+		);
+
+		// We should have one deposit per address.
+		assert_eq!(deposit_witnesses.len(), 2);
+		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
+		assert_eq!(deposit_witnesses[0].deposit_address, btc_deposit_script_1);
+		assert_eq!(deposit_witnesses[1].amount, UTXO_FOR_SECOND_DEPOSIT);
+		assert_eq!(deposit_witnesses[1].deposit_address, btc_deposit_script_2);
 	}
 
 	#[test]
