@@ -80,18 +80,28 @@ fn deposit_witnesses(
 	let mut deposit_witnesses = Vec::new();
 	for tx in txs {
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
-		for (vout, tx_out) in (0..).zip(&tx.output) {
-			if tx_out.value > 0 {
+
+		if let Some(deposit) = (0..)
+			.zip(&tx.output)
+			.filter(|(_vout, tx_out)| tx_out.value > 0)
+			.filter_map(|(vout, tx_out)| {
 				let tx_script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
-				if let Some(bitcoin_script) = script_addresses.get(&tx_script_pubkey_bytes) {
-					deposit_witnesses.push(DepositWitness {
+				script_addresses.get(&tx_script_pubkey_bytes).map(
+					|bitcoin_script| DepositWitness::<Bitcoin> {
 						deposit_address: bitcoin_script.clone(),
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
 						deposit_details: UtxoId { tx_id: tx_hash, vout },
-					});
-				}
-			}
+					},
+				)
+			})
+			// We only take the largest output of a tx as a deposit witness. This is to avoid
+			// attackers spamming us with many small outputs in a tx. Inputs are more expensive than
+			// outputs - thus, the attacker could send many outputs (cheap for them) which results
+			// in us needing to sign many *inputs*, expensive for us. sort by descending by amount
+			.max_by_key(|d| d.amount)
+		{
+			deposit_witnesses.push(deposit.clone());
 		}
 	}
 	deposit_witnesses
@@ -177,20 +187,25 @@ mod tests {
 
 	#[test]
 	fn deposit_witnesses_several_same_tx() {
-		const UTXO_WITNESSED_1: u64 = 2324;
-		const UTXO_WITNESSED_2: u64 = 1234;
+		const LARGEST_UTXO_TO_DEPOSIT: u64 = 2324;
+		const UTXO_TO_DEPOSIT_2: u64 = 1234;
+		const UTXO_TO_DEPOSIT_3: u64 = 2000;
 
 		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
 
 		let txs = vec![
 			fake_transaction(vec![
 				TxOut {
-					value: UTXO_WITNESSED_1,
+					value: UTXO_TO_DEPOSIT_2,
 					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
 				},
 				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
 				TxOut {
-					value: UTXO_WITNESSED_2,
+					value: LARGEST_UTXO_TO_DEPOSIT,
+					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+				},
+				TxOut {
+					value: UTXO_TO_DEPOSIT_3,
 					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
 				},
 			]),
@@ -199,9 +214,8 @@ mod tests {
 
 		let deposit_witnesses =
 			deposit_witnesses(&txs, script_addresses(vec![fake_details(btc_deposit_script)]));
-		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
+		assert_eq!(deposit_witnesses.len(), 1);
+		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
 	}
 
 	#[test]
@@ -212,13 +226,28 @@ mod tests {
 		const UTXO_WITNESSED_2: u64 = 1234;
 		let txs = vec![
 			fake_transaction(vec![
-				TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
+				TxOut {
+					value: UTXO_WITNESSED_1,
+					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+				},
 				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
+				TxOut {
+					// smaller value, so we will only take the largest one
+					value: UTXO_WITNESSED_1 - 1,
+					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+				},
 			]),
-			fake_transaction(vec![TxOut {
-				value: 1234,
-				script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-			}]),
+			fake_transaction(vec![
+				TxOut {
+					// smaller, so we only take the largest (different order to above)
+					value: UTXO_WITNESSED_2 - 10,
+					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+				},
+				TxOut {
+					value: UTXO_WITNESSED_2,
+					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+				},
+			]),
 		];
 
 		let deposit_witnesses =
