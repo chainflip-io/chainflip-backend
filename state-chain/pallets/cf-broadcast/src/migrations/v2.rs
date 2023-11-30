@@ -1,9 +1,6 @@
 use crate::*;
 use frame_support::{
-	migration,
-	pallet_prelude::Weight,
-	traits::{OnRuntimeUpgrade, PalletInfoAccess},
-	StoragePrefixedMap,
+	migration, pallet_prelude::Weight, traits::OnRuntimeUpgrade, StoragePrefixedMap,
 };
 use sp_std::marker::PhantomData;
 
