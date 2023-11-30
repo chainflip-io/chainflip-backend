@@ -137,7 +137,6 @@ pub mod pallet {
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
 	}
 
-	// TODO: Rename
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]

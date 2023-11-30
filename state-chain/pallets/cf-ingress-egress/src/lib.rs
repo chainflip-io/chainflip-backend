@@ -356,6 +356,7 @@ pub mod pallet {
 	/// from storage in the epoch after that.
 	/// Hashmap: last_signed_epoch -> Vec<FailedCcm>
 	#[pallet::storage]
+	#[pallet::getter(fn failed_ccms)]
 	pub type FailedCcms<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<FailedCcm>, ValueQuery>;
 
