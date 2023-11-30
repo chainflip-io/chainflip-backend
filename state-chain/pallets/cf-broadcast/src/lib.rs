@@ -947,11 +947,15 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 
 	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
 		let broadcast_id = Self::threshold_sign_and_broadcast(api_call, None);
-		let mut broadcast_barriers: VecDeque<u32> = <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(
-			broadcast_id,
-		).into();
+
 		BroadcastBarriers::<T, I>::mutate(|current_barriers| {
-			current_barriers.append(&mut broadcast_barriers)
+			current_barriers.append(
+				&mut <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id)
+					.extract_if(|barrier| {
+						PendingBroadcasts::<T, I>::get().first().map_or(false, |id| *id <= *barrier)
+					})
+					.collect::<VecDeque<BroadcastId>>(),
+			);
 		});
 		broadcast_id
 	}
