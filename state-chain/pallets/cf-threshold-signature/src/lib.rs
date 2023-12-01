@@ -57,9 +57,6 @@ pub enum PalletOffence {
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum RequestType<Key, Participants> {
-	/// Will use the current key and current authority set (which might change between retries).
-	/// This signing request will be retried until success.
-	CurrentKey,
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
 	SpecificKey(Key, EpochIndex),
@@ -365,11 +362,6 @@ pub mod pallet {
 			request_id: RequestId,
 			attempt_count: AttemptCount,
 		},
-		/// We cannot sign because the key is unavailable.
-		CurrentKeyUnavailable {
-			request_id: RequestId,
-			attempt_count: AttemptCount,
-		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
 			new_timeout: BlockNumberFor<T>,
@@ -671,12 +663,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else {
 				(
 					match request_instruction.request_type {
-						RequestType::CurrentKey => T::KeyProvider::active_epoch_key()
-							.map(|EpochKey { key, epoch_index }| (key, epoch_index))
-							.ok_or(Event::<T, I>::CurrentKeyUnavailable {
-								request_id,
-								attempt_count,
-							}),
 						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
 						_ => unreachable!("RequestType::KeygenVerification is handled above"),
 					}

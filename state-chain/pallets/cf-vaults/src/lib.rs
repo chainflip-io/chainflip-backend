@@ -953,9 +953,9 @@ impl<T: Config<I>, I: 'static> KeyProvider<<T::Chain as Chain>::ChainCrypto> for
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey) {
+	fn set_key(key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey, epoch: EpochIndex) {
 		Vaults::<T, I>::insert(
-			CurrentEpochIndex::<T>::get(),
+			epoch,
 			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
 		);
 	}

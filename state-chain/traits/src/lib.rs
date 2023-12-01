@@ -378,7 +378,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(_key: C::AggKey) {
+	fn set_key(_key: C::AggKey, _epoch: EpochIndex) {
 		unimplemented!()
 	}
 }
