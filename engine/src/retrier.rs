@@ -27,8 +27,8 @@ use utilities::{
 	UnendingStream,
 };
 
-#[derive(Debug, Clone)]
-enum RetryLimit {
+#[derive(Debug, Clone, Copy)]
+pub enum RetryLimit {
 	// For requests that should never fail. Failure in these cases is directly or indirectly the
 	// fault of the operator. e.g. a faulty Ethereum node.
 	NoLimit,
@@ -439,14 +439,12 @@ where
 		&self,
 		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
-		retry_limit: Attempt,
+		retry_limit: RetryLimit,
 	) -> Result<T> {
-		let rx = self
-			.send_request(specific_closure, request_log.clone(), RetryLimit::Limit(retry_limit))
-			.await;
+		let rx = self.send_request(specific_closure, request_log.clone(), retry_limit).await;
 		let result: BoxAny = rx.await.map_err(|_| {
 			anyhow::anyhow!(
-				"Maximum attempt of `{retry_limit}` reached for request `{request_log}`."
+				"Maximum attempt of `{retry_limit:?}` reached for request `{request_log}`."
 			)
 		})?;
 		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
@@ -632,7 +630,7 @@ mod tests {
 						.request_with_limit(
 							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 							RequestLog::new("request 1".to_string(), None),
-							5
+							RetryLimit::Limit(5)
 						)
 						.await
 						.unwrap()
@@ -645,7 +643,7 @@ mod tests {
 						.request_with_limit(
 							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 							RequestLog::new("request 2".to_string(), None),
-							5
+							RetryLimit::Limit(5)
 						)
 						.await
 						.unwrap()
@@ -752,7 +750,7 @@ mod tests {
 					.request_with_limit(
 						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
 						RequestLog::new("request".to_string(), None),
-						5,
+						RetryLimit::Limit(5),
 					)
 					.await
 					.unwrap_err();

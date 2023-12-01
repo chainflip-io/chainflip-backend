@@ -1,5 +1,6 @@
 use std::{pin::Pin, time::Duration};
 
+use crate::retrier::RetryLimit;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::PolkadotBlockNumber;
 use futures_util::stream;
@@ -21,7 +22,7 @@ use anyhow::Result;
 use subxt::{self, config::Header as SubxtHeader};
 
 macro_rules! polkadot_source {
-	($self:expr, $func:ident) => {{
+	($self:expr, $func:ident, $retry_limit:expr) => {{
 		struct State<C> {
 			client: C,
 			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
@@ -37,7 +38,9 @@ macro_rules! polkadot_source {
 						tokio::time::timeout(TIMEOUT, state.stream.next()).await
 					{
 						if let Ok(header) = header {
-							let Some(events) = state.client.events(header.hash()).await else {
+							let Ok(Some(events)) =
+								state.client.events(header.hash(), $retry_limit).await
+							else {
 								continue
 							};
 
@@ -99,7 +102,10 @@ where
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		polkadot_source!(self, subscribe_best_heads)
+		// For the unfinalised source we limit to two retries, so we try the primary and backup. We
+		// stop here becauase for unfinalised it's possible the block simple doesn't exist, due to a
+		// reorg.
+		polkadot_source!(self, subscribe_best_heads, RetryLimit::Limit(2))
 	}
 }
 
@@ -147,7 +153,7 @@ impl<
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		polkadot_source!(self, subscribe_finalized_heads)
+		polkadot_source!(self, subscribe_finalized_heads, RetryLimit::NoLimit)
 	}
 }
 
