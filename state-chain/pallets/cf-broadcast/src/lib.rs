@@ -320,6 +320,12 @@ pub mod pallet {
 	#[pallet::getter(fn pending_broadcasts)]
 	pub type PendingBroadcasts<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
 
+	/// List of broadcasts that have been aborted because they were unsuccessful to be broadcast
+	/// after many retries.
+	#[pallet::storage]
+	#[pallet::getter(fn aborted_broadcasts)]
+	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -491,6 +497,8 @@ pub mod pallet {
 						.broadcast_attempt_id
 						.broadcast_id,
 				});
+				Self::remove_pending_broadcast(&broadcast_attempt_id.broadcast_id);
+				AbortedBroadcasts::<T, I>::append(broadcast_attempt_id.broadcast_id);
 			} else {
 				Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
 			}
@@ -574,14 +582,7 @@ pub mod pallet {
 				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
-			PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
-				debug_assert!(pending_broadcasts.iter().is_sorted());
-				if let Ok(id) = pending_broadcasts.binary_search(&broadcast_id) {
-					pending_broadcasts.remove(id);
-				} else {
-					log::error!("The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated");
-				}
-			});
+			Self::remove_pending_broadcast(&broadcast_id);
 
 			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().front() {
 				if PendingBroadcasts::<T, I>::get()
@@ -714,6 +715,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			None
 		}
+	}
+
+	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
+		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
+			debug_assert!(pending_broadcasts.iter().is_sorted());
+			if let Ok(id) = pending_broadcasts.binary_search(broadcast_id) {
+				pending_broadcasts.remove(id);
+			} else {
+				log::error!("The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated");
+			}
+		});
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
