@@ -250,7 +250,7 @@ mod tests {
 			fake_transaction(vec![]),
 		];
 
-		let deposit_witnesses = deposit_witnesses(
+		let mut deposit_witnesses = deposit_witnesses(
 			&txs,
 			// watching 2 addresses
 			script_addresses(vec![
@@ -259,12 +259,13 @@ mod tests {
 			]),
 		);
 
+		deposit_witnesses.sort_by_key(|d| d.deposit_address.clone());
 		// We should have one deposit per address.
 		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
-		assert_eq!(deposit_witnesses[0].deposit_address, btc_deposit_script_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_FOR_SECOND_DEPOSIT);
-		assert_eq!(deposit_witnesses[1].deposit_address, btc_deposit_script_2);
+		assert_eq!(deposit_witnesses[0].amount, UTXO_FOR_SECOND_DEPOSIT);
+		assert_eq!(deposit_witnesses[0].deposit_address, btc_deposit_script_2);
+		assert_eq!(deposit_witnesses[1].amount, LARGEST_UTXO_TO_DEPOSIT);
+		assert_eq!(deposit_witnesses[1].deposit_address, btc_deposit_script_1);
 	}
 
 	#[test]
