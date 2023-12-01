@@ -4,12 +4,13 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMode};
 use cf_chains::{
+	btc::BitcoinRetryPolicy,
 	eth::Ethereum,
 	evm::EvmCrypto,
 	mocks::{
 		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
 	},
-	Chain, ChainCrypto, RetryPolicy,
+	Chain, ChainCrypto, DefaultRetryPolicy, RetryPolicy,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -135,18 +136,41 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+pub enum SlowDown {
+	// Default retry policy.
+	Default,
+	// Uses the bitcoin implementation for retry policies.
+	Bitcoin,
+}
+
+thread_local! {
+	pub static SLOWDOWN: std::cell::RefCell<SlowDown> = RefCell::new(SlowDown::Default);
+}
+
 pub struct MockRetryPolicy;
 
 impl RetryPolicy for MockRetryPolicy {
 	type BlockNumber = u64;
 	type AttemptCount = u32;
 
-	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
-		1
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
+		SLOWDOWN.with(|cell| match *cell.borrow() {
+			SlowDown::Default => DefaultRetryPolicy::next_attempt_delay(retry_attempts).into(),
+			SlowDown::Bitcoin => BitcoinRetryPolicy::next_attempt_delay(retry_attempts).into(),
+		})
 	}
 
 	fn attempt_slowdown_threshold() -> Self::AttemptCount {
-		151
+		SLOWDOWN.with(|cell| match *cell.borrow() {
+			SlowDown::Default => DefaultRetryPolicy::attempt_slowdown_threshold(),
+			SlowDown::Bitcoin => BitcoinRetryPolicy::attempt_slowdown_threshold(),
+		})
+	}
+}
+
+impl MockRetryPolicy {
+	pub fn set_slowdown(mode: SlowDown) {
+		SLOWDOWN.with(|cell| *cell.borrow_mut() = mode);
 	}
 }
 

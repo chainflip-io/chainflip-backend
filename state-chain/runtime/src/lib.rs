@@ -17,7 +17,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	btc::BitcoinCrypto,
+	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
@@ -724,7 +724,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type KeyProvider = BitcoinVault;
 	type ChainTracking = BitcoinChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type RetryPolicy = BitcoinRetryPolicy;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {

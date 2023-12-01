@@ -493,11 +493,11 @@ impl RetryPolicy for DefaultRetryPolicy {
 	type AttemptCount = u32;
 
 	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
-		1
+		10
 	}
 
 	fn attempt_slowdown_threshold() -> Self::AttemptCount {
 		// This would never change the retry frequency.
-		151
+		50
 	}
 }

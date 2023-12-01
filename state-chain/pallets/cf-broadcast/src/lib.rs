@@ -287,6 +287,8 @@ pub mod pallet {
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
 
+	/// The list of the failed broadcasts that are scheduled for retry at a later block based on the
+	/// chain specific retry policy.
 	#[pallet::storage]
 	pub type SlowBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
@@ -392,6 +394,8 @@ pub mod pallet {
 					}
 				}
 				for attempt in slow_retries {
+					// I think we don't need to use `take_awaiting_broadcast` here because it's not
+					// awaited - it already failed and not existing anymore.
 					Self::start_next_broadcast_attempt(attempt);
 				}
 			} else {
@@ -872,12 +876,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if broadcast_attempt.broadcast_attempt_id.attempt_count >
 			T::RetryPolicy::attempt_slowdown_threshold()
 		{
-			let next_retry = frame_system::Pallet::<T>::block_number().saturating_add(
+			let next_attempt_at = frame_system::Pallet::<T>::block_number().saturating_add(
 				T::RetryPolicy::next_attempt_delay(
 					broadcast_attempt.broadcast_attempt_id.attempt_count,
 				),
 			);
-			SlowBroadcastRetryQueue::<T, I>::append(next_retry, broadcast_attempt);
+			SlowBroadcastRetryQueue::<T, I>::append(next_attempt_at, broadcast_attempt);
 		} else {
 			BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
 		}

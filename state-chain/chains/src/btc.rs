@@ -996,20 +996,21 @@ impl SerializeBtc for BitcoinOp {
 	}
 }
 
-pub struct BitcoinRetryPolicy;
+pub struct BitcoinRetryPolicy {}
 
 impl RetryPolicy for BitcoinRetryPolicy {
 	type BlockNumber = u32;
 	type AttemptCount = u32;
 
 	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Self::BlockNumber {
-		let next_block = 2u32.pow(retry_attempts - Self::attempt_slowdown_threshold());
-		// Cap it at 1024 blocks thats about 100 minutes.
-		if next_block > 1024 {
+		// Attempts after the slowdown has started.
+		let attempts = retry_attempts - Self::attempt_slowdown_threshold();
+		// Cap it at 1024 blocks thats about 100 minutes. 11 attemmpts is 2^11 = 2048 Blocks.
+		if attempts > 11 {
 			// 1200 blocks are 2 hours - the maximum time we want to wait between retries.
 			1200
 		} else {
-			next_block
+			2u32.pow(attempts)
 		}
 	}
 
