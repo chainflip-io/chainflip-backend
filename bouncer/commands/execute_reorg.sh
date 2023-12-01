@@ -1,22 +1,10 @@
 #!/bin/sh
 
 echo advance chain on main node
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
-docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-sleep 6
+for i in `seq 8`; do
+	docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
+	sleep 8
+done
 
 echo advance even further on second node
 docker exec bitcoin2 bitcoin-cli generatetoaddress 10 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
