@@ -5,7 +5,7 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -355,7 +355,6 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 #[allow(clippy::result_unit_err)]
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
-		egress_id: EgressId,
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,

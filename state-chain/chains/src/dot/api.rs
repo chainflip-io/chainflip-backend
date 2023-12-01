@@ -106,7 +106,6 @@ where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
-		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,

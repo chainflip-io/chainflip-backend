@@ -365,6 +365,7 @@ pub struct Transaction {
 	pub gas_limit: Option<Uint>,
 	pub contract: Address,
 	pub value: Uint,
+	#[serde(with = "hex::serde")]
 	pub data: Vec<u8>,
 }
 

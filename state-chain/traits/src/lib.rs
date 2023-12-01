@@ -462,12 +462,19 @@ pub trait Broadcaster<C: Chain> {
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> BroadcastId;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call
 	/// specifically for a rotation tx..
 	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
+
+	/// Resign a call, and update the signature data storage, but do not broadcast.
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network

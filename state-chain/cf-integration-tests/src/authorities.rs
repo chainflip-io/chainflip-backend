@@ -449,3 +449,24 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			assert_eq!(GENESIS_EPOCH + 2, Validator::epoch_index(), "We should be in a new epoch");
 		});
 }
+
+/// Tests that Validator and Vaults work together to complete a Authority Rotation
+/// by going through the correct sequence in sync.
+#[test]
+fn can_move_through_multiple_epochs() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+
+			for _ in 0..20 {
+				testnet.move_to_the_next_epoch();
+			}
+			assert_eq!(GENESIS_EPOCH + 20, Validator::epoch_index());
+		});
+}

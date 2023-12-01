@@ -83,12 +83,12 @@ export async function tryRuntimeUpgradeWithCompileRuntime(
   networkUrl: string,
   lastN = 50,
 ) {
-  compileBinaries('runtime', projectRoot);
-  tryRuntimeUpgrade(
+  await compileBinaries('runtime', projectRoot);
+  await tryRuntimeUpgrade(
     block,
     api,
     networkUrl,
-    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm`,
+    `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     lastN,
   );
 }

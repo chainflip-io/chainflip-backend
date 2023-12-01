@@ -5,7 +5,7 @@ use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use pallet_cf_broadcast::{BroadcastAttemptId, RequestCallbacks};
+use pallet_cf_broadcast::{BroadcastAttemptId, RequestSuccessCallbacks};
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
@@ -158,41 +158,74 @@ pub mod old {
 	pub type RequestCallbacks<T: pallet_cf_broadcast::Config<I>, I: 'static> =
 		StorageMap<pallet_cf_broadcast::Pallet<T, I>, Twox64Concat, BroadcastId, RuntimeCall>;
 }
+
 pub struct ThresholdSignatureCallbacks;
 impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 	fn on_runtime_upgrade() -> Weight {
-		RequestCallbacks::<Runtime, EthereumInstance>::translate(|_k, v: old::RuntimeCall| {
-			let c = v.unwrap_eth();
-			Some(RuntimeCall::EthereumBroadcaster(Call::on_signature_ready {
-				threshold_request_id: c.0,
-				threshold_signature_payload: c.1,
-				api_call: Box::new(c.2),
-				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: c.3, attempt_count: 0 },
-				initiated_at: c.4,
-			}))
-		});
+		use frame_support::storage::StoragePrefixedMap;
+		frame_support::migration::move_prefix(
+			old::RequestCallbacks::<Runtime, EthereumInstance>::storage_prefix(),
+			RequestSuccessCallbacks::<Runtime, EthereumInstance>::storage_prefix(),
+		);
+		frame_support::migration::move_prefix(
+			old::RequestCallbacks::<Runtime, BitcoinInstance>::storage_prefix(),
+			RequestSuccessCallbacks::<Runtime, BitcoinInstance>::storage_prefix(),
+		);
+		frame_support::migration::move_prefix(
+			old::RequestCallbacks::<Runtime, PolkadotInstance>::storage_prefix(),
+			RequestSuccessCallbacks::<Runtime, PolkadotInstance>::storage_prefix(),
+		);
 
-		RequestCallbacks::<Runtime, PolkadotInstance>::translate(|_k, v: old::RuntimeCall| {
-			let c = v.unwrap_dot();
-			Some(RuntimeCall::PolkadotBroadcaster(Call::on_signature_ready {
-				threshold_request_id: c.0,
-				threshold_signature_payload: c.1,
-				api_call: Box::new(c.2),
-				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: c.3, attempt_count: 0 },
-				initiated_at: c.4,
-			}))
-		});
+		RequestSuccessCallbacks::<Runtime, EthereumInstance>::translate(
+			|_k, v: old::RuntimeCall| {
+				let c = v.unwrap_eth();
+				Some(RuntimeCall::EthereumBroadcaster(Call::on_signature_ready {
+					threshold_request_id: c.0,
+					threshold_signature_payload: c.1,
+					api_call: Box::new(c.2),
+					broadcast_attempt_id: BroadcastAttemptId {
+						broadcast_id: c.3,
+						attempt_count: 0,
+					},
+					initiated_at: c.4,
+					should_broadcast: true,
+				}))
+			},
+		);
 
-		RequestCallbacks::<Runtime, BitcoinInstance>::translate(|_k, v: old::RuntimeCall| {
-			let c = v.unwrap_btc();
-			Some(RuntimeCall::BitcoinBroadcaster(Call::on_signature_ready {
-				threshold_request_id: c.0,
-				threshold_signature_payload: c.1,
-				api_call: Box::new(c.2),
-				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: c.3, attempt_count: 0 },
-				initiated_at: c.4,
-			}))
-		});
+		RequestSuccessCallbacks::<Runtime, PolkadotInstance>::translate(
+			|_k, v: old::RuntimeCall| {
+				let c = v.unwrap_dot();
+				Some(RuntimeCall::PolkadotBroadcaster(Call::on_signature_ready {
+					threshold_request_id: c.0,
+					threshold_signature_payload: c.1,
+					api_call: Box::new(c.2),
+					broadcast_attempt_id: BroadcastAttemptId {
+						broadcast_id: c.3,
+						attempt_count: 0,
+					},
+					initiated_at: c.4,
+					should_broadcast: true,
+				}))
+			},
+		);
+
+		RequestSuccessCallbacks::<Runtime, BitcoinInstance>::translate(
+			|_k, v: old::RuntimeCall| {
+				let c = v.unwrap_btc();
+				Some(RuntimeCall::BitcoinBroadcaster(Call::on_signature_ready {
+					threshold_request_id: c.0,
+					threshold_signature_payload: c.1,
+					api_call: Box::new(c.2),
+					broadcast_attempt_id: BroadcastAttemptId {
+						broadcast_id: c.3,
+						attempt_count: 0,
+					},
+					initiated_at: c.4,
+					should_broadcast: true,
+				}))
+			},
+		);
 
 		Weight::default()
 	}
@@ -220,7 +253,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 
 		let old_storage = <Vec<(u32, u32)>>::decode(&mut &state[..]).unwrap();
 
-		let mut eth_broadcastids = RequestCallbacks::<Runtime, EthereumInstance>::iter()
+		let mut eth_broadcastids = RequestSuccessCallbacks::<Runtime, EthereumInstance>::iter()
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::EthereumBroadcaster(call) => call, v, DispatchError::Other(".."));
 					let broadcast_attempt_id = ensure_variant!(Call::on_signature_ready{broadcast_attempt_id, ..} => broadcast_attempt_id, call, DispatchError::Other(".."));
@@ -229,7 +262,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
 
-		let mut dot_broadcastids = RequestCallbacks::<Runtime, PolkadotInstance>::iter()
+		let mut dot_broadcastids = RequestSuccessCallbacks::<Runtime, PolkadotInstance>::iter()
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::PolkadotBroadcaster(call) => call, v, DispatchError::Other(".."));
 					let broadcast_attempt_id = ensure_variant!(Call::on_signature_ready{broadcast_attempt_id, ..} => broadcast_attempt_id, call, DispatchError::Other(".."));
@@ -238,7 +271,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
 
-		let mut btc_broadcastids = RequestCallbacks::<Runtime, BitcoinInstance>::iter()
+		let mut btc_broadcastids = RequestSuccessCallbacks::<Runtime, BitcoinInstance>::iter()
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::BitcoinBroadcaster(call) => call, v, DispatchError::Other(".."));
 					let broadcast_attempt_id = ensure_variant!(Call::on_signature_ready{broadcast_attempt_id, ..} => broadcast_attempt_id, call, DispatchError::Other(".."));

@@ -1,8 +1,9 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
-	Event as PalletEvent, FailedVaultTransfers, FetchOrTransfer, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount, VaultTransfer,
+	Event as PalletEvent, FailedCcm, FailedCcms, FailedVaultTransfers, FetchOrTransfer,
+	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
+	VaultTransfer,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -17,7 +18,7 @@ use cf_traits::{
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	DepositApi, EgressApi, GetBlockHeight,
+	DepositApi, EgressApi, EpochInfo, GetBlockHeight,
 };
 use frame_support::{
 	assert_ok,
@@ -347,7 +348,7 @@ fn addresses_are_getting_reused() {
 			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
-				MockEgressBroadcaster::dispatch_callback(id);
+				MockEgressBroadcaster::dispatch_success_callback(id);
 			}
 			channels
 		})
@@ -557,7 +558,6 @@ fn can_egress_ccm() {
 
 		// Check that the CCM should be egressed
 		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
-			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
@@ -762,7 +762,7 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			let pending_callbacks = MockEgressBroadcaster::get_success_pending_callbacks();
 			assert!(scheduled_fetches.len() == 1);
 			assert!(pending_api_calls.len() == 1);
 			assert!(pending_callbacks.len() == 1);
@@ -797,7 +797,7 @@ fn multi_use_deposit_same_block() {
 			));
 		})
 		.then_execute_at_next_block(|ctx| {
-			MockEgressBroadcaster::dispatch_all_callbacks();
+			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
 		.inspect_storage(|(_, _, deposit_address)| {
@@ -810,7 +810,7 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			let pending_callbacks = MockEgressBroadcaster::get_success_pending_callbacks();
 			assert!(scheduled_fetches.is_empty());
 			assert!(pending_api_calls.len() == 2);
 			assert!(pending_callbacks.len() == 1);
@@ -966,7 +966,7 @@ fn channel_reuse_with_different_assets() {
 		.map_context(|mut result| result.pop().unwrap())
 		.then_execute_at_next_block(|ctx| {
 			// Dispatch callbacks to finalise the ingress.
-			MockEgressBroadcaster::dispatch_all_callbacks();
+			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
 		.inspect_storage(|(request, _, address)| {
@@ -1212,4 +1212,113 @@ fn all_can_be_recycled() {
 		vec![H160::from([1u8; 20]), H160::from([2; 20]), H160::from([3; 20]), H160::from([4; 20])]
 	);
 	assert!(channel_recycle_blocks.is_empty());
+}
+
+#[test]
+fn failed_ccm_is_stored() {
+	new_test_ext().execute_with(|| {
+		let epoch = MockEpochInfo::epoch_index();
+		let broadcast_id = 1;
+		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), broadcast_id,));
+
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch),
+			vec![FailedCcm { broadcast_id, original_epoch: epoch }]
+		);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::CcmBroadcastFailed { broadcast_id },
+		));
+	});
+}
+
+#[test]
+fn on_finalize_handles_failed_ccms() {
+	new_test_ext().execute_with(|| {
+		// Advance to Epoch 1 so the expiry logic start to work.
+		let epoch = 1u32;
+		MockEpochInfo::set_epoch(epoch);
+		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 1,));
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 2,));
+
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch),
+			vec![
+				FailedCcm { broadcast_id: 1, original_epoch: epoch },
+				FailedCcm { broadcast_id: 2, original_epoch: epoch }
+			]
+		);
+
+		// on-finalize do nothing
+		IngressEgress::on_finalize(0);
+
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch),
+			vec![
+				FailedCcm { broadcast_id: 1, original_epoch: epoch },
+				FailedCcm { broadcast_id: 2, original_epoch: epoch }
+			]
+		);
+
+		// Advance into the next epoch
+		MockEpochInfo::set_epoch(epoch + 1);
+
+		// Resign 1 call per block
+		IngressEgress::on_finalize(1);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmCallResigned {
+				broadcast_id: 2,
+				threshold_signature_id: 1,
+			},
+		));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(2u32));
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch),
+			vec![FailedCcm { broadcast_id: 1, original_epoch: epoch }]
+		);
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch + 1),
+			vec![FailedCcm { broadcast_id: 2, original_epoch: epoch }]
+		);
+
+		// Resign the 2nd call
+		IngressEgress::on_finalize(2);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmCallResigned {
+				broadcast_id: 1,
+				threshold_signature_id: 2,
+			},
+		));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(1u32));
+		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch + 1),
+			vec![
+				FailedCcm { broadcast_id: 2, original_epoch: epoch },
+				FailedCcm { broadcast_id: 1, original_epoch: epoch }
+			]
+		);
+
+		// Failed calls are removed in the next epoch, 1 at a time.
+		MockEpochInfo::set_epoch(epoch + 2);
+		IngressEgress::on_finalize(3);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmExpired { broadcast_id: 1 },
+		));
+		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+		assert_eq!(
+			FailedCcms::<Test>::get(epoch + 1),
+			vec![FailedCcm { broadcast_id: 2, original_epoch: 1 }]
+		);
+
+		IngressEgress::on_finalize(4);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedCcmExpired { broadcast_id: 2 },
+		));
+		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedCcms::<Test>::get(epoch + 1), vec![]);
+	});
 }

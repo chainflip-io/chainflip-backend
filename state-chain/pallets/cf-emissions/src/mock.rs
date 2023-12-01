@@ -5,7 +5,7 @@ use cf_chains::{
 	mocks::{MockEthereum, MockEthereumChainCrypto},
 	AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply,
 };
-use cf_primitives::{BroadcastId, FlipBalance};
+use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
@@ -180,12 +180,22 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
+		_success_callback: Option<Self::Callback>,
+		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> BroadcastId {
 		unimplemented!()
 	}
 
 	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		unimplemented!()
+	}
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
 		unimplemented!()
 	}
 }

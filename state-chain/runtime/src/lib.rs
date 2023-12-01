@@ -22,9 +22,9 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
+	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot, TransactionBuilder,
 };
-use cf_primitives::NetworkEnvironment;
+use cf_primitives::{BroadcastId, NetworkEnvironment};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -86,8 +86,8 @@ pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BidderProvider, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, BidderProvider, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
+	SessionKeysRegistered, SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -841,9 +841,9 @@ type PalletMigrations = (
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_broadcast::migrations::PalletMigration,
+	pallet_cf_broadcast::migrations::PalletMigration,
+	pallet_cf_broadcast::migrations::PalletMigration,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
@@ -1270,6 +1270,16 @@ impl_runtime_apis! {
 				None
 			} else {
 				Some(all_prewitnessed_swaps)
+			}
+		}
+
+		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+			if EthereumIngressEgress::get_failed_ccm(broadcast_id).is_some() {
+				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+					chainflip::EthTransactionBuilder::build_transaction(&api_call)
+				})
+			} else {
+				None
 			}
 		}
 	}

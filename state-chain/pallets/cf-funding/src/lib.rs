@@ -147,7 +147,7 @@ pub mod pallet {
 	/// List of restricted addresses
 	#[pallet::storage]
 	pub type RestrictedAddresses<T: Config> =
-		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
+		StorageMap<_, Blake2_128Concat, EthereumAddress, (), OptionQuery>;
 
 	/// Map that bookkeeps the restricted balances for each address
 	#[pallet::storage]

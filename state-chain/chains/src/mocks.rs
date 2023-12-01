@@ -188,9 +188,9 @@ pub struct MockTransaction;
 impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 	fn return_fee_refund(
 		&self,
-		_fee_paid: <MockEthereum as Chain>::TransactionFee,
+		fee_paid: <MockEthereum as Chain>::TransactionFee,
 	) -> <MockEthereum as Chain>::ChainAmount {
-		<MockEthereum as Chain>::ChainAmount::default()
+		fee_paid.effective_gas_price * fee_paid.gas_used
 	}
 }
 

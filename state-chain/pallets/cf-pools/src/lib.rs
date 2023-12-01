@@ -12,15 +12,18 @@ use cf_amm::{
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwappingApi};
 use frame_support::{
+	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating},
-	traits::StorageVersion,
+	storage::with_storage_layer,
+	traits::{OriginTrait, StorageVersion},
 	transactional,
 };
+
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
 
@@ -228,6 +231,14 @@ pub mod pallet {
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
+	pub struct LimitOrderUpdate<T: Config> {
+		pub lp: T::AccountId,
+		pub id: OrderId,
+		pub call: Call<T>,
+	}
+
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool.
@@ -429,6 +440,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// Queue of limit orders, indexed by block number waiting to get minted or burned.
+	#[pallet::storage]
+	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
@@ -476,6 +492,30 @@ pub mod pallet {
 					}
 				}
 			}
+
+			weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+			for LimitOrderUpdate { ref lp, id, call } in
+				ScheduledLimitOrderUpdates::<T>::take(current_block)
+			{
+				let call_weight = call.get_dispatch_info().weight;
+				let _result = with_storage_layer(move || {
+					call.dispatch_bypass_filter(OriginTrait::signed(lp.clone()))
+				})
+				.map(|_| {
+					Self::deposit_event(Event::<T>::ScheduledLimitOrderUpdateDispatchSuccess {
+						lp: lp.clone(),
+						order_id: id,
+					});
+				})
+				.map_err(|err| {
+					Self::deposit_event(Event::<T>::ScheduledLimitOrderUpdateDispatchFailure {
+						lp: lp.clone(),
+						order_id: id,
+						error: err.error,
+					});
+				});
+				weight_used.saturating_accrue(call_weight);
+			}
 			weight_used
 		}
 	}
@@ -515,10 +555,14 @@ pub mod pallet {
 		/// There are no amounts between the specified maximum and minimum that match the required
 		/// ratio of assets
 		AssetRatioUnachieveable,
-		/// Updating Limit Orders is disabled
+		/// Updating Limit Orders is disabled.
 		UpdatingLimitOrdersDisabled,
-		/// Updating Range Orders is disabled
+		/// Updating Range Orders is disabled.
 		UpdatingRangeOrdersDisabled,
+		/// Unsupported call.
+		UnsupportedCall,
+		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
+		LimitOrderUpdateExpired,
 	}
 
 	#[pallet::event]
@@ -573,6 +617,23 @@ pub mod pallet {
 			base_asset: Asset,
 			pair_asset: Asset,
 			fee_hundredth_pips: u32,
+		},
+		/// A scheduled update to a limit order succeeded.
+		ScheduledLimitOrderUpdateDispatchSuccess {
+			lp: T::AccountId,
+			order_id: OrderId,
+		},
+		/// A scheduled update to a limit order failed.
+		ScheduledLimitOrderUpdateDispatchFailure {
+			lp: T::AccountId,
+			order_id: OrderId,
+			error: DispatchError,
+		},
+		/// A limit order set or update was scheduled.
+		LimitOrderSetOrUpdateScheduled {
+			lp: T::AccountId,
+			order_id: OrderId,
+			dispatch_at: BlockNumberFor<T>,
 		},
 	}
 
@@ -1005,6 +1066,54 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Schedules a limit order update to be executed at a later block.
+		///
+		/// The update is defined by the passed call, which can be one either `set_limit_order` or
+		/// `update_limit_order` extrinsic at a later block. The call is executed at the specified
+		/// block number, and the validity of the order is checked at the block number it enters
+		/// the state-chain.
+		///
+		/// `dispatch_at` specifies the block at which to schedule the update. If the
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::schedule())]
+		pub fn schedule_limit_order_update(
+			origin: OriginFor<T>,
+			call: Box<Call<T>>,
+			dispatch_at: BlockNumberFor<T>,
+		) -> DispatchResultWithPostInfo {
+			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			let current_block_number = frame_system::Pallet::<T>::block_number();
+			ensure!(dispatch_at >= current_block_number, Error::<T>::LimitOrderUpdateExpired);
+
+			let schedule_or_dispatch = |call: Call<T>, id: OrderId| {
+				if current_block_number == dispatch_at {
+					call.dispatch_bypass_filter(OriginTrait::signed(lp))
+				} else {
+					ScheduledLimitOrderUpdates::<T>::append(
+						dispatch_at,
+						LimitOrderUpdate { lp: lp.clone(), id, call },
+					);
+					Self::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
+						lp,
+						order_id: id,
+						dispatch_at,
+					});
+					Ok(().into())
+				}
+			};
+
+			match *call {
+				Call::update_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+				Call::set_limit_order { id, .. } => schedule_or_dispatch(*call, id),
+				_ => Err(Error::<T>::UnsupportedCall)?,
+			}
+		}
 	}
 }
 
@@ -1092,13 +1201,30 @@ pub struct PoolInfo {
 	pub range_order_fee_hundredth_pips: u32,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub struct LimitOrder {
+	pub id: OrderId,
+	pub tick: Tick,
+	pub amount: Amount,
+	pub fees_earned: Amount,
+	pub original_amount: Amount,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+pub struct RangeOrder {
+	pub id: OrderId,
+	pub range: Range<Tick>,
+	pub liquidity: Liquidity,
+	pub fees_earned: AssetsMap<Amount>,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
 pub struct PoolOrders {
 	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AssetsMap<Vec<(OrderId, Tick, Amount)>>,
+	pub limit_orders: AssetsMap<Vec<LimitOrder>>,
 	/// Range orders can be both buy and/or sell therefore they not split. The current range order
 	/// price determines if they are buy and/or sell.
-	pub range_orders: Vec<(OrderId, Range<Tick>, Liquidity)>,
+	pub range_orders: Vec<RangeOrder>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
@@ -1690,11 +1816,17 @@ impl<T: Config> Pallet<T> {
 					.into_iter()
 					.flat_map(|limit_orders| {
 						limit_orders.iter().map(|(id, tick)| {
-							let (_collected, position_info) = pool
+							let (collected, position_info) = pool
 								.pool_state
 								.limit_order(&(lp.clone(), *id), side, Order::Sell, *tick)
 								.unwrap();
-							(*id, *tick, position_info.amount)
+							LimitOrder {
+								id: *id,
+								tick: *tick,
+								amount: position_info.amount,
+								fees_earned: collected.accumulative_fees,
+								original_amount: collected.original_amount,
+							}
 						})
 					})
 					.collect()
@@ -1705,11 +1837,17 @@ impl<T: Config> Pallet<T> {
 				.into_iter()
 				.flat_map(|range_orders| {
 					range_orders.iter().map(|(id, tick_range)| {
-						let (_collected, position_info) = pool
+						let (collected, position_info) = pool
 							.pool_state
 							.range_order(&(lp.clone(), *id), tick_range.clone())
 							.unwrap();
-						(*id, tick_range.clone(), position_info.liquidity)
+						RangeOrder {
+							id: *id,
+							range: tick_range.clone(),
+							liquidity: position_info.liquidity,
+							fees_earned: asset_pair
+								.side_map_to_assets_map(collected.accumulative_fees),
+						}
 					})
 				})
 				.collect(),

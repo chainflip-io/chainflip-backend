@@ -1,9 +1,9 @@
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
-	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
-	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MaximumSwapAmount, MinimumSwapAmount,
-	Pallet, PendingCcms, Swap, SwapOrigin, SwapQueue, SwapType,
+	CcmFailReason, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, CollectedRejectedFunds,
+	EarnedBrokerFees, Error, Event, MaximumSwapAmount, MinimumSwapAmount, Pallet, PendingCcms,
+	Swap, SwapOrigin, SwapQueue, SwapType,
 };
 use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -535,9 +535,6 @@ fn can_process_ccms_via_swap_deposit_address() {
 			},]
 		);
 
-		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
-
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
@@ -610,9 +607,6 @@ fn can_process_ccms_via_extrinsic() {
 				gas_budget,
 			},]
 		);
-
-		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -693,9 +687,6 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 			},]
 		);
 
-		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
-
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
@@ -770,9 +761,6 @@ fn can_handle_ccms_with_native_gas_asset() {
 			},]
 		);
 
-		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
-
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
@@ -815,9 +803,6 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		// The ccm is never put in storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
-
-		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -1593,9 +1578,6 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			// CCM are processed and egressed even if principal output is zero.
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
 			assert_eq!(SwapQueue::<Test>::decode_len(), None);
-
-			// Zero gas budget are not stored.
-			assert_eq!(CcmGasBudget::<Test>::get(1), None);
 		});
 }
 
@@ -2222,5 +2204,22 @@ fn swap_fail_if_below_minimum_swap_amount() {
 		swap_with_custom_broker_fee(Asset::Usdc, Asset::Flip, minimum_amount - 500, 0);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 250);
 		swap_amount_too_low_witnessed(Asset::Usdc, 500);
+	});
+}
+
+#[test]
+fn broker_bps_is_limited() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Swapping::request_swap_deposit_address(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Eth,
+				Asset::Usdc,
+				EncodedAddress::Eth(Default::default()),
+				1001,
+				None,
+			),
+			Error::<Test>::BrokerCommissionBpsTooHigh
+		);
 	});
 }

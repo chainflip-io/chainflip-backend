@@ -4,7 +4,7 @@ use cf_chains::{
 	evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment,
 	Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain};
+use cf_primitives::{chains::assets, ForeignChain};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -95,7 +95,6 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
 pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 	nonce: <Ethereum as Chain>::ReplayProtection,
-	egress_id: EgressId,
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
@@ -106,7 +105,6 @@ pub struct MockExecutexSwapAndCall<MockEthEnvironment> {
 
 impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	fn new_unsigned(
-		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
@@ -118,7 +116,6 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockExecutexSwapAndCall {
 				nonce: Default::default(),
-				egress_id,
 				transfer_param,
 				source_chain,
 				source_address,
