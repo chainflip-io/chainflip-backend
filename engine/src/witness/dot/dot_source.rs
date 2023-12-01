@@ -30,6 +30,7 @@ macro_rules! polkadot_source {
 
 		let client = $self.client.clone();
 		let stream = client.$func().await;
+		let unwrap_events = $unwrap_events;
 
 		(
 			Box::pin(stream::unfold(State { client, stream }, move |mut state| async move {
@@ -38,7 +39,7 @@ macro_rules! polkadot_source {
 						tokio::time::timeout(TIMEOUT, state.stream.next()).await
 					{
 						if let Ok(header) = header {
-							let Some(events) = $unwrap_events(
+							let Some(events) = unwrap_events(
 								state.client.events(header.hash(), $retry_limit).await,
 							) else {
 								continue
@@ -105,9 +106,9 @@ where
 		// For the unfinalised source we limit to two retries, so we try the primary and backup. We
 		// stop here becauase for unfinalised it's possible the block simple doesn't exist, due to a
 		// reorg.
-		let unwrap_events =
-			|raw_events: Result<Option<Events<PolkadotConfig>>>| raw_events.ok().flatten();
-		polkadot_source!(self, subscribe_best_heads, 2, unwrap_events)
+		polkadot_source!(self, subscribe_best_heads, 2, |raw_events: Result<
+			Option<Events<PolkadotConfig>>,
+		>| raw_events.ok().flatten())
 	}
 }
 
@@ -155,8 +156,9 @@ impl<
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		let unwrap_events = |raw_events| raw_events;
-		polkadot_source!(self, subscribe_finalized_heads, NoRetryLimit, unwrap_events)
+		polkadot_source!(self, subscribe_finalized_heads, NoRetryLimit, |raw_events: Option<
+			Events<PolkadotConfig>,
+		>| raw_events)
 	}
 }
 
