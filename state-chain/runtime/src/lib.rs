@@ -21,14 +21,14 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot,
+	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot, TransactionBuilder,
 };
-use cf_primitives::NetworkEnvironment;
+use cf_primitives::{BroadcastId, NetworkEnvironment};
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, PoolLiquidity, UnidirectionalPoolDepth};
+use pallet_cf_pools::{AssetsMap, PoolLiquidity, PoolOrderbook, UnidirectionalPoolDepth};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
@@ -85,8 +85,8 @@ pub use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BidderProvider, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, BidderProvider, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
+	SessionKeysRegistered, SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -1070,6 +1070,14 @@ impl_runtime_apis! {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
 		}
 
+		fn cf_pool_orderbook(
+			base_asset: Asset,
+			quote_asset: Asset,
+			orders: u32,
+		) -> Result<PoolOrderbook, DispatchError> {
+			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
+		}
+
 		fn cf_pool_orders(
 			base_asset: Asset,
 			pair_asset: Asset,
@@ -1257,6 +1265,16 @@ impl_runtime_apis! {
 				None
 			} else {
 				Some(all_prewitnessed_swaps)
+			}
+		}
+
+		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+			if EthereumIngressEgress::get_failed_ccm(broadcast_id).is_some() {
+				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+					chainflip::EthTransactionBuilder::build_transaction(&api_call)
+				})
+			} else {
+				None
 			}
 		}
 	}

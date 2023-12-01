@@ -5,9 +5,11 @@ use cf_amm::{
 use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
+	Chain,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, ForeignChain, NetworkEnvironment, SemVer, SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, ForeignChain, NetworkEnvironment, SemVer,
+	SwapOutput,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -18,7 +20,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
+use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, UnidirectionalPoolDepth};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -272,6 +274,66 @@ pub struct RpcEnvironment {
 	pools: PoolsEnvironment,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct LimitOrder {
+	id: NumberOrHex,
+	tick: Tick,
+	amount: NumberOrHex,
+	fees_earned: NumberOrHex,
+	original_amount: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RangeOrder {
+	id: NumberOrHex,
+	range: Range<Tick>,
+	liquidity: NumberOrHex,
+	fees_earned: AssetsMap<NumberOrHex>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrders {
+	/// Limit orders are groups by which asset they are selling.
+	pub limit_orders: AssetsMap<Vec<LimitOrder>>,
+	/// Range orders can be both buy and/or sell therefore they not split. The current range order
+	/// price determines if they are buy and/or sell.
+	pub range_orders: Vec<RangeOrder>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrder {
+	amount: NumberOrHex,
+	sqrt_price: NumberOrHex,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PoolOrderbook {
+	asks: Vec<PoolOrder>,
+	bids: Vec<PoolOrder>,
+}
+impl From<pallet_cf_pools::PoolOrderbook> for PoolOrderbook {
+	fn from(value: pallet_cf_pools::PoolOrderbook) -> Self {
+		Self {
+			asks: value
+				.asks
+				.into_iter()
+				.map(|ask| PoolOrder {
+					amount: ask.amount.into(),
+					sqrt_price: ask.sqrt_price.into(),
+				})
+				.collect(),
+			bids: value
+				.bids
+				.into_iter()
+				.map(|bid| PoolOrder {
+					amount: bid.amount.into(),
+					sqrt_price: bid.sqrt_price.into(),
+				})
+				.collect(),
+		}
+	}
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -381,6 +443,14 @@ pub trait CustomApi {
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	#[method(name = "pool_orderbook")]
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -463,6 +533,12 @@ pub trait CustomApi {
 
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
+
+	#[method(name = "failed_ccm")]
+	fn cf_failed_ccm_call(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -868,6 +944,25 @@ where
 			.map_err(map_dispatch_error)
 	}
 
+	fn cf_pool_orderbook(
+		&self,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		orders: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<PoolOrderbook> {
+		self.client
+			.runtime_api()
+			.cf_pool_orderbook(
+				self.unwrap_or_best(at),
+				base_asset.try_into()?,
+				quote_asset.try_into()?,
+				orders,
+			)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map(Into::into).map_err(map_dispatch_error))
+	}
+
 	fn cf_pool_orders(
 		&self,
 		base_asset: RpcAsset,
@@ -883,6 +978,34 @@ where
 				pair_asset.try_into()?,
 				lp,
 			)
+			.map(|option_pool_orders| {
+				option_pool_orders.map(|pool_orders| PoolOrders {
+					limit_orders: pool_orders.limit_orders.map(|limit_orders| {
+						limit_orders
+							.into_iter()
+							.map(|limit_order| LimitOrder {
+								id: limit_order.id.into(),
+								tick: limit_order.tick,
+								amount: limit_order.amount.into(),
+								fees_earned: limit_order.fees_earned.into(),
+								original_amount: limit_order.original_amount.into(),
+							})
+							.collect()
+					}),
+					range_orders: pool_orders
+						.range_orders
+						.into_iter()
+						.map(|range_order| RangeOrder {
+							id: range_order.id.into(),
+							range: range_order.range,
+							liquidity: range_order.liquidity.into(),
+							fees_earned: range_order
+								.fees_earned
+								.map(|fees_earned| fees_earned.into()),
+						})
+						.collect(),
+				})
+			})
 			.map_err(to_rpc_error)
 	}
 
@@ -1051,6 +1174,16 @@ where
 				.or_insert(vec![*asset]);
 		});
 		Ok(chain_to_asset)
+	}
+
+	fn cf_failed_ccm_call(
+		&self,
+		broadcast_id: BroadcastId,
+	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>> {
+		self.client
+			.runtime_api()
+			.cf_failed_ccm_call(self.unwrap_or_best(None), broadcast_id)
+			.map_err(to_rpc_error)
 	}
 }
 

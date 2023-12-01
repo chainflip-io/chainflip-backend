@@ -1,11 +1,12 @@
 use crate::{
-	mock::*, utilities, AssetAmounts, AssetPair, AssetsMap, CanonicalAssetPair,
-	CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, PoolInfo, PoolOrders, Pools,
-	RangeOrderSize, STABLE_ASSET,
+	self as pallet_cf_pools, mock::*, utilities, AssetAmounts, AssetPair, AssetsMap,
+	CanonicalAssetPair, CollectedNetworkFee, Error, Event, FlipBuyInterval, FlipToBurn, LimitOrder,
+	PoolInfo, PoolOrders, Pools, RangeOrder, RangeOrderSize, ScheduledLimitOrderUpdates,
+	STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
-use cf_test_utilities::{assert_events_match, assert_has_event};
+use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::Permill;
@@ -315,8 +316,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 5000u128.into())],
-					pair: vec![(1, 0, 1000u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 5000u128.into(),
+						fees_earned: 0.into(),
+						original_amount: 5000u128.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 1000.into(),
+						fees_earned: 0.into(),
+						original_amount: 1000u128.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -325,8 +338,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 10_000u128.into())],
-					pair: vec![(1, 0, 10_000u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 10000u128.into(),
+						fees_earned: 0.into(),
+						original_amount: 10000u128.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 10000.into(),
+						fees_earned: 0.into(),
+						original_amount: 10000u128.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -378,8 +403,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 3_000u128.into())],
-					pair: vec![(1, 0, 454u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 3000.into(),
+						fees_earned: 1333.into(),
+						original_amount: 5000.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 454.into(),
+						fees_earned: 363.into(),
+						original_amount: 1000.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -388,8 +425,20 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap {
-					base: vec![(0, 0, 6_000u128.into())],
-					pair: vec![(1, 0, 4_545u128.into())]
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 6_000u128.into(),
+						fees_earned: 2666.into(),
+						original_amount: 10000.into()
+					}],
+					pair: vec![LimitOrder {
+						id: 1,
+						tick: 0,
+						amount: 4_545.into(),
+						fees_earned: 3636.into(),
+						original_amount: 10000u128.into()
+					}]
 				},
 				range_orders: vec![]
 			})
@@ -459,7 +508,16 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
-				limit_orders: AssetsMap { base: vec![(0, 0, 100u128.into())], pair: vec![] },
+				limit_orders: AssetsMap {
+					base: vec![LimitOrder {
+						id: 0,
+						tick: 0,
+						amount: 100.into(),
+						fees_earned: 0.into(),
+						original_amount: 100.into()
+					}],
+					pair: vec![]
+				},
 				range_orders: vec![]
 			})
 		);
@@ -598,14 +656,24 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &ALICE,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap { base: vec![], pair: vec![] },
-				range_orders: vec![(0, range.clone(), 1_000_000)]
+				range_orders: vec![RangeOrder {
+					id: 0,
+					range: range.clone(),
+					liquidity: 1_000_000,
+					fees_earned: AssetsMap { base: 999.into(), pair: 999.into() }
+				}]
 			})
 		);
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BOB,),
 			Some(PoolOrders {
 				limit_orders: AssetsMap { base: vec![], pair: vec![] },
-				range_orders: vec![(0, range.clone(), 1_000_000)]
+				range_orders: vec![RangeOrder {
+					id: 0,
+					range: range.clone(),
+					liquidity: 1_000_000,
+					fees_earned: AssetsMap { base: 999.into(), pair: 999.into() }
+				}]
 			})
 		);
 
@@ -638,5 +706,90 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(BobCollectedUsdc::get(), 5_984u128);
 		assert_eq!(BobDebitedEth::get(), 4_988u128);
 		assert_eq!(BobDebitedUsdc::get(), 4_988u128);
+	});
+}
+
+#[test]
+fn can_execute_scheduled_limit_order() {
+	new_test_ext().execute_with(|| {
+		let order_id = 0;
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			STABLE_ASSET,
+			400_000u32,
+			price_at_tick(0).unwrap(),
+		));
+		assert_ok!(LiquidityPools::schedule_limit_order_update(
+			RuntimeOrigin::signed(ALICE),
+			Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
+				sell_asset: STABLE_ASSET,
+				buy_asset: Asset::Flip,
+				id: order_id,
+				option_tick: Some(100),
+				sell_amount: 55,
+			}),
+			6
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			RuntimeEvent::LiquidityPools(crate::Event::LimitOrderSetOrUpdateScheduled {
+				lp: ALICE,
+				order_id,
+				dispatch_at: 6,
+			})
+		);
+		assert!(!ScheduledLimitOrderUpdates::<Test>::get(6).is_empty());
+		LiquidityPools::on_initialize(6);
+		assert!(
+			ScheduledLimitOrderUpdates::<Test>::get(6).is_empty(),
+			"Should be empty, but is {:?}",
+			ScheduledLimitOrderUpdates::<Test>::get(6)
+		);
+		assert_eq!(
+			last_event::<Test>(),
+			RuntimeEvent::LiquidityPools(crate::Event::ScheduledLimitOrderUpdateDispatchSuccess {
+				lp: ALICE,
+				order_id,
+			})
+		);
+	});
+}
+
+#[test]
+fn schedule_rejects_unsupported_calls() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			LiquidityPools::schedule_limit_order_update(
+				RuntimeOrigin::signed(ALICE),
+				Box::new(pallet_cf_pools::Call::<Test>::set_pool_fees {
+					base_asset: Asset::Eth,
+					pair_asset: STABLE_ASSET,
+					fee_hundredth_pips: 0,
+				}),
+				6
+			),
+			Error::<Test>::UnsupportedCall
+		);
+	});
+}
+
+#[test]
+fn cant_schedule_in_the_past() {
+	new_test_ext().then_execute_at_block(10u32, |_| {
+		assert_noop!(
+			LiquidityPools::schedule_limit_order_update(
+				RuntimeOrigin::signed(ALICE),
+				Box::new(pallet_cf_pools::Call::<Test>::set_limit_order {
+					sell_asset: STABLE_ASSET,
+					buy_asset: Asset::Flip,
+					id: 0,
+					option_tick: Some(0),
+					sell_amount: 55,
+				}),
+				9
+			),
+			Error::<Test>::LimitOrderUpdateExpired
+		);
 	});
 }

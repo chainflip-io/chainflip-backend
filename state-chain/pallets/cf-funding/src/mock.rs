@@ -165,8 +165,18 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
+		_success_callback: Option<Self::Callback>,
+		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		unimplemented!()
+	}
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
 		unimplemented!()
 	}
 }

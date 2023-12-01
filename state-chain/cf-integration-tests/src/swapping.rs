@@ -1,4 +1,8 @@
 //! Contains tests related to liquidity, pools and swapping
+use crate::{
+	genesis,
+	network::{setup_account_and_peer_mapping, Cli, Network},
+};
 use cf_amm::{
 	common::{price_at_tick, Price, Tick},
 	range_orders::Liquidity,
@@ -10,14 +14,21 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, Ethereum, ExecutexSwapAndCall,
 	ForeignChain, ForeignChainAddress, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
-use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
+use cf_primitives::{
+	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, GENESIS_EPOCH, STABLE_ASSET,
+};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{AccountRoleRegistry, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
+	instances::Instance1,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
-use pallet_cf_ingress_egress::DepositWitness;
+use pallet_cf_broadcast::{
+	AwaitingBroadcast, BroadcastAttemptId, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData, TransactionSigningAttempt,
+};
+use pallet_cf_ingress_egress::{DepositWitness, FailedCcm};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use sp_core::U256;
@@ -26,9 +37,9 @@ use state_chain_runtime::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthEnvironment,
 		EthTransactionBuilder,
 	},
-	AccountRoles, EthereumChainTracking, EthereumInstance, LiquidityPools, LiquidityProvider,
-	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator,
-	Weight, Witnesser,
+	AccountRoles, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent,
+	RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -679,7 +690,6 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 
 		let make_ccm_call = |gas_budget: u128| {
 			<EthereumApi<EthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
-				(ForeignChain::Ethereum, 1),
 				TransferAssetParams::<Ethereum> {
 					asset: EthAsset::Flip,
 					amount: 1_000,
@@ -731,4 +741,121 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 			Some(U256::from(0))
 		);
 	});
+}
+
+#[test]
+fn can_resign_failed_ccm() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			// Setup environments, and rotate into the next epoch.
+			let (mut testnet, backup_nodes) =
+				Network::create(10, &Validator::current_authorities());
+			for node in &backup_nodes {
+				testnet.state_chain_gateway_contract.fund_account(
+					node.clone(),
+					genesis::GENESIS_BALANCE,
+					GENESIS_EPOCH,
+				);
+			}
+			testnet.move_forward_blocks(1);
+			for node in backup_nodes.clone() {
+				Cli::register_as_validator(&node);
+				setup_account_and_peer_mapping(&node);
+				Cli::start_bidding(&node);
+			}
+
+			testnet.move_to_the_next_epoch();
+			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
+
+			// Deposit CCM and process the swap
+			let deposit_metadata = CcmDepositMetadata {
+				source_chain: ForeignChain::Ethereum,
+				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+				channel_metadata: CcmChannelMetadata {
+					message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
+					gas_budget: 1_000,
+					cf_parameters: Default::default(),
+				},
+			};
+
+			let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+				source_asset: Asset::Flip,
+				deposit_amount: 10_000,
+				destination_asset: Asset::Usdc,
+				destination_address: EncodedAddress::Eth([0x02; 20]),
+				deposit_metadata,
+				tx_hash: Default::default(),
+			}));
+			let starting_epoch = Validator::current_epoch();
+			for node in Validator::current_authorities() {
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(node),
+					ccm_call.clone(),
+					starting_epoch
+				));
+			}
+
+			// Process the swap -> egress -> threshold sign -> broadcast
+			let broadcast_id = 2;
+			assert!(EthereumBroadcaster::threshold_signature_data(broadcast_id).is_none());
+			testnet.move_forward_blocks(3);
+
+			// Threshold signature is ready and the call is ready to be broadcasted.
+			assert!(EthereumBroadcaster::threshold_signature_data(broadcast_id).is_some());
+
+			let validators = Validator::current_authorities();
+			let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
+
+			// Fail the broadcast
+			for _ in 0..validators.len() {
+				let TransactionSigningAttempt { broadcast_attempt: _attempt, nominee } =
+					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_attempt_id).unwrap();
+
+				assert_ok!(EthereumBroadcaster::transaction_signing_failure(
+					RuntimeOrigin::signed(nominee),
+					broadcast_attempt_id,
+				));
+				testnet.move_forward_blocks(1);
+				broadcast_attempt_id = broadcast_attempt_id.next_attempt();
+			}
+
+			// Upon broadcast failure, the Failure callback is called, and failed CCM is stored.
+			assert_eq!(
+				EthereumIngressEgress::failed_ccms(broadcast_id),
+				vec![FailedCcm { broadcast_id: 2, original_epoch: 2 }]
+			);
+
+			// No storage change in the
+			testnet.move_forward_blocks(100);
+			assert_eq!(
+				EthereumIngressEgress::failed_ccms(starting_epoch),
+				vec![FailedCcm { broadcast_id: 2, original_epoch: 2 }]
+			);
+
+			// On the next epoch, the call is asked to be resigned
+			testnet.move_to_the_next_epoch();
+			testnet.move_forward_blocks(2);
+
+			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch), vec![]);
+			assert_eq!(
+				EthereumIngressEgress::failed_ccms(starting_epoch + 1),
+				vec![FailedCcm { broadcast_id: 2, original_epoch: 2 }]
+			);
+
+			// On the next epoch, the failed call is removed from storage.
+			testnet.move_to_the_next_epoch();
+			testnet.move_forward_blocks(2);
+			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch), vec![]);
+			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch + 1), vec![]);
+			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch + 2), vec![]);
+
+			assert!(ThresholdSignatureData::<Runtime, Instance1>::get(broadcast_id).is_none());
+			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
+			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
+		});
 }

@@ -3,16 +3,18 @@ use cf_amm::{
 	common::{Amount, Price, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{eth::Address as EthereumAddress, ForeignChainAddress};
+use cf_chains::{eth::Address as EthereumAddress, Chain, ForeignChainAddress};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, EpochIndex, ForeignChain, NetworkEnvironment, SemVer,
-	SwapOutput,
+	AccountRole, Asset, AssetAmount, BroadcastId, EpochIndex, ForeignChain, NetworkEnvironment,
+	SemVer, SwapOutput,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, PoolOrders, UnidirectionalPoolDepth};
+use pallet_cf_pools::{
+	AssetsMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, UnidirectionalPoolDepth,
+};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
@@ -118,6 +120,11 @@ decl_runtime_apis!(
 			pair_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
 		) -> Option<Result<AssetsMap<Amount>, DispatchError>>;
+		fn cf_pool_orderbook(
+			base_asset: Asset,
+			quote_asset: Asset,
+			orders: u32,
+		) -> Result<PoolOrderbook, DispatchError>;
 		fn cf_pool_orders(base: Asset, pair: Asset, lp: AccountId32) -> Option<PoolOrders>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
@@ -132,5 +139,8 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
+		fn cf_failed_ccm_call(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
 	}
 );

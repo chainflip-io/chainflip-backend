@@ -113,6 +113,19 @@ where
 			self.proposed_key_components = None;
 		}
 	}
+
+	pub fn is_key_valid(&self, key: &AggKey) -> bool {
+		let current_key = self.key_components.agg_key();
+		if *key != current_key {
+			if let Some(next_key_components) = self.proposed_key_components.as_ref() {
+				*key == next_key_components.agg_key()
+			} else {
+				false
+			}
+		} else {
+			true
+		}
+	}
 }
 
 pub type EthThresholdSigner = ThresholdSigner<EthKeyComponents, SchnorrVerificationComponents>;

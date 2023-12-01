@@ -4,14 +4,12 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use super::{FeeGrowthQ128F128, Liquidity};
-use crate::common::{Amount, SideMap, SqrtPriceQ64F96, Tick};
+use crate::common::{SideMap, SqrtPriceQ64F96, Tick};
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
-	accumulative_fees: SideMap<Amount>,
-	original_sqrt_price: SqrtPriceQ64F96,
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]

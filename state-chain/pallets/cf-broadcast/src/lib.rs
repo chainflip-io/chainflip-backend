@@ -10,7 +10,7 @@ pub mod migrations;
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{GetBlockHeight, SafeMode};
-use frame_support::RuntimeDebug;
+use frame_support::{traits::OriginTrait, RuntimeDebug};
 use sp_std::marker;
 pub use weights::WeightInfo;
 
@@ -83,7 +83,7 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -99,7 +99,7 @@ pub mod pallet {
 	/// Type alias for the instance's configured SignerId.
 	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 
-	/// Type alias for the payload hash
+	/// Type alias for the threshold signature
 	pub type ThresholdSignatureFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
@@ -137,7 +137,6 @@ pub mod pallet {
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
 	}
 
-	// TODO: Rename
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
@@ -238,8 +237,14 @@ pub mod pallet {
 
 	/// Callbacks to be dispatched when the SignatureAccepted event has been witnessed.
 	#[pallet::storage]
-	#[pallet::getter(fn request_callback)]
-	pub type RequestCallbacks<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn request_success_callback)]
+	pub type RequestSuccessCallbacks<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
+
+	/// Callbacks to be dispatched when a broadcast failure has been witnessed.
+	#[pallet::storage]
+	#[pallet::getter(fn request_failed_callback)]
+	pub type RequestFailureCallbacks<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
 
 	/// The last attempt number for a particular broadcast.
@@ -287,6 +292,7 @@ pub mod pallet {
 
 	/// Stores all needed information to be able to re-request the signature
 	#[pallet::storage]
+	#[pallet::getter(fn threshold_signature_data)]
 	pub type ThresholdSignatureData<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
@@ -339,6 +345,8 @@ pub mod pallet {
 		},
 		/// The fee paid for broadcasting a transaction has been refused.
 		TransactionFeeDeficitRefused { beneficiary: SignerIdFor<T, I> },
+		/// A Call has been re-threshold-signed, and its signature data is inserted into storage.
+		CallResigned { broadcast_id: BroadcastId },
 	}
 
 	#[pallet::error]
@@ -407,7 +415,9 @@ pub mod pallet {
 				let retries_len = retries.len();
 
 				for retry in retries {
-					Self::start_next_broadcast_attempt(retry);
+					if Self::take_awaiting_broadcast(retry.broadcast_attempt_id).is_some() {
+						Self::start_next_broadcast_attempt(retry);
+					}
 				}
 				next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
 			} else {
@@ -435,15 +445,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
 		) -> DispatchResultWithPostInfo {
-			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?.into();
+			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin.clone())?.into();
 
 			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			// Only the nominated signer can say they failed to sign
 			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
-
-			Self::take_awaiting_broadcast(broadcast_attempt_id);
 
 			FailedBroadcasters::<T, I>::append(
 				signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
@@ -458,11 +466,31 @@ pub mod pallet {
 					.checked_sub(1)
 					.expect("We must have at least one authority")
 			{
+				let broadcast_id =
+					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id;
+
 				// We want to keep the broadcast details, but we don't need the list of failed
 				// broadcasters any more.
-				FailedBroadcasters::<T, I>::remove(
-					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				);
+				FailedBroadcasters::<T, I>::remove(broadcast_id);
+
+				// Call the failed callback and clean up the callback storage.
+				if let Some(callback) = RequestFailureCallbacks::<T, I>::take(broadcast_id) {
+					Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+						broadcast_id,
+						result: callback
+							.dispatch_bypass_filter(OriginTrait::root())
+							.map(|_| ())
+							.map_err(|e| {
+								log::warn!(
+								"Broadcast failure callback execution has failed for broadcast {}.",
+								broadcast_id
+							);
+								e.error
+							}),
+					});
+				}
+				RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
+
 				Self::deposit_event(Event::<T, I>::BroadcastAborted {
 					broadcast_id: signing_attempt
 						.broadcast_attempt
@@ -477,12 +505,14 @@ pub mod pallet {
 		}
 
 		/// A callback to be used when a threshold signature request completes. Retrieves the
-		/// requested signature, uses the configured [TransactionBuilder] to build the transaction
-		/// and then initiates the broadcast sequence.
+		/// requested signature, uses the configured [TransactionBuilder] to build the transaction.
+		/// Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert
+		/// the signature result into the `ThresholdSignatureData` storage.
 		///
 		/// ## Events
 		///
-		/// - See [Call::start_broadcast].
+		/// - If `should_broadcast` see [Call::start_broadcast]
+		///
 		///
 		/// ## Errors
 		///
@@ -496,6 +526,7 @@ pub mod pallet {
 			api_call: Box<<T as Config<I>>::ApiCall>,
 			broadcast_id: BroadcastId,
 			initiated_at: ChainBlockNumberFor<T, I>,
+			should_broadcast: bool,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -511,15 +542,24 @@ pub mod pallet {
 				.expect("signature can not be unavailable");
 
 			let signed_api_call = api_call.signed(&signature);
-
-			Self::start_broadcast(
-				&signature,
-				T::TransactionBuilder::build_transaction(&signed_api_call),
-				signed_api_call,
-				threshold_signature_payload,
+			ThresholdSignatureData::<T, I>::insert(
 				broadcast_id,
-				initiated_at,
+				(signed_api_call.clone(), signature),
 			);
+
+			// If a signed call already exists, update the storage and do not broadcast.
+			if should_broadcast {
+				Self::start_broadcast(
+					T::TransactionBuilder::build_transaction(&signed_api_call),
+					signed_api_call,
+					threshold_signature_payload,
+					broadcast_id,
+					initiated_at,
+				);
+			} else {
+				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
+			}
+
 			Ok(().into())
 		}
 
@@ -587,7 +627,7 @@ pub mod pallet {
 				);
 			}
 
-			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
+			if let Some(callback) = RequestSuccessCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
 					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
@@ -655,7 +695,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		RequestCallbacks::<T, I>::remove(broadcast_id);
+		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
+		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
 
@@ -677,16 +718,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
-		maybe_callback: Option<<T as Config<I>>::BroadcastCallable>,
+		maybe_success_callback: Option<<T as Config<I>>::BroadcastCallable>,
+		maybe_failed_callback_generator: impl FnOnce(
+			BroadcastId,
+		) -> Option<<T as Config<I>>::BroadcastCallable>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
-		if let Some(callback) = maybe_callback {
-			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
+		if let Some(callback) = maybe_success_callback {
+			RequestSuccessCallbacks::<T, I>::insert(broadcast_id, callback);
+		}
+		if let Some(callback) = maybe_failed_callback_generator(broadcast_id) {
+			RequestFailureCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
 
+		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, true))
+	}
+
+	/// Signs a API call, use `Call::on_signature_ready` as the callback, and returns the signature
+	/// request ID.
+	fn threshold_sign(
+		api_call: <T as Config<I>>::ApiCall,
+		broadcast_id: BroadcastId,
+		should_broadcast: bool,
+	) -> ThresholdSignatureRequestId {
 		// We must set this here because after the threshold signature is requested, it's
 		// possible that an authority submits the transaction themselves, not going through the
 		// standard path. This protects against that, to ensure we always set the earliest possible
@@ -694,7 +751,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let initiated_at = T::ChainTracking::get_block_height();
 
 		let threshold_signature_payload = api_call.threshold_signature_payload();
-		let signature_request_id = T::ThresholdSigner::request_signature_with_callback(
+		T::ThresholdSigner::request_signature_with_callback(
 			threshold_signature_payload.clone(),
 			|threshold_request_id| {
 				Call::on_signature_ready {
@@ -703,11 +760,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					api_call: Box::new(api_call),
 					broadcast_id,
 					initiated_at,
+					should_broadcast,
 				}
 				.into()
 			},
-		);
-		(broadcast_id, signature_request_id)
+		)
 	}
 
 	/// Begin the process of broadcasting a transaction.
@@ -716,7 +773,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - [TransactionBroadcastRequest](Event::TransactionBroadcastRequest)
 	fn start_broadcast(
-		signature: &ThresholdSignatureFor<T, I>,
 		transaction_payload: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
 		threshold_signature_payload: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload,
@@ -731,8 +787,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&transaction_out_id,
 			(broadcast_id, initiated_at),
 		);
-
-		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
@@ -782,7 +836,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::clean_up_broadcast_storage(broadcast_id);
 				let (retry_broadcast_id, _) = Self::threshold_sign_and_broadcast(
 					api_call,
-					RequestCallbacks::<T, I>::get(broadcast_id),
+					RequestSuccessCallbacks::<T, I>::get(broadcast_id),
+					|_broadcast_id| RequestFailureCallbacks::<T, I>::get(broadcast_id),
 				);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
@@ -863,13 +918,27 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, None)
+		Self::threshold_sign_and_broadcast(api_call, None, |_| None)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, Some(callback))
+		Self::threshold_sign_and_broadcast(api_call, success_callback, failed_callback_generator)
+	}
+
+	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+			Some(Self::threshold_sign(api_call, broadcast_id, false))
+		} else {
+			None
+		}
+	}
+
+	/// Clean up storage data related to a broadcast ID.
+	fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
+		Self::clean_up_broadcast_storage(broadcast_id);
 	}
 }

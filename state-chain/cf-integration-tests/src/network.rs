@@ -254,17 +254,31 @@ impl Engine {
 							payload,
 							..
 						}) => {
-							queue_dispatch_extrinsic(
-								RuntimeCall::PolkadotThresholdSigner(
-									pallet_cf_threshold_signature::Call::signature_success{
-										ceremony_id: *ceremony_id,
-										signature: self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
-									}
-								),
-								RuntimeOrigin::none()
-							);
+							// Only sign if the signing key is up-to-date
+							if self.dot_threshold_signer.borrow().is_key_valid(key){
+								queue_dispatch_extrinsic(
+									RuntimeCall::PolkadotThresholdSigner(
+										pallet_cf_threshold_signature::Call::signature_success{
+											ceremony_id: *ceremony_id,
+											signature: self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
+										}
+									),
+									RuntimeOrigin::none()
+								);
+							} else {
+								let mut offenders = BTreeSet::new();
+								offenders.insert(self.node_id.clone());
+								queue_dispatch_extrinsic(
+									RuntimeCall::PolkadotThresholdSigner(
+										pallet_cf_threshold_signature::Call::report_signature_failed{
+											ceremony_id: *ceremony_id,
+											offenders,
+										}
+									),
+									RuntimeOrigin::signed(self.node_id.clone())
+								);
+							}
 					}
-
 					RuntimeEvent::BitcoinThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							ceremony_id,
@@ -555,8 +569,10 @@ impl Network {
 
 	/// Move to the next epoch, to the block after the completion of Authority rotation.
 	pub fn move_to_the_next_epoch(&mut self) {
+		let epoch = Validator::epoch_index();
 		self.move_to_the_end_of_epoch();
 		self.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+		assert_eq!(epoch + 1, Validator::epoch_index());
 	}
 
 	/// Move to the last block of the epoch - next block will start Authority rotation
