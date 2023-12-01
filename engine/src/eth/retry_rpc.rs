@@ -10,7 +10,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	eth::rpc::{EthRpcApi, EthSigningRpcApi},
-	retrier::{Attempt, RequestLog, RetrierClient, RetryLimit},
+	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -317,7 +317,7 @@ impl<Rpc: EthSigningRpcApi> EthersRetrySigningRpcApi for EthRetryRpcClient<Rpc> 
 					})
 				}),
 				log,
-				RetryLimit::Limit(MAX_BROADCAST_RETRIES),
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}

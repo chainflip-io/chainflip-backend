@@ -305,6 +305,54 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 	}
 }
 
+#[async_trait::async_trait]
+pub trait RetryLimitReturn: Send + 'static {
+	type ReturnType<T>;
+
+	fn into_retry_limit(param_type: Self) -> RetryLimit;
+
+	fn inner_to_return_type<T: Send + 'static>(
+		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
+		log_message: String,
+	) -> Self::ReturnType<T>;
+}
+
+pub struct NoRetryLimit;
+
+impl RetryLimitReturn for NoRetryLimit {
+	type ReturnType<T> = T;
+
+	fn into_retry_limit(_param_type: Self) -> RetryLimit {
+		RetryLimit::NoLimit
+	}
+
+	fn inner_to_return_type<T: Send + 'static>(
+		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
+		_log_message: String,
+	) -> Self::ReturnType<T> {
+		let result: BoxAny = inner.unwrap();
+		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
+	}
+}
+
+pub struct SetRetryLimit {}
+
+impl RetryLimitReturn for u32 {
+	type ReturnType<T> = Result<T>;
+
+	fn into_retry_limit(param_type: Self) -> RetryLimit {
+		RetryLimit::Limit(param_type)
+	}
+
+	fn inner_to_return_type<T: Send + 'static>(
+		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
+		log_message: String,
+	) -> Self::ReturnType<T> {
+		let result: BoxAny = inner.map_err(|_| anyhow::anyhow!("{log_message}"))?;
+		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
+	}
+}
+
 /// Requests submitted to this client will be retried until success.
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
@@ -428,26 +476,24 @@ where
 		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
 	) -> T {
-		let rx = self.send_request(specific_closure, request_log, RetryLimit::NoLimit).await;
-		let result: BoxAny = rx.await.unwrap();
-		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
+		self.request_with_limit::<T, NoRetryLimit>(specific_closure, request_log, NoRetryLimit)
+			.await
 	}
 
 	/// Requests something to be retried by the retry client, with an explicit retry limit.
 	/// Returns an error if the retry limit is reached.
-	pub async fn request_with_limit<T: Send + 'static>(
+	pub async fn request_with_limit<T: Send + 'static, R: RetryLimitReturn>(
 		&self,
 		specific_closure: TypedFutureGenerator<T, Client>,
 		request_log: RequestLog,
-		retry_limit: RetryLimit,
-	) -> Result<T> {
+		retry_limit: R,
+	) -> R::ReturnType<T> {
+		let retry_limit = R::into_retry_limit(retry_limit);
 		let rx = self.send_request(specific_closure, request_log.clone(), retry_limit).await;
-		let result: BoxAny = rx.await.map_err(|_| {
-			anyhow::anyhow!(
-				"Maximum attempt of `{retry_limit:?}` reached for request `{request_log}`."
-			)
-		})?;
-		Ok(*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error."))
+		R::inner_to_return_type(
+			rx.await,
+			format!("Maximum attempt of `{retry_limit:?}` reached for request `{request_log}`."),
+		)
 	}
 }
 
@@ -630,7 +676,7 @@ mod tests {
 						.request_with_limit(
 							specific_fut_closure(REQUEST_1, INITIAL_TIMEOUT),
 							RequestLog::new("request 1".to_string(), None),
-							RetryLimit::Limit(5)
+							5
 						)
 						.await
 						.unwrap()
@@ -643,7 +689,7 @@ mod tests {
 						.request_with_limit(
 							specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT),
 							RequestLog::new("request 2".to_string(), None),
-							RetryLimit::Limit(5)
+							5
 						)
 						.await
 						.unwrap()
@@ -750,7 +796,7 @@ mod tests {
 					.request_with_limit(
 						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
 						RequestLog::new("request".to_string(), None),
-						RetryLimit::Limit(5),
+						5,
 					)
 					.await
 					.unwrap_err();

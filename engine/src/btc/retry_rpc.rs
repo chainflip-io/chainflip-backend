@@ -2,7 +2,7 @@ use bitcoin::{Block, BlockHash, Txid};
 use utilities::task_scope::Scope;
 
 use crate::{
-	retrier::{Attempt, RequestLog, RetrierClient, RetryLimit},
+	retrier::{Attempt, RequestLog, RetrierClient},
 	settings::{HttpBasicAuthEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -103,7 +103,7 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 					Box::pin(async move { client.send_raw_transaction(transaction_bytes).await })
 				}),
 				log,
-				RetryLimit::Limit(MAX_BROADCAST_RETRIES),
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}
