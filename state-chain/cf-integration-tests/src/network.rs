@@ -575,8 +575,7 @@ impl Network {
 					true => true,
 					false =>
 						engine.auto_submit_heartbeat &&
-							engine.last_heartbeat + Validator::blocks_per_epoch() - 1 <=
-								current_block,
+							engine.last_heartbeat + HEARTBEAT_BLOCK_INTERVAL - 1 <= current_block,
 				} {
 				assert_ok!(Reputation::heartbeat(RuntimeOrigin::signed(engine.node_id.clone())));
 				engine.last_heartbeat = current_block;

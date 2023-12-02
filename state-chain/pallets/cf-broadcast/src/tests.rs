@@ -11,8 +11,8 @@ use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
 		ChainChoice, MockApiCall, MockBroadcastBarriers, MockEthereum, MockEthereumChainCrypto,
-		MockEthereumTransactionMetadata, MockTransaction, MockTransactionBuilder, ETH_TX_FEE,
-		MOCK_TX_METADATA,
+		MockEthereumTransactionMetadata, MockTransactionBuilder, ETH_TX_FEE,
+		MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -42,8 +42,6 @@ thread_local! {
 
 // When calling on_idle, we should broadcast everything with this excess weight.
 const LARGE_EXCESS_WEIGHT: Weight = Weight::from_parts(20_000_000_000, 0);
-
-const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 
 struct MockCfe;
 
@@ -128,27 +126,15 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 }
 
 fn start_mock_broadcast_tx_out_id(
-	tx_out_id: <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId,
-) -> BroadcastAttemptId {
-	let api_call =
-		MockApiCall { tx_out_id, payload: Default::default(), sig: Some(Default::default()) };
-	let broadcast_id = 1;
-	// Insert threshold signature into storage.
-	ThresholdSignatureData::<Test, Instance1>::insert(
-		broadcast_id,
-		(api_call.clone(), api_call.sig.unwrap()),
-	);
-	Broadcaster::start_broadcast(
-		MockTransaction,
-		api_call,
-		Default::default(),
-		BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 },
-		100u64,
-	)
+	i: u8,
+) -> (BroadcastAttemptId, <MockEthereumChainCrypto as ChainCrypto>::TransactionOutId) {
+	let (tx_out_id, apicall) = api_call(i);
+	let broadcast_id = initiate_and_sign_broadcast(&apicall, TxType::Normal);
+	(BroadcastAttemptId { broadcast_id, attempt_count: 0 }, tx_out_id)
 }
 
 fn start_mock_broadcast() -> BroadcastAttemptId {
-	start_mock_broadcast_tx_out_id(Default::default())
+	start_mock_broadcast_tx_out_id(Default::default()).0
 }
 
 #[test]
@@ -192,15 +178,16 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 #[test]
 fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast();
+		let (_tx_out_id, apicall) = api_call(1);
+		let broadcast_id = initiate_and_sign_broadcast(&apicall, TxType::Normal);
 
 		for i in 0..MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
 			// retry should kick off at end of block if sufficient block space is free.
 			assert_eq!(
-				BroadcastAttemptCount::<Test, _>::get(broadcast_attempt_id.broadcast_id),
-				broadcast_attempt_id.attempt_count + i,
-				"Failed for {broadcast_attempt_id:?} at iteration {i}"
+				BroadcastAttemptCount::<Test, _>::get(broadcast_id),
+				i,
+				"Failed for {broadcast_id:?} at iteration {i}"
 			);
 			MockCfe::respond(Scenario::SigningFailure);
 			Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
@@ -208,9 +195,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted {
-				broadcast_id: broadcast_attempt_id.broadcast_id
-			})
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted { broadcast_id })
 		);
 	});
 }
@@ -236,8 +221,9 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 		Broadcaster::on_initialize(0);
 
 		// only the first one should have retried, incremented attempt count
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
-			.is_some());
+		assert!(
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.peek_next()).is_some()
+		);
 		// the other should be still in the retry queue
 		let retry_queue = BroadcastRetryQueue::<Test, Instance1>::get();
 		assert_eq!(retry_queue.len(), 1);
@@ -272,8 +258,9 @@ fn test_transaction_signing_failed() {
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
 		Broadcaster::on_initialize(0);
 
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
-			.is_some());
+		assert!(
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.peek_next()).is_some()
+		);
 	});
 }
 
@@ -384,7 +371,7 @@ fn test_signature_request_expiry() {
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
 				let new_attempt =
-					AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+					AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.peek_next())
 						.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
@@ -427,7 +414,7 @@ fn test_transmission_request_expiry() {
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
 				let new_attempt =
-					AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+					AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.peek_next())
 						.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
@@ -444,46 +431,37 @@ fn test_transmission_request_expiry() {
 		check_end_state();
 	});
 }
-
-fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
-	// Expect the original broadcast to be deleted
-	assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
-	// Verify storage has been deleted
-	assert!(
-		TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID).is_none()
-	);
-	// attempt count incremented for the same broadcast_id
-	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id), 1);
-	// Verify that we have a new signature request in the pipeline
-	assert_eq!(
-		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
-		AsyncResult::Pending
-	);
-}
-
 // One particular case where this occurs is if the Polkadot Runtime upgrade occurs after we've
 // already signed a tx. In this case we know it will continue to fail if we keep rebroadcasting so
 // we should stop and rethreshold sign using the new runtime version.
 #[test]
 fn re_request_threshold_signature_on_invalid_tx_params() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast();
+		let (_, apicall) = api_call(1);
+		let broadcast_id = initiate_and_sign_broadcast(&apicall, TxType::Normal);
+		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 
 		assert_eq!(
 			MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
 			AsyncResult::Void
 		);
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
-		assert_eq!(
-			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
-			0
-		);
+		assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 
 		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
 
 		// If invalid on retry then we should re-threshold sign
 		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
-		threshold_signature_rerequested(broadcast_attempt_id);
+		// Verify storage has been deleted
+		assert!(TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID)
+			.is_none());
+		// attempt count incremented for the same broadcast_id
+		assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 1);
+		// Verify that we have a new signature request in the pipeline
+		assert_eq!(
+			MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
+			AsyncResult::Pending
+		);
 	});
 }
 
@@ -681,9 +659,10 @@ fn retry_and_success_in_same_block() {
 #[test]
 fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt() {
 	let mut expected_expiry_block = 0;
+	const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 	new_test_ext()
 		.execute_with(|| {
-			let broadcast_attempt_id = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
+			let (broadcast_attempt_id, _) = start_mock_broadcast_tx_out_id(0xbc);
 
 			let awaiting_broadcast =
 				AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();

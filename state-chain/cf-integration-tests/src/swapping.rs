@@ -11,6 +11,7 @@ use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
+	evm::TransactionFee,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, Ethereum, ExecutexSwapAndCall,
 	ForeignChain, ForeignChainAddress, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
@@ -18,15 +19,15 @@ use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, GENESIS_EPOCH, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, EpochInfo, LpBalanceApi};
+use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastAttemptId, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData, TransactionSigningAttempt,
+	AwaitingBroadcast, BroadcastAttemptId, BroadcastIdCounter, RequestFailureCallbacks,
+	RequestSuccessCallbacks, ThresholdSignatureData, TransactionSigningAttempt,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedCcm};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
@@ -770,6 +771,33 @@ fn can_resign_failed_ccm() {
 			}
 
 			testnet.move_to_the_next_epoch();
+			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(BroadcastAttemptId {
+				broadcast_id: 1,
+				attempt_count: 0,
+			})
+			.unwrap()
+			.broadcast_attempt
+			.transaction_out_id;
+
+			for node in Validator::current_authorities() {
+				// Broadcast success for id 1, which is the rotation transaction.
+				// This needs to succeed because it's a barrier broadcast.
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(node),
+					Box::new(RuntimeCall::EthereumBroadcaster(
+						pallet_cf_broadcast::Call::transaction_succeeded {
+							tx_out_id,
+							signer_id: Default::default(),
+							tx_fee: TransactionFee {
+								effective_gas_price: Default::default(),
+								gas_used: Default::default()
+							},
+							tx_metadata: Default::default(),
+						}
+					)),
+					<Runtime as Chainflip>::EpochInfo::current_epoch()
+				));
+			}
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
 			// Deposit CCM and process the swap
@@ -801,26 +829,19 @@ fn can_resign_failed_ccm() {
 			}
 
 			// Process the swap -> egress -> threshold sign -> broadcast
-			let broadcast_id = 2;
-			assert!(EthereumBroadcaster::threshold_signature_data(broadcast_id).is_none());
 			testnet.move_forward_blocks(3);
-
-			// Threshold signature is ready and the call is ready to be broadcasted.
-			assert!(EthereumBroadcaster::threshold_signature_data(broadcast_id).is_some());
-
-			let validators = Validator::current_authorities();
+			let broadcast_id = BroadcastIdCounter::<Runtime, Instance1>::get();
 			let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 
 			// Fail the broadcast
-			for _ in 0..validators.len() {
+			for _ in Validator::current_authorities() {
 				let TransactionSigningAttempt { broadcast_attempt: _attempt, nominee } =
 					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_attempt_id)
 						.unwrap_or_else(|| {
 							panic!(
-							"Failed to get the transaction signing attempt for {:?}. Available attempts: {:?}",
-							broadcast_attempt_id,
-							AwaitingBroadcast::<Runtime, Instance1>::iter().collect::<Vec<_>>()
-						)
+								"Failed to get the transaction signing attempt for {:?}.",
+								broadcast_attempt_id,
+							)
 						});
 
 				assert_ok!(EthereumBroadcaster::transaction_signing_failure(
@@ -828,7 +849,7 @@ fn can_resign_failed_ccm() {
 					broadcast_attempt_id,
 				));
 				testnet.move_forward_blocks(1);
-				broadcast_attempt_id = broadcast_attempt_id.next_attempt();
+				broadcast_attempt_id = broadcast_attempt_id.peek_next();
 			}
 
 			// Upon broadcast failure, the Failure callback is called, and failed CCM is stored.

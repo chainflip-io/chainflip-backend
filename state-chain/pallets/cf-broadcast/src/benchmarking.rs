@@ -111,13 +111,13 @@ benchmarks_instance_pallet! {
 	start_next_broadcast_attempt {
 		let api_call = ApiCallFor::<T, I>::benchmark_value();
 		let signed_api_call = api_call.signed(&BenchmarkValue::benchmark_value());
-		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(
+		let broadcast_id = <Pallet::<T, I> as Broadcaster<_>>::threshold_sign_and_broadcast(
 			BenchmarkValue::benchmark_value(),
-			signed_api_call,
-			BenchmarkValue::benchmark_value(),
-			BroadcastAttemptId{broadcast_id: 1, attempt_count: 0},
-			INITIATED_AT.into(),
 		);
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id,
+			attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+		};
 
 		T::KeyProvider::set_key(AggKeyFor::<T, I>::benchmark_value(), CurrentEpochIndex::<T>::get());
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
@@ -131,7 +131,7 @@ benchmarks_instance_pallet! {
 		})
 	}
 	verify {
-		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
+		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.peek_next()));
 	}
 	transaction_succeeded {
 		let caller: T::AccountId = whitelisted_caller();
