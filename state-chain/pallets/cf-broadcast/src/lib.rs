@@ -10,10 +10,26 @@ mod tests;
 
 pub mod migrations;
 pub mod weights;
+use cf_chains::{
+	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder, TransactionMetadata as _,
+};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
-use cf_traits::{GetBlockHeight, SafeMode};
-use frame_support::{traits::OriginTrait, RuntimeDebug};
-use sp_std::marker;
+use cf_traits::{
+	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
+	EpochKey, GetBlockHeight, KeyProvider, SafeMode, ThresholdSigner,
+};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{
+	dispatch::DispatchResultWithPostInfo,
+	pallet_prelude::DispatchResult,
+	sp_runtime::traits::Saturating,
+	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
+	RuntimeDebug, Twox64Concat,
+};
+use frame_system::pallet_prelude::OriginFor;
+pub use pallet::*;
+use scale_info::TypeInfo;
+use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*, vec::Vec};
 pub use weights::WeightInfo;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -29,28 +45,6 @@ impl<I: 'static> SafeMode for PalletSafeMode<I> {
 	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
 	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
 }
-
-use cf_chains::{
-	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder, TransactionMetadata as _,
-};
-use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
-	EpochKey, KeyProvider, ThresholdSigner,
-};
-use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
-	pallet_prelude::DispatchResult,
-	sp_runtime::traits::Saturating,
-	traits::{Get, StorageVersion, UnfilteredDispatchable},
-	Twox64Concat,
-};
-use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
-
-use frame_system::pallet_prelude::OriginFor;
-pub use pallet::*;
-use scale_info::TypeInfo;
-use sp_std::{marker::PhantomData, prelude::*};
 
 /// The number of broadcast attempts that were made before this one.
 pub type AttemptCount = u32;
@@ -333,12 +327,12 @@ pub mod pallet {
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
 	#[pallet::getter(fn broadcast_barriers)]
-	pub type BroadcastBarriers<T, I = ()> = StorageValue<_, VecDeque<BroadcastId>, ValueQuery>;
+	pub type BroadcastBarriers<T, I = ()> = StorageValue<_, BTreeSet<BroadcastId>, ValueQuery>;
 
 	/// List of broadcasts that are initiated but not witnessed on the external chain.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_broadcasts)]
-	pub type PendingBroadcasts<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
+	pub type PendingBroadcasts<T, I = ()> = StorageValue<_, BTreeSet<BroadcastId>, ValueQuery>;
 
 	/// List of broadcasts that have been aborted because they were unsuccessful to be broadcast
 	/// after many retries.
@@ -414,10 +408,7 @@ pub mod pallet {
 			let expiries = Timeouts::<T, I>::take(block_number);
 			if T::SafeMode::get().retry_enabled {
 				for attempt_id in expiries.iter() {
-					if PendingBroadcasts::<T, I>::get()
-						.binary_search(&attempt_id.broadcast_id)
-						.is_ok()
-					{
+					if PendingBroadcasts::<T, I>::get().contains(&attempt_id.broadcast_id) {
 						Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
 							broadcast_attempt_id: *attempt_id,
 						});
@@ -449,7 +440,7 @@ pub mod pallet {
 
 				let retries = BroadcastRetryQueue::<T, I>::mutate(|retry_queue| {
 					let id_limit = BroadcastBarriers::<T, I>::get()
-						.front()
+						.first()
 						.copied()
 						.unwrap_or(BroadcastId::max_value());
 					retry_queue
@@ -465,8 +456,7 @@ pub mod pallet {
 				for retry in retries {
 					// Check if the broadcast is pending
 					if PendingBroadcasts::<T, I>::get()
-						.binary_search(&retry.broadcast_attempt_id.broadcast_id)
-						.is_ok()
+						.contains(&retry.broadcast_attempt_id.broadcast_id)
 					{
 						Self::start_next_broadcast_attempt(retry);
 					}
@@ -621,7 +611,7 @@ pub mod pallet {
 					transaction_out_id,
 				};
 
-				if BroadcastBarriers::<T, I>::get().front().is_some_and(|broadcast_barrier_id| {
+				if BroadcastBarriers::<T, I>::get().first().is_some_and(|broadcast_barrier_id| {
 					broadcast_attempt_id.broadcast_id > *broadcast_barrier_id
 				}) {
 					Self::schedule_for_retry(&broadcast_attempt);
@@ -791,17 +781,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
 		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
 			debug_assert!(pending_broadcasts.iter().is_sorted());
-			if let Ok(id) = pending_broadcasts.binary_search(broadcast_id) {
-				pending_broadcasts.remove(id);
-			} else {
+			if !pending_broadcasts.remove(broadcast_id) {
 				cf_runtime_utilities::log_or_panic!(
 					"The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated"
 				);
 			}
-			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().front() {
+			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
 				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
-						broadcast_barriers.pop_front();
+						broadcast_barriers.pop_first();
 					});
 				}
 			}
@@ -1012,15 +1000,16 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
 		let broadcast_id = <Self as Broadcaster<_>>::threshold_sign_and_broadcast(api_call);
 
-		BroadcastBarriers::<T, I>::mutate(|current_barriers| {
-			current_barriers.append(
-				&mut <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id)
-					.extract_if(|barrier| {
-						PendingBroadcasts::<T, I>::get().first().map_or(false, |id| *id <= *barrier)
-					})
-					.collect::<VecDeque<BroadcastId>>(),
-			);
-		});
+		if let Some(earliest_pending_broadcast_id) = PendingBroadcasts::<T, I>::get()
+			.first()
+			.defensive_proof("Broadcast ID was just inserted, so at least this one must exist.")
+		{
+			for barrier in <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id) {
+					if barrier >= *earliest_pending_broadcast_id {
+						BroadcastBarriers::<T, I>::append(barrier);
+					}
+				}
+		}
 		broadcast_id
 	}
 }
