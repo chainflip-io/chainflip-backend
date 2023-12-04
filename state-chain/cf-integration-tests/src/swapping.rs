@@ -29,7 +29,7 @@ use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastAttemptId, BroadcastIdCounter, RequestFailureCallbacks,
 	RequestSuccessCallbacks, ThresholdSignatureData, TransactionSigningAttempt,
 };
-use pallet_cf_ingress_egress::{DepositWitness, FailedCcm};
+use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use sp_core::U256;
@@ -854,33 +854,142 @@ fn can_resign_failed_ccm() {
 
 			// Upon broadcast failure, the Failure callback is called, and failed CCM is stored.
 			assert_eq!(
-				EthereumIngressEgress::failed_ccms(broadcast_id),
-				vec![FailedCcm { broadcast_id: 2, original_epoch: 2 }]
+				EthereumIngressEgress::failed_foreign_chain_calls(broadcast_id),
+				vec![FailedForeignChainCall { broadcast_id: 2, original_epoch: 2 }]
 			);
 
-			// No storage change in the
-			testnet.move_forward_blocks(100);
+			// No storage change within the same epoch
+			testnet.move_to_the_end_of_epoch();
 			assert_eq!(
-				EthereumIngressEgress::failed_ccms(starting_epoch),
-				vec![FailedCcm { broadcast_id: 2, original_epoch: 2 }]
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch),
+				vec![FailedForeignChainCall { broadcast_id: 2, original_epoch: 2 }]
 			);
 
 			// On the next epoch, the call is asked to be resigned
 			testnet.move_to_the_next_epoch();
 			testnet.move_forward_blocks(2);
 
-			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch), vec![]);
+			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
 			assert_eq!(
-				EthereumIngressEgress::failed_ccms(starting_epoch + 1),
-				vec![FailedCcm { broadcast_id: 2, original_epoch: 2 }]
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch + 1),
+				vec![FailedForeignChainCall { broadcast_id: 2, original_epoch: 2 }]
 			);
 
 			// On the next epoch, the failed call is removed from storage.
 			testnet.move_to_the_next_epoch();
 			testnet.move_forward_blocks(2);
-			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch), vec![]);
-			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch + 1), vec![]);
-			assert_eq!(EthereumIngressEgress::failed_ccms(starting_epoch + 2), vec![]);
+			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch + 1),
+				vec![]
+			);
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch + 2),
+				vec![]
+			);
+
+			assert!(ThresholdSignatureData::<Runtime, Instance1>::get(broadcast_id).is_none());
+			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
+			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
+		});
+}
+
+#[test]
+fn can_handle_failed_vault_transfer() {
+	const EPOCH_BLOCKS: u32 = 1000;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			// Setup environments, and rotate into the next epoch.
+			let (mut testnet, backup_nodes) =
+				Network::create(10, &Validator::current_authorities());
+			for node in &backup_nodes {
+				testnet.state_chain_gateway_contract.fund_account(
+					node.clone(),
+					genesis::GENESIS_BALANCE,
+					GENESIS_EPOCH,
+				);
+			}
+			testnet.move_forward_blocks(1);
+			for node in backup_nodes.clone() {
+				Cli::register_as_validator(&node);
+				setup_account_and_peer_mapping(&node);
+				Cli::start_bidding(&node);
+			}
+
+			testnet.move_to_the_next_epoch();
+
+			// Report a failed vault transfer
+			let starting_epoch = Validator::current_epoch();
+			let asset = cf_chains::assets::eth::Asset::Eth;
+			let amount = 1_000_000u128;
+			let destination_address = [0x00; 20].into();
+			let broadcast_id = 2;
+
+			let call = Box::new(RuntimeCall::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Call::vault_transfer_failed {
+					asset,
+					amount,
+					destination_address,
+				},
+			));
+			for node in Validator::current_authorities() {
+				assert_ok!(Witnesser::witness_at_epoch(
+					RuntimeOrigin::signed(node),
+					call.clone(),
+					starting_epoch
+				));
+			}
+
+			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Event::<Runtime, Instance1>::TransferFallbackRequested {
+					asset,
+					amount,
+					destination_address,
+					broadcast_id,
+				},
+			));
+			testnet.move_forward_blocks(11);
+
+			// Transfer Fallback call is constructed, but not broadcasted.
+			assert!(EthereumBroadcaster::threshold_signature_data(broadcast_id).is_some());
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch),
+				vec![FailedForeignChainCall { broadcast_id, original_epoch: starting_epoch }]
+			);
+
+			// No storage change within the same epoch
+			testnet.move_to_the_end_of_epoch();
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch),
+				vec![FailedForeignChainCall { broadcast_id, original_epoch: starting_epoch }]
+			);
+
+			// On the next epoch, the call is asked to be resigned
+			testnet.move_to_the_next_epoch();
+			testnet.move_forward_blocks(2);
+
+			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch + 1),
+				vec![FailedForeignChainCall { broadcast_id, original_epoch: starting_epoch }]
+			);
+
+			// On the next epoch, the failed call is removed from storage.
+			testnet.move_to_the_next_epoch();
+			testnet.move_forward_blocks(2);
+			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch + 1),
+				vec![]
+			);
+			assert_eq!(
+				EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch + 2),
+				vec![]
+			);
 
 			assert!(ThresholdSignatureData::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
