@@ -18,8 +18,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, SetSafeMode,
-	ThresholdSigner,
+	AsyncResult, BroadcastNomination, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo,
+	SetSafeMode, ThresholdSigner,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -198,6 +198,71 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted { broadcast_id })
 		);
 	});
+}
+
+#[test]
+fn broadcasts_aborted_after_all_report_failures_after_retry() {
+	new_test_ext()
+		.execute_with(|| {
+			let (_tx_out_id1, api_call1) = api_call(1);
+
+			// Mock when all the possible broadcasts have failed another broadcast, and are
+			// therefore suspended.
+			MockNominator::set_nominees(Some(Default::default()));
+
+			let broadcast_id = initiate_and_sign_broadcast(&api_call1, TxType::Normal);
+
+			// No nominees, so we need to reschedule
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_attempt_id: BroadcastAttemptId { broadcast_id, attempt_count: 0 },
+				},
+			));
+			broadcast_id
+		})
+		// schedule some retries within each block - these do not result in
+		// TransactionBroadcastRequests
+		.then_execute_at_next_block(|broadcast_id| broadcast_id)
+		.then_execute_at_next_block(|broadcast_id| broadcast_id)
+		.then_execute_at_next_block(|broadcast_id| {
+			// The nominees are no longer suspended, so the retry in on_idle will nominate a
+			// broadcaster
+			MockNominator::reset_last_nominee();
+			MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			// we should have attempt 3 here now.
+			assert_ok!(Broadcaster::transaction_signing_failure(
+				RawOrigin::Signed(0).into(),
+				BroadcastAttemptId { broadcast_id, attempt_count: 3 },
+			));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			assert_ok!(Broadcaster::transaction_signing_failure(
+				RawOrigin::Signed(1).into(),
+				BroadcastAttemptId { broadcast_id, attempt_count: 4 },
+			));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			assert_ok!(Broadcaster::transaction_signing_failure(
+				RawOrigin::Signed(2).into(),
+				BroadcastAttemptId { broadcast_id, attempt_count: 5 },
+			));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			assert_ok!(Broadcaster::transaction_signing_failure(
+				RawOrigin::Signed(3).into(),
+				BroadcastAttemptId { broadcast_id, attempt_count: 6 },
+			));
+			assert_eq!(
+				System::events().pop().expect("an event").event,
+				RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted { broadcast_id })
+			);
+		});
 }
 
 #[test]
