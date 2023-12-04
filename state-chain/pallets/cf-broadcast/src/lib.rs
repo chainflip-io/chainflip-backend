@@ -12,10 +12,7 @@ pub mod migrations;
 pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{GetBlockHeight, SafeMode};
-use frame_support::{
-	traits::{Defensive, OriginTrait},
-	RuntimeDebug,
-};
+use frame_support::{traits::OriginTrait, RuntimeDebug};
 use sp_std::marker;
 pub use weights::WeightInfo;
 
@@ -425,7 +422,6 @@ pub mod pallet {
 							broadcast_attempt_id: *attempt_id,
 						});
 						if let Some(broadcast_attempt) = Self::take_awaiting_broadcast(*attempt_id)
-							.defensive_proof("take_awaiting_broadcast should not fail")
 						{
 							Self::start_next_broadcast_attempt(broadcast_attempt);
 						}
