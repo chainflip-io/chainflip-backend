@@ -503,7 +503,7 @@ pub mod pallet {
 			// Schedule a failed attempt for retry when the next block is authored.
 			// We will abort the broadcast once all authorities have attempt to sign the
 			// transaction
-			if signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count ==
+			if signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count >=
 				T::EpochInfo::current_authority_count()
 					.checked_sub(1)
 					.expect("We must have at least one authority")
@@ -780,7 +780,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
 		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
-			debug_assert!(pending_broadcasts.iter().is_sorted());
 			if !pending_broadcasts.remove(broadcast_id) {
 				cf_runtime_utilities::log_or_panic!(
 					"The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated"
