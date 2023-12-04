@@ -690,7 +690,7 @@ pub mod pallet {
 						});
 					} else {
 						log::warn!(
-							"Unable to attribute transaction fee refundfor broadcast {}.",
+							"Unable to attribute transaction fee refund for broadcast {}.",
 							broadcast_id
 						);
 					}
