@@ -16,6 +16,9 @@ use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEnd
 
 use anyhow::{anyhow, Context, Result};
 
+// https://github.com/bitcoin/bitcoin/blob/fb7b5293844ea6adc5dcf5ad0a0c5890b4495939/src/rpc/protocol.h#L58
+const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
+
 // From jsonrpc crate
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcError {
@@ -289,15 +292,36 @@ impl BtcRpcApi for BtcRpcClient {
 	}
 
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
-		Ok(self
-			.call_rpc(
-				"sendrawtransaction",
-				ReqParams::Batch(vec![json!([json!(hex::encode(transaction_bytes))])]),
-			)
-			.await?
-			.into_iter()
-			.next()
-			.ok_or_else(|| anyhow!("Response missing txid"))?)
+		let tx: Transaction = bitcoin::consensus::encode::deserialize(&transaction_bytes)
+			.map_err(|_| anyhow!("Failed to deserialize transaction"))?;
+		let derived_txid = tx.txid();
+
+		match call_rpc_raw(
+			&self.client,
+			&self.endpoint,
+			"sendrawtransaction",
+			ReqParams::Batch(vec![json!([json!(hex::encode(transaction_bytes))])]),
+		)
+		.await
+		{
+			Ok(txids) => {
+				let txid = txids
+					.into_iter()
+					.map(|txid| {
+						Txid::deserialize(txid)
+							.map_err(|e| anyhow!("Error deserializing response: {e:?}"))
+					})
+					.next()
+					.ok_or_else(|| anyhow!("Response missing txid"))??;
+				assert_eq!(txid, derived_txid);
+				Ok(txid)
+			},
+			Err(Error::Rpc(e)) if e.code == RPC_VERIFY_ALREADY_IN_CHAIN => {
+				tracing::info!("Transaction already on chain with txid: {:?}", derived_txid);
+				Ok(derived_txid)
+			},
+			Err(e) => Err(anyhow!("Error sending transaction: {:?}", e)),
+		}
 	}
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>> {

@@ -264,6 +264,7 @@ pub struct FundingEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
 	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -517,6 +518,8 @@ pub trait CustomApi {
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
 	#[method(name = "min_swap_amount")]
 	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount>;
+	#[method(name = "max_swap_amount")]
+	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = Price)]
 	fn cf_subscribe_pool_price(&self, from_asset: RpcAsset, to_asset: RpcAsset);
 
@@ -1059,16 +1062,22 @@ where
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
 		let mut minimum_swap_amounts = HashMap::new();
+		let mut maximum_swap_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let swap_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
+			let min_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
+			let max_amount = runtime_api.cf_max_swap_amount(hash, asset).map_err(to_rpc_error)?;
 			minimum_swap_amounts
 				.entry(asset.into())
 				.or_insert_with(HashMap::new)
-				.insert(asset, swap_amount.into());
+				.insert(asset, min_amount.into());
+			maximum_swap_amounts
+				.entry(asset.into())
+				.or_insert_with(HashMap::new)
+				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { minimum_swap_amounts })
+		Ok(SwappingEnvironment { minimum_swap_amounts, maximum_swap_amounts })
 	}
 
 	fn cf_funding_environment(
@@ -1124,6 +1133,13 @@ where
 		self.client
 			.runtime_api()
 			.cf_min_swap_amount(self.unwrap_or_best(None), asset.try_into()?)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>> {
+		self.client
+			.runtime_api()
+			.cf_max_swap_amount(self.unwrap_or_best(None), asset.try_into()?)
 			.map_err(to_rpc_error)
 	}
 
@@ -1381,6 +1397,17 @@ mod test {
 							(Asset::Flip, u64::MAX.into()),
 							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
 							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+				maximum_swap_amounts: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, Some(0u32.into()))])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, None),
+							(Asset::Usdc, Some((u64::MAX / 2 - 1).into())),
+							(Asset::Eth, Some(0u32.into())),
 						]),
 					),
 				]),

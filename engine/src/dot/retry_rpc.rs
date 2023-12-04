@@ -1,6 +1,6 @@
 use crate::{
 	common::option_inner,
-	retrier::Attempt,
+	retrier::{Attempt, RetryLimitReturn},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -94,7 +94,11 @@ pub trait DotRetryRpcApi: Clone {
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
 
-	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
+	async fn events<R: RetryLimitReturn>(
+		&self,
+		block_hash: PolkadotHash,
+		retry_limit: R,
+	) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
 	async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
@@ -134,14 +138,19 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>> {
+	async fn events<R: RetryLimitReturn>(
+		&self,
+		block_hash: PolkadotHash,
+		retry_limit: R,
+	) -> R::ReturnType<Option<Events<PolkadotConfig>>> {
 		self.rpc_retry_client
-			.request(
-				Box::pin(move |client| {
+			.request_with_limit(
+				Box::pin(move |client: DotHttpRpcClient| {
 					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.events(block_hash).await })
 				}),
 				RequestLog::new("events".to_string(), Some(format!("{block_hash:?}"))),
+				retry_limit,
 			)
 			.await
 	}
@@ -290,7 +299,7 @@ pub mod mocks {
 
 			async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
 
-			async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
+			async fn events<R: RetryLimitReturn>(&self, block_hash: PolkadotHash, retry_limit: R) -> R::ReturnType<Option<Events<PolkadotConfig>>>;
 
 			async fn runtime_version(&self, block_hash: Option<H256>) -> RuntimeVersion;
 
@@ -308,6 +317,8 @@ mod tests {
 	use futures_util::FutureExt;
 
 	use utilities::task_scope::task_scope;
+
+	use crate::retrier::NoRetryLimit;
 
 	use super::*;
 
@@ -335,7 +346,7 @@ mod tests {
 				let extrinsics = dot_retry_rpc_client.extrinsics(hash).await;
 				println!("extrinsics: {:?}", extrinsics);
 
-				let events = dot_retry_rpc_client.events(hash).await;
+				let events = dot_retry_rpc_client.events(hash, NoRetryLimit).await;
 				println!("Events: {:?}", events);
 
 				let runtime_version = dot_retry_rpc_client.runtime_version(None).await;

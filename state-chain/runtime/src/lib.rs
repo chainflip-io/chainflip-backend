@@ -1108,6 +1108,10 @@ impl_runtime_apis! {
 			Swapping::minimum_swap_amount(asset)
 		}
 
+		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount> {
+			Swapping::maximum_swap_amount(asset)
+		}
+
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
 			use pallet_cf_ingress_egress::MinimumDeposit;
 			use cf_chains::assets::{eth, dot, btc};
