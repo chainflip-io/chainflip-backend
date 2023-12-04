@@ -182,9 +182,9 @@ async fn request_redemption(
 	// Calculate the redemption amount
 	let redeem_amount = flip_to_redemption_amount(amount);
 	match redeem_amount {
-		RedemptionAmount::Exact(amount_float) => {
+		RedemptionAmount::Exact(atomic_amount) => {
 			println!(
-				"Submitting redemption with amount `{}` FLIP (`{amount_float}` Flipperinos) to ETH address `{redeem_address:?}`.", amount.expect("Exact must be some")
+				"Submitting redemption with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", amount.expect("Exact must be some")
 			);
 		},
 		RedemptionAmount::Max => {
