@@ -670,16 +670,16 @@ pub mod pallet {
 
 			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
-					if let Some(to_refund) = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
-						broadcast_id,
-						attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
-					})
-					.map(|signing_attempt| {
-						signing_attempt
+					if let Some(signing_attempt) =
+						AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+							broadcast_id,
+							attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+						}) {
+						let to_refund = signing_attempt
 							.broadcast_attempt
 							.transaction_payload
-							.return_fee_refund(tx_fee)
-					}) {
+							.return_fee_refund(tx_fee);
+
 						TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
 							*fee_deficit = fee_deficit.saturating_add(to_refund);
 						});
