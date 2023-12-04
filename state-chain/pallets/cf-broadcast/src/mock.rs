@@ -6,9 +6,7 @@ use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMod
 use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
-	mocks::{
-		MockAggKey, MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder,
-	},
+	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
 	Chain, ChainCrypto,
 };
 use cf_traits::{
@@ -17,7 +15,7 @@ use cf_traits::{
 		block_height_provider::BlockHeightProvider, signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
-	AccountRoleRegistry, EpochKey, OnBroadcastReady,
+	AccountRoleRegistry, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -79,10 +77,6 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
-pub const VALID_AGG_KEY: MockAggKey = MockAggKey([0, 0, 0, 0]);
-
-pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
-
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
@@ -90,17 +84,6 @@ thread_local! {
 }
 
 pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
-
-pub struct MockKeyProvider;
-
-impl cf_traits::KeyProvider<MockEthereumChainCrypto> for MockKeyProvider {
-	fn active_epoch_key() -> Option<EpochKey<<MockEthereumChainCrypto as ChainCrypto>::AggKey>> {
-		Some(EpochKey {
-			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
-			epoch_index: Default::default(),
-		})
-	}
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback;
@@ -120,12 +103,6 @@ impl UnfilteredDispatchable for MockCallback {
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		CALLBACK_CALLED.with(|cell| *cell.borrow_mut() = true);
 		Ok(().into())
-	}
-}
-
-impl MockKeyProvider {
-	pub fn set_valid(valid: bool) {
-		VALIDKEY.with(|cell| *cell.borrow_mut() = valid);
 	}
 }
 
@@ -149,7 +126,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type BroadcastTimeout = BroadcastTimeout;
 	type WeightInfo = ();
-	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
 	type SafeMode = MockRuntimeSafeMode;

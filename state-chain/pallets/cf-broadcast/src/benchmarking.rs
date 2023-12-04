@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_traits::{CurrentEpochIndex, ThresholdSigner};
+use cf_traits::ThresholdSigner;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
@@ -68,7 +68,6 @@ benchmarks_instance_pallet! {
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key, CurrentEpochIndex::<T>::get());
 	} : {
 		Pallet::<T, I>::on_initialize(timeout_block);
 	}
@@ -86,7 +85,6 @@ benchmarks_instance_pallet! {
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key, CurrentEpochIndex::<T>::get());
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
 		assert!(Timeouts::<T, I>::contains_key(expiry_block));
@@ -101,7 +99,6 @@ benchmarks_instance_pallet! {
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key, CurrentEpochIndex::<T>::get());
 	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 0);
@@ -119,7 +116,6 @@ benchmarks_instance_pallet! {
 			attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
 		};
 
-		T::KeyProvider::set_key(AggKeyFor::<T, I>::benchmark_value(), CurrentEpochIndex::<T>::get());
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
 
 	} : {
@@ -151,7 +147,6 @@ benchmarks_instance_pallet! {
 			tx_metadata: TransactionMetadataFor::<T, I>::benchmark_value(),
 		};
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key, CurrentEpochIndex::<T>::get());
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap())? }
 	verify {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic

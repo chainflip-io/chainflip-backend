@@ -675,7 +675,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = EthereumVault;
 	type ChainTracking = EthereumChainTracking;
 }
 
@@ -698,7 +697,6 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = PolkadotVault;
 	type ChainTracking = PolkadotChainTracking;
 }
 
@@ -721,7 +719,6 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = BitcoinVault;
 	type ChainTracking = BitcoinChainTracking;
 }
 

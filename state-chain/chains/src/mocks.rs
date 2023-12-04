@@ -333,14 +333,14 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 }
 
 thread_local! {
-	pub static IS_VALID_BROADCAST: std::cell::RefCell<bool> = RefCell::new(true);
+	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = RefCell::new(false);
 }
 
 pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
 
 impl<C, Call> MockTransactionBuilder<C, Call> {
-	pub fn set_invalid_for_rebroadcast() {
-		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow_mut() = false)
+	pub fn set_requires_refresh() {
+		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow_mut() = true)
 	}
 }
 
@@ -355,12 +355,10 @@ impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		_call: &Call,
 		_payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		_signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
+		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow())
 	}
 }

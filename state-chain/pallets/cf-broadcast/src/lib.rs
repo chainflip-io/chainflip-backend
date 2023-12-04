@@ -16,7 +16,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
-	EpochKey, GetBlockHeight, KeyProvider, SafeMode, ThresholdSigner,
+	GetBlockHeight, SafeMode, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -98,7 +98,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, KeyProvider, OnBroadcastReady};
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
 	use frame_support::{
 		ensure,
 		pallet_prelude::{OptionQuery, ValueQuery, *},
@@ -220,9 +220,6 @@ pub mod pallet {
 		/// The timeout duration for the broadcast, measured in number of blocks.
 		#[pallet::constant]
 		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
-
-		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -855,27 +852,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 
-		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			let EpochKey { key, .. } = T::KeyProvider::active_epoch_key()
-				.expect("Epoch key must exist if we made a broadcast.");
-
+		if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let next_broadcast_attempt_id =
 				broadcast_attempt.broadcast_attempt_id.into_next::<T, I>();
 
-			if T::TransactionBuilder::is_valid_for_rebroadcast(
+			if T::TransactionBuilder::requires_signature_refresh(
 				&api_call,
 				&broadcast_attempt.threshold_signature_payload,
-				&key,
-				&signature,
 			) {
-				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-					broadcast_attempt_id: next_broadcast_attempt_id,
-					..broadcast_attempt
-				});
-			}
-			// If the signature verification fails, we want
-			// to retry from the threshold signing stage.
-			else {
 				// We update the initiated_at here since as the tx is resigned and broadcast, it is
 				// not possible for it to be successfully broadcasted before this point.
 				// This `initiated_at` block will be associated with the new transaction_out_id
@@ -906,6 +890,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
 				);
+			} else {
+				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+					broadcast_attempt_id: next_broadcast_attempt_id,
+					..broadcast_attempt
+				});
 			}
 		} else {
 			log::error!("No threshold signature data is available.");

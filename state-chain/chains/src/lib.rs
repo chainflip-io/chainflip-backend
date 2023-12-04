@@ -237,11 +237,9 @@ where
 	fn refresh_unsigned_data(tx: &mut C::Transaction);
 
 	/// Checks if the payload is still valid for the call.
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
 
 	/// Calculate the Units of gas that is allowed to make this call.

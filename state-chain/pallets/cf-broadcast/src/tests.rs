@@ -502,7 +502,7 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 		assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 
-		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
+		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
 
 		// If invalid on retry then we should re-threshold sign
 		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
@@ -752,7 +752,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 				),
 				1
 			);
-			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
+			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
 			MockCfe::respond(Scenario::Timeout);
 			(nominee, awaiting_broadcast)
 		})
