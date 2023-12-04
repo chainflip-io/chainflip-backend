@@ -50,7 +50,7 @@ pub type ThresholdSignatureRequestId = u32;
 
 pub type PolkadotBlockNumber = u32;
 
-const FLIP_DECIMALS: u32 = 18;
+pub const FLIP_DECIMALS: u32 = 18;
 pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain

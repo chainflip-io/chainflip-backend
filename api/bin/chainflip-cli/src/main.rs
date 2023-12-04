@@ -11,8 +11,10 @@ use crate::settings::{
 	LiquidityProviderSubcommands,
 };
 use api::{
-	lp::LpApi, primitives::RedemptionAmount, queries::QueryApi, AccountId32, BrokerApi,
-	GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
+	lp::LpApi,
+	primitives::{RedemptionAmount, FLIP_DECIMALS},
+	queries::QueryApi,
+	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
@@ -151,7 +153,7 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 	match amount {
 		Some(amount_float) => {
 			let atomic_amount = ((amount_float * 10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
-				10_u128.pow(18 - MAX_DECIMAL_PLACES);
+				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => RedemptionAmount::Max,
