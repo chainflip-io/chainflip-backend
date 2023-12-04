@@ -668,17 +668,6 @@ pub mod pallet {
 
 			Self::remove_pending_broadcast(&broadcast_id);
 
-			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().front() {
-				if PendingBroadcasts::<T, I>::get()
-					.first()
-					.map_or(true, |id| *id > *broadcast_barrier_id)
-				{
-					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
-						broadcast_barriers.pop_front();
-					});
-				}
-			}
-
 			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
 					if let Some(to_refund) = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
@@ -808,6 +797,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				cf_runtime_utilities::log_or_panic!(
 					"The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated"
 				);
+			}
+			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().front() {
+				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
+					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
+						broadcast_barriers.pop_front();
+					});
+				}
 			}
 		});
 	}
