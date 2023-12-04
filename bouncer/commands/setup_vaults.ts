@@ -6,8 +6,6 @@
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
 // For example: ./commands/setup_vaults.ts
 
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { AddressOrPair } from '@polkadot/api/types';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
@@ -18,13 +16,11 @@ import {
   sleep,
   handleSubstrateError,
 } from '../shared/utils';
+import { aliceKeyringPair } from '../shared/polkadot_keyring';
 
 async function main(): Promise<void> {
   const btcClient = getBtcClient();
-  await cryptoWaitReady();
-  const keyring = new Keyring({ type: 'sr25519' });
-  const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
-  const alice = keyring.createFromUri(aliceUri);
+  const alice = await aliceKeyringPair();
 
   const chainflip = await getChainflipApi();
   const polkadot = await getPolkadotApi();

@@ -1,11 +1,10 @@
 #!/usr/bin/env -S pnpm tsx
-import Keyring from '@polkadot/keyring';
 import fs from 'fs';
 import path from 'path';
 import assert from 'assert';
 import { execSync } from 'child_process';
-import { BN } from '@polkadot/util';
-import { blake2AsU8a, cryptoWaitReady } from '@polkadot/util-crypto';
+
+import { blake2AsU8a } from '@polkadot/util-crypto';
 import { assetDecimals, Assets, Asset } from '@chainflip-io/cli';
 import {
   getPolkadotApi,
@@ -13,72 +12,24 @@ import {
   observeEvent,
   sleep,
   amountToFineAmount,
-  Event,
 } from '../shared/utils';
-import {
-  bumpSpecVersionAgainstNetwork,
-  getCurrentRuntimeVersion,
-} from '../shared/utils/bump_spec_version';
+import { bumpSpecVersion, getCurrentRuntimeVersion } from '../shared/utils/bump_spec_version';
 import { testSwap } from '../shared/swapping';
+import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 
+const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
 const POLKADOT_ENDPOINT_PORT = 9947;
-const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
-const keyring = new Keyring({ type: 'sr25519' });
 const polkadot = await getPolkadotApi();
+
+// The spec version of the runtime wasm file that is in the repo at bouncer/test_data/polkadot_runtime_xxxx.wasm
+// When the localnet polkadot runtime version is updated, change this value to be +1 and this test will compile the new wasm file for you.
+// Then you will need to delete the old file and commit the new one.
+const PRE_COMPILED_WASM_VERSION = 10001;
 
 let swapsComplete = 0;
 let swapsStarted = 0;
 let runtimeUpgradeComplete = false;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function handleDispatchError(result: any) {
-  if (result.dispatchError) {
-    const dispatchError = JSON.parse(result.dispatchError);
-    if (dispatchError.module) {
-      const errorIndex = {
-        index: new BN(dispatchError.module.index, 'hex'),
-        error: new Uint8Array(Buffer.from(dispatchError.module.error.slice(2), 'hex')),
-      };
-      const { docs, name, section } = polkadot.registry.findMetaError(errorIndex);
-      throw new Error('dispatchError:' + section + '.' + name + ': ' + docs);
-    } else {
-      throw new Error('dispatchError: ' + JSON.stringify(dispatchError));
-    }
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function submitAndGetEvent(call: any, eventMatch: any): Promise<Event> {
-  await cryptoWaitReady();
-  const alice = keyring.createFromUri(aliceUri);
-  let done = false;
-  let event: Event = { name: '', data: [], block: 0, event_index: 0 };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await call.signAndSend(alice, { nonce: -1 }, (result: any) => {
-    if (result.dispatchError) {
-      done = true;
-    }
-    handleDispatchError(result);
-    if (result.isInBlock) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      result.events.forEach((eventRecord: any) => {
-        if (eventMatch.is(eventRecord.event)) {
-          event = eventRecord.event;
-          done = true;
-        }
-      });
-      if (!done) {
-        done = true;
-        throw new Error('Event was not found in block: ' + JSON.stringify(eventMatch));
-      }
-    }
-  });
-  while (!done) {
-    await sleep(1000);
-  }
-  return event;
-}
 
 /// Pushes a polkadot runtime upgrade using the democracy pallet.
 /// preimage -> proposal -> vote -> democracy pass -> scheduler dispatch runtime upgrade.
@@ -171,6 +122,7 @@ async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void> {
 }
 
 async function randomPolkadotSwap(): Promise<void> {
+  // console.log(`Starting random swap: (${swapsStarted}/${swapsComplete})`);
   const assets: Asset[] = [Assets.BTC, Assets.ETH, Assets.USDC, Assets.FLIP];
   const randomAsset = assets[Math.floor(Math.random() * assets.length)];
 
@@ -190,11 +142,12 @@ async function randomPolkadotSwap(): Promise<void> {
 }
 
 async function doPolkadotSwaps(): Promise<void> {
-  console.log('Running polkadot, new swap every 1 second');
+  const startSwapInterval = 1000;
+  console.log(`Running polkadot swaps, new random swap every ${startSwapInterval}ms`);
   while (!runtimeUpgradeComplete) {
     randomPolkadotSwap();
     swapsStarted++;
-    await sleep(1000);
+    await sleep(startSwapInterval);
   }
   console.log(`Stopping polkadot swaps, ${swapsComplete}/${swapsStarted} swaps complete.`);
 
@@ -205,32 +158,69 @@ async function doPolkadotSwaps(): Promise<void> {
   console.log(`All ${swapsComplete} swaps complete`);
 }
 
-async function main(): Promise<void> {
-  // Get polkadot source using git
+/// Pulls the polkadot source code and bumps the spec version, then compiles it if necessary.
+/// If the bumped spec version matches the pre-compiled one stored in the repo, then it will use that instead.
+async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
+  const projectPath = process.cwd();
   // tmp/ is ignored in the bouncer .gitignore file.
-  const workspacePath = path.join(process.cwd(), 'tmp/polkadot');
-  console.log('cloning polkadot repo to: ' + workspacePath);
-  // TODO: this is not a great solution, what if the folder exists but is empty?
+  const workspacePath = path.join(projectPath, 'tmp/polkadot');
+  const nextSpecVersion = (await getCurrentRuntimeVersion(POLKADOT_ENDPOINT_PORT)).specVersion + 1;
+  console.log('Current polkadot spec_version: ' + nextSpecVersion);
+
+  // No need to compile if the version we need is the pre-compiled version.
+  const preCompiledWasmPath = `${projectPath}/tests/test_data/polkadot_runtime_${PRE_COMPILED_WASM_VERSION}.wasm`;
+  let copyToPreCompileLocation = false;
+  if (nextSpecVersion === PRE_COMPILED_WASM_VERSION) {
+    if (!fs.existsSync(preCompiledWasmPath)) {
+      console.log(
+        `Warning: Precompiled Wasm file not found at "${preCompiledWasmPath}". It will be compiled and copied there. You will need to commit the file to the repo to speed up future runs.`,
+      );
+      copyToPreCompileLocation = true;
+    } else {
+      return [preCompiledWasmPath, nextSpecVersion];
+    }
+  }
+
+  // Get polkadot source using git
   if (!fs.existsSync(workspacePath)) {
+    console.log('Cloning polkadot repo to: ' + workspacePath);
     execSync(`git clone https://github.com/chainflip-io/polkadot.git ${workspacePath}`);
   }
-  execSync(`cd ${workspacePath} && git reset --hard HEAD && git clean -fd && git pull`);
+  const remoteUrl = execSync('git config --get remote.origin.url', { cwd: workspacePath })
+    .toString()
+    .trim();
+  if (remoteUrl !== POLKADOT_REPO_URL) {
+    throw new Error(
+      `Polkadot folder exists at ${workspacePath} but is not the correct git repo: ${remoteUrl}. Please remove the folder and try again.`,
+    );
+  }
+  console.log('Updating polkadot source');
+  execSync(`git pull`, { cwd: workspacePath });
 
-  // Bump the spec version
-  const expectedSpecVersion = await bumpSpecVersionAgainstNetwork(
-    `${workspacePath}/runtime/polkadot/src/lib.rs`,
-    POLKADOT_ENDPOINT_PORT,
-  );
+  await bumpSpecVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, nextSpecVersion);
 
   // Compile polkadot runtime
   console.log('Compiling polkadot...');
-  execSync(`cd ${workspacePath} && cargo build --locked --release --features fast-runtime`);
+  execSync(`cargo build --locked --release --features fast-runtime`, { cwd: workspacePath });
   console.log('Finished compiling polkadot');
   const wasmPath = `${workspacePath}/target/release/wbuild/polkadot-runtime/polkadot_runtime.compact.compressed.wasm`;
   if (!fs.existsSync(wasmPath)) {
-    throw new Error(`Wasm file not found at ${wasmPath}`);
+    throw new Error(`Wasm file not found: ${wasmPath}`);
   }
 
+  // Backup the pre-compiled wasm file so we do not have to build it again on future fresh runs.
+  if (copyToPreCompileLocation) {
+    fs.copyFileSync(wasmPath, preCompiledWasmPath);
+    console.log(`Copied ${wasmPath} to ${preCompiledWasmPath}`);
+  }
+
+  return [wasmPath, nextSpecVersion];
+}
+
+async function main(): Promise<void> {
+  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
+
+  // Start some swaps
   const swapping = doPolkadotSwaps();
   console.log('Waiting for swaps to start...');
   while (swapsComplete === 0) {
@@ -251,7 +241,6 @@ async function main(): Promise<void> {
 
   // Wait for all of the swaps to complete
   console.log('Waiting for swaps to complete...');
-  // FIXME: API is glitching out here with "API/INIT: Runtime version updated to spec=10002, tx=24".
   await swapping;
 
   process.exit(0);

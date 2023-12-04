@@ -17,7 +17,6 @@ export async function getCurrentRuntimeVersion(port: number): Promise<RuntimeVer
 }
 
 export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
-  // TODO JAMIE: Why was this in a try catch?
   const fileContent = fs.readFileSync(filePath, 'utf-8');
   const lines = fileContent.split('\n');
 
