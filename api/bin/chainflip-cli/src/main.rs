@@ -147,11 +147,11 @@ async fn run_cli() -> Result<()> {
 /// Turns the amount of FLIP into a RedemptionAmount in Flipperinos.
 fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
-	const DECIMAL_PLACES: u32 = 6;
+	const MAX_DECIMAL_PLACES: u32 = 6;
 	match amount {
 		Some(amount_float) => {
-			let atomic_amount = ((amount_float * 10_f64.powi(DECIMAL_PLACES as i32)) as u128) *
-				10_u128.pow(18 - DECIMAL_PLACES);
+			let atomic_amount = ((amount_float * 10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
+				10_u128.pow(18 - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => RedemptionAmount::Max,
@@ -431,12 +431,26 @@ fn test_flip_to_redemption_amount() {
 		flip_to_redemption_amount(Some(199995.0)),
 		RedemptionAmount::Exact(199995000000000000000000)
 	);
+
+	assert_eq!(
+		flip_to_redemption_amount(Some(123456789.000001)),
+		RedemptionAmount::Exact(123456789000001000000000000)
+	);
+
 	assert_eq!(
 		flip_to_redemption_amount(Some(69420.123456)),
 		RedemptionAmount::Exact(69420123456000000000000)
 	);
+
+	// specifying more than the allowed precision ignores the extra precision
 	assert_eq!(
-		flip_to_redemption_amount(Some(123456789.000001)),
-		RedemptionAmount::Exact(123456789000001000000000000)
+		flip_to_redemption_amount(Some(69420.123456789)),
+		RedemptionAmount::Exact(69420123456000000000000)
+	);
+
+	// very large value, decimal precision holds
+	assert_eq!(
+		flip_to_redemption_amount(Some(69420000.123456789)),
+		RedemptionAmount::Exact(69420000123456000000000000)
 	);
 }
