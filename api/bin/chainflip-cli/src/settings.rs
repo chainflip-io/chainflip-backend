@@ -112,7 +112,7 @@ pub enum CliCommand {
 	)]
 	Redeem {
 		#[clap(
-			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP)",
+			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP). Only accepts up to 6 decimal places of precision.",
 			long = "exact"
 		)]
 		amount: Option<f64>,
