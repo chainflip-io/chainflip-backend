@@ -45,8 +45,9 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		// just check that the old storage item existed
-		Ok(old::CurrentVaultEpochAndState::<T, I>::exists().encode())
+		let state = old::CurrentVaultEpochAndState::<T, I>::get().unwrap();
+
+		Ok(state.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
