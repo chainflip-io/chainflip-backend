@@ -155,8 +155,12 @@ pub mod old {
 	}
 
 	#[frame_support::storage_alias]
-	pub type RequestCallbacks<T: pallet_cf_broadcast::Config<I>, I: 'static> =
-		StorageMap<pallet_cf_broadcast::Pallet<T, I>, Twox64Concat, BroadcastId, RuntimeCall>;
+	pub type RequestCallback<T: pallet_cf_threshold_signature::Config<I>, I: 'static> = StorageMap<
+		pallet_cf_threshold_signature::Pallet<T, I>,
+		Twox64Concat,
+		BroadcastId,
+		RuntimeCall,
+	>;
 }
 
 pub struct ThresholdSignatureCallbacks;
@@ -164,15 +168,15 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 	fn on_runtime_upgrade() -> Weight {
 		use frame_support::storage::StoragePrefixedMap;
 		frame_support::migration::move_prefix(
-			old::RequestCallbacks::<Runtime, EthereumInstance>::storage_prefix(),
+			old::RequestCallback::<Runtime, EthereumInstance>::storage_prefix(),
 			RequestSuccessCallbacks::<Runtime, EthereumInstance>::storage_prefix(),
 		);
 		frame_support::migration::move_prefix(
-			old::RequestCallbacks::<Runtime, BitcoinInstance>::storage_prefix(),
+			old::RequestCallback::<Runtime, BitcoinInstance>::storage_prefix(),
 			RequestSuccessCallbacks::<Runtime, BitcoinInstance>::storage_prefix(),
 		);
 		frame_support::migration::move_prefix(
-			old::RequestCallbacks::<Runtime, PolkadotInstance>::storage_prefix(),
+			old::RequestCallback::<Runtime, PolkadotInstance>::storage_prefix(),
 			RequestSuccessCallbacks::<Runtime, PolkadotInstance>::storage_prefix(),
 		);
 
@@ -232,13 +236,13 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let mut eth_broadcastids = old::RequestCallbacks::<Runtime, EthereumInstance>::iter()
+		let mut eth_broadcastids = old::RequestCallback::<Runtime, EthereumInstance>::iter()
 			.map(|(k, v)| (k, v.unwrap_eth().3))
 			.collect::<Vec<(u32, u32)>>();
-		let mut dot_broadcastids = old::RequestCallbacks::<Runtime, PolkadotInstance>::iter()
+		let mut dot_broadcastids = old::RequestCallback::<Runtime, PolkadotInstance>::iter()
 			.map(|(k, v): (u32, old::RuntimeCall)| (k, v.unwrap_dot().3))
 			.collect::<Vec<(u32, u32)>>();
-		let mut btc_broadcastids = old::RequestCallbacks::<Runtime, BitcoinInstance>::iter()
+		let mut btc_broadcastids = old::RequestCallback::<Runtime, BitcoinInstance>::iter()
 			.map(|(k, v): (u32, old::RuntimeCall)| (k, v.unwrap_btc().3))
 			.collect::<Vec<(u32, u32)>>();
 
