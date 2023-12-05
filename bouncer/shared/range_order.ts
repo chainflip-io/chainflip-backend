@@ -20,7 +20,7 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   const lp = keyring.createFromUri(lpUri);
 
   const currentSqrtPrice = (
-    await chainflip.query.liquidityPools.pools({ assets: { one: 'usdc', zero: ccy.toLowerCase() } })
+    await chainflip.query.liquidityPools.pools({ assets: { quote: 'usdc', base: ccy.toLowerCase() } })
   ).toJSON()!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
   console.log('Setting up ' + ccy + ' range order');
@@ -29,12 +29,12 @@ export async function rangeOrder(ccy: Asset, amount: number) {
     chainflip,
     (event) =>
       event.data.lp === lp.address &&
-      event.data.pairAsset.toUpperCase() === ccy &&
+      event.data.baseAsset.toUpperCase() === ccy &&
       event.data.id === String(0),
   );
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
-      .setRangeOrder('usdc', ccy.toLowerCase(), 0, [-887272, 887272], {
+      .setRangeOrder(ccy.toLowerCase(), 'usdc', 0, [-887272, 887272], {
         Liquidity: { Liquidity: liquidity },
       })
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));

@@ -8,6 +8,11 @@ mod old {
 	use super::*;
 	use sp_std::collections::btree_map::BTreeMap;
 
+	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
+	pub struct CanonicalAssetPair {
+		assets: SideMap<Asset>,
+	}
+
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
@@ -21,7 +26,6 @@ mod old {
 		pub pool_state: cf_amm::v1::PoolState<(T::AccountId, OrderId)>,
 	}
 
-	#[cfg(feature = "try-runtime")]
 	#[frame_support::storage_alias]
 	pub type Pools<T: Config> =
 		StorageMap<Pallet<T>, Twox64Concat, CanonicalAssetPair, Pool<T>, OptionQuery>;
@@ -29,14 +33,20 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		Pools::<T>::translate::<old::Pool<T>, _>(|_key, old_pool: old::Pool<T>| {
-			Some(Pool::<T> {
-				range_orders_cache: old_pool.range_orders_cache,
-				limit_orders_cache: old_pool.limit_orders_cache,
-				pool_state: old_pool.pool_state.into(),
-			})
-		});
 
+		for (key, pool) in old::Pools<T>::iter().filter_map(|(old_key, old_pool)| {
+			Some((
+				AssetPair::new(old_key.assets[Side::Zero], old_key.assets[Side::One])?,
+				Pool::<T> {
+					range_orders_cache: old_pool.range_orders_cache,
+					limit_orders_cache: old_pool.limit_orders_cache.into(),
+					pool_state: old_pool.pool_state.into(),
+				}
+			))
+		}) {
+			Pools::<T>::insert(key, pool);
+		}
+		
 		Weight::zero()
 	}
 

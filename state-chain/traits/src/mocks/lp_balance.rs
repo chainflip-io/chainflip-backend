@@ -16,7 +16,7 @@ impl LpBalanceApi for MockBalance {
 	fn ensure_has_refund_address_for_pair(
 		_who: &Self::AccountId,
 		_base_asset: Asset,
-		_pair_asset: Asset,
+		_quote_asset: Asset,
 	) -> DispatchResult {
 		Ok(())
 	}

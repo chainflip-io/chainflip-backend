@@ -1,5 +1,5 @@
 use cf_amm::{
-	common::{Amount, Price, Tick},
+	common::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -20,7 +20,9 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_pools::{AssetsMap, PoolInfo, PoolLiquidity, UnidirectionalPoolDepth};
+use pallet_cf_pools::{
+	AskBidMap, AssetsMap, PoolInfo, PoolLiquidity, PoolPrice, UnidirectionalPoolDepth,
+};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -236,12 +238,12 @@ impl From<Asset> for RpcAsset {
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
 	pub pool_info: PoolInfo,
-	pub pair_asset: RpcAsset,
+	pub quote_asset: RpcAsset,
 }
 
 impl From<PoolInfo> for RpcPoolInfo {
 	fn from(pool_info: PoolInfo) -> Self {
-		Self { pool_info, pair_asset: Asset::Usdc.into() }
+		Self { pool_info, quote_asset: Asset::Usdc.into() }
 	}
 }
 
@@ -279,9 +281,9 @@ pub struct RpcEnvironment {
 pub struct LimitOrder {
 	id: NumberOrHex,
 	tick: Tick,
-	amount: NumberOrHex,
+	sell_amount: NumberOrHex,
 	fees_earned: NumberOrHex,
-	original_amount: NumberOrHex,
+	original_sell_amount: NumberOrHex,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -295,7 +297,7 @@ pub struct RangeOrder {
 #[derive(Serialize, Deserialize)]
 pub struct PoolOrders {
 	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AssetsMap<Vec<LimitOrder>>,
+	pub limit_orders: AskBidMap<Vec<LimitOrder>>,
 	/// Range orders can be both buy and/or sell therefore they not split. The current range order
 	/// price determines if they are buy and/or sell.
 	pub range_orders: Vec<RangeOrder>,
@@ -427,7 +429,7 @@ pub trait CustomApi {
 		from_asset: RpcAsset,
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Price>>;
+	) -> RpcResult<Option<PoolPrice>>;
 	#[method(name = "swap_rate")]
 	fn cf_pool_swap_rate(
 		&self,
@@ -440,10 +442,10 @@ pub trait CustomApi {
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	) -> RpcResult<AssetsMap<Amount>>;
 	#[method(name = "pool_orderbook")]
 	fn cf_pool_orderbook(
 		&self,
@@ -456,41 +458,41 @@ pub trait CustomApi {
 	fn cf_pool_info(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolInfo>>;
+	) -> RpcResult<PoolInfo>;
 	#[method(name = "pool_depth")]
 	fn cf_pool_depth(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>>;
+	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>>;
 	#[method(name = "pool_liquidity")]
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolLiquidity>>;
+	) -> RpcResult<PoolLiquidity>;
 	#[method(name = "pool_orders")]
 	fn cf_pool_orders(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		lp: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolOrders>>;
+	) -> RpcResult<PoolOrders>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>>;
+	) -> RpcResult<AssetsMap<Amount>>;
 	#[method(name = "funding_environment")]
 	fn cf_funding_environment(
 		&self,
@@ -520,7 +522,7 @@ pub trait CustomApi {
 	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount>;
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
-	#[subscription(name = "subscribe_pool_price", item = Price)]
+	#[subscription(name = "subscribe_pool_price", item = PoolPrice)]
 	fn cf_subscribe_pool_price(&self, from_asset: RpcAsset, to_asset: RpcAsset);
 
 	#[subscription(name = "subscribe_prewitness_swaps", item = Vec<AssetAmount>)]
@@ -841,7 +843,7 @@ where
 		from_asset: RpcAsset,
 		to_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Price>> {
+	) -> RpcResult<Option<PoolPrice>> {
 		self.client
 			.runtime_api()
 			.cf_pool_price(self.unwrap_or_best(at), from_asset.try_into()?, to_asset.try_into()?)
@@ -873,78 +875,76 @@ where
 					.map_err(|str| anyhow::anyhow!(str))?,
 			)
 			.map_err(to_rpc_error)
-			.and_then(|r| {
-				r.ok_or(jsonrpsee::core::Error::from(anyhow::anyhow!("Unable to process swap.")))
-			})
+			.and_then(|result| result.map_err(map_dispatch_error))
 			.map(RpcSwapOutput::from)
 	}
 
 	fn cf_pool_info(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolInfo>> {
+	) -> RpcResult<PoolInfo> {
 		self.client
 			.runtime_api()
-			.cf_pool_info(self.unwrap_or_best(at), base_asset.try_into()?, pair_asset.try_into()?)
+			.cf_pool_info(self.unwrap_or_best(at), base_asset.try_into()?, quote_asset.try_into()?)
 			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_depth(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<UnidirectionalPoolDepth>>> {
+	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>> {
 		self.client
 			.runtime_api()
 			.cf_pool_depth(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				tick_range,
 			)
-			.map_err(to_rpc_error)?
-			.transpose()
-			.map_err(map_dispatch_error)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_liquidity(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolLiquidity>> {
+	) -> RpcResult<PoolLiquidity> {
 		self.client
 			.runtime_api()
 			.cf_pool_liquidity(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 			)
 			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<cf_amm::common::Tick>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>> {
+	) -> RpcResult<AssetsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_required_asset_ratio_for_range_order(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				tick_range,
 			)
-			.map_err(to_rpc_error)?
-			.transpose()
-			.map_err(map_dispatch_error)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_orderbook(
@@ -969,69 +969,70 @@ where
 	fn cf_pool_orders(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		lp: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<PoolOrders>> {
+	) -> RpcResult<PoolOrders> {
 		self.client
 			.runtime_api()
 			.cf_pool_orders(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				lp,
 			)
-			.map(|option_pool_orders| {
-				option_pool_orders.map(|pool_orders| PoolOrders {
-					limit_orders: pool_orders.limit_orders.map(|limit_orders| {
-						limit_orders
-							.into_iter()
-							.map(|limit_order| LimitOrder {
-								id: limit_order.id.into(),
-								tick: limit_order.tick,
-								amount: limit_order.amount.into(),
-								fees_earned: limit_order.fees_earned.into(),
-								original_amount: limit_order.original_amount.into(),
-							})
-							.collect()
-					}),
-					range_orders: pool_orders
-						.range_orders
-						.into_iter()
-						.map(|range_order| RangeOrder {
-							id: range_order.id.into(),
-							range: range_order.range,
-							liquidity: range_order.liquidity.into(),
-							fees_earned: range_order
-								.fees_earned
-								.map(|fees_earned| fees_earned.into()),
-						})
-						.collect(),
-				})
-			})
 			.map_err(to_rpc_error)
+			.and_then(|result| {
+				result
+					.map(|pool_orders| PoolOrders {
+						limit_orders: pool_orders.limit_orders.map(|limit_orders| {
+							limit_orders
+								.into_iter()
+								.map(|limit_order| LimitOrder {
+									id: limit_order.id.into(),
+									tick: limit_order.tick,
+									sell_amount: limit_order.sell_amount.into(),
+									fees_earned: limit_order.fees_earned.into(),
+									original_sell_amount: limit_order.original_sell_amount.into(),
+								})
+								.collect()
+						}),
+						range_orders: pool_orders
+							.range_orders
+							.into_iter()
+							.map(|range_order| RangeOrder {
+								id: range_order.id.into(),
+								range: range_order.range,
+								liquidity: range_order.liquidity.into(),
+								fees_earned: range_order
+									.fees_earned
+									.map(|fees_earned| fees_earned.into()),
+							})
+							.collect(),
+					})
+					.map_err(map_dispatch_error)
+			})
 	}
 
 	fn cf_pool_range_order_liquidity_value(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<AssetsMap<Amount>>> {
+	) -> RpcResult<AssetsMap<Amount>> {
 		self.client
 			.runtime_api()
 			.cf_pool_range_order_liquidity_value(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				tick_range,
 				liquidity,
 			)
-			.map_err(to_rpc_error)?
-			.transpose()
-			.map_err(map_dispatch_error)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_ingress_egress_environment(
@@ -1104,7 +1105,7 @@ where
 				continue
 			}
 
-			let info = self.cf_pool_info(asset.into(), Asset::Usdc.into(), at)?.map(Into::into);
+			let info = self.cf_pool_info(asset.into(), Asset::Usdc.into(), at).ok().map(Into::into);
 
 			fees.entry(asset.into()).or_insert_with(HashMap::new).insert(asset, info);
 		}
