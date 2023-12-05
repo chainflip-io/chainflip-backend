@@ -4,10 +4,11 @@ use crate::network;
 use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
+use frame_support::assert_noop;
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers, VanityNames};
-use state_chain_runtime::{Reputation, Runtime, Validator};
+use state_chain_runtime::{Funding, Reputation, Runtime, Validator};
 
 #[test]
 fn account_deletion_removes_relevant_storage_items() {
@@ -46,6 +47,18 @@ fn account_deletion_removes_relevant_storage_items() {
 		assert_eq!(*vanity_names.get(&backup_node).unwrap(), elon_vanity_name.as_bytes().to_vec());
 
 		// Redeem all
+		assert_noop!(
+			Funding::redeem(
+				state_chain_runtime::RuntimeOrigin::signed(backup_node.clone()),
+				RedemptionAmount::Max,
+				EthereumAddress::repeat_byte(0x22),
+				Default::default()
+			),
+			pallet_cf_funding::Error::<Runtime>::AccountReferencesOutstanding
+		);
+
+		network::Cli::deregister_as_validator(&backup_node);
+
 		network::Cli::redeem(
 			&backup_node,
 			RedemptionAmount::Max,

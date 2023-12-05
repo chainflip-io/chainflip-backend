@@ -351,6 +351,8 @@ pub mod pallet {
 		NotEnoughFunds,
 		/// Rotations are currently disabled through SafeMode.
 		RotationsDisabled,
+		/// Validators cannot deregister until they are no longer key holders.
+		StillKeyHolder,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -764,6 +766,33 @@ pub mod pallet {
 				);
 			}
 			T::AccountRoleRegistry::register_as_validator(&account_id)
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
+		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			ensure!(
+				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
+					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
+				Error::<T>::StillKeyHolder
+			);
+
+			<pallet_session::Pallet<T>>::purge_keys(origin)?;
+
+			if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
+				MappedPeers::<T>::remove(peer_id);
+				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
+			}
+
+			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
+
+			Ok(())
 		}
 	}
 
@@ -1336,37 +1365,6 @@ impl<T: Config> EstimateNextSessionRotation<BlockNumberFor<T>> for Pallet<T> {
 	}
 }
 
-pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
-
-/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the
-/// account by burning it.
-impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
-	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
-			MappedPeers::<T>::remove(peer_id);
-
-			let validator_id = <ValidatorIdOf<T> as IsType<
-				<T as frame_system::Config>::AccountId,
-			>>::from_ref(account_id);
-
-			T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
-
-			// TODO: consider removing this
-			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
-		}
-	}
-}
-
-pub struct DeleteVanityName<T: Config>(PhantomData<T>);
-
-impl<T: Config> OnKilledAccount<T::AccountId> for DeleteVanityName<T> {
-	fn on_killed_account(account_id: &T::AccountId) {
-		let mut vanity_names = VanityNames::<T>::get();
-		vanity_names.remove(account_id);
-		VanityNames::<T>::put(vanity_names);
-	}
-}
-
 pub struct PeerMapping<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for PeerMapping<T> {
@@ -1425,6 +1423,14 @@ impl<T: Config> AuthoritiesCfeVersions for Pallet<T> {
 				.count() as u32,
 			authorities_count,
 		)
+	}
+}
+
+pub struct RemoveVanityNames<T>(PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for RemoveVanityNames<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = VanityNames::<T>::try_mutate(|vanity_names| vanity_names.remove(who).ok_or(()));
 	}
 }
 

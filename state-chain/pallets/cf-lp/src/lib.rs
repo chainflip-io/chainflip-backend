@@ -94,6 +94,10 @@ pub mod pallet {
 		LiquidityDepositDisabled,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
+		/// The account still has open orders remaining.
+		OpenOrdersRemaining,
+		/// The account still has funds remaining in the free balances.
+		FundsRemaining,
 	}
 
 	#[pallet::event]
@@ -295,6 +299,33 @@ pub mod pallet {
 				chain: decoded_address.chain(),
 				address: decoded_address,
 			});
+			Ok(())
+		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
+		pub fn deregister_lp_account(who: OriginFor<T>, force: bool) -> DispatchResult {
+			const STABLE_ASSET: Asset = Asset::Usdc;
+			let account_id = ensure_signed(who)?;
+
+			ensure!(
+				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
+					T::PoolApi::open_order_count(&account_id, asset, STABLE_ASSET)
+						.unwrap_or_default() == 0
+				}),
+				Error::<T>::OpenOrdersRemaining
+			);
+			ensure!(
+				force || Self::asset_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
+				Error::<T>::FundsRemaining
+			);
+
+			let _ = FreeBalances::<T>::clear_prefix(&account_id, u32::MAX, None);
+			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
+			HistoricalEarnedFees::<T>::remove(&account_id);
+
+			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
+
 			Ok(())
 		}
 	}

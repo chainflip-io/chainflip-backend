@@ -26,6 +26,18 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 		Ok(())
 	}
 
+	fn deregister_account_role(
+		account_id: &<T as Config>::AccountId,
+		role: AccountRole,
+	) -> sp_runtime::DispatchResult {
+		match <Self as MockPalletStorage>::take_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
+		{
+			Some(r) if r == role => Ok(()),
+			Some(_) => Err("Account role mismatch".into()),
+			_ => Err("Account not registered".into()),
+		}
+	}
+
 	fn has_account_role(who: &<T as Config>::AccountId, role: AccountRole) -> bool {
 		<Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, who)
 			.unwrap_or(AccountRole::Unregistered) ==

@@ -345,5 +345,19 @@ mod benchmarks {
 		));
 	}
 
+	#[benchmark]
+	fn deregister_as_validator() {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		let _ = Pallet::<T>::register_as_validator(RawOrigin::Signed(caller.clone()).into());
+
+		#[extrinsic_call]
+		deregister_as_validator(RawOrigin::Signed(caller.clone()));
+
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::ensure_validator(
+			RawOrigin::Signed(caller).into()
+		));
+	}
+
 	// NOTE: Test suite not included due to missing Funding and Reputation pallet in `mock::Test`.
 }

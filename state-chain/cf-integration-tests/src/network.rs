@@ -12,7 +12,9 @@ use codec::{Decode, Encode};
 use frame_support::{
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
-	traits::{IntegrityTest, OnFinalize, OnIdle, OnNewAccount, UnfilteredDispatchable},
+	traits::{
+		IntegrityTest, OnFinalize, OnIdle, OnNewAccount, OriginTrait, UnfilteredDispatchable,
+	},
 };
 use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use sp_consensus_aura::SlotDuration;
@@ -132,10 +134,7 @@ impl Cli {
 	}
 
 	pub fn register_as_validator(account: &NodeId) {
-		assert_ok!(<AccountRoles as AccountRoleRegistry<Runtime>>::register_account_role(
-			account,
-			AccountRole::Validator
-		));
+		assert_ok!(Validator::register_as_validator(OriginTrait::signed(account.clone()),));
 	}
 
 	pub fn rotate_keys(account: &NodeId) {
@@ -146,8 +145,8 @@ impl Cli {
 		));
 	}
 
-	pub fn purge_keys(account: &NodeId) {
-		assert_ok!(Validator::purge_keys(RuntimeOrigin::signed(account.clone())));
+	pub fn deregister_as_validator(account: &NodeId) {
+		assert_ok!(Validator::deregister_as_validator(OriginTrait::signed(account.clone()),));
 	}
 }
 

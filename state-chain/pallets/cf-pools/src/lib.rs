@@ -1057,6 +1057,17 @@ impl<T: Config> PoolApi for Pallet<T> {
 	fn sweep(who: &T::AccountId) -> DispatchResult {
 		Self::inner_sweep(who)
 	}
+
+	fn open_order_count(
+		who: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<u32, DispatchError> {
+		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()))?;
+		Ok(pool_orders.limit_orders.asks.len() as u32 +
+			pool_orders.limit_orders.bids.len() as u32 +
+			pool_orders.range_orders.len() as u32)
+	}
 }
 
 #[derive(

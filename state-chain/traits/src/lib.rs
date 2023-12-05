@@ -713,6 +713,8 @@ pub trait DepositApi<C: Chain> {
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
+	fn deregister_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
 	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 
 	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
@@ -725,6 +727,18 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_role(account_id, AccountRole::Validator)
+	}
+
+	fn deregister_as_broker(account_id: &T::AccountId) -> DispatchResult {
+		Self::deregister_account_role(account_id, AccountRole::Broker)
+	}
+
+	fn deregister_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		Self::deregister_account_role(account_id, AccountRole::LiquidityProvider)
+	}
+
+	fn deregister_as_validator(account_id: &T::AccountId) -> DispatchResult {
+		Self::deregister_account_role(account_id, AccountRole::Validator)
 	}
 
 	fn ensure_account_role(
@@ -743,6 +757,7 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_account(account_id: &T::AccountId, role: AccountRole);
 

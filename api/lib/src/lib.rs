@@ -204,7 +204,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 			AccountRole::LiquidityProvider =>
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-			AccountRole::Unregistered => bail!("Cannot register account role None"),
+			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
 		};
 
 		let (tx_hash, ..) = self

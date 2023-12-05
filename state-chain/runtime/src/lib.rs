@@ -479,12 +479,11 @@ impl frame_system::Config for Runtime {
 	/// What to do if an account is fully reaped from the system.
 	type OnKilledAccount = (
 		pallet_cf_flip::BurnFlipAccount<Self>,
-		pallet_cf_validator::DeletePeerMapping<Self>,
-		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
 		Funding,
 		AccountRoles,
 		Reputation,
+		pallet_cf_validator::RemoveVanityNames<Self>,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();

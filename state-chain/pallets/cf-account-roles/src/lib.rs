@@ -53,6 +53,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		AccountRoleRegistered { account_id: T::AccountId, role: AccountRole },
+		AccountRoleDeregistered { account_id: T::AccountId, role: AccountRole },
 	}
 
 	#[pallet::error]
@@ -153,16 +154,45 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 	///
 	/// Fails if an account type has already been registered for this account id.
 	/// Or if Swapping is not yet enabled.
+	#[frame_support::transactional]
 	fn register_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
+		<frame_system::Pallet<T>>::inc_consumers(account_id)?;
 		match account_role {
 			AccountRole::Broker | AccountRole::LiquidityProvider
 				if !SwappingEnabled::<T>::get() =>
 				Err(Error::<T>::SwappingDisabled.into()),
 			_ => Self::register_account_role_unprotected(account_id, account_role),
-		}
+		}?;
+
+		Ok(())
+	}
+
+	/// Deregister the account role for some account id.
+	///
+	/// This is required in order to be able to redeem all funds. Callers should ensure that any
+	/// state associated with the account is cleaned up before calling this function. For example:
+	/// LPs should withdraw all liquidity.
+	#[frame_support::transactional]
+	fn deregister_account_role(
+		account_id: &T::AccountId,
+		account_role: AccountRole,
+	) -> DispatchResult {
+		AccountRoles::<T>::try_mutate(account_id, |role| {
+			role.replace(AccountRole::Unregistered)
+				.filter(|r| *r == account_role)
+				.ok_or(Error::<T>::UnknownAccount)
+		})?;
+		<frame_system::Pallet<T>>::dec_consumers(account_id);
+
+		Self::deposit_event(Event::AccountRoleDeregistered {
+			account_id: account_id.clone(),
+			role: account_role,
+		});
+
+		Ok(())
 	}
 
 	fn has_account_role(id: &T::AccountId, role: AccountRole) -> bool {

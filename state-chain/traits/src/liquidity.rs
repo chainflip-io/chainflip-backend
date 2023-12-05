@@ -70,6 +70,13 @@ pub trait PoolApi {
 	/// Sweep all earnings of an LP into their free balance (Should be called before any assets are
 	/// debited from their free balance)
 	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
+
+	///
+	fn open_order_count(
+		who: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<u32, DispatchError>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -77,6 +84,14 @@ impl<T: frame_system::Config> PoolApi for T {
 
 	fn sweep(_who: &Self::AccountId) -> Result<(), DispatchError> {
 		Ok(())
+	}
+
+	fn open_order_count(
+		_who: &Self::AccountId,
+		_base_asset: Asset,
+		_quote_asset: Asset,
+	) -> Result<u32, DispatchError> {
+		Ok(0)
 	}
 }
 
