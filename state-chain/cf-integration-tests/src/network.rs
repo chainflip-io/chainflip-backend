@@ -8,7 +8,7 @@ use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest};
 use chainflip_node::test_account_from_seed;
-use codec::Encode;
+use codec::{Decode, Encode};
 use frame_support::{
 	inherent::ProvideInherent,
 	pallet_prelude::InherentData,
@@ -136,6 +136,18 @@ impl Cli {
 			account,
 			AccountRole::Validator
 		));
+	}
+
+	pub fn rotate_keys(account: &NodeId) {
+		assert_ok!(Validator::set_keys(
+			RuntimeOrigin::signed(account.clone()),
+			SessionKeys::decode(&mut &[0xcf; 64][..]).unwrap(),
+			Default::default()
+		));
+	}
+
+	pub fn purge_keys(account: &NodeId) {
+		assert_ok!(Validator::purge_keys(RuntimeOrigin::signed(account.clone())));
 	}
 }
 

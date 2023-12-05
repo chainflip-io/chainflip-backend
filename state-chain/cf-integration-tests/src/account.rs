@@ -38,6 +38,7 @@ fn account_deletion_removes_relevant_storage_items() {
 		Reputation::heartbeat(state_chain_runtime::RuntimeOrigin::signed(backup_node.clone()))
 			.unwrap();
 		assert!(Reputations::<Runtime>::contains_key(backup_node.clone()));
+		network::Cli::rotate_keys(&backup_node);
 
 		let elon_vanity_name = "ElonShibaMoonInu";
 		network::Cli::set_vanity_name(&backup_node, elon_vanity_name);
