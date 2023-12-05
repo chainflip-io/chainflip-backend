@@ -328,6 +328,7 @@ fn test_round_f64() {
 	assert_eq!(round_f64(1.23456789, 1), 1.2);
 	assert_eq!(round_f64(1.23456789, 2), 1.23);
 	assert_eq!(round_f64(1.23456789, 6), 1.234568);
+	assert_eq!(round_f64(1.22223333, 6), 1.222233);
 	assert_eq!(round_f64(1.23, 6), 1.23);
 }
 
