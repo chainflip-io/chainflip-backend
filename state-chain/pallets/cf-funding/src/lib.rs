@@ -294,6 +294,9 @@ pub mod pallet {
 
 		/// The account is already bound to an executor address.
 		ExecutorAddressAlreadyBound,
+
+		/// The account cannot be reaped because it still has references outstanding.
+		AccountReferencesOutstanding,
 	}
 
 	#[pallet::call]
@@ -456,6 +459,13 @@ pub mod pallet {
 			// Update the account balance.
 			if redeem_amount > Zero::zero() {
 				T::Flip::try_initiate_redemption(&account_id, redeem_amount)?;
+				if T::Flip::balance(&account_id).is_zero() {
+					// Check if this account can be reaped.
+					ensure!(
+						frame_system::Pallet::<T>::can_dec_provider(&account_id),
+						Error::<T>::AccountReferencesOutstanding
+					);
+				}
 
 				// Send the transaction.
 				let contract_expiry =
