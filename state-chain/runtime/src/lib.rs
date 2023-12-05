@@ -834,7 +834,7 @@ pub type Executive = frame_executive::Executive<
 type PalletMigrations = (
 	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
-	pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
