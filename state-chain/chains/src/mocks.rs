@@ -14,11 +14,17 @@ pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
 
+#[derive(Clone)]
+pub enum ChainChoice {
+	Ethereum,
+	Polkadot,
+	Bitcoin,
+}
+
 thread_local! {
 	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
-	static MOCK_OPTIMISTIC_ACTIVATION: RefCell<bool> = RefCell::new(false);
-	static MOCK_SIGN_WITH_SPECIFIC_KEY: RefCell<bool> = RefCell::new(false);
 	static MOCK_VALID_METADATA: RefCell<bool> = RefCell::new(true);
+	static MOCK_BROADCAST_BARRIERS: RefCell<ChainChoice> = RefCell::new(ChainChoice::Ethereum);
 }
 
 pub struct MockKeyHandoverIsRequired;
@@ -35,31 +41,17 @@ impl Get<bool> for MockKeyHandoverIsRequired {
 	}
 }
 
-pub struct MockOptimisticActivation;
+pub struct MockBroadcastBarriers;
 
-impl MockOptimisticActivation {
-	pub fn set(value: bool) {
-		MOCK_OPTIMISTIC_ACTIVATION.with(|v| *v.borrow_mut() = value);
+impl MockBroadcastBarriers {
+	pub fn set(value: ChainChoice) {
+		MOCK_BROADCAST_BARRIERS.with(|v| *v.borrow_mut() = value);
 	}
 }
 
-impl Get<bool> for MockOptimisticActivation {
-	fn get() -> bool {
-		MOCK_OPTIMISTIC_ACTIVATION.with(|v| *v.borrow())
-	}
-}
-
-pub struct MockFixedKeySigningRequests;
-
-impl MockFixedKeySigningRequests {
-	pub fn set(value: bool) {
-		MOCK_SIGN_WITH_SPECIFIC_KEY.with(|v| *v.borrow_mut() = value);
-	}
-}
-
-impl Get<bool> for MockFixedKeySigningRequests {
-	fn get() -> bool {
-		MOCK_SIGN_WITH_SPECIFIC_KEY.with(|v| *v.borrow())
+impl Get<ChainChoice> for MockBroadcastBarriers {
+	fn get() -> ChainChoice {
+		MOCK_BROADCAST_BARRIERS.with(|v| (*v.borrow()).clone())
 	}
 }
 
@@ -260,16 +252,23 @@ impl ChainCrypto for MockEthereumChainCrypto {
 		new_key != &BAD_AGG_KEY_POST_HANDOVER
 	}
 
-	fn sign_with_specific_key() -> bool {
-		MockFixedKeySigningRequests::get()
-	}
-
-	fn optimistic_activation() -> bool {
-		MockOptimisticActivation::get()
-	}
-
 	fn key_handover_is_required() -> bool {
 		MockKeyHandoverIsRequired::get()
+	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		match MockBroadcastBarriers::get() {
+			ChainChoice::Ethereum =>
+				if rotation_broadcast_id > 1 {
+					vec![rotation_broadcast_id - 1, rotation_broadcast_id]
+				} else {
+					vec![rotation_broadcast_id]
+				},
+			ChainChoice::Polkadot => vec![rotation_broadcast_id],
+			ChainChoice::Bitcoin => vec![],
+		}
 	}
 }
 
@@ -334,14 +333,14 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 }
 
 thread_local! {
-	pub static IS_VALID_BROADCAST: std::cell::RefCell<bool> = RefCell::new(true);
+	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = RefCell::new(false);
 }
 
 pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
 
 impl<C, Call> MockTransactionBuilder<C, Call> {
-	pub fn set_invalid_for_rebroadcast() {
-		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow_mut() = false)
+	pub fn set_requires_refresh() {
+		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow_mut() = true)
 	}
 }
 
@@ -356,12 +355,10 @@ impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		_call: &Call,
 		_payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		_signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool {
-		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
+		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow())
 	}
 }

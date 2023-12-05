@@ -53,4 +53,10 @@ impl ChainCrypto for NoneChainCrypto {
 	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
 		unimplemented!()
 	}
+
+	fn maybe_broadcast_barriers_on_rotation(
+		_rotation_broadcast_id: BroadcastId,
+	) -> Vec<BroadcastId> {
+		unimplemented!()
+	}
 }

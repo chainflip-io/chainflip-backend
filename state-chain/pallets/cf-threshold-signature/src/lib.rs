@@ -57,9 +57,6 @@ pub enum PalletOffence {
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum RequestType<Key, Participants> {
-	/// Will use the current key and current authority set (which might change between retries).
-	/// This signing request will be retried until success.
-	CurrentKey,
 	/// Uses the provided key and selects new participants from the provided epoch.
 	/// This signing request will be retried until success.
 	SpecificKey(Key, EpochIndex),
@@ -365,11 +362,6 @@ pub mod pallet {
 			request_id: RequestId,
 			attempt_count: AttemptCount,
 		},
-		/// We cannot sign because the key is unavailable.
-		CurrentKeyUnavailable {
-			request_id: RequestId,
-			attempt_count: AttemptCount,
-		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
 			new_timeout: BlockNumberFor<T>,
@@ -422,11 +414,7 @@ pub mod pallet {
 								request_id,
 								attempt_count.wrapping_add(1),
 								payload,
-								if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
-									RequestType::SpecificKey(key, epoch)
-								} else {
-									RequestType::CurrentKey
-								},
+								RequestType::SpecificKey(key, epoch),
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
@@ -675,18 +663,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else {
 				(
 					match request_instruction.request_type {
-						RequestType::CurrentKey => T::KeyProvider::active_epoch_key()
-							.and_then(|EpochKey { key_state, key, epoch_index }| {
-								if key_state.is_available_for_request(request_id) {
-									Some((key, epoch_index))
-								} else {
-									None
-								}
-							})
-							.ok_or(Event::<T, I>::CurrentKeyUnavailable {
-								request_id,
-								attempt_count,
-							}),
 						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
 						_ => unreachable!("RequestType::KeygenVerification is handled above"),
 					}
@@ -816,14 +792,11 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> RequestId {
-		let request_type = if <T::TargetChainCrypto as ChainCrypto>::sign_with_specific_key() {
-			T::KeyProvider::active_epoch_key().defensive_map_or_else(
-				|| RequestType::CurrentKey,
-				|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
-			)
-		} else {
-			RequestType::CurrentKey
-		};
+		let request_type = T::KeyProvider::active_epoch_key().defensive_map_or_else(
+			|| RequestType::SpecificKey(Default::default(), Default::default()),
+			|EpochKey { key, epoch_index, .. }| RequestType::SpecificKey(key, epoch_index),
+		);
+
 		Self::inner_request_signature(payload, request_type)
 	}
 

@@ -152,38 +152,18 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some(EpochKey { key, key_state, .. }) = Self::active_epoch_key() {
+			if let Some(EpochKey { key, .. }) = Self::active_epoch_key() {
 				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 					Some(key),
 					new_public_key,
 				) {
 					Ok(activation_call) => {
-						let (_, threshold_request_id) =
-							T::Broadcaster::threshold_sign_and_broadcast(activation_call);
-						if <T::Chain as Chain>::ChainCrypto::optimistic_activation() {
-							// Optimistic activation means we don't need to wait for the activation
-							// transaction to succeed before using the new key.
-							Self::activate_new_key(
-								new_public_key,
-								T::ChainTracking::get_block_height(),
-							);
-						} else {
-							debug_assert!(
-								matches!(key_state, KeyState::Unlocked),
-								"Current epoch key must be active to activate next key."
-							);
-							// The key needs to be locked until activation is complete.
-							CurrentVaultEpochAndState::<T, I>::mutate(|epoch_end_key| {
-								epoch_end_key
-									.as_mut()
-									.expect("Checked above at if let Some")
-									.key_state
-									.lock(threshold_request_id)
-							});
-							PendingVaultRotation::<T, I>::put(
-								VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
-							);
-						}
+						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
+
+						Self::activate_new_key(
+							new_public_key,
+							T::ChainTracking::get_block_height(),
+						);
 					},
 					Err(SetAggKeyWithAggKeyError::NotRequired) => {
 						// This can happen if, for example, on a utxo chain there are no funds that

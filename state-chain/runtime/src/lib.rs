@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
+pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
@@ -674,7 +675,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = EthereumVault;
 	type ChainTracking = EthereumChainTracking;
 }
 
@@ -697,7 +697,6 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = PolkadotVault;
 	type ChainTracking = PolkadotChainTracking;
 }
 
@@ -720,7 +719,6 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = BitcoinVault;
 	type ChainTracking = BitcoinChainTracking;
 }
 
@@ -854,6 +852,10 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	migrations::VersionedMigration<
+		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
+		103,
+	>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 

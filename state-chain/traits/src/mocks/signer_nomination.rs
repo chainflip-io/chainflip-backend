@@ -45,6 +45,10 @@ impl MockNominator {
 		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
 	}
 
+	pub fn reset_last_nominee() {
+		LAST_NOMINATED_INDEX.with(|cell| *cell.borrow_mut() = None);
+	}
+
 	pub fn set_nominees(nominees: Option<BTreeSet<u64>>) {
 		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees);
 	}

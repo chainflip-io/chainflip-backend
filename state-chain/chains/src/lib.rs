@@ -5,7 +5,7 @@ use core::{fmt::Display, iter::Step};
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddress};
-use cf_primitives::{AssetAmount, ChannelId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -179,27 +179,17 @@ pub trait ChainCrypto {
 		true
 	}
 
-	/// Determines whether threshold signatures are made with a specific fixed key, or whether the
-	/// key is refreshed if we need to retry the signature.
-	///
-	/// By default, this is true for Utxo-based chains, false otherwise.
-	fn sign_with_specific_key() -> bool {
-		Self::UtxoChain::get()
-	}
-
-	/// Determines whether the chain crypto allows for optimistic activation of new aggregate keys.
-	///
-	/// By default, this is true for Utxo-based chains, false otherwise.
-	fn optimistic_activation() -> bool {
-		Self::UtxoChain::get()
-	}
-
 	/// Determines whether the chain crypto supports key handover.
 	///
 	/// By default, this is true for Utxo-based chains, false otherwise.
 	fn key_handover_is_required() -> bool {
 		Self::UtxoChain::get()
 	}
+
+	/// Provides chain specific functionality for providing the broadcast barriers on rotation tx
+	/// broadcast
+	fn maybe_broadcast_barriers_on_rotation(rotation_broadcast_id: BroadcastId)
+		-> Vec<BroadcastId>;
 }
 
 /// Provides chain-specific replay protection data.
@@ -247,11 +237,9 @@ where
 	fn refresh_unsigned_data(tx: &mut C::Transaction);
 
 	/// Checks if the payload is still valid for the call.
-	fn is_valid_for_rebroadcast(
+	fn requires_signature_refresh(
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		current_key: &<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-		signature: &<<C as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
 	) -> bool;
 
 	/// Calculate the Units of gas that is allowed to make this call.
