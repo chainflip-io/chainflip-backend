@@ -1283,7 +1283,7 @@ fn on_finalize_handles_failed_calls() {
 		// Resign 1 call per block
 		IngressEgress::on_finalize(1);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallCallResigned {
+			crate::Event::<Test>::FailedForeignChainCallResigned {
 				broadcast_id: 13,
 				threshold_signature_id: 2,
 			},
@@ -1304,7 +1304,7 @@ fn on_finalize_handles_failed_calls() {
 		// Resign the 2nd call
 		IngressEgress::on_finalize(2);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallCallResigned {
+			crate::Event::<Test>::FailedForeignChainCallResigned {
 				broadcast_id: 12,
 				threshold_signature_id: 3,
 			},
@@ -1324,7 +1324,7 @@ fn on_finalize_handles_failed_calls() {
 		// Resign the last call
 		IngressEgress::on_finalize(3);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedForeignChainCallCallResigned {
+			crate::Event::<Test>::FailedForeignChainCallResigned {
 				broadcast_id: 1,
 				threshold_signature_id: 4,
 			},

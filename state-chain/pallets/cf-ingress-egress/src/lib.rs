@@ -425,7 +425,7 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 		},
 		/// A failed CCM call has been re-threshold-signed for the current epoch.
-		FailedForeignChainCallCallResigned {
+		FailedForeignChainCallResigned {
 			broadcast_id: BroadcastId,
 			threshold_signature_id: ThresholdSignatureRequestId,
 		},
@@ -501,9 +501,8 @@ pub mod pallet {
 			// Take 1 call per block to avoid weight spike.
 			let current_epoch = T::EpochInfo::epoch_index();
 			if let Some(call) =
-				FailedForeignChainCalls::<T, I>::mutate(current_epoch.saturating_sub(1), |ccms| {
-					ccms.pop()
-				}) {
+				FailedForeignChainCalls::<T, I>::mutate(current_epoch.saturating_sub(1), Vec::pop)
+			{
 				match current_epoch.saturating_sub(call.original_epoch) {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
@@ -517,12 +516,10 @@ pub mod pallet {
 						if let Some(threshold_signature_id) =
 							T::Broadcaster::threshold_resign(call.broadcast_id)
 						{
-							Self::deposit_event(
-								Event::<T, I>::FailedForeignChainCallCallResigned {
-									broadcast_id: call.broadcast_id,
-									threshold_signature_id,
-								},
-							);
+							Self::deposit_event(Event::<T, I>::FailedForeignChainCallResigned {
+								broadcast_id: call.broadcast_id,
+								threshold_signature_id,
+							});
 							FailedForeignChainCalls::<T, I>::append(current_epoch, call);
 						} else {
 							// We are here if the Call needs to be resigned, yet no API call data is
