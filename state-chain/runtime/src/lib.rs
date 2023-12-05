@@ -854,7 +854,7 @@ type PalletMigrations = (
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	migrations::VersionedMigration<
 		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
-		101,
+		103,
 	>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );

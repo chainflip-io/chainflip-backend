@@ -10,8 +10,6 @@ pub mod threshold_signature_callbacks;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
-//const SPEC_VERSION: u32 = 101;
-
 /// A runtime storage migration that will only be applied if the `SPEC_VERSION` matches the
 /// post-upgrade runtime's spec version.
 pub struct VersionedMigration<U, const SPEC_VERSION: u32>(PhantomData<U>);
