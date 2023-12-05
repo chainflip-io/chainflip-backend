@@ -2,8 +2,9 @@ use crate::{Config, Pallet};
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{sp_runtime, sp_runtime::traits::Get};
+#[cfg(feature = "try-runtime")]
+use sp_std::prelude::*;
 
-// Always run this after all others have finished.
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
@@ -31,4 +32,4 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = (VersionUpdate<T>,);
+pub type PalletMigration = ();
