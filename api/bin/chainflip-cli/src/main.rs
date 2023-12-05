@@ -18,7 +18,7 @@ use api::{
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
-use utilities::{clean_hex_address, task_scope::task_scope};
+use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 
 mod settings;
 
@@ -152,7 +152,8 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 	const MAX_DECIMAL_PLACES: u32 = 6;
 	match amount {
 		Some(amount_float) => {
-			let atomic_amount = ((amount_float * 10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
+			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
+				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
 				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
@@ -444,15 +445,13 @@ fn test_flip_to_redemption_amount() {
 		RedemptionAmount::Exact(69420123456000000000000)
 	);
 
-	// specifying more than the allowed precision ignores the extra precision
+	// Specifying more than the allowed precision rounds the result to the allowed precision
 	assert_eq!(
-		flip_to_redemption_amount(Some(69420.123456789)),
-		RedemptionAmount::Exact(69420123456000000000000)
+		flip_to_redemption_amount(Some(6942000.123456789)),
+		RedemptionAmount::Exact(6942000123457000000000000)
 	);
-
-	// very large value, decimal precision holds
 	assert_eq!(
-		flip_to_redemption_amount(Some(69420000.123456789)),
-		RedemptionAmount::Exact(69420000123456000000000000)
+		flip_to_redemption_amount(Some(4206900.1234564321)),
+		RedemptionAmount::Exact(4206900123456000000000000)
 	);
 }
