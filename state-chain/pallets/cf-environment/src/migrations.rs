@@ -1,33 +1,28 @@
-use crate::{Config, Pallet};
+use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
-use frame_support::{sp_runtime, sp_runtime::traits::Get};
-#[cfg(feature = "try-runtime")]
-use sp_std::prelude::*;
+use frame_support::{dispatch::DispatchError, sp_runtime};
 
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		Ok(Default::default())
+	}
+
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		Pallet::<T>::update_current_release_version();
 		frame_support::weights::Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		frame_support::ensure!(
-			crate::CurrentReleaseVersion::<T>::get() < <T as Config>::CurrentReleaseVersion::get(),
-			"Expected the release version to increase."
-		);
-		Ok(Default::default())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		frame_support::ensure!(
 			crate::CurrentReleaseVersion::<T>::get() == <T as Config>::CurrentReleaseVersion::get(),
-			"Expected the release version to be updated."
+			"Expect storage to be the new version after upgrade."
 		);
+
 		Ok(())
 	}
 }
