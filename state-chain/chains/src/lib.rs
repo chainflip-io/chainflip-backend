@@ -298,7 +298,6 @@ pub enum SetAggKeyWithAggKeyError {
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
-#[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	fn new_unsigned(
 		maybe_old_key: Option<<C as ChainCrypto>::AggKey>,
@@ -342,7 +341,6 @@ pub enum AllBatchError {
 	Other,
 }
 
-#[allow(clippy::result_unit_err)]
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
@@ -350,7 +348,6 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	) -> Result<Self, AllBatchError>;
 }
 
-#[allow(clippy::result_unit_err)]
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<C>,
@@ -359,6 +356,10 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
+}
+
+pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
+	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, DispatchError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {

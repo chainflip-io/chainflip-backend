@@ -1275,8 +1275,8 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
-			if EthereumIngressEgress::get_failed_ccm(broadcast_id).is_some() {
+		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
 				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
 					chainflip::EthTransactionBuilder::build_transaction(&api_call)
 				})

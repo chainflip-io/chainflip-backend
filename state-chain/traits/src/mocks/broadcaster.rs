@@ -55,6 +55,17 @@ impl<
 		id
 	}
 
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
+		(
+			<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
+				let v = v.get_or_insert(0);
+				*v += 1;
+				*v
+			}),
+			Self::next_threshold_id(),
+		)
+	}
+
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
 		Some(Self::next_threshold_id())

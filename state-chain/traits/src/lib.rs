@@ -473,6 +473,10 @@ pub trait Broadcaster<C: Chain> {
 	/// Resign a call, and update the signature data storage, but do not broadcast.
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
 
+	/// Request a call to be threshold signed, but do not broadcast.
+	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
+	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
+
 	/// Clean up storage data related to a broadcast ID.
 	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
 }

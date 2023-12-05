@@ -11,6 +11,7 @@ pub mod execute_x_swap_and_call;
 pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
 pub mod set_gov_key_with_agg_key;
+pub mod transfer_fallback;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EvmReplayProtection {

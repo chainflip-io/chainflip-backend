@@ -1,9 +1,8 @@
 use crate::{
 	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets,
-	Event as PalletEvent, FailedCcm, FailedCcms, FailedVaultTransfers, FetchOrTransfer,
+	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	VaultTransfer,
 };
 use cf_chains::{
 	address::AddressConverter, evm::EvmFetchId, mocks::MockEthereum, CcmChannelMetadata,
@@ -1034,25 +1033,31 @@ fn ingress_finalisation_succeeds_after_channel_expired_but_not_recycled() {
 #[test]
 fn can_store_failed_vault_transfers() {
 	new_test_ext().execute_with(|| {
-		let vault_transfer = VaultTransfer::<Ethereum> {
-			asset: eth::Asset::Eth,
-			amount: 1_000_000u128,
-			destination_address: [0xcf; 20].into(),
-		};
+		let epoch = MockEpochInfo::epoch_index();
+		let asset = eth::Asset::Eth;
+		let amount = 1_000_000u128;
+		let destination_address = [0xcf; 20].into();
 
 		assert_ok!(IngressEgress::vault_transfer_failed(
 			RuntimeOrigin::root(),
-			vault_transfer.asset,
-			vault_transfer.amount,
-			vault_transfer.destination_address,
+			asset,
+			amount,
+			destination_address,
 		));
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::VaultTransferFailed {
-			asset: vault_transfer.asset,
-			amount: vault_transfer.amount,
-			destination_address: vault_transfer.destination_address,
-		}));
-		assert_eq!(FailedVaultTransfers::<Test>::get(), vec![vault_transfer]);
+		let broadcast_id = 1;
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			PalletEvent::TransferFallbackRequested {
+				asset,
+				amount,
+				destination_address,
+				broadcast_id,
+			},
+		));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
+		);
 	});
 }
 
@@ -1219,13 +1224,13 @@ fn failed_ccm_is_stored() {
 	new_test_ext().execute_with(|| {
 		let epoch = MockEpochInfo::epoch_index();
 		let broadcast_id = 1;
-		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
 
 		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), broadcast_id,));
 
 		assert_eq!(
-			FailedCcms::<Test>::get(epoch),
-			vec![FailedCcm { broadcast_id, original_epoch: epoch }]
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test>::CcmBroadcastFailed { broadcast_id },
@@ -1234,21 +1239,29 @@ fn failed_ccm_is_stored() {
 }
 
 #[test]
-fn on_finalize_handles_failed_ccms() {
+fn on_finalize_handles_failed_calls() {
 	new_test_ext().execute_with(|| {
 		// Advance to Epoch 1 so the expiry logic start to work.
 		let epoch = 1u32;
 		MockEpochInfo::set_epoch(epoch);
-		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+		let destination_address = [0xcf; 20].into();
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
 
-		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 1,));
-		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 2,));
+		assert_ok!(IngressEgress::vault_transfer_failed(
+			RuntimeOrigin::root(),
+			eth::Asset::Eth,
+			1_000_000,
+			destination_address
+		));
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 12,));
+		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 13,));
 
 		assert_eq!(
-			FailedCcms::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test>::get(epoch),
 			vec![
-				FailedCcm { broadcast_id: 1, original_epoch: epoch },
-				FailedCcm { broadcast_id: 2, original_epoch: epoch }
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }
 			]
 		);
 
@@ -1256,10 +1269,11 @@ fn on_finalize_handles_failed_ccms() {
 		IngressEgress::on_finalize(0);
 
 		assert_eq!(
-			FailedCcms::<Test>::get(epoch),
+			FailedForeignChainCalls::<Test>::get(epoch),
 			vec![
-				FailedCcm { broadcast_id: 1, original_epoch: epoch },
-				FailedCcm { broadcast_id: 2, original_epoch: epoch }
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }
 			]
 		);
 
@@ -1269,56 +1283,95 @@ fn on_finalize_handles_failed_ccms() {
 		// Resign 1 call per block
 		IngressEgress::on_finalize(1);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedCcmCallResigned {
-				broadcast_id: 2,
-				threshold_signature_id: 1,
+			crate::Event::<Test>::FailedForeignChainCallResigned {
+				broadcast_id: 13,
+				threshold_signature_id: 2,
 			},
 		));
-		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(2u32));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(13u32));
 		assert_eq!(
-			FailedCcms::<Test>::get(epoch),
-			vec![FailedCcm { broadcast_id: 1, original_epoch: epoch }]
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+			]
 		);
 		assert_eq!(
-			FailedCcms::<Test>::get(epoch + 1),
-			vec![FailedCcm { broadcast_id: 2, original_epoch: epoch }]
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }]
 		);
 
 		// Resign the 2nd call
 		IngressEgress::on_finalize(2);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedCcmCallResigned {
+			crate::Event::<Test>::FailedForeignChainCallResigned {
+				broadcast_id: 12,
+				threshold_signature_id: 3,
+			},
+		));
+		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(12u32));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch),
+			vec![FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch }]
+		);
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch }
+			]
+		);
+		// Resign the last call
+		IngressEgress::on_finalize(3);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallResigned {
 				broadcast_id: 1,
-				threshold_signature_id: 2,
+				threshold_signature_id: 4,
 			},
 		));
 		assert_eq!(MockEgressBroadcaster::resigned_call(), Some(1u32));
-		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
 		assert_eq!(
-			FailedCcms::<Test>::get(epoch + 1),
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
 			vec![
-				FailedCcm { broadcast_id: 2, original_epoch: epoch },
-				FailedCcm { broadcast_id: 1, original_epoch: epoch }
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 1, original_epoch: epoch }
 			]
 		);
 
 		// Failed calls are removed in the next epoch, 1 at a time.
 		MockEpochInfo::set_epoch(epoch + 2);
-		IngressEgress::on_finalize(3);
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedCcmExpired { broadcast_id: 1 },
-		));
-		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
-		assert_eq!(
-			FailedCcms::<Test>::get(epoch + 1),
-			vec![FailedCcm { broadcast_id: 2, original_epoch: 1 }]
-		);
-
 		IngressEgress::on_finalize(4);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::FailedCcmExpired { broadcast_id: 2 },
+			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 1 },
 		));
-		assert_eq!(FailedCcms::<Test>::get(epoch), vec![]);
-		assert_eq!(FailedCcms::<Test>::get(epoch + 1), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![
+				FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id: 12, original_epoch: epoch }
+			]
+		);
+
+		IngressEgress::on_finalize(5);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 12 },
+		));
+		assert_eq!(
+			FailedForeignChainCalls::<Test>::get(epoch + 1),
+			vec![FailedForeignChainCall { broadcast_id: 13, original_epoch: epoch }]
+		);
+
+		IngressEgress::on_finalize(6);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::FailedForeignChainCallExpired { broadcast_id: 13 },
+		));
+
+		// All calls are culled from storage.
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 1), vec![]);
+		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 2), vec![]);
 	});
 }

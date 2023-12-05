@@ -140,7 +140,7 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
-		fn cf_failed_ccm_call(
+		fn cf_failed_call(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
 	}

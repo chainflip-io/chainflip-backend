@@ -85,18 +85,13 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
-pub struct VaultTransfer<C: Chain> {
-	asset: C::ChainAsset,
-	amount: C::ChainAmount,
-	destination_address: C::ChainAccount,
-}
-
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
-/// Struct that contains information about a CCM transaction that has failed to broadcast.
-/// User can use information stored here to query for relevant information.
+
+/// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
+/// User can use information stored here to query for relevant information to broadcast
+/// the call themselves.
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct FailedCcm {
+pub struct FailedForeignChainCall {
 	/// Broadcast ID used in the broadcast pallet. Use it to query broadcast information,
 	/// such as the threshold signature, the API call etc.
 	pub broadcast_id: BroadcastId,
@@ -107,7 +102,7 @@ pub struct FailedCcm {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::ExecutexSwapAndCall;
+	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use core::marker::PhantomData;
 	use frame_support::{
@@ -272,7 +267,9 @@ pub mod pallet {
 		type CcmHandler: CcmHandler;
 
 		/// The type of the chain-native transaction.
-		type ChainApiCall: AllBatch<Self::TargetChain> + ExecutexSwapAndCall<Self::TargetChain>;
+		type ChainApiCall: AllBatch<Self::TargetChain>
+			+ ExecutexSwapAndCall<Self::TargetChain>
+			+ TransferFallback<Self::TargetChain>;
 
 		/// Get the latest block height of the target chain via Chain Tracking.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>;
@@ -342,23 +339,15 @@ pub mod pallet {
 	pub type DepositChannelLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
-	/// Stores any failed transfers by the Vault contract.
-	/// Without dealing with the underlying reason for the failure, retrying is unlike to succeed.
-	/// Therefore these calls are stored here, until we can react to the reason for failure and
-	/// respond appropriately.
+	/// Stores information about Calls to external chains that have failed to be broadcasted.
+	/// These calls are signed and stored on-chain so that the user can broadcast the call
+	/// themselves. These messages will be re-threshold-signed once during the next epoch, and
+	/// removed from storage in the epoch after that.
+	/// Hashmap: last_signed_epoch -> Vec<FailedForeignChainCall>
 	#[pallet::storage]
-	pub type FailedVaultTransfers<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<VaultTransfer<T::TargetChain>>, ValueQuery>;
-
-	/// Stores information about CCM messages that have failed to be broadcasted.
-	/// User can broadcast the call themselves using the signature stored on the State chain.
-	/// The messages will be re-threshold-signed once during the next epoch, and removed
-	/// from storage in the epoch after that.
-	/// Hashmap: last_signed_epoch -> Vec<FailedCcm>
-	#[pallet::storage]
-	#[pallet::getter(fn failed_ccms)]
-	pub type FailedCcms<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, EpochIndex, Vec<FailedCcm>, ValueQuery>;
+	#[pallet::getter(fn failed_foreign_chain_calls)]
+	pub type FailedForeignChainCalls<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, EpochIndex, Vec<FailedForeignChainCall>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
@@ -420,10 +409,11 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		},
-		VaultTransferFailed {
+		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			destination_address: TargetChainAccount<T, I>,
+			broadcast_id: BroadcastId,
 		},
 		/// The deposit witness was rejected.
 		DepositWitnessRejected {
@@ -435,13 +425,13 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 		},
 		/// A failed CCM call has been re-threshold-signed for the current epoch.
-		FailedCcmCallResigned {
+		FailedForeignChainCallResigned {
 			broadcast_id: BroadcastId,
 			threshold_signature_id: ThresholdSignatureRequestId,
 		},
 		/// A failed CCM has been in the system storage for more than 1 epoch.
 		/// It's broadcast data has been cleaned from storage.
-		FailedCcmExpired {
+		FailedForeignChainCallExpired {
 			broadcast_id: BroadcastId,
 		},
 	}
@@ -507,42 +497,42 @@ pub mod pallet {
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
 
-			// Process failed CCM requires resigning or culling. Take 1 call per block to avoid
-			// spike.
+			// Process failed external chain calls: re-sign or cull storage.
+			// Take 1 call per block to avoid weight spike.
 			let current_epoch = T::EpochInfo::epoch_index();
-			if let Some(ccm) =
-				FailedCcms::<T, I>::mutate(current_epoch.saturating_sub(1), |ccms| ccms.pop())
+			if let Some(call) =
+				FailedForeignChainCalls::<T, I>::mutate(current_epoch.saturating_sub(1), Vec::pop)
 			{
-				match current_epoch.saturating_sub(ccm.original_epoch) {
-					// The CCM message is stale, clean up storage.
+				match current_epoch.saturating_sub(call.original_epoch) {
+					// The call is stale, clean up storage.
 					n if n >= 2 => {
-						T::Broadcaster::clean_up_broadcast_storage(ccm.broadcast_id);
-						Self::deposit_event(Event::<T, I>::FailedCcmExpired {
-							broadcast_id: ccm.broadcast_id,
+						T::Broadcaster::clean_up_broadcast_storage(call.broadcast_id);
+						Self::deposit_event(Event::<T, I>::FailedForeignChainCallExpired {
+							broadcast_id: call.broadcast_id,
 						});
 					},
 					// Previous epoch, signature is invalid. Re-sign and store.
 					n if n == 1 => {
 						if let Some(threshold_signature_id) =
-							T::Broadcaster::threshold_resign(ccm.broadcast_id)
+							T::Broadcaster::threshold_resign(call.broadcast_id)
 						{
-							Self::deposit_event(Event::<T, I>::FailedCcmCallResigned {
-								broadcast_id: ccm.broadcast_id,
+							Self::deposit_event(Event::<T, I>::FailedForeignChainCallResigned {
+								broadcast_id: call.broadcast_id,
 								threshold_signature_id,
 							});
-							FailedCcms::<T, I>::append(current_epoch, ccm);
+							FailedForeignChainCalls::<T, I>::append(current_epoch, call);
 						} else {
-							// We are here if the CCM needs to be resigned, yet no API call data is
+							// We are here if the Call needs to be resigned, yet no API call data is
 							// available to use. In this situation, there's nothing else that can be
 							// done.
-							log::error!("Ccm message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}", ccm.broadcast_id);
+							log::error!("Foreign Chain Call message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}", call.broadcast_id);
 						}
 					},
 					// Current epoch, shouldn't be possible.
 					_ => {
 						log_or_panic!(
-							"Unexpected CCM message for current epoch. Broadcast Id: {:?}",
-							ccm.broadcast_id,
+							"Unexpected Call for the current epoch. Broadcast Id: {:?}",
+							call.broadcast_id,
 						);
 					},
 				}
@@ -669,7 +659,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [on_success](Event::VaultTransferFailed)
+		/// - [on_success](Event::TransferFallbackRequested)
 		#[pallet::weight(T::WeightInfo::vault_transfer_failed())]
 		#[pallet::call_index(4)]
 		pub fn vault_transfer_failed(
@@ -680,17 +670,32 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			FailedVaultTransfers::<T, I>::append(VaultTransfer {
-				asset,
-				amount,
-				destination_address: destination_address.clone(),
-			});
-
-			Self::deposit_event(Event::<T, I>::VaultTransferFailed {
-				asset,
-				amount,
-				destination_address,
-			});
+			let current_epoch = T::EpochInfo::epoch_index();
+			match <T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+				TransferAssetParams { asset, amount, to: destination_address.clone() },
+			) {
+				Ok(api_call) => {
+					let (broadcast_id, _) = T::Broadcaster::threshold_sign(api_call);
+					FailedForeignChainCalls::<T, I>::append(
+						current_epoch,
+						FailedForeignChainCall { broadcast_id, original_epoch: current_epoch },
+					);
+					Self::deposit_event(Event::<T, I>::TransferFallbackRequested {
+						asset,
+						amount,
+						destination_address,
+						broadcast_id,
+					});
+				},
+				// The only way this can fail is if the target chain is unsupported, which should
+				// never happen.
+				Err(_) => {
+					log_or_panic!(
+						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}",
+						asset, amount, destination_address
+					);
+				},
+			};
 			Ok(())
 		}
 
@@ -713,9 +718,9 @@ pub mod pallet {
 
 			// Stores the broadcast ID, so the user can use it to query for
 			// information such as Threshold Signature etc.
-			FailedCcms::<T, I>::append(
+			FailedForeignChainCalls::<T, I>::append(
 				current_epoch,
-				FailedCcm { broadcast_id, original_epoch: current_epoch },
+				FailedForeignChainCall { broadcast_id, original_epoch: current_epoch },
 			);
 
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
@@ -1070,9 +1075,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((channel_id, deposit_address, expiry_height))
 	}
 
-	pub fn get_failed_ccm(broadcast_id: BroadcastId) -> Option<FailedCcm> {
+	pub fn get_failed_call(broadcast_id: BroadcastId) -> Option<FailedForeignChainCall> {
 		let epoch = T::EpochInfo::epoch_index();
-		FailedCcms::<T, I>::get(epoch)
+		FailedForeignChainCalls::<T, I>::get(epoch)
 			.iter()
 			.find(|ccm| ccm.broadcast_id == broadcast_id)
 			.cloned()

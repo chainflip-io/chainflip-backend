@@ -123,6 +123,10 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
 	/// Clean up storage data related to a broadcast ID.
 	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
 		unimplemented!()

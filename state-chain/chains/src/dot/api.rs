@@ -116,6 +116,15 @@ where
 	}
 }
 
+impl<E> TransferFallback<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	fn new_unsigned(_transfer_param: TransferAssetParams<Polkadot>) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("TransferFallback is not supported for the Polkadot chain."))
+	}
+}
+
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {
