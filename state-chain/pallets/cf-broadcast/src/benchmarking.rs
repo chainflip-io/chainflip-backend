@@ -115,6 +115,7 @@ benchmarks_instance_pallet! {
 			broadcast_id,
 			attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
 		};
+		ThresholdSignatureData::<T, I>::insert(broadcast_id, (signed_api_call, ThresholdSignatureFor::<T, I>::benchmark_value()));
 
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
 
