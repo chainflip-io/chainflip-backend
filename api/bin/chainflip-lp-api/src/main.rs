@@ -12,10 +12,10 @@ use chainflip_api::{
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
-		AccountRole, Asset, ForeignChain, Hash,
+		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	OperatorApi, StateChainApi,
+	EthereumAddress, OperatorApi, StateChainApi,
 };
 use clap::Parser;
 use custom_rpc::RpcAsset;
@@ -162,6 +162,14 @@ pub trait Rpc {
 
 	#[method(name = "get_open_swap_channels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, AnyhowRpcError>;
+
+	#[method(name = "request_redemption")]
+	async fn request_redemption(
+		&self,
+		redeem_address: EthereumAddress,
+		exact_amount: Option<NumberOrHex>,
+		executor_address: Option<EthereumAddress>,
+	) -> Result<Hash, AnyhowRpcError>;
 }
 
 pub struct RpcServerImpl {
@@ -343,6 +351,25 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Polkadot>(None),
 		)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
+	}
+
+	async fn request_redemption(
+		&self,
+		redeem_address: EthereumAddress,
+		exact_amount: Option<NumberOrHex>,
+		executor_address: Option<EthereumAddress>,
+	) -> Result<Hash, AnyhowRpcError> {
+		let redeem_amount = if let Some(number_or_hex) = exact_amount {
+			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex)?)
+		} else {
+			RedemptionAmount::Max
+		};
+
+		Ok(self
+			.api
+			.operator_api()
+			.request_redemption(redeem_amount, redeem_address, executor_address)
+			.await?)
 	}
 }
 
