@@ -1,27 +1,27 @@
 #!/bin/sh
 
-echo advance chain on main node
-for i in `seq 8`; do
+# This executes a Bitcoin reorg. It takes the depth of the reorg as a parameter. For this
+# command to work, you need to execute "prepare_reorg.sh" first.
+
+echo "Advancing Bitcoin chain on main node"
+for i in $(seq $1); do
 	docker exec bitcoin bitcoin-cli generatetoaddress 1 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
-	sleep 8
+	sleep 7
 done
 
-echo advance even further on second node
-docker exec bitcoin2 bitcoin-cli generatetoaddress 10 mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
+echo "Advancing Bitcoin chain on second node"
+docker exec secondary_btc_node bitcoin-cli generatetoaddress $(echo $1 + 1 | bc) mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
 
-sleep 5
+echo "Synching nodes"
+docker exec secondary_btc_node bitcoin-cli addnode "bitcoin" "onetry"
+BLOCKS=$(docker exec secondary_btc_node bitcoin-cli getblockcount)
+while [ $(docker exec bitcoin bitcoin-cli getblockcount) != $BLOCKS ]; do
+    sleep 1
+done
 
-echo connect nodes
-docker exec bitcoin2 bitcoin-cli addnode "bitcoin" "onetry"
-
-echo wait for sync
-sleep 10
-
-echo turn on block generation
+echo "Turning on block generation"
 docker exec bitcoin touch /root/mine_blocks
 
-echo disconnect nodes
-docker exec bitcoin2 bitcoin-cli disconnectnode "bitcoin"
-
-echo remove second node
-docker rm -f bitcoin2
+echo "Removing secondary node"
+docker exec secondary_btc_node bitcoin-cli disconnectnode "bitcoin"
+docker rm -f secondary_btc_node > /dev/null

@@ -1,22 +1,26 @@
 #!/bin/sh
 
-echo launch second BTC node
-docker run --platform linux/amd64 -d --network=chainflip-localnet_default --name bitcoin2 ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1 bash start.sh dont_mine
+# This command prepares the localnet for a Bitcoin reorg. It will stop generating bitcoin blocks,
+# so commands that wait for the success of a bitcoin transaction need to be run asynchronously after
+# executing "prepare_reorg.sh". After running this command and submitting the BTC transactions to be included
+# in the reorg, run "execute_regorg.sh <REORG_DEPTH>"
 
-echo wait for it to launch
-sleep 10
+echo "Launching second BTC node"
+docker run --platform linux/amd64 -d --network=chainflip-localnet_default --name secondary_btc_node ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1 bash start.sh dont_mine > /dev/null
+while ! docker exec secondary_btc_node bitcoin-cli getblockchaininfo > /dev/null 2>&1; do
+    sleep 1
+done
 
-echo disable mining on main BTC node
+echo "Disabling mining on main BTC node"
 docker exec bitcoin rm /root/mine_blocks
 
-echo connect nodes
-docker exec bitcoin2 bitcoin-cli addnode "bitcoin" "onetry"
+echo "Synchronizing nodes"
+docker exec secondary_btc_node bitcoin-cli addnode "bitcoin" "onetry"
+BLOCKS=$(docker exec bitcoin bitcoin-cli getblockcount)
+while [ $(docker exec secondary_btc_node bitcoin-cli getblockcount) != $BLOCKS ]; do
+    sleep 1
+done
 
-echo wait for sync
-sleep 10
-
-echo disconnect nodes
-docker exec bitcoin2 bitcoin-cli disconnectnode "bitcoin"
-
-echo wait for sync
-sleep 5
+echo "Disconnecting nodes"
+docker exec secondary_btc_node bitcoin-cli disconnectnode "bitcoin"
+sleep 1
