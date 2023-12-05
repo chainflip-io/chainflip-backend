@@ -2,6 +2,7 @@
 use crate::{
 	genesis,
 	network::{setup_account_and_peer_mapping, Cli, Network},
+	witness_call,
 };
 use cf_amm::{
 	common::{price_at_tick, Price, Tick},
@@ -245,23 +246,15 @@ fn basic_pool_setup_provision_and_swap() {
 		).unwrap();
 
 		System::reset_events();
-
-		let current_epoch = Validator::current_epoch();
-		for node in Validator::current_authorities() {
-			assert_ok!(Witnesser::witness_at_epoch(
-				RuntimeOrigin::signed(node),
-				Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address,
-						asset: cf_primitives::chains::assets::eth::Asset::Eth,
-						amount: 50,
-						deposit_details: (),
-					}],
-					block_height: 0,
-				})),
-				current_epoch
-			));
-		}
+		witness_call(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+			deposit_witnesses: vec![DepositWitness {
+				deposit_address,
+				asset: cf_primitives::chains::assets::eth::Asset::Eth,
+				amount: 50,
+				deposit_details: (),
+			}],
+			block_height: 0,
+		}));
 
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 			swap_id,
@@ -350,24 +343,17 @@ fn can_process_ccm_via_swap_deposit_address() {
 				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 			)
 			.unwrap();
-		let current_epoch = Validator::current_epoch();
-		for node in Validator::current_authorities() {
-			assert_ok!(Witnesser::witness_at_epoch(
-				RuntimeOrigin::signed(node),
-				Box::new(RuntimeCall::EthereumIngressEgress(
-					pallet_cf_ingress_egress::Call::process_deposits {
-						deposit_witnesses: vec![DepositWitness {
-							deposit_address,
-							asset: cf_primitives::chains::assets::eth::Asset::Flip,
-							amount: 1_000,
-							deposit_details: (),
-						}],
-						block_height: 0,
-					}
-				)),
-				current_epoch
-			));
-		}
+		witness_call(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::process_deposits {
+				deposit_witnesses: vec![DepositWitness {
+					deposit_address,
+					asset: cf_primitives::chains::assets::eth::Asset::Flip,
+					amount: 1_000,
+					deposit_details: (),
+				}],
+				block_height: 0,
+			}
+		));
 		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
@@ -447,7 +433,7 @@ fn can_process_ccm_via_direct_deposit() {
 			},
 		};
 
-		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{
+		witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{
 			source_asset: Asset::Flip,
 			deposit_amount,
 			destination_asset: Asset::Usdc,
@@ -455,14 +441,7 @@ fn can_process_ccm_via_direct_deposit() {
 			deposit_metadata,
 			tx_hash: Default::default(),
 		}));
-		let current_epoch = Validator::current_epoch();
-		for node in Validator::current_authorities() {
-			assert_ok!(Witnesser::witness_at_epoch(
-				RuntimeOrigin::signed(node),
-				ccm_call.clone(),
-				current_epoch
-			));
-		}
+
 		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
@@ -538,7 +517,7 @@ fn failed_swaps_are_rolled_back() {
 
 		let witness_swap_ingress =
 			|from: Asset, to: Asset, amount: AssetAmount, destination_address: EncodedAddress| {
-				let swap_call = Box::new(RuntimeCall::Swapping(
+				witness_call(RuntimeCall::Swapping(
 					pallet_cf_swapping::Call::schedule_swap_from_contract {
 						from,
 						to,
@@ -546,15 +525,7 @@ fn failed_swaps_are_rolled_back() {
 						destination_address,
 						tx_hash: Default::default(),
 					},
-				));
-				let current_epoch = Validator::current_epoch();
-				for node in Validator::current_authorities() {
-					assert_ok!(Witnesser::witness_at_epoch(
-						RuntimeOrigin::signed(node),
-						swap_call.clone(),
-						current_epoch
-					));
-				}
+				))
 			};
 
 		witness_swap_ingress(
@@ -667,7 +638,6 @@ fn failed_swaps_are_rolled_back() {
 #[test]
 fn ethereum_ccm_can_calculate_gas_limits() {
 	super::genesis::default().build().execute_with(|| {
-		let current_epoch = Validator::current_epoch();
 		let chain_state = ChainState::<Ethereum> {
 			block_height: 1,
 			tracked_data: EthereumTrackedData {
@@ -676,17 +646,11 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 			},
 		};
 
-		for node in Validator::current_authorities() {
-			assert_ok!(Witnesser::witness_at_epoch(
-				RuntimeOrigin::signed(node),
-				Box::new(RuntimeCall::EthereumChainTracking(
-					pallet_cf_chain_tracking::Call::update_chain_state {
-						new_chain_state: chain_state.clone(),
-					}
-				)),
-				current_epoch
-			));
-		}
+		witness_call(RuntimeCall::EthereumChainTracking(
+			pallet_cf_chain_tracking::Call::update_chain_state {
+				new_chain_state: chain_state.clone(),
+			},
+		));
 		assert_eq!(EthereumChainTracking::chain_state(), Some(chain_state));
 
 		let make_ccm_call = |gas_budget: u128| {
@@ -725,17 +689,11 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 			tracked_data: EthereumTrackedData { base_fee: 0u128, priority_fee: 0u128 },
 		};
 
-		for node in Validator::current_authorities() {
-			assert_ok!(Witnesser::witness_at_epoch(
-				RuntimeOrigin::signed(node),
-				Box::new(RuntimeCall::EthereumChainTracking(
-					pallet_cf_chain_tracking::Call::update_chain_state {
-						new_chain_state: chain_state.clone(),
-					}
-				)),
-				current_epoch
-			));
-		}
+		witness_call(RuntimeCall::EthereumChainTracking(
+			pallet_cf_chain_tracking::Call::update_chain_state {
+				new_chain_state: chain_state.clone(),
+			},
+		));
 
 		assert_eq!(
 			EthTransactionBuilder::calculate_gas_limit(&make_ccm_call(1_000_000_000u128)),
@@ -811,7 +769,7 @@ fn can_resign_failed_ccm() {
 				},
 			};
 
-			let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+			witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 				source_asset: Asset::Flip,
 				deposit_amount: 10_000,
 				destination_asset: Asset::Usdc,
@@ -819,16 +777,9 @@ fn can_resign_failed_ccm() {
 				deposit_metadata,
 				tx_hash: Default::default(),
 			}));
-			let starting_epoch = Validator::current_epoch();
-			for node in Validator::current_authorities() {
-				assert_ok!(Witnesser::witness_at_epoch(
-					RuntimeOrigin::signed(node),
-					ccm_call.clone(),
-					starting_epoch
-				));
-			}
 
 			// Process the swap -> egress -> threshold sign -> broadcast
+			let starting_epoch = Validator::current_epoch();
 			testnet.move_forward_blocks(3);
 			let broadcast_id = BroadcastIdCounter::<Runtime, Instance1>::get();
 			let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
@@ -929,20 +880,13 @@ fn can_handle_failed_vault_transfer() {
 			let destination_address = [0x00; 20].into();
 			let broadcast_id = 2;
 
-			let call = Box::new(RuntimeCall::EthereumIngressEgress(
+			witness_call(RuntimeCall::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Call::vault_transfer_failed {
 					asset,
 					amount,
 					destination_address,
 				},
 			));
-			for node in Validator::current_authorities() {
-				assert_ok!(Witnesser::witness_at_epoch(
-					RuntimeOrigin::signed(node),
-					call.clone(),
-					starting_epoch
-				));
-			}
 
 			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, Instance1>::TransferFallbackRequested {

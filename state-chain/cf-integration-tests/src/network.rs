@@ -17,7 +17,7 @@ use sp_consensus_aura::SlotDuration;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, BitcoinInstance, PolkadotInstance, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Weight,
+	RuntimeEvent, RuntimeOrigin, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
