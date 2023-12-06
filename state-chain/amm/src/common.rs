@@ -37,6 +37,7 @@ pub enum SetFeesError {
 	TypeInfo,
 	Deserialize,
 	Serialize,
+	Hash,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum Order {
@@ -62,7 +63,7 @@ impl core::ops::Not for Order {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
 	Zero,
 	One,
@@ -87,6 +88,7 @@ impl core::ops::Not for Side {
 	TypeInfo,
 	PartialEq,
 	Eq,
+	Hash,
 	Encode,
 	Decode,
 	MaxEncodedLen,

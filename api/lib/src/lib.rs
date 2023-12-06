@@ -21,7 +21,7 @@ pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
-	pub use state_chain_runtime::Hash;
+	pub use state_chain_runtime::{self, BlockNumber, Hash};
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
@@ -31,7 +31,9 @@ pub mod primitives {
 pub use cf_chains::eth::Address as EthereumAddress;
 pub use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::{BaseRpcApi, RawRpcApi},
+	chain_api::ChainApi,
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	storage_api::StorageApi,
 };
 
 pub mod lp;

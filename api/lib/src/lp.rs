@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Order, SideMap, Tick},
+	common::{Amount, Order, Side, SideMap, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::address::EncodedAddress;
