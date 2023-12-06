@@ -23,6 +23,7 @@ pub mod v1;
 
 use core::convert::Infallible;
 
+use serde::{Deserialize, Serialize};
 use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -45,7 +46,9 @@ use crate::common::{
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0] /* little endian */);
 
 /// Represents a number exclusively between 0 and 1.
-#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize,
+)]
 #[cfg_attr(feature = "std", derive(Default))]
 struct FloatBetweenZeroAndOne {
 	/// A fixed point number where the msb has a value of `0.5`,
@@ -295,6 +298,9 @@ pub struct Collected {
 	/// The amount of assets purchased by the LP using the liquidity in this position since the
 	/// last collect.
 	pub bought_amount: Amount,
+	/// The amount of assets sold by the LP using the liquidity in this position since the
+	/// last collect.
+	pub sold_amount: Amount,
 	/// The accumulative fees earned by this position since the last modification of the position
 	/// i.e. non-zero mint or burn.
 	pub accumulative_fees: Amount,
@@ -320,7 +326,7 @@ impl<'a> From<&'a Position> for PositionInfo {
 }
 
 /// Represents a single LP position
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
 struct Position {
 	/// Used to identify when the position was created and thereby determine if all the liquidity
 	/// in the position has been used or not. As once all the liquidity at a tick has been used,
@@ -349,7 +355,7 @@ struct Position {
 
 /// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
 /// single fixed pool will contain the liquidity/assets for all limit orders at that specific price.
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
 pub(super) struct FixedPool {
 	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
 	/// used, a new value for pool_instance is used, and the previously used value will never be
@@ -368,8 +374,8 @@ pub(super) struct FixedPool {
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub(super) struct PoolState<LiquidityProvider> {
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.
 	pub(super) fee_hundredth_pips: u32,
@@ -412,6 +418,69 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
+	/// Creates an iterator over all positions
+	///
+	/// This function never panics.
+	pub(super) fn positions<SD: SwapDirection>(
+		&self,
+	) -> impl '_ + Iterator<Item = (LiquidityProvider, Tick, Collected, PositionInfo)> {
+		self.positions[!SD::INPUT_SIDE].iter().map(|((sqrt_price, lp), position)| {
+			let (collected, option_position) = Self::collect_from_position::<SD>(
+				position.clone(),
+				self.fixed_pools[!SD::INPUT_SIDE].get(sqrt_price),
+				sqrt_price_to_price(*sqrt_price),
+				self.fee_hundredth_pips,
+			);
+
+			(
+				lp.clone(),
+				tick_at_sqrt_price(*sqrt_price),
+				collected,
+				option_position
+					.map_or(Default::default(), |position| PositionInfo::from(&position)),
+			)
+		})
+	}
+
+	/// Runs collect for all positions in the pool. Returns a SideMap
+	/// containing the state and fees collected from every position. The positions are grouped into
+	/// a SideMap by the asset they sell.
+	///
+	/// This function never panics.
+	#[allow(clippy::type_complexity)]
+	pub(super) fn collect_all(
+		&mut self,
+	) -> SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>> {
+		// We must collect all positions before we can change the fee, otherwise the fee and swapped
+		// liquidity calculations would be wrong.
+		SideMap::from_array([
+			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
+				.keys()
+				.cloned()
+				.collect::<sp_std::vec::Vec<_>>()
+				.into_iter()
+				.map(|(sqrt_price, lp)| {
+					let (collected, position_info) =
+						self.inner_collect::<OneToZero>(&lp, sqrt_price).unwrap();
+
+					(lp.clone(), tick_at_sqrt_price(sqrt_price), collected, position_info)
+				})
+				.collect(),
+			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE]
+				.keys()
+				.cloned()
+				.collect::<sp_std::vec::Vec<_>>()
+				.into_iter()
+				.map(|(sqrt_price, lp)| {
+					let (collected, position_info) =
+						self.inner_collect::<ZeroToOne>(&lp, sqrt_price).unwrap();
+
+					(lp.clone(), tick_at_sqrt_price(sqrt_price), collected, position_info)
+				})
+				.collect(),
+		])
+	}
+
 	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
 	/// higher than 50%. Also runs collect for all positions in the pool. Returns a SideMap
 	/// containing the state and fees collected from every position as part of the set_fees
@@ -422,44 +491,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn set_fees(
 		&mut self,
 		fee_hundredth_pips: u32,
-	) -> Result<SideMap<BTreeMap<(Tick, LiquidityProvider), (Collected, PositionInfo)>>, SetFeesError>
-	{
+	) -> Result<SideMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError> {
 		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
 
-		// We must collect all positions before we can change the fee, otherwise the fee and swapped
-		// liquidity calculations would be wrong.
-		let collected_amounts = [
-			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
-				.keys()
-				.cloned()
-				.collect::<sp_std::vec::Vec<_>>()
-				.into_iter()
-				.map(|(sqrt_price, lp)| {
-					(
-						(tick_at_sqrt_price(sqrt_price), lp.clone()),
-						self.inner_collect::<OneToZero>(&lp, sqrt_price).unwrap(),
-					)
-				})
-				.collect(),
-			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE]
-				.keys()
-				.cloned()
-				.collect::<sp_std::vec::Vec<_>>()
-				.into_iter()
-				.map(|(sqrt_price, lp)| {
-					(
-						(tick_at_sqrt_price(sqrt_price), lp.clone()),
-						self.inner_collect::<ZeroToOne>(&lp, sqrt_price).unwrap(),
-					)
-				})
-				.collect(),
-		];
-
+		let collect_all = self.collect_all();
 		self.fee_hundredth_pips = fee_hundredth_pips;
-
-		Ok(SideMap::from_array(collected_amounts))
+		Ok(collect_all)
 	}
 
 	/// Returns the current price of the pool for a given swap direction, if some liquidity exists.
@@ -617,6 +656,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			Collected {
 				fees,
 				bought_amount,
+				sold_amount: used_liquidity,
 				accumulative_fees,
 				original_amount: previous_position.original_amount,
 			},

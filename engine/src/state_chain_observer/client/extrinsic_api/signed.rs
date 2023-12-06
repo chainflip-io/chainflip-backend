@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use cf_primitives::SemVer;
 use futures::StreamExt;
 use futures_util::FutureExt;
+use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
@@ -12,6 +13,8 @@ use tracing::trace;
 use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, OR_CANCEL};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
+
+use self::submission_watcher::ExtrinsicDetails;
 
 use super::{
 	super::{base_rpc_api, StateChainStreamApi},
@@ -74,6 +77,24 @@ impl UntilInBlock for UntilInBlockFuture {
 	}
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+pub enum WaitFor {
+	// Return immediately after the extrinsic is submitted
+	NoWait,
+	// Wait until the extrinsic is included in a block
+	InBlock,
+	// Wait until the extrinsic is in a finalized block
+	#[default]
+	Finalized,
+}
+
+#[derive(Debug)]
+pub enum WaitForResult {
+	// The hash of the SC transaction that was submitted.
+	TransactionHash(H256),
+	Details(ExtrinsicDetails),
+}
+
 // Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]
 pub trait SignedExtrinsicApi {
@@ -86,6 +107,19 @@ pub trait SignedExtrinsicApi {
 		&self,
 		call: Call,
 	) -> (H256, (Self::UntilInBlockFuture, Self::UntilFinalizedFuture))
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static;
+
+	async fn submit_signed_extrinsic_wait_for<Call>(
+		&self,
+		call: Call,
+		wait_for: WaitFor,
+	) -> Result<WaitForResult>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -236,6 +270,32 @@ impl SignedExtrinsicApi for SignedExtrinsicClient {
 				UntilFinalizedFuture(until_finalized_receiver),
 			),
 		)
+	}
+
+	async fn submit_signed_extrinsic_wait_for<Call>(
+		&self,
+		call: Call,
+		wait_for: WaitFor,
+	) -> Result<WaitForResult>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
+	{
+		let (hash, (until_in_block, until_finalized)) =
+			self.submit_signed_extrinsic(call.clone()).await;
+
+		// can dedup this and put it into details whether in block or finalised
+		let details = match wait_for {
+			WaitFor::NoWait => return Ok(WaitForResult::TransactionHash(hash)),
+			WaitFor::InBlock => until_in_block.until_in_block().await?,
+			WaitFor::Finalized => until_finalized.until_finalized().await?,
+		};
+
+		Ok(WaitForResult::Details(details))
 	}
 
 	/// Dry run the call, and only submit the extrinsic onto the chain

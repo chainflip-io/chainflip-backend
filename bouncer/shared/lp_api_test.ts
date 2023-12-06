@@ -86,7 +86,9 @@ async function testLiquidityDeposit() {
     (event) => event.data.depositAddress.Eth,
   );
 
-  const liquidityDepositAddress = await lpApiRpc(`lp_liquidity_deposit`, [testRpcAsset]);
+  const liquidityDepositAddress = (
+    await lpApiRpc(`lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
+  ).tx_details.response;
   const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
 
   assert.strictEqual(
@@ -114,11 +116,14 @@ async function testLiquidityDeposit() {
 async function testWithdrawAsset() {
   const oldBalance = await getBalance(testAsset, testAddress);
 
-  const [chain, egressId] = await lpApiRpc(`lp_withdraw_asset`, [
+  const result = await lpApiRpc(`lp_withdraw_asset`, [
     testAssetAmount,
     testRpcAsset,
     testAddress,
+    'InBlock',
   ]);
+  const [chain, egressId] = result.tx_details.response;
+
   assert.strictEqual(chain, testRpcAsset.chain, `Unexpected withdraw asset result`);
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
@@ -158,21 +163,25 @@ async function testRangeOrder() {
     orderId,
     range,
     zeroAssetAmounts,
+    'InBlock',
   ]);
 
   // Mint a range order
-  const mintRangeOrder = await lpApiRpc(`lp_set_range_order`, [
-    testRpcAsset,
-    Assets.USDC,
-    orderId,
-    range,
-    {
-      AssetAmounts: {
-        maximum: { base: testAssetAmount, quote: 0 },
-        minimum: { base: 0, quote: 0 },
+  const mintRangeOrder = (
+    await lpApiRpc(`lp_set_range_order`, [
+      testRpcAsset,
+      Assets.USDC,
+      orderId,
+      range,
+      {
+        AssetAmounts: {
+          maximum: { base: testAssetAmount, quote: 0 },
+          minimum: { base: 0, quote: 0 },
+        },
       },
-    },
-  ]);
+      'InBlock',
+    ])
+  ).tx_details.response;
   assert(mintRangeOrder.length >= 1, `Empty mint range order result`);
   assert(
     parseInt(mintRangeOrder[0].liquidity_total) > 0,
@@ -180,20 +189,23 @@ async function testRangeOrder() {
   );
 
   // Update the range order
-  const updateRangeOrder = await lpApiRpc(`lp_update_range_order`, [
-    testRpcAsset,
-    Assets.USDC,
-    orderId,
-    range,
-    {
-      increase: {
-        AssetAmounts: {
-          maximum: { base: testAssetAmount, quote: 0 },
-          minimum: { base: 0, quote: 0 },
+  const updateRangeOrder = (
+    await lpApiRpc(`lp_update_range_order`, [
+      testRpcAsset,
+      Assets.USDC,
+      orderId,
+      range,
+      {
+        increase: {
+          AssetAmounts: {
+            maximum: { base: testAssetAmount, quote: 0 },
+            minimum: { base: 0, quote: 0 },
+          },
         },
       },
-    },
-  ]);
+      'InBlock',
+    ])
+  ).tx_details.response;
 
   assert(updateRangeOrder.length >= 1, `Empty update range order result`);
   let matchUpdate = false;
@@ -207,13 +219,16 @@ async function testRangeOrder() {
   assert.strictEqual(matchUpdate, true, `Expected update of range order to increase liquidity`);
 
   // Burn the range order
-  const burnRangeOrder = await lpApiRpc(`lp_set_range_order`, [
-    testRpcAsset,
-    Assets.USDC,
-    orderId,
-    range,
-    zeroAssetAmounts,
-  ]);
+  const burnRangeOrder = (
+    await lpApiRpc(`lp_set_range_order`, [
+      testRpcAsset,
+      Assets.USDC,
+      orderId,
+      range,
+      zeroAssetAmounts,
+      'InBlock',
+    ])
+  ).tx_details.response;
 
   assert(burnRangeOrder.length >= 1, `Empty burn range order result`);
   let matchBurn = false;
@@ -245,14 +260,16 @@ async function testLimitOrder() {
   await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'sell', orderId, tick, 0]);
 
   // Mint a limit order
-  const mintLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
-    testRpcAsset,
-    Assets.USDC,
-    'sell',
-    orderId,
-    tick,
-    testAssetAmount,
-  ]);
+  const mintLimitOrder = (
+    await lpApiRpc(`lp_set_limit_order`, [
+      testRpcAsset,
+      Assets.USDC,
+      'sell',
+      orderId,
+      tick,
+      testAssetAmount,
+    ])
+  ).tx_details.response;
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
   assert(
     parseInt(mintLimitOrder[0].sell_amount_change.increase) > 0,
@@ -267,16 +284,18 @@ async function testLimitOrder() {
   );
 
   // Update the limit order
-  const updateLimitOrder = await lpApiRpc(`lp_update_limit_order`, [
-    testRpcAsset,
-    Assets.USDC,
-    'sell',
-    orderId,
-    tick,
-    {
-      increase: testAssetAmount,
-    },
-  ]);
+  const updateLimitOrder = (
+    await lpApiRpc(`lp_update_limit_order`, [
+      testRpcAsset,
+      Assets.USDC,
+      'sell',
+      orderId,
+      tick,
+      {
+        increase: testAssetAmount,
+      },
+    ])
+  ).tx_details.response;
 
   assert(updateLimitOrder.length >= 1, `Empty update limit order result`);
   let matchUpdate = false;
@@ -296,14 +315,9 @@ async function testLimitOrder() {
   );
 
   // Burn the limit order
-  const burnLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
-    testRpcAsset,
-    Assets.USDC,
-    'sell',
-    orderId,
-    tick,
-    0,
-  ]);
+  const burnLimitOrder = (
+    await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'sell', orderId, tick, 0])
+  ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
   let matchBurn = false;

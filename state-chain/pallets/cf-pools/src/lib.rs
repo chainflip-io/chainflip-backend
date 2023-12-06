@@ -42,7 +42,7 @@ impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_u
 
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
-#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
 pub struct AssetPair {
 	assets: AssetsMap<Asset>,
 }
@@ -178,6 +178,7 @@ impl<T> AskBidMap<T> {
 	Eq,
 	Deserialize,
 	Serialize,
+	Hash,
 )]
 pub struct AssetsMap<S> {
 	pub base: S,
@@ -565,7 +566,7 @@ pub mod pallet {
 			lp: T::AccountId,
 			base_asset: Asset,
 			quote_asset: Asset,
-			order: Order,
+			side: Order,
 			id: OrderId,
 			tick: Tick,
 			sell_amount_change: Option<IncreaseOrDecrease<AssetAmount>>,
@@ -853,7 +854,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			base_asset: any::Asset,
 			quote_asset: any::Asset,
-			order: Order,
+			side: Order,
 			id: OrderId,
 			option_tick: Option<Tick>,
 			amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -865,7 +866,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[order.to_sold_side().into()]
+					pool.limit_orders_cache[side.to_sold_side().into()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -879,7 +880,7 @@ pub mod pallet {
 								pool,
 								&lp,
 								asset_pair,
-								order,
+								side,
 								id,
 								previous_tick,
 								IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
@@ -889,7 +890,7 @@ pub mod pallet {
 								pool,
 								&lp,
 								asset_pair,
-								order,
+								side,
 								id,
 								new_tick,
 								IncreaseOrDecrease::Increase(withdrawn_asset_amount.into()),
@@ -904,7 +905,7 @@ pub mod pallet {
 					pool,
 					&lp,
 					asset_pair,
-					order,
+					side,
 					id,
 					tick,
 					amount_change.map(|amount| amount.into()),
@@ -929,7 +930,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			base_asset: any::Asset,
 			quote_asset: any::Asset,
-			order: Order,
+			side: Order,
 			id: OrderId,
 			option_tick: Option<Tick>,
 			sell_amount: AssetAmount,
@@ -941,7 +942,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[order.to_sold_side().into()]
+					pool.limit_orders_cache[side.to_sold_side().into()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -954,7 +955,7 @@ pub mod pallet {
 							pool,
 							&lp,
 							asset_pair,
-							order,
+							side,
 							id,
 							previous_tick,
 							IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
@@ -968,7 +969,7 @@ pub mod pallet {
 					pool,
 					&lp,
 					asset_pair,
-					order,
+					side,
 					id,
 					tick,
 					IncreaseOrDecrease::Increase(sell_amount.into()),
@@ -1010,8 +1011,7 @@ pub mod pallet {
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
 					.try_map(|side, collected_fees| {
-						for ((tick, (lp, id)), (collected, position_info)) in
-							collected_fees.into_iter()
+						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
 						{
 							Self::process_limit_order_update(
 								pool,
@@ -1292,7 +1292,7 @@ impl<T: Config> Pallet<T> {
 		pool: &mut Pool<T>,
 		lp: &T::AccountId,
 		asset_pair: &AssetPair,
-		order: Order,
+		side: Order,
 		id: OrderId,
 		tick: cf_amm::common::Tick,
 		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
@@ -1303,7 +1303,7 @@ impl<T: Config> Pallet<T> {
 				IncreaseOrDecrease::Increase(sold_amount) => {
 					let (collected, position_info) = match pool
 						.pool_state
-						.collect_and_mint_limit_order(&(lp.clone(), id), order, tick, sold_amount)
+						.collect_and_mint_limit_order(&(lp.clone(), id), side, tick, sold_amount)
 					{
 						Ok(ok) => Ok(ok),
 						Err(error) => Err(match error {
@@ -1326,7 +1326,7 @@ impl<T: Config> Pallet<T> {
 					let debited_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_debit_account(
 						lp,
-						asset_pair.assets()[order.to_sold_side().into()],
+						asset_pair.assets()[side.to_sold_side().into()],
 						debited_amount,
 					)?;
 
@@ -1335,7 +1335,7 @@ impl<T: Config> Pallet<T> {
 				IncreaseOrDecrease::Decrease(sold_amount) => {
 					let (sold_amount, collected, position_info) = match pool
 						.pool_state
-						.collect_and_burn_limit_order(&(lp.clone(), id), order, tick, sold_amount)
+						.collect_and_burn_limit_order(&(lp.clone(), id), side, tick, sold_amount)
 					{
 						Ok(ok) => Ok(ok),
 						Err(error) => Err(match error {
@@ -1353,7 +1353,7 @@ impl<T: Config> Pallet<T> {
 					let withdrawn_amount: AssetAmount = sold_amount.try_into()?;
 					T::LpBalance::try_credit_account(
 						lp,
-						asset_pair.assets()[order.to_sold_side().into()],
+						asset_pair.assets()[side.to_sold_side().into()],
 						withdrawn_amount,
 					)?;
 
@@ -1366,7 +1366,7 @@ impl<T: Config> Pallet<T> {
 			pool,
 			asset_pair,
 			lp,
-			order,
+			side,
 			id,
 			tick,
 			collected,
@@ -1902,7 +1902,7 @@ impl<T: Config> Pallet<T> {
 				lp: lp.clone(),
 				base_asset: asset_pair.assets().base,
 				quote_asset: asset_pair.assets().quote,
-				order,
+				side: order,
 				id,
 				tick,
 				sell_amount_change: {

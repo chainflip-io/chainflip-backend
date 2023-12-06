@@ -83,8 +83,11 @@ async fn run_cli() -> Result<()> {
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress { asset, chain },
 				) => {
 					let asset = RpcAsset::try_from((asset, chain))?;
-					let address =
-						api.lp_api().request_liquidity_deposit_address(asset.try_into()?).await?;
+					let address = api
+						.lp_api()
+						.request_liquidity_deposit_address(asset.try_into()?, api::WaitFor::InBlock)
+						.await?
+						.unwrap_details();
 					println!("Deposit Address: {address}");
 				},
 				LiquidityProvider(

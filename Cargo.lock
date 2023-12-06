@@ -1620,6 +1620,7 @@ dependencies = [
  "chainflip-api",
  "clap 3.2.25",
  "custom-rpc",
+ "frame-system",
  "futures",
  "hex",
  "jsonrpsee 0.20.3",

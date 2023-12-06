@@ -1,4 +1,4 @@
-use cf_primitives::BlockNumber;
+use cf_primitives::{AccountId, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -8,22 +8,31 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		LpApi, Order, Tick,
+		ApiWaitForResult, LpApi, Order, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	EthereumAddress, OperatorApi, StateChainApi,
+	ChainApi, EthereumAddress, OperatorApi, StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::RpcAsset;
-use futures::FutureExt;
-use jsonrpsee::{core::async_trait, proc_macros::rpc, server::ServerBuilder};
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+use futures::{FutureExt, StreamExt};
+use jsonrpsee::{
+	core::{async_trait, SubscriptionResult},
+	proc_macros::rpc,
+	server::ServerBuilder,
+	PendingSubscriptionSink, SubscriptionMessage,
+};
+use pallet_cf_pools::{AssetPair, AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use std::{collections::BTreeMap, ops::Range, path::PathBuf};
+use std::{
+	collections::{BTreeMap, HashMap, HashSet},
+	ops::Range,
+	path::PathBuf,
+};
 use tracing::log;
 
 /// Contains RPC interface types that differ from internal types.
@@ -96,7 +105,8 @@ pub trait Rpc {
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: RpcAsset,
-	) -> Result<String, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<String>, AnyhowRpcError>;
 
 	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
@@ -111,7 +121,8 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: RpcAsset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<EgressId>, AnyhowRpcError>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
@@ -121,7 +132,8 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError>;
 
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
@@ -131,31 +143,34 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError>;
 
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
-		amount: NumberOrHex,
+		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
 	async fn asset_balances(
@@ -172,6 +187,9 @@ pub trait Rpc {
 		exact_amount: Option<NumberOrHex>,
 		executor_address: Option<EthereumAddress>,
 	) -> Result<Hash, AnyhowRpcError>;
+
+	#[subscription(name = "subscribe_order_fills", item = OrderFills)]
+	async fn subscribe_order_fills(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl {
@@ -190,19 +208,53 @@ impl RpcServerImpl {
 	}
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct OrderFills {
+	block_hash: Hash,
+	block_number: BlockNumber,
+	fills: Vec<OrderFilled>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderFilled {
+	LimitOrder {
+		lp: AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Order,
+		id: NumberOrHex,
+		tick: Tick,
+		sold: NumberOrHex,
+		bought: NumberOrHex,
+		fees: NumberOrHex,
+		remaining: NumberOrHex,
+	},
+	RangeOrder {
+		lp: AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+		id: NumberOrHex,
+		range: Range<Tick>,
+		fees: AssetsMap<NumberOrHex>,
+		liquidity: NumberOrHex,
+	},
+}
+
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: RpcAsset,
-	) -> Result<String, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<String>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset.try_into()?)
+			.request_liquidity_deposit_address(asset.try_into()?, wait_for.unwrap_or_default())
 			.await
-			.map(|address| address.to_string())?)
+			.map(|result| result.map_details(|address| address.to_string()))?)
 	}
 
 	async fn register_liquidity_refund_address(
@@ -220,7 +272,8 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: RpcAsset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<EgressId>, AnyhowRpcError> {
 		let asset: Asset = asset.try_into()?;
 
 		let destination_address =
@@ -229,7 +282,12 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.lp_api()
-			.withdraw_asset(try_parse_number_or_hex(amount)?, asset, destination_address)
+			.withdraw_asset(
+				try_parse_number_or_hex(amount)?,
+				asset,
+				destination_address,
+				wait_for.unwrap_or_default(),
+			)
 			.await?)
 	}
 
@@ -254,7 +312,8 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -264,6 +323,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick_range,
 				size_change.try_map(|size| size.try_into())?,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -275,7 +335,8 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -285,6 +346,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick_range,
 				size.try_into()?,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -293,23 +355,25 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
 			.update_limit_order(
 				base_asset.try_into()?,
 				quote_asset.try_into()?,
-				order,
+				side,
 				id.try_into()?,
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
 				dispatch_at,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -318,23 +382,25 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
 			.set_limit_order(
 				base_asset.try_into()?,
 				quote_asset.try_into()?,
-				order,
+				side,
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,
 				dispatch_at,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -376,6 +442,135 @@ impl RpcServer for RpcServerImpl {
 			.operator_api()
 			.request_redemption(redeem_amount, redeem_address, executor_address)
 			.await?)
+	}
+
+	async fn subscribe_order_fills(&self, sink: PendingSubscriptionSink) -> SubscriptionResult {
+		let sink = sink.accept().await?;
+		let state_chain_client = self.api.state_chain_client.clone();
+		let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
+		let mut previous_pools = state_chain_client.storage_map::<pallet_cf_pools::Pools<chainflip_api::primitives::state_chain_runtime::Runtime>, HashMap<_, _>>(finalized_block_stream.cache().hash).await?;
+
+		tokio::spawn(async move {
+			while let Some(block) = finalized_block_stream.next().await {
+				let events = state_chain_client
+					.storage_value::<frame_system::Events<chainflip_api::primitives::state_chain_runtime::Runtime>>(
+						block.hash,
+					)
+					.await
+					.unwrap();
+				sink.send(SubscriptionMessage::from_json(&OrderFills { block_hash: block.hash, block_number: block.number, fills: {
+					let updated_range_orders = events.iter().filter_map(|event_record| {
+						match &event_record.event {
+							chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::RangeOrderUpdated {
+								lp,
+								base_asset,
+								quote_asset,
+								id,
+								..
+							}) => {
+								Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *id))
+							},
+							_ => {
+								None
+							}
+						}
+					}).collect::<HashSet<_>>();
+
+					let updated_limit_orders = events.iter().filter_map(|event_record| {
+						match &event_record.event {
+							chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+								lp,
+								base_asset,
+								quote_asset,
+								side,
+								id,
+								..
+							}) => {
+								Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id))
+							},
+							_ => {
+								None
+							}
+						}
+					}).collect::<HashSet<_>>();
+
+					let pools = state_chain_client.storage_map::<pallet_cf_pools::Pools<chainflip_api::primitives::state_chain_runtime::Runtime>, HashMap<_, _>>(block.hash).await.unwrap();
+
+					let order_fills = pools.iter().flat_map(|(asset_pair, pool)| {
+						let updated_range_orders = &updated_range_orders;
+						let updated_limit_orders = &updated_limit_orders;
+						let previous_pools = &previous_pools;
+						[Order::Sell, Order::Buy].into_iter().flat_map(move |side| {
+							pool.pool_state.limit_orders(side).filter_map(move |((lp, id), tick, collected, position_info)| {
+								let (fees, sold, bought) = {
+									let option_previous_order_state = if updated_limit_orders.contains(&(lp.clone(), *asset_pair, side, id)) {
+										None
+									} else {
+										previous_pools.get(asset_pair).and_then(|pool| pool.pool_state.limit_order(&(lp.clone(), id), side, tick).ok())
+									};
+
+									if let Some((previous_collected, _)) = option_previous_order_state {
+										(
+											collected.fees - previous_collected.fees,
+											collected.sold_amount - previous_collected.sold_amount,
+											collected.bought_amount - previous_collected.bought_amount,
+										)
+									} else {
+										(
+											collected.fees,
+											collected.sold_amount,
+											collected.bought_amount,
+										)
+									}
+								};
+
+								if fees.is_zero() && sold.is_zero() && bought.is_zero() {
+									None
+								} else {
+									Some(OrderFilled::LimitOrder { lp, base_asset: asset_pair.assets().base, quote_asset: asset_pair.assets().quote, side, id: id.into(), tick, sold: sold.into(), bought: bought.into(), fees: fees.into(), remaining: position_info.amount.into() })
+								}
+							})
+						}).chain(
+							pool.pool_state.range_orders().filter_map(move |((lp, id), range, collected, position_info)| {
+								let fees = {
+									let option_previous_order_state = if updated_range_orders.contains(&(lp.clone(), *asset_pair, id)) {
+										None
+									} else {
+										previous_pools.get(asset_pair).and_then(|pool| pool.pool_state.range_order(&(lp.clone(), id), range.clone()).ok())
+									};
+
+									if let Some((previous_collected, _)) = option_previous_order_state {
+										collected.fees.zip(previous_collected.fees).map(|_, (fees, previous_fees)| fees - previous_fees)
+									} else {
+										collected.fees
+									}
+								};
+
+								if fees == Default::default() {
+									None
+								} else {
+									Some(OrderFilled::RangeOrder {
+										lp: lp.clone(),
+										base_asset: asset_pair.assets().base,
+										quote_asset: asset_pair.assets().quote,
+										id: id.into(),
+										range: range.clone(),
+										fees: fees.map(|_, fees| fees.into()).into(),
+										liquidity: position_info.liquidity.into()
+									})
+								}
+							})
+						)
+					}).collect::<Vec<_>>();
+
+					previous_pools = pools;
+
+					order_fills
+				} }).unwrap()).await.unwrap();
+			}
+		});
+
+		Ok(())
 	}
 }
 
