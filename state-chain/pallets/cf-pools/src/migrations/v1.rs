@@ -33,7 +33,7 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		for (key, pool) in old::Pools::<T>::iter().filter_map(|(old_key, old_pool)| {
+		for (key, pool) in old::Pools::<T>::drain().filter_map(|(old_key, old_pool)| {
 			Some((
 				AssetPair::new(old_key.assets[Side::Zero], old_key.assets[Side::One])?,
 				Pool::<T> {

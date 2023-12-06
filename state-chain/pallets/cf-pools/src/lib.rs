@@ -42,7 +42,6 @@ impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_u
 
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
-// TODO Move into pallet
 #[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
 pub struct AssetPair {
 	assets: AssetsMap<Asset>,
@@ -151,7 +150,7 @@ pub struct AskBidMap<S> {
 }
 impl<T> AskBidMap<T> {
 	/// Takes a map from an asset to details regarding selling that asset, and returns a map from
-	/// ask/bid to the details associated with the asks or the bid
+	/// ask/bid to the details associated with the asks or the bids
 	pub fn from_sell_map(map: AssetsMap<T>) -> Self {
 		Self { asks: map.base, bids: map.quote }
 	}
@@ -866,7 +865,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[order.to_sold_side().into()] // TODO order to sold_asset
+					pool.limit_orders_cache[order.to_sold_side().into()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -942,7 +941,7 @@ pub mod pallet {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_order(&lp, base_asset, quote_asset, |asset_pair, pool| {
 				let tick = match (
-					pool.limit_orders_cache[order.to_sold_side().into()] // TODO order to sold_asset
+					pool.limit_orders_cache[order.to_sold_side().into()]
 						.get(&lp)
 						.and_then(|limit_orders| limit_orders.get(&id))
 						.cloned(),
@@ -1018,10 +1017,7 @@ pub mod pallet {
 								pool,
 								asset_pair,
 								&lp,
-								match side {
-									Side::Zero => Order::Sell,
-									Side::One => Order::Buy,
-								}, // WIP TODO
+								Assets::from(side).sell_order(),
 								id,
 								tick,
 								collected,
@@ -1631,13 +1627,13 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolOrderbook {
 			asks: {
 				let mut pool_state = pool_state.clone();
-				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Sell, orders);
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Buy, orders);
 
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_base_amount, remaining_quote_amount) =
-							pool_state.swap(Order::Sell, Amount::MAX, Some(sqrt_price));
+							pool_state.swap(Order::Buy, Amount::MAX, Some(sqrt_price));
 
 						let bought_quote_amount = Amount::MAX - remaining_quote_amount;
 
@@ -1657,13 +1653,13 @@ impl<T: Config> Pallet<T> {
 			},
 			bids: {
 				let mut pool_state = pool_state;
-				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Buy, orders);
+				let sqrt_prices = pool_state.logarithm_sqrt_price_sequence(Order::Sell, orders);
 
 				sqrt_prices
 					.into_iter()
 					.filter_map(|sqrt_price| {
 						let (sold_quote_amount, remaining_base_amount) =
-							pool_state.swap(Order::Buy, Amount::MAX, Some(sqrt_price));
+							pool_state.swap(Order::Sell, Amount::MAX, Some(sqrt_price));
 
 						let bought_base_amount = Amount::MAX - remaining_base_amount;
 
