@@ -29,7 +29,7 @@ use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
 	extrinsic_api::{
-		signed::{signer, SignedExtrinsicApi},
+		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
 		unsigned,
 	},
 	finalized_stream::FinalizedCachedStream,
@@ -848,6 +848,24 @@ impl<
 		self.signed_extrinsic_client.submit_signed_extrinsic(call).await
 	}
 
+	async fn submit_signed_extrinsic_wait_for<Call>(
+		&self,
+		call: Call,
+		wait_for: WaitFor,
+	) -> Result<WaitForResult>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
+	{
+		self.signed_extrinsic_client
+			.submit_signed_extrinsic_wait_for(call, wait_for)
+			.await
+	}
+
 	/// Sign, submit, and watch an extrinsic retrying if submissions fail be to finalized
 	async fn finalize_signed_extrinsic<Call>(
 		&self,
@@ -933,7 +951,11 @@ pub mod mocks {
 	use state_chain_runtime::AccountId;
 
 	use super::{
-		extrinsic_api::{self, unsigned},
+		extrinsic_api::{
+			self,
+			signed::{WaitFor, WaitForResult},
+			unsigned,
+		},
 		storage_api, BlockInfo, StateChainStreamApi,
 	};
 
@@ -947,6 +969,19 @@ pub mod mocks {
 			fn account_id(&self) -> AccountId;
 
 			async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, (<Self as SignedExtrinsicApi>::UntilInBlockFuture, <Self as SignedExtrinsicApi>::UntilFinalizedFuture))
+			where
+				Call: Into<state_chain_runtime::RuntimeCall>
+					+ Clone
+					+ std::fmt::Debug
+					+ Send
+					+ Sync
+					+ 'static;
+
+			async fn submit_signed_extrinsic_wait_for<Call>(
+				&self,
+				call: Call,
+				wait_for: WaitFor,
+			) -> anyhow::Result<WaitForResult>
 			where
 				Call: Into<state_chain_runtime::RuntimeCall>
 					+ Clone
