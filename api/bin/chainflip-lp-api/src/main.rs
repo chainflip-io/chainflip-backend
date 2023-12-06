@@ -210,8 +210,8 @@ impl RpcServerImpl {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct OrderFills {
-	hash: Hash,
-	number: BlockNumber,
+	block_hash: Hash,
+	block_number: BlockNumber,
 	fills: Vec<OrderFilled>,
 }
 
@@ -458,7 +458,7 @@ impl RpcServer for RpcServerImpl {
 					)
 					.await
 					.unwrap();
-				sink.send(SubscriptionMessage::from_json(&OrderFills { hash: block.hash, number: block.number, fills: {
+				sink.send(SubscriptionMessage::from_json(&OrderFills { block_hash: block.hash, block_number: block.number, fills: {
 					let updated_range_orders = events.iter().filter_map(|event_record| {
 						match &event_record.event {
 							chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::RangeOrderUpdated {
