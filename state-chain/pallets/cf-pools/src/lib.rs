@@ -42,7 +42,7 @@ impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_u
 
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
-#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
 pub struct AssetPair {
 	assets: AssetsMap<Asset>,
 }
@@ -178,6 +178,7 @@ impl<T> AskBidMap<T> {
 	Eq,
 	Deserialize,
 	Serialize,
+	Hash,
 )]
 pub struct AssetsMap<S> {
 	pub base: S,
@@ -1010,8 +1011,7 @@ pub mod pallet {
 					.set_fees(fee_hundredth_pips)
 					.map_err(|_| Error::<T>::InvalidFeeAmount)?
 					.try_map(|side, collected_fees| {
-						for ((tick, (lp, id)), (collected, position_info)) in
-							collected_fees.into_iter()
+						for ((lp, id), tick, collected, position_info) in collected_fees.into_iter()
 						{
 							Self::process_limit_order_update(
 								pool,
