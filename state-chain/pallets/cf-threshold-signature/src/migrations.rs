@@ -1,6 +1,6 @@
-pub mod v3;
+pub mod v4;
 
 use cf_runtime_upgrade_utilities::VersionedMigration;
 
 pub type PalletMigration<T, I> =
-	(VersionedMigration<crate::Pallet<T, I>, v3::Migration<T, I>, 2, 3>,);
+	(VersionedMigration<crate::Pallet<T, I>, v4::Migration<T, I>, 3, 4>,);
