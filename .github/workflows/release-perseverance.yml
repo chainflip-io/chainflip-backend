@@ -11,7 +11,7 @@ jobs:
   release-checks:
     uses: ./.github/workflows/_03_release_checks.yml
   bins:
-    needs: [check-versions]
+    needs: [release-checks]
     uses: ./.github/workflows/_02_retrieve-bins.yml
     secrets: inherit
   docker:
