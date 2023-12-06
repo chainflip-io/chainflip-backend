@@ -6,10 +6,25 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use sp_std::prelude::Vec;
 
+mod old {
+
+	use super::*;
+
+	#[frame_support::storage_alias]
+	pub type RequestCallbacks<T: Config<I>, I: 'static> =
+		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
+}
+
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		use frame_support::storage::StoragePrefixedMap;
+		frame_support::migration::move_prefix(
+			old::RequestCallbacks::<T, I>::storage_prefix(),
+			RequestSuccessCallbacks::<T, I>::storage_prefix(),
+		);
+
 		let pending_broadcasts = AwaitingBroadcast::<T, I>::iter_keys()
 			.map(|BroadcastAttemptId { broadcast_id, .. }| broadcast_id)
 			.collect::<BTreeSet<_>>();
