@@ -3,8 +3,8 @@ use crate::{
 	evm::{
 		api::{
 			all_batch, execute_x_swap_and_call, set_agg_key_with_agg_key,
-			set_comm_key_with_agg_key, set_gov_key_with_agg_key, EthEnvironmentProvider, EvmCall,
-			EvmReplayProtection, EvmTransactionBuilder, SigData,
+			set_comm_key_with_agg_key, set_gov_key_with_agg_key, transfer_fallback,
+			EthEnvironmentProvider, EvmCall, EvmReplayProtection, EvmTransactionBuilder, SigData,
 		},
 		EvmCrypto, EvmFetchId, SchnorrVerificationComponents,
 	},
@@ -73,6 +73,7 @@ pub enum EthereumApi<Environment: 'static> {
 	SetCommKeyWithAggKey(EvmTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>),
 	AllBatch(EvmTransactionBuilder<all_batch::AllBatch>),
 	ExecutexSwapAndCall(EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
+	TransferFallback(EvmTransactionBuilder<transfer_fallback::TransferFallback>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -284,6 +285,24 @@ where
 	}
 }
 
+impl<E> TransferFallback<Ethereum> for EthereumApi<E>
+where
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+{
+	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
+		let transfer_param = EncodableTransferAssetParams {
+			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			to: transfer_param.to,
+			amount: transfer_param.amount,
+		};
+
+		Ok(Self::TransferFallback(EvmTransactionBuilder::new_unsigned(
+			E::replay_protection(E::contract_address(EthereumContract::Vault)),
+			transfer_fallback::TransferFallback::new(transfer_param),
+		)))
+	}
+}
+
 impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
 	for EthereumApi<E>
 {
@@ -334,6 +353,12 @@ impl<E> From<EvmTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>
 	}
 }
 
+impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for EthereumApi<E> {
+	fn from(tx: EvmTransactionBuilder<transfer_fallback::TransferFallback>) -> Self {
+		Self::TransferFallback(tx)
+	}
+}
+
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {
@@ -344,6 +369,7 @@ macro_rules! map_over_api_variants {
 			EthereumApi::SetCommKeyWithAggKey($var) => $var_method,
 			EthereumApi::AllBatch($var) => $var_method,
 			EthereumApi::ExecutexSwapAndCall($var) => $var_method,
+			EthereumApi::TransferFallback($var) => $var_method,
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	};

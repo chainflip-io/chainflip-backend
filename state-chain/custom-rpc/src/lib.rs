@@ -539,8 +539,8 @@ pub trait CustomApi {
 	#[method(name = "supported_assets")]
 	fn cf_supported_assets(&self) -> RpcResult<HashMap<ForeignChain, Vec<Asset>>>;
 
-	#[method(name = "failed_ccm")]
-	fn cf_failed_ccm_call(
+	#[method(name = "failed_call")]
+	fn cf_failed_call(
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>>;
@@ -1193,13 +1193,13 @@ where
 		Ok(chain_to_asset)
 	}
 
-	fn cf_failed_ccm_call(
+	fn cf_failed_call(
 		&self,
 		broadcast_id: BroadcastId,
 	) -> RpcResult<Option<<cf_chains::Ethereum as Chain>::Transaction>> {
 		self.client
 			.runtime_api()
-			.cf_failed_ccm_call(self.unwrap_or_best(None), broadcast_id)
+			.cf_failed_call(self.unwrap_or_best(None), broadcast_id)
 			.map_err(to_rpc_error)
 	}
 }

@@ -49,7 +49,7 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 		threshold_request_id,
 		threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 		api_call: Box::new(ApiCallFor::<T, I>::benchmark_value()),
-		broadcast_id: 1,
+		broadcast_attempt_id: BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 },
 		initiated_at: INITIATED_AT.into(),
 		should_broadcast: true,
 	}
@@ -68,7 +68,6 @@ benchmarks_instance_pallet! {
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
 	} : {
 		Pallet::<T, I>::on_initialize(timeout_block);
 	}
@@ -86,7 +85,6 @@ benchmarks_instance_pallet! {
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())?;
 		let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
 		assert!(Timeouts::<T, I>::contains_key(expiry_block));
@@ -101,7 +99,6 @@ benchmarks_instance_pallet! {
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
 	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::try_successful_origin().unwrap())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 0);
@@ -111,15 +108,15 @@ benchmarks_instance_pallet! {
 	start_next_broadcast_attempt {
 		let api_call = ApiCallFor::<T, I>::benchmark_value();
 		let signed_api_call = api_call.signed(&BenchmarkValue::benchmark_value());
-		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(
+		let broadcast_id = <Pallet::<T, I> as Broadcaster<_>>::threshold_sign_and_broadcast(
 			BenchmarkValue::benchmark_value(),
-			signed_api_call,
-			BenchmarkValue::benchmark_value(),
-			1,
-			INITIATED_AT.into(),
 		);
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id,
+			attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+		};
+		ThresholdSignatureData::<T, I>::insert(broadcast_id, (signed_api_call, ThresholdSignatureFor::<T, I>::benchmark_value()));
 
-		T::KeyProvider::set_key(AggKeyFor::<T, I>::benchmark_value());
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
 
 	} : {
@@ -131,7 +128,7 @@ benchmarks_instance_pallet! {
 		})
 	}
 	verify {
-		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
+		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.peek_next()));
 	}
 	transaction_succeeded {
 		let caller: T::AccountId = whitelisted_caller();
@@ -151,7 +148,6 @@ benchmarks_instance_pallet! {
 			tx_metadata: TransactionMetadataFor::<T, I>::benchmark_value(),
 		};
 		let valid_key = AggKeyFor::<T, I>::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap())? }
 	verify {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic

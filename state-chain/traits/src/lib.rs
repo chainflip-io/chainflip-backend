@@ -363,40 +363,9 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyState {
-	Unlocked,
-	/// Key is only available to sign this request id.
-	Locked(ThresholdSignatureRequestId),
-}
-
-impl KeyState {
-	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
-		match self {
-			KeyState::Unlocked => true,
-			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
-		}
-	}
-
-	pub fn unlock(&mut self) {
-		*self = KeyState::Unlocked;
-	}
-
-	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
-		*self = KeyState::Locked(request_id);
-	}
-}
-
-#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
-	pub key_state: KeyState,
-}
-
-impl<Key> EpochKey<Key> {
-	pub fn lock_for_request(&mut self, request_id: ThresholdSignatureRequestId) {
-		self.key_state = KeyState::Locked(request_id);
-	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -409,7 +378,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_key(_key: C::AggKey) {
+	fn set_key(_key: C::AggKey, _epoch: EpochIndex) {
 		unimplemented!()
 	}
 }
@@ -487,9 +456,7 @@ pub trait Broadcaster<C: Chain> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
@@ -497,10 +464,18 @@ pub trait Broadcaster<C: Chain> {
 		api_call: Self::ApiCall,
 		success_callback: Option<Self::Callback>,
 		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
+	) -> BroadcastId;
+
+	/// Request a threshold signature and then build and broadcast the outbound api call
+	/// specifically for a rotation tx..
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId;
 
 	/// Resign a call, and update the signature data storage, but do not broadcast.
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+
+	/// Request a call to be threshold signed, but do not broadcast.
+	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
+	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Clean up storage data related to a broadcast ID.
 	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);

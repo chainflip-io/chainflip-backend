@@ -27,13 +27,35 @@ impl<
 	type ApiCall = A;
 	type Callback = C;
 
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (cf_primitives::BroadcastId, cf_primitives::ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> cf_primitives::BroadcastId {
 		Self::mutate_value(b"API_CALLS", |api_calls: &mut Option<Vec<A>>| {
 			let api_calls = api_calls.get_or_insert(Default::default());
 			api_calls.push(api_call);
 		});
+		let _ = Self::next_threshold_id();
+		<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
+			let v = v.get_or_insert(0);
+			*v += 1;
+			*v
+		})
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		api_call: Self::ApiCall,
+		success_callback: Option<Self::Callback>,
+		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
+	) -> BroadcastId {
+		let id = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call);
+		if let Some(callback) = success_callback {
+			Self::put_storage(b"SUCCESS_CALLBACKS", id, callback);
+		}
+		if let Some(callback) = failed_callback_generator(id) {
+			Self::put_storage(b"FAILED_CALLBACKS", id, callback);
+		}
+		id
+	}
+
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
 		(
 			<Self as MockPalletStorage>::mutate_value(b"BROADCAST_ID", |v: &mut Option<u32>| {
 				let v = v.get_or_insert(0);
@@ -44,21 +66,6 @@ impl<
 		)
 	}
 
-	fn threshold_sign_and_broadcast_with_callback(
-		api_call: Self::ApiCall,
-		success_callback: Option<Self::Callback>,
-		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let ids @ (id, _) = <Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call);
-		if let Some(callback) = success_callback {
-			Self::put_storage(b"SUCCESS_CALLBACKS", id, callback);
-		}
-		if let Some(callback) = failed_callback_generator(id) {
-			Self::put_storage(b"FAILED_CALLBACKS", id, callback);
-		}
-		ids
-	}
-
 	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
 		Some(Self::next_threshold_id())
@@ -66,6 +73,10 @@ impl<
 
 	/// Clean up storage data related to a broadcast ID.
 	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {}
+
+	fn threshold_sign_and_broadcast_rotation_tx(api_call: Self::ApiCall) -> BroadcastId {
+		<Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call)
+	}
 }
 
 impl<

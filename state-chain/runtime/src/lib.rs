@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
+pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
@@ -156,10 +157,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 100,
+	spec_version: 110,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 10,
+	transaction_version: 12,
 	state_version: 1,
 };
 
@@ -676,7 +677,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = EthereumVault;
 	type ChainTracking = EthereumChainTracking;
 }
 
@@ -699,7 +699,6 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = PolkadotVault;
 	type ChainTracking = PolkadotChainTracking;
 }
 
@@ -722,7 +721,6 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = BitcoinVault;
 	type ChainTracking = BitcoinChainTracking;
 }
 
@@ -834,9 +832,10 @@ pub type Executive = frame_executive::Executive<
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
 // for tuple migrations (like these).
 type PalletMigrations = (
-	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
+	pallet_cf_environment::migrations::PalletMigration,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
-	pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
@@ -856,6 +855,10 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
+	migrations::VersionedMigration<
+		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
+		110,
+	>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 );
 
@@ -1274,8 +1277,8 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
-			if EthereumIngressEgress::get_failed_ccm(broadcast_id).is_some() {
+		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
 				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
 					chainflip::EthTransactionBuilder::build_transaction(&api_call)
 				})

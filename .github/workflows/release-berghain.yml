@@ -13,6 +13,7 @@ jobs:
     secrets: inherit
     with:
       profile: "production"
+      binary-subdir: "production"
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml

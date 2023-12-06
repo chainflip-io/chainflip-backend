@@ -134,7 +134,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpochAndState()).toJSON()!
+  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()!
     .epochIndex as number;
   const pubkey = (
     (await chainflip.query.bitcoinVault.vaults(epoch)).toJSON()!.publicKey.current as string

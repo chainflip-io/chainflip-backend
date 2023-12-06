@@ -317,6 +317,21 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 		.with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
 }
 
+pub fn round_f64(x: f64, decimals: u32) -> f64 {
+	let y = 10i32.pow(decimals) as f64;
+	(x * y).round() / y
+}
+
+#[test]
+fn test_round_f64() {
+	assert_eq!(round_f64(1.23456789, 0), 1.0);
+	assert_eq!(round_f64(1.23456789, 1), 1.2);
+	assert_eq!(round_f64(1.23456789, 2), 1.23);
+	assert_eq!(round_f64(1.23456789, 6), 1.234568);
+	assert_eq!(round_f64(1.22223333, 6), 1.222233);
+	assert_eq!(round_f64(1.23, 6), 1.23);
+}
+
 #[cfg(test)]
 mod tests_read_clean_and_decode_hex_str_file {
 	use crate::{assert_ok, testing::with_file};
