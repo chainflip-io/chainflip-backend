@@ -277,66 +277,6 @@ pub struct RpcEnvironment {
 	pools: PoolsEnvironment,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct LimitOrder {
-	id: NumberOrHex,
-	tick: Tick,
-	sell_amount: NumberOrHex,
-	fees_earned: NumberOrHex,
-	original_sell_amount: NumberOrHex,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RangeOrder {
-	id: NumberOrHex,
-	range: Range<Tick>,
-	liquidity: NumberOrHex,
-	fees_earned: AssetsMap<NumberOrHex>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PoolOrders {
-	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AskBidMap<Vec<LimitOrder>>,
-	/// Range orders can be both buy and/or sell therefore they not split. The current range order
-	/// price determines if they are buy and/or sell.
-	pub range_orders: Vec<RangeOrder>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PoolOrder {
-	amount: NumberOrHex,
-	sqrt_price: NumberOrHex,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PoolOrderbook {
-	asks: Vec<PoolOrder>,
-	bids: Vec<PoolOrder>,
-}
-impl From<pallet_cf_pools::PoolOrderbook> for PoolOrderbook {
-	fn from(value: pallet_cf_pools::PoolOrderbook) -> Self {
-		Self {
-			asks: value
-				.asks
-				.into_iter()
-				.map(|ask| PoolOrder {
-					amount: ask.amount.into(),
-					sqrt_price: ask.sqrt_price.into(),
-				})
-				.collect(),
-			bids: value
-				.bids
-				.into_iter()
-				.map(|bid| PoolOrder {
-					amount: bid.amount.into(),
-					sqrt_price: bid.sqrt_price.into(),
-				})
-				.collect(),
-		}
-	}
-}
-
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -453,7 +393,7 @@ pub trait CustomApi {
 		quote_asset: RpcAsset,
 		orders: u32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolOrderbook>;
+	) -> RpcResult<pallet_cf_pools::PoolOrderbook>;
 	#[method(name = "pool_info")]
 	fn cf_pool_info(
 		&self,
@@ -481,9 +421,9 @@ pub trait CustomApi {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		lp: state_chain_runtime::AccountId,
+		maybe_lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolOrders>;
+	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
 		&self,
@@ -953,7 +893,7 @@ where
 		quote_asset: RpcAsset,
 		orders: u32,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolOrderbook> {
+	) -> RpcResult<pallet_cf_pools::PoolOrderbook> {
 		self.client
 			.runtime_api()
 			.cf_pool_orderbook(
@@ -970,48 +910,19 @@ where
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		lp: state_chain_runtime::AccountId,
+		maybe_lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolOrders> {
+	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>> {
 		self.client
 			.runtime_api()
 			.cf_pool_orders(
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
 				quote_asset.try_into()?,
-				lp,
+				maybe_lp,
 			)
 			.map_err(to_rpc_error)
-			.and_then(|result| {
-				result
-					.map(|pool_orders| PoolOrders {
-						limit_orders: pool_orders.limit_orders.map(|limit_orders| {
-							limit_orders
-								.into_iter()
-								.map(|limit_order| LimitOrder {
-									id: limit_order.id.into(),
-									tick: limit_order.tick,
-									sell_amount: limit_order.sell_amount.into(),
-									fees_earned: limit_order.fees_earned.into(),
-									original_sell_amount: limit_order.original_sell_amount.into(),
-								})
-								.collect()
-						}),
-						range_orders: pool_orders
-							.range_orders
-							.into_iter()
-							.map(|range_order| RangeOrder {
-								id: range_order.id.into(),
-								range: range_order.range,
-								liquidity: range_order.liquidity.into(),
-								fees_earned: range_order
-									.fees_earned
-									.map(|fees_earned| fees_earned.into()),
-							})
-							.collect(),
-					})
-					.map_err(map_dispatch_error)
-			})
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 
 	fn cf_pool_range_order_liquidity_value(

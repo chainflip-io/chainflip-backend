@@ -1086,9 +1086,12 @@ impl_runtime_apis! {
 		fn cf_pool_orders(
 			base_asset: Asset,
 			quote_asset: Asset,
-			lp: AccountId,
-		) -> Result<PoolOrders, DispatchError> {
-			LiquidityPools::pool_orders(base_asset, quote_asset, &lp)
+			maybe_lp: Option<AccountId>,
+		) -> Result<PoolOrders<Runtime>, DispatchError> {
+			match maybe_lp {
+				Some(lp) => LiquidityPools::pool_orders(base_asset, quote_asset, &lp),
+				None => LiquidityPools::all_pool_orders(base_asset, quote_asset),
+			}
 		}
 
 		fn cf_pool_range_order_liquidity_value(

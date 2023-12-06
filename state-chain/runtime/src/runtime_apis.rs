@@ -133,10 +133,10 @@ decl_runtime_apis!(
 			orders: u32,
 		) -> Result<PoolOrderbook, DispatchError>;
 		fn cf_pool_orders(
-			base: Asset,
-			pair: Asset,
-			lp: AccountId32,
-		) -> Result<PoolOrders, DispatchError>;
+			base_asset: Asset,
+			quote_asset: Asset,
+			maybe_lp: Option<AccountId32>,
+		) -> Result<PoolOrders<crate::Runtime>, DispatchError>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
 			quote_asset: Asset,
