@@ -41,7 +41,7 @@ type AmountChange = null | {
 type LimitOrderResponse = {
   base_asset: string;
   quote_asset: string;
-  order: string;
+  side: string;
   id: number;
   tick: number;
   sell_amount_total: number;

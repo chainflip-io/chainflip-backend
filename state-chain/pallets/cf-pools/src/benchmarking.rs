@@ -233,7 +233,7 @@ benchmarks! {
 		Box::new(Call::<T>::set_limit_order {
 			base_asset: Asset::Eth,
 			quote_asset: Asset::Usdc,
-			order: Order::Sell,
+			side: Order::Sell,
 			id: 0,
 			option_tick: Some(0),
 			sell_amount: 100,

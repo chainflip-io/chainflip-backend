@@ -151,7 +151,7 @@ pub trait Rpc {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -164,7 +164,7 @@ pub trait Rpc {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -222,7 +222,7 @@ pub enum OrderFilled {
 		lp: AccountId,
 		base_asset: Asset,
 		quote_asset: Asset,
-		order: Order,
+		side: Order,
 		id: NumberOrHex,
 		tick: Tick,
 		sold: NumberOrHex,
@@ -355,7 +355,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -368,7 +368,7 @@ impl RpcServer for RpcServerImpl {
 			.update_limit_order(
 				base_asset.try_into()?,
 				quote_asset.try_into()?,
-				order,
+				side,
 				id.try_into()?,
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
@@ -382,7 +382,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		order: Order,
+		side: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -395,7 +395,7 @@ impl RpcServer for RpcServerImpl {
 			.set_limit_order(
 				base_asset.try_into()?,
 				quote_asset.try_into()?,
-				order,
+				side,
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,
@@ -482,11 +482,11 @@ impl RpcServer for RpcServerImpl {
 								lp,
 								base_asset,
 								quote_asset,
-								order,
+								side,
 								id,
 								..
 							}) => {
-								Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *order, *id))
+								Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id))
 							},
 							_ => {
 								None
@@ -500,13 +500,13 @@ impl RpcServer for RpcServerImpl {
 						let updated_range_orders = &updated_range_orders;
 						let updated_limit_orders = &updated_limit_orders;
 						let previous_pools = &previous_pools;
-						[Order::Sell, Order::Buy].into_iter().flat_map(move |order| {
-							pool.pool_state.limit_orders(order).filter_map(move |((lp, id), tick, collected, position_info)| {
+						[Order::Sell, Order::Buy].into_iter().flat_map(move |side| {
+							pool.pool_state.limit_orders(side).filter_map(move |((lp, id), tick, collected, position_info)| {
 								let (fees, sold, bought) = {
-									let option_previous_order_state = if updated_limit_orders.contains(&(lp.clone(), *asset_pair, order, id)) {
+									let option_previous_order_state = if updated_limit_orders.contains(&(lp.clone(), *asset_pair, side, id)) {
 										None
 									} else {
-										previous_pools.get(asset_pair).and_then(|pool| pool.pool_state.limit_order(&(lp.clone(), id), order, tick).ok())
+										previous_pools.get(asset_pair).and_then(|pool| pool.pool_state.limit_order(&(lp.clone(), id), side, tick).ok())
 									};
 
 									if let Some((previous_collected, _)) = option_previous_order_state {
@@ -527,7 +527,7 @@ impl RpcServer for RpcServerImpl {
 								if fees.is_zero() && sold.is_zero() && bought.is_zero() {
 									None
 								} else {
-									Some(OrderFilled::LimitOrder { lp, base_asset: asset_pair.assets().base, quote_asset: asset_pair.assets().quote, order, id: id.into(), tick, sold: sold.into(), bought: bought.into(), fees: fees.into(), remaining: position_info.amount.into() })
+									Some(OrderFilled::LimitOrder { lp, base_asset: asset_pair.assets().base, quote_asset: asset_pair.assets().quote, side, id: id.into(), tick, sold: sold.into(), bought: bought.into(), fees: fees.into(), remaining: position_info.amount.into() })
 								}
 							})
 						}).chain(
