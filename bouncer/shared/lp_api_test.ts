@@ -168,7 +168,7 @@ async function testRangeOrder() {
     range,
     {
       AssetAmounts: {
-        maximum: { base: 0, quote: testAssetAmount },
+        maximum: { base: testAssetAmount, quote: 0 },
         minimum: { base: 0, quote: 0 },
       },
     },
@@ -188,7 +188,7 @@ async function testRangeOrder() {
     {
       increase: {
         AssetAmounts: {
-          maximum: { base: 0, quote: testAssetAmount },
+          maximum: { base: testAssetAmount, quote: 0 },
           minimum: { base: 0, quote: 0 },
         },
       },
@@ -242,13 +242,13 @@ async function testLimitOrder() {
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'Sell', orderId, tick, 0]);
+  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'sell', orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     testRpcAsset,
     Assets.USDC,
-    'Sell',
+    'sell',
     orderId,
     tick,
     testAssetAmount,
@@ -270,7 +270,7 @@ async function testLimitOrder() {
   const updateLimitOrder = await lpApiRpc(`lp_update_limit_order`, [
     testRpcAsset,
     Assets.USDC,
-    'Sell',
+    'sell',
     orderId,
     tick,
     {
@@ -299,7 +299,7 @@ async function testLimitOrder() {
   const burnLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     testRpcAsset,
     Assets.USDC,
-    'Sell',
+    'sell',
     orderId,
     tick,
     0,
