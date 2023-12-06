@@ -1,4 +1,4 @@
-use cf_primitives::{AccountId, BlockNumber};
+use cf_primitives::{AccountId, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -8,14 +8,14 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		LpApi, Order, Tick,
+		ApiWaitForResult, LpApi, Order, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	ChainApi, EthereumAddress, OperatorApi, StateChainApi, StorageApi,
+	ChainApi, EthereumAddress, OperatorApi, StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::RpcAsset;
@@ -105,7 +105,8 @@ pub trait Rpc {
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: RpcAsset,
-	) -> Result<String, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<String>, AnyhowRpcError>;
 
 	#[method(name = "register_liquidity_refund_address")]
 	async fn register_liquidity_refund_address(
@@ -120,7 +121,8 @@ pub trait Rpc {
 		amount: NumberOrHex,
 		asset: RpcAsset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<EgressId>, AnyhowRpcError>;
 
 	#[method(name = "update_range_order")]
 	async fn update_range_order(
@@ -130,7 +132,8 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError>;
 
 	#[method(name = "set_range_order")]
 	async fn set_range_order(
@@ -140,7 +143,8 @@ pub trait Rpc {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError>;
 
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
@@ -152,7 +156,8 @@ pub trait Rpc {
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError>;
 
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
@@ -162,9 +167,10 @@ pub trait Rpc {
 		order: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
-		amount: NumberOrHex,
+		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError>;
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError>;
 
 	#[method(name = "asset_balances")]
 	async fn asset_balances(
@@ -241,13 +247,14 @@ impl RpcServer for RpcServerImpl {
 	async fn request_liquidity_deposit_address(
 		&self,
 		asset: RpcAsset,
-	) -> Result<String, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<String>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
-			.request_liquidity_deposit_address(asset.try_into()?)
+			.request_liquidity_deposit_address(asset.try_into()?, wait_for.unwrap_or_default())
 			.await
-			.map(|address| address.to_string())?)
+			.map(|result| result.map_details(|address| address.to_string()))?)
 	}
 
 	async fn register_liquidity_refund_address(
@@ -265,7 +272,8 @@ impl RpcServer for RpcServerImpl {
 		amount: NumberOrHex,
 		asset: RpcAsset,
 		destination_address: &str,
-	) -> Result<(ForeignChain, u64), AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<EgressId>, AnyhowRpcError> {
 		let asset: Asset = asset.try_into()?;
 
 		let destination_address =
@@ -274,7 +282,12 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.lp_api()
-			.withdraw_asset(try_parse_number_or_hex(amount)?, asset, destination_address)
+			.withdraw_asset(
+				try_parse_number_or_hex(amount)?,
+				asset,
+				destination_address,
+				wait_for.unwrap_or_default(),
+			)
 			.await?)
 	}
 
@@ -299,7 +312,8 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -309,6 +323,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick_range,
 				size_change.try_map(|size| size.try_into())?,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -320,7 +335,8 @@ impl RpcServer for RpcServerImpl {
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
-	) -> Result<Vec<RangeOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<RangeOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -330,6 +346,7 @@ impl RpcServer for RpcServerImpl {
 				id.try_into()?,
 				tick_range,
 				size.try_into()?,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -343,7 +360,8 @@ impl RpcServer for RpcServerImpl {
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -355,6 +373,7 @@ impl RpcServer for RpcServerImpl {
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
 				dispatch_at,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}
@@ -368,7 +387,8 @@ impl RpcServer for RpcServerImpl {
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<LimitOrder>, AnyhowRpcError> {
+		wait_for: Option<WaitFor>,
+	) -> Result<ApiWaitForResult<Vec<LimitOrder>>, AnyhowRpcError> {
 		Ok(self
 			.api
 			.lp_api()
@@ -380,6 +400,7 @@ impl RpcServer for RpcServerImpl {
 				tick,
 				try_parse_number_or_hex(sell_amount)?,
 				dispatch_at,
+				wait_for.unwrap_or_default(),
 			)
 			.await?)
 	}

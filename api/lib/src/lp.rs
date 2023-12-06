@@ -7,7 +7,7 @@ pub use cf_amm::{
 use cf_chains::address::EncodedAddress;
 use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
 use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
@@ -16,6 +16,31 @@ use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
 use utilities::rpc::NumberOrHex;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiWaitForResult<T> {
+	TxHash(H256),
+	TxDetails { tx_hash: H256, response: T },
+}
+
+impl<T> ApiWaitForResult<T> {
+	pub fn map_details<R>(self, f: impl FnOnce(T) -> R) -> ApiWaitForResult<R> {
+		match self {
+			ApiWaitForResult::TxHash(hash) => ApiWaitForResult::TxHash(hash),
+			ApiWaitForResult::TxDetails { response, tx_hash } =>
+				ApiWaitForResult::TxDetails { tx_hash, response: f(response) },
+		}
+	}
+
+	#[track_caller]
+	pub fn unwrap_details(self) -> T {
+		match self {
+			ApiWaitForResult::TxHash(_) => panic!("unwrap_details called on TransactionHash"),
+			ApiWaitForResult::TxDetails { response, .. } => response,
+		}
+	}
+}
 
 pub mod types {
 	use super::*;
@@ -124,6 +149,19 @@ fn collect_limit_order_returns(
 
 impl LpApi for StateChainClient {}
 
+fn into_api_wait_for_result<T>(
+	from: WaitForResult,
+	map_events: impl FnOnce(Vec<state_chain_runtime::RuntimeEvent>) -> T,
+) -> ApiWaitForResult<T> {
+	match from {
+		WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+		WaitForResult::Details(details) => {
+			let (tx_hash, events, ..) = details;
+			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events) }
+		},
+	}
+}
+
 #[async_trait]
 pub trait LpApi: SignedExtrinsicApi {
 	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
@@ -138,24 +176,40 @@ pub trait LpApi: SignedExtrinsicApi {
 		Ok(tx_hash)
 	}
 
-	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<EncodedAddress> {
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_lp::Call::request_liquidity_deposit_address {
-				asset,
-			})
-			.await
-			.until_finalized()
+	async fn request_liquidity_deposit_address(
+		&self,
+		asset: Asset,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<EncodedAddress>> {
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
+				wait_for,
+			)
 			.await?;
 
-		events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityProvider(
-					pallet_cf_lp::Event::LiquidityDepositAddressReady { deposit_address, .. },
-				) => Some(deposit_address),
-				_ => None,
-			})
-			.ok_or_else(|| anyhow::anyhow!("No LiquidityDepositAddressReady event was found"))
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(details) => {
+				let (tx_hash, events, ..) = details;
+				let encoded_address = events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LiquidityProvider(
+							pallet_cf_lp::Event::LiquidityDepositAddressReady {
+								deposit_address,
+								..
+							},
+						) => Some(deposit_address),
+						_ => None,
+					})
+					.ok_or_else(|| {
+						anyhow::anyhow!("No LiquidityDepositAddressReady event was found")
+					})?;
+
+				ApiWaitForResult::TxDetails { tx_hash, response: encoded_address }
+			},
+		})
 	}
 
 	async fn withdraw_asset(
@@ -163,30 +217,38 @@ pub trait LpApi: SignedExtrinsicApi {
 		amount: AssetAmount,
 		asset: Asset,
 		destination_address: EncodedAddress,
-	) -> Result<EgressId> {
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<EgressId>> {
 		if amount == 0 {
 			bail!("Withdrawal amount must be greater than 0");
 		}
 
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_lp::Call::withdraw_asset {
-				amount,
-				asset,
-				destination_address,
-			})
-			.await
-			.until_in_block()
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
+				wait_for,
+			)
 			.await?;
 
-		events
-			.into_iter()
-			.find_map(|event| match event {
-				state_chain_runtime::RuntimeEvent::LiquidityProvider(
-					pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
-				) => Some(egress_id),
-				_ => None,
-			})
-			.ok_or_else(|| anyhow::anyhow!("No WithdrawalEgressScheduled event was found"))
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(details) => {
+				let (tx_hash, events, ..) = details;
+				let egress_id = events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LiquidityProvider(
+							pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
+						) => Some(egress_id),
+						_ => None,
+					})
+					.ok_or_else(|| {
+						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
+					})?;
+
+				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
+			},
+		})
 	}
 
 	async fn update_range_order(
@@ -196,21 +258,23 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSize>,
-	) -> Result<Vec<types::RangeOrder>> {
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::RangeOrder>>> {
 		// Submit the mint order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::update_range_order {
-				base_asset,
-				quote_asset,
-				id,
-				option_tick_range,
-				size_change,
-			})
-			.await
-			.until_in_block()
-			.await?;
-
-		Ok(collect_range_order_returns(events))
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::update_range_order {
+					base_asset,
+					quote_asset,
+					id,
+					option_tick_range,
+					size_change,
+				},
+				wait_for,
+			)
+			.await?,
+			collect_range_order_returns,
+		))
 	}
 
 	async fn set_range_order(
@@ -220,21 +284,23 @@ pub trait LpApi: SignedExtrinsicApi {
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
-	) -> Result<Vec<types::RangeOrder>> {
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::RangeOrder>>> {
 		// Submit the mint order
-		let (_tx_hash, events, ..) = self
-			.submit_signed_extrinsic(pallet_cf_pools::Call::set_range_order {
-				base_asset,
-				quote_asset,
-				id,
-				option_tick_range,
-				size,
-			})
-			.await
-			.until_in_block()
-			.await?;
-
-		Ok(collect_range_order_returns(events))
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::set_range_order {
+					base_asset,
+					quote_asset,
+					id,
+					option_tick_range,
+					size,
+				},
+				wait_for,
+			)
+			.await?,
+			collect_range_order_returns,
+		))
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -247,7 +313,8 @@ pub trait LpApi: SignedExtrinsicApi {
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<types::LimitOrder>> {
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::update_limit_order {
 				base_asset,
@@ -258,6 +325,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				amount_change,
 			},
 			dispatch_at,
+			wait_for,
 		)
 		.await
 	}
@@ -272,7 +340,8 @@ pub trait LpApi: SignedExtrinsicApi {
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<types::LimitOrder>> {
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::set_limit_order {
 				base_asset,
@@ -283,6 +352,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				sell_amount,
 			},
 			dispatch_at,
+			wait_for,
 		)
 		.await
 	}
@@ -291,22 +361,22 @@ pub trait LpApi: SignedExtrinsicApi {
 		&self,
 		call: pallet_cf_pools::Call<state_chain_runtime::Runtime>,
 		dispatch_at: Option<BlockNumber>,
-	) -> Result<Vec<types::LimitOrder>> {
-		let events = if let Some(dispatch_at) = dispatch_at {
-			let (_tx_hash, events, ..) = self
-				.submit_signed_extrinsic(pallet_cf_pools::Call::schedule_limit_order_update {
-					call: Box::new(call),
-					dispatch_at,
-				})
-				.await
-				.until_in_block()
-				.await?;
-			events
-		} else {
-			let (_tx_hash, events, ..) =
-				self.submit_signed_extrinsic(call).await.until_in_block().await?;
-			events
-		};
-		Ok(collect_limit_order_returns(events))
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrder>>> {
+		Ok(into_api_wait_for_result(
+			if let Some(dispatch_at) = dispatch_at {
+				self.submit_signed_extrinsic_wait_for(
+					pallet_cf_pools::Call::schedule_limit_order_update {
+						call: Box::new(call),
+						dispatch_at,
+					},
+					wait_for,
+				)
+				.await?
+			} else {
+				self.submit_signed_extrinsic_wait_for(call, wait_for).await?
+			},
+			collect_limit_order_returns,
+		))
 	}
 }
