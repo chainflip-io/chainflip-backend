@@ -83,7 +83,7 @@ async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void> {
 
   // Wait for the democracy started event
   console.log('Waiting for voting to start...');
-  await observeDemocracyStarted; // FIXME: Sometimes this event is not getting hit?
+  await observeDemocracyStarted;
 
   // Vote for the proposal
   const observeDemocracyPassed = observeEvent('democracy:Passed', polkadot);
@@ -95,6 +95,9 @@ async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void> {
     polkadot.events.democracy.Voted,
   );
   console.log(`voted for proposal ${proposalIndex}`);
+
+  // Stopping swaps now because the api sometimes gets error 1010 (bad signature) when depositing dot after the runtime upgrade but before the api is updated.
+  runtimeUpgradeComplete = true;
 
   // Wait for it to pass
   await Promise.race([observeDemocracyPassed, observeDemocracyNotPassed])
@@ -139,10 +142,11 @@ async function randomPolkadotSwap(): Promise<void> {
 
   await testSwap(sourceAsset, destAsset, undefined, undefined, undefined, undefined, false);
   swapsComplete++;
+  console.log(`Swap complete: (${swapsComplete}/${swapsStarted})`);
 }
 
 async function doPolkadotSwaps(): Promise<void> {
-  const startSwapInterval = 1000;
+  const startSwapInterval = 2000;
   console.log(`Running polkadot swaps, new random swap every ${startSwapInterval}ms`);
   while (!runtimeUpgradeComplete) {
     randomPolkadotSwap();
@@ -177,6 +181,7 @@ async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
       );
       copyToPreCompileLocation = true;
     } else {
+      console.log(`Using pre-compiled wasm file: ${preCompiledWasmPath}`);
       return [preCompiledWasmPath, nextSpecVersion];
     }
   }
@@ -229,7 +234,6 @@ async function main(): Promise<void> {
 
   // Submit the runtime upgrade
   await pushPolkadotRuntimeUpgrade(wasmPath);
-  runtimeUpgradeComplete = true;
 
   // Check the polkadot spec version has changed
   const postUpgradeSpecVersion = await getCurrentRuntimeVersion(POLKADOT_ENDPOINT_PORT);
@@ -246,7 +250,7 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 500000).catch((error) => {
+runWithTimeout(main(), 1230000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });
