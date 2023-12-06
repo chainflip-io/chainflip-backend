@@ -521,7 +521,7 @@ impl P2PContext {
 				state: ConnectionState::Connected(connected_socket),
 				info: peer,
 				last_activity: Cell::new(
-					previous_activity.unwrap_or_else(|| tokio::time::Instant::now()),
+					previous_activity.unwrap_or_else(tokio::time::Instant::now),
 				),
 			},
 		) {
