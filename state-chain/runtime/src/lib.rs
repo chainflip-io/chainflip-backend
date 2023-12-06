@@ -14,7 +14,7 @@ use crate::{
 	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
 };
 use cf_amm::{
-	common::{Amount, Price, Tick},
+	common::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -29,7 +29,9 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, PoolLiquidity, PoolOrderbook, UnidirectionalPoolDepth};
+use pallet_cf_pools::{
+	AskBidMap, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
+};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
@@ -1037,7 +1039,7 @@ impl_runtime_apis! {
 		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<Price> {
+		) -> Option<PoolPrice> {
 			LiquidityPools::current_price(from, to)
 		}
 
@@ -1049,28 +1051,28 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapOutput> {
-			LiquidityPools::swap_with_network_fee(from, to, amount).ok()
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
+			LiquidityPools::swap_with_network_fee(from, to, amount)
 		}
 
-		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo> {
-			LiquidityPools::pool_info(base_asset, pair_asset)
+		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchError> {
+			LiquidityPools::pool_info(base_asset, quote_asset)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
-			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
+		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchError> {
+			LiquidityPools::pool_depth(base_asset, quote_asset, tick_range)
 		}
 
-		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity> {
-			LiquidityPools::pool_liquidity(base_asset, pair_asset)
+		fn cf_pool_liquidity(base_asset: Asset, quote_asset: Asset) -> Result<PoolLiquidity, DispatchError> {
+			LiquidityPools::pool_liquidity(base_asset, quote_asset)
 		}
 
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
-			pair_asset: Asset,
+			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		) -> Result<AssetsMap<Amount>, DispatchError> {
+			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range)
 		}
 
 		fn cf_pool_orderbook(
@@ -1083,19 +1085,19 @@ impl_runtime_apis! {
 
 		fn cf_pool_orders(
 			base_asset: Asset,
-			pair_asset: Asset,
+			quote_asset: Asset,
 			lp: AccountId,
-		) -> Option<PoolOrders> {
-			LiquidityPools::pool_orders(base_asset, pair_asset, &lp)
+		) -> Result<PoolOrders, DispatchError> {
+			LiquidityPools::pool_orders(base_asset, quote_asset, &lp)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
-			pair_asset: Asset,
+			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
+		) -> Result<AssetsMap<Amount>, DispatchError> {
+			LiquidityPools::pool_range_order_liquidity_value(base_asset, quote_asset, tick_range, liquidity)
 		}
 
 		fn cf_network_environment() -> NetworkEnvironment {

@@ -59,7 +59,7 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 		Runtime,
 		RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::NewPoolCreated {
 			base_asset: unstable_asset,
-			pair_asset: STABLE_ASSET,
+			quote_asset: STABLE_ASSET,
 			fee_hundredth_pips,
 			initial_price,
 		},)
@@ -115,30 +115,30 @@ fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 fn set_range_order(
 	account_id: &AccountId,
 	base_asset: Asset,
-	pair_asset: Asset,
+	quote_asset: Asset,
 	id: OrderId,
 	range: Option<core::ops::Range<Tick>>,
 	liquidity: Liquidity,
 ) {
-	let balances = [base_asset, pair_asset].map(|asset| {
+	let balances = [base_asset, quote_asset].map(|asset| {
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
 	});
 	assert_ok!(LiquidityPools::set_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		base_asset,
-		pair_asset,
+		quote_asset,
 		id,
 		range,
 		RangeOrderSize::Liquidity { liquidity },
 	));
-	let new_balances = [base_asset, pair_asset].map(|asset| {
+	let new_balances = [base_asset, quote_asset].map(|asset| {
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
 	});
 
 	assert!(new_balances.into_iter().zip(balances).all(|(new, old)| { new <= old }));
 
 	for ((new_balance, old_balance), asset) in
-		new_balances.into_iter().zip(balances).zip([base_asset, pair_asset])
+		new_balances.into_iter().zip(balances).zip([base_asset, quote_asset])
 	{
 		if new_balance < old_balance {
 			assert_events_eq!(
@@ -163,14 +163,17 @@ fn set_limit_order(
 	tick: Option<Tick>,
 	sell_amount: AssetAmount,
 ) {
+	let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset, buy_asset).unwrap();
+
 	let sell_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
 	let buy_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
 	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		sell_asset,
-		buy_asset,
+		asset_pair.assets().base,
+		asset_pair.assets().quote,
+		order,
 		id,
 		tick,
 		sell_amount,
@@ -511,9 +514,11 @@ fn failed_swaps_are_rolled_back() {
 
 		// Get current pool's liquidity
 		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
-			.expect("Eth pool should be set up with liquidity.");
+			.expect("Eth pool should be set up with liquidity.")
+			.price;
 		let btc_price = LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
-			.expect("Btc pool should be set up with liquidity.");
+			.expect("Btc pool should be set up with liquidity.")
+			.price;
 
 		let witness_swap_ingress =
 			|from: Asset, to: Asset, amount: AssetAmount, destination_address: EncodedAddress| {
@@ -563,14 +568,30 @@ fn failed_swaps_are_rolled_back() {
 		);
 
 		// Repeatedly processing Failed swaps should not impact pool liquidity
-		assert_eq!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
-		assert_eq!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
+		assert_eq!(
+			Some(eth_price),
+			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
+				.map(|pool_price| pool_price.price)
+		);
+		assert_eq!(
+			Some(btc_price),
+			LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
+				.map(|pool_price| pool_price.price)
+		);
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
 		Swapping::on_finalize(2);
-		assert_eq!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
-		assert_eq!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
+		assert_eq!(
+			Some(eth_price),
+			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
+				.map(|pool_price| pool_price.price)
+		);
+		assert_eq!(
+			Some(btc_price),
+			LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
+				.map(|pool_price| pool_price.price)
+		);
 
 		// All swaps can continue once the problematic pool is fixed
 		setup_pool_and_accounts(vec![Asset::Flip]);
@@ -578,8 +599,16 @@ fn failed_swaps_are_rolled_back() {
 
 		Swapping::on_finalize(3);
 
-		assert_ne!(Some(eth_price), LiquidityPools::current_price(Asset::Eth, STABLE_ASSET));
-		assert_ne!(Some(btc_price), LiquidityPools::current_price(Asset::Btc, STABLE_ASSET));
+		assert_ne!(
+			Some(eth_price),
+			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
+				.map(|pool_price| pool_price.price)
+		);
+		assert_ne!(
+			Some(btc_price),
+			LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
+				.map(|pool_price| pool_price.price)
+		);
 
 		assert_events_match!(
 			Runtime,

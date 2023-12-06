@@ -146,15 +146,15 @@ async function testRangeOrder() {
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
     AssetAmounts: {
-      maximum: { base: 0, pair: 0 },
-      minimum: { base: 0, pair: 0 },
+      maximum: { base: 0, quote: 0 },
+      minimum: { base: 0, quote: 0 },
     },
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
   await lpApiRpc(`lp_set_range_order`, [
-    Assets.USDC,
     testRpcAsset,
+    Assets.USDC,
     orderId,
     range,
     zeroAssetAmounts,
@@ -162,14 +162,14 @@ async function testRangeOrder() {
 
   // Mint a range order
   const mintRangeOrder = await lpApiRpc(`lp_set_range_order`, [
-    Assets.USDC,
     testRpcAsset,
+    Assets.USDC,
     orderId,
     range,
     {
       AssetAmounts: {
-        maximum: { base: 0, pair: testAssetAmount },
-        minimum: { base: 0, pair: 0 },
+        maximum: { base: testAssetAmount, quote: 0 },
+        minimum: { base: 0, quote: 0 },
       },
     },
   ]);
@@ -181,15 +181,15 @@ async function testRangeOrder() {
 
   // Update the range order
   const updateRangeOrder = await lpApiRpc(`lp_update_range_order`, [
-    Assets.USDC,
     testRpcAsset,
+    Assets.USDC,
     orderId,
     range,
     {
       increase: {
         AssetAmounts: {
-          maximum: { base: 0, pair: testAssetAmount },
-          minimum: { base: 0, pair: 0 },
+          maximum: { base: testAssetAmount, quote: 0 },
+          minimum: { base: 0, quote: 0 },
         },
       },
     },
@@ -208,8 +208,8 @@ async function testRangeOrder() {
 
   // Burn the range order
   const burnRangeOrder = await lpApiRpc(`lp_set_range_order`, [
-    Assets.USDC,
     testRpcAsset,
+    Assets.USDC,
     orderId,
     range,
     zeroAssetAmounts,
@@ -242,25 +242,26 @@ async function testLimitOrder() {
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, orderId, tick, 0]);
+  await lpApiRpc(`lp_set_limit_order`, [testRpcAsset, Assets.USDC, 'sell', orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     testRpcAsset,
     Assets.USDC,
+    'sell',
     orderId,
     tick,
     testAssetAmount,
   ]);
   assert(mintLimitOrder.length >= 1, `Empty mint limit order result`);
   assert(
-    parseInt(mintLimitOrder[0].amount_change.increase) > 0,
-    `Expected mint of limit order to increase liquidity. amount_change: ${JSON.stringify(
-      mintLimitOrder[0].amount_change,
+    parseInt(mintLimitOrder[0].sell_amount_change.increase) > 0,
+    `Expected mint of limit order to increase liquidity. sell_amount_change: ${JSON.stringify(
+      mintLimitOrder[0].sell_amount_change,
     )}`,
   );
   assert.strictEqual(
-    parseInt(mintLimitOrder[0].amount_total),
+    parseInt(mintLimitOrder[0].sell_amount_total),
     testAssetAmount,
     `Unexpected amount of asset was minted for limit order`,
   );
@@ -269,6 +270,7 @@ async function testLimitOrder() {
   const updateLimitOrder = await lpApiRpc(`lp_update_limit_order`, [
     testRpcAsset,
     Assets.USDC,
+    'sell',
     orderId,
     tick,
     {
@@ -281,8 +283,8 @@ async function testLimitOrder() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateLimitOrder.forEach((order: any) => {
     if (
-      parseInt(order.amount_change.increase) === testAssetAmount &&
-      parseInt(order.amount_total) === testAssetAmount * 2
+      parseInt(order.sell_amount_change.increase) === testAssetAmount &&
+      parseInt(order.sell_amount_total) === testAssetAmount * 2
     ) {
       matchUpdate = true;
     }
@@ -297,6 +299,7 @@ async function testLimitOrder() {
   const burnLimitOrder = await lpApiRpc(`lp_set_limit_order`, [
     testRpcAsset,
     Assets.USDC,
+    'sell',
     orderId,
     tick,
     0,
@@ -307,8 +310,8 @@ async function testLimitOrder() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   burnLimitOrder.forEach((order: any) => {
     if (
-      parseInt(order.amount_change.decrease) === testAssetAmount * 2 &&
-      parseInt(order.amount_total) === 0
+      parseInt(order.sell_amount_change.decrease) === testAssetAmount * 2 &&
+      parseInt(order.sell_amount_total) === 0
     ) {
       matchBurn = true;
     }

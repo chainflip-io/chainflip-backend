@@ -7,7 +7,7 @@ pub use cf_amm::{
 use cf_chains::address::EncodedAddress;
 use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
 	StateChainClient,
 };
 use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
@@ -22,7 +22,7 @@ pub mod types {
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrder {
 		pub base_asset: Asset,
-		pub pair_asset: Asset,
+		pub quote_asset: Asset,
 		pub id: OrderId,
 		pub tick_range: Range<Tick>,
 		pub liquidity_total: NumberOrHex,
@@ -38,14 +38,15 @@ pub mod types {
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct LimitOrder {
-		pub sell_asset: Asset,
-		pub buy_asset: Asset,
+		pub base_asset: Asset,
+		pub quote_asset: Asset,
+		pub order: Order,
 		pub id: OrderId,
 		pub tick: Tick,
-		pub amount_total: NumberOrHex,
+		pub sell_amount_total: NumberOrHex,
 		pub collected_fees: NumberOrHex,
 		pub bought_amount: NumberOrHex,
-		pub amount_change: Option<IncreaseOrDecrease<NumberOrHex>>,
+		pub sell_amount_change: Option<IncreaseOrDecrease<NumberOrHex>>,
 	}
 }
 
@@ -62,13 +63,13 @@ fn collect_range_order_returns(
 					collected_fees,
 					tick_range,
 					base_asset,
-					pair_asset,
+					quote_asset,
 					id,
 					..
 				},
 			) => Some(types::RangeOrder {
 				base_asset,
-				pair_asset,
+				quote_asset,
 				id,
 				size_change: size_change.map(|increase_or_decrese| {
 					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
@@ -93,25 +94,27 @@ fn collect_limit_order_returns(
 		.filter_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::LimitOrderUpdated {
-					amount_change,
-					amount_total,
+					sell_amount_change,
+					sell_amount_total,
 					collected_fees,
 					bought_amount,
 					tick,
-					sell_asset,
-					buy_asset,
+					base_asset,
+					quote_asset,
+					order,
 					id,
 					..
 				},
 			) => Some(types::LimitOrder {
-				sell_asset,
-				buy_asset,
+				base_asset,
+				quote_asset,
+				order,
 				id,
 				tick,
-				amount_total: amount_total.into(),
+				sell_amount_total: sell_amount_total.into(),
 				collected_fees: collected_fees.into(),
 				bought_amount: bought_amount.into(),
-				amount_change: amount_change
+				sell_amount_change: sell_amount_change
 					.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
 			}),
 			_ => None,
@@ -141,7 +144,7 @@ pub trait LpApi: SignedExtrinsicApi {
 				asset,
 			})
 			.await
-			.until_in_block()
+			.until_finalized()
 			.await?;
 
 		events
@@ -189,7 +192,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn update_range_order(
 		&self,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSize>,
@@ -198,7 +201,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::update_range_order {
 				base_asset,
-				pair_asset,
+				quote_asset,
 				id,
 				option_tick_range,
 				size_change,
@@ -213,7 +216,7 @@ pub trait LpApi: SignedExtrinsicApi {
 	async fn set_range_order(
 		&self,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 		id: OrderId,
 		option_tick_range: Option<Range<Tick>>,
 		size: RangeOrderSize,
@@ -222,7 +225,7 @@ pub trait LpApi: SignedExtrinsicApi {
 		let (_tx_hash, events, ..) = self
 			.submit_signed_extrinsic(pallet_cf_pools::Call::set_range_order {
 				base_asset,
-				pair_asset,
+				quote_asset,
 				id,
 				option_tick_range,
 				size,
@@ -234,10 +237,12 @@ pub trait LpApi: SignedExtrinsicApi {
 		Ok(collect_range_order_returns(events))
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn update_limit_order(
 		&self,
-		sell_asset: Asset,
-		buy_asset: Asset,
+		base_asset: Asset,
+		quote_asset: Asset,
+		order: Order,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
@@ -245,8 +250,9 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<types::LimitOrder>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::update_limit_order {
-				sell_asset,
-				buy_asset,
+				base_asset,
+				quote_asset,
+				order,
 				id,
 				option_tick,
 				amount_change,
@@ -256,10 +262,12 @@ pub trait LpApi: SignedExtrinsicApi {
 		.await
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn set_limit_order(
 		&self,
-		sell_asset: Asset,
-		buy_asset: Asset,
+		base_asset: Asset,
+		quote_asset: Asset,
+		order: Order,
 		id: OrderId,
 		option_tick: Option<Tick>,
 		sell_amount: AssetAmount,
@@ -267,8 +275,9 @@ pub trait LpApi: SignedExtrinsicApi {
 	) -> Result<Vec<types::LimitOrder>> {
 		self.scheduled_or_immediate(
 			pallet_cf_pools::Call::set_limit_order {
-				sell_asset,
-				buy_asset,
+				base_asset,
+				quote_asset,
+				order,
 				id,
 				option_tick,
 				sell_amount,

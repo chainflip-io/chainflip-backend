@@ -39,14 +39,15 @@ type AmountChange = null | {
 };
 
 type LimitOrderResponse = {
-  sell_asset: string;
-  buy_asset: string;
+  base_asset: string;
+  quote_asset: string;
+  order: string;
   id: number;
   tick: number;
-  amount_total: number;
+  sell_amount_total: number;
   collected_fees: number;
   bought_amount: number;
-  amount_change: AmountChange;
+  sell_amount_change: AmountChange;
 };
 
 function predictBtcAddress(pubkey: string, salt: number): string {
@@ -100,12 +101,12 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
     const result = await Promise.all([
       call(
         'lp_set_limit_order',
-        ['USDC', asset, 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        [asset, 'USDC', 'Sell', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
         `Buy ${asset}`,
       ),
       call(
         'lp_set_limit_order',
-        [asset, 'USDC', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        [asset, 'USDC', 'Buy', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
         `Sell ${asset}`,
       ),
     ]);

@@ -8,7 +8,7 @@ use chainflip_api::{
 	self,
 	lp::{
 		types::{LimitOrder, RangeOrder},
-		LpApi, Tick,
+		LpApi, Order, Tick,
 	},
 	primitives::{
 		chains::{Bitcoin, Ethereum, Polkadot},
@@ -117,7 +117,7 @@ pub trait Rpc {
 	async fn update_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -127,7 +127,7 @@ pub trait Rpc {
 	async fn set_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -136,8 +136,9 @@ pub trait Rpc {
 	#[method(name = "update_limit_order")]
 	async fn update_limit_order(
 		&self,
-		sell_asset: RpcAsset,
-		buy_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		order: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -147,8 +148,9 @@ pub trait Rpc {
 	#[method(name = "set_limit_order")]
 	async fn set_limit_order(
 		&self,
-		sell_asset: RpcAsset,
-		buy_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		order: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount: NumberOrHex,
@@ -248,7 +250,7 @@ impl RpcServer for RpcServerImpl {
 	async fn update_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size_change: IncreaseOrDecrease<RangeOrderSizeJson>,
@@ -258,7 +260,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.update_range_order(
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				id.try_into()?,
 				tick_range,
 				size_change.try_map(|size| size.try_into())?,
@@ -269,7 +271,7 @@ impl RpcServer for RpcServerImpl {
 	async fn set_range_order(
 		&self,
 		base_asset: RpcAsset,
-		pair_asset: RpcAsset,
+		quote_asset: RpcAsset,
 		id: OrderIdJson,
 		tick_range: Option<Range<Tick>>,
 		size: RangeOrderSizeJson,
@@ -279,7 +281,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.set_range_order(
 				base_asset.try_into()?,
-				pair_asset.try_into()?,
+				quote_asset.try_into()?,
 				id.try_into()?,
 				tick_range,
 				size.try_into()?,
@@ -289,8 +291,9 @@ impl RpcServer for RpcServerImpl {
 
 	async fn update_limit_order(
 		&self,
-		sell_asset: RpcAsset,
-		buy_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		order: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<NumberOrHex>,
@@ -300,8 +303,9 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.update_limit_order(
-				sell_asset.try_into()?,
-				buy_asset.try_into()?,
+				base_asset.try_into()?,
+				quote_asset.try_into()?,
+				order,
 				id.try_into()?,
 				tick,
 				amount_change.try_map(try_parse_number_or_hex)?,
@@ -312,8 +316,9 @@ impl RpcServer for RpcServerImpl {
 
 	async fn set_limit_order(
 		&self,
-		sell_asset: RpcAsset,
-		buy_asset: RpcAsset,
+		base_asset: RpcAsset,
+		quote_asset: RpcAsset,
+		order: Order,
 		id: OrderIdJson,
 		tick: Option<Tick>,
 		sell_amount: NumberOrHex,
@@ -323,8 +328,9 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.set_limit_order(
-				sell_asset.try_into()?,
-				buy_asset.try_into()?,
+				base_asset.try_into()?,
+				quote_asset.try_into()?,
+				order,
 				id.try_into()?,
 				tick,
 				try_parse_number_or_hex(sell_amount)?,

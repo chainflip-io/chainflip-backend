@@ -277,13 +277,13 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 	fn ensure_has_refund_address_for_pair(
 		account_id: &Self::AccountId,
 		base_asset: Asset,
-		pair_asset: Asset,
+		quote_asset: Asset,
 	) -> DispatchResult {
 		ensure!(
 			LiquidityRefundAddress::<T>::contains_key(account_id, ForeignChain::from(base_asset)) &&
 				LiquidityRefundAddress::<T>::contains_key(
 					account_id,
-					ForeignChain::from(pair_asset)
+					ForeignChain::from(quote_asset)
 				),
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
