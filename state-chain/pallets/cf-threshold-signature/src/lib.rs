@@ -73,7 +73,7 @@ pub enum ThresholdCeremonyType {
 	KeygenVerification,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
