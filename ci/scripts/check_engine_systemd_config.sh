@@ -18,7 +18,7 @@ version=$1
 IFS='.' read -r major_version minor_version patch_version <<< "$version"
 
 # Construct the filename to search for
-filename="chainflip-engine${major_version}.${minor_version}.service"
+service_file="chainflip-engine${major_version}.${minor_version}.service"
 search_string="chainflip-engine${major_version}.${minor_version}"
 
 # Check each subdirectory for the specified file and content
