@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        manifest: [state-chain/node/Cargo.toml, engine/Cargo.toml, api/bin/chainflip-cli/Cargo.toml, api/bin/chainflip-broker-api/Cargo.toml]
+        manifest: [state-chain/node/Cargo.toml, engine/Cargo.toml, api/bin/chainflip-cli/Cargo.toml, api/bin/chainflip-broker-api/Cargo.toml, api/bin/chainflip-lp-api/Cargo.toml]
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -38,3 +38,27 @@ jobs:
             echo "Tag version (${{ inputs.tag }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
             exit 1
           fi
+
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
+
+  check-engine-systemd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Check systemd files and debian package config 👀
+        shell: bash
+        run: ./ci/scripts/check_engine_systemd_config.sh ${{ inputs.tag }}
+
+  check-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Check changelog 📝
+        shell: bash
+        run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
