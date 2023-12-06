@@ -7,7 +7,7 @@ pub use cf_amm::{
 use cf_chains::address::EncodedAddress;
 use cf_primitives::{Asset, AssetAmount, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
-	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, UntilFinalized},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
 	StateChainClient,
 };
 use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};

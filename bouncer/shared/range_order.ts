@@ -20,7 +20,9 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   const lp = keyring.createFromUri(lpUri);
 
   const currentSqrtPrice = (
-    await chainflip.query.liquidityPools.pools({ assets: { quote: 'usdc', base: ccy.toLowerCase() } })
+    await chainflip.query.liquidityPools.pools({
+      assets: { quote: 'usdc', base: ccy.toLowerCase() },
+    })
   ).toJSON()!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
   console.log('Setting up ' + ccy + ' range order');

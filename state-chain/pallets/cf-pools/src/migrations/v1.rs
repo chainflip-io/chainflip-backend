@@ -10,7 +10,7 @@ mod old {
 
 	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
 	pub struct CanonicalAssetPair {
-		assets: SideMap<Asset>,
+		pub assets: SideMap<Asset>,
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
@@ -33,20 +33,19 @@ mod old {
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-
-		for (key, pool) in old::Pools<T>::iter().filter_map(|(old_key, old_pool)| {
+		for (key, pool) in old::Pools::<T>::iter().filter_map(|(old_key, old_pool)| {
 			Some((
 				AssetPair::new(old_key.assets[Side::Zero], old_key.assets[Side::One])?,
 				Pool::<T> {
 					range_orders_cache: old_pool.range_orders_cache,
 					limit_orders_cache: old_pool.limit_orders_cache.into(),
 					pool_state: old_pool.pool_state.into(),
-				}
+				},
 			))
 		}) {
 			Pools::<T>::insert(key, pool);
 		}
-		
+
 		Weight::zero()
 	}
 
