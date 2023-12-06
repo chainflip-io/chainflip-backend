@@ -15,7 +15,7 @@ export async function newSwap(
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
-  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997'
+  const brokerUrl = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
   await broker.requestSwapDepositAddress(
     {
       srcAsset: sourceAsset,
