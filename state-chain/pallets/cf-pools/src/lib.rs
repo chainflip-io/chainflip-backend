@@ -1052,7 +1052,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [UnsupportedCall](pallet_cf_pools::Error::UnsupportedCall)
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::schedule())]
+		#[pallet::weight(T::WeightInfo::schedule_limit_order_update())]
 		pub fn schedule_limit_order_update(
 			origin: OriginFor<T>,
 			call: Box<Call<T>>,
