@@ -35,6 +35,11 @@ enum Scenario {
 	Timeout,
 }
 
+enum TxType {
+	Normal,
+	Rotation,
+}
+
 thread_local! {
 	pub static TIMEDOUT_ATTEMPTS: std::cell::RefCell<Vec<BroadcastAttemptId>> = Default::default();
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
@@ -1006,7 +1011,28 @@ fn witness_broadcast(tx_out_id: [u8; 4]) {
 		MOCK_TX_METADATA,
 	));
 }
-enum TxType {
-	Normal,
-	Rotation,
+
+#[test]
+fn time_out_broadcaster_are_reported() {
+	new_test_ext().execute_with(|| {
+		let broadcast_attempt_id = start_mock_broadcast();
+		let expiry = System::block_number()
+			.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
+		let nominee =
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap().nominee;
+
+		assert_eq!(
+			FailedBroadcasters::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+			None
+		);
+
+		// Let the broadcast attempt time out
+		Broadcaster::on_initialize(expiry);
+
+		// The nominated broadcaster is added to `FailedBroadcasters` to be reported later.
+		assert_eq!(
+			FailedBroadcasters::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+			Some(vec![nominee])
+		);
+	});
 }

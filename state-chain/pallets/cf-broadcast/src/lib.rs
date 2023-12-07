@@ -409,9 +409,11 @@ pub mod pallet {
 						Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
 							broadcast_attempt_id: *attempt_id,
 						});
-						if let Some(broadcast_attempt) = Self::take_awaiting_broadcast(*attempt_id)
+						if let Some((broadcast_attempt, nominee)) =
+							Self::take_awaiting_broadcast(*attempt_id)
 						{
-							Self::start_next_broadcast_attempt(broadcast_attempt);
+							FailedBroadcasters::<T, I>::append(attempt_id.broadcast_id, nominee);
+							Self::start_next_broadcast_attempt(broadcast_attempt)
 						}
 					}
 				}
@@ -762,14 +764,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn take_awaiting_broadcast(
 		broadcast_attempt_id: BroadcastAttemptId,
-	) -> Option<BroadcastAttempt<T, I>> {
+	) -> Option<(BroadcastAttempt<T, I>, T::ValidatorId)> {
 		if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::take(broadcast_attempt_id) {
 			assert_eq!(
 				signing_attempt.broadcast_attempt.broadcast_attempt_id,
 				broadcast_attempt_id,
 				"The broadcast attempt id of the signing attempt should match that of the broadcast attempt id of its key"
 			);
-			Some(signing_attempt.broadcast_attempt)
+			Some((signing_attempt.broadcast_attempt, signing_attempt.nominee))
 		} else {
 			None
 		}
