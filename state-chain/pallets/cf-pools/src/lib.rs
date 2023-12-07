@@ -1163,7 +1163,7 @@ pub struct PoolInfo {
 #[serde(bound = "")]
 pub struct LimitOrder<T: Config> {
 	pub lp: T::AccountId,
-	pub id: OrderId,
+	pub id: Amount, // TODO: Intro type alias
 	pub tick: Tick,
 	pub sell_amount: Amount,
 	pub fees_earned: Amount,
@@ -1174,7 +1174,7 @@ pub struct LimitOrder<T: Config> {
 #[serde(bound = "")]
 pub struct RangeOrder<T: Config> {
 	pub lp: T::AccountId,
-	pub id: OrderId,
+	pub id: Amount,
 	pub range: Range<Tick>,
 	pub liquidity: Liquidity,
 	pub fees_earned: AssetsMap<Amount>,
@@ -1826,7 +1826,7 @@ impl<T: Config> Pallet<T> {
 									.unwrap();
 								LimitOrder {
 									lp: lp.clone(),
-									id: *id,
+									id: (*id).into(),
 									tick: *tick,
 									sell_amount: position_info.amount,
 									fees_earned: collected.accumulative_fees,
@@ -1849,7 +1849,7 @@ impl<T: Config> Pallet<T> {
 							.unwrap();
 						RangeOrder {
 							lp: lp.clone(),
-							id: *id,
+							id: (*id).into(),
 							range: tick_range.clone(),
 							liquidity: position_info.liquidity,
 							fees_earned: collected.accumulative_fees.into(),
@@ -1886,7 +1886,7 @@ impl<T: Config> Pallet<T> {
 										.unwrap();
 									LimitOrder {
 										lp: lp.clone(),
-										id: *order_id,
+										id: (*order_id).into(),
 										tick: *tick,
 										sell_amount: position_info.amount,
 										fees_earned: collected.accumulative_fees,
@@ -1911,7 +1911,7 @@ impl<T: Config> Pallet<T> {
 								.unwrap();
 							RangeOrder {
 								lp: lp.clone(),
-								id: *id,
+								id: (*id).into(),
 								range: tick_range.clone(),
 								liquidity: position_info.liquidity,
 								fees_earned: collected.accumulative_fees.into(),

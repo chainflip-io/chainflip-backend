@@ -322,7 +322,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: ALICE,
-						id: 0,
+						id: 0.into(),
 						tick: 0,
 						sell_amount: 5000u128.into(),
 						fees_earned: 0.into(),
@@ -330,7 +330,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 					}],
 					bids: vec![LimitOrder {
 						lp: ALICE,
-						id: 1,
+						id: 1.into(),
 						tick: 0,
 						sell_amount: 1000.into(),
 						fees_earned: 0.into(),
@@ -346,7 +346,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: BOB,
-						id: 0,
+						id: 0.into(),
 						tick: 0,
 						sell_amount: 10000u128.into(),
 						fees_earned: 0.into(),
@@ -354,7 +354,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 					}],
 					bids: vec![LimitOrder {
 						lp: BOB,
-						id: 1,
+						id: 1.into(),
 						tick: 0,
 						sell_amount: 10000.into(),
 						fees_earned: 0.into(),
@@ -413,7 +413,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: ALICE,
-						id: 0,
+						id: 0.into(),
 						tick: 0,
 						sell_amount: 3000.into(),
 						fees_earned: 1333.into(),
@@ -421,7 +421,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 					}],
 					bids: vec![LimitOrder {
 						lp: ALICE,
-						id: 1,
+						id: 1.into(),
 						tick: 0,
 						sell_amount: 454.into(),
 						fees_earned: 363.into(),
@@ -437,7 +437,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: BOB,
-						id: 0,
+						id: 0.into(),
 						tick: 0,
 						sell_amount: 6_000u128.into(),
 						fees_earned: 2666.into(),
@@ -445,7 +445,7 @@ fn can_update_pool_liquidity_fee_and_collect_for_limit_order() {
 					}],
 					bids: vec![LimitOrder {
 						lp: BOB,
-						id: 1,
+						id: 1.into(),
 						tick: 0,
 						sell_amount: 4_545.into(),
 						fees_earned: 3636.into(),
@@ -526,7 +526,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
 						lp: ALICE,
-						id: 0,
+						id: 0.into(),
 						tick: 0,
 						sell_amount: 100.into(),
 						fees_earned: 0.into(),
@@ -675,7 +675,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
 					lp: ALICE,
-					id: 0,
+					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
 					fees_earned: AssetsMap { base: 999.into(), quote: 999.into() }
@@ -688,7 +688,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
 					lp: ALICE,
-					id: 0,
+					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
 					fees_earned: AssetsMap { base: 999.into(), quote: 999.into() }
@@ -908,7 +908,7 @@ fn can_get_all_pool_orders() {
 					asks: vec![
 						LimitOrder {
 							lp: ALICE,
-							id: 4,
+							id: 4.into(),
 							tick: 100,
 							sell_amount: 500_000.into(),
 							fees_earned: 0.into(),
@@ -916,7 +916,7 @@ fn can_get_all_pool_orders() {
 						},
 						LimitOrder {
 							lp: ALICE,
-							id: 5,
+							id: 5.into(),
 							tick: 1000,
 							sell_amount: 600_000.into(),
 							fees_earned: 0.into(),
@@ -924,7 +924,7 @@ fn can_get_all_pool_orders() {
 						},
 						LimitOrder {
 							lp: ALICE,
-							id: 6,
+							id: 6.into(),
 							tick: 100,
 							sell_amount: 700_000.into(),
 							fees_earned: 0.into(),
@@ -933,7 +933,7 @@ fn can_get_all_pool_orders() {
 					],
 					bids: vec![LimitOrder {
 						lp: ALICE,
-						id: 7,
+						id: 7.into(),
 						tick: 1000,
 						sell_amount: 800_000.into(),
 						fees_earned: 0.into(),
@@ -943,28 +943,28 @@ fn can_get_all_pool_orders() {
 				range_orders: vec![
 					RangeOrder {
 						lp: ALICE,
-						id: 0,
+						id: 0.into(),
 						range: -100..100,
 						liquidity: 100_000u128,
 						fees_earned: Default::default(),
 					},
 					RangeOrder {
 						lp: ALICE,
-						id: 1,
+						id: 1.into(),
 						range: -234..234,
 						liquidity: 200_000u128,
 						fees_earned: Default::default(),
 					},
 					RangeOrder {
 						lp: BOB,
-						id: 2,
+						id: 2.into(),
 						range: -100..100,
 						liquidity: 300_000u128,
 						fees_earned: Default::default(),
 					},
 					RangeOrder {
 						lp: BOB,
-						id: 3,
+						id: 3.into(),
 						range: -234..234,
 						liquidity: 400_000u128,
 						fees_earned: Default::default(),

@@ -135,7 +135,7 @@ decl_runtime_apis!(
 		fn cf_pool_orders(
 			base_asset: Asset,
 			quote_asset: Asset,
-			maybe_lp: Option<AccountId32>,
+			lp: Option<AccountId32>,
 		) -> Result<PoolOrders<crate::Runtime>, DispatchError>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,

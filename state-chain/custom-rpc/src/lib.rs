@@ -421,7 +421,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		maybe_lp: Option<state_chain_runtime::AccountId>,
+		lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
 	#[method(name = "pool_range_order_liquidity_value")]
@@ -910,7 +910,7 @@ where
 		&self,
 		base_asset: RpcAsset,
 		quote_asset: RpcAsset,
-		maybe_lp: Option<state_chain_runtime::AccountId>,
+		lp: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>> {
 		self.client
@@ -919,7 +919,7 @@ where
 				self.unwrap_or_best(at),
 				base_asset.try_into()?,
 				quote_asset.try_into()?,
-				maybe_lp,
+				lp,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
