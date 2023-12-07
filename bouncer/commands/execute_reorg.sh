@@ -12,7 +12,7 @@ done
 echo "Advancing Bitcoin chain on second node"
 docker exec secondary_btc_node bitcoin-cli generatetoaddress $(echo $1 + 1 | bc) mqWrbvavrNhKH1bf23pAUPd5peyFPWjHGm
 
-echo "Synching nodes"
+echo "Syncing nodes"
 docker exec secondary_btc_node bitcoin-cli addnode "bitcoin" "onetry"
 BLOCKS=$(docker exec secondary_btc_node bitcoin-cli getblockcount)
 while [ $(docker exec bitcoin bitcoin-cli getblockcount) != $BLOCKS ]; do
