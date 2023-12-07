@@ -11,7 +11,9 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
-	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
+	runtime_apis::{
+		AuctionState, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiPenalty,
+	},
 };
 use cf_amm::{
 	common::{Amount, Tick},
@@ -36,7 +38,6 @@ use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use sp_runtime::DispatchError;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -1051,47 +1052,47 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
-			LiquidityPools::swap_with_network_fee(from, to, amount)
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchErrorWithMessage> {
+			LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
 		}
 
-		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchError> {
-			LiquidityPools::pool_info(base_asset, quote_asset)
+		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {
+			LiquidityPools::pool_info(base_asset, quote_asset).map_err(Into::into)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchError> {
-			LiquidityPools::pool_depth(base_asset, quote_asset, tick_range)
+		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_depth(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
-		fn cf_pool_liquidity(base_asset: Asset, quote_asset: Asset) -> Result<PoolLiquidity, DispatchError> {
-			LiquidityPools::pool_liquidity(base_asset, quote_asset)
+		fn cf_pool_liquidity(base_asset: Asset, quote_asset: Asset) -> Result<PoolLiquidity, DispatchErrorWithMessage> {
+			LiquidityPools::pool_liquidity(base_asset, quote_asset).map_err(Into::into)
 		}
 
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchError> {
-			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range)
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
 			orders: u32,
-		) -> Result<PoolOrderbook, DispatchError> {
-			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
+		) -> Result<PoolOrderbook, DispatchErrorWithMessage> {
+			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders).map_err(Into::into)
 		}
 
 		fn cf_pool_orders(
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId>,
-		) -> Result<PoolOrders<Runtime>, DispatchError> {
+		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
 			match lp {
 				Some(lp) => LiquidityPools::pool_orders(base_asset, quote_asset, &lp),
 				None => LiquidityPools::all_pool_orders(base_asset, quote_asset),
-			}
+			}.map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
@@ -1099,8 +1100,8 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchError> {
-			LiquidityPools::pool_range_order_liquidity_value(base_asset, quote_asset, tick_range, liquidity)
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_range_order_liquidity_value(base_asset, quote_asset, tick_range, liquidity).map_err(Into::into)
 		}
 
 		fn cf_network_environment() -> NetworkEnvironment {

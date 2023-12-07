@@ -26,11 +26,12 @@ use pallet_cf_pools::{
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
-use sp_runtime::DispatchError;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{CustomRuntimeApi, LiquidityProviderInfo, RuntimeApiAccountInfoV2},
+	runtime_apis::{
+		CustomRuntimeApi, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiAccountInfoV2,
+	},
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -513,8 +514,16 @@ fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee
 	CallError::from_std_error(e).into()
 }
 
-fn map_dispatch_error(e: DispatchError) -> jsonrpsee::core::Error {
-	jsonrpsee::core::Error::from(anyhow::anyhow!("Dispatch error: {}", <&'static str>::from(e)))
+fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
+	jsonrpsee::core::Error::from(match e {
+		DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+			Ok(message) => anyhow::anyhow!("DispatchError: {message}"),
+			Err(error) =>
+				anyhow::anyhow!("DispatchError: Unable to deserialize error message: '{error}'"),
+		},
+		DispatchErrorWithMessage::Other(e) =>
+			anyhow::anyhow!("DispatchError: {}", <&'static str>::from(e)),
+	})
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
