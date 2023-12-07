@@ -25,7 +25,7 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      profile: "release"
+      profile: "production"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
