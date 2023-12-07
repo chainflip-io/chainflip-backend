@@ -21,14 +21,14 @@ jobs:
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
 
       - name: Invalidate CloudFront Cache - Sisyphos 🔥
-        if: ${{ github.event.inputs.network == 'sisyphos' }}
+        if: ${{ inputs.network == 'sisyphos' }}
         run: >
           aws cloudfront create-invalidation
           --distribution-id E3LRLBQETRDJF3
           --paths '/*'
 
       - name: Invalidate CloudFront Cache - Perseverance 🔥
-        if: ${{ github.event.inputs.network == 'perseverance' }}
+        if: ${{ inputs.network == 'perseverance' }}
         run: >
           aws cloudfront create-invalidation
           --distribution-id E15DU9IPLRYY7S
