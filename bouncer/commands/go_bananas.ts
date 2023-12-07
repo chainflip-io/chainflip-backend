@@ -101,32 +101,44 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
     const result = await Promise.all([
       call(
         'lp_set_limit_order',
-        [asset, 'USDC', 'Sell', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
+        [asset, 'USDC', 'buy', 1, buyTick, '0x' + BigInt(liquidityFine).toString(16)],
         `Buy ${asset}`,
       ),
       call(
         'lp_set_limit_order',
-        [asset, 'USDC', 'Buy', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
+        [asset, 'USDC', 'sell', 1, sellTick, '0x' + BigInt(liquidityFine / price).toString(16)],
         `Sell ${asset}`,
       ),
     ]);
     result.forEach((r) => {
       if (r.data.error) {
         console.log(`Error [${r.data.id}]: ${JSON.stringify(r.data.error)}`);
+      } else {
+        r.data.result.tx_details.response.forEach((update: LimitOrderResponse) => {
+          if (BigInt(update.collected_fees) > BigInt(0)) {
+            let ccy;
+            if(update.side == "buy"){
+              ccy = update.base_asset.toUpperCase() as Asset;
+            } else {
+              ccy = update.quote_asset.toUpperCase() as Asset;
+            }
+            const fees = fineAmountToAmount(BigInt(update.collected_fees.toString()).toString(10), assetDecimals[ccy]);
+            console.log(`Collected ${fees} ${ccy} in fees`);
+          }
+          if (BigInt(update.bought_amount) > BigInt(0)) {
+            let buyCcy, sellCcy;
+            if(update.side == "buy"){
+              buyCcy = update.base_asset.toUpperCase() as Asset;
+              sellCcy = update.quote_asset.toUpperCase() as Asset;
+            } else {
+              buyCcy = update.quote_asset.toUpperCase() as Asset;
+              sellCcy = update.base_asset.toUpperCase() as Asset;
+            }
+            const amount = fineAmountToAmount(BigInt(update.bought_amount.toString()).toString(10), assetDecimals[buyCcy]);
+            console.log(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
+          }
+        });
       }
-      r.data.result.forEach((update: LimitOrderResponse) => {
-        if (update.collected_fees > 0) {
-          const ccy = update.buy_asset.toUpperCase() as Asset;
-          const fees = fineAmountToAmount(update.collected_fees.toString(), assetDecimals[ccy]);
-          console.log(`Collected ${fees} ${ccy} in fees`);
-        }
-        if (update.bought_amount > 0) {
-          const buyCcy = update.buy_asset.toUpperCase() as Asset;
-          const sellCcy = update.sell_asset.toUpperCase() as Asset;
-          const amount = fineAmountToAmount(update.bought_amount.toString(), assetDecimals[buyCcy]);
-          console.log(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
-        }
-      });
     });
     await sleep(12000);
   }
@@ -134,8 +146,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
 
 async function launchTornado() {
   const chainflip = await getChainflipApi();
-  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()!
-    .epochIndex as number;
+  const epoch = (await chainflip.query.bitcoinVault.currentVaultEpoch()).toJSON()! as number;
   const pubkey = (
     (await chainflip.query.bitcoinVault.vaults(epoch)).toJSON()!.publicKey.current as string
   ).substring(2);
