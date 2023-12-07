@@ -385,7 +385,7 @@ impl P2PContext {
 					// This is guaranteed by construction of `active_connections`:
 					assert_eq!(peer.info.account_id, account_id);
 
-					self.connect_to_peer(peer.info.clone(), Some(peer.last_activity.get()));
+					self.connect_to_peer(peer.info.clone(), peer.last_activity.get());
 					self.send_message(account_id, payload);
 				},
 			}
@@ -479,7 +479,7 @@ impl P2PContext {
 			match peer.state {
 				ConnectionState::ReconnectionScheduled => {
 					info!("Reconnecting to peer: {account_id}");
-					self.connect_to_peer(peer.info.clone(), Some(peer.last_activity.get()));
+					self.connect_to_peer(peer.info.clone(), peer.last_activity.get());
 				},
 				ConnectionState::Connected(_) => {
 					// It is possible that while we were waiting to reconnect,
@@ -506,7 +506,7 @@ impl P2PContext {
 		}
 	}
 
-	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: Option<tokio::time::Instant>) {
+	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: tokio::time::Instant) {
 		let account_id = peer.account_id.clone();
 
 		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
@@ -520,9 +520,7 @@ impl P2PContext {
 			ConnectionStateInfo {
 				state: ConnectionState::Connected(connected_socket),
 				info: peer,
-				last_activity: Cell::new(
-					previous_activity.unwrap_or_else(tokio::time::Instant::now),
-				),
+				last_activity: Cell::new(previous_activity),
 			},
 		) {
 			if !matches!(connection.state, ConnectionState::Stale) {
@@ -541,7 +539,7 @@ impl P2PContext {
 			return
 		}
 
-		let mut previous_activity = None;
+		let mut previous_activity = tokio::time::Instant::now();
 
 		if let Some(existing_peer_state) = self.active_connections.remove(&peer.account_id) {
 			debug!(
@@ -550,7 +548,7 @@ impl P2PContext {
 				&peer.account_id
 			);
 
-			previous_activity = Some(existing_peer_state.last_activity.get());
+			previous_activity = existing_peer_state.last_activity.get();
 
 			match existing_peer_state.state {
 				ConnectionState::Connected(socket) => {
