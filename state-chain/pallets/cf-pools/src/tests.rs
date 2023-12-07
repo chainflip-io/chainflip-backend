@@ -687,7 +687,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
-					lp: ALICE,
+					lp: BOB,
 					id: 0.into(),
 					range: range.clone(),
 					liquidity: 1_000_000,
