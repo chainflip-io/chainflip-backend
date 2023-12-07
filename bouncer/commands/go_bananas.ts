@@ -117,24 +117,31 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
         r.data.result.tx_details.response.forEach((update: LimitOrderResponse) => {
           if (BigInt(update.collected_fees) > BigInt(0)) {
             let ccy;
-            if(update.side == "buy"){
+            if (update.side === 'buy') {
               ccy = update.base_asset.toUpperCase() as Asset;
             } else {
               ccy = update.quote_asset.toUpperCase() as Asset;
             }
-            const fees = fineAmountToAmount(BigInt(update.collected_fees.toString()).toString(10), assetDecimals[ccy]);
+            const fees = fineAmountToAmount(
+              BigInt(update.collected_fees.toString()).toString(10),
+              assetDecimals[ccy],
+            );
             console.log(`Collected ${fees} ${ccy} in fees`);
           }
           if (BigInt(update.bought_amount) > BigInt(0)) {
-            let buyCcy, sellCcy;
-            if(update.side == "buy"){
+            let buyCcy;
+            let sellCcy;
+            if (update.side === 'buy') {
               buyCcy = update.base_asset.toUpperCase() as Asset;
               sellCcy = update.quote_asset.toUpperCase() as Asset;
             } else {
               buyCcy = update.quote_asset.toUpperCase() as Asset;
               sellCcy = update.base_asset.toUpperCase() as Asset;
             }
-            const amount = fineAmountToAmount(BigInt(update.bought_amount.toString()).toString(10), assetDecimals[buyCcy]);
+            const amount = fineAmountToAmount(
+              BigInt(update.bought_amount.toString()).toString(10),
+              assetDecimals[buyCcy],
+            );
             console.log(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
           }
         });
