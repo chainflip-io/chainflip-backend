@@ -28,6 +28,7 @@ use jsonrpsee::{
 };
 use pallet_cf_pools::{AssetPair, AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use rpc_types::{AssetBalance, OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
+use sp_core::U256;
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	ops::Range,
@@ -223,21 +224,21 @@ pub enum OrderFilled {
 		base_asset: Asset,
 		quote_asset: Asset,
 		side: Order,
-		id: NumberOrHex,
+		id: U256,
 		tick: Tick,
-		sold: NumberOrHex,
-		bought: NumberOrHex,
-		fees: NumberOrHex,
-		remaining: NumberOrHex,
+		sold: U256,
+		bought: U256,
+		fees: U256,
+		remaining: U256,
 	},
 	RangeOrder {
 		lp: AccountId,
 		base_asset: Asset,
 		quote_asset: Asset,
-		id: NumberOrHex,
+		id: U256,
 		range: Range<Tick>,
-		fees: AssetsMap<NumberOrHex>,
-		liquidity: NumberOrHex,
+		fees: AssetsMap<U256>,
+		liquidity: U256,
 	},
 }
 
@@ -527,7 +528,7 @@ impl RpcServer for RpcServerImpl {
 								if fees.is_zero() && sold.is_zero() && bought.is_zero() {
 									None
 								} else {
-									Some(OrderFilled::LimitOrder { lp, base_asset: asset_pair.assets().base, quote_asset: asset_pair.assets().quote, side, id: id.into(), tick, sold: sold.into(), bought: bought.into(), fees: fees.into(), remaining: position_info.amount.into() })
+									Some(OrderFilled::LimitOrder { lp, base_asset: asset_pair.assets().base, quote_asset: asset_pair.assets().quote, side, id: id.into(), tick, sold, bought, fees, remaining: position_info.amount })
 								}
 							})
 						}).chain(
@@ -555,7 +556,7 @@ impl RpcServer for RpcServerImpl {
 										quote_asset: asset_pair.assets().quote,
 										id: id.into(),
 										range: range.clone(),
-										fees: fees.map(|_, fees| fees.into()).into(),
+										fees: fees.map(|_, fees| fees).into(),
 										liquidity: position_info.liquidity.into()
 									})
 								}

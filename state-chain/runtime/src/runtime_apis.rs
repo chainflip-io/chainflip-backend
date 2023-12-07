@@ -76,6 +76,21 @@ pub struct LiquidityProviderInfo {
 	pub balances: Vec<(Asset, AssetAmount)>,
 }
 
+#[derive(Debug, Decode, Encode, TypeInfo)]
+pub enum DispatchErrorWithMessage {
+	Module(Vec<u8>),
+	Other(DispatchError),
+}
+impl From<DispatchError> for DispatchErrorWithMessage {
+	fn from(value: DispatchError) -> Self {
+		match value {
+			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
+				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
+			value => DispatchErrorWithMessage::Other(value),
+		}
+	}
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -111,38 +126,41 @@ decl_runtime_apis!(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-		) -> Result<SwapOutput, DispatchError>;
-		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchError>;
+		) -> Result<SwapOutput, DispatchErrorWithMessage>;
+		fn cf_pool_info(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Result<PoolInfo, DispatchErrorWithMessage>;
 		fn cf_pool_depth(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchError>;
+		) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage>;
 		fn cf_pool_liquidity(
 			base_asset: Asset,
 			quote_asset: Asset,
-		) -> Result<PoolLiquidity, DispatchError>;
+		) -> Result<PoolLiquidity, DispatchErrorWithMessage>;
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Result<AssetsMap<Amount>, DispatchError>;
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
 			orders: u32,
-		) -> Result<PoolOrderbook, DispatchError>;
+		) -> Result<PoolOrderbook, DispatchErrorWithMessage>;
 		fn cf_pool_orders(
-			base: Asset,
-			pair: Asset,
-			lp: AccountId32,
-		) -> Result<PoolOrders, DispatchError>;
+			base_asset: Asset,
+			quote_asset: Asset,
+			lp: Option<AccountId32>,
+		) -> Result<PoolOrders<crate::Runtime>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
 			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Result<AssetsMap<Amount>, DispatchError>;
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount;
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount>;
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount;
