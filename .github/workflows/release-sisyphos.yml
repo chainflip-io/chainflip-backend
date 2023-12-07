@@ -50,3 +50,8 @@ jobs:
       version: "sisyphos/"
       environment: "development"
     secrets: inherit
+  invalidate-apt-cache:
+    needs: [publish]
+    uses: ./.github/workflows/_70_post_release.yml
+    with:
+      network: "sisyphos"

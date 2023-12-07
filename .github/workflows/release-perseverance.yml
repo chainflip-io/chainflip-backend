@@ -41,3 +41,8 @@ jobs:
     secrets: inherit
     with:
       network: "perseverance"
+  invalidate-apt-cache:
+    needs: [publish]
+    uses: ./.github/workflows/_70_post_release.yml
+    with:
+      network: "perseverance"
