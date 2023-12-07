@@ -26,6 +26,7 @@ jobs:
     secrets: inherit
     with:
       profile: "production"
+      binary-subdir: "production"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
