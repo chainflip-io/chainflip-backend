@@ -60,7 +60,9 @@ where
 		.btc_deposits(witness_call.clone())
 		.egress_items(scope, state_chain_stream, state_chain_client)
 		.await
-		.then(move |epoch, header| process_egress(epoch, header, witness_call.clone()))
+		.then(move |epoch, header| {
+			process_egress(epoch, header, witness_call.clone(), btc_client.clone())
+		})
 		.logging("witnessing")
 		.spawn(scope);
 

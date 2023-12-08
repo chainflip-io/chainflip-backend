@@ -1,4 +1,4 @@
-use bitcoin::{Block, BlockHash, Txid};
+use bitcoin::{Block, BlockHash, Transaction, Txid};
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -62,6 +62,8 @@ pub trait BtcRetryRpcApi: Clone {
 	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
 	async fn best_block_header(&self) -> BlockHeader;
+
+	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Vec<Transaction>;
 }
 
 #[async_trait::async_trait]
@@ -151,6 +153,19 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 			)
 			.await
 	}
+
+	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Vec<Transaction> {
+		self.retry_client
+			.request(
+				Box::pin(move |client| {
+					let tx_hashes = tx_hashes.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move { client.get_raw_transactions(tx_hashes).await })
+				}),
+				RequestLog::new("get_raw_transactions".to_string(), None),
+			)
+			.await
+	}
 }
 
 #[async_trait::async_trait]
@@ -212,6 +227,8 @@ pub mod mocks {
 			async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
 			async fn best_block_header(&self) -> BlockHeader;
+
+			async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Vec<Transaction>;
 		}
 	}
 }

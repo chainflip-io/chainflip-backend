@@ -27,10 +27,39 @@ use super::common::{
 
 use anyhow::Result;
 
+async fn calc_bitcoin_transaction_fee(tx: &Transaction, client: &BtcRetryRpcClient) -> u64 {
+	let mut prev_outs: Vec<_> = tx
+		.input
+		.iter()
+		.map(|input| (input.previous_output.txid, input.previous_output.vout))
+		.collect();
+
+	prev_outs.sort_by_key(|(txid, _)| *txid);
+	let (input_txids, input_vouts): (Vec<_>, Vec<_>) = prev_outs.into_iter().unzip();
+
+	let input_txids_len = input_txids.len();
+	let mut input_txs: Vec<Transaction> = client.get_raw_transactions(input_txids).await;
+	assert_eq!(input_txs.len(), input_txids_len);
+
+	// protect against RPC re-ordering of the batched request
+	input_txs.sort_by_key(|tx| tx.txid());
+
+	let total_input_value: u64 = input_txs
+		.into_iter()
+		.zip(input_vouts)
+		.map(|(tx, vout)| tx.output[vout as usize].value)
+		.sum();
+
+	total_input_value
+		.checked_sub(tx.output.iter().map(|output| output.value).sum::<u64>())
+		.expect("It's not possible to pay more than you have.")
+}
+
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
 	header: Header<u64, BlockHash, (Vec<Transaction>, Vec<(btc::Hash, BlockNumber)>)>,
 	process_call: ProcessCall,
+	rpc: BtcRetryRpcClient,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
@@ -43,7 +72,8 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 
 	let monitored_tx_hashes = monitored_tx_hashes.iter().map(|(tx_hash, _)| tx_hash);
 
-	for tx_hash in success_witnesses(monitored_tx_hashes, &txs) {
+	for (tx_hash, tx) in success_witnesses(monitored_tx_hashes, txs) {
+		let tx_fee = calc_bitcoin_transaction_fee(&tx, &rpc).await;
 		process_call(
 			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 				pallet_cf_broadcast::Call::transaction_succeeded {
@@ -53,7 +83,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 						CHANGE_ADDRESS_SALT,
 					)
 					.script_pubkey(),
-					tx_fee: Default::default(),
+					tx_fee,
 					tx_metadata: (),
 				},
 			),
@@ -168,7 +198,9 @@ where
 		.await
 		.then({
 			let process_call = process_call.clone();
-			move |epoch, header| process_egress(epoch, header, process_call.clone())
+			move |epoch, header| {
+				process_egress(epoch, header, process_call.clone(), btc_client.clone())
+			}
 		})
 		.continuous("Bitcoin".to_string(), db)
 		.logging("witnessing")
@@ -179,15 +211,16 @@ where
 
 fn success_witnesses<'a>(
 	monitored_tx_hashes: impl Iterator<Item = &'a btc::Hash> + Clone,
-	txs: &Vec<Transaction>,
-) -> Vec<btc::Hash> {
+	txs: Vec<Transaction>,
+) -> Vec<(btc::Hash, Transaction)> {
 	let mut successful_witnesses = Vec::new();
 
 	for tx in txs {
 		let mut monitored = monitored_tx_hashes.clone();
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
+
 		if monitored.any(|&monitored_hash| monitored_hash == tx_hash) {
-			successful_witnesses.push(tx_hash);
+			successful_witnesses.push((tx_hash, tx));
 		}
 	}
 	successful_witnesses
@@ -235,10 +268,11 @@ mod tests {
 		// we're not monitoring for index 2, and they're out of order.
 		let mut monitored_hashes = vec![tx_hashes[3], tx_hashes[0], tx_hashes[1]];
 
-		let mut success_witnesses = success_witnesses(monitored_hashes.iter(), &txs);
-		success_witnesses.sort();
+		let (mut success_witness_hashes, _): (Vec<_>, Vec<_>) =
+			success_witnesses(monitored_hashes.iter(), txs).into_iter().unzip();
+		success_witness_hashes.sort();
 		monitored_hashes.sort();
 
-		assert_eq!(success_witnesses, monitored_hashes);
+		assert_eq!(success_witness_hashes, monitored_hashes);
 	}
 }
