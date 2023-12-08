@@ -43,7 +43,6 @@ where
 			move |(epoch, mut chain_stream, option_old_then_fut)| {
 				async move {
 					let apply_then = |header: Header<_, _, _>| {
-						println!("[MAXIM] apply then is called");
 						let epoch = epoch.clone();
 						#[allow(clippy::redundant_async_block)]
 						header
@@ -100,6 +99,51 @@ where
 		.into_box()
 }
 
+#[async_trait::async_trait]
+impl<Inner: ChunkedChainSource, Output, Fut, F> ChunkedChainSource for LatestThen<Inner, F>
+where
+	Output: aliases::Data,
+	Fut: Future<Output = Output> + Send,
+	F: Fn(
+			Epoch<Inner::Info, Inner::HistoricInfo>,
+			Header<Inner::Index, Inner::Hash, Inner::Data>,
+		) -> Fut
+		+ Send
+		+ Sync
+		+ Clone,
+{
+	type Info = Inner::Info;
+	type HistoricInfo = Inner::HistoricInfo;
+
+	type Index = Inner::Index;
+	type Hash = Inner::Hash;
+	type Data = Output;
+
+	type Client = ThenClient<Inner, F>;
+
+	type Chain = Inner::Chain;
+
+	type Parameters = Inner::Parameters;
+
+	async fn stream(
+		&self,
+		parameters: Self::Parameters,
+	) -> BoxActiveAndFuture<'_, super::Item<'_, Self, Self::Info, Self::HistoricInfo>> {
+		self.inner
+			.stream(parameters)
+			.await
+			.then(move |(epoch, chain_stream, chain_client)| async move {
+				(
+					epoch.clone(),
+					latest_then_stream(chain_stream, epoch.clone(), &self.f),
+					ThenClient::new(chain_client, self.f.clone(), epoch),
+				)
+			})
+			.await
+			.into_box()
+	}
+}
+
 #[tokio::test]
 async fn test_latest_then_stream() {
 	use crate::common::Signal;
@@ -148,50 +192,5 @@ async fn test_latest_then_stream() {
 		// The resulting stream ends when the source ends
 		drop(header_sender);
 		assert!(res_stream.next().await.is_none());
-	}
-}
-
-#[async_trait::async_trait]
-impl<Inner: ChunkedChainSource, Output, Fut, F> ChunkedChainSource for LatestThen<Inner, F>
-where
-	Output: aliases::Data,
-	Fut: Future<Output = Output> + Send,
-	F: Fn(
-			Epoch<Inner::Info, Inner::HistoricInfo>,
-			Header<Inner::Index, Inner::Hash, Inner::Data>,
-		) -> Fut
-		+ Send
-		+ Sync
-		+ Clone,
-{
-	type Info = Inner::Info;
-	type HistoricInfo = Inner::HistoricInfo;
-
-	type Index = Inner::Index;
-	type Hash = Inner::Hash;
-	type Data = Output;
-
-	type Client = ThenClient<Inner, F>;
-
-	type Chain = Inner::Chain;
-
-	type Parameters = Inner::Parameters;
-
-	async fn stream(
-		&self,
-		parameters: Self::Parameters,
-	) -> BoxActiveAndFuture<'_, super::Item<'_, Self, Self::Info, Self::HistoricInfo>> {
-		self.inner
-			.stream(parameters)
-			.await
-			.then(move |(epoch, chain_stream, chain_client)| async move {
-				(
-					epoch.clone(),
-					latest_then_stream(chain_stream, epoch.clone(), &self.f),
-					ThenClient::new(chain_client, self.f.clone(), epoch),
-				)
-			})
-			.await
-			.into_box()
 	}
 }
