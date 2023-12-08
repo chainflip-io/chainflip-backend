@@ -151,13 +151,21 @@ impl DotRpcApi for DotHttpRpcClient {
 		Ok(self.block(block_hash).await?.map(|block| block.block.extrinsics))
 	}
 
-	// TODO: When witnessing is catching up we query blocks in batches. It's posible that when
+	// TODO: When witnessing is catching up we query blocks in batches. It's possible that when
 	// a batch is made over a runtime boundary that the metadata will need to be queried more than
-	// necessary, as the order within the batch is not necessarily guaranteed. Beacause we limit
+	// necessary, as the order within the batch is not necessarily guaranteed. Because we limit
 	// Polkadot to 32 concurrent requests and runtime upgrades are infrequent this should not be an
 	// issue in reality, but probably worth solving at some point.
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>> {
-		let chain_runtime_version = self.runtime_version(Some(block_hash)).await?;
+	async fn events(
+		&self,
+		block_hash: PolkadotHash,
+		parent_hash: PolkadotHash,
+	) -> Result<Option<Events<PolkadotConfig>>> {
+		// We need to get the runtime version at the previous block instead the desired block
+		// because the events in the block are encoded using the previous block's runtime version,
+		// not the desired block's runtime version.
+		let chain_runtime_version = self.runtime_version(Some(parent_hash)).await?;
+		println!("using spec_version: {:?}", chain_runtime_version.spec_version);
 
 		let client_runtime_version = self.online_client.runtime_version();
 
@@ -168,7 +176,7 @@ impl DotRpcApi for DotHttpRpcClient {
 			chain_runtime_version.transaction_version !=
 				client_runtime_version.transaction_version
 		{
-			let new_metadata = self.metadata(block_hash).await?;
+			let new_metadata = self.metadata(parent_hash).await?;
 
 			self.online_client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
 				spec_version: chain_runtime_version.spec_version,
@@ -223,5 +231,41 @@ mod tests {
 			DotHttpRpcClient::new("http://localhost:9945".into(), None).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
+	}
+
+	#[ignore = "Uses public mainnet polkadot endpoint"]
+	#[tokio::test]
+	async fn test_parsing_events_in_runtime_update_block() {
+		use std::str::FromStr;
+
+		// Block hash of the block that the runtime update occurred in
+		let block_hash_of_runtime_update =
+			H256::from_str("0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610")
+				.unwrap();
+
+		// The hash of the block before the runtime update block
+		let block_hash_of_parent =
+			H256::from_str("0x99fa3b7ae36c379f1ebccf050312a00877e985e8b8d5ca054cee1bb901e0ffa4")
+				.unwrap();
+
+		let dot_http_rpc =
+			DotHttpRpcClient::new("https://polkadot-rpc-tn.dwellir.com:443".into(), None)
+				.unwrap()
+				.await;
+
+		// Get the events for the block with the runtime update in it
+		let events = dot_http_rpc
+			.events(block_hash_of_runtime_update, block_hash_of_parent)
+			.await
+			.unwrap()
+			.unwrap();
+
+		// Calling iter() will cause the events to be decoded. None of the events should fail to
+		// decode if the correct metadata is used.
+		assert!(!events.iter().any(|event| event.is_err()));
+
+		// Check that mapping the events does not panic
+		let _mapped_events: Vec<_> =
+			events.iter().filter_map(crate::witness::dot::filter_map_events).collect();
 	}
 }

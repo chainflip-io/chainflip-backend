@@ -91,7 +91,11 @@ pub trait DotRpcApi: Send + Sync {
 		block_hash: PolkadotHash,
 	) -> Result<Option<Vec<ChainBlockExtrinsic>>>;
 
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>>;
+	async fn events(
+		&self,
+		block_hash: PolkadotHash,
+		parent_hash: PolkadotHash,
+	) -> Result<Option<Events<PolkadotConfig>>>;
 
 	async fn runtime_version(&self, at: Option<H256>) -> Result<RuntimeVersion>;
 
@@ -125,8 +129,13 @@ impl DotRpcApi for DotRpcClient {
 
 	/// Returns the events for a particular block hash.
 	/// If the block for the given block hash does not exist, then this returns `Ok(None)`.
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>> {
-		self.http_client.events(block_hash).await
+	/// The parent hash is used to determine the runtime version to decode the events.
+	async fn events(
+		&self,
+		block_hash: PolkadotHash,
+		parent_hash: PolkadotHash,
+	) -> Result<Option<Events<PolkadotConfig>>> {
+		self.http_client.events(block_hash, parent_hash).await
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
@@ -158,7 +167,7 @@ impl DotSubscribeApi for DotSubClient {
 				.blocks()
 				.subscribe_best()
 				.await?
-				.map(|block| block.map(|block| block.header().clone()))
+				.map(|result| result.map(|block| block.header().clone()))
 				.map_err(|e| anyhow!("Error in best head stream: {e}")),
 		))
 	}
@@ -173,7 +182,7 @@ impl DotSubscribeApi for DotSubClient {
 				.blocks()
 				.subscribe_finalized()
 				.await?
-				.map(|block| block.map(|block| block.header().clone()))
+				.map(|result| result.map(|block| block.header().clone()))
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
