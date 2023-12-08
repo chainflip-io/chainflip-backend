@@ -338,8 +338,6 @@ pub mod pallet {
 		InvalidPayload,
 		/// The provided broadcast id is invalid.
 		InvalidBroadcastId,
-		/// The transaction signer is not signer who was nominated.
-		InvalidSigner,
 		/// A threshold signature was expected but not available.
 		ThresholdSignatureUnavailable,
 	}
@@ -428,7 +426,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
-		/// - [InvalidSigner](Error::InvalidSigner)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::transaction_signing_failure())]
 		pub fn transaction_signing_failure(

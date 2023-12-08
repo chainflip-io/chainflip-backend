@@ -71,19 +71,6 @@ impl MockCfe {
 				} => {
 					match scenario {
 						Scenario::SigningFailure => {
-							// only nominee can return the signed tx
-							assert_eq!(
-								nominee,
-								MockNominator::get_last_nominee().unwrap(),
-								"CFE using wrong nomination"
-							);
-							assert_noop!(
-								Broadcaster::transaction_signing_failure(
-									RawOrigin::Signed((nominee + 1) % 3).into(),
-									broadcast_id
-								),
-								Error::<Test, Instance1>::InvalidSigner
-							);
 							assert_ok!(Broadcaster::transaction_signing_failure(
 								RawOrigin::Signed(nominee).into(),
 								broadcast_id,
@@ -583,7 +570,7 @@ fn callback_is_called_upon_broadcast_failure() {
 			Some(MockCallback)
 		);
 		assert!(!MockCallback::was_called());
-		
+
 		// Broadcast fails when no broadcaster can be nominated.
 		MockNominator::set_nominees(Some(Default::default()));
 		AwaitingBroadcast::<Test, Instance1>::insert(
