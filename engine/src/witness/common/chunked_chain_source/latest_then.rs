@@ -168,8 +168,16 @@ async fn test_latest_then_stream() {
 	let mut res_stream = latest_then_stream(chain_stream, epoch.clone(), &then_fn);
 
 	{
-		// One header is available, should be processed
-		header_sender.send(to_header(1)).await.unwrap();
+		// Initial header comes delayed so we can exercise a corresponding code branch
+		tokio::spawn({
+			let header_sender = header_sender.clone();
+			async move {
+				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+				header_sender.send(to_header(1)).await.unwrap();
+			}
+		});
+
+		// The delayed header should be processed when it arrives
 		let res = res_stream.next().await.unwrap();
 
 		assert_eq!(res.index, 1);
