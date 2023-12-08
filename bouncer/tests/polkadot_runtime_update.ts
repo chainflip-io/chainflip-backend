@@ -89,6 +89,7 @@ async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void> {
   const observeDemocracyPassed = observeEvent('democracy:Passed', polkadot);
   const observeDemocracyNotPassed = observeEvent('democracy:NotPassed', polkadot);
   const observeSchedulerDispatched = observeEvent('scheduler:Dispatched', polkadot);
+  const observeCodeUpdated = observeEvent('system:CodeUpdated', polkadot);
   const vote = { Standard: { vote: true, balance: amount } };
   await submitAndGetEvent(
     polkadot.tx.democracy.vote(proposalIndex, vote),
@@ -121,6 +122,11 @@ async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void> {
     });
     process.exit(-1);
   }
+  console.log(`Scheduler dispatched Runtime upgrade at block ${schedulerDispatchedEvent.block}`);
+
+  const CodeUpdated = await observeCodeUpdated;
+  console.log(`Code updated at block ${CodeUpdated.block}`);
+
   console.log('-- Polkadot runtime upgrade complete --');
 }
 
