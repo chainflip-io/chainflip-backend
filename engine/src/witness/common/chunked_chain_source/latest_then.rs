@@ -50,6 +50,10 @@ where
 							.boxed()
 					};
 
+					// the mapping can take longer
+
+					println!("option_old_then_fut is some: {:?}", option_old_then_fut.is_some());
+
 					let (
 						// The future for the first header we see
 						mut option_first_then_fut,
@@ -61,9 +65,18 @@ where
 							let mut option_latest = None;
 							loop {
 								match chain_stream.next().now_or_never() {
-									Some(None) => return None,
-									Some(Some(item)) => option_latest = Some(item),
-									None => break option_latest
+									Some(None) => {
+										println!("chain stream is done");
+										return None
+									},
+									Some(Some(item)) => {
+										println!("Item ready in chain stream");
+										option_latest = Some(item)
+									},
+									None => {
+										println!("chain stream is not ready yet");
+										break option_latest 
+									}
 								}
 							}
 						}
@@ -75,8 +88,15 @@ where
 						}
 					};
 
+					println!("option_first_then_fut is some: {:?}", option_first_then_fut.is_some());
+					println!("option_newest_then_fut is some: {:?}", option_newest_then_fut.is_some());
+
+
+					// if we get a new item in this gap between the first next() call and the this next call. 
+
 					loop_select!(
 						if let Some(newest_header) = chain_stream.next() => {
+							println!("new chain stream item found in loop select");
 							*if option_first_then_fut.is_none() {
 								&mut option_first_then_fut
 							} else {
@@ -84,11 +104,13 @@ where
 							} = Some(apply_then(newest_header));
 						} else break None,
 						if option_first_then_fut.is_some() => let mapped_header = option_first_then_fut.as_mut().unwrap() => {
-							// Keep replaceable_then_fut as it is from a newer header than persistent_then_fut
+							println!("Option first is some() hit");
+							// Keep option_newest_then_fut as it is from a newer header than option_first_then_fut
 							break Some((mapped_header, (epoch, chain_stream, option_newest_then_fut)))
 						},
 						if option_newest_then_fut.is_some() => let mapped_header = option_newest_then_fut.as_mut().unwrap() => {
-							// Don't keep persistent_then_fut as it is from an older header than replaceable_then_fut
+							println!("Option newest is some() hit");
+							// Don't keep option_first_then_fut as it is from an older header than option_newest_then_fut
 							break Some((mapped_header, (epoch, chain_stream, None)))
 						},
 					)
@@ -141,6 +163,75 @@ where
 			})
 			.await
 			.into_box()
+	}
+}
+
+#[tokio::test]
+async fn test_latest_then_stream_apply_then_can_vary() {
+	use crate::common::Signal;
+
+	type Index = u64;
+	type Hash = ();
+	type Data = u32;
+
+	let (_, historic_signal) = Signal::<()>::new();
+	let (_, expired_signal) = Signal::<()>::new();
+	let epoch = Epoch { index: 1, info: (), historic_signal, expired_signal };
+
+	fn to_header(i: u32) -> Header<Index, Hash, Data> {
+		Header { index: i as u64, hash: (), parent_hash: None, data: i }
+	}
+
+	let (header_sender, header_receiver) = tokio::sync::mpsc::channel(10);
+
+	let chain_stream = tokio_stream::wrappers::ReceiverStream::new(header_receiver).boxed();
+
+	let then_fn = |epoch, header: Header<_, _, _>| async move { 
+		if header.index == 2 || header.index == 3 {
+			tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+		}
+		(epoch, header)
+	 };
+	let mut res_stream = latest_then_stream(chain_stream, epoch.clone(), &then_fn);
+
+	header_sender.send(to_header(1)).await.unwrap();
+	// Initial header comes delayed so we can exercise a corresponding code branch
+	tokio::spawn({
+		let header_sender = header_sender.clone();
+		async move {
+			header_sender.send(to_header(2)).await.unwrap();		
+		}
+	});
+	
+
+	// The delayed header should be processed when it arrives
+	let res = res_stream.next().await.unwrap();
+
+	assert_eq!(res.index, 1);
+
+	// Check that correct epoch/header is provided to the closure:
+	assert_eq!(res.data.0.index, epoch.index);
+	assert_eq!(res.data.1, to_header(1));
+
+	
+	// Two headers are available, only the last one is processed
+	
+	header_sender.send(to_header(3)).await.unwrap();
+	let res = res_stream.next().await.unwrap();
+
+	println!("res.index: {}", res.index);
+
+
+	header_sender.send(to_header(4)).await.unwrap();
+	let res = res_stream.next().await.unwrap();
+
+	println!("res.index: {}", res.index);
+
+
+	{
+		// The resulting stream ends when the source ends
+		drop(header_sender);
+		assert!(res_stream.next().await.is_none());
 	}
 }
 
