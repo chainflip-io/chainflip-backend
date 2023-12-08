@@ -416,11 +416,12 @@ fn test_signature_request_expiry() {
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
 		Broadcaster::on_initialize(expected_expiry_block);
+		Broadcaster::on_idle(expected_expiry_block, 1_000_000_000_000_000u64.into());
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
 			// old attempt has expired, but the data still exists
-			assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+			assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 
 			assert_eq!(
 				TIMEDOUT_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
@@ -463,6 +464,7 @@ fn test_transmission_request_expiry() {
 		// Simulate the expiry hook for the expected expiry block.
 		let expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
 		Broadcaster::on_initialize(expected_expiry_block);
+		Broadcaster::on_idle(expected_expiry_block, 1_000_000_000_000_000u64.into());
 		MockCfe::respond(Scenario::Timeout);
 
 		let check_end_state = || {
@@ -490,9 +492,10 @@ fn test_transmission_request_expiry() {
 		check_end_state();
 	});
 }
+
 // One particular case where this occurs is if the Polkadot Runtime upgrade occurs after we've
 // already signed a tx. In this case we know it will continue to fail if we keep rebroadcasting so
-// we should stop and rethreshold sign using the new runtime version.
+// we should stop and re-threshold sign using the new runtime version.
 #[test]
 fn re_request_threshold_signature_on_invalid_tx_params() {
 	new_test_ext().execute_with(|| {
@@ -511,6 +514,8 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 
 		// If invalid on retry then we should re-threshold sign
 		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
+		Broadcaster::on_idle(BROADCAST_EXPIRY_BLOCKS + 1, 1_000_000_000_000_000u64.into());
+
 		// Verify storage has been deleted
 		assert!(TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID)
 			.is_none());
@@ -1014,25 +1019,24 @@ fn witness_broadcast(tx_out_id: [u8; 4]) {
 
 #[test]
 fn time_out_broadcaster_are_reported() {
-	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast();
-		let expiry = System::block_number()
-			.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
-		let nominee =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap().nominee;
+	let mut expiry = 0u64;
+	new_test_ext()
+		.execute_with(|| {
+			let broadcast_attempt_id = start_mock_broadcast();
+			expiry = System::block_number()
+				.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
+			let nominee =
+				AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap().nominee;
 
-		assert_eq!(
-			FailedBroadcasters::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
-			None
-		);
-
-		// Let the broadcast attempt time out
-		Broadcaster::on_initialize(expiry);
-
-		// The nominated broadcaster is added to `FailedBroadcasters` to be reported later.
-		assert_eq!(
-			FailedBroadcasters::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
-			Some(vec![nominee])
-		);
-	});
+			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
+				.is_none());
+			(broadcast_attempt_id, nominee)
+		})
+		.then_execute_at_block(expiry, |(broadcast_attempt_id, nominee)| {
+			// The nominated broadcaster is added to `FailedBroadcasters` to be reported later.
+			assert_eq!(
+				FailedBroadcasters::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+				Some(vec![nominee])
+			);
+		});
 }

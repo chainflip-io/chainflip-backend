@@ -397,11 +397,9 @@ pub mod pallet {
 		///
 		/// - [BroadcastAttemptTimeout](Event::BroadcastAttemptTimeout)
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			// NB: We don't want broadcasts that timeout to ever expire. We will keep retrying
-			// forever. It's possible that the reason for timeout could be something like a chain
-			// halt on the external chain. If the signature is valid then we expect it to succeed
-			// eventually. For outlying, unknown unknowns, these can be something governance can
-			// handle if absolutely necessary (though it likely never will be).
+			// We treat a time out here as a Broadcast Failure. This is handled the same way - the
+			// current broadcaster is reported as Failed to broadcast, and a new broadcaster is
+			// nominated. If there are no more broadcaster available, then the broadcast is aborted.
 			let expiries = Timeouts::<T, I>::take(block_number);
 			if T::SafeMode::get().retry_enabled {
 				for attempt_id in expiries.iter() {
@@ -409,11 +407,13 @@ pub mod pallet {
 						Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
 							broadcast_attempt_id: *attempt_id,
 						});
-						if let Some((broadcast_attempt, nominee)) =
-							Self::take_awaiting_broadcast(*attempt_id)
-						{
-							FailedBroadcasters::<T, I>::append(attempt_id.broadcast_id, nominee);
-							Self::start_next_broadcast_attempt(broadcast_attempt)
+						if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::get(attempt_id) {
+							assert_eq!(
+								signing_attempt.broadcast_attempt.broadcast_attempt_id,
+								*attempt_id,
+								"The broadcast attempt id of the signing attempt should match that of the broadcast attempt id of its key"
+							);
+							Self::handle_broadcast_failure(signing_attempt);
 						}
 					}
 				}
@@ -494,56 +494,7 @@ pub mod pallet {
 			// Only the nominated signer can say they failed to sign
 			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
 
-			FailedBroadcasters::<T, I>::append(
-				signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				&extrinsic_signer,
-			);
-
-			// Schedule a failed attempt for retry when the next block is authored.
-			// We will abort the broadcast once all authorities have attempt to sign the
-			// transaction
-			if signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count >=
-				T::EpochInfo::current_authority_count()
-					.checked_sub(1)
-					.expect("We must have at least one authority")
-			{
-				let broadcast_id =
-					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id;
-
-				// We want to keep the broadcast details, but we don't need the list of failed
-				// broadcasters any more.
-				FailedBroadcasters::<T, I>::remove(broadcast_id);
-
-				// Call the failed callback and clean up the callback storage.
-				if let Some(callback) = RequestFailureCallbacks::<T, I>::take(broadcast_id) {
-					Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-						broadcast_id,
-						result: callback
-							.dispatch_bypass_filter(OriginTrait::root())
-							.map(|_| ())
-							.map_err(|e| {
-								log::warn!(
-								"Broadcast failure callback execution has failed for broadcast {}.",
-								broadcast_id
-							);
-								e.error
-							}),
-					});
-				}
-				RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
-
-				Self::deposit_event(Event::<T, I>::BroadcastAborted {
-					broadcast_id: signing_attempt
-						.broadcast_attempt
-						.broadcast_attempt_id
-						.broadcast_id,
-				});
-				Self::remove_pending_broadcast(&broadcast_attempt_id.broadcast_id);
-				AbortedBroadcasts::<T, I>::append(broadcast_attempt_id.broadcast_id);
-			} else {
-				Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
-			}
-
+			Self::handle_broadcast_failure(signing_attempt);
 			Ok(().into())
 		}
 
@@ -762,21 +713,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	pub fn take_awaiting_broadcast(
-		broadcast_attempt_id: BroadcastAttemptId,
-	) -> Option<(BroadcastAttempt<T, I>, T::ValidatorId)> {
-		if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::take(broadcast_attempt_id) {
-			assert_eq!(
-				signing_attempt.broadcast_attempt.broadcast_attempt_id,
-				broadcast_attempt_id,
-				"The broadcast attempt id of the signing attempt should match that of the broadcast attempt id of its key"
-			);
-			Some((signing_attempt.broadcast_attempt, signing_attempt.nominee))
-		} else {
-			None
-		}
-	}
-
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
 		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
 			if !pending_broadcasts.remove(broadcast_id) {
@@ -963,6 +899,51 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		})
+	}
+
+	/// Handles a broadcast failure. The broadcaster is added to a list of FailedBroadcasters,
+	/// and will try to nominate a new broadcaster.
+	/// If all broadcasters tried and failed to broadcast, then the broadcast is aborted.
+	fn handle_broadcast_failure(signing_attempt: TransactionSigningAttempt<T, I>) {
+		let broadcast_id = signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id;
+		FailedBroadcasters::<T, I>::append(broadcast_id, signing_attempt.nominee);
+
+		// Schedule a failed attempt for retry when the next block is authored.
+		// We will abort the broadcast once all authorities have attempt to sign the
+		// transaction
+		if signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count >=
+			T::EpochInfo::current_authority_count()
+				.checked_sub(1)
+				.expect("We must have at least one authority")
+		{
+			// We want to keep the broadcast details, but we don't need the list of failed
+			// broadcasters any more.
+			FailedBroadcasters::<T, I>::remove(broadcast_id);
+
+			// Call the failed callback and clean up the callback storage.
+			if let Some(callback) = RequestFailureCallbacks::<T, I>::take(broadcast_id) {
+				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+					broadcast_id,
+					result: callback
+						.dispatch_bypass_filter(OriginTrait::root())
+						.map(|_| ())
+						.map_err(|e| {
+							log::warn!(
+								"Broadcast failure callback execution has failed for broadcast {}.",
+								broadcast_id
+							);
+							e.error
+						}),
+				});
+			}
+			RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
+
+			Self::deposit_event(Event::<T, I>::BroadcastAborted { broadcast_id });
+			Self::remove_pending_broadcast(&broadcast_id);
+			AbortedBroadcasts::<T, I>::append(broadcast_id);
+		} else {
+			Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
+		}
 	}
 }
 
