@@ -133,3 +133,9 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
 	}
 }
+
+impl<T: Config<I>, I: 'static> GetTrackedData<T::TargetChain> for Pallet<T, I> {
+	fn get_tracked_data() -> <T::TargetChain as Chain>::TrackedData {
+		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).tracked_data
+	}
+}

@@ -21,7 +21,7 @@ use frame_support::sp_runtime::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature,
+	FixedPointNumber, FixedU128, MultiAddress, MultiSignature,
 };
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
@@ -249,6 +249,40 @@ impl Default for PolkadotTrackedData {
 	#[track_caller]
 	fn default() -> Self {
 		panic!("You should not use the default chain tracking, as it's meaningless.")
+	}
+}
+
+impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+	) -> <Polkadot as Chain>::ChainAmount {
+		// TODO: Check these numbers. Multiplier seems a bit high.
+		// See https://wiki.polkadot.network/docs/learn-transaction-fees
+		/// Taken from the Polkadot runtime.
+		const MULTIPLIER: FixedU128 = FixedU128::from_inner(100_000_000_000_000_000);
+		/// Taken from the Polkadot runtime. Should be 1 mDOT
+		const BASE_FEE: u128 = 10_000_000;
+		/// Taken from the Polkadot runtime. Should be 0.1 mDOT
+		const LENGTH_FEE: u128 = 1_000_000;
+		/// Estimated from the Polkadot runtime. Should be 400 µDOT
+		const WEIGHT_FEE: u128 = 4_000_000;
+		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
+		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
+		/// encoded in the extrinsic, bringing the per-fetch average down.
+		const EXTRINSIC_LENGTH: u128 = 80;
+
+		self.median_tip +
+			MULTIPLIER
+				.checked_mul_int(BASE_FEE * LENGTH_FEE * EXTRINSIC_LENGTH + WEIGHT_FEE)
+				.expect("TODO: Make sure this can't panic...")
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+	) -> <Polkadot as Chain>::ChainAmount {
+		todo!()
 	}
 }
 

@@ -182,6 +182,22 @@ impl BenchmarkValue for MockTrackedData {
 	}
 }
 
+impl FeeEstimationApi<MockEthereum> for MockTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		_asset: <MockEthereum as Chain>::ChainAsset,
+	) -> <MockEthereum as Chain>::ChainAmount {
+		todo!()
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <MockEthereum as Chain>::ChainAsset,
+	) -> <MockEthereum as Chain>::ChainAmount {
+		todo!("Unused for now.")
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct MockTransaction;
 

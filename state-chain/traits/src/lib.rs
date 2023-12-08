@@ -790,6 +790,11 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
+
+pub trait GetTrackedData<C: Chain> {
+	fn get_tracked_data() -> C::TrackedData;
+}
+
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
 }

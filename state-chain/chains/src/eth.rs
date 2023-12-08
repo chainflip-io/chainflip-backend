@@ -77,6 +77,36 @@ impl EthereumTrackedData {
 	}
 }
 
+impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		asset: <Ethereum as Chain>::ChainAsset,
+	) -> <Ethereum as Chain>::ChainAmount {
+		// TODO: refine these constants.
+		const BASE_COST_PER_BATCH: u128 = 10_000;
+		const GAS_COST_PER_FETCH: u128 = 40_000;
+		const GAS_COST_PER_TRANSFER: u128 = 50_000;
+
+		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
+		// cost on the ingress chain).
+		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
+			match asset {
+				assets::eth::Asset::Eth => GAS_COST_PER_TRANSFER,
+				assets::eth::Asset::Flip | assets::eth::Asset::Usdc =>
+					GAS_COST_PER_TRANSFER + GAS_COST_PER_FETCH,
+			};
+
+		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_fetch)
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <Ethereum as Chain>::ChainAsset,
+	) -> <Ethereum as Chain>::ChainAmount {
+		todo!("Unused for now. See comment above.")
+	}
+}
+
 impl Default for EthereumTrackedData {
 	#[track_caller]
 	fn default() -> Self {

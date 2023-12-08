@@ -18,8 +18,8 @@ pub use weights::WeightInfo;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FeeEstimationApi,
+	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
@@ -27,11 +27,12 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, GetBlockHeight, NetworkEnvironmentProvider, SwapDepositHandler,
+	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
+	SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{DispatchError, Saturating, TransactionOutcome},
+	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -271,8 +272,8 @@ pub mod pallet {
 			+ ExecutexSwapAndCall<Self::TargetChain>
 			+ TransferFallback<Self::TargetChain>;
 
-		/// Get the latest block height of the target chain via Chain Tracking.
-		type ChainTracking: GetBlockHeight<Self::TargetChain>;
+		/// Get the latest chain state of the target chain.
+		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -904,7 +905,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn process_single_deposit(
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
-		amount: TargetChainAmount<T, I>,
+		deposit_amount: TargetChainAmount<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
@@ -927,12 +928,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Error::<T, I>::AssetMismatch
 		);
 
-		if amount < MinimumDeposit::<T, I>::get(asset) {
-			// If the amount is below the minimum allowed, the deposit is ignored.
+		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
+			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			Self::deposit_event(Event::<T, I>::DepositIgnored {
 				deposit_address,
 				asset,
-				amount,
+				amount: deposit_amount,
 				deposit_details,
 			});
 			return Ok(())
@@ -942,15 +943,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			asset,
 			deposit_address: deposit_address.clone(),
 			deposit_fetch_id: None,
-			amount,
+			amount: deposit_amount,
 		});
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
+		// Shave off the fetch fee from the deposit amount.
+		let fetch_fee = T::ChainTracking::get_tracked_data()
+			.estimate_ingress_fee(deposit_channel_details.deposit_channel.asset);
+		let net_deposit_amount = deposit_amount.saturating_sub(fetch_fee);
+
+		// TODO: Consider whether this is ok. State changes will be rolled back, so we won't fetch
+		// at all. The deposit will end up being silently dropped. Might be better to emit an event
+		// and return ok. But a new event is a breaking change. Maybe we can re-use the minimum
+		// deposit event.
+		ensure!(
+			net_deposit_amount > Zero::zero(),
+			"Deposit amount is too small to cover the fetch fee."
+		);
+
 		match deposit_channel_details.action {
 			ChannelAction::LiquidityProvision { lp_account, .. } =>
-				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
+				T::LpBalance::try_credit_account(
+					&lp_account,
+					asset.into(),
+					net_deposit_amount.into(),
+				)?,
 			ChannelAction::Swap {
 				destination_address,
 				destination_asset,
@@ -962,7 +981,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				block_height.into(),
 				asset.into(),
 				destination_asset,
-				amount.into(),
+				deposit_amount.into(),
 				destination_address,
 				broker_id,
 				broker_commission_bps,
@@ -975,7 +994,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				..
 			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
-				amount.into(),
+				deposit_amount.into(),
 				destination_asset,
 				destination_address,
 				CcmDepositMetadata {
@@ -996,15 +1015,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(
 			deposit_details.clone(),
-			amount,
+			deposit_amount,
 			deposit_channel_details.deposit_channel,
 		);
-		DepositBalances::<T, I>::mutate(asset, |deposits| deposits.register_deposit(amount));
+		DepositBalances::<T, I>::mutate(asset, |deposits| {
+			deposits.register_deposit(deposit_amount)
+		});
 
 		Self::deposit_event(Event::DepositReceived {
 			deposit_address,
 			asset,
-			amount,
+			amount: deposit_amount,
 			deposit_details,
 		});
 		Ok(())
