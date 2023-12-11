@@ -6,10 +6,16 @@ import { execSync } from 'child_process';
 import { compileBinaries } from './utils/compile_binaries';
 
 function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: string) {
-  execSync(
-    `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --checks all ${blockParam} --uri ${networkUrl}`,
-    { stdio: 'ignore' },
-  );
+  try {
+    execSync(
+      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --checks all ${blockParam} --uri ${networkUrl}`,
+      { stdio: 'ignore' },
+    );
+  } catch (error) {
+    console.log('Error:', error);
+    console.log('Standard Error Output:', error.stderr);
+    console.log('Standard Output:', error.stdout);
+  }
 }
 
 // 4 options:
