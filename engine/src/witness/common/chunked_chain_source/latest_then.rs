@@ -21,6 +21,8 @@ impl<Inner, F> LatestThen<Inner, F> {
 	}
 }
 
+/// Applies `then_fn` to the latest available headers in chain_stream (skipping any "backlog"
+/// headers), producing a new stream corresponding to the processed items.
 fn latest_then_stream<'a, ItemStream, Fut, ThenFn, Output, Index, Hash, Data, Info, HistoricInfo>(
 	chain_stream: Pin<Box<ItemStream>>,
 	epoch: Epoch<Info, HistoricInfo>,
@@ -84,11 +86,11 @@ where
 							} = Some(apply_then(newest_header));
 						} else break None,
 						if option_first_then_fut.is_some() => let mapped_header = option_first_then_fut.as_mut().unwrap() => {
-							// Keep replaceable_then_fut as it is from a newer header than persistent_then_fut
+							// Keep option_newest_then_fut as it is from a newer header than option_first_then_fut
 							break Some((mapped_header, (epoch, chain_stream, option_newest_then_fut)))
 						},
 						if option_newest_then_fut.is_some() => let mapped_header = option_newest_then_fut.as_mut().unwrap() => {
-							// Don't keep persistent_then_fut as it is from an older header than replaceable_then_fut
+							// Don't keep option_first_then_fut as it is from an older header than option_newest_then_fut
 							break Some((mapped_header, (epoch, chain_stream, None)))
 						},
 					)
