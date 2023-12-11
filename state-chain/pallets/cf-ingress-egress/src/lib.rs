@@ -934,6 +934,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
+			// TODO: track these funds somewhere, for example add them to the withheld fees.
 			Self::deposit_event(Event::<T, I>::DepositIgnored {
 				deposit_address,
 				asset,
@@ -954,19 +955,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		// Shave off the fetch fee from the deposit amount.
+		// For now, we take ingress and egress fees here. This is a simplification: we should
+		// really take the egress fee at the point of egress.
+		let tracked_data = T::ChainTracking::get_tracked_data();
+		let tx_fees = tracked_data
+			.estimate_ingress_fee(deposit_channel_details.deposit_channel.asset) +
+			tracked_data.estimate_egress_fee(deposit_channel_details.deposit_channel.asset);
 		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
-			fees.saturating_accrue(fetch_fee);
+			fees.saturating_accrue(tx_fees);
 		});
-		let net_deposit_amount = deposit_amount.saturating_sub(fetch_fee);
+		let net_deposit_amount = deposit_amount.saturating_sub(tx_fees);
 
-		// TODO: Consider whether this is ok. State changes will be rolled back, so we won't fetch
-		// at all. The deposit will end up being silently dropped. Might be better to emit an event
-		// and return ok. But a new event is a breaking change. Maybe we can re-use the minimum
-		// deposit event.
-		ensure!(
-			net_deposit_amount > Zero::zero(),
-			"Deposit amount is too small to cover the fetch fee."
-		);
+		// TODO: Consider updating the event with a reason explaining why the deposit was ignored.
+		if net_deposit_amount.is_zero() {
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+			});
+			return Ok(())
+		}
 
 		match deposit_channel_details.action {
 			ChannelAction::LiquidityProvision { lp_account, .. } =>
@@ -986,7 +995,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				block_height.into(),
 				asset.into(),
 				destination_asset,
-				deposit_amount.into(),
+				net_deposit_amount.into(),
 				destination_address,
 				broker_id,
 				broker_commission_bps,
@@ -999,7 +1008,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				..
 			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
-				deposit_amount.into(),
+				net_deposit_amount.into(),
 				destination_asset,
 				destination_address,
 				CcmDepositMetadata {
