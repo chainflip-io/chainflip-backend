@@ -364,6 +364,10 @@ pub mod pallet {
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
+	#[pallet::storage]
+	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -950,8 +954,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		// Shave off the fetch fee from the deposit amount.
-		let fetch_fee = T::ChainTracking::get_tracked_data()
-			.estimate_ingress_fee(deposit_channel_details.deposit_channel.asset);
+		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
+			fees.saturating_accrue(fetch_fee);
+		});
 		let net_deposit_amount = deposit_amount.saturating_sub(fetch_fee);
 
 		// TODO: Consider whether this is ok. State changes will be rolled back, so we won't fetch
