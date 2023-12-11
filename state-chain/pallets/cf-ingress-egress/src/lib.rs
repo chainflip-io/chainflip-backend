@@ -1136,9 +1136,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
 		};
 
-		let (remaining_amount, fee_estimate) = if asset == <T::TargetChain as Chain>::GAS_ASSET {
-			(available_amount.saturating_sub(fee_estimate), fee_estimate)
-		} else {
+		let (remaining_amount, fee_estimate) =
 			T::AssetConverter::convert_asset_to_approximate_output(
 				asset,
 				available_amount,
@@ -1152,8 +1150,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 				);
 				(available_amount, Zero::zero())
-			})
-		};
+			});
 
 		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
 			fees.saturating_accrue(fee_estimate);

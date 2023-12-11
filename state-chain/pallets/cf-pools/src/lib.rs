@@ -2021,7 +2021,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 	/// desired output amount. The actual output amount is not guaranteed to be close to the desired
 	/// amount.
 	///
-	/// Returns the actually converted input amount and the resultant output amount.
+	/// Returns the remaining input amount and the resultant output amount.
 	fn convert_asset_to_approximate_output<
 		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
 	>(
@@ -2030,10 +2030,25 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		output_asset: impl Into<Asset>,
 		desired_output_amount: Amount,
 	) -> Option<(Amount, Amount)> {
+		if desired_output_amount.is_zero() {
+			return Some((available_input_amount, Zero::zero()))
+		}
+		if available_input_amount.is_zero() {
+			return None
+		}
+
 		let input_asset = input_asset.into();
 		let output_asset = output_asset.into();
-
-		debug_assert_ne!(input_asset, output_asset);
+		if input_asset == output_asset {
+			if desired_output_amount < available_input_amount {
+				return Some((
+					available_input_amount.saturating_sub(desired_output_amount),
+					desired_output_amount,
+				))
+			} else {
+				return None
+			}
+		}
 
 		let input_amount_to_convert = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
@@ -2052,7 +2067,7 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		}
 
 		Some((
-			input_amount_to_convert.unique_saturated_into(),
+			available_input_amount.saturating_sub(input_amount_to_convert.unique_saturated_into()),
 			Self::swap_with_network_fee(input_asset, output_asset, input_amount_to_convert)
 				.ok()?
 				.output
