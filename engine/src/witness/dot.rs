@@ -143,29 +143,32 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		);
 		let mut xt_bytes = xt.0.as_slice();
 
-		let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
-		if let Ok(unchecked) = unchecked {
-			if let Some(signature) = unchecked.signature() {
-				if monitored_egress_ids.contains(&signature) {
-					tracing::info!("Witnessing transaction_succeeded. signature: {signature:?}");
-					process_call(
-						pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
-							tx_out_id: signature,
-							signer_id: epoch.info.1,
-							tx_fee,
-							tx_metadata: (),
-						}
-						.into(),
-						epoch.index,
-					)
-					.await;
-				}
-			}
-		} else {
-			// We expect this to occur when attempting to decode
-			// a transaction that was not sent by us.
-			// We can safely ignore it, but we log it in case.
-			tracing::debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+		match PolkadotUncheckedExtrinsic::decode(&mut xt_bytes) {
+			Ok(unchecked) =>
+				if let Some(signature) = unchecked.signature() {
+					if monitored_egress_ids.contains(&signature) {
+						tracing::info!(
+							"Witnessing transaction_succeeded. signature: {signature:?}"
+						);
+						process_call(
+							pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
+								tx_out_id: signature,
+								signer_id: epoch.info.1,
+								tx_fee,
+								tx_metadata: (),
+							}
+							.into(),
+							epoch.index,
+						)
+						.await;
+					}
+				},
+			Err(error) => {
+				// We expect this to occur when attempting to decode
+				// a transaction that was not sent by us.
+				// We can safely ignore it, but we log it in case.
+				tracing::debug!("Failed to decode UncheckedExtrinsic {error}");
+			},
 		}
 	}
 }
@@ -237,9 +240,7 @@ where
 	DotFinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
 		.logging("finalised block produced")
-		.then(|header| async move {
-			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
-		})
+		.then(|header| async move { header.data.iter().filter_map(filter_map_events).collect() })
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
