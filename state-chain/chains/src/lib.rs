@@ -51,6 +51,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
+	const GAS_ASSET: Self::ChainAsset;
+
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec

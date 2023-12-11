@@ -84,6 +84,8 @@ impl MockEthereumTransactionMetadata {
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
+	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+
 	type ChainCrypto = MockEthereumChainCrypto;
 
 	type DepositFetchId = MockEthereumChannelId;

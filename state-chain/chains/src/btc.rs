@@ -192,6 +192,8 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
+	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
+
 	type ChainCrypto = BitcoinCrypto;
 
 	type ChainBlockNumber = BlockNumber;

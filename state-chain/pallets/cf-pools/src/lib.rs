@@ -14,8 +14,8 @@ use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, Swappin
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
 	pallet_prelude::*,
-	sp_runtime::{Permill, Saturating},
-	storage::with_storage_layer,
+	sp_runtime::{Permill, Saturating, TransactionOutcome},
+	storage::{with_storage_layer, with_transaction_unchecked},
 	traits::{OriginTrait, StorageVersion},
 	transactional,
 };
@@ -2013,6 +2013,26 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> cf_traits::PriceOracle for Pallet<T> {
+	fn convert_asset_value(
+		source_asset: impl Into<Asset>,
+		destination_asset: impl Into<Asset>,
+		source_amount: impl Into<AssetAmount>,
+	) -> Option<AssetAmount> {
+		with_transaction_unchecked(|| {
+			TransactionOutcome::Rollback(
+				Self::swap_with_network_fee(
+					source_asset.into(),
+					destination_asset.into(),
+					source_amount.into(),
+				)
+				.ok()
+				.map(|swap_output| swap_output.output),
+			)
+		})
 	}
 }
 

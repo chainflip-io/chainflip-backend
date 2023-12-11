@@ -27,12 +27,15 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider,
+	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, PriceOracle,
 	SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
+	sp_runtime::{
+		traits::{UniqueSaturatedInto, Zero},
+		DispatchError, Saturating, TransactionOutcome,
+	},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -286,6 +289,9 @@ pub mod pallet {
 		type DepositHandler: DepositHandler<Self::TargetChain>;
 
 		type NetworkEnvironment: NetworkEnvironmentProvider;
+
+		/// Provides access to current AMM prices.
+		type PriceOracle: PriceOracle;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -961,10 +967,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let tx_fees = tracked_data
 			.estimate_ingress_fee(deposit_channel_details.deposit_channel.asset) +
 			tracked_data.estimate_egress_fee(deposit_channel_details.deposit_channel.asset);
+
+		let withheld_fees: TargetChainAmount<T, I> = {
+			if asset == <T::TargetChain as Chain>::GAS_ASSET {
+				tx_fees
+			} else {
+				T::PriceOracle::convert_asset_value(
+					asset,
+					<T::TargetChain as Chain>::GAS_ASSET,
+					tx_fees,
+				)
+				.map(|amount| amount.unique_saturated_into())
+				.unwrap_or_else(|| {
+					log::warn!(
+						"Unable to estimate conversion rate for fee estimation from {:?} to {:?}",
+						asset,
+						<T::TargetChain as Chain>::GAS_ASSET
+					);
+					Zero::zero()
+				})
+			}
+		};
+
+		let net_deposit_amount = deposit_amount.saturating_sub(withheld_fees);
 		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
-			fees.saturating_accrue(tx_fees);
+			fees.saturating_accrue(withheld_fees);
 		});
-		let net_deposit_amount = deposit_amount.saturating_sub(tx_fees);
 
 		// TODO: Consider updating the event with a reason explaining why the deposit was ignored.
 		if net_deposit_amount.is_zero() {

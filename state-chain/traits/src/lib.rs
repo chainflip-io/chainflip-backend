@@ -813,3 +813,11 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 		true
 	}
 }
+
+pub trait PriceOracle {
+	fn convert_asset_value(
+		source_asset: impl Into<Asset>,
+		destination_asset: impl Into<Asset>,
+		source_amount: impl Into<AssetAmount>,
+	) -> Option<AssetAmount>;
+}

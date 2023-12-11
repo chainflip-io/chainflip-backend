@@ -24,6 +24,7 @@ pub mod key_provider;
 pub mod lp_balance;
 pub mod offence_reporting;
 pub mod on_account_funded;
+pub mod price_oracle;
 pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod safe_mode;

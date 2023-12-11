@@ -21,6 +21,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 		lp_balance::MockBalance,
+		price_oracle::MockPriceOracle,
 		swap_deposit_handler::MockSwapDepositHandler,
 	},
 	DepositApi, DepositHandler, NetworkEnvironmentProvider,
@@ -120,6 +121,7 @@ impl crate::Config for Test {
 	type ChainTracking = cf_traits::mocks::chain_tracking::ChainTracking<Ethereum>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
+	type PriceOracle = MockPriceOracle;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

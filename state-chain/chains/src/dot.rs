@@ -324,6 +324,8 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
+	const GAS_ASSET: Self::ChainAsset = assets::dot::Asset::Dot;
+
 	type ChainCrypto = PolkadotCrypto;
 
 	type ChainBlockNumber = PolkadotBlockNumber;
