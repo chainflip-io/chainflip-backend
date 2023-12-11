@@ -66,7 +66,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The user does not have enough fund.
+		/// The user does not have enough funds.
 		InsufficientBalance,
 		/// The user has reached the maximum balance.
 		BalanceOverflow,
