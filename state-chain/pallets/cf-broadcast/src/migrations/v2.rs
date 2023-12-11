@@ -10,7 +10,9 @@ mod old {
 	use super::*;
 
 	/// A unique id for each broadcast attempt
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default, Copy)]
+	#[derive(
+		Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default, Copy,
+	)]
 	pub struct BroadcastAttemptId {
 		pub broadcast_id: BroadcastId,
 		pub attempt_count: AttemptCount,
@@ -21,12 +23,8 @@ mod old {
 		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
 
 	#[frame_support::storage_alias]
-	pub type AwaitingBroadcast<T: Config<I>, I: 'static> = StorageMap<
-		Pallet<T, I>,
-		Twox64Concat,
-		BroadcastAttemptId,
-		TransactionSigningAttempt<T, I>,
-	>;
+	pub type AwaitingBroadcast<T: Config<I>, I: 'static> =
+		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastAttemptId, TransactionSigningAttempt<T, I>>;
 }
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -59,7 +57,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		let pending_broadcasts = PendingBroadcasts::<T, I>::get();
 		for id in AwaitingBroadcast::<T, I>::iter_keys() {
-			assert!(pending_broadcasts.contains(&id.broadcast_id),);
+			assert!(pending_broadcasts.contains(&id));
 		}
 		Ok(())
 	}

@@ -1,11 +1,13 @@
-use crate::{BitcoinInstance, Box, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
+use crate::{
+	BitcoinBroadcaster, BitcoinInstance, Box, EthereumBroadcaster, EthereumInstance,
+	PolkadotBroadcaster, PolkadotInstance, Runtime, RuntimeCall,
+};
 use codec::{Decode, Encode};
 use pallet_cf_broadcast::Call;
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_threshold_signature::RequestCallback;
 
 #[cfg(feature = "try-runtime")]
@@ -173,7 +175,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 				threshold_request_id: c.0,
 				threshold_signature_payload: c.1,
 				api_call: Box::new(c.2),
-				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: c.3, attempt_count: 0 },
+				broadcast_id: c.3,
 				initiated_at: c.4,
 				should_broadcast: true,
 			}))
@@ -185,7 +187,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 				threshold_request_id: c.0,
 				threshold_signature_payload: c.1,
 				api_call: Box::new(c.2),
-				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: c.3, attempt_count: 0 },
+				broadcast_id: c.3,
 				initiated_at: c.4,
 				should_broadcast: true,
 			}))
@@ -197,7 +199,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 				threshold_request_id: c.0,
 				threshold_signature_payload: c.1,
 				api_call: Box::new(c.2),
-				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: c.3, attempt_count: 0 },
+				broadcast_id: c.3,
 				initiated_at: c.4,
 				should_broadcast: true,
 			}))
@@ -232,27 +234,27 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 		let mut eth_broadcastids = RequestCallback::<Runtime, EthereumInstance>::iter()
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::EthereumBroadcaster(call) => call, v, DispatchError::Other(".."));
-					let broadcast_attempt_id = ensure_variant!(Call::on_signature_ready{broadcast_attempt_id, ..} => broadcast_attempt_id, call, DispatchError::Other(".."));
-					assert_eq!(broadcast_attempt_id.attempt_count, 0);
-				Ok((k, broadcast_attempt_id.broadcast_id))
+				let broadcast_id = ensure_variant!(Call::on_signature_ready{broadcast_id, ..} => broadcast_id, call, DispatchError::Other(".."));
+				assert_eq!(EthereumBroadcaster::attempt_count(broadcast_id), 0);
+				Ok((k, broadcast_id))
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
 
 		let mut dot_broadcastids = RequestCallback::<Runtime, PolkadotInstance>::iter()
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::PolkadotBroadcaster(call) => call, v, DispatchError::Other(".."));
-					let broadcast_attempt_id = ensure_variant!(Call::on_signature_ready{broadcast_attempt_id, ..} => broadcast_attempt_id, call, DispatchError::Other(".."));
-					assert_eq!(broadcast_attempt_id.attempt_count, 0);
-				Ok((k, broadcast_attempt_id.broadcast_id))
+				let broadcast_id = ensure_variant!(Call::on_signature_ready{broadcast_id, ..} => broadcast_id, call, DispatchError::Other(".."));
+				assert_eq!(PolkadotBroadcaster::attempt_count(broadcast_id), 0);
+				Ok((k, broadcast_id))
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
 
 		let mut btc_broadcastids = RequestCallback::<Runtime, BitcoinInstance>::iter()
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::BitcoinBroadcaster(call) => call, v, DispatchError::Other(".."));
-					let broadcast_attempt_id = ensure_variant!(Call::on_signature_ready{broadcast_attempt_id, ..} => broadcast_attempt_id, call, DispatchError::Other(".."));
-					assert_eq!(broadcast_attempt_id.attempt_count, 0);
-				Ok((k, broadcast_attempt_id.broadcast_id))
+				let broadcast_id = ensure_variant!(Call::on_signature_ready{broadcast_id, ..} => broadcast_id, call, DispatchError::Other(".."));
+				assert_eq!(BitcoinBroadcaster::attempt_count(broadcast_id), 0);
+				Ok((k, broadcast_id))
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
 

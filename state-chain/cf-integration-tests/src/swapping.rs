@@ -27,8 +27,8 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastAttemptId, BroadcastIdCounter, RequestFailureCallbacks,
-	RequestSuccessCallbacks, ThresholdSignatureData, TransactionSigningAttempt,
+	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData, TransactionSigningAttempt,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
@@ -758,13 +758,10 @@ fn can_resign_failed_ccm() {
 			}
 
 			testnet.move_to_the_next_epoch();
-			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(BroadcastAttemptId {
-				broadcast_id: 1,
-				attempt_count: 0,
-			})
-			.unwrap()
-			.broadcast_attempt
-			.transaction_out_id;
+			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(1)
+				.unwrap()
+				.broadcast_attempt
+				.transaction_out_id;
 
 			for node in Validator::current_authorities() {
 				// Broadcast success for id 1, which is the rotation transaction.
@@ -811,25 +808,24 @@ fn can_resign_failed_ccm() {
 			let starting_epoch = Validator::current_epoch();
 			testnet.move_forward_blocks(3);
 			let broadcast_id = BroadcastIdCounter::<Runtime, Instance1>::get();
-			let mut broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 
 			// Fail the broadcast
 			for _ in Validator::current_authorities() {
 				let TransactionSigningAttempt { broadcast_attempt: _attempt, nominee } =
-					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_attempt_id)
-						.unwrap_or_else(|| {
+					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_id).unwrap_or_else(
+						|| {
 							panic!(
 								"Failed to get the transaction signing attempt for {:?}.",
-								broadcast_attempt_id,
+								broadcast_id,
 							)
-						});
+						},
+					);
 
-				assert_ok!(EthereumBroadcaster::transaction_signing_failure(
+				assert_ok!(EthereumBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(nominee),
-					broadcast_attempt_id,
+					broadcast_id,
 				));
 				testnet.move_forward_blocks(1);
-				broadcast_attempt_id = broadcast_attempt_id.peek_next();
 			}
 
 			// Upon broadcast failure, the Failure callback is called, and failed CCM is stored.

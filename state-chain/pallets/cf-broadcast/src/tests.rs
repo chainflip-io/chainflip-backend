@@ -1,18 +1,17 @@
 #![cfg(test)]
 
 use crate::{
-	mock::*, AwaitingBroadcast, BroadcastAttempt,
-	BroadcastId, BroadcastRetryQueue, Config, Error, Event as BroadcastEvent, FailedBroadcasters,
-	Instance1, PalletOffence, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionMetadata,
-	TransactionOutIdToBroadcastId, TransactionSigningAttempt, WeightInfo,
+	mock::*, AwaitingBroadcast, BroadcastAttempt, BroadcastId, BroadcastRetryQueue, Config, Error,
+	Event as BroadcastEvent, FailedBroadcasters, Instance1, PalletOffence, RequestFailureCallbacks,
+	RequestSuccessCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
+	TransactionMetadata, TransactionOutIdToBroadcastId, TransactionSigningAttempt, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
-		ChainChoice, MockApiCall, MockBroadcastBarriers, MockEthereum, MockEthereumChainCrypto,
-		MockEthereumTransactionMetadata, MockTransactionBuilder, ETH_TX_FEE,
-		MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA, MockThresholdSignature, MockAggKey
+		ChainChoice, MockAggKey, MockApiCall, MockBroadcastBarriers, MockEthereum,
+		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
+		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
 	ChainCrypto, FeeRefundCalculator,
 };
@@ -71,7 +70,7 @@ impl MockCfe {
 				} => {
 					match scenario {
 						Scenario::SigningFailure => {
-							assert_ok!(Broadcaster::transaction_signing_failure(
+							assert_ok!(Broadcaster::transaction_failed(
 								RawOrigin::Signed(nominee).into(),
 								broadcast_id,
 							));
@@ -136,8 +135,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 		let (tx_out_id, apicall) = api_call(1);
 		let broadcast_id = initiate_and_sign_broadcast(&apicall, TxType::Normal);
 
-		let tx_sig_request =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
+		let tx_sig_request = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
 
 		let nominee = MockNominator::get_last_nominee().unwrap();
 
@@ -204,24 +202,19 @@ fn broadcasts_aborted_after_all_report_failures_after_retry() {
 			// therefore aborted.
 			MockNominator::set_nominees(Some(Default::default()));
 
-			assert_ok!(Broadcaster::transaction_signing_failure(
-				RawOrigin::Signed(0).into(),
-				broadcast_id,
-			));
+			assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
 
 			// Schedule to retry after a failed broadcast
 			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
-					broadcast_id,
-				},
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled { broadcast_id },
 			));
 		})
-		.then_execute_at_next_block(|_|{})
+		.then_execute_at_next_block(|_| {})
 		.execute_with(|| {
 			// Cannot find a nominee to broadcast, abort the broadcast
-			System::assert_last_event(
-				RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted { broadcast_id })
-			);
+			System::assert_last_event(RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted {
+				broadcast_id,
+			}));
 		});
 }
 
@@ -256,9 +249,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
 		let (broadcast_id, _) = start_mock_broadcast();
-		assert_eq!(
-			Broadcaster::attempt_count(broadcast_id), 0
-		);
+		assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::SigningFailure);
@@ -281,7 +272,7 @@ fn test_transaction_signing_failed() {
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Broadcaster::transaction_signing_failure(
+			Broadcaster::transaction_failed(
 				RawOrigin::Signed(
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
@@ -346,7 +337,7 @@ fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
 		let (broadcast_id, _) = start_mock_broadcast();
 		assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
-		
+
 		// Simulate the expiry hook for the next block.
 		let current_block = System::block_number();
 		Broadcaster::on_initialize(current_block + 1);
@@ -554,50 +545,55 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 
 #[test]
 fn callback_is_called_upon_broadcast_failure() {
-	new_test_ext().execute_with(|| {
-		let api_call = MockApiCall {
-			payload: Default::default(),
-			sig: Default::default(),
-			tx_out_id: MOCK_TRANSACTION_OUT_ID,
-		};
-		let broadcast_id =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
+	new_test_ext()
+		.execute_with(|| {
+			let api_call = MockApiCall {
+				payload: Default::default(),
+				sig: Default::default(),
+				tx_out_id: MOCK_TRANSACTION_OUT_ID,
+			};
+			let broadcast_id =
+				Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
+					Some(MockCallback)
+				});
+
+			assert_eq!(
+				RequestFailureCallbacks::<Test, Instance1>::get(broadcast_id),
 				Some(MockCallback)
-			});
+			);
+			assert!(!MockCallback::was_called());
 
-		assert_eq!(
-			RequestFailureCallbacks::<Test, Instance1>::get(broadcast_id),
-			Some(MockCallback)
-		);
-		assert!(!MockCallback::was_called());
-
-		// Broadcast fails when no broadcaster can be nominated.
-		MockNominator::set_nominees(Some(Default::default()));
-		AwaitingBroadcast::<Test, Instance1>::insert(
-			broadcast_id,
-			TransactionSigningAttempt {
-				broadcast_attempt: BroadcastAttempt {
-					broadcast_id,
-					transaction_payload: Default::default(),
-					threshold_signature_payload: Default::default(),
-					transaction_out_id: Default::default(),
+			// Broadcast fails when no broadcaster can be nominated.
+			MockNominator::set_nominees(Some(Default::default()));
+			AwaitingBroadcast::<Test, Instance1>::insert(
+				broadcast_id,
+				TransactionSigningAttempt {
+					broadcast_attempt: BroadcastAttempt {
+						broadcast_id,
+						transaction_payload: Default::default(),
+						threshold_signature_payload: Default::default(),
+						transaction_out_id: Default::default(),
+					},
+					nominee: 0,
 				},
-				nominee: 0,
-			},
-		);
-		ThresholdSignatureData::<Test, Instance1>::insert(broadcast_id, (api_call, MockThresholdSignature{
-			signing_key: MockAggKey([0u8; 4]),
-			signed_payload: [0u8; 4],
-		}));
-		assert_ok!(Broadcaster::transaction_signing_failure(
-			RawOrigin::Signed(0).into(),
-			broadcast_id,
-		));
-	}).then_execute_at_next_block(|_|{})
-	.execute_with(||{
-		// This should trigger the failed callback
-		assert!(MockCallback::was_called());
-	});
+			);
+			ThresholdSignatureData::<Test, Instance1>::insert(
+				broadcast_id,
+				(
+					api_call,
+					MockThresholdSignature {
+						signing_key: MockAggKey([0u8; 4]),
+						signed_payload: [0u8; 4],
+					},
+				),
+			);
+			assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
+		})
+		.then_execute_at_next_block(|_| {})
+		.execute_with(|| {
+			// This should trigger the failed callback
+			assert!(MockCallback::was_called());
+		});
 }
 
 #[test]
@@ -605,7 +601,7 @@ fn retry_and_success_in_same_block() {
 	new_test_ext()
 		.execute_with(|| {
 			// Setup
-			let (broadcast_id, _)= start_mock_broadcast();
+			let (broadcast_id, _) = start_mock_broadcast();
 			(
 				MockNominator::get_last_nominee().unwrap(),
 				AwaitingBroadcast::<Test, Instance1>::get(broadcast_id)
@@ -618,7 +614,7 @@ fn retry_and_success_in_same_block() {
 				[
 					(
 						OriginTrait::signed(*nominee),
-						RuntimeCall::Broadcaster(crate::Call::transaction_signing_failure {
+						RuntimeCall::Broadcaster(crate::Call::transaction_failed {
 							broadcast_id: *broadcast_id,
 						}),
 						Ok(()),
@@ -645,8 +641,6 @@ fn retry_and_success_in_same_block() {
 
 // When we retry threshold signing, we want to make sure that the storage remains valid such that if
 // there is transaction_succeeded witnessed late due to some delay, the success still goes through.
-// Note: At time of writing there is a bug here, that the tx fee is not refunded in the case we
-// re-threshold sign and then witness success.
 #[test]
 fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt() {
 	let mut expected_expiry_block = 0;
@@ -680,7 +674,10 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 		// on idle runs and the retry is kicked off.
 		.then_execute_at_next_block(|p| p)
 		.then_execute_at_next_block(|(nominee, awaiting_broadcast)| {
-			assert_eq!(Broadcaster::attempt_count(awaiting_broadcast.broadcast_attempt.broadcast_id), 1);
+			assert_eq!(
+				Broadcaster::attempt_count(awaiting_broadcast.broadcast_attempt.broadcast_id),
+				1
+			);
 			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
 			MockCfe::respond(Scenario::Timeout);
 			(nominee, awaiting_broadcast)
@@ -698,10 +695,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 				MOCK_TX_METADATA,
 			));
 
-			// This is a bug. If this bug didn't exist, this would be assert_eq!().
-			// Leaving this assert here so when the code changes, whoever changes it, thinks about
-			// this case.
-			assert_ne!(
+			assert_eq!(
 				TransactionFeeDeficit::<Test, Instance1>::get(nominee),
 				awaiting_broadcast
 					.broadcast_attempt
@@ -746,11 +740,7 @@ fn broadcast_barrier_for_polkadot() {
 		// tx3 should still not be broadcasted because the blocking tx (tx2) has still not
 		// succeeded.
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance1>::get()[0]
-				.broadcast_id,
-			broadcast_id_3
-		);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id_3);
 
 		// Now tx2 succeeds which should allow tx3 to be broadcast
 		witness_broadcast(tx_out_id2);
@@ -838,17 +828,9 @@ fn broadcast_barrier_for_ethereum() {
 		// tx3 and tx4 should still not be broadcasted because not all txs before and including tx2
 		// have been witnessed
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance1>::get()[0]
-				.broadcast_id,
-			broadcast_id_3
-		);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id_3);
 
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance1>::get()[1]
-				.broadcast_id,
-			broadcast_id_4
-		);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[1].broadcast_id, broadcast_id_4);
 
 		// Now tx1 succeeds which should allow tx3 to be broadcast but not tx4 since there will be
 		// another barrier at tx3
@@ -859,11 +841,7 @@ fn broadcast_barrier_for_ethereum() {
 		assert_transaction_broadcast_request_event(broadcast_id_3, tx_out_id3);
 
 		// tx4 is still pending
-		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance1>::get()[0]
-				.broadcast_id,
-			broadcast_id_4
-		);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id_4);
 
 		// witness tx3 which should allow tx4 to be broadcast
 		witness_broadcast(tx_out_id3);
@@ -880,10 +858,7 @@ fn api_call(i: u8) -> ([u8; 4], MockApiCall<MockEthereumChainCrypto>) {
 	(tx_out_id, MockApiCall { tx_out_id, sig: Default::default(), payload: Default::default() })
 }
 
-fn assert_transaction_broadcast_request_event(
-	broadcast_id: BroadcastId,
-	tx_out_id: [u8; 4],
-) {
+fn assert_transaction_broadcast_request_event(broadcast_id: BroadcastId, tx_out_id: [u8; 4]) {
 	System::assert_last_event(RuntimeEvent::Broadcaster(
 		crate::Event::<Test, Instance1>::TransactionBroadcastRequest {
 			transaction_out_id: tx_out_id,
@@ -930,11 +905,9 @@ fn time_out_broadcaster_are_reported() {
 			let (broadcast_id, _) = start_mock_broadcast();
 			expiry = System::block_number()
 				.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
-			let nominee =
-				AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap().nominee;
+			let nominee = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap().nominee;
 
-			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id)
-				.is_empty());
+			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
 			(broadcast_id, nominee)
 		})
 		.then_execute_at_block(expiry, |(broadcast_id, nominee)| {
