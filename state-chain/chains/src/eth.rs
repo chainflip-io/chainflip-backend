@@ -96,8 +96,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
 			match asset {
 				assets::eth::Asset::Eth => Zero::zero(),
-				assets::eth::Asset::Flip | assets::eth::Asset::Usdc =>
-					GAS_COST_PER_TRANSFER + GAS_COST_PER_FETCH,
+				assets::eth::Asset::Flip | assets::eth::Asset::Usdc => GAS_COST_PER_FETCH,
 			};
 
 		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_fetch)
