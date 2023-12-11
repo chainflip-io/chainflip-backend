@@ -297,7 +297,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
-	type PriceOracle = LiquidityPools;
+	type AssetConverter = LiquidityPools;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -315,7 +315,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type PriceOracle = LiquidityPools;
+	type AssetConverter = LiquidityPools;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -333,7 +333,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type PriceOracle = LiquidityPools;
+	type AssetConverter = LiquidityPools;
 }
 
 parameter_types! {

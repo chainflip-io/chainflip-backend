@@ -22,7 +22,7 @@ use frame_support::{
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::Zero;
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -2016,23 +2016,48 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::PriceOracle for Pallet<T> {
-	fn convert_asset_value(
-		source_asset: impl Into<Asset>,
-		destination_asset: impl Into<Asset>,
-		source_amount: impl Into<AssetAmount>,
-	) -> Option<AssetAmount> {
-		with_transaction_unchecked(|| {
+impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+	/// Try to convert the input asset to the output asset, subject to an available input amount and
+	/// desired output amount. The actual output amount is not guaranteed to be close to the desired
+	/// amount.
+	///
+	/// Returns the actually converted input amount and the resultant output amount.
+	fn convert_asset_to_approximate_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		available_input_amount: Amount,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<(Amount, Amount)> {
+		let input_asset = input_asset.into();
+		let output_asset = output_asset.into();
+
+		debug_assert_ne!(input_asset, output_asset);
+
+		let input_amount_to_convert = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
 				Self::swap_with_network_fee(
-					source_asset.into(),
-					destination_asset.into(),
-					source_amount.into(),
+					output_asset,
+					input_asset,
+					desired_output_amount.into(),
 				)
-				.ok()
-				.map(|swap_output| swap_output.output),
+				.ok(),
 			)
-		})
+		})?
+		.output;
+
+		if input_amount_to_convert > available_input_amount.into() {
+			return None
+		}
+
+		Some((
+			input_amount_to_convert.unique_saturated_into(),
+			Self::swap_with_network_fee(input_asset, output_asset, input_amount_to_convert)
+				.ok()?
+				.output
+				.unique_saturated_into(),
+		))
 	}
 }
 

@@ -26,16 +26,13 @@ use cf_primitives::{
 	ForeignChain, ThresholdSignatureRequestId,
 };
 use cf_traits::{
-	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
-	EgressApi, EpochInfo, GetBlockHeight, GetTrackedData, NetworkEnvironmentProvider, PriceOracle,
-	SwapDepositHandler,
+	liquidity::LpBalanceApi, AssetConverter, Broadcaster, CcmHandler, Chainflip, DepositApi,
+	DepositHandler, EgressApi, EpochInfo, GetBlockHeight, GetTrackedData,
+	NetworkEnvironmentProvider, SwapDepositHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{
-		traits::{UniqueSaturatedInto, Zero},
-		DispatchError, Saturating, TransactionOutcome,
-	},
+	sp_runtime::{traits::Zero, DispatchError, Saturating, TransactionOutcome},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -296,7 +293,7 @@ pub mod pallet {
 		type NetworkEnvironment: NetworkEnvironmentProvider;
 
 		/// Provides access to current AMM prices.
-		type PriceOracle: PriceOracle;
+		type AssetConverter: AssetConverter;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -840,8 +837,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					egress_ids.push(egress_id);
 					transfer_params.push(TransferAssetParams {
 						asset,
-						amount: amount
-							.saturating_sub(Self::withhold_fee(IngressOrEgress::Egress, asset)),
+						amount: Self::withold_transaction_fee(
+							IngressOrEgress::Egress,
+							asset,
+							amount,
+						),
 						to: destination_address,
 					});
 					DepositBalances::<T, I>::mutate(asset, |tracker| {
@@ -964,10 +964,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let net_deposit_amount = deposit_amount.saturating_sub(Self::withhold_fee(
+		let net_deposit_amount = Self::withold_transaction_fee(
 			IngressOrEgress::Ingress,
 			deposit_channel_details.deposit_channel.asset,
-		));
+			deposit_amount,
+		);
 
 		// TODO: Consider updating the event with a reason explaining why the deposit was ignored.
 		if net_deposit_amount.is_zero() {
@@ -1121,9 +1122,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.cloned()
 	}
 
-	fn withhold_fee(
+	/// Withholds the fee for a given amount.
+	///
+	/// Returns the remaining amount after the fee has been withheld.
+	fn withold_transaction_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
+		available_amount: TargetChainAmount<T, I>,
 	) -> TargetChainAmount<T, I> {
 		let tracked_data = T::ChainTracking::get_tracked_data();
 		let fee_estimate = match ingress_or_egress {
@@ -1131,22 +1136,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
 		};
 
-		let fee_estimate = if asset == <T::TargetChain as Chain>::GAS_ASSET {
-			fee_estimate
+		let (remaining_amount, fee_estimate) = if asset == <T::TargetChain as Chain>::GAS_ASSET {
+			(available_amount.saturating_sub(fee_estimate), fee_estimate)
 		} else {
-			T::PriceOracle::convert_asset_value(
+			T::AssetConverter::convert_asset_to_approximate_output(
 				asset,
+				available_amount,
 				<T::TargetChain as Chain>::GAS_ASSET,
 				fee_estimate,
 			)
-			.map(|amount| amount.unique_saturated_into())
 			.unwrap_or_else(|| {
 				log::warn!(
-					"Unable to estimate conversion rate for fee estimation from {:?} to {:?}",
+					"Unable to convert input to gas for input of {:?} ${:?}. Ignoring transaction fees.",
+					available_amount,
 					asset,
-					<T::TargetChain as Chain>::GAS_ASSET
 				);
-				Zero::zero()
+				(available_amount, Zero::zero())
 			})
 		};
 
@@ -1154,7 +1159,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees.saturating_accrue(fee_estimate);
 		});
 
-		fee_estimate
+		remaining_amount
 	}
 }
 
