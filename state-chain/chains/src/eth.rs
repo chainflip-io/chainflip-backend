@@ -81,9 +81,10 @@ impl EthereumTrackedData {
 
 mod fees {
 	// TODO: refine these constants.
-	pub const BASE_COST_PER_BATCH: u128 = 10_000;
-	pub const GAS_COST_PER_FETCH: u128 = 40_000;
-	pub const GAS_COST_PER_TRANSFER: u128 = 50_000;
+	pub const BASE_COST_PER_BATCH: u128 = 50_000;
+	pub const GAS_COST_PER_FETCH: u128 = 30_000;
+	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
+	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
@@ -106,11 +107,15 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 
 	fn estimate_egress_fee(
 		&self,
-		_asset: <Ethereum as Chain>::ChainAsset,
+		asset: <Ethereum as Chain>::ChainAsset,
 	) -> <Ethereum as Chain>::ChainAmount {
 		use fees::*;
 
-		let gas_cost_per_transfer = BASE_COST_PER_BATCH + GAS_COST_PER_TRANSFER;
+		let gas_cost_per_transfer = BASE_COST_PER_BATCH +
+			match asset {
+				assets::eth::Asset::Eth => GAS_COST_PER_TRANSFER_NATIVE,
+				assets::eth::Asset::Flip | assets::eth::Asset::Usdc => GAS_COST_PER_TRANSFER_TOKEN,
+			};
 
 		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_transfer)
 	}
