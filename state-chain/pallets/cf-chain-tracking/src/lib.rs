@@ -11,7 +11,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState};
-use cf_traits::{Chainflip, GetBlockHeight};
+use cf_traits::{Chainflip, GetBlockHeight, GetTrackedData};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, traits::OnRuntimeUpgrade,
 };
