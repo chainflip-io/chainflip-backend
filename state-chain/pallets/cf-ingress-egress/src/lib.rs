@@ -151,6 +151,11 @@ pub mod pallet {
 		pub action: ChannelAction<T::AccountId>,
 	}
 
+	pub enum IngressOrEgress {
+		Ingress,
+		Egress,
+	}
+
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum ChannelAction<AccountId> {
@@ -835,7 +840,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					egress_ids.push(egress_id);
 					transfer_params.push(TransferAssetParams {
 						asset,
-						amount,
+						amount: amount
+							.saturating_sub(Self::withhold_fee(IngressOrEgress::Egress, asset)),
 						to: destination_address,
 					});
 					DepositBalances::<T, I>::mutate(asset, |tracker| {
@@ -922,12 +928,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-		if DepositChannelPool::<T, I>::get(deposit_channel_details.deposit_channel.channel_id)
-			.is_some()
-		{
+		let channel_id = deposit_channel_details.deposit_channel.channel_id;
+
+		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
 			log_or_panic!(
 				"Deposit channel {} should not be in the recycled address pool if it's active",
-				deposit_channel_details.deposit_channel.channel_id
+				channel_id
 			);
 			#[cfg(not(debug_assertions))]
 			return Err(Error::<T, I>::InvalidDepositAddress.into())
@@ -956,43 +962,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_fetch_id: None,
 			amount: deposit_amount,
 		});
-
-		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		// Shave off the fetch fee from the deposit amount.
-		// For now, we take ingress and egress fees here. This is a simplification: we should
-		// really take the egress fee at the point of egress.
-		let tracked_data = T::ChainTracking::get_tracked_data();
-		let tx_fees = tracked_data
-			.estimate_ingress_fee(deposit_channel_details.deposit_channel.asset) +
-			tracked_data.estimate_egress_fee(deposit_channel_details.deposit_channel.asset);
-
-		let withheld_fees: TargetChainAmount<T, I> = {
-			if asset == <T::TargetChain as Chain>::GAS_ASSET {
-				tx_fees
-			} else {
-				T::PriceOracle::convert_asset_value(
-					asset,
-					<T::TargetChain as Chain>::GAS_ASSET,
-					tx_fees,
-				)
-				.map(|amount| amount.unique_saturated_into())
-				.unwrap_or_else(|| {
-					log::warn!(
-						"Unable to estimate conversion rate for fee estimation from {:?} to {:?}",
-						asset,
-						<T::TargetChain as Chain>::GAS_ASSET
-					);
-					Zero::zero()
-				})
-			}
-		};
-
-		let net_deposit_amount = deposit_amount.saturating_sub(withheld_fees);
-		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
-			fees.saturating_accrue(withheld_fees);
-		});
+		let net_deposit_amount = deposit_amount.saturating_sub(Self::withhold_fee(
+			IngressOrEgress::Ingress,
+			deposit_channel_details.deposit_channel.asset,
+		));
 
 		// TODO: Consider updating the event with a reason explaining why the deposit was ignored.
 		if net_deposit_amount.is_zero() {
@@ -1144,6 +1119,42 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.iter()
 			.find(|ccm| ccm.broadcast_id == broadcast_id)
 			.cloned()
+	}
+
+	fn withhold_fee(
+		ingress_or_egress: IngressOrEgress,
+		asset: TargetChainAsset<T, I>,
+	) -> TargetChainAmount<T, I> {
+		let tracked_data = T::ChainTracking::get_tracked_data();
+		let fee_estimate = match ingress_or_egress {
+			IngressOrEgress::Ingress => tracked_data.estimate_ingress_fee(asset),
+			IngressOrEgress::Egress => tracked_data.estimate_egress_fee(asset),
+		};
+
+		let fee_estimate = if asset == <T::TargetChain as Chain>::GAS_ASSET {
+			fee_estimate
+		} else {
+			T::PriceOracle::convert_asset_value(
+				asset,
+				<T::TargetChain as Chain>::GAS_ASSET,
+				fee_estimate,
+			)
+			.map(|amount| amount.unique_saturated_into())
+			.unwrap_or_else(|| {
+				log::warn!(
+					"Unable to estimate conversion rate for fee estimation from {:?} to {:?}",
+					asset,
+					<T::TargetChain as Chain>::GAS_ASSET
+				);
+				Zero::zero()
+			})
+		};
+
+		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
+			fees.saturating_accrue(fee_estimate);
+		});
+
+		fee_estimate
 	}
 }
 
