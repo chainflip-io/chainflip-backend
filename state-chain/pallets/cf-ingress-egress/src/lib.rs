@@ -837,7 +837,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					egress_ids.push(egress_id);
 					transfer_params.push(TransferAssetParams {
 						asset,
-						amount: Self::withold_transaction_fee(
+						amount: Self::withhold_transaction_fee(
 							IngressOrEgress::Egress,
 							asset,
 							amount,
@@ -964,7 +964,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
-		let net_deposit_amount = Self::withold_transaction_fee(
+		let net_deposit_amount = Self::withhold_transaction_fee(
 			IngressOrEgress::Ingress,
 			deposit_channel_details.deposit_channel.asset,
 			deposit_amount,
@@ -1125,7 +1125,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Withholds the fee for a given amount.
 	///
 	/// Returns the remaining amount after the fee has been withheld.
-	fn withold_transaction_fee(
+	fn withhold_transaction_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
 		available_amount: TargetChainAmount<T, I>,
