@@ -1152,7 +1152,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				(available_amount, Zero::zero())
 			});
 
-		WithheldTransactionFees::<T, I>::mutate(asset, |fees| {
+		WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
 			fees.saturating_accrue(fee_estimate);
 		});
 
