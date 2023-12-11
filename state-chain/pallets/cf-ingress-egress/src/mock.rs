@@ -1,6 +1,7 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 use crate::{DepositBalances, DepositWitness};
 
+use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, ForeignChainAddress},
 	eth::{api::EthereumApi, Address as EthereumAddress},
@@ -17,7 +18,6 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
-		block_height_provider::BlockHeightProvider,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 		lp_balance::MockBalance,
@@ -117,7 +117,7 @@ impl crate::Config for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type ChainTracking = BlockHeightProvider<Ethereum>;
+	type ChainTracking = cf_traits::mocks::chain_tracking::ChainTracking<Ethereum>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 }
@@ -130,6 +130,14 @@ impl_test_helpers! {
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2) },
+	},
+	|| {
+		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Ethereum>::set_tracked_data(
+			EthereumTrackedData {
+				base_fee: Default::default(),
+				priority_fee: Default::default()
+			}
+		);
 	}
 }
 

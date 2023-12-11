@@ -11,6 +11,7 @@ pub mod broadcaster;
 pub mod callback;
 pub mod ccm_handler;
 pub mod ceremony_id_provider;
+pub mod chain_tracking;
 pub mod deposit_handler;
 pub mod egress_handler;
 pub mod ensure_origin_mock;
@@ -30,6 +31,7 @@ pub mod signer_nomination;
 pub mod swap_deposit_handler;
 pub mod threshold_signer;
 pub mod time_source;
+pub mod tracked_data_provider;
 pub mod vault_rotator;
 pub mod waived_fees_mock;
 
