@@ -8,7 +8,7 @@ import { compileBinaries } from './utils/compile_binaries';
 function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: string) {
   try {
     execSync(
-      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --checks all ${blockParam} --uri ${networkUrl}`,
+      `try-runtime --runtime ${runtimePath} on-runtime-upgrade --disable-spec-version-check --disable-idempotency-checks --checks all ${blockParam} --uri ${networkUrl}`,
       { stdio: 'ignore' },
     );
   } catch (error) {
