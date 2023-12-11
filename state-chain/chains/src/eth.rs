@@ -17,7 +17,7 @@ pub use ethabi::{
 	Address, Hash as TxHash, Token, Uint, Word,
 };
 use evm::api::EvmReplayProtection;
-use frame_support::sp_runtime::{FixedPointNumber, FixedU64, RuntimeDebug};
+use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{cmp::min, convert::TryInto, str};
@@ -77,21 +77,25 @@ impl EthereumTrackedData {
 	}
 }
 
+mod fees {
+	// TODO: refine these constants.
+	pub const BASE_COST_PER_BATCH: u128 = 10_000;
+	pub const GAS_COST_PER_FETCH: u128 = 40_000;
+	pub const GAS_COST_PER_TRANSFER: u128 = 50_000;
+}
+
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		asset: <Ethereum as Chain>::ChainAsset,
 	) -> <Ethereum as Chain>::ChainAmount {
-		// TODO: refine these constants.
-		const BASE_COST_PER_BATCH: u128 = 10_000;
-		const GAS_COST_PER_FETCH: u128 = 40_000;
-		const GAS_COST_PER_TRANSFER: u128 = 50_000;
+		use fees::*;
 
 		// Note: this is taking the egress cost of the swap in the ingress currency (and basing the
 		// cost on the ingress chain).
 		let gas_cost_per_fetch = BASE_COST_PER_BATCH +
 			match asset {
-				assets::eth::Asset::Eth => GAS_COST_PER_TRANSFER,
+				assets::eth::Asset::Eth => Zero::zero(),
 				assets::eth::Asset::Flip | assets::eth::Asset::Usdc =>
 					GAS_COST_PER_TRANSFER + GAS_COST_PER_FETCH,
 			};
@@ -103,7 +107,11 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 		&self,
 		_asset: <Ethereum as Chain>::ChainAsset,
 	) -> <Ethereum as Chain>::ChainAmount {
-		todo!("Unused for now. See comment above.")
+		use fees::*;
+
+		let gas_cost_per_transfer = BASE_COST_PER_BATCH + GAS_COST_PER_TRANSFER;
+
+		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_transfer)
 	}
 }
 
