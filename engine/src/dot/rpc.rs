@@ -129,10 +129,10 @@ impl DotRpcApi for DotRpcClient {
 
 	/// Returns the events for a particular block hash.
 	/// If the block for the given block hash does not exist, then this returns `Ok(None)`.
-	/// The parent hash is used to determine the runtime version to decode the events.
 	async fn events(
 		&self,
 		block_hash: PolkadotHash,
+		// The parent hash is used to determine the runtime version to decode the events.
 		parent_hash: PolkadotHash,
 	) -> Result<Option<Events<PolkadotConfig>>> {
 		self.http_client.events(block_hash, parent_hash).await

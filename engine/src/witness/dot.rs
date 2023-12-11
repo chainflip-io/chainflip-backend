@@ -151,16 +151,16 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 							"Witnessing transaction_succeeded. signature: {signature:?}"
 						);
 						process_call(
-						pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
-							tx_out_id: signature,
-							signer_id: epoch.info.1,
-							tx_fee,
-							tx_metadata: (),
-						}
-						.into(),
-						epoch.index,
-					)
-					.await;
+							pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
+								tx_out_id: signature,
+								signer_id: epoch.info.1,
+								tx_fee,
+								tx_metadata: (),
+							}
+							.into(),
+							epoch.index,
+						)
+						.await;
 					}
 				},
 			Err(error) => {

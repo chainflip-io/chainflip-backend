@@ -163,9 +163,9 @@ impl DotRpcApi for DotHttpRpcClient {
 	) -> Result<Option<Events<PolkadotConfig>>> {
 		// We need to get the runtime version at the previous block instead the desired block
 		// because the events in the block are encoded using the previous block's runtime version,
-		// not the desired block's runtime version.
+		// not the desired block's runtime version. This is caused by the `state_getRuntimeVersion`
+		// RPC returning the value of the runtime at the end of the block, not the beginning.
 		let chain_runtime_version = self.runtime_version(Some(parent_hash)).await?;
-		println!("using spec_version: {:?}", chain_runtime_version.spec_version);
 
 		let client_runtime_version = self.online_client.runtime_version();
 
@@ -238,34 +238,35 @@ mod tests {
 	async fn test_parsing_events_in_runtime_update_block() {
 		use std::str::FromStr;
 
-		// Block hash of the block that the runtime update occurred in
-		let block_hash_of_runtime_update =
+		// Block hash of the block that a runtime update occurred in. Using 2 different blocks with
+		// runtime updates to test.
+		let block_hash_of_runtime_updates = vec![
 			H256::from_str("0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610")
-				.unwrap();
-
-		// The hash of the block before the runtime update block
-		let block_hash_of_parent =
-			H256::from_str("0x99fa3b7ae36c379f1ebccf050312a00877e985e8b8d5ca054cee1bb901e0ffa4")
-				.unwrap();
+				.unwrap(),
+			H256::from_str("0xa0138c9d6686f9d80c3fa8a7e175951842ca400f43e479ba694d6d4da69969ea")
+				.unwrap(),
+		];
 
 		let dot_http_rpc =
 			DotHttpRpcClient::new("https://polkadot-rpc-tn.dwellir.com:443".into(), None)
 				.unwrap()
 				.await;
 
-		// Get the events for the block with the runtime update in it
-		let events = dot_http_rpc
-			.events(block_hash_of_runtime_update, block_hash_of_parent)
-			.await
-			.unwrap()
-			.unwrap();
+		for block_hash in block_hash_of_runtime_updates {
+			// Block hash of the block before the runtime update occurred
+			let block_hash_of_parent =
+				dot_http_rpc.block(block_hash).await.unwrap().unwrap().block.header.parent_hash;
 
-		// Calling iter() will cause the events to be decoded. None of the events should fail to
-		// decode if the correct metadata is used.
-		assert!(!events.iter().any(|event| event.is_err()));
+			// Get the events for the block with the runtime update in it
+			let events =
+				dot_http_rpc.events(block_hash, block_hash_of_parent).await.unwrap().unwrap();
 
-		// Check that mapping the events does not panic
-		let _mapped_events: Vec<_> =
-			events.iter().filter_map(crate::witness::dot::filter_map_events).collect();
+			// Calling iter() will cause the events to be decoded. None of the events should fail to
+			// decode if the correct metadata is used.
+			assert!(!events.iter().any(|event| event.is_err()));
+
+			// Check that mapping the events does not panic
+			events.iter().filter_map(crate::witness::dot::filter_map_events).for_each(drop);
+		}
 	}
 }
