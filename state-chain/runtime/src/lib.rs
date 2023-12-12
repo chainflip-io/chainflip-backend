@@ -24,9 +24,10 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot, TransactionBuilder,
+	Bitcoin, CcmChannelMetadata, FeeEstimationApi, ForeignChain, Polkadot, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
+use cf_traits::GetTrackedData;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -1136,6 +1137,54 @@ impl_runtime_apis! {
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
 				).into(),
+			}
+		}
+
+		fn cf_ingress_fee(asset: Asset) -> AssetAmount {
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, Instance1>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+					),
+				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, Instance2>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+					),
+				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, Instance3>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						)
+						.into(),
+			}
+		}
+
+		fn cf_egress_fee(asset: Asset) -> AssetAmount {
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, Instance1>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						),
+				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, Instance2>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						),
+				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, Instance3>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						)
+						.into(),
 			}
 		}
 
