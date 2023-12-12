@@ -9,6 +9,7 @@ import {
   sleep,
   observeBalanceIncrease,
   chainFromAsset,
+  isWithinOnePercent,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -107,7 +108,10 @@ async function testLiquidityDeposit() {
     chainflip,
     (event) =>
       event.data.asset.toUpperCase() === testAsset.toUpperCase() &&
-      Number(event.data.amountCredited.replace(/,/g, '')) === testAssetAmount,
+      isWithinOnePercent(
+        BigInt(event.data.amountCredited.replace(/,/g, '')),
+        BigInt(testAssetAmount),
+      ),
   );
   await sendEth(liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;

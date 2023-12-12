@@ -84,6 +84,8 @@ impl MockEthereumTransactionMetadata {
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
+	const GAS_ASSET: Self::ChainAsset = assets::eth::Asset::Eth;
+
 	type ChainCrypto = MockEthereumChainCrypto;
 
 	type DepositFetchId = MockEthereumChannelId;
@@ -179,6 +181,22 @@ impl MockTrackedData {
 impl BenchmarkValue for MockTrackedData {
 	fn benchmark_value() -> Self {
 		Self { base_fee: 1_000u128, priority_fee: 100u128 }
+	}
+}
+
+impl FeeEstimationApi<MockEthereum> for MockTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		_asset: <MockEthereum as Chain>::ChainAsset,
+	) -> <MockEthereum as Chain>::ChainAmount {
+		todo!()
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <MockEthereum as Chain>::ChainAsset,
+	) -> <MockEthereum as Chain>::ChainAmount {
+		todo!("Unused for now.")
 	}
 }
 
