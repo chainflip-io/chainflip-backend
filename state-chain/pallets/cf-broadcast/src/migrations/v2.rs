@@ -43,6 +43,11 @@ mod old {
 		StorageValue<Pallet<T, I>, Vec<BroadcastAttempt<T, I>>>;
 }
 
+#[derive(Clone, Encode, Decode)]
+pub struct MigrationVerification {
+	broadcasts_with_failed_broadcasters: Vec<BroadcastId>,
+	broadcast_retry_queue: Vec<BroadcastId>,
+}
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
@@ -130,15 +135,40 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(Default::default())
+		let broadcasts_with_failed_broadcasters =
+			old::FailedBroadcasters::<T, I>::iter_keys().collect::<Vec<_>>();
+		let broadcast_retry_queue = old::BroadcastRetryQueue::<T, I>::get()
+			.unwrap_or_default()
+			.into_iter()
+			.map(|attempt| attempt.broadcast_attempt_id.broadcast_id)
+			.collect::<Vec<_>>();
+		Ok(MigrationVerification { broadcasts_with_failed_broadcasters, broadcast_retry_queue }
+			.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		let pending_broadcasts = PendingBroadcasts::<T, I>::get();
 		for id in AwaitingBroadcast::<T, I>::iter_keys() {
 			assert!(pending_broadcasts.contains(&id));
 		}
+
+		let MigrationVerification { broadcasts_with_failed_broadcasters, broadcast_retry_queue } =
+			<MigrationVerification>::decode(&mut &state[..]).unwrap();
+
+		broadcasts_with_failed_broadcasters.into_iter().for_each(|broadcast_id| {
+			assert!(FailedBroadcasters::<T, I>::contains_key(broadcast_id))
+		});
+
+		let new_retry_queue = BroadcastRetryQueue::<T, I>::get()
+			.into_iter()
+			.map(|(broadcast_id, _attempt)| broadcast_id)
+			.collect::<Vec<_>>();
+
+		broadcast_retry_queue
+			.into_iter()
+			.for_each(|broadcast_id| assert!(new_retry_queue.contains(&broadcast_id)));
+
 		Ok(())
 	}
 }
