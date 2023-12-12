@@ -253,44 +253,44 @@ impl Default for PolkadotTrackedData {
 }
 
 /// See https://wiki.polkadot.network/docs/learn-transaction-fees
+///
+/// Fee constants here already include the Multiplier.
 mod fee_constants {
-	use frame_support::sp_runtime::FixedU128;
-
 	// See https://wiki.polkadot.network/docs/learn-DOT.
 	pub const MICRO_DOT: u128 = 10_000;
 	pub const MILLI_DOT: u128 = 1_000 * MICRO_DOT;
 
 	/// Taken from the Polkadot runtime.
-	pub const MULTIPLIER: FixedU128 = FixedU128::from_inner(100_000_000_000_000_000);
-	/// Taken from the Polkadot runtime.
-	pub const BASE_FEE: u128 = 126_045_000;
+	pub const BASE_FEE: u128 = 1 * MILLI_DOT;
 	/// Taken from the Polkadot runtime. Should be 0.1 mDOT
 	pub const LENGTH_FEE: u128 = MILLI_DOT / 10;
 
 	pub mod fetch {
 		pub use super::*;
 
-		/// Estimated from the Polkadot runtime. Should be 400 µDOT
-		pub const WEIGHT_FEE: u128 = 400 * MICRO_DOT;
+		/// Estimated from the Polkadot runtime.
+		pub const ADJUSTED_WEIGHT_FEE: u128 = 330 * MICRO_DOT;
 		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
 		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
 		/// encoded in the extrinsic, bringing the per-fetch average down.
-		pub const EXTRINSIC_LENGTH: u128 = 80;
+		pub const EXTRINSIC_LENGTH: u128 = 184;
 
-		pub const EXTRINSIC_FEE: u128 = BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + WEIGHT_FEE;
+		pub const EXTRINSIC_FEE: u128 =
+			BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + ADJUSTED_WEIGHT_FEE;
 	}
 
 	pub mod transfer {
 		pub use super::*;
 
-		/// Estimated from the Polkadot runtime. Should be 400 µDOT
-		pub const WEIGHT_FEE: u128 = 400 * MICRO_DOT;
+		/// Estimated from the Polkadot runtime.
+		pub const ADJUSTED_WEIGHT_FEE: u128 = 245 * MICRO_DOT;
 		/// This should be a minor over-estimate. It's the length in bytes of an extrinsic that
 		/// encodes a single fetch operation. In practice, multiple fetches and transfers might be
 		/// encoded in the extrinsic, bringing the per-fetch average down.
-		pub const EXTRINSIC_LENGTH: u128 = 110;
+		pub const EXTRINSIC_LENGTH: u128 = 185;
 
-		pub const EXTRINSIC_FEE: u128 = BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + WEIGHT_FEE;
+		pub const EXTRINSIC_FEE: u128 =
+			BASE_FEE + LENGTH_FEE * EXTRINSIC_LENGTH + ADJUSTED_WEIGHT_FEE;
 	}
 }
 
@@ -300,12 +300,8 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 		_asset: <Polkadot as Chain>::ChainAsset,
 	) -> <Polkadot as Chain>::ChainAmount {
 		use fee_constants::fetch::*;
-		use frame_support::sp_runtime::FixedPointNumber;
 
-		self.median_tip +
-			MULTIPLIER
-				.checked_mul_int(fetch::EXTRINSIC_FEE)
-				.expect("Doesn't panic, see test.")
+		self.median_tip + fetch::EXTRINSIC_FEE
 	}
 
 	fn estimate_egress_fee(
@@ -313,12 +309,8 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 		_asset: <Polkadot as Chain>::ChainAsset,
 	) -> <Polkadot as Chain>::ChainAmount {
 		use fee_constants::transfer::*;
-		use frame_support::sp_runtime::FixedPointNumber;
 
-		self.median_tip +
-			MULTIPLIER
-				.checked_mul_int(transfer::EXTRINSIC_FEE)
-				.expect("Doesn't panic, see test.")
+		self.median_tip + transfer::EXTRINSIC_FEE
 	}
 }
 
@@ -1158,7 +1150,7 @@ mod test_polkadot_extrinsics {
 		// The values are not important. This test serves more as a sanity check that
 		// the fees are valid, and a reference to compare against the actual fees. These values must
 		// be updated if we update the fee calculation.
-		assert_eq!(ingress_fee, 21004500u128);
-		assert_eq!(egress_fee, 24004500u128);
+		assert_eq!(ingress_fee, 197_300_000u128);
+		assert_eq!(egress_fee, 197_450_000u128);
 	}
 }
