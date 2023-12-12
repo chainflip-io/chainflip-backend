@@ -138,7 +138,7 @@ async function testGasLimitSwap(
     'ethereumBroadcaster:TransactionBroadcastRequest',
     chainflipApi,
     (event) => {
-      broadcastIdToTxPayload[event.data.broadcastAttemptId.broadcastId] =
+      broadcastIdToTxPayload[event.data.broadcastId] =
         event.data.transactionPayload;
       return false;
     },
