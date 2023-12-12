@@ -16,7 +16,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{Permill, Saturating, TransactionOutcome},
 	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::{OriginTrait, StorageVersion},
+	traits::{Defensive, OriginTrait, StorageVersion},
 	transactional,
 };
 
@@ -2030,6 +2030,8 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 		output_asset: impl Into<Asset>,
 		desired_output_amount: Amount,
 	) -> Option<(Amount, Amount)> {
+		use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
+
 		if desired_output_amount.is_zero() {
 			return Some((available_input_amount, Zero::zero()))
 		}
@@ -2046,32 +2048,42 @@ impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
 					desired_output_amount,
 				))
 			} else {
-				return None
+				return Some((Zero::zero(), available_input_amount))
 			}
 		}
 
-		let input_amount_to_convert = with_transaction_unchecked(|| {
+		let available_output_amount = with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback(
 				Self::swap_with_network_fee(
-					output_asset,
 					input_asset,
-					desired_output_amount.into(),
+					output_asset,
+					available_input_amount.into(),
 				)
 				.ok(),
 			)
 		})?
 		.output;
 
-		if input_amount_to_convert > available_input_amount.into() {
-			return None
-		}
+		let input_amount_to_convert = multiply_by_rational_with_rounding(
+			desired_output_amount.into(),
+			available_input_amount.into(),
+			available_output_amount,
+			sp_arithmetic::Rounding::Down,
+		)
+		.defensive_proof(
+			"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
+		)?;
 
 		Some((
 			available_input_amount.saturating_sub(input_amount_to_convert.unique_saturated_into()),
-			Self::swap_with_network_fee(input_asset, output_asset, input_amount_to_convert)
-				.ok()?
-				.output
-				.unique_saturated_into(),
+			Self::swap_with_network_fee(
+				input_asset,
+				output_asset,
+				sp_std::cmp::min(input_amount_to_convert, available_input_amount.into()),
+			)
+			.ok()?
+			.output
+			.unique_saturated_into(),
 		))
 	}
 }
