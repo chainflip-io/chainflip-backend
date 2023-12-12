@@ -4,10 +4,11 @@ import assert from 'assert';
 import { execSync } from 'child_process';
 
 import { blake2AsU8a } from '@polkadot/util-crypto';
-import { assetDecimals } from '@chainflip-io/cli';
-import { getPolkadotApi, observeEvent, amountToFineAmount } from '../shared/utils';
+import { Asset, Assets, assetDecimals } from '@chainflip-io/cli';
+import { getPolkadotApi, observeEvent, amountToFineAmount, sleep } from '../shared/utils';
 import { bumpSpecVersion, getCurrentRuntimeVersion } from '../shared/utils/bump_spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
+import { testSwap } from './swapping';
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
@@ -21,15 +22,13 @@ const PRE_COMPILED_WASM_VERSION = 10001;
 
 /// The update is sent to the polkadot chain.
 let runtimeUpdatePushed = false;
-/// Used to to stop swaps before the runtime upgrade goes through and causes issues with the api.
-export function isRuntimeUpdatePushed(): boolean {
-  return runtimeUpdatePushed;
-}
+let swapsComplete = 0;
+let swapsStarted = 0;
 
-/// Pushes a polkadot runtime upgrade using the democracy pallet.
-/// preimage -> proposal -> vote -> democracy pass -> scheduler dispatch runtime upgrade.
-export async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void> {
-  console.log('-- Pushing polkadot runtime upgrade --');
+/// Pushes a polkadot runtime update using the democracy pallet.
+/// preimage -> proposal -> vote -> democracy pass -> scheduler dispatch runtime update.
+export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void> {
+  console.log('-- Pushing polkadot runtime update --');
 
   // Read the runtime wasm from file
   const runtimeWasm = fs.readFileSync(wasmPath);
@@ -92,37 +91,37 @@ export async function pushPolkadotRuntimeUpgrade(wasmPath: string): Promise<void
   );
   console.log(`voted for proposal ${proposalIndex}`);
 
-  // Stopping swaps now because the api sometimes gets error 1010 (bad signature) when depositing dot after the runtime upgrade but before the api is updated.
+  // Stopping swaps now because the api sometimes gets error 1010 (bad signature) when depositing dot after the runtime update but before the api is updated.
   runtimeUpdatePushed = true;
 
   // Wait for it to pass
   await Promise.race([observeDemocracyPassed, observeDemocracyNotPassed])
     .then((event) => {
       if (event.name.method !== 'Passed') {
-        throw new Error(`Democracy failed for runtime upgrade. ${proposalIndex}`);
+        throw new Error(`Democracy failed for runtime update. ${proposalIndex}`);
       }
     })
     .catch((error) => {
       console.error(error);
       process.exit(-1);
     });
-  console.log('Democracy manifest! waiting for a succulent scheduled runtime upgrade...');
+  console.log('Democracy manifest! waiting for a succulent scheduled runtime update...');
 
-  // Wait for the runtime upgrade to complete
+  // Wait for the runtime update to complete
   const schedulerDispatchedEvent = await observeSchedulerDispatched;
   if (schedulerDispatchedEvent.data.result.Err) {
-    console.log('Runtime upgrade failed');
+    console.log('Runtime update failed');
     handleDispatchError({
       dispatchError: JSON.stringify({ module: schedulerDispatchedEvent.data.result.Err.Module }),
     });
     process.exit(-1);
   }
-  console.log(`Scheduler dispatched Runtime upgrade at block ${schedulerDispatchedEvent.block}`);
+  console.log(`Scheduler dispatched Runtime update at block ${schedulerDispatchedEvent.block}`);
 
   const CodeUpdated = await observeCodeUpdated;
   console.log(`Code updated at block ${CodeUpdated.block}`);
 
-  console.log('-- Polkadot runtime upgrade complete --');
+  console.log('-- Polkadot runtime update complete --');
 }
 
 /// Pulls the polkadot source code and bumps the spec version, then compiles it if necessary.
@@ -183,4 +182,69 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   }
 
   return [wasmPath, nextSpecVersion];
+}
+
+async function randomPolkadotSwap(): Promise<void> {
+  const assets: Asset[] = [Assets.BTC, Assets.ETH, Assets.USDC, Assets.FLIP];
+  const randomAsset = assets[Math.floor(Math.random() * assets.length)];
+
+  let sourceAsset: Asset;
+  let destAsset: Asset;
+
+  if (Math.random() < 0.5) {
+    sourceAsset = Assets.DOT;
+    destAsset = randomAsset;
+  } else {
+    sourceAsset = randomAsset;
+    destAsset = Assets.DOT;
+  }
+
+  await testSwap(sourceAsset, destAsset, undefined, undefined, undefined, undefined, false);
+  swapsComplete++;
+  console.log(`Swap complete: (${swapsComplete}/${swapsStarted})`);
+}
+
+async function doPolkadotSwaps(): Promise<void> {
+  const startSwapInterval = 2000;
+  console.log(`Running polkadot swaps, new random swap every ${startSwapInterval}ms`);
+  while (!runtimeUpdatePushed) {
+    randomPolkadotSwap();
+    swapsStarted++;
+    await sleep(startSwapInterval);
+  }
+  console.log(`Stopping polkadot swaps, ${swapsComplete}/${swapsStarted} swaps complete.`);
+
+  // Wait for all of the swaps to complete
+  while (swapsComplete < swapsStarted) {
+    await sleep(1000);
+  }
+  console.log(`All ${swapsComplete} swaps complete`);
+}
+
+export async function testPolkadotRuntimeUpdate(): Promise<void> {
+  const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
+
+  // Start some swaps
+  const swapping = doPolkadotSwaps();
+  console.log('Waiting for swaps to start...');
+  while (swapsComplete === 0) {
+    await sleep(1000);
+  }
+
+  // Submit the runtime update
+  await pushPolkadotRuntimeUpdate(wasmPath);
+
+  // Check the polkadot spec version has changed
+  const postUpgradeSpecVersion = await getCurrentRuntimeVersion(POLKADOT_ENDPOINT_PORT);
+  if (postUpgradeSpecVersion.specVersion !== expectedSpecVersion) {
+    throw new Error(
+      `Polkadot runtime update failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,
+    );
+  }
+
+  // Wait for all of the swaps to complete
+  console.log('Waiting for swaps to complete...');
+  await swapping;
+
+  process.exit(0);
 }

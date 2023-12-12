@@ -7,7 +7,7 @@
 
 import {
   bumpAndBuildPolkadotRuntime,
-  pushPolkadotRuntimeUpgrade,
+  pushPolkadotRuntimeUpdate,
 } from '../shared/polkadot_runtime_update';
 import { runWithTimeout } from '../shared/utils';
 import { getCurrentRuntimeVersion } from '../shared/utils/bump_spec_version';
@@ -18,14 +18,14 @@ async function main(): Promise<void> {
   // Bump the spec version
   const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
 
-  // Submit the runtime upgrade
-  await pushPolkadotRuntimeUpgrade(wasmPath);
+  // Submit the runtime update
+  await pushPolkadotRuntimeUpdate(wasmPath);
 
   // Check the polkadot spec version has changed
   const postUpgradeSpecVersion = await getCurrentRuntimeVersion(POLKADOT_ENDPOINT_PORT);
   if (postUpgradeSpecVersion.specVersion !== expectedSpecVersion) {
     throw new Error(
-      `Polkadot runtime upgrade failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,
+      `Polkadot runtime update failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,
     );
   }
 
