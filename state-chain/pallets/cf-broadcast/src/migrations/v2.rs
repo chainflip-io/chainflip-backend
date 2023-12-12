@@ -37,6 +37,10 @@ mod old {
 	#[frame_support::storage_alias]
 	pub type FailedBroadcasters<T: Config<I>, I: 'static> =
 		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastId, Vec<<T as Chainflip>::ValidatorId>>;
+
+	#[frame_support::storage_alias]
+	pub type BroadcastRetryQueue<T: Config<I>, I: 'static> =
+		StorageValue<Pallet<T, I>, Vec<BroadcastAttempt<T, I>>>;
 }
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -83,7 +87,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					broadcast_id,
 					TransactionSigningAttempt {
 						broadcast_attempt: BroadcastAttempt {
-							broadcast_id,
 							transaction_payload: attempt.broadcast_attempt.transaction_payload,
 							threshold_signature_payload: attempt
 								.broadcast_attempt
@@ -103,6 +106,24 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				BTreeSet::from_iter(failed_broadcasters),
 			)
 		});
+
+		// BroadcastRetryQueue: Vec<old::BroadcastAttempt> -> Vec<(BroadcastId, BroadcastAttempt)>
+		let retry_queue = old::BroadcastRetryQueue::<T, I>::take()
+			.unwrap_or_default()
+			.into_iter()
+			.map(|old_broadcast_attempt| {
+				(
+					old_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+					BroadcastAttempt::<T, I> {
+						transaction_payload: old_broadcast_attempt.transaction_payload,
+						threshold_signature_payload: old_broadcast_attempt
+							.threshold_signature_payload,
+						transaction_out_id: old_broadcast_attempt.transaction_out_id,
+					},
+				)
+			})
+			.collect::<Vec<_>>();
+		BroadcastRetryQueue::<T, I>::put(retry_queue);
 
 		Weight::zero()
 	}

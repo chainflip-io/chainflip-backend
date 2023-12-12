@@ -241,7 +241,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 		// the other should be still in the retry queue
 		let retry_queue = BroadcastRetryQueue::<Test, Instance1>::get();
 		assert_eq!(retry_queue.len(), 1);
-		assert_eq!(retry_queue.first().unwrap().broadcast_id, broadcast_id_2);
+		assert_eq!(retry_queue.first().unwrap().0, broadcast_id_2);
 	});
 }
 
@@ -254,11 +254,7 @@ fn test_transaction_signing_failed() {
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::SigningFailure);
 		assert_eq!(
-			BroadcastRetryQueue::<Test, Instance1>::get()
-				.into_iter()
-				.next()
-				.unwrap()
-				.broadcast_id,
+			BroadcastRetryQueue::<Test, Instance1>::get().into_iter().next().unwrap().0,
 			broadcast_id
 		);
 
@@ -569,7 +565,6 @@ fn callback_is_called_upon_broadcast_failure() {
 				broadcast_id,
 				TransactionSigningAttempt {
 					broadcast_attempt: BroadcastAttempt {
-						broadcast_id,
 						transaction_payload: Default::default(),
 						threshold_signature_payload: Default::default(),
 						transaction_out_id: Default::default(),
@@ -603,6 +598,7 @@ fn retry_and_success_in_same_block() {
 			// Setup
 			let (broadcast_id, _) = start_mock_broadcast();
 			(
+				broadcast_id,
 				MockNominator::get_last_nominee().unwrap(),
 				AwaitingBroadcast::<Test, Instance1>::get(broadcast_id)
 					.unwrap()
@@ -610,7 +606,7 @@ fn retry_and_success_in_same_block() {
 			)
 		})
 		.then_apply_extrinsics(
-			|(nominee, BroadcastAttempt { broadcast_id, transaction_out_id, .. })| {
+			|(broadcast_id, nominee, BroadcastAttempt { transaction_out_id, .. })| {
 				[
 					(
 						OriginTrait::signed(*nominee),
@@ -669,15 +665,12 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 
 			// We want to run test test on the second attempt.
 			MockCfe::respond(Scenario::SigningFailure);
-			(nominee, awaiting_broadcast)
+			(broadcast_id, nominee, awaiting_broadcast)
 		})
 		// on idle runs and the retry is kicked off.
 		.then_execute_at_next_block(|p| p)
-		.then_execute_at_next_block(|(nominee, awaiting_broadcast)| {
-			assert_eq!(
-				Broadcaster::attempt_count(awaiting_broadcast.broadcast_attempt.broadcast_id),
-				1
-			);
+		.then_execute_at_next_block(|(broadcast_id, nominee, awaiting_broadcast)| {
+			assert_eq!(Broadcaster::attempt_count(broadcast_id), 1);
 			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
 			MockCfe::respond(Scenario::Timeout);
 			(nominee, awaiting_broadcast)
@@ -740,7 +733,7 @@ fn broadcast_barrier_for_polkadot() {
 		// tx3 should still not be broadcasted because the blocking tx (tx2) has still not
 		// succeeded.
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id_3);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].0, broadcast_id_3);
 
 		// Now tx2 succeeds which should allow tx3 to be broadcast
 		witness_broadcast(tx_out_id2);
@@ -828,9 +821,9 @@ fn broadcast_barrier_for_ethereum() {
 		// tx3 and tx4 should still not be broadcasted because not all txs before and including tx2
 		// have been witnessed
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id_3);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].0, broadcast_id_3);
 
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[1].broadcast_id, broadcast_id_4);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[1].0, broadcast_id_4);
 
 		// Now tx1 succeeds which should allow tx3 to be broadcast but not tx4 since there will be
 		// another barrier at tx3
@@ -841,7 +834,7 @@ fn broadcast_barrier_for_ethereum() {
 		assert_transaction_broadcast_request_event(broadcast_id_3, tx_out_id3);
 
 		// tx4 is still pending
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id_4);
+		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].0, broadcast_id_4);
 
 		// witness tx3 which should allow tx4 to be broadcast
 		witness_broadcast(tx_out_id3);

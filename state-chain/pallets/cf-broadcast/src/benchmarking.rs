@@ -24,7 +24,6 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 		broadcast_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
-				broadcast_id,
 				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
 				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
@@ -108,8 +107,7 @@ benchmarks_instance_pallet! {
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
 
 	} : {
-		Pallet::<T, I>::start_next_broadcast_attempt( BroadcastAttempt::<T, I> {
-			broadcast_id,
+		Pallet::<T, I>::start_next_broadcast_attempt(broadcast_id, BroadcastAttempt::<T, I> {
 			transaction_payload,
 			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
