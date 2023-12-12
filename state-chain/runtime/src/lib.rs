@@ -3,6 +3,7 @@
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
+pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
@@ -10,10 +11,12 @@ pub mod test_runner;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
-	runtime_apis::{AuctionState, LiquidityProviderInfo, RuntimeApiPenalty},
+	runtime_apis::{
+		AuctionState, DispatchErrorWithMessage, LiquidityProviderInfo, RuntimeApiPenalty,
+	},
 };
 use cf_amm::{
-	common::{Amount, Price, Tick},
+	common::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -28,12 +31,13 @@ use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{ChannelAction, DepositWitness};
-use pallet_cf_pools::{AssetsMap, PoolLiquidity, PoolOrderbook, UnidirectionalPoolDepth};
+use pallet_cf_pools::{
+	AskBidMap, AssetsMap, PoolLiquidity, PoolOrderbook, PoolPrice, UnidirectionalPoolDepth,
+};
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::CcmSwapAmounts;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
-use sp_runtime::DispatchError;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -154,10 +158,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 100,
+	spec_version: 110,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 10,
+	transaction_version: 12,
 	state_version: 1,
 };
 
@@ -674,7 +678,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = EthereumVault;
 	type ChainTracking = EthereumChainTracking;
 }
 
@@ -697,7 +700,6 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = PolkadotVault;
 	type ChainTracking = PolkadotChainTracking;
 }
 
@@ -720,7 +722,6 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type KeyProvider = BitcoinVault;
 	type ChainTracking = BitcoinChainTracking;
 }
 
@@ -832,29 +833,34 @@ pub type Executive = frame_executive::Executive<
 // We use the executive pallet because the `pre_upgrade` and `post_upgrade` hooks are noops
 // for tuple migrations (like these).
 type PalletMigrations = (
-	pallet_cf_environment::migrations::PalletMigration<Runtime>,
+	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
+	pallet_cf_environment::migrations::PalletMigration,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
-	pallet_cf_validator::migrations::PalletMigration<Runtime>,
+	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,
 	pallet_cf_tokenholder_governance::migrations::PalletMigration<Runtime>,
-	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
+	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
+	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
-	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	migrations::VersionedMigration<
+		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
+		110,
+	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1034,7 +1040,7 @@ impl_runtime_apis! {
 		fn cf_pool_price(
 			from: Asset,
 			to: Asset,
-		) -> Option<Price> {
+		) -> Option<PoolPrice> {
 			LiquidityPools::current_price(from, to)
 		}
 
@@ -1046,53 +1052,56 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapOutput> {
-			LiquidityPools::swap_with_network_fee(from, to, amount).ok()
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchErrorWithMessage> {
+			LiquidityPools::swap_with_network_fee(from, to, amount).map_err(Into::into)
 		}
 
-		fn cf_pool_info(base_asset: Asset, pair_asset: Asset) -> Option<PoolInfo> {
-			LiquidityPools::pool_info(base_asset, pair_asset)
+		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {
+			LiquidityPools::pool_info(base_asset, quote_asset).map_err(Into::into)
 		}
 
-		fn cf_pool_depth(base_asset: Asset, pair_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Option<Result<AssetsMap<UnidirectionalPoolDepth>, DispatchError>> {
-			LiquidityPools::pool_depth(base_asset, pair_asset, tick_range)
+		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_depth(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
-		fn cf_pool_liquidity(base_asset: Asset, pair_asset: Asset) -> Option<PoolLiquidity> {
-			LiquidityPools::pool_liquidity(base_asset, pair_asset)
+		fn cf_pool_liquidity(base_asset: Asset, quote_asset: Asset) -> Result<PoolLiquidity, DispatchErrorWithMessage> {
+			LiquidityPools::pool_liquidity(base_asset, quote_asset).map_err(Into::into)
 		}
 
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
-			pair_asset: Asset,
+			quote_asset: Asset,
 			tick_range: Range<cf_amm::common::Tick>,
-		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-			LiquidityPools::required_asset_ratio_for_range_order(base_asset, pair_asset, tick_range)
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
 		fn cf_pool_orderbook(
 			base_asset: Asset,
 			quote_asset: Asset,
 			orders: u32,
-		) -> Result<PoolOrderbook, DispatchError> {
-			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders)
+		) -> Result<PoolOrderbook, DispatchErrorWithMessage> {
+			LiquidityPools::pool_orderbook(base_asset, quote_asset, orders).map_err(Into::into)
 		}
 
 		fn cf_pool_orders(
 			base_asset: Asset,
-			pair_asset: Asset,
-			lp: AccountId,
-		) -> Option<PoolOrders> {
-			LiquidityPools::pool_orders(base_asset, pair_asset, &lp)
+			quote_asset: Asset,
+			lp: Option<AccountId>,
+		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
+			match lp {
+				Some(lp) => LiquidityPools::pool_orders(base_asset, quote_asset, &lp),
+				None => LiquidityPools::all_pool_orders(base_asset, quote_asset),
+			}.map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
-			pair_asset: Asset,
+			quote_asset: Asset,
 			tick_range: Range<Tick>,
 			liquidity: Liquidity,
-		) -> Option<Result<AssetsMap<Amount>, DispatchError>> {
-			LiquidityPools::pool_range_order_liquidity_value(base_asset, pair_asset, tick_range, liquidity)
+		) -> Result<AssetsMap<Amount>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_range_order_liquidity_value(base_asset, quote_asset, tick_range, liquidity).map_err(Into::into)
 		}
 
 		fn cf_network_environment() -> NetworkEnvironment {
@@ -1101,6 +1110,10 @@ impl_runtime_apis! {
 
 		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
 			Swapping::minimum_swap_amount(asset)
+		}
+
+		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount> {
+			Swapping::maximum_swap_amount(asset)
 		}
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
@@ -1268,8 +1281,8 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_failed_ccm_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
-			if EthereumIngressEgress::get_failed_ccm(broadcast_id).is_some() {
+		fn cf_failed_call(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
+			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
 				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
 					chainflip::EthTransactionBuilder::build_transaction(&api_call)
 				})

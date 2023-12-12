@@ -299,6 +299,7 @@ fn historics() {
 				Collected {
 					fees: Amount::zero(),
 					bought_amount: Amount::zero(),
+					sold_amount: Amount::zero(),
 					accumulative_fees: Amount::zero(),
 					original_amount: Amount::zero()
 				},
@@ -306,10 +307,11 @@ fn historics() {
 			)
 		);
 
+		let swap_amount = Amount::from(50);
 		let bought_amount = Amount::from(24);
 		let fees = Amount::from(24);
 
-		pool_state.swap::<ZeroToOne>(50.into(), None);
+		pool_state.swap::<ZeroToOne>(swap_amount, None);
 
 		assert_eq!(
 			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
@@ -317,6 +319,7 @@ fn historics() {
 				Collected {
 					fees,
 					bought_amount,
+					sold_amount: bought_amount,
 					accumulative_fees: 24.into(),
 					original_amount: amount
 				},
@@ -324,7 +327,7 @@ fn historics() {
 			)
 		);
 
-		pool_state.swap::<ZeroToOne>(50.into(), None);
+		pool_state.swap::<ZeroToOne>(swap_amount, None);
 
 		assert_eq!(
 			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
@@ -332,6 +335,7 @@ fn historics() {
 				Collected {
 					fees,
 					bought_amount,
+					sold_amount: bought_amount,
 					accumulative_fees: 48.into(),
 					original_amount: amount
 				},
@@ -339,7 +343,7 @@ fn historics() {
 			)
 		);
 
-		pool_state.swap::<ZeroToOne>(50.into(), None);
+		pool_state.swap::<ZeroToOne>(swap_amount, None);
 
 		assert_eq!(
 			assert_ok!(pool_state.collect::<ZeroToOne>(&lp, 0)),
@@ -347,6 +351,7 @@ fn historics() {
 				Collected {
 					fees,
 					bought_amount,
+					sold_amount: bought_amount,
 					accumulative_fees: 72.into(),
 					original_amount: amount
 				},
@@ -361,6 +366,7 @@ fn historics() {
 				Collected {
 					fees: Amount::zero(),
 					bought_amount: Amount::zero(),
+					sold_amount: Amount::zero(),
 					accumulative_fees: 72.into(),
 					original_amount: amount
 				},
@@ -530,6 +536,7 @@ fn burn() {
 					0.into(),
 					Collected {
 						fees: 0.into(),
+						sold_amount: amount,
 						bought_amount: amount,
 						accumulative_fees: Default::default(),
 						original_amount: amount,
@@ -563,6 +570,7 @@ fn burn() {
 					amount - swap,
 					Collected {
 						fees: 0.into(),
+						sold_amount: swap,
 						bought_amount: expected_output,
 						accumulative_fees: Default::default(),
 						original_amount: amount

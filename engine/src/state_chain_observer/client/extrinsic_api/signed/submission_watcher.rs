@@ -59,10 +59,10 @@ pub enum DryRunError {
 	Dispatch(#[from] DispatchError),
 }
 
-pub type ExtrinsicResult<OtherError> = Result<
-	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo),
-	ExtrinsicError<OtherError>,
->;
+pub type ExtrinsicDetails =
+	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo);
+
+pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
 
 #[derive(Error, Debug)]
 pub enum FinalizationError {

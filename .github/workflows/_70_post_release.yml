@@ -1,0 +1,35 @@
+on:
+  workflow_call:
+    inputs:
+      network:
+        description: Network being released
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  invalidate-apt-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials using OIDC 🪪
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+
+      - name: Invalidate CloudFront Cache - Sisyphos 🔥
+        if: ${{ inputs.network == 'sisyphos' }}
+        run: >
+          aws cloudfront create-invalidation
+          --distribution-id E3LRLBQETRDJF3
+          --paths '/*'
+
+      - name: Invalidate CloudFront Cache - Perseverance 🔥
+        if: ${{ inputs.network == 'perseverance' }}
+        run: >
+          aws cloudfront create-invalidation
+          --distribution-id E15DU9IPLRYY7S
+          --paths '/*'

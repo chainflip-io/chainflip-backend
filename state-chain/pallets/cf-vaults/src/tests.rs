@@ -7,11 +7,7 @@ use crate::{
 	KeygenFailureVoters, KeygenOutcomeFor, KeygenResolutionPendingSince, KeygenResponseTimeout,
 	KeygenSuccessVoters, PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
-use cf_chains::{
-	btc::BitcoinCrypto,
-	evm::EvmCrypto,
-	mocks::{MockAggKey, MockOptimisticActivation},
-};
+use cf_chains::{btc::BitcoinCrypto, evm::EvmCrypto, mocks::MockAggKey};
 use cf_primitives::{AuthorityCount, GENESIS_EPOCH};
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
@@ -517,8 +513,6 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 }
 
 fn do_full_key_rotation() {
-	assert!(!MockOptimisticActivation::get(), "Test expects non-optimistic activation");
-
 	let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
 	<VaultsPallet as VaultRotator>::keygen(
 		BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
@@ -649,18 +643,10 @@ fn do_full_key_rotation() {
 	VaultsPallet::activate();
 
 	assert!(!KeygenResolutionPendingSince::<Test, _>::exists());
-	assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
-
-	assert!(matches!(
-		PendingVaultRotation::<Test, _>::get().unwrap(),
-		VaultRotationStatus::<Test, _>::AwaitingActivation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
-	));
 
 	// Voting has been cleared.
 	assert_eq!(KeygenSuccessVoters::<Test, _>::iter_keys().next(), None);
 	assert!(!KeygenFailureVoters::<Test, _>::exists());
-
-	assert_ok!(VaultsPallet::vault_key_rotated(RuntimeOrigin::root(), 1, [0xab; 4],));
 
 	assert_last_event!(crate::Event::VaultRotationCompleted);
 	assert_eq!(PendingVaultRotation::<Test, _>::get(), Some(VaultRotationStatus::Complete));
@@ -801,9 +787,6 @@ mod vault_key_rotation {
 
 	use super::*;
 
-	const ACTIVATION_BLOCK_NUMBER: u64 = 42;
-	const TX_HASH: [u8; 4] = [0xab; 4];
-
 	fn setup(key_handover_outcome: KeygenOutcomeFor<Test>) -> TestRunner<()> {
 		let ext = new_test_ext();
 		ext.execute_with(|| {
@@ -811,15 +794,6 @@ mod vault_key_rotation {
 			let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().skip(1).take(2).cloned());
 
 			let rotation_epoch_index = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-
-			assert_noop!(
-				VaultsPallet::vault_key_rotated(
-					RuntimeOrigin::root(),
-					ACTIVATION_BLOCK_NUMBER,
-					TX_HASH,
-				),
-				Error::<Test, _>::NoActiveRotation
-			);
 
 			<VaultsPallet as VaultRotator>::keygen(candidates.clone(), GENESIS_EPOCH);
 			let ceremony_id = current_ceremony_id();
@@ -855,16 +829,6 @@ mod vault_key_rotation {
 
 	fn final_checks(ext: TestRunner<()>, expected_activation_block: u64) {
 		ext.execute_with(|| {
-			// Can't repeat.
-			assert_noop!(
-				VaultsPallet::vault_key_rotated(
-					RuntimeOrigin::root(),
-					expected_activation_block,
-					TX_HASH,
-				),
-				Error::<Test, _>::InvalidRotationStatus
-			);
-
 			let current_epoch = <Test as Chainflip>::EpochInfo::epoch_index();
 
 			let Vault { public_key, active_from_block } =
@@ -900,31 +864,6 @@ mod vault_key_rotation {
 	}
 
 	#[test]
-	fn non_optimistic_activation() {
-		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
-			BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![
-				BTC_DUMMY_SIG,
-			]));
-
-			MockOptimisticActivation::set(false);
-			VaultsPallet::activate();
-
-			assert!(matches!(
-				PendingVaultRotation::<Test, _>::get().unwrap(),
-				VaultRotationStatus::AwaitingActivation { .. }
-			));
-
-			assert_ok!(VaultsPallet::vault_key_rotated(
-				RuntimeOrigin::root(),
-				ACTIVATION_BLOCK_NUMBER,
-				TX_HASH,
-			));
-		});
-
-		final_checks(ext, ACTIVATION_BLOCK_NUMBER);
-	}
-
-	#[test]
 	fn optimistic_activation() {
 		const HANDOVER_ACTIVATION_BLOCK: u64 = 420;
 		let ext = setup(Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)).execute_with(|| {
@@ -933,18 +872,7 @@ mod vault_key_rotation {
 			]));
 
 			BlockHeightProvider::<MockEthereum>::set_block_height(HANDOVER_ACTIVATION_BLOCK);
-			MockOptimisticActivation::set(true);
 			VaultsPallet::activate();
-
-			// No need to call vault_key_rotated.
-			assert_noop!(
-				VaultsPallet::vault_key_rotated(
-					RuntimeOrigin::root(),
-					ACTIVATION_BLOCK_NUMBER,
-					TX_HASH,
-				),
-				Error::<Test, _>::InvalidRotationStatus
-			);
 
 			assert!(matches!(
 				PendingVaultRotation::<Test, _>::get().unwrap(),
@@ -985,8 +913,6 @@ mod vault_key_rotation {
 			BtcMockThresholdSigner::execute_signature_result_against_last_request(Ok(vec![
 				BTC_DUMMY_SIG,
 			]));
-
-			MockOptimisticActivation::set(true);
 			VaultsPallet::activate();
 		});
 

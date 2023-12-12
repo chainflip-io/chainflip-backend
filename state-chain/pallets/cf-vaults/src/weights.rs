@@ -36,7 +36,6 @@ pub trait WeightInfo {
 	fn on_initialize_success() -> Weight;
 	fn report_keygen_outcome() -> Weight;
 	fn on_keygen_verification_result() -> Weight;
-	fn vault_key_rotated() -> Weight;
 	fn vault_key_rotated_externally() -> Weight;
 	fn set_keygen_response_timeout() -> Weight;
 }
@@ -131,23 +130,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(18_698_000, 3812)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::Vaults` (r:0 w:1)
-	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:0 w:1)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn vault_key_rotated() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `493`
-		//  Estimated: `1978`
-		// Minimum execution time: 23_429_000 picoseconds.
-		Weight::from_parts(23_875_000, 1978)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -270,23 +252,6 @@ impl WeightInfo for () {
 		Weight::from_parts(18_698_000, 3812)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumVault::PendingVaultRotation` (r:1 w:1)
-	/// Proof: `EthereumVault::PendingVaultRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::Vaults` (r:0 w:1)
-	/// Proof: `EthereumVault::Vaults` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumVault::CurrentVaultEpochAndState` (r:0 w:1)
-	/// Proof: `EthereumVault::CurrentVaultEpochAndState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn vault_key_rotated() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `493`
-		//  Estimated: `1978`
-		// Minimum execution time: 23_429_000 picoseconds.
-		Weight::from_parts(23_875_000, 1978)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)

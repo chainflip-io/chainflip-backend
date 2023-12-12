@@ -25,7 +25,8 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      profile: "release"
+      profile: "production"
+      binary-subdir: "production"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
@@ -50,3 +51,8 @@ jobs:
       version: "sisyphos/"
       environment: "development"
     secrets: inherit
+  invalidate-apt-cache:
+    needs: [publish]
+    uses: ./.github/workflows/_70_post_release.yml
+    with:
+      network: "sisyphos"

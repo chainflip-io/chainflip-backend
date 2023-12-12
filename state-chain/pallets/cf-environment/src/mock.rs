@@ -103,9 +103,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
 	}
 
@@ -113,11 +111,19 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		_api_call: Self::ApiCall,
 		_success_callback: Option<Self::Callback>,
 		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_rotation_tx(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
 	}
 
 	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+		unimplemented!()
+	}
+
+	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 

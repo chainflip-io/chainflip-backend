@@ -37,13 +37,33 @@ pub enum SetFeesError {
 	TypeInfo,
 	Deserialize,
 	Serialize,
+	Hash,
 )]
+#[serde(rename_all = "snake_case")]
 pub enum Order {
 	Buy,
 	Sell,
 }
+impl Order {
+	pub fn to_sold_side(&self) -> Side {
+		match self {
+			Order::Buy => Side::One,
+			Order::Sell => Side::Zero,
+		}
+	}
+}
+impl core::ops::Not for Order {
+	type Output = Self;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	fn not(self) -> Self::Output {
+		match self {
+			Order::Sell => Order::Buy,
+			Order::Buy => Order::Sell,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
 	Zero,
 	One,
@@ -68,6 +88,7 @@ impl core::ops::Not for Side {
 	TypeInfo,
 	PartialEq,
 	Eq,
+	Hash,
 	Encode,
 	Decode,
 	MaxEncodedLen,
@@ -101,6 +122,10 @@ impl<T> SideMap<T> {
 
 	pub fn as_mut(&mut self) -> SideMap<&mut T> {
 		SideMap { zero: &mut self.zero, one: &mut self.one }
+	}
+
+	pub fn zip<S>(self, other: SideMap<S>) -> SideMap<(T, S)> {
+		SideMap { zero: (self.zero, other.zero), one: (self.one, other.one) }
 	}
 }
 impl<T> IntoIterator for SideMap<T> {

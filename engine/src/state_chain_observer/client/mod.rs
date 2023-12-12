@@ -8,7 +8,7 @@ pub mod storage_api;
 use async_trait::async_trait;
 
 use anyhow::{anyhow, bail, Context, Result};
-use cf_primitives::{AccountRole, NodeCFEVersions, SemVer};
+use cf_primitives::{AccountRole, SemVer};
 use futures::{StreamExt, TryStreamExt};
 
 use futures_core::Stream;
@@ -29,7 +29,7 @@ use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
 	extrinsic_api::{
-		signed::{signer, SignedExtrinsicApi},
+		signed::{signer, SignedExtrinsicApi, WaitFor, WaitForResult},
 		unsigned,
 	},
 	finalized_stream::FinalizedCachedStream,
@@ -695,7 +695,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				.nonce
 		};
 
-		if let Some(this_cfe_version) = self.update_cfe_version {
+		if let Some(this_version) = self.update_cfe_version {
 			use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
 			use subxt::{tx::Signer, PolkadotConfig};
 
@@ -725,7 +725,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
 			};
 
-			let recorded_versions = <NodeCFEVersions as codec::Decode>::decode(
+			let recorded_version = <SemVer as codec::Decode>::decode(
 				&mut subxt_client
 					.storage()
 					.at_latest()
@@ -738,23 +738,15 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.await?
 					.encoded(),
 			)
-			.map_err(|e| anyhow::anyhow!("Failed to decode recorded_versions: {e:?}"))?;
+			.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
 
 			// Note that around CFE upgrade period, the less recent version might still be running
 			// (and can even be *the* "active" instance), so it is important that it doesn't
 			// downgrade the version record:
-			if this_cfe_version.is_more_recent_than(recorded_versions.cfe) {
-				// if we need to update CFE version we also update the node version
-				let running_node_version = subxt_client.rpc().system_version().await?;
-				let new_node_version: SemVer = SemVer::parse(running_node_version.as_str())?;
-
+			if this_version.is_more_recent_than(recorded_version) {
 				info!(
 					"Updating CFE version record from {:?} to {:?}",
-					recorded_versions.cfe, this_cfe_version
-				);
-				info!(
-					"Updating Node version record from {:?} to {:?}",
-					recorded_versions.node, new_node_version
+					recorded_version, this_version
 				);
 
 				subxt_client
@@ -762,20 +754,13 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					.sign_and_submit_then_watch_default(
 						&subxt::dynamic::tx(
 							"Validator",
-							"set_node_cfe_version",
+							"cfe_version",
 							vec![(
 								"new_version",
 								vec![
-									vec![
-										("major", new_node_version.major),
-										("minor", new_node_version.minor),
-										("patch", new_node_version.patch),
-									],
-									vec![
-										("major", this_cfe_version.major),
-										("minor", this_cfe_version.minor),
-										("patch", this_cfe_version.patch),
-									],
+									("major", this_version.major),
+									("minor", this_version.minor),
+									("patch", this_version.patch),
 								],
 							)],
 						),
@@ -863,6 +848,24 @@ impl<
 		self.signed_extrinsic_client.submit_signed_extrinsic(call).await
 	}
 
+	async fn submit_signed_extrinsic_wait_for<Call>(
+		&self,
+		call: Call,
+		wait_for: WaitFor,
+	) -> Result<WaitForResult>
+	where
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
+	{
+		self.signed_extrinsic_client
+			.submit_signed_extrinsic_wait_for(call, wait_for)
+			.await
+	}
+
 	/// Sign, submit, and watch an extrinsic retrying if submissions fail be to finalized
 	async fn finalize_signed_extrinsic<Call>(
 		&self,
@@ -948,7 +951,11 @@ pub mod mocks {
 	use state_chain_runtime::AccountId;
 
 	use super::{
-		extrinsic_api::{self, unsigned},
+		extrinsic_api::{
+			self,
+			signed::{WaitFor, WaitForResult},
+			unsigned,
+		},
 		storage_api, BlockInfo, StateChainStreamApi,
 	};
 
@@ -962,6 +969,19 @@ pub mod mocks {
 			fn account_id(&self) -> AccountId;
 
 			async fn submit_signed_extrinsic<Call>(&self, call: Call) -> (H256, (<Self as SignedExtrinsicApi>::UntilInBlockFuture, <Self as SignedExtrinsicApi>::UntilFinalizedFuture))
+			where
+				Call: Into<state_chain_runtime::RuntimeCall>
+					+ Clone
+					+ std::fmt::Debug
+					+ Send
+					+ Sync
+					+ 'static;
+
+			async fn submit_signed_extrinsic_wait_for<Call>(
+				&self,
+				call: Call,
+				wait_for: WaitFor,
+			) -> anyhow::Result<WaitForResult>
 			where
 				Call: Into<state_chain_runtime::RuntimeCall>
 					+ Clone

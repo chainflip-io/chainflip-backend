@@ -27,8 +27,8 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
-	Flip, Funding, Governance, PolkadotVault, Reputation, Runtime, RuntimeOrigin, System,
-	Validator,
+	Flip, Funding, Governance, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin,
+	System, Validator, Witnesser,
 };
 
 type NodeId = AccountId32;
@@ -68,3 +68,16 @@ pub enum ChainflipAccountState {
 }
 
 pub type AllVaults = <Runtime as pallet_cf_validator::Config>::VaultRotator;
+
+/// Helper function that dispatches a call that requires EnsureWitnessed origin.
+pub fn witness_call(call: RuntimeCall) {
+	let epoch = Validator::epoch_index();
+	let boxed_call = Box::new(call);
+	for node in Validator::current_authorities() {
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(node),
+			boxed_call.clone(),
+			epoch,
+		));
+	}
+}

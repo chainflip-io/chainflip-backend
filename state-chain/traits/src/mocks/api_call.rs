@@ -3,6 +3,7 @@ use core::marker::PhantomData;
 use cf_chains::{
 	evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment,
 	Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
+	TransferFallback,
 };
 use cf_primitives::{chains::assets, ForeignChain};
 use codec::{Decode, Encode};
@@ -32,6 +33,7 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 pub enum MockEthereumApiCall<MockEthEnvironment> {
 	AllBatch(MockAllBatch<MockEthEnvironment>),
 	ExecutexSwapAndCall(MockExecutexSwapAndCall<MockEthEnvironment>),
+	TransferFallback(MockTransferFallback<MockEthEnvironment>),
 }
 
 impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEthEnvironment> {
@@ -121,6 +123,27 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 				source_address,
 				gas_budget,
 				message,
+				_phantom: PhantomData,
+			}))
+		}
+	}
+}
+
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+pub struct MockTransferFallback<MockEthEnvironment> {
+	nonce: <Ethereum as Chain>::ReplayProtection,
+	transfer_param: TransferAssetParams<Ethereum>,
+	_phantom: PhantomData<MockEthEnvironment>,
+}
+
+impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
+		if MockEthEnvironment::lookup(transfer_param.asset).is_none() {
+			Err(DispatchError::CannotLookup)
+		} else {
+			Ok(Self::TransferFallback(MockTransferFallback {
+				nonce: Default::default(),
+				transfer_param,
 				_phantom: PhantomData,
 			}))
 		}
