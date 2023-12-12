@@ -110,7 +110,7 @@ chains! {
 pub struct AnyChain;
 
 impl ForeignChain {
-	pub fn gas_asset(self) -> assets::any::Asset {
+	pub const fn gas_asset(self) -> assets::any::Asset {
 		match self {
 			ForeignChain::Ethereum => assets::any::Asset::Eth,
 			ForeignChain::Polkadot => assets::any::Asset::Dot,

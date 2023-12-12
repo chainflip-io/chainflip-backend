@@ -24,9 +24,10 @@ use cf_chains::{
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, ForeignChain, Polkadot, TransactionBuilder,
+	Bitcoin, CcmChannelMetadata, FeeEstimationApi, ForeignChain, Polkadot, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
+use cf_traits::GetTrackedData;
 use core::ops::Range;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
@@ -297,6 +298,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -314,6 +316,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -331,6 +334,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
+	type AssetConverter = LiquidityPools;
 }
 
 parameter_types! {
@@ -1133,6 +1137,54 @@ impl_runtime_apis! {
 					btc::Asset::try_from(asset)
 						.expect("Conversion must succeed: ForeignChain checked in match clause.")
 				).into(),
+			}
+		}
+
+		fn cf_ingress_fee(asset: Asset) -> AssetAmount {
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+					),
+				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+					),
+				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
+					.estimate_ingress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						)
+						.into(),
+			}
+		}
+
+		fn cf_egress_fee(asset: Asset) -> AssetAmount {
+			match ForeignChain::from(asset) {
+				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						),
+				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						),
+				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
+					.estimate_egress_fee(
+						asset
+							.try_into()
+							.expect("Conversion must succeed: ForeignChain checked in match clause.")
+						)
+						.into(),
 			}
 		}
 
