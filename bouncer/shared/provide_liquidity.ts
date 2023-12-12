@@ -10,6 +10,7 @@ import {
   lpMutex,
   assetToChain,
   amountToFineAmount,
+  isWithinOnePercent,
 } from '../shared/utils';
 import { send } from '../shared/send';
 
@@ -64,8 +65,10 @@ export async function provideLiquidity(ccy: Asset, amount: number, waitForFinali
     chainflip,
     (event) =>
       event.data.asset.toUpperCase() === ccy &&
-      Number(event.data.amountCredited.replace(/,/g, '')) ===
-        Number(amountToFineAmount(String(amount), assetDecimals[ccy])),
+      isWithinOnePercent(
+        BigInt(event.data.amountCredited.replace(/,/g, '')),
+        BigInt(amountToFineAmount(String(amount), assetDecimals[ccy])),
+      ),
     undefined,
     waitForFinalization,
   );
