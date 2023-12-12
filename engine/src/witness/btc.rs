@@ -4,7 +4,7 @@ pub mod btc_source;
 
 use std::sync::Arc;
 
-use bitcoin::{BlockHash, Transaction};
+use bitcoin::BlockHash;
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
@@ -12,7 +12,10 @@ use secp256k1::hashes::Hash;
 use utilities::task_scope::Scope;
 
 use crate::{
-	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
+	btc::{
+		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
+		rpc::VerboseTransaction,
+	},
 	db::PersistentKeyDB,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
@@ -27,39 +30,10 @@ use super::common::{
 
 use anyhow::Result;
 
-async fn calc_bitcoin_transaction_fee(tx: &Transaction, client: &BtcRetryRpcClient) -> u64 {
-	let mut prev_outs: Vec<_> = tx
-		.input
-		.iter()
-		.map(|input| (input.previous_output.txid, input.previous_output.vout))
-		.collect();
-
-	prev_outs.sort_by_key(|(txid, _)| *txid);
-	let (input_txids, input_vouts): (Vec<_>, Vec<_>) = prev_outs.into_iter().unzip();
-
-	let input_txids_len = input_txids.len();
-	let mut input_txs: Vec<Transaction> = client.get_raw_transactions(input_txids).await;
-	assert_eq!(input_txs.len(), input_txids_len);
-
-	// protect against RPC re-ordering of the batched request
-	input_txs.sort_by_key(|tx| tx.txid());
-
-	let total_input_value: u64 = input_txs
-		.into_iter()
-		.zip(input_vouts)
-		.map(|(tx, vout)| tx.output[vout as usize].value)
-		.sum();
-
-	total_input_value
-		.checked_sub(tx.output.iter().map(|output| output.value).sum::<u64>())
-		.expect("It's not possible to pay more than you have.")
-}
-
 pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoricInfo>(
 	epoch: Vault<cf_chains::Bitcoin, ExtraInfo, ExtraHistoricInfo>,
-	header: Header<u64, BlockHash, (Vec<Transaction>, Vec<(btc::Hash, BlockNumber)>)>,
+	header: Header<u64, BlockHash, (Vec<VerboseTransaction>, Vec<(btc::Hash, BlockNumber)>)>,
 	process_call: ProcessCall,
-	rpc: BtcRetryRpcClient,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
@@ -73,7 +47,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 	let monitored_tx_hashes = monitored_tx_hashes.iter().map(|(tx_hash, _)| tx_hash);
 
 	for (tx_hash, tx) in success_witnesses(monitored_tx_hashes, txs) {
-		let tx_fee = calc_bitcoin_transaction_fee(&tx, &rpc).await;
 		process_call(
 			state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 				pallet_cf_broadcast::Call::transaction_succeeded {
@@ -83,7 +56,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 						CHANGE_ADDRESS_SALT,
 					)
 					.script_pubkey(),
-					tx_fee,
+					tx_fee: tx.fee.unwrap_or_default().to_sat(),
 					tx_metadata: (),
 				},
 			),
@@ -198,9 +171,7 @@ where
 		.await
 		.then({
 			let process_call = process_call.clone();
-			move |epoch, header| {
-				process_egress(epoch, header, process_call.clone(), btc_client.clone())
-			}
+			move |epoch, header| process_egress(epoch, header, process_call.clone())
 		})
 		.continuous("Bitcoin".to_string(), db)
 		.logging("witnessing")
@@ -211,13 +182,13 @@ where
 
 fn success_witnesses<'a>(
 	monitored_tx_hashes: impl Iterator<Item = &'a btc::Hash> + Clone,
-	txs: Vec<Transaction>,
-) -> Vec<(btc::Hash, Transaction)> {
+	txs: Vec<VerboseTransaction>,
+) -> Vec<(btc::Hash, VerboseTransaction)> {
 	let mut successful_witnesses = Vec::new();
 
 	for tx in txs {
 		let mut monitored = monitored_tx_hashes.clone();
-		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
+		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
 
 		if monitored.any(|&monitored_hash| monitored_hash == tx_hash) {
 			successful_witnesses.push((tx_hash, tx));
@@ -229,50 +200,47 @@ fn success_witnesses<'a>(
 #[cfg(test)]
 mod tests {
 
-	use super::*;
-	use bitcoin::{
-		absolute::{Height, LockTime},
-		ScriptBuf, Transaction, TxOut,
-	};
+	use bitcoin::Amount;
 
-	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
-		Transaction {
-			version: 2,
-			lock_time: LockTime::Blocks(Height::from_consensus(0).unwrap()),
-			input: vec![],
-			output: tx_outs,
-		}
-	}
+	use super::*;
+	use crate::witness::btc::btc_deposits::tests::{fake_transaction, fake_verbose_vouts};
 
 	#[test]
 	fn witnesses_tx_hash_successfully() {
+		const FEE_0: u64 = 1;
+		const FEE_1: u64 = 111;
+		const FEE_2: u64 = 222;
+		const FEE_3: u64 = 333;
 		let txs = vec![
-			fake_transaction(vec![]),
-			fake_transaction(vec![TxOut {
-				value: 2324,
-				script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]),
-			}]),
-			fake_transaction(vec![TxOut {
-				value: 232232,
-				script_pubkey: ScriptBuf::from(vec![32, 32, 121, 9]),
-			}]),
-			fake_transaction(vec![TxOut {
-				value: 232232,
-				script_pubkey: ScriptBuf::from(vec![33, 2, 1, 9]),
-			}]),
+			fake_transaction(vec![], Some(Amount::from_sat(FEE_0))),
+			fake_transaction(
+				fake_verbose_vouts(vec![(2324, vec![0, 32, 121, 9])]),
+				Some(Amount::from_sat(FEE_1)),
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				Some(Amount::from_sat(FEE_2)),
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				Some(Amount::from_sat(FEE_3)),
+			),
 		];
 
 		let tx_hashes =
-			txs.iter().map(|tx| tx.txid().to_raw_hash().to_byte_array()).collect::<Vec<_>>();
+			txs.iter().map(|tx| tx.txid.to_raw_hash().to_byte_array()).collect::<Vec<_>>();
 
 		// we're not monitoring for index 2, and they're out of order.
-		let mut monitored_hashes = vec![tx_hashes[3], tx_hashes[0], tx_hashes[1]];
+		let monitored_hashes = [tx_hashes[3], tx_hashes[0], tx_hashes[1]];
 
-		let (mut success_witness_hashes, _): (Vec<_>, Vec<_>) =
+		let sorted_monitored_hashes = vec![tx_hashes[0], tx_hashes[1], tx_hashes[3]];
+
+		let (success_witness_hashes, txs): (Vec<_>, Vec<_>) =
 			success_witnesses(monitored_hashes.iter(), txs).into_iter().unzip();
-		success_witness_hashes.sort();
-		monitored_hashes.sort();
-
-		assert_eq!(success_witness_hashes, monitored_hashes);
+		assert_eq!(sorted_monitored_hashes, success_witness_hashes);
+		assert_eq!(txs[0].fee.unwrap().to_sat(), FEE_0);
+		assert_eq!(txs[1].fee.unwrap().to_sat(), FEE_1);
+		// we weren't monitoring for 2, so the last fee should be FEE_3.
+		assert_eq!(txs[2].fee.unwrap().to_sat(), FEE_3);
 	}
 }

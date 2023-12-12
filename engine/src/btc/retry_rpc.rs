@@ -1,4 +1,4 @@
-use bitcoin::{Block, BlockHash, Transaction, Txid};
+use bitcoin::{BlockHash, Txid};
 use utilities::task_scope::Scope;
 
 use crate::{
@@ -11,7 +11,7 @@ use core::time::Duration;
 
 use anyhow::Result;
 
-use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
+use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient, VerboseBlock};
 
 #[derive(Clone)]
 pub struct BtcRetryRpcClient {
@@ -51,7 +51,7 @@ impl BtcRetryRpcClient {
 
 #[async_trait::async_trait]
 pub trait BtcRetryRpcApi: Clone {
-	async fn block(&self, block_hash: BlockHash) -> Block;
+	async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
 
 	async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
@@ -62,13 +62,11 @@ pub trait BtcRetryRpcApi: Clone {
 	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
 	async fn best_block_header(&self) -> BlockHeader;
-
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Vec<Transaction>;
 }
 
 #[async_trait::async_trait]
 impl BtcRetryRpcApi for BtcRetryRpcClient {
-	async fn block(&self, block_hash: BlockHash) -> Block {
+	async fn block(&self, block_hash: BlockHash) -> VerboseBlock {
 		self.retry_client
 			.request(
 				Box::pin(move |client| {
@@ -153,19 +151,6 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 			)
 			.await
 	}
-
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Vec<Transaction> {
-		self.retry_client
-			.request(
-				Box::pin(move |client| {
-					let tx_hashes = tx_hashes.clone();
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.get_raw_transactions(tx_hashes).await })
-				}),
-				RequestLog::new("get_raw_transactions".to_string(), None),
-			)
-			.await
-	}
 }
 
 #[async_trait::async_trait]
@@ -216,7 +201,7 @@ pub mod mocks {
 
 		#[async_trait::async_trait]
 		impl BtcRetryRpcApi for BtcRetryRpcClient {
-			async fn block(&self, block_hash: BlockHash) -> Block;
+			async fn block(&self, block_hash: BlockHash) -> VerboseBlock;
 
 			async fn block_hash(&self, block_number: cf_chains::btc::BlockNumber) -> BlockHash;
 
@@ -227,8 +212,6 @@ pub mod mocks {
 			async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
 
 			async fn best_block_header(&self) -> BlockHeader;
-
-			async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Vec<Transaction>;
 		}
 	}
 }
