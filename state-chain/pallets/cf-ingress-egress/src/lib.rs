@@ -292,7 +292,7 @@ pub mod pallet {
 
 		type NetworkEnvironment: NetworkEnvironmentProvider;
 
-		/// Provides access to current AMM prices.
+		/// Allows assets to be converted through the AMM.
 		type AssetConverter: AssetConverter;
 
 		/// Benchmark weights
@@ -372,6 +372,7 @@ pub mod pallet {
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
+	/// Tracks fees withheld from ingresses and egresses.
 	#[pallet::storage]
 	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
