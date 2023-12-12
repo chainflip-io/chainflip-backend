@@ -1457,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1476,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1496,7 +1496,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "async-broadcast 0.5.1",
@@ -1562,6 +1562,7 @@ dependencies = [
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "sha2 0.10.8",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
  "sp-rpc",
@@ -1613,7 +1614,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -1637,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -10613,6 +10614,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4beec8bce849d58d06238cb50db2e1c417cfeafa4c63f692b15c82b7c80f8335"
+dependencies = [
+ "itoa",
+ "serde",
+]
+
+[[package]]
 name = "serde_spanned"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12034,7 +12045,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "cf-amm",
  "cf-chains",

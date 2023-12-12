@@ -256,6 +256,8 @@ pub struct PoolsEnvironment {
 #[derive(Serialize, Deserialize)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub ingress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
+	pub egress_fees: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -962,18 +964,26 @@ where
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
 		let mut minimum_deposit_amounts = HashMap::new();
+		let mut ingress_fees = HashMap::new();
+		let mut egress_fees = HashMap::new();
 
 		for asset in Asset::all() {
-			minimum_deposit_amounts
-				.entry(ForeignChain::from(asset))
-				.or_insert_with(HashMap::new)
-				.insert(
-					asset,
-					runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
-				);
+			let chain = ForeignChain::from(asset);
+			minimum_deposit_amounts.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_min_deposit_amount(hash, asset).map_err(to_rpc_error)?.into(),
+			);
+			ingress_fees.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_ingress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+			);
+			egress_fees.entry(chain).or_insert_with(HashMap::new).insert(
+				asset,
+				runtime_api.cf_egress_fee(hash, asset).map_err(to_rpc_error)?.into(),
+			);
 		}
 
-		Ok(IngressEgressEnvironment { minimum_deposit_amounts })
+		Ok(IngressEgressEnvironment { minimum_deposit_amounts, ingress_fees, egress_fees })
 	}
 
 	fn cf_swapping_environment(
@@ -1340,6 +1350,28 @@ mod test {
 						ForeignChain::Ethereum,
 						HashMap::from([
 							(Asset::Flip, u64::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+				ingress_fees: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, AssetAmount::MAX.into()),
+							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
+							(Asset::Eth, 0u32.into()),
+						]),
+					),
+				]),
+				egress_fees: HashMap::from([
+					(ForeignChain::Bitcoin, HashMap::from([(Asset::Btc, 0u32.into())])),
+					(
+						ForeignChain::Ethereum,
+						HashMap::from([
+							(Asset::Flip, AssetAmount::MAX.into()),
 							(Asset::Usdc, (u64::MAX / 2 - 1).into()),
 							(Asset::Eth, 0u32.into()),
 						]),

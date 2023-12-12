@@ -58,7 +58,7 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode>;
 
 		/// The interface for sweeping funds from pools into free balance
-		type PoolApi: PoolApi;
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -66,7 +66,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The user does not have enough fund.
+		/// The user does not have enough funds.
 		InsufficientBalance,
 		/// The user has reached the maximum balance.
 		BalanceOverflow,
@@ -196,6 +196,9 @@ pub mod pallet {
 					destination_address_internal.chain() == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
+
+				// Sweep earned fees
+				T::PoolApi::sweep(&account_id)?;
 
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
