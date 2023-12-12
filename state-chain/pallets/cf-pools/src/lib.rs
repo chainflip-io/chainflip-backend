@@ -1159,30 +1159,48 @@ pub struct PoolInfo {
 	pub range_order_fee_hundredth_pips: u32,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub struct LimitOrder {
-	pub id: OrderId,
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct LimitOrder<T: Config> {
+	pub lp: T::AccountId,
+	pub id: Amount, // TODO: Intro type alias
 	pub tick: Tick,
 	pub sell_amount: Amount,
 	pub fees_earned: Amount,
 	pub original_sell_amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub struct RangeOrder {
-	pub id: OrderId,
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct RangeOrder<T: Config> {
+	pub lp: T::AccountId,
+	pub id: Amount,
 	pub range: Range<Tick>,
 	pub liquidity: Liquidity,
 	pub fees_earned: AssetsMap<Amount>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
-pub struct PoolOrders {
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound = "")]
+pub struct PoolOrders<T: Config> {
 	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AskBidMap<Vec<LimitOrder>>,
+	pub limit_orders: AskBidMap<Vec<LimitOrder<T>>>,
 	/// Range orders can be both buy and/or sell therefore they not split. The current range order
 	/// price determines if they are buy and/or sell.
-	pub range_orders: Vec<RangeOrder>,
+	pub range_orders: Vec<RangeOrder<T>>,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct LimitOrderLiquidity {
+	tick: Tick,
+	amount: Amount,
+}
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+pub struct RangeOrderLiquidity {
+	tick: Tick,
+	liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
+	                    * serialization) */
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
@@ -1190,12 +1208,12 @@ pub struct PoolLiquidity {
 	/// An ordered lists of the amount of assets available at each tick, if a tick contains zero
 	/// liquidity it will not be included in the list. Note limit order liquidity is split by which
 	/// asset the liquidity is "selling".
-	pub limit_orders: AskBidMap<Vec<(Tick, Amount)>>,
+	pub limit_orders: AskBidMap<Vec<LimitOrderLiquidity>>,
 	/// An ordered list of the amount of range order liquidity available from a tick until the next
 	/// tick in the list. Note range orders can be both buy and/or sell therefore they not split by
 	/// sold asset. The current range order price determines if the liquidity can be used for
 	/// buying and/or selling,
-	pub range_orders: Vec<(Tick, Liquidity)>,
+	pub range_orders: Vec<RangeOrderLiquidity>,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
@@ -1214,13 +1232,13 @@ pub struct UnidirectionalPoolDepth {
 	pub range_orders: UnidirectionalSubPoolDepth,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolOrder {
 	pub amount: Amount,
 	pub sqrt_price: SqrtPriceQ64F96,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolOrderbook {
 	pub bids: Vec<PoolOrder>,
 	pub asks: Vec<PoolOrder>,
@@ -1770,16 +1788,28 @@ impl<T: Config> Pallet<T> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolLiquidity {
-			limit_orders: AskBidMap::from_fn(|order| pool.pool_state.limit_order_liquidity(order)),
-			range_orders: pool.pool_state.range_order_liquidity(),
+			limit_orders: AskBidMap::from_fn(|order| {
+				pool.pool_state
+					.limit_order_liquidity(order)
+					.into_iter()
+					.map(|(tick, amount)| LimitOrderLiquidity { tick, amount })
+					.collect()
+			}),
+			range_orders: pool
+				.pool_state
+				.range_order_liquidity()
+				.into_iter()
+				.map(|(tick, liquidity)| RangeOrderLiquidity { tick, liquidity: liquidity.into() })
+				.collect(),
 		})
 	}
 
+	/// Returns the limit and range orders for a given Liquidity Provider within the given pool.
 	pub fn pool_orders(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		lp: &T::AccountId,
-	) -> Result<PoolOrders, DispatchError> {
+	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolOrders {
@@ -1795,7 +1825,8 @@ impl<T: Config> Pallet<T> {
 									.limit_order(&(lp.clone(), *id), asset.sell_order(), *tick)
 									.unwrap();
 								LimitOrder {
-									id: *id,
+									lp: lp.clone(),
+									id: (*id).into(),
 									tick: *tick,
 									sell_amount: position_info.amount,
 									fees_earned: collected.accumulative_fees,
@@ -1817,12 +1848,76 @@ impl<T: Config> Pallet<T> {
 							.range_order(&(lp.clone(), *id), tick_range.clone())
 							.unwrap();
 						RangeOrder {
-							id: *id,
+							lp: lp.clone(),
+							id: (*id).into(),
 							range: tick_range.clone(),
 							liquidity: position_info.liquidity,
 							fees_earned: collected.accumulative_fees.into(),
 						}
 					})
+				})
+				.collect(),
+		})
+	}
+
+	/// Returns All limit and range orders within the given pool.
+	pub fn all_pool_orders(
+		base_asset: any::Asset,
+		pair_asset: any::Asset,
+	) -> Result<PoolOrders<T>, DispatchError> {
+		let asset_pair = AssetPair::try_new::<T>(base_asset, pair_asset)?;
+		let pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
+		Ok(PoolOrders {
+			limit_orders: AskBidMap::from_sell_map(
+				pool.limit_orders_cache.as_ref().map_with_asset(|asset, limit_order_cache| {
+					limit_order_cache
+						.iter()
+						.flat_map(|(lp, orders)| {
+							orders
+								.iter()
+								.map(|(order_id, tick)| {
+									let (collected, position_info) = pool
+										.pool_state
+										.limit_order(
+											&(lp.clone(), *order_id),
+											asset.sell_order(),
+											*tick,
+										)
+										.unwrap();
+									LimitOrder {
+										lp: lp.clone(),
+										id: (*order_id).into(),
+										tick: *tick,
+										sell_amount: position_info.amount,
+										fees_earned: collected.accumulative_fees,
+										original_sell_amount: collected.original_amount,
+									}
+								})
+								.collect::<Vec<_>>()
+						})
+						.collect()
+				}),
+			),
+			range_orders: pool
+				.range_orders_cache
+				.iter()
+				.flat_map(|(lp, range_orders)| {
+					range_orders
+						.iter()
+						.map(|(id, tick_range)| {
+							let (collected, position_info) = pool
+								.pool_state
+								.range_order(&(lp.clone(), *id), tick_range.clone())
+								.unwrap();
+							RangeOrder {
+								lp: lp.clone(),
+								id: (*id).into(),
+								range: tick_range.clone(),
+								liquidity: position_info.liquidity,
+								fees_earned: collected.accumulative_fees.into(),
+							}
+						})
+						.collect::<Vec<_>>()
 				})
 				.collect(),
 		})

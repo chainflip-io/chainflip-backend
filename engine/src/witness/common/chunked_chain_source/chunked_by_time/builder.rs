@@ -74,6 +74,7 @@ impl<T: ChunkedByTime> ChunkedByTimeBuilder<T> {
 		}
 	}
 
+	/// Adapter that applies `then_fn` to latest items only, skipping any "backlog" items
 	pub fn latest_then<Output, Fut, ThenFn>(
 		self,
 		then_fn: ThenFn,

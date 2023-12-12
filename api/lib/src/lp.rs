@@ -12,10 +12,9 @@ use chainflip_engine::state_chain_observer::client::{
 };
 use pallet_cf_pools::{AssetsMap, IncreaseOrDecrease, OrderId, RangeOrderSize};
 use serde::{Deserialize, Serialize};
-use sp_core::H256;
+use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
-use utilities::rpc::NumberOrHex;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -48,17 +47,17 @@ pub mod types {
 	pub struct RangeOrder {
 		pub base_asset: Asset,
 		pub quote_asset: Asset,
-		pub id: OrderId,
+		pub id: U256,
 		pub tick_range: Range<Tick>,
-		pub liquidity_total: NumberOrHex,
-		pub collected_fees: AssetsMap<NumberOrHex>,
+		pub liquidity_total: U256,
+		pub collected_fees: AssetsMap<U256>,
 		pub size_change: Option<IncreaseOrDecrease<RangeOrderChange>>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
 	pub struct RangeOrderChange {
-		pub liquidity: NumberOrHex,
-		pub amounts: AssetsMap<NumberOrHex>,
+		pub liquidity: U256,
+		pub amounts: AssetsMap<U256>,
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
@@ -66,12 +65,12 @@ pub mod types {
 		pub base_asset: Asset,
 		pub quote_asset: Asset,
 		pub side: Order,
-		pub id: OrderId,
+		pub id: U256,
 		pub tick: Tick,
-		pub sell_amount_total: NumberOrHex,
-		pub collected_fees: NumberOrHex,
-		pub bought_amount: NumberOrHex,
-		pub sell_amount_change: Option<IncreaseOrDecrease<NumberOrHex>>,
+		pub sell_amount_total: U256,
+		pub collected_fees: U256,
+		pub bought_amount: U256,
+		pub sell_amount_change: Option<IncreaseOrDecrease<U256>>,
 	}
 }
 
@@ -95,7 +94,7 @@ fn collect_range_order_returns(
 			) => Some(types::RangeOrder {
 				base_asset,
 				quote_asset,
-				id,
+				id: id.into(),
 				size_change: size_change.map(|increase_or_decrese| {
 					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
 						liquidity: range_order_change.liquidity.into(),
@@ -134,7 +133,7 @@ fn collect_limit_order_returns(
 				base_asset,
 				quote_asset,
 				side,
-				id,
+				id: id.into(),
 				tick,
 				sell_amount_total: sell_amount_total.into(),
 				collected_fees: collected_fees.into(),
