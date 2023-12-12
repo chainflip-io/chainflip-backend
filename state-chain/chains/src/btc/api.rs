@@ -2,7 +2,7 @@ pub mod batch_transfer;
 
 use super::{
 	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinCrypto, BitcoinOutput, BtcAmount,
-	Utxo, CHANGE_ADDRESS_SALT,
+	Utxo, BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -41,11 +41,13 @@ where
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
-			btc_outputs.push(BitcoinOutput {
-				amount: transfer_param.amount,
-				script_pubkey: transfer_param.to,
-			});
-			total_output_amount += transfer_param.amount;
+			if transfer_param.amount >= BITCOIN_DUST_LIMIT {
+				btc_outputs.push(BitcoinOutput {
+					amount: transfer_param.amount,
+					script_pubkey: transfer_param.to,
+				});
+				total_output_amount += transfer_param.amount;
+			}
 		}
 		// Looks up all available Utxos and selects and takes them for the transaction depending on
 		// the amount that needs to be output. If the output amount is 0,
@@ -56,9 +58,12 @@ where
 			number_of_outputs: (btc_outputs.len() + 1) as u64, // +1 for the change output
 		})
 		.ok_or(AllBatchError::Other)?;
-
-		btc_outputs
-			.push(BitcoinOutput { amount: change_amount, script_pubkey: bitcoin_change_script });
+		if change_amount >= BITCOIN_DUST_LIMIT {
+			btc_outputs.push(BitcoinOutput {
+				amount: change_amount,
+				script_pubkey: bitcoin_change_script,
+			});
+		}
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			&agg_key,

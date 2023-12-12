@@ -33,9 +33,13 @@ use sp_std::{vec, vec::Vec};
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
 pub const CHANGE_ADDRESS_SALT: u32 = 0;
 
-//The bitcoin script generated from the bitcoin address should not exceed this value according to
+// The bitcoin script generated from the bitcoin address should not exceed this value according to
 // our construction
 pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
+
+// The minimum amount for transaction outputs we want to generate to avoid hitting the Bitcoin dust
+// limit
+pub const BITCOIN_DUST_LIMIT: u64 = 600;
 
 pub type BlockNumber = u64;
 
