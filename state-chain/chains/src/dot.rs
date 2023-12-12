@@ -261,7 +261,7 @@ mod fee_constants {
 	pub const MILLI_DOT: u128 = 1_000 * MICRO_DOT;
 
 	/// Taken from the Polkadot runtime.
-	pub const BASE_FEE: u128 = 1 * MILLI_DOT;
+	pub const BASE_FEE: u128 = MILLI_DOT;
 	/// Taken from the Polkadot runtime. Should be 0.1 mDOT
 	pub const LENGTH_FEE: u128 = MILLI_DOT / 10;
 
