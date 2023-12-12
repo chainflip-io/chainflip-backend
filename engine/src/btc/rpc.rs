@@ -249,6 +249,8 @@ where
 	Ok(ScriptBuf::from(hex::decode(helper.hex).map_err(serde::de::Error::custom)?))
 }
 
+// This is a work around for this bug, it is effectively a catch all.
+// https://github.com/serde-rs/json/issues/721
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum Difficulty {
