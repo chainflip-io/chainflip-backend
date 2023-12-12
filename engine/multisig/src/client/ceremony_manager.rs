@@ -28,7 +28,7 @@ use crate::{
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
 use utilities::{
-	metrics::{CEREMONY_BAD_MSG, UNAUTHORIZED_CEREMONY},
+	metrics::{CEREMONY_BAD_MSG, PENDING_CEREMONIES, UNAUTHORIZED_CEREMONY},
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 
@@ -416,6 +416,10 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				}
 			},
 		}
+		PENDING_CEREMONIES
+			.set(&[Chain::NAME, SIGNING_LABEL], self.signing_states.count_authorised_ceremonies());
+		PENDING_CEREMONIES
+			.set(&[Chain::NAME, KEYGEN_LABEL], self.keygen_states.count_authorised_ceremonies());
 	}
 
 	pub async fn run(
@@ -444,9 +448,11 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 						}
 						Some((id, outcome)) = self.signing_states.outcome_receiver.recv() => {
 							self.signing_states.finalize_authorised_ceremony(id, outcome);
+							PENDING_CEREMONIES.set(&[Chain::NAME, SIGNING_LABEL], self.signing_states.count_authorised_ceremonies());
 						}
 						Some((id, outcome)) = self.keygen_states.outcome_receiver.recv() => {
 							self.keygen_states.finalize_authorised_ceremony(id, outcome);
+							PENDING_CEREMONIES.set(&[Chain::NAME, KEYGEN_LABEL], self.keygen_states.count_authorised_ceremonies());
 						}
 					}
 				}
@@ -802,6 +808,13 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		self.ceremony_handles
 			.values()
 			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Unauthorised(_)))
+			.count()
+	}
+
+	fn count_authorised_ceremonies(&self) -> usize {
+		self.ceremony_handles
+			.values()
+			.filter(|handle| matches!(handle.request_state, CeremonyRequestState::Authorised(_)))
 			.count()
 	}
 }

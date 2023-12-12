@@ -521,6 +521,12 @@ build_gauge_vec!(
 	"Gauge keeping track of the latest block number the engine reported to the state chain",
 	["chain"]
 );
+build_gauge_vec!(
+	PENDING_CEREMONIES,
+	"pending_ceremonies",
+	"Gauge keeping track of the number of ceremonies currently running",
+	["chain", "type"]
+);
 build_counter_vec!(
 	RPC_RETRIER_REQUESTS,
 	"rpc_requests",
