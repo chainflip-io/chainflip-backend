@@ -1142,19 +1142,19 @@ impl_runtime_apis! {
 
 		fn cf_ingress_fee(asset: Asset) -> AssetAmount {
 			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, Instance1>::get_tracked_data()
+				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
 					.estimate_ingress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 					),
-				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, Instance2>::get_tracked_data()
+				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
 					.estimate_ingress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 					),
-				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, Instance3>::get_tracked_data()
+				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_ingress_fee(
 						asset
 							.try_into()
@@ -1166,19 +1166,19 @@ impl_runtime_apis! {
 
 		fn cf_egress_fee(asset: Asset) -> AssetAmount {
 			match ForeignChain::from(asset) {
-				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, Instance1>::get_tracked_data()
+				ForeignChain::Ethereum => pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::get_tracked_data()
 					.estimate_egress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 						),
-				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, Instance2>::get_tracked_data()
+				ForeignChain::Polkadot => pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::get_tracked_data()
 					.estimate_egress_fee(
 						asset
 							.try_into()
 							.expect("Conversion must succeed: ForeignChain checked in match clause.")
 						),
-				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, Instance3>::get_tracked_data()
+				ForeignChain::Bitcoin => pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::get_tracked_data()
 					.estimate_egress_fee(
 						asset
 							.try_into()
