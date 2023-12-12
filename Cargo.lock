@@ -1411,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-api"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1428,6 +1428,7 @@ dependencies = [
  "futures",
  "hex",
  "hmac-sha512",
+ "lazy_static",
  "libp2p-identity 0.2.8",
  "libsecp256k1",
  "pallet-cf-account-roles",
