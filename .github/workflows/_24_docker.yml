@@ -49,6 +49,7 @@ jobs:
         id: version
         run: |
           version=$(./ci/scripts/extract_version.sh ${{ github.ref }})
+          echo "Extracted version: $version"
           if [[ "$version" == "" ]]; then
             echo "version=0.0.0" >> "$GITHUB_OUTPUT"
           else
@@ -114,7 +115,7 @@ jobs:
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
             type=ref,event=tag,prefix=${{ inputs.network }}-
-            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }}, prefix=${{ inputs.network }}-,enabled=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
@@ -198,7 +199,7 @@ jobs:
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
             type=ref,event=tag,prefix=${{ inputs.network }}-
-            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }}, prefix=${{ inputs.network }}-,enabled=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
