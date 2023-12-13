@@ -14,7 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        manifest: [state-chain/node/Cargo.toml, engine/Cargo.toml, api/bin/chainflip-cli/Cargo.toml, api/bin/chainflip-broker-api/Cargo.toml, api/bin/chainflip-lp-api/Cargo.toml]
+        manifest:
+          - state-chain/node/Cargo.toml
+          - engine/Cargo.toml
+          - api/bin/chainflip-cli/Cargo.toml
+          - api/bin/chainflip-broker-api/Cargo.toml
+          - api/bin/chainflip-lp-api/Cargo.toml
+          - state-chain/runtime/Cargo.toml
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
