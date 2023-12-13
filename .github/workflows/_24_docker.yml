@@ -38,7 +38,22 @@ jobs:
         run: |
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
-
+  get-version-from-branch-name:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+      - name: Get version from branch name
+        id: version
+        run: |
+          version=$(./ci/scripts/extract_version.sh ${{ github.ref }})
+          if [[ "$version" == "" ]]; then
+            echo "version=0.0.0" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
   set-dockerfile-name:
     runs-on: ubuntu-22.04
     outputs:
@@ -54,7 +69,7 @@ jobs:
           fi
 
   private-images:
-    needs: [get-date-time, set-dockerfile-name]
+    needs: [get-date-time, set-dockerfile-name, get-version-from-branch-name]
     strategy:
       fail-fast: false
       matrix:
@@ -98,8 +113,8 @@ jobs:
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
-            type=ref,event=branch,prefix=${{ inputs.network }}-
             type=ref,event=tag,prefix=${{ inputs.network }}-
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }}, prefix=${{ inputs.network }}-,enabled=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
@@ -141,7 +156,7 @@ jobs:
 
   public-images:
     if: inputs.publish_public_images || inputs.save_tags != ''
-    needs: [get-date-time, set-dockerfile-name]
+    needs: [get-date-time, set-dockerfile-name, get-version-from-branch-name]
     strategy:
       fail-fast: false
       matrix:
@@ -182,8 +197,8 @@ jobs:
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
-            type=ref,event=branch,prefix=${{ inputs.network }}-
             type=ref,event=tag,prefix=${{ inputs.network }}-
+            type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }}, prefix=${{ inputs.network }}-,enabled=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
