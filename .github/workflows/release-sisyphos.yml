@@ -40,19 +40,19 @@ jobs:
     with:
       network: "sisyphos"
     secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
-  publish:
-    needs: [package]
-    uses: ./.github/workflows/_30_publish.yml
-    with:
-      version: "sisyphos/"
-      environment: "development"
-    secrets: inherit
-  invalidate-apt-cache:
-    needs: [publish]
-    uses: ./.github/workflows/_70_post_release.yml
-    with:
-      network: "sisyphos"
+  # post-check:
+  #   needs: [build]
+  #   uses: ./.github/workflows/_40_post_check.yml
+  #   secrets: inherit
+  # publish:
+  #   needs: [package]
+  #   uses: ./.github/workflows/_30_publish.yml
+  #   with:
+  #     version: "sisyphos/"
+  #     environment: "development"
+  #   secrets: inherit
+  # invalidate-apt-cache:
+  #   needs: [publish]
+  #   uses: ./.github/workflows/_70_post_release.yml
+  #   with:
+  #     network: "sisyphos"

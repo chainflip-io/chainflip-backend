@@ -129,7 +129,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ inputs.save_tags == '' }}
+          push: false
           load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
@@ -212,7 +212,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ inputs.publish_public_images }}
+          push: false
           load: ${{ inputs.save_tags != '' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
