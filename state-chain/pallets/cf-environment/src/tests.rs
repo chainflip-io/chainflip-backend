@@ -16,16 +16,16 @@ fn genesis_config() {
 	});
 }
 
+fn add_utxo_amount(amount: crate::BtcAmount) {
+	Environment::add_bitcoin_utxo_to_list(
+		amount,
+		Default::default(),
+		DepositAddress::new(Default::default(), Default::default()),
+	);
+}
+
 #[test]
 fn test_btc_utxo_selection() {
-	fn add_utxo_amount(amount: crate::BtcAmount) {
-		Environment::add_bitcoin_utxo_to_list(
-			amount,
-			Default::default(),
-			DepositAddress::new(Default::default(), Default::default()),
-		);
-	}
-
 	let utxo = |amount| Utxo {
 		amount,
 		id: Default::default(),
@@ -89,6 +89,53 @@ fn test_btc_utxo_selection() {
 				.unwrap(),
 			(vec![utxo(5000), utxo(15000),], 15980)
 		);
+	});
+}
+
+#[test]
+fn test_btc_utxo_consolidation() {
+	new_test_ext().execute_with(|| {
+		let utxo = |amount| Utxo {
+			amount,
+			id: Default::default(),
+			deposit_address: DepositAddress::new(Default::default(), Default::default()),
+		};
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+
+		let dust_amount = {
+			use cf_traits::GetBitcoinFeeInfo;
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+		};
+
+		add_utxo_amount(10000);
+		// Some utxos exist, but it won't be enough for consolidation:
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(1));
+
+		// Dust utxo does not count:
+		add_utxo_amount(dust_amount);
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
+
+		add_utxo_amount(10000);
+		add_utxo_amount(10000);
+
+		// Any utxo that didn't get consolidated should still be available:
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Some((vec![utxo(10000), utxo(10000)], 15980))
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
 	});
 }
 

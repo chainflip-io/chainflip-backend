@@ -18,8 +18,8 @@ pub use weights::WeightInfo;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, AddressDerivationError},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FeeEstimationApi,
-	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
+	FeeEstimationApi, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex,
@@ -275,7 +275,8 @@ pub mod pallet {
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
 			+ ExecutexSwapAndCall<Self::TargetChain>
-			+ TransferFallback<Self::TargetChain>;
+			+ TransferFallback<Self::TargetChain>
+			+ ConsolidateCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
 		type ChainTracking: GetBlockHeight<Self::TargetChain> + GetTrackedData<Self::TargetChain>;
@@ -507,6 +508,20 @@ pub mod pallet {
 			if let Err(e) = with_transaction(|| Self::do_egress_scheduled_fetch_transfer()) {
 				log::error!("Ingress-Egress failed to send BatchAll. Error: {e:?}");
 			}
+
+			if let Ok(egress_transaction) =
+				<T::ChainApiCall as ConsolidateCall<T::TargetChain>>::consolidate_utxos()
+			{
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					egress_transaction,
+					None,
+					|_| None,
+				);
+				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
+					broadcast_id,
+					egress_ids: Default::default(),
+				});
+			};
 
 			// Egress all scheduled Cross chain messages
 			Self::do_egress_scheduled_ccm();
