@@ -98,7 +98,8 @@ jobs:
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
-            type=ref,event=tag
+            type=ref,event=branch,prefix=${{ inputs.network }}-
+            type=ref,event=tag,prefix=${{ inputs.network }}-
             type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
@@ -181,7 +182,8 @@ jobs:
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
             type=ref,event=branch
-            type=ref,event=tag
+            type=ref,event=branch,prefix=${{ inputs.network }}-
+            type=ref,event=tag,prefix=${{ inputs.network }}-
             type=ref,event=pr
 
       - name: Login to DockerHub 🔑
