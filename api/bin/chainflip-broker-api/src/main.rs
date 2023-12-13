@@ -107,6 +107,7 @@ impl RpcServer for RpcServerImpl {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
 pub struct BrokerOptions {
 	#[clap(
 		long = "port",
