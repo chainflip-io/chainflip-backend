@@ -68,3 +68,13 @@ jobs:
       - name: Check changelog 📝
         shell: bash
         run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
+
+  check-runtime-spec-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Check changelog 📝
+        shell: bash
+        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.tag }}
