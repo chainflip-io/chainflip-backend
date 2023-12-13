@@ -38,7 +38,7 @@ where
 	ProcessingFut: futures::Future<Output = ()> + Send + 'static,
 {
 	let eth_client = {
-		let nodes = NodeContainer { primary: settings.eth_node.clone(), backup: None };
+		let nodes = NodeContainer { primary: settings.eth.clone(), backup: None };
 
 		EthRetryRpcClient::<EthRpcClient>::new(scope, nodes, env_params.eth_chain_id.into())?
 	};
