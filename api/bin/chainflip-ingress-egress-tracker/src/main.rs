@@ -23,21 +23,21 @@ pub struct DepositTrackerSettings {
 #[derive(Parser, Debug, Clone, Default)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
 pub struct TrackerOptions {
-	#[clap(long = "eth_ws_endpoint")]
+	#[clap(long = "eth.rpc.ws_endpoint")]
 	eth_ws_endpoint: Option<String>,
-	#[clap(long = "eth_http_endpoint")]
+	#[clap(long = "eth.rpc.http_endpoint")]
 	eth_http_endpoint: Option<String>,
-	#[clap(long = "dot_ws_endpoint")]
+	#[clap(long = "dot.rpc.ws_endpoint")]
 	dot_ws_endpoint: Option<String>,
-	#[clap(long = "dot_http_endpoint")]
+	#[clap(long = "dot.rpc.http_endpoint")]
 	dot_http_endpoint: Option<String>,
-	#[clap(long = "state_chain_ws_endpoint")]
+	#[clap(long = "state_chain.ws_endpoint")]
 	state_chain_ws_endpoint: Option<String>,
-	#[clap(long = "btc_endpoint")]
+	#[clap(long = "btc.rpc.http_endpoint")]
 	btc_endpoint: Option<String>,
-	#[clap(long = "btc_username")]
+	#[clap(long = "btc.rpc.basic_auth_user")]
 	btc_username: Option<String>,
-	#[clap(long = "btc_password")]
+	#[clap(long = "btc.rpc.basic_auth_password")]
 	btc_password: Option<String>,
 }
 
@@ -49,19 +49,18 @@ impl CfSettings for DepositTrackerSettings {
 		_settings_dir: &str,
 		opts: Self::CommandLineOptions,
 	) -> Result<Self, ConfigError> {
-		let builder = Self::set_defaults(Config::builder(), &config_root)?;
-		let settings: Self = builder
+		Self::set_defaults(Config::builder(), &config_root)?
 			.add_source(Environment::default().separator("__"))
 			.add_source(opts)
 			.build()?
-			.try_deserialize()?;
-		Ok(settings)
+			.try_deserialize()
 	}
 
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
 		_config_root: &str,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
+		// These defaults are for a localnet setup
 		config_builder
 			.set_default("eth.ws_endpoint", "ws://localhost:8546")?
 			.set_default("eth.http_endpoint", "http://localhost:8545")?
