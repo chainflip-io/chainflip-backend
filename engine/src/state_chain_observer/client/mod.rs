@@ -327,10 +327,7 @@ async fn create_finalized_block_subscription<
 							)
 							.await?;
 						if !required_version.is_compatible_with(current_release_version) {
-							break Err(anyhow!("This version '{required_version}' is no longer compatible with the release version '{current_release_version}' at block {}: {:?}", 
-								block.number, 
-								block.hash
-							))
+							break Err(anyhow!("This version '{required_version}' is no longer compatible with the release version '{current_release_version}' at block {}: {:?}", block.number, block.hash))
 						}
 					}
 
