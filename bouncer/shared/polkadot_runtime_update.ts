@@ -5,7 +5,13 @@ import { execSync } from 'child_process';
 
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { Asset, Assets, assetDecimals } from '@chainflip-io/cli';
-import { getPolkadotApi, observeEvent, amountToFineAmount, sleep } from '../shared/utils';
+import {
+  getPolkadotApi,
+  observeEvent,
+  amountToFineAmount,
+  sleep,
+  observeBadEvents,
+} from '../shared/utils';
 import { bumpSpecVersion, getCurrentRuntimeVersion } from '../shared/utils/bump_spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from './swapping';
@@ -221,8 +227,13 @@ async function doPolkadotSwaps(): Promise<void> {
   console.log(`All ${swapsComplete} swaps complete`);
 }
 
+// Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
 export async function testPolkadotRuntimeUpdate(): Promise<void> {
   const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
+
+  // Monitor for the broadcast aborted event to help catch failed swaps
+  let stopObserving = false;
+  const broadcastAborted = observeBadEvents(':BroadcastAborted', () => stopObserving);
 
   // Start some swaps
   const swapping = doPolkadotSwaps();
@@ -245,6 +256,8 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   // Wait for all of the swaps to complete
   console.log('Waiting for swaps to complete...');
   await swapping;
+  stopObserving = true;
+  await broadcastAborted;
 
   process.exit(0);
 }

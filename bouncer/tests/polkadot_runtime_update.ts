@@ -1,24 +1,10 @@
 #!/usr/bin/env -S pnpm tsx
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
-import { getChainflipApi, observeEvent, runWithTimeout } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
 
-let broadcastAbortedCount = 0;
-
-async function observeBroadcastAborted(): Promise<void> {
-  for (;;) {
-    await observeEvent(':BroadcastAborted', await getChainflipApi());
-    console.log('Broadcast aborted');
-    broadcastAbortedCount++;
-  }
-}
-
+// Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
 async function main(): Promise<void> {
-  observeBroadcastAborted();
-
   await testPolkadotRuntimeUpdate();
-
-  console.log(`Broadcasts aborted: ${broadcastAbortedCount}`);
-
   process.exit(0);
 }
 

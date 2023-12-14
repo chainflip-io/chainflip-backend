@@ -29,7 +29,7 @@ async function redeemAndObserve(
   await redeemFlip(seed, redeemEthAddress, redeemAmount);
 
   const newBalance = await observeBalanceIncrease('FLIP', redeemEthAddress, initBalance);
-  const balanceIncrease = newBalance - parseInt(initBalance);
+  const balanceIncrease = newBalance - parseFloat(initBalance);
   console.log(
     `Redemption success! New balance: ${newBalance.toString()}, Increase: ${balanceIncrease}`,
   );

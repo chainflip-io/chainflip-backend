@@ -338,7 +338,7 @@ export async function observeBadEvents(
   );
   if (event) {
     throw new Error(
-      `Unexpected event emited ${event.name.section}:${event.name.method} in block ${event.block}`,
+      `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
     );
   }
 }
