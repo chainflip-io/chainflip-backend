@@ -101,6 +101,15 @@ fn test_btc_utxo_consolidation() {
 			deposit_address: DepositAddress::new(Default::default(), Default::default()),
 		};
 
+		// Reduce consolidation parameters to make testing easier
+		assert_ok!(Environment::update_consolidation_parameters(
+			OriginTrait::root(),
+			cf_chains::btc::ConsolidationParameters {
+				consolidation_threshold: 2,
+				consolidation_size: 2,
+			}
+		));
+
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
 			None
@@ -136,6 +145,30 @@ fn test_btc_utxo_consolidation() {
 			Some((vec![utxo(10000), utxo(10000)], 15980))
 		);
 		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
+	});
+}
+
+#[test]
+fn updating_consolidation_parameters() {
+	new_test_ext().execute_with(|| {
+		// Should work with valid parameters
+		assert_ok!(Environment::update_consolidation_parameters(
+			OriginTrait::root(),
+			cf_chains::btc::ConsolidationParameters {
+				consolidation_threshold: 2,
+				consolidation_size: 2,
+			}
+		));
+
+		// Should fail with invalid parameters
+		assert!(Environment::update_consolidation_parameters(
+			OriginTrait::root(),
+			cf_chains::btc::ConsolidationParameters {
+				consolidation_threshold: 1,
+				consolidation_size: 2,
+			}
+		)
+		.is_err());
 	});
 }
 
