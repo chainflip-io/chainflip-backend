@@ -24,9 +24,9 @@ echo "Live runtime version: $live_runtime_version, Current Spec version: $spec_v
 
 # Compare versions
 if [ $spec_version -gt $live_runtime_version ]; then
-    echo "Runtime version has been incremented.
+    echo "Runtime version has been incremented."
     exit 0
 else
-    echo "Runtime version has not been incremented.
+    echo "Runtime version has not been incremented."
     exit 2
 fi
