@@ -20,11 +20,13 @@ fi
 
 live_runtime_version=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "state_getRuntimeVersion", "params":[]}' $RPC_ENDPOINT | jq .result.specVersion)
 
+echo "Live runtime version: $live_runtime_version, Current Spec version: $spec_version"
+
 # Compare versions
 if [ $spec_version -gt $live_runtime_version ]; then
-    echo "Runtime version has been incremented. Live runtime version: $live_runtime_version, Current Spec version: $spec_version"
+    echo "Runtime version has been incremented.
     exit 0
 else
-    echo "Runtime version has not been incremented. Live runtime version: $live_runtime_version, Current Spec version: $spec_version"
+    echo "Runtime version has not been incremented.
     exit 2
 fi
