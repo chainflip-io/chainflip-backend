@@ -72,8 +72,8 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 			frame_system::Pallet::<Runtime>::set_block_number(block_number);
 			Runtime::on_initialize(block_number);
 			let context = f();
-			Runtime::on_finalize(block_number);
 			Runtime::on_idle(block_number, Weight::MAX);
+			Runtime::on_finalize(block_number);
 			Runtime::integrity_test();
 			context
 		});
