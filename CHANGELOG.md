@@ -2,6 +2,22 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.1] - 2023-12-13
+
+### Features
+
+- Track btc fees on success ([#4334](https://github.com/chainflip-io/chainflip-backend/issues/4334))
+- Shave fees on ingress ([#4335](https://github.com/chainflip-io/chainflip-backend/issues/4335))
+
+### Fixes
+
+- CFE Witnessing, use parent block metadata when decoding events ([#4331](https://github.com/chainflip-io/chainflip-backend/issues/4331))
+- Sweeping before withdrawal ([#4337](https://github.com/chainflip-io/chainflip-backend/issues/4337))
+
+### Testing
+
+- Latest_then adapter testing ([#4322](https://github.com/chainflip-io/chainflip-backend/issues/4322))
+
 ## [1.1.0] - 2023-12-07
 
 ### Features
@@ -26,6 +42,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Fixes
 
 - Correlate new and old broadcast ids [([WEB-575](https://linear.app/chainflip/issue/WEB-575))] ([#4221](https://github.com/chainflip-io/chainflip-backend/issues/4221))
+- Build sisyphos with production profile ([#4327](https://github.com/chainflip-io/chainflip-backend/issues/4327))
 - Substract broker fee from swap ([#4226](https://github.com/chainflip-io/chainflip-backend/issues/4226))
 - Reduce permissions of backend token ([#4265](https://github.com/chainflip-io/chainflip-backend/issues/4265))
 - No dup chain tracking submissions for reorgs on unsafe stream ([#4268](https://github.com/chainflip-io/chainflip-backend/issues/4268))
