@@ -57,13 +57,13 @@ export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
 
 // Bump the spec version in the runtime file, using the spec version of the network.
 export async function bumpSpecVersionAgainstNetwork(
-  filePath: string,
+  runtimeLibPath: string,
   port: number,
 ): Promise<number> {
   const currentSpecVersion = (await getCurrentRuntimeVersion(port)).specVersion;
   console.log('Current spec_version: ' + currentSpecVersion);
   const nextSpecVersion = currentSpecVersion + 1;
   console.log('Bumping the spec version to: ' + nextSpecVersion);
-  bumpSpecVersion(filePath, nextSpecVersion);
+  bumpSpecVersion(runtimeLibPath, nextSpecVersion);
   return nextSpecVersion;
 }
