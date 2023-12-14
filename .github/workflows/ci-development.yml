@@ -3,8 +3,7 @@ name: Release Chainflip Development
 on:
   pull_request:
     branches:
-      # Ignore for now
-      # - main
+      - main
       - "release/*"
 concurrency:
   group: ${{ github.ref }}-release-development

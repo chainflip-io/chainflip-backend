@@ -16,8 +16,8 @@ permissions:
 jobs:
   upgrade_test:
     runs-on: [digitalocean]
-    # conservatively 2 hours. 2 bouncer runs need to occur.
-    timeout-minutes: 120
+    # conservativel 1.5 hours. 2 bouncer runs need to occur.
+    timeout-minutes: 90
     steps:
       
       - name: Checkout chainflip-backend
@@ -111,7 +111,6 @@ jobs:
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
-          # chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
@@ -122,6 +121,7 @@ jobs:
           ./run.sh
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
+      # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
       - name: Upgrade network
         shell: bash
         id: upgrade-network
@@ -187,4 +187,3 @@ jobs:
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
             👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             #️⃣ Tagging: <@&939151218708709416>
-            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif

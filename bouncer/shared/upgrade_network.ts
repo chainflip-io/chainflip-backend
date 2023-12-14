@@ -1,4 +1,4 @@
-import { exec, execSync } from 'child_process';
+import { execSync } from 'child_process';
 import fs from 'fs/promises';
 import * as toml from 'toml';
 import path from 'path';
