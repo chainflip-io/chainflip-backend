@@ -189,33 +189,33 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	});
 }
 
+// Helper function: make a broadcast to be aborted upon the next failure.
+fn ready_to_abort_broadcast(broadcast_id: BroadcastId) {
+	// Mock when all the possible broadcasts have failed another broadcast, and are
+	// therefore aborted.
+	let mut validators = MockEpochInfo::current_authorities();
+	let nominee = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap().nominee;
+	validators.remove(&nominee);
+	FailedBroadcasters::<Test, Instance1>::insert(broadcast_id, validators);
+}
+
 #[test]
-fn broadcasts_aborted_after_all_report_failures_after_retry() {
+fn broadcasts_aborted_after_all_report_failures() {
 	let mut broadcast_id = 0;
-	new_test_ext()
-		.execute_with(|| {
-			let (_tx_out_id1, api_call1) = api_call(1);
+	new_test_ext().execute_with(|| {
+		let (_tx_out_id1, api_call1) = api_call(1);
 
-			broadcast_id = initiate_and_sign_broadcast(&api_call1, TxType::Normal);
+		broadcast_id = initiate_and_sign_broadcast(&api_call1, TxType::Normal);
 
-			// Mock when all the possible broadcasts have failed another broadcast, and are
-			// therefore aborted.
-			MockNominator::set_nominees(Some(Default::default()));
+		// Make it so the broadcast will be aborted on the next failure.
+		ready_to_abort_broadcast(broadcast_id);
+		assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
 
-			assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
-
-			// Schedule to retry after a failed broadcast
-			System::assert_last_event(RuntimeEvent::Broadcaster(
-				crate::Event::<Test, Instance1>::BroadcastRetryScheduled { broadcast_id },
-			));
-		})
-		.then_execute_at_next_block(|_| {})
-		.execute_with(|| {
-			// Cannot find a nominee to broadcast, abort the broadcast
-			System::assert_last_event(RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted {
-				broadcast_id,
-			}));
-		});
+		// All validator reported broadcast failure - abort the broadcast.
+		System::assert_last_event(RuntimeEvent::Broadcaster(crate::Event::BroadcastAborted {
+			broadcast_id,
+		}));
+	});
 }
 
 #[test]
@@ -545,55 +545,54 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 
 #[test]
 fn callback_is_called_upon_broadcast_failure() {
-	new_test_ext()
-		.execute_with(|| {
-			let api_call = MockApiCall {
-				payload: Default::default(),
-				sig: Default::default(),
-				tx_out_id: MOCK_TRANSACTION_OUT_ID,
-			};
-			let broadcast_id =
-				Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
-					Some(MockCallback)
-				});
-
-			assert_eq!(
-				RequestFailureCallbacks::<Test, Instance1>::get(broadcast_id),
+	new_test_ext().execute_with(|| {
+		let api_call = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: MOCK_TRANSACTION_OUT_ID,
+		};
+		let broadcast_id =
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, |_| {
 				Some(MockCallback)
-			);
-			assert!(!MockCallback::was_called());
+			});
 
-			// Broadcast fails when no broadcaster can be nominated.
-			MockNominator::set_nominees(Some(Default::default()));
-			AwaitingBroadcast::<Test, Instance1>::insert(
-				broadcast_id,
-				TransactionSigningAttempt {
-					broadcast_attempt: BroadcastAttempt {
-						broadcast_id,
-						transaction_payload: Default::default(),
-						threshold_signature_payload: Default::default(),
-						transaction_out_id: Default::default(),
-					},
-					nominee: 0,
+		assert_eq!(
+			RequestFailureCallbacks::<Test, Instance1>::get(broadcast_id),
+			Some(MockCallback)
+		);
+		assert!(!MockCallback::was_called());
+
+		AwaitingBroadcast::<Test, Instance1>::insert(
+			broadcast_id,
+			TransactionSigningAttempt {
+				broadcast_attempt: BroadcastAttempt {
+					broadcast_id,
+					transaction_payload: Default::default(),
+					threshold_signature_payload: Default::default(),
+					transaction_out_id: Default::default(),
 				},
-			);
-			ThresholdSignatureData::<Test, Instance1>::insert(
-				broadcast_id,
-				(
-					api_call,
-					MockThresholdSignature {
-						signing_key: MockAggKey([0u8; 4]),
-						signed_payload: [0u8; 4],
-					},
-				),
-			);
-			assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
-		})
-		.then_execute_at_next_block(|_| {})
-		.execute_with(|| {
-			// This should trigger the failed callback
-			assert!(MockCallback::was_called());
-		});
+				nominee: 0,
+			},
+		);
+		ThresholdSignatureData::<Test, Instance1>::insert(
+			broadcast_id,
+			(
+				api_call,
+				MockThresholdSignature {
+					signing_key: MockAggKey([0u8; 4]),
+					signed_payload: [0u8; 4],
+				},
+			),
+		);
+
+		// Broadcast fails when no broadcaster can be nominated.
+		ready_to_abort_broadcast(broadcast_id);
+
+		assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
+
+		// This should trigger the failed callback
+		assert!(MockCallback::was_called());
+	});
 }
 
 #[test]
