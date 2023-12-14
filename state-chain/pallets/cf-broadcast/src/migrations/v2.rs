@@ -92,6 +92,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					broadcast_id,
 					TransactionSigningAttempt {
 						broadcast_attempt: BroadcastAttempt {
+							broadcast_id,
 							transaction_payload: attempt.broadcast_attempt.transaction_payload,
 							threshold_signature_payload: attempt
 								.broadcast_attempt
@@ -112,20 +113,14 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			)
 		});
 
-		// BroadcastRetryQueue: Vec<old::BroadcastAttempt> -> Vec<(BroadcastId, BroadcastAttempt)>
 		let retry_queue = old::BroadcastRetryQueue::<T, I>::take()
 			.unwrap_or_default()
 			.into_iter()
-			.map(|old_broadcast_attempt| {
-				(
-					old_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-					BroadcastAttempt::<T, I> {
-						transaction_payload: old_broadcast_attempt.transaction_payload,
-						threshold_signature_payload: old_broadcast_attempt
-							.threshold_signature_payload,
-						transaction_out_id: old_broadcast_attempt.transaction_out_id,
-					},
-				)
+			.map(|attempt| BroadcastAttempt::<T, I> {
+				broadcast_id: attempt.broadcast_attempt_id.broadcast_id,
+				transaction_payload: attempt.transaction_payload,
+				threshold_signature_payload: attempt.threshold_signature_payload,
+				transaction_out_id: attempt.transaction_out_id,
 			})
 			.collect::<Vec<_>>();
 		BroadcastRetryQueue::<T, I>::put(retry_queue);
@@ -162,7 +157,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 		let new_retry_queue = BroadcastRetryQueue::<T, I>::get()
 			.into_iter()
-			.map(|(broadcast_id, _attempt)| broadcast_id)
+			.map(|attempt| attempt.broadcast_id)
 			.collect::<Vec<_>>();
 
 		broadcast_retry_queue

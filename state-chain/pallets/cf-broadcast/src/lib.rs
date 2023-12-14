@@ -16,7 +16,7 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip,
+	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
 	GetBlockHeight, SafeMode, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -106,6 +106,7 @@ pub mod pallet {
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
+		pub broadcast_id: BroadcastId,
 		pub transaction_payload: TransactionFor<T, I>,
 		pub threshold_signature_payload: PayloadFor<T, I>,
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
@@ -243,7 +244,7 @@ pub mod pallet {
 	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<(BroadcastId, BroadcastAttempt<T, I>)>, ValueQuery>;
+		StorageValue<_, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
 
 	/// A mapping from block number to a list of signing or broadcasts that expire at that
 	/// block number.
@@ -349,13 +350,13 @@ pub mod pallet {
 			// nominated. If there are no more broadcaster available, then the broadcast is aborted.
 			let expiries = Timeouts::<T, I>::take(block_number);
 			let num_expiries = expiries.len() as u32;
+			let pending_broadcasts = PendingBroadcasts::<T, I>::get();
 			if T::SafeMode::get().retry_enabled {
 				for broadcast_id in expiries.into_iter() {
-					if PendingBroadcasts::<T, I>::get().contains(&broadcast_id) {
+					if pending_broadcasts.contains(&broadcast_id) {
 						Self::deposit_event(Event::<T, I>::BroadcastTimeout { broadcast_id });
-						if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::get(broadcast_id)
-						{
-							Self::handle_broadcast_failure(broadcast_id, signing_attempt, None);
+						if let Err(e) = Self::handle_broadcast_failure(broadcast_id, None) {
+							log::warn!("Error when handling broadcast failure: Broadcast ID:{}, Error: {:?}", broadcast_id, e);
 						}
 					}
 				}
@@ -385,17 +386,17 @@ pub mod pallet {
 						.copied()
 						.unwrap_or(BroadcastId::max_value());
 					retry_queue
-						.extract_if(|(id, _broadcast)| *id <= id_limit)
+						.extract_if(|broadcast| broadcast.broadcast_id <= id_limit)
 						.take(num_retries_that_fit)
 						.collect::<Vec<_>>()
 				});
 
 				let retries_len = retries.len();
 
-				for (id, retry) in retries {
+				for retry in retries {
 					// Check if the broadcast is pending
-					if PendingBroadcasts::<T, I>::get().contains(&id) {
-						Self::start_next_broadcast_attempt(id, retry);
+					if PendingBroadcasts::<T, I>::get().contains(&retry.broadcast_id) {
+						Self::start_next_broadcast_attempt(retry);
 					}
 				}
 				next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
@@ -425,10 +426,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
-			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
-				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-
-			Self::handle_broadcast_failure(broadcast_id, signing_attempt, Some(reporter.into()));
+			Self::handle_broadcast_failure(broadcast_id, Some(reporter.into()))?;
 			Ok(().into())
 		}
 
@@ -489,6 +487,7 @@ pub mod pallet {
 				);
 
 				let broadcast_attempt = BroadcastAttempt::<T, I> {
+					broadcast_id,
 					transaction_payload: T::TransactionBuilder::build_transaction(&signed_api_call),
 					threshold_signature_payload,
 					transaction_out_id,
@@ -498,9 +497,9 @@ pub mod pallet {
 					.first()
 					.is_some_and(|broadcast_barrier_id| broadcast_id > *broadcast_barrier_id)
 				{
-					Self::schedule_for_retry(broadcast_id, &broadcast_attempt);
+					Self::schedule_for_retry(&broadcast_attempt);
 				} else {
-					Self::start_broadcast_attempt(broadcast_id, broadcast_attempt);
+					Self::start_broadcast_attempt(broadcast_attempt);
 				}
 			} else {
 				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
@@ -598,7 +597,7 @@ pub mod pallet {
 			if !failed_signers.is_empty() {
 				T::OffenceReporter::report_many(
 					PalletOffence::FailedToBroadcastTransaction,
-					&failed_signers.into_iter().collect::<Vec<_>>(),
+					failed_signers,
 				);
 			}
 
@@ -709,10 +708,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)
 	}
 
-	fn start_next_broadcast_attempt(
-		broadcast_id: BroadcastId,
-		broadcast_attempt: BroadcastAttempt<T, I>,
-	) {
+	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
+		let broadcast_id = broadcast_attempt.broadcast_id;
+
 		if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			if T::TransactionBuilder::requires_signature_refresh(
 				&api_call,
@@ -747,17 +745,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_id
 				);
 			} else {
-				Self::start_broadcast_attempt(broadcast_id, broadcast_attempt);
+				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+					broadcast_id,
+					..broadcast_attempt
+				});
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
 		};
 	}
 
-	fn start_broadcast_attempt(
-		broadcast_id: BroadcastId,
-		mut broadcast_attempt: BroadcastAttempt<T, I>,
-	) {
+	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
+		let broadcast_id = broadcast_attempt.broadcast_id;
 		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_attempt.transaction_payload);
 		TransactionMetadata::<T, I>::insert(
 			broadcast_id,
@@ -775,7 +774,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.encode();
 		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
 			seed,
-			&FailedBroadcasters::<T, I>::get(broadcast_id).into_iter().collect::<Vec<_>>(),
+			FailedBroadcasters::<T, I>::get(broadcast_attempt.broadcast_id),
 		) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingBroadcast::<T, I>::insert(
@@ -802,13 +801,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				transaction_out_id: broadcast_attempt.transaction_out_id,
 			});
 		} else {
-			Self::abort_broadcast(broadcast_id);
+			// Else schedule for re-try later, when more broadcasters becomes available.
+			Self::schedule_for_retry(&broadcast_attempt);
 		}
 	}
 
-	fn schedule_for_retry(broadcast_id: BroadcastId, broadcast_attempt: &BroadcastAttempt<T, I>) {
-		BroadcastRetryQueue::<T, I>::append((broadcast_id, broadcast_attempt));
-		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled { broadcast_id });
+	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>) {
+		BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
+		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+			broadcast_id: broadcast_attempt.broadcast_id,
+		});
 	}
 
 	// Advance the broadcast ID in storage by 1 and return the result.
@@ -824,20 +826,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// The broadcast will then be retried.
 	fn handle_broadcast_failure(
 		broadcast_id: BroadcastId,
-		signing_attempt: TransactionSigningAttempt<T, I>,
 		maybe_reporter: Option<T::ValidatorId>,
-	) {
+	) -> DispatchResult {
+		let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
+			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+
+		let broadcast_id = signing_attempt.broadcast_attempt.broadcast_id;
 		let reporter = match maybe_reporter {
 			Some(reporter) => reporter,
 			None => signing_attempt.nominee,
 		};
 		FailedBroadcasters::<T, I>::mutate(broadcast_id, |failed_broadcasters| {
 			if failed_broadcasters.insert(reporter) {
-				Self::schedule_for_retry(broadcast_id, &signing_attempt.broadcast_attempt);
+				// We will abort the broadcast if all validators reported failure.
+				if FailedBroadcasters::<T, I>::decode_len(broadcast_id).unwrap_or_default() as u32 >=
+					T::EpochInfo::current_authority_count()
+						.checked_sub(1)
+						.expect("We must have at least one authority")
+				{
+					Self::abort_broadcast(broadcast_id);
+				} else {
+					Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
+				}
 			} else {
 				log::warn!("Broadcast failure already reported: Broadcast ID:{}", broadcast_id,);
 			}
 		});
+		Ok(())
 	}
 
 	/// Called when we cannot select a broadcaster, because all validators have failed to broadcast

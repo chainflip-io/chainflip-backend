@@ -407,7 +407,7 @@ pub mod pallet {
 						ThresholdCeremonyType::Standard => {
 							T::OffenceReporter::report_many(
 								PalletOffence::ParticipateSigningFailed,
-								&offenders[..],
+								offenders,
 							);
 
 							Self::new_ceremony_attempt(RequestInstruction::new(
