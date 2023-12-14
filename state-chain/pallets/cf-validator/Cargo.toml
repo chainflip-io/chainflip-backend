@@ -40,19 +40,19 @@ scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-sp-application-crypto = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false, optional = true }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+sp-application-crypto = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false, optional = true }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
 
-pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
+pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
 lazy_static = "1.4"
 
 [features]

@@ -22,7 +22,7 @@ clap = { version = "3.2.23", features = ["derive", "env"] }
 config = "0.13.1"
 redis = { version = "0.24.0", features = ["tokio-comp"] }
 
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
 codec = { package = "parity-scale-codec", version = "3.6.1", features = [
   "derive",
   "full",
@@ -39,10 +39,10 @@ state-chain-runtime = { path = "../../../state-chain/runtime" }
 cf-chains = { path = "../../../state-chain/chains" }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08+5' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1' }
 
 [dev-dependencies]
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
 insta = { version = "1.34.0", features = ["json"] }
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 mockall = "0.11.0"

@@ -44,12 +44,12 @@ codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = 
 scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
 
 [dev-dependencies]
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
 cf-test-utilities = { path = '../test-utilities' }
 rand = { version = '0.8.4' }
 
