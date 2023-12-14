@@ -5,6 +5,10 @@ on:
         type: string
         required: false
         default: ${{ github.ref_name }}
+      network:
+        type: string
+        required: false
+        default: perseverance
 
 env:
   FORCE_COLOR: 1
@@ -77,4 +81,4 @@ jobs:
 
       - name: Check changelog 📝
         shell: bash
-        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.tag }}
+        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.network }}
