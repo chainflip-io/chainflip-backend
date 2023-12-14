@@ -10,6 +10,8 @@ concurrency:
 jobs:
   release-checks:
     uses: ./.github/workflows/_03_release_checks.yml
+    with:
+      network: "berghain"
   build:
     needs: [release-checks]
     uses: ./.github/workflows/_20_build.yml
