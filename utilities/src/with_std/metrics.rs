@@ -4,7 +4,6 @@
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 use super::{super::Port, task_scope};
 use crate::ArrayCollect;
-use async_channel::{unbounded, Receiver, Sender};
 use lazy_static;
 use prometheus::{
 	register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
@@ -13,28 +12,14 @@ use prometheus::{
 	IntGaugeVec, Opts, Registry,
 };
 use serde::Deserialize;
-use std::{collections::HashSet, net::IpAddr};
+use std::net::IpAddr;
 use tracing::info;
 use warp::Filter;
-
-pub enum DeleteMetricCommand {
-	CounterPair(IntCounterVec, Vec<String>),
-	GaugePair(IntGaugeVec, Vec<String>),
-}
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Prometheus {
 	pub hostname: String,
 	pub port: Port,
-}
-
-fn collect_metric_to_delete() -> Vec<DeleteMetricCommand> {
-	let mut metric_pair = vec![];
-	while let Ok(msg) = DELETE_METRIC_CHANNEL.1.try_recv() {
-		metric_pair.push(msg);
-	}
-
-	metric_pair
 }
 
 /// wrapper around histogram to enforce correct conversion to f64 when observing a value
@@ -257,21 +242,20 @@ macro_rules! build_histogram_vec_struct {
 }
 
 macro_rules! build_gauge_vec_struct {
-	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
 		build_gauge_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			labels: [String; { $labels.len() }],
-			drop: bool,
 		}
 		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
 				labels: [String; { $labels.len() }],
 			) -> $struct_ident {
-				$struct_ident { metric, labels, drop: $drop }
+				$struct_ident { metric, labels }
 			}
 
 			pub fn inc(&self) {
@@ -292,50 +276,27 @@ macro_rules! build_gauge_vec_struct {
 				self.metric.set(&labels, val);
 			}
 		}
-		impl Drop for $struct_ident {
-			fn drop(&mut self) {
-				if self.drop {
-					let metric = self.metric.prom_metric.clone();
-					let labels: Vec<String> = self.labels.to_vec();
-
-					DELETE_METRIC_CHANNEL
-						.0
-						.try_send(DeleteMetricCommand::GaugePair(metric, labels))
-						.expect("DELETE_METRIC_CHANNEL should never be closed!");
-				}
-			}
-		}
 	};
-	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt, $const_labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt, $const_labels:tt) => {
 		build_gauge_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			const_labels: [String; { $const_labels.len() }],
-			non_const_labels_used: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
-			drop: bool,
 		}
 		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
 				const_labels: [String; { $const_labels.len() }],
 			) -> $struct_ident {
-				$struct_ident {
-					metric,
-					const_labels,
-					non_const_labels_used: HashSet::new(),
-					drop: $drop,
-				}
+				$struct_ident { metric, const_labels }
 			}
 
 			pub fn inc(
 				&mut self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
-				if self.drop {
-					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
-				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -349,9 +310,6 @@ macro_rules! build_gauge_vec_struct {
 				&mut self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
-				if self.drop {
-					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
-				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -368,9 +326,6 @@ macro_rules! build_gauge_vec_struct {
 			) where
 				<T as TryInto<i64>>::Error: std::fmt::Debug,
 			{
-				if self.drop {
-					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
-				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -380,41 +335,24 @@ macro_rules! build_gauge_vec_struct {
 				self.metric.set(&labels, val);
 			}
 		}
-		impl Drop for $struct_ident {
-			fn drop(&mut self) {
-				if self.drop {
-					let metric = self.metric.prom_metric.clone();
-					let labels: Vec<String> = self.const_labels.to_vec();
-					for non_const_labels in self.non_const_labels_used.drain() {
-						let mut final_labels = labels.clone();
-						final_labels.append(&mut non_const_labels.to_vec());
-						DELETE_METRIC_CHANNEL
-							.0
-							.try_send(DeleteMetricCommand::GaugePair(metric.clone(), final_labels))
-							.expect("DELETE_METRIC_CHANNEL should never be closed!");
-					}
-				}
-			}
-		}
 	};
 }
 
 macro_rules! build_counter_vec_struct {
-	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt) => {
 		build_counter_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			labels: [String; { $labels.len() }],
-			drop: bool,
 		}
 		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
 				labels: [String; { $labels.len() }],
 			) -> $struct_ident {
-				$struct_ident { metric, labels, drop: $drop }
+				$struct_ident { metric, labels }
 			}
 
 			pub fn inc(&self) {
@@ -422,50 +360,27 @@ macro_rules! build_counter_vec_struct {
 				self.metric.inc(&labels);
 			}
 		}
-		impl Drop for $struct_ident {
-			fn drop(&mut self) {
-				if self.drop {
-					let metric = self.metric.prom_metric.clone();
-					let labels: Vec<String> = self.labels.to_vec();
-
-					DELETE_METRIC_CHANNEL
-						.0
-						.try_send(DeleteMetricCommand::CounterPair(metric, labels))
-						.expect("DELETE_METRIC_CHANNEL should never be closed!");
-				}
-			}
-		}
 	};
-	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $drop:expr, $labels:tt, $const_labels:tt) => {
+	($metric_ident:ident, $struct_ident:ident, $name:literal, $help:literal, $labels:tt, $const_labels:tt) => {
 		build_counter_vec!($metric_ident, $name, $help, $labels);
 
 		#[derive(Clone)]
 		pub struct $struct_ident {
 			metric: &'static $metric_ident,
 			const_labels: [String; { $const_labels.len() }],
-			non_const_labels_used: HashSet<[String; { $labels.len() - $const_labels.len() }]>,
-			drop: bool,
 		}
 		impl $struct_ident {
 			pub fn new(
 				metric: &'static $metric_ident,
 				const_labels: [String; { $const_labels.len() }],
 			) -> $struct_ident {
-				$struct_ident {
-					metric,
-					const_labels,
-					drop: $drop,
-					non_const_labels_used: HashSet::new(),
-				}
+				$struct_ident { metric, const_labels }
 			}
 
 			pub fn inc(
 				&mut self,
 				non_const_labels: &[&str; { $labels.len() - $const_labels.len() }],
 			) {
-				if self.drop {
-					self.non_const_labels_used.insert(non_const_labels.map(|s| s.to_string()));
-				}
 				let labels: [&str; { $labels.len() }] = self
 					.const_labels
 					.iter()
@@ -475,31 +390,11 @@ macro_rules! build_counter_vec_struct {
 				self.metric.inc(&labels);
 			}
 		}
-		impl Drop for $struct_ident {
-			fn drop(&mut self) {
-				if self.drop {
-					let metric = self.metric.prom_metric.clone();
-					let labels: Vec<String> = self.const_labels.to_vec();
-					for non_const_labels in self.non_const_labels_used.drain() {
-						let mut final_labels = labels.clone();
-						final_labels.append(&mut non_const_labels.to_vec());
-						DELETE_METRIC_CHANNEL
-							.0
-							.try_send(DeleteMetricCommand::CounterPair(
-								metric.clone(),
-								final_labels,
-							))
-							.expect("DELETE_METRIC_CHANNEL should never be closed!");
-					}
-				}
-			}
-		}
 	};
 }
 
 lazy_static::lazy_static! {
 	static ref REGISTRY: Registry = Registry::new();
-	pub static ref DELETE_METRIC_CHANNEL: (Sender<DeleteMetricCommand>, Receiver<DeleteMetricCommand>) = unbounded::<DeleteMetricCommand>();
 
 	pub static ref P2P_MSG_SENT: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_sent", "Count all the p2p msgs sent by the engine"), REGISTRY).expect("A duplicate metric collector has already been registered.");
 	pub static ref P2P_MSG_RECEIVED: IntCounter = register_int_counter_with_registry!(Opts::new("p2p_msg_received", "Count all the p2p msgs received by the engine (raw before any processing)"), REGISTRY).expect("A duplicate metric collector has already been registered.");
@@ -556,7 +451,6 @@ build_counter_vec_struct!(
 	CeremonyProcessedMsg,
 	"ceremony_msg",
 	"Count all the processed messages for a given ceremony",
-	false,
 	["chain", "ceremony_type"]
 );
 build_counter_vec_struct!(
@@ -564,7 +458,6 @@ build_counter_vec_struct!(
 	CeremonyBadMsg,
 	"ceremony_bad_msg",
 	"Count all the bad msgs processed during a ceremony",
-	false,
 	["chain", "reason"],
 	["chain"] //const labels
 );
@@ -581,7 +474,6 @@ build_gauge_vec_struct!(
 	CeremonyTimeoutMissingMsg,
 	"ceremony_timeout_missing_msg",
 	"Measure the number of missing messages when reaching timeout",
-	false,
 	["chain", "ceremony_type", "stage"],
 	["chain", "ceremony_type"]
 );
@@ -599,7 +491,6 @@ build_counter_vec_struct!(
 	StageFailing,
 	"stage_failing",
 	"Count the number of stages which are failing with the cause of the failure attached",
-	false,
 	["chain", "stage", "reason"],
 	["chain"]
 );
@@ -608,7 +499,6 @@ build_counter_vec_struct!(
 	StageCompleting,
 	"stage_completing",
 	"Count the number of stages which are completing successfully",
-	false,
 	["chain", "stage"],
 	["chain"]
 );
@@ -675,38 +565,16 @@ fn metrics_handler() -> String {
 	use prometheus::Encoder;
 	let encoder = prometheus::TextEncoder::new();
 
-	let metric_pairs = collect_metric_to_delete();
 	let mut buffer = Vec::new();
 	if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
 		tracing::error!("could not encode custom metrics: {}", e);
 	};
-	let res = match String::from_utf8(buffer) {
+	match String::from_utf8(buffer) {
 		Ok(v) => v,
 		Err(e) => {
 			tracing::error!("custom metrics could not be from_utf8'd: {}", e);
 			String::default()
 		},
-	};
-	delete_labels(&metric_pairs);
-	res
-}
-
-fn delete_labels(metric_pairs: &Vec<DeleteMetricCommand>) {
-	for command in metric_pairs {
-		match command {
-			DeleteMetricCommand::CounterPair(metric, labels) => {
-				let labels = labels.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-				if let Err(e) = metric.remove_label_values(&labels) {
-					tracing::error!("error removing label values: {}", e);
-				}
-			},
-			DeleteMetricCommand::GaugePair(metric, labels) => {
-				let labels = labels.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-				if let Err(e) = metric.remove_label_values(&labels) {
-					tracing::error!("error removing label values: {}", e);
-				}
-			},
-		}
 	}
 }
 
@@ -720,10 +588,6 @@ mod test {
 		let prometheus_settings = Prometheus { hostname: "0.0.0.0".to_string(), port: 5567 };
 		let metric = create_and_register_metric();
 
-		let _ = DELETE_METRIC_CHANNEL
-			.0
-			.send(DeleteMetricCommand::CounterPair(metric.clone(), ["A".to_string()].to_vec()))
-			.await;
 		task_scope::task_scope(|scope| {
 			async {
 				start(scope, &prometheus_settings).await.unwrap();
@@ -748,8 +612,7 @@ mod test {
 
 				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"A\"} 1\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
 				request_test("invalid", reqwest::StatusCode::NOT_FOUND, "").await;
-				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
-				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
+				request_test("metrics", reqwest::StatusCode::OK, "# HELP test test help\n# TYPE test counter\ntest{label=\"A\"} 1\ntest{label=\"B\"} 10\ntest{label=\"C\"} 100\n").await;
 
 				REGISTRY.unregister(Box::new(metric)).unwrap();
 				request_test("metrics", reqwest::StatusCode::OK, "").await;
