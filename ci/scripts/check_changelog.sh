@@ -23,4 +23,5 @@ if grep -q "$version" "$changelog_file"; then
     echo "Version $version found in the changelog."
 else
     echo "Version $version not found in the changelog."
+    exit 3
 fi
