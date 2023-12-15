@@ -136,15 +136,22 @@ fn test_btc_utxo_consolidation() {
 		);
 		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
 
-		add_utxo_amount(10000);
-		add_utxo_amount(10000);
+		add_utxo_amount(20000);
+		add_utxo_amount(30000);
+
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(4));
+
+		// Should select two UTXOs, with all funds (minus fees) going back to us as change
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Some((vec![utxo(10000), utxo(20000)], 25980))
+		);
 
 		// Any utxo that didn't get consolidated should still be available:
 		assert_eq!(
-			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			Some((vec![utxo(10000), utxo(10000)], 15980))
+			crate::BitcoinAvailableUtxos::<Test>::get(),
+			vec![utxo(30000), utxo(dust_amount)]
 		);
-		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
 	});
 }
 

@@ -63,10 +63,9 @@ pub fn select_utxos_for_consolidation<UTXO: GetUtxoAmount + Clone>(
 	fee_per_utxo: u64,
 	params: ConsolidationParameters,
 ) -> Vec<UTXO> {
-	let mut all_utxos = sp_std::mem::take(available_utxos);
-
-	let (mut spendable, mut dust) =
-		all_utxos.drain(..).partition::<Vec<_>, _>(|utxo| utxo.amount() > fee_per_utxo);
+	let (mut spendable, mut dust) = available_utxos
+		.drain(..)
+		.partition::<Vec<_>, _>(|utxo| utxo.amount() > fee_per_utxo);
 
 	if spendable.len() >= params.consolidation_threshold as usize {
 		let mut remaining = spendable.split_off(params.consolidation_size as usize);

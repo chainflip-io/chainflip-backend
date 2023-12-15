@@ -188,7 +188,7 @@ pub mod pallet {
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 		/// UTXO consolidation parameters has been updated
-		UTXOConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
+		UtxoConsolidationParametersUpdated { params: cf_chains::btc::ConsolidationParameters },
 	}
 
 	#[pallet::call]
@@ -298,13 +298,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			if !params.are_valid() {
-				return Err(DispatchError::Other("Invalid parameters"))
-			}
+			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
 
 			ConsolidationParameters::<T>::set(params);
 
-			Self::deposit_event(Event::<T>::UTXOConsolidationParametersUpdated { params });
+			Self::deposit_event(Event::<T>::UtxoConsolidationParametersUpdated { params });
 
 			Ok(())
 		}
