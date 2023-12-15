@@ -61,7 +61,8 @@ if (
 }
 
 const releaseSpecVersion = Number(
-  (await jsonRpc('state_getRuntimeVersion', [], 'perseverance.chainflip.xyz', 443)).specVersion,
+  (await jsonRpc('state_getRuntimeVersion', [], 'https://perseverance.chainflip.xyz:443'))
+    .specVersion,
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 

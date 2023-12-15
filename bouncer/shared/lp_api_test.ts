@@ -32,8 +32,7 @@ const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function lpApiRpc(method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `start_lp_api.sh`
-  const port = 10589;
-  return jsonRpc(method, params, undefined, port);
+  return jsonRpc(method, params, 'http://127.0.0.1:10589');
 }
 
 async function provideLiquidityAndTestAssetBalances() {
