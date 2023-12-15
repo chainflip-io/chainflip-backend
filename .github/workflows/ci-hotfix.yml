@@ -1,0 +1,27 @@
+# This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
+name: Hotfix CI
+on:
+  push:
+    branches:
+      - hotfix/*
+
+jobs:
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+  build-try-runtime:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "try-runtime"
+      upload-name: "chainflip-backend-bin-try-runtime"
+      binary-subdir: release
+      
