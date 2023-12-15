@@ -74,6 +74,10 @@ pub fn select_utxos_for_consolidation<UTXO: GetUtxoAmount + Clone>(
 		available_utxos.append(&mut dust);
 		spendable
 	} else {
+		// Not strictly necessary (the caller is expected roll back the change), but
+		// let's put everything back just as a precaution:
+		available_utxos.append(&mut spendable);
+		available_utxos.append(&mut dust);
 		vec![]
 	}
 }
