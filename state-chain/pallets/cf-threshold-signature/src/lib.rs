@@ -9,8 +9,6 @@ pub mod mock;
 mod tests;
 
 mod benchmarking;
-pub mod migrations;
-
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};

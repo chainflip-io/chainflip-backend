@@ -6,7 +6,7 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::prelude::Vec;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 
-mod old {
+pub(crate) mod old {
 	use super::*;
 
 	/// A unique id for each broadcast attempt
@@ -26,9 +26,11 @@ mod old {
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
 	}
 
-	#[frame_support::storage_alias]
-	pub type RequestCallbacks<T: Config<I>, I: 'static> =
-		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
+		pub broadcast_attempt: BroadcastAttempt<T, I>,
+		pub nominee: T::ValidatorId,
+	}
 
 	#[frame_support::storage_alias]
 	pub type AwaitingBroadcast<T: Config<I>, I: 'static> =
@@ -52,20 +54,6 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use frame_support::storage::StoragePrefixedMap;
-
-		// Renaming of storage: RequestCallbacks -> RequestSuccessCallbacks
-		frame_support::migration::move_prefix(
-			old::RequestCallbacks::<T, I>::storage_prefix(),
-			RequestSuccessCallbacks::<T, I>::storage_prefix(),
-		);
-
-		// Adding Awaiting Broadcasts -> PendingBroadcasts
-		let pending_broadcasts = old::AwaitingBroadcast::<T, I>::iter_keys()
-			.map(|old::BroadcastAttemptId { broadcast_id, .. }| broadcast_id)
-			.collect::<BTreeSet<_>>();
-		PendingBroadcasts::<T, I>::put(pending_broadcasts);
-
 		// Awaiting broadcast: take the broadcast attempt with the highest attempt.
 		let mut latest_attempt = BTreeMap::new();
 		old::AwaitingBroadcast::<T, I>::iter_keys().for_each(
@@ -165,5 +153,119 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			.for_each(|broadcast_id| assert!(new_retry_queue.contains(&broadcast_id)));
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod migration_tests {
+	use super::*;
+	use crate::mock::*;
+
+	#[test]
+	fn migration_works_v2_to_v3_awaiting_broadcast() {
+		new_test_ext().execute_with(|| {
+			// Insert mock data into old storage
+			for broadcast_id in 1..10 {
+				for attempt_id in 0..=broadcast_id {
+					let broadcast_attempt_id =
+						old::BroadcastAttemptId { broadcast_id, attempt_count: attempt_id };
+					let singing_attempt = old::TransactionSigningAttempt {
+						broadcast_attempt: old::BroadcastAttempt {
+							broadcast_attempt_id,
+							transaction_payload: Default::default(),
+							threshold_signature_payload: Default::default(),
+							transaction_out_id: Default::default(),
+						},
+						nominee: attempt_id as u64,
+					};
+					old::AwaitingBroadcast::<Test, Instance1>::insert(
+						broadcast_attempt_id,
+						singing_attempt,
+					);
+				}
+			}
+
+			// Perform runtime migration.
+			crate::migrations::v3::Migration::<Test, Instance1>::on_runtime_upgrade();
+
+			// Verify data is correctly migrated into new storage.
+			// Only the attempt with the highest attempt count is migrated.
+			for broadcast_id in 1..10 {
+				assert_eq!(
+					AwaitingBroadcast::<Test, Instance1>::get(broadcast_id),
+					Some(TransactionSigningAttempt {
+						broadcast_attempt: BroadcastAttempt {
+							broadcast_id,
+							transaction_payload: Default::default(),
+							threshold_signature_payload: Default::default(),
+							transaction_out_id: Default::default(),
+						},
+						nominee: broadcast_id as u64,
+					})
+				);
+			}
+		});
+	}
+
+	#[test]
+	fn migration_works_v2_to_v3_failed_broadcasters() {
+		new_test_ext().execute_with(|| {
+			// Insert mock data into old storage
+			old::FailedBroadcasters::<Test, Instance1>::insert(
+				1,
+				vec![1u64, 1u64, 2u64, 2u64, 3u64, 3u64, 3u64, 3u64],
+			);
+			old::FailedBroadcasters::<Test, Instance1>::insert(2, vec![1u64, 2u64, 3u64]);
+
+			// Perform runtime migration.
+			crate::migrations::v3::Migration::<Test, Instance1>::on_runtime_upgrade();
+
+			// Verify data is correctly migrated into new storage.
+			let failed_1 = FailedBroadcasters::<Test, Instance1>::get(1);
+			let failed_2 = FailedBroadcasters::<Test, Instance1>::get(2);
+			assert!(failed_1.contains(&1u64));
+			assert!(failed_1.contains(&2u64));
+			assert!(failed_1.contains(&3u64));
+
+			assert!(failed_2.contains(&1u64));
+			assert!(failed_2.contains(&2u64));
+			assert!(failed_2.contains(&3u64));
+		});
+	}
+
+	#[test]
+	fn migration_works_v2_to_v3_retry_queue() {
+		new_test_ext().execute_with(|| {
+			// Insert mock data into old storage
+			old::BroadcastRetryQueue::<Test, Instance1>::put(
+				(0..3)
+					.map(|broadcast_id| old::BroadcastAttempt {
+						broadcast_attempt_id: old::BroadcastAttemptId {
+							broadcast_id,
+							attempt_count: broadcast_id,
+						},
+						transaction_payload: Default::default(),
+						threshold_signature_payload: Default::default(),
+						transaction_out_id: Default::default(),
+					})
+					.collect::<Vec<_>>(),
+			);
+
+			// Perform runtime migration.
+			crate::migrations::v3::Migration::<Test, Instance1>::on_runtime_upgrade();
+
+			// Verify data is correctly migrated into new storage.
+			assert_eq!(
+				BroadcastRetryQueue::<Test, Instance1>::get(),
+				(0..3)
+					.map(|broadcast_id| BroadcastAttempt {
+						broadcast_id,
+						transaction_payload: Default::default(),
+						threshold_signature_payload: Default::default(),
+						transaction_out_id: Default::default(),
+					})
+					.collect::<Vec<_>>()
+			);
+		});
 	}
 }

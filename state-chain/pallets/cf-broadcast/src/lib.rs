@@ -55,7 +55,7 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -640,8 +640,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
 		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
 			if !pending_broadcasts.remove(broadcast_id) {
-				cf_runtime_utilities::log_or_panic!(
-					"The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated"
+				log::warn!(
+					"The broadcast_id already aborted, but is now reported as successful. broadcast_id: {}", broadcast_id
 				);
 			}
 			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
@@ -774,7 +774,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.encode();
 		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
 			seed,
-			FailedBroadcasters::<T, I>::get(broadcast_attempt.broadcast_id),
+			FailedBroadcasters::<T, I>::get(broadcast_id),
 		) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingBroadcast::<T, I>::insert(
@@ -801,6 +801,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				transaction_out_id: broadcast_attempt.transaction_out_id,
 			});
 		} else {
+			log::info!(
+				"Failed to nominate a broadcaster, but not all validators have reported failure. Broadcast is scheduled for retry. Broadcast Id: {}",
+				broadcast_id
+			);
 			// Else schedule for re-try later, when more broadcasters becomes available.
 			Self::schedule_for_retry(&broadcast_attempt);
 		}
@@ -831,27 +835,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
 			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
-		let broadcast_id = signing_attempt.broadcast_attempt.broadcast_id;
 		let reporter = match maybe_reporter {
 			Some(reporter) => reporter,
 			None => signing_attempt.nominee,
 		};
-		FailedBroadcasters::<T, I>::mutate(broadcast_id, |failed_broadcasters| {
-			if failed_broadcasters.insert(reporter) {
-				// We will abort the broadcast if all validators reported failure.
-				if FailedBroadcasters::<T, I>::decode_len(broadcast_id).unwrap_or_default() as u32 >=
-					T::EpochInfo::current_authority_count()
-						.checked_sub(1)
-						.expect("We must have at least one authority")
-				{
-					Self::abort_broadcast(broadcast_id);
-				} else {
-					Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
-				}
+
+		if FailedBroadcasters::<T, I>::mutate(broadcast_id, |failed_broadcasters| {
+			failed_broadcasters.insert(reporter.clone())
+		}) {
+			// Abort the broadcast if all validators reported failure, Retry otherwise.
+			if Self::attempt_count(broadcast_id) >= T::EpochInfo::current_authority_count() {
+				Self::abort_broadcast(broadcast_id);
 			} else {
-				log::warn!("Broadcast failure already reported: Broadcast ID:{}", broadcast_id,);
+				Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
 			}
-		});
+		} else {
+			// Do nothing since this failure has already been reported.
+			log::warn!(
+				"Broadcast failure by {:?} already recorded for Broadcast ID:{}",
+				reporter,
+				broadcast_id
+			);
+		}
 		Ok(())
 	}
 
@@ -861,7 +866,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// governance functions.
 	fn abort_broadcast(broadcast_id: BroadcastId) {
 		log::warn!(
-			"Failed to select a signer for broadcast {:?}. Broadcast is aborted.",
+			"All authorities failed to broadcast, broadcast is aborted. Broadcast_id {:?}.",
 			broadcast_id
 		);
 
