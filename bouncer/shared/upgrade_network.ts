@@ -80,16 +80,14 @@ async function incompatibleUpgradeNoBuild(
   execSync(`kill $(lsof -t -i:10997)`);
   execSync(`kill $(lsof -t -i:10589)`);
   await sleep(6000);
-  console.log("Stopped old broker and lp-api. Starting the new ones.");
+  console.log('Stopped old broker and lp-api. Starting the new ones.');
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
   await sleep(6000);
-  console.log("Started new broker and lp-api.");
-
+  console.log('Started new broker and lp-api.');
 }
-
 
 async function incompatibleUpgrade(
   // could we pass localnet/init instead of this.
@@ -187,8 +185,9 @@ export async function upgradeNetworkPrebuilt(
 
   console.log("Version we're upgrading from: " + oldVersion);
 
-  if (!versionRegex.test(oldVersion)) {
-    oldVersion = oldVersion.match(versionRegex)[0];
+  let cleanOldVersion = oldVersion;
+  if (!versionRegex.test(cleanOldVersion)) {
+    cleanOldVersion = oldVersion.match(versionRegex)[0];
   }
 
   const cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
@@ -205,13 +204,13 @@ export async function upgradeNetworkPrebuilt(
     );
   }
 
-  if (compareSemVer(oldVersion, cfeVersion) === 'greater') {
+  if (compareSemVer(cleanOldVersion, cfeVersion) === 'greater') {
     throw new Error(
       "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
     );
   }
 
-  const isCompatible = isCompatibleWith(oldVersion, cfeVersion);
+  const isCompatible = isCompatibleWith(cleanOldVersion, cfeVersion);
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');

@@ -69,8 +69,12 @@ export async function testFundRedeem(providedSeed?: string) {
     exactRedeemAmount,
   );
   console.log(`Expected balance increase amount: ${exactAmount}`);
-  assert.strictEqual(redeemedExact.toFixed(5), exactAmount.toFixed(5), `Unexpected balance increase amount`);
-  console.log("Redeem exact amount success!");
+  assert.strictEqual(
+    redeemedExact.toFixed(5),
+    exactAmount.toFixed(5),
+    `Unexpected balance increase amount`,
+  );
+  console.log('Redeem exact amount success!');
 
   // Test redeeming the rest of the flip with a 'Max' redeem amount
   console.log(`Testing redeem all`);
@@ -79,8 +83,9 @@ export async function testFundRedeem(providedSeed?: string) {
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount * 2;
   assert(
     redeemedAll >= expectedRedeemAllAmount - expectedRedeemGasFeeFlip * 2 &&
-    redeemedAll <= expectedRedeemAllAmount,
-    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${expectedRedeemAllAmount - expectedRedeemGasFeeFlip * 2
+      redeemedAll <= expectedRedeemAllAmount,
+    `Unexpected balance increase amount: ${redeemedAll}. Expected between: ${
+      expectedRedeemAllAmount - expectedRedeemGasFeeFlip * 2
     } - ${expectedRedeemAllAmount}. Did fees change?`,
   );
 }
