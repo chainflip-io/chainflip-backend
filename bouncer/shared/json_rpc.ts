@@ -3,7 +3,8 @@ export async function jsonRpc(
   method: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any[],
-  port: number,
+  host?: string,
+  port?: number,
 ): Promise<JSON> {
   console.log('Sending json RPC', method);
 
@@ -14,7 +15,10 @@ export async function jsonRpc(
     params,
     id,
   });
-  const response = await fetch(`http://127.0.0.1:${port}`, {
+
+  const fetchHost = host ?? 'localhost';
+  const fetchPort = port ?? 9944;
+  const response = await fetch(`https://${fetchHost}:${fetchPort}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',

@@ -33,7 +33,7 @@ const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 async function lpApiRpc(method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `start_lp_api.sh`
   const port = 10589;
-  return jsonRpc(method, params, port);
+  return jsonRpc(method, params, undefined, port);
 }
 
 async function provideLiquidityAndTestAssetBalances() {

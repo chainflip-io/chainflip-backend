@@ -3,6 +3,8 @@
 import fs from 'fs';
 import toml from '@iarna/toml';
 import { compareSemVer } from '../shared/utils';
+import { jsonRpc } from '../shared/json_rpc';
+import { bumpSpecVersion } from '../shared/utils/bump_spec_version';
 
 const projectRoot = process.argv[2];
 const engineReleaseVersion = process.argv[3];
@@ -49,9 +51,29 @@ if (
 ) {
   throw Error('All versions should be the same');
 } else if (compareSemVer(engineTomlVersion, releaseVersion) === 'greater') {
-  console.log(`Version is correct. Your branch has a version greater than the current release.`);
+  console.log(
+    `Binary versions are correct. Your branch has a version greater than the current release.`,
+  );
 } else {
   throw Error(
-    `Version is incorrect. The version of your branch (${engineTomlVersion}) should be greater than the current release (${releaseVersion}).)`,
+    `Binary versions are incorrect. The version of your branch (${engineTomlVersion}) should be greater than the current release (${releaseVersion}).)`,
+  );
+}
+
+const releaseSpecVersion = Number(
+  (await jsonRpc('state_getRuntimeVersion', [], 'perseverance.chainflip.xyz', 443)).specVersion,
+);
+console.log(`Release spec version: ${releaseSpecVersion}`);
+
+const specVersionInToml = bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, true);
+console.log(`Spec version in TOML: ${specVersionInToml}`);
+
+if (specVersionInToml >= releaseSpecVersion) {
+  console.log(
+    `Spec version is correct. Version in TOML is greater than or equal to the release spec version.`,
+  );
+} else {
+  throw Error(
+    `Spec version is incorrect. Version in TOML (${specVersionInToml}) should be greater than or equal to the release spec version (${releaseSpecVersion}).`,
   );
 }
