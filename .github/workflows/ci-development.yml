@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      - 'release/*'
+      - "release/*"
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
