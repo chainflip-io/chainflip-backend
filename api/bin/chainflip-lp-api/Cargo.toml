@@ -20,7 +20,7 @@ name = "chainflip-lp-api"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "3.2.23", features = ["derive"] }
+clap = { version = "3.2.23", features = ["derive", "env"] }
 futures = "0.3"
 hex = "0.4.3"
 jsonrpsee = { version = "0.20", features = ["full"] }
@@ -39,3 +39,6 @@ frame-system = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'c
 # Local
 chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
+
+[build-dependencies]
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2023-08+3' }

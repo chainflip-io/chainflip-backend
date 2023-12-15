@@ -3,12 +3,14 @@ use futures_core::Future;
 use thiserror::Error;
 
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use serde;
-use serde_json::json;
+use serde_json::{json, Map};
 
-use bitcoin::{block::Version, Amount, Block, BlockHash, Transaction, Txid};
+use bitcoin::{
+	absolute, block::Version, Amount, BlockHash, ScriptBuf, Sequence, Transaction, Txid,
+};
 use tracing::error;
 use utilities::make_periodic_tick;
 
@@ -208,6 +210,89 @@ async fn get_bitcoin_network(
 	BitcoinNetwork::try_from(network_name)
 }
 
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum VerboseOutPoint {
+	#[serde(rename = "coinbase")]
+	Coinbase { coinbase: String },
+	#[serde(rename = "txid")]
+	Txid { txid: Txid, vout: u32 },
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct VerboseTxIn {
+	#[serde(flatten)]
+	pub outpoint: VerboseOutPoint,
+	pub txinwitness: Option<Vec<String>>,
+	pub sequence: Sequence,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+pub struct VerboseTxOut {
+	#[serde(with = "bitcoin::amount::serde::as_btc")]
+	pub value: Amount,
+	pub n: u64,
+	#[serde(rename = "scriptPubKey")]
+	#[serde(deserialize_with = "deserialize_scriptpubkey")]
+	pub script_pubkey: ScriptBuf,
+}
+
+fn deserialize_scriptpubkey<'de, D>(deserializer: D) -> Result<ScriptBuf, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	#[derive(Deserialize)]
+	struct Helper {
+		hex: String,
+	}
+	let helper = Helper::deserialize(deserializer)?;
+	Ok(ScriptBuf::from(hex::decode(helper.hex).map_err(serde::de::Error::custom)?))
+}
+
+// This is a work around for this bug, it is effectively a catch all.
+// https://github.com/serde-rs/json/issues/721
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Difficulty {
+	Number(f64),
+	Object(Map<String, serde_json::Value>),
+}
+
+/// Transaction type when the verbose flag is used.
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerboseTransaction {
+	pub txid: Txid,
+	pub hash: Txid,
+	pub version: Version,
+	pub size: usize,
+	pub vsize: usize,
+	pub weight: usize,
+	pub locktime: absolute::LockTime,
+	pub vin: Vec<VerboseTxIn>,
+	pub vout: Vec<VerboseTxOut>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "bitcoin::amount::serde::as_btc::opt"
+	)]
+	pub fee: Option<Amount>,
+	pub hex: String,
+}
+
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+pub struct VerboseBlock {
+	/// The block header
+	#[serde(flatten)]
+	pub header: BlockHeader,
+
+	/// List of transactions contained in the block\
+	#[serde(rename = "tx")]
+	pub txdata: Vec<VerboseTransaction>,
+}
+
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockHeader {
@@ -215,9 +300,8 @@ pub struct BlockHeader {
 	pub confirmations: i32,
 	pub height: u64,
 	pub version: Version,
+	pub version_hex: Option<String>,
 	// Don't care to write custom deserializer for this
-	#[serde(skip)]
-	pub version_hex: Option<Vec<u8>>,
 	#[serde(rename = "merkleroot")]
 	pub merkle_root: bitcoin::hash_types::TxMerkleNode,
 	pub time: usize,
@@ -225,20 +309,23 @@ pub struct BlockHeader {
 	pub median_time: Option<usize>,
 	pub nonce: u32,
 	pub bits: String,
-	pub difficulty: f64,
+	pub difficulty: Difficulty,
 	// Don't care to write custom deserializer for this
-	#[serde(skip)]
-	pub chainwork: Vec<u8>,
+	pub chainwork: Option<String>,
 	pub n_tx: usize,
 	#[serde(rename = "previousblockhash")]
 	pub previous_block_hash: Option<bitcoin::BlockHash>,
 	#[serde(rename = "nextblockhash")]
 	pub next_block_hash: Option<bitcoin::BlockHash>,
+
+	pub strippedsize: Option<usize>,
+	pub size: Option<usize>,
+	pub weight: Option<usize>,
 }
 
 #[async_trait::async_trait]
 pub trait BtcRpcApi {
-	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<Block>;
+	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock>;
 
 	async fn block_hash(
 		&self,
@@ -265,18 +352,13 @@ pub trait BtcRpcApi {
 
 #[async_trait::async_trait]
 impl BtcRpcApi for BtcRpcClient {
-	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<bitcoin::Block> {
-		// The 0 arg means we get the response as a hex string, which we use in the custom
-		// deserialization.
-		let hex_block: Vec<String> = self
-			.call_rpc("getblock", ReqParams::Batch(vec![json!([json!(block_hash), json!(0)])]))
-			.await?;
-		let hex_block = hex_block
+	async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock> {
+		Ok(self
+			.call_rpc("getblock", ReqParams::Batch(vec![json!([json!(block_hash), json!(2)])]))
+			.await?
 			.into_iter()
 			.next()
-			.ok_or_else(|| anyhow!("Response missing hex block"))?;
-		let hex_bytes = hex::decode(hex_block).context("Response not valid hex")?;
-		Ok(bitcoin::consensus::encode::deserialize(&hex_bytes)?)
+			.ok_or_else(|| anyhow!("Response missing block"))?)
 	}
 
 	async fn block_hash(
@@ -429,10 +511,24 @@ mod tests {
 				basic_auth_user: "flip".to_string(),
 				basic_auth_password: "flip".to_string(),
 			},
-			Some(BitcoinNetwork::Regtest),
+			None,
 		)
 		.unwrap()
 		.await;
+
+		// from a `getblock` RPC call with verbosity 2
+		let block_data: &str = r#"{"hash":"7f03b5690dffca7e446fa986df8c2269389e5846b4e5e8942e8230238392cc55","confirmations":235,"height":113,"version":536870912,"versionHex":"20000000","merkleroot":"3eb919e3d8be10620dd18daa33578859fd4ee8fcfa7d182ad33ef5b69e9347aa","time":1702309098,"mediantime":1702309073,"nonce":0,"bits":"207fffff","difficulty":4.656542373906925e-10,"chainwork":"00000000000000000000000000000000000000000000000000000000000000e4","nTx":2,"previousblockhash":"524d0847614eb89dffd4291786c111473fe7ca3334c7fddd2fa399481a2a99e7","nextblockhash":"7f3bf60a2dc7f2726b7afd5b7fc04d8626edd174779e16c6a3dfa6a450758156","strippedsize":332,"size":477,"weight":1473,"tx":[{"txid":"e2056652441becbfe33cc3b51c70a804360bdf1a730e65f0ee9abbe4028bf8f2","hash":"596da34ae4bb652af9872990ffe6746b922cee46e5fee25f8a16b9e6c3d17c73","version":2,"size":168,"vsize":141,"weight":564,"locktime":0,"vin":[{"coinbase":"017100","txinwitness":["0000000000000000000000000000000000000000000000000000000000000000"],"sequence":4294967295}],"vout":[{"value":50.00000147,"n":0,"scriptPubKey":{"asm":"0 a66802f0279cc06c04abe451733d0644b7cd1aa3","desc":"addr(bcrt1q5e5q9up8nnqxcp9tu3ghx0gxgjmu6x4rkhnr04)#qqa77u3g","hex":"0014a66802f0279cc06c04abe451733d0644b7cd1aa3","address":"bcrt1q5e5q9up8nnqxcp9tu3ghx0gxgjmu6x4rkhnr04","type":"witness_v0_keyhash"}},{"value":0.00000000,"n":1,"scriptPubKey":{"asm":"OP_RETURN aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d","desc":"raw(6a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d)#8sr8jfxw","hex":"6a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d","type":"nulldata"}}],"hex":"020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff03017100ffffffff0293f2052a01000000160014a66802f0279cc06c04abe451733d0644b7cd1aa30000000000000000266a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d0120000000000000000000000000000000000000000000000000000000000000000000000000"},{"txid":"7b43fc408a6b1eb61f312b6732c27a2dde77828de7a677157d1ea03f7888748a","hash":"47d0b049a25be39a6f5b7871d9c6f9350e945095ba09aa3290494f399a4c66f7","version":2,"size":228,"vsize":147,"weight":585,"locktime":112,"vin":[{"txid":"773171b0c840f1dc69c247db64efc553dc2ce0c18558cd9ecef8e7bf81a81f2d","vout":0,"scriptSig":{"asm":"","hex":""},"txinwitness":["30440220379b67fd1ac79d3416aad215b9185144430a71c5f530cafcc076fe4df3025c75022045f823e4d2f15a5daa89ee1682a15f42b7cd95f6594b34315589676aab92203901","03b22186e3b2c239cb47066fca1f42b416772a27a113ba2c968bba069354f7c20a"],"sequence":4294967293}],"vout":[{"value":39.99999853,"n":0,"scriptPubKey":{"asm":"OP_DUP OP_HASH160 0b308fdc0ae8b11dde0673387ac36f20100bf5e9 OP_EQUALVERIFY OP_CHECKSIG","desc":"addr(mgY7uJoK6HszJqYxcwAKpJFj56bEJiuAhB)#pu2vn08p","hex":"76a9140b308fdc0ae8b11dde0673387ac36f20100bf5e988ac","address":"mgY7uJoK6HszJqYxcwAKpJFj56bEJiuAhB","type":"pubkeyhash"}},{"value":10.00000000,"n":1,"scriptPubKey":{"asm":"OP_DUP OP_HASH160 9a1c78a507689f6f54b847ad1cef1e614ee23f1e OP_EQUALVERIFY OP_CHECKSIG","desc":"addr(muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi)#t9q9hu3x","hex":"76a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac","address":"muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi","type":"pubkeyhash"}}],"fee":0.00000147,"hex":"020000000001012d1fa881bfe7f8ce9ecd5885c1e02cdc53c5ef64db47c269dcf140c8b07131770000000000fdffffff026d276bee000000001976a9140b308fdc0ae8b11dde0673387ac36f20100bf5e988ac00ca9a3b000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac024730440220379b67fd1ac79d3416aad215b9185144430a71c5f530cafcc076fe4df3025c75022045f823e4d2f15a5daa89ee1682a15f42b7cd95f6594b34315589676aab922039012103b22186e3b2c239cb47066fca1f42b416772a27a113ba2c968bba069354f7c20a70000000"}]}"#;
+		let jd = &mut serde_json::Deserializer::from_str(block_data);
+
+		let result: Result<VerboseBlock, _> = serde_path_to_error::deserialize(jd);
+
+		match result {
+			Ok(vb) => {
+				println!("vb: {vb:?}");
+				println!("Verbose block fee: {}", vb.txdata[1].fee.unwrap());
+			},
+			Err(e) => panic!("error: {e:?}"),
+		}
 
 		let block_hash_zero = client.block_hash(0).await.unwrap();
 
@@ -454,9 +550,21 @@ mod tests {
 
 		println!("block_header: {block_header:?}");
 
-		let average_block_fee_rate = client.average_block_fee_rate(best_block_hash).await.unwrap();
+		let v_block = client.block(best_block_hash).await.unwrap();
 
-		println!("average_block_fee_rate: {average_block_fee_rate}");
+		println!("verbose block: {v_block:?}");
+
+		println!("number of txs: {}", v_block.txdata.len());
+
+		let tx = &v_block.txdata[0];
+
+		let raw_transaction = client.get_raw_transactions(vec![tx.txid]).await.unwrap()[0].txid();
+		assert_eq!(raw_transaction, tx.txid);
+
+		// let average_block_fee_rate =
+		// client.average_block_fee_rate(best_block_hash).await.unwrap();
+
+		// println!("average_block_fee_rate: {average_block_fee_rate}");
 
 		// Generate new hex bytes using ./bouncer/commands/create_raw_btc_tx.ts;
 		// let hex_str =

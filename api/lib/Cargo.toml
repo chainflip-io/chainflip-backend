@@ -1,6 +1,6 @@
 [package]
 name = "chainflip-api"
-version = "0.1.0"
+version = "1.1.0"
 edition = "2021"
 
 [dependencies]
@@ -20,6 +20,7 @@ tokio = "1.28"
 tracing = "0.1"
 zeroize = "1.5.4"
 libp2p-identity = { version = "0.2", features = ["ed25519", "peerid"] }
+lazy_static = "1.4"
 
 # Local
 chainflip-engine = { path = "../../engine/" }

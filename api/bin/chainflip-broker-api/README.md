@@ -25,7 +25,7 @@ OPTIONS:
             Print help information
 
         --port <PORT>
-            The port number on which the broker will listen for connections. Use 0 to assing a
+            The port number on which the broker will listen for connections. Use 0 to assign a
             random port. [default: 80]
 
         --state_chain.signing_key_file <SIGNING_KEY_FILE>
@@ -34,6 +34,9 @@ OPTIONS:
 
         --state_chain.ws_endpoint <WS_ENDPOINT>
             The state chain node's rpc endpoint. [default: ws://localhost:9944]
+
+    -v, --version 
+        Print the version of the API
 ```
 
 ## Example

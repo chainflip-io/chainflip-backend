@@ -116,6 +116,7 @@ section = "rust"
 systemd-units = [
   { unit-name = "chainflip-node", enable = false },
   { unit-name = "chainflip-archive-node", enable = false },
+  { unit-name = "chainflip-rpc-node", enable = false },
   { unit-name = "chainflip-genesis-node", enable = false },
 ]
 
@@ -161,7 +162,7 @@ assets = [
     "644",
   ],
   [
-    "target/production/chainflip-node",
+    "target/release/chainflip-node",
     "usr/bin/",
     "755",
   ],
