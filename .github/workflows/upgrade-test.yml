@@ -1,9 +1,6 @@
 name: Test upgrade from latest release to main
 
 on:
-  push:
-    branches:
-      - feat/upgrade-github-action
   workflow_dispatch:
 
 env:
@@ -16,7 +13,7 @@ permissions:
 jobs:
   upgrade_test:
     runs-on: [digitalocean]
-    # conservativel 1.5 hours. 2 bouncer runs need to occur.
+    # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
     steps:
       
@@ -176,14 +173,14 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
-      - name: Notify on failed bouncer
+      - name: Notify on failed upgrade test
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
-          DISCORD_USERNAME: "HEUTE LEIDER NICHT"
+          DISCORD_USERNAME: "Upgrade Test"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
         uses: Ilshidur/action-discord@0.3.2
         with:
           args: |
-            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
+            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, The Upgrade Test has not passed ❗️❗️❗️❗️
             👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             #️⃣ Tagging: <@&939151218708709416>
