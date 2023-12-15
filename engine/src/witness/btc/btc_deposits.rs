@@ -151,8 +151,8 @@ pub mod tests {
 	use sp_runtime::AccountId32;
 
 	pub fn fake_transaction(tx_outs: Vec<VerboseTxOut>, fee: Option<Amount>) -> VerboseTransaction {
-		let random_number: u8 = rand::thread_rng().gen();
-		let txid = Txid::from_byte_array([random_number; 32]);
+		let random_bytes: [u8; 32] = rand::thread_rng().gen();
+		let txid = Txid::from_byte_array(random_bytes);
 		VerboseTransaction {
 			txid,
 			version: Version::from_consensus(2),
