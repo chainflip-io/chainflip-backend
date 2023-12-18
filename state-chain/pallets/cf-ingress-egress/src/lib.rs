@@ -449,6 +449,9 @@ pub mod pallet {
 		FailedForeignChainCallExpired {
 			broadcast_id: BroadcastId,
 		},
+		UtxoConsolidation {
+			broadcast_id: BroadcastId,
+		},
 	}
 
 	#[pallet::error]
@@ -512,11 +515,8 @@ pub mod pallet {
 			if let Ok(egress_transaction) =
 				<T::ChainApiCall as ConsolidateCall<T::TargetChain>>::consolidate_utxos()
 			{
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					egress_transaction,
-					None,
-					|_| None,
-				);
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				Self::deposit_event(Event::<T, I>::UtxoConsolidation { broadcast_id });
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids: Default::default(),
