@@ -2,8 +2,8 @@ use core::marker::PhantomData;
 
 use cf_chains::{
 	evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment,
-	Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
-	TransferFallback,
+	ConsolidationError, Ethereum, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
+	TransferAssetParams, TransferFallback,
 };
 use cf_primitives::{chains::assets, ForeignChain};
 use codec::{Decode, Encode};
@@ -74,6 +74,7 @@ impl MockAllBatch<MockEthEnvironment> {
 
 thread_local! {
 	static ALL_BATCH_SUCCESS: std::cell::RefCell<bool> = std::cell::RefCell::new(true);
+	pub static SHOULD_CONSOLIDATE: std::cell::Cell<bool> = std::cell::Cell::new(false);
 }
 
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
@@ -90,6 +91,24 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 			}))
 		} else {
 			Err(AllBatchError::Other)
+		}
+	}
+}
+
+impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
+	fn consolidate_utxos() -> Result<Self, cf_chains::ConsolidationError> {
+		// Consolidation isn't necessary for Ethereum, but this implementation
+		// helps in testing some generic behaviour
+
+		if SHOULD_CONSOLIDATE.with(|cell| cell.get()) {
+			Ok(Self::AllBatch(MockAllBatch {
+				nonce: Default::default(),
+				fetch_params: Default::default(),
+				transfer_params: Default::default(),
+				_phantom: PhantomData,
+			}))
+		} else {
+			Err(ConsolidationError::NotRequired)
 		}
 	}
 }

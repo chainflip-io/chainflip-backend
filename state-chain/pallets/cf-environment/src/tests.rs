@@ -16,16 +16,16 @@ fn genesis_config() {
 	});
 }
 
+fn add_utxo_amount(amount: crate::BtcAmount) {
+	Environment::add_bitcoin_utxo_to_list(
+		amount,
+		Default::default(),
+		DepositAddress::new(Default::default(), Default::default()),
+	);
+}
+
 #[test]
 fn test_btc_utxo_selection() {
-	fn add_utxo_amount(amount: crate::BtcAmount) {
-		Environment::add_bitcoin_utxo_to_list(
-			amount,
-			Default::default(),
-			DepositAddress::new(Default::default(), Default::default()),
-		);
-	}
-
 	let utxo = |amount| Utxo {
 		amount,
 		id: Default::default(),
@@ -89,6 +89,93 @@ fn test_btc_utxo_selection() {
 				.unwrap(),
 			(vec![utxo(5000), utxo(15000),], 15980)
 		);
+	});
+}
+
+#[test]
+fn test_btc_utxo_consolidation() {
+	new_test_ext().execute_with(|| {
+		let utxo = |amount| Utxo {
+			amount,
+			id: Default::default(),
+			deposit_address: DepositAddress::new(Default::default(), Default::default()),
+		};
+
+		// Reduce consolidation parameters to make testing easier
+		assert_ok!(Environment::update_consolidation_parameters(
+			OriginTrait::root(),
+			cf_chains::btc::ConsolidationParameters {
+				consolidation_threshold: 2,
+				consolidation_size: 2,
+			}
+		));
+
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+
+		let dust_amount = {
+			use cf_traits::GetBitcoinFeeInfo;
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+		};
+
+		add_utxo_amount(10000);
+		// Some utxos exist, but it won't be enough for consolidation:
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(1));
+
+		// Dust utxo does not count:
+		add_utxo_amount(dust_amount);
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			None
+		);
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(2));
+
+		add_utxo_amount(20000);
+		add_utxo_amount(30000);
+
+		assert_eq!(crate::BitcoinAvailableUtxos::<Test>::decode_len(), Some(4));
+
+		// Should select two UTXOs, with all funds (minus fees) going back to us as change
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
+			Some((vec![utxo(10000), utxo(20000)], 25980))
+		);
+
+		// Any utxo that didn't get consolidated should still be available:
+		assert_eq!(
+			crate::BitcoinAvailableUtxos::<Test>::get(),
+			vec![utxo(30000), utxo(dust_amount)]
+		);
+	});
+}
+
+#[test]
+fn updating_consolidation_parameters() {
+	new_test_ext().execute_with(|| {
+		// Should work with valid parameters
+		assert_ok!(Environment::update_consolidation_parameters(
+			OriginTrait::root(),
+			cf_chains::btc::ConsolidationParameters {
+				consolidation_threshold: 2,
+				consolidation_size: 2,
+			}
+		));
+
+		// Should fail with invalid parameters
+		assert!(Environment::update_consolidation_parameters(
+			OriginTrait::root(),
+			cf_chains::btc::ConsolidationParameters {
+				consolidation_threshold: 1,
+				consolidation_size: 2,
+			}
+		)
+		.is_err());
 	});
 }
 

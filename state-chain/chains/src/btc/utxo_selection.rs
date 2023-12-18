@@ -1,6 +1,6 @@
 use sp_std::{vec, vec::Vec};
 
-use super::GetUtxoAmount;
+use super::{ConsolidationParameters, GetUtxoAmount};
 
 /// The algorithm for the utxo selection works as follows: In a greedy approach it starts selecting
 /// utxos from the lowest value utxos in a sorted array. It keeps selecting the utxos until the
@@ -56,6 +56,30 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
 	available_utxos.append(&mut skipped_utxos);
 
 	Some((selected_utxos, cumulative_amount))
+}
+
+pub fn select_utxos_for_consolidation<UTXO: GetUtxoAmount + Clone>(
+	available_utxos: &mut Vec<UTXO>,
+	fee_per_utxo: u64,
+	params: ConsolidationParameters,
+) -> Vec<UTXO> {
+	let (mut spendable, mut dust) = available_utxos
+		.drain(..)
+		.partition::<Vec<_>, _>(|utxo| utxo.amount() > fee_per_utxo);
+
+	if spendable.len() >= params.consolidation_threshold as usize {
+		let mut remaining = spendable.split_off(params.consolidation_size as usize);
+		// put remaining and dust back:
+		available_utxos.append(&mut remaining);
+		available_utxos.append(&mut dust);
+		spendable
+	} else {
+		// Not strictly necessary (the caller is expected roll back the change), but
+		// let's put everything back just as a precaution:
+		available_utxos.append(&mut spendable);
+		available_utxos.append(&mut dust);
+		vec![]
+	}
 }
 
 #[test]
