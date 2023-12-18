@@ -995,7 +995,11 @@ fn aborted_broadcasts_can_still_succeed() {
 		})
 		.then_execute_with(|(broadcast_id, transaction_out_id)| {
 			// Broadcast should be aborted
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
+			));
 			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(broadcast_id), None);
+			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 
 			// Broadcast can still be reported as successful
 			assert_ok!(Broadcaster::transaction_succeeded(
@@ -1013,9 +1017,6 @@ fn aborted_broadcasts_can_still_succeed() {
 					transaction_out_id,
 				},
 			));
-			assert!(!AwaitingBroadcast::<Test, Instance1>::contains_key(broadcast_id));
-			assert!(!TransactionMetadata::<Test, Instance1>::contains_key(broadcast_id));
-			assert!(!RequestSuccessCallbacks::<Test, Instance1>::contains_key(broadcast_id));
-			assert!(!RequestFailureCallbacks::<Test, Instance1>::contains_key(broadcast_id));
+			assert_broadcast_storage_cleaned_up(broadcast_id);
 		});
 }
