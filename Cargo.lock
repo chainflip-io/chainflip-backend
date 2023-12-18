@@ -1458,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
