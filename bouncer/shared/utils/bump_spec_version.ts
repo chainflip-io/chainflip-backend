@@ -2,15 +2,21 @@ import fs from 'fs';
 import { jsonRpc } from '../json_rpc';
 
 export async function getCurrentSpecVersion(): Promise<number> {
-  return Number((await jsonRpc('state_getRuntimeVersion', [], 9944)).specVersion);
+  return Number((await jsonRpc('state_getRuntimeVersion', [])).specVersion);
 }
 
-export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
+// If `onlyReadCurrent` is true, it will only read the current spec version and return it.
+// If `onlyReadCurrent` is false, it will increment the spec version and write it to the file. Returning the newly written version.
+export function bumpSpecVersion(
+  filePath: string,
+  onlyReadCurrent?: boolean,
+  nextSpecVersion?: number,
+): number {
   try {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const lines = fileContent.split('\n');
 
-    let incrementedVersion;
+    let incrementedVersion = -1;
     let foundMacro = false;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -23,10 +29,16 @@ export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
         const specVersionLine = line.match(/(spec_version:\s*)(\d+)/);
 
         if (specVersionLine) {
+          const currentSpecVersion = parseInt(specVersionLine[2]);
+
+          if (onlyReadCurrent) {
+            return currentSpecVersion;
+          }
+
           if (nextSpecVersion) {
             incrementedVersion = nextSpecVersion;
           } else {
-            incrementedVersion = parseInt(specVersionLine[2]) + 1;
+            incrementedVersion = currentSpecVersion + 1;
           }
           lines[i] = `	spec_version: ${incrementedVersion},`;
           break;
@@ -36,15 +48,17 @@ export function bumpSpecVersion(filePath: string, nextSpecVersion?: number) {
 
     if (!foundMacro) {
       console.error('spec_version within #[sp_version::runtime_version] not found.');
-      return;
+      return -1;
     }
 
     const updatedContent = lines.join('\n');
     fs.writeFileSync(filePath, updatedContent);
 
     console.log(`Successfully updated spec_version to ${incrementedVersion}.`);
+    return incrementedVersion;
   } catch (error) {
     console.error(`An error occurred: ${error.message}`);
+    return -1;
   }
 }
 
@@ -54,6 +68,6 @@ export async function bumpSpecVersionAgainstNetwork(projectRoot: string): Promis
   console.log('Current spec_version: ' + currentSpecVersion);
   const nextSpecVersion = currentSpecVersion + 1;
   console.log('Bumping the spec version to: ' + nextSpecVersion);
-  bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, nextSpecVersion);
+  bumpSpecVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, false, nextSpecVersion);
   return nextSpecVersion;
 }

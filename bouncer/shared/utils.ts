@@ -584,6 +584,16 @@ export function isValidEthAddress(address: string): boolean {
   return ethRegex.test(address);
 }
 
+export function isWithinOnePercent(value1: bigint, value2: bigint): boolean {
+  if (value1 < value2) {
+    return value2 - value1 <= value2 / BigInt(100);
+  }
+  if (value2 < value1) {
+    return value1 - value2 <= value1 / BigInt(100);
+  }
+  return true;
+}
+
 // "v1 is greater than v2" -> "greater"
 export function compareSemVer(version1: string, version2: string) {
   const v1 = version1.split('.').map(Number);

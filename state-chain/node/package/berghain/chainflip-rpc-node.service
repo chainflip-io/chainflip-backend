@@ -1,0 +1,19 @@
+[Unit]
+Description=Chainflip RPC Node
+
+[Service]
+Restart=always
+RestartSec=30
+
+WorkingDirectory=/etc/chainflip
+
+ExecStart=/usr/bin/chainflip-node \
+    --base-path=/etc/chainflip/chaindata \
+    --chain=/etc/chainflip/berghain.chainspec.json \
+    --rpc-cors=all \
+    --rpc-methods=unsafe \
+    --unsafe-rpc-external \
+    --sync=warp
+
+[Install]
+WantedBy=multi-user.target

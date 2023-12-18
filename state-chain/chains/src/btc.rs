@@ -7,7 +7,7 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainCrypto, DepositChannel, FeeRefundCalculator};
+use crate::{Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -33,9 +33,13 @@ use sp_std::{vec, vec::Vec};
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
 pub const CHANGE_ADDRESS_SALT: u32 = 0;
 
-//The bitcoin script generated from the bitcoin address should not exceed this value according to
+// The bitcoin script generated from the bitcoin address should not exceed this value according to
 // our construction
 pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
+
+// The minimum amount for transaction outputs we want to generate to avoid hitting the Bitcoin dust
+// limit
+pub const BITCOIN_DUST_LIMIT: u64 = 600;
 
 pub type BlockNumber = u64;
 
@@ -112,6 +116,24 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
+impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
+	fn estimate_ingress_fee(
+		&self,
+		_asset: <Bitcoin as Chain>::ChainAsset,
+	) -> <Bitcoin as Chain>::ChainAmount {
+		// Include the min fee so we over-estimate the cost.
+		self.btc_fee_info.min_fee_required_per_tx + self.btc_fee_info.fee_per_input_utxo
+	}
+
+	fn estimate_egress_fee(
+		&self,
+		_asset: <Bitcoin as Chain>::ChainAsset,
+	) -> <Bitcoin as Chain>::ChainAmount {
+		// Include the min fee so we over-estimate the cost.
+		self.btc_fee_info.min_fee_required_per_tx + self.btc_fee_info.fee_per_output_utxo
+	}
+}
+
 #[derive(
 	Copy,
 	Clone,
@@ -174,6 +196,8 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
+	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
+
 	type ChainCrypto = BitcoinCrypto;
 
 	type ChainBlockNumber = BlockNumber;

@@ -6,6 +6,7 @@ use crate::{
 use cf_amm::common::{price_at_tick, Order, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
+use cf_traits::AssetConverter;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::Permill;
@@ -971,6 +972,81 @@ fn can_get_all_pool_orders() {
 					}
 				]
 			})
+		);
+	});
+}
+
+#[test]
+fn asset_conversion() {
+	new_test_ext().execute_with(|| {
+		// Create pools
+		for asset in [Asset::Eth, Asset::Flip] {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				Default::default(),
+				price_at_tick(0).unwrap(),
+			));
+			assert_ok!(LiquidityPools::set_range_order(
+				RuntimeOrigin::signed(ALICE),
+				asset,
+				STABLE_ASSET,
+				0,
+				Some(-100..100),
+				RangeOrderSize::Liquidity { liquidity: 100_000_000_000_000_000 },
+			));
+		}
+
+		const AVAILABLE: AssetAmount = 1_000_000;
+		const DESIRED: AssetAmount = 10_000;
+		// No available funds -> no conversion.
+		assert!(LiquidityPools::convert_asset_to_approximate_output(
+			Asset::Flip,
+			0u128,
+			Asset::Eth,
+			DESIRED,
+		)
+		.is_none());
+
+		// Desired output is zero -> trivially ok.
+		assert_eq!(
+			LiquidityPools::convert_asset_to_approximate_output(
+				Asset::Flip,
+				AVAILABLE,
+				Asset::Eth,
+				0u128,
+			),
+			Some((AVAILABLE, 0))
+		);
+
+		// Desired output is available -> assets converted.
+		assert!(matches!(
+			LiquidityPools::convert_asset_to_approximate_output(
+				Asset::Flip,
+				AVAILABLE,
+				Asset::Eth,
+				DESIRED,
+			),
+			Some((remaining, converted)) if converted > 0 && remaining + converted <= AVAILABLE
+		),);
+		cf_test_utilities::assert_event_sequence!(
+			Test,
+			RuntimeEvent::LiquidityPools(Event::NewPoolCreated { .. }),
+			RuntimeEvent::LiquidityPools(Event::RangeOrderUpdated { .. }),
+			RuntimeEvent::LiquidityPools(Event::NewPoolCreated { .. }),
+			RuntimeEvent::LiquidityPools(Event::RangeOrderUpdated { .. }),
+			RuntimeEvent::LiquidityPools(Event::AssetSwapped {
+				from: Asset::Flip,
+				to: STABLE_ASSET,
+				..
+			}),
+			RuntimeEvent::LiquidityPools(Event::NetworkFeeTaken { .. }),
+			RuntimeEvent::LiquidityPools(Event::AssetSwapped {
+				from: STABLE_ASSET,
+				to: Asset::Eth,
+				..
+			}),
 		);
 	});
 }

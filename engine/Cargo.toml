@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = '1.1.0'
+version = '1.1.2'
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -151,6 +151,7 @@ tempfile = "3.7.0"
 utilities = { package = "utilities", path = "../utilities", features = [
   "test-utils",
 ] }
+serde_path_to_error = "*"
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }

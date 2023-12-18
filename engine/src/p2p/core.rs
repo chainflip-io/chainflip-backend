@@ -385,7 +385,7 @@ impl P2PContext {
 					// This is guaranteed by construction of `active_connections`:
 					assert_eq!(peer.info.account_id, account_id);
 
-					self.connect_to_peer(peer.info.clone());
+					self.connect_to_peer(peer.info.clone(), peer.last_activity.get());
 					self.send_message(account_id, payload);
 				},
 			}
@@ -479,7 +479,7 @@ impl P2PContext {
 			match peer.state {
 				ConnectionState::ReconnectionScheduled => {
 					info!("Reconnecting to peer: {account_id}");
-					self.connect_to_peer(peer.info.clone());
+					self.connect_to_peer(peer.info.clone(), peer.last_activity.get());
 				},
 				ConnectionState::Connected(_) => {
 					// It is possible that while we were waiting to reconnect,
@@ -506,7 +506,7 @@ impl P2PContext {
 		}
 	}
 
-	fn connect_to_peer(&mut self, peer: PeerInfo) {
+	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: tokio::time::Instant) {
 		let account_id = peer.account_id.clone();
 
 		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
@@ -520,7 +520,7 @@ impl P2PContext {
 			ConnectionStateInfo {
 				state: ConnectionState::Connected(connected_socket),
 				info: peer,
-				last_activity: Cell::new(tokio::time::Instant::now()),
+				last_activity: Cell::new(previous_activity),
 			},
 		) {
 			if !matches!(connection.state, ConnectionState::Stale) {
@@ -539,12 +539,16 @@ impl P2PContext {
 			return
 		}
 
+		let mut previous_activity = tokio::time::Instant::now();
+
 		if let Some(existing_peer_state) = self.active_connections.remove(&peer.account_id) {
 			debug!(
 				peer_info = peer.to_string(),
 				"Received info for known peer with account id {}, updating info and reconnecting",
 				&peer.account_id
 			);
+
+			previous_activity = existing_peer_state.last_activity.get();
 
 			match existing_peer_state.state {
 				ConnectionState::Connected(socket) => {
@@ -571,7 +575,7 @@ impl P2PContext {
 
 		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
-		self.connect_to_peer(peer);
+		self.connect_to_peer(peer, previous_activity);
 	}
 
 	/// Start listening for incoming p2p messages on a separate thread

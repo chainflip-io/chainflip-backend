@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use bitcoin::Transaction;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
@@ -11,9 +10,12 @@ use state_chain_runtime::BitcoinInstance;
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
 };
-use crate::witness::common::{
-	chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
-	RuntimeHasChain,
+use crate::{
+	btc::rpc::VerboseTransaction,
+	witness::common::{
+		chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses, RuntimeCallHasChain,
+		RuntimeHasChain,
+	},
 };
 use bitcoin::BlockHash;
 use cf_chains::{
@@ -27,13 +29,18 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		process_call: ProcessCall,
 	) -> ChunkedByVaultBuilder<
-		impl ChunkedByVault<Index = u64, Hash = BlockHash, Data = Vec<Transaction>, Chain = Bitcoin>,
+		impl ChunkedByVault<
+			Index = u64,
+			Hash = BlockHash,
+			Data = Vec<VerboseTransaction>,
+			Chain = Bitcoin,
+		>,
 	>
 	where
 		Inner: ChunkedByVault<
 			Index = u64,
 			Hash = BlockHash,
-			Data = (((), Vec<Transaction>), Addresses<Inner>),
+			Data = (((), Vec<VerboseTransaction>), Addresses<Inner>),
 			Chain = Bitcoin,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -75,23 +82,23 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 }
 
 fn deposit_witnesses(
-	txs: &Vec<Transaction>,
+	txs: &Vec<VerboseTransaction>,
 	script_addresses: HashMap<Vec<u8>, ScriptPubkey>,
 ) -> Vec<DepositWitness<Bitcoin>> {
 	let mut deposit_witnesses = Vec::new();
 	for tx in txs {
-		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
+		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
 
 		let deposits_in_tx = (0..)
-			.zip(&tx.output)
-			.filter(|(_vout, tx_out)| tx_out.value > 0)
+			.zip(&tx.vout)
+			.filter(|(_vout, tx_out)| tx_out.value.to_sat() > 0)
 			.filter_map(|(vout, tx_out)| {
 				let tx_script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
 				script_addresses.get(&tx_script_pubkey_bytes).map(
 					|bitcoin_script| DepositWitness::<Bitcoin> {
 						deposit_address: bitcoin_script.clone(),
 						asset: btc::Asset::Btc,
-						amount: tx_out.value,
+						amount: tx_out.value.to_sat(),
 						deposit_details: UtxoId { tx_id: tx_hash, vout },
 					},
 				)
@@ -125,26 +132,40 @@ fn script_addresses(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
+
+	use crate::btc::rpc::VerboseTxOut;
 
 	use super::*;
 	use bitcoin::{
 		absolute::{Height, LockTime},
-		ScriptBuf, Transaction, TxOut,
+		block::Version,
+		Amount, ScriptBuf, Txid,
 	};
 	use cf_chains::{
 		btc::{deposit_address::DepositAddress, ScriptPubkey},
 		DepositChannel,
 	};
 	use pallet_cf_ingress_egress::ChannelAction;
+	use rand::Rng;
 	use sp_runtime::AccountId32;
 
-	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
-		Transaction {
-			version: 2,
-			lock_time: LockTime::Blocks(Height::from_consensus(0).unwrap()),
-			input: vec![],
-			output: tx_outs,
+	pub fn fake_transaction(tx_outs: Vec<VerboseTxOut>, fee: Option<Amount>) -> VerboseTransaction {
+		let random_bytes: [u8; 32] = rand::thread_rng().gen();
+		let txid = Txid::from_byte_array(random_bytes);
+		VerboseTransaction {
+			txid,
+			version: Version::from_consensus(2),
+			locktime: LockTime::Blocks(Height::from_consensus(0).unwrap()),
+			vin: vec![],
+			vout: tx_outs,
+			fee,
+			// not important, we just need to set it to a value.
+			hash: txid,
+			size: Default::default(),
+			vsize: Default::default(),
+			weight: Default::default(),
+			hex: Default::default(),
 		}
 	}
 
@@ -166,9 +187,21 @@ mod tests {
 		}
 	}
 
+	pub fn fake_verbose_vouts(vals_and_scripts: Vec<(u64, Vec<u8>)>) -> Vec<VerboseTxOut> {
+		vals_and_scripts
+			.into_iter()
+			.enumerate()
+			.map(|(n, (value, script_bytes))| VerboseTxOut {
+				value: Amount::from_sat(value),
+				n: n as u64,
+				script_pubkey: ScriptBuf::from(script_bytes),
+			})
+			.collect()
+	}
+
 	#[test]
 	fn deposit_witnesses_no_utxos_no_monitored() {
-		let txs = vec![fake_transaction(vec![]), fake_transaction(vec![])];
+		let txs = vec![fake_transaction(vec![], None), fake_transaction(vec![], None)];
 		let deposit_witnesses = deposit_witnesses(&txs, HashMap::new());
 		assert!(deposit_witnesses.is_empty());
 	}
@@ -178,10 +211,13 @@ mod tests {
 		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
-		let txs = vec![fake_transaction(vec![
-			TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-			TxOut { value: 0, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-		])];
+		let txs = vec![fake_transaction(
+			fake_verbose_vouts(vec![
+				(2324, btc_deposit_script.bytes()),
+				(0, btc_deposit_script.bytes()),
+			]),
+			None,
+		)];
 
 		let deposit_witnesses =
 			deposit_witnesses(&txs, script_addresses(vec![(fake_details(btc_deposit_script))]));
@@ -198,22 +234,16 @@ mod tests {
 		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
 
 		let txs = vec![
-			fake_transaction(vec![
-				TxOut {
-					value: UTXO_TO_DEPOSIT_2,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-				TxOut {
-					value: LARGEST_UTXO_TO_DEPOSIT,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-				TxOut {
-					value: UTXO_TO_DEPOSIT_3,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-			]),
-			fake_transaction(vec![]),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(UTXO_TO_DEPOSIT_2, btc_deposit_script.bytes()),
+					(12223, vec![0, 32, 121, 9]),
+					(LARGEST_UTXO_TO_DEPOSIT, btc_deposit_script.bytes()),
+					(UTXO_TO_DEPOSIT_3, btc_deposit_script.bytes()),
+				]),
+				None,
+			),
+			fake_transaction(vec![], None),
 		];
 
 		let deposit_witnesses =
@@ -232,22 +262,16 @@ mod tests {
 		let btc_deposit_script_2: ScriptPubkey = DepositAddress::new([0; 32], 1232).script_pubkey();
 
 		let txs = vec![
-			fake_transaction(vec![
-				TxOut {
-					value: UTXO_TO_DEPOSIT_2,
-					script_pubkey: ScriptBuf::from(btc_deposit_script_1.bytes()),
-				},
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-				TxOut {
-					value: LARGEST_UTXO_TO_DEPOSIT,
-					script_pubkey: ScriptBuf::from(btc_deposit_script_1.bytes()),
-				},
-				TxOut {
-					value: UTXO_FOR_SECOND_DEPOSIT,
-					script_pubkey: ScriptBuf::from(btc_deposit_script_2.bytes()),
-				},
-			]),
-			fake_transaction(vec![]),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(UTXO_TO_DEPOSIT_2, btc_deposit_script_1.bytes()),
+					(12223, vec![0, 32, 121, 9]),
+					(LARGEST_UTXO_TO_DEPOSIT, btc_deposit_script_1.bytes()),
+					(UTXO_FOR_SECOND_DEPOSIT, btc_deposit_script_2.bytes()),
+				]),
+				None,
+			),
+			fake_transaction(vec![], None),
 		];
 
 		let mut deposit_witnesses = deposit_witnesses(
@@ -275,29 +299,21 @@ mod tests {
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
 		let txs = vec![
-			fake_transaction(vec![
-				TxOut {
-					value: UTXO_WITNESSED_1,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-				TxOut {
-					// smaller value, so we will only take the largest one
-					value: UTXO_WITNESSED_1 - 1,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-			]),
-			fake_transaction(vec![
-				TxOut {
-					// smaller, so we only take the largest (different order to above)
-					value: UTXO_WITNESSED_2 - 10,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-				TxOut {
-					value: UTXO_WITNESSED_2,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-			]),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(UTXO_WITNESSED_1, btc_deposit_script.bytes()),
+					(12223, vec![0, 32, 121, 9]),
+					(UTXO_WITNESSED_1 - 1, btc_deposit_script.bytes()),
+				]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(UTXO_WITNESSED_2 - 10, btc_deposit_script.bytes()),
+					(UTXO_WITNESSED_2, btc_deposit_script.bytes()),
+				]),
+				None,
+			),
 		];
 
 		let deposit_witnesses =
