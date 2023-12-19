@@ -66,12 +66,21 @@ pub async fn process_egress<ProcessCall, ProcessingFut, ExtraInfo, ExtraHistoric
 	}
 }
 
-pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
+pub async fn start<
+	StateChainClient,
+	StateChainStream,
+	ProcessCall,
+	ProcessingFut,
+	PrewitnessCall,
+	PrewitnessFut,
+>(
 	scope: &Scope<'_, anyhow::Error>,
 	btc_client: BtcRetryRpcClient,
 	process_call: ProcessCall,
+	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
+	unfinalised_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -84,6 +93,12 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
+	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
+		+ Send
+		+ Sync
+		+ Clone
+		+ 'static,
+	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let btc_source = BtcSource::new(btc_client.clone()).strictly_monotonic().shared(scope);
 
@@ -108,6 +123,16 @@ where
 			}
 		})
 		.shared(scope);
+
+	// Pre-witnessing stream.
+	block_source
+		.clone()
+		.chunk_by_vault(vaults.clone(), scope)
+		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
+		.await
+		.btc_deposits(prewitness_call)
+		.logging("pre-witnessing")
+		.spawn(scope);
 
 	let btc_safety_margin = match state_chain_client
 		.storage_value::<pallet_cf_ingress_egress::WitnessSafetyMargin<
