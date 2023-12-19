@@ -69,7 +69,6 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 					Some((*CFE_VERSION, true)),
 				)
 				.await?;
-			drop(unfinalised_state_chain_stream);
 
 			// In case we are upgrading, this gives the old CFE more time to release system
 			// resources.
@@ -213,6 +212,7 @@ async fn run_main(settings: Settings) -> anyhow::Result<()> {
 				dot_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
+				unfinalised_state_chain_stream.clone(),
 				db.clone(),
 			)
 			.await?;
