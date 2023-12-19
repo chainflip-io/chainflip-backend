@@ -18,8 +18,8 @@ import { testSwap } from './swapping';
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
-const POLKADOT_ENDPOINT_PORT = 9947;
 const polkadot = await getPolkadotApi();
+const polkadotEndpoint = 'http://127.0.0.1:9947';
 
 // The spec version of the runtime wasm file that is in the repo at bouncer/test_data/polkadot_runtime_xxxx.wasm
 // When the localnet polkadot runtime version is updated, change this value to be +1 and this test will compile the new wasm file for you.
@@ -136,7 +136,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   const projectPath = process.cwd();
   // tmp/ is ignored in the bouncer .gitignore file.
   const workspacePath = path.join(projectPath, 'tmp/polkadot');
-  const nextSpecVersion = (await getCurrentRuntimeVersion(POLKADOT_ENDPOINT_PORT)).specVersion + 1;
+  const nextSpecVersion = (await getCurrentRuntimeVersion(polkadotEndpoint)).specVersion + 1;
   console.log('Current polkadot spec_version: ' + nextSpecVersion);
 
   // No need to compile if the version we need is the pre-compiled version.
@@ -170,7 +170,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   console.log('Updating polkadot source');
   execSync(`git pull`, { cwd: workspacePath });
 
-  await bumpSpecVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, nextSpecVersion);
+  await bumpSpecVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, false, nextSpecVersion);
 
   // Compile polkadot runtime
   console.log('Compiling polkadot...');
@@ -246,7 +246,7 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   await pushPolkadotRuntimeUpdate(wasmPath);
 
   // Check the polkadot spec version has changed
-  const postUpgradeSpecVersion = await getCurrentRuntimeVersion(POLKADOT_ENDPOINT_PORT);
+  const postUpgradeSpecVersion = await getCurrentRuntimeVersion(polkadotEndpoint);
   if (postUpgradeSpecVersion.specVersion !== expectedSpecVersion) {
     throw new Error(
       `Polkadot runtime update failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,

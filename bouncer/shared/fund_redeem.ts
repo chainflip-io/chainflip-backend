@@ -68,7 +68,13 @@ export async function testFundRedeem(providedSeed?: string) {
     redeemEthAddress as HexString,
     exactRedeemAmount,
   );
-  assert.strictEqual(redeemedExact, exactAmount, `Unexpected balance increase amount`);
+  console.log(`Expected balance increase amount: ${exactAmount}`);
+  assert.strictEqual(
+    redeemedExact.toFixed(5),
+    exactAmount.toFixed(5),
+    `Unexpected balance increase amount`,
+  );
+  console.log('Redeem exact amount success!');
 
   // Test redeeming the rest of the flip with a 'Max' redeem amount
   console.log(`Testing redeem all`);

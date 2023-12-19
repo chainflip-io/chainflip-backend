@@ -67,7 +67,6 @@ async function incompatibleUpgradeNoBuild(
     )}" LOCALNET_INIT_DIR=${localnetInitPath} BINARY_ROOT_PATH=${binaryPath} ${localnetInitPath}/scripts/start-all-engines.sh`,
   );
 
-  // let the engines do what they gotta do
   await sleep(7000);
 
   console.log('Engines started');
@@ -77,6 +76,17 @@ async function incompatibleUpgradeNoBuild(
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
   );
+
+  execSync(`kill $(lsof -t -i:10997)`);
+  execSync(`kill $(lsof -t -i:10589)`);
+  await sleep(6000);
+  console.log('Stopped old broker and lp-api. Starting the new ones.');
+
+  const KEYS_DIR = `${localnetInitPath}/keys`;
+  execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
+  execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
+  await sleep(6000);
+  console.log('Started new broker and lp-api.');
 }
 
 async function incompatibleUpgrade(
@@ -176,8 +186,14 @@ export async function upgradeNetworkPrebuilt(
 ) {
   const versionRegex = /\d+\.\d+\.\d+/;
 
-  const cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
+  console.log("Version we're upgrading from: " + oldVersion);
 
+  let cleanOldVersion = oldVersion;
+  if (!versionRegex.test(cleanOldVersion)) {
+    cleanOldVersion = oldVersion.match(versionRegex)[0];
+  }
+
+  const cfeBinaryVersion = execSync(`${binariesPath}/chainflip-engine --version`).toString();
   const cfeVersion = cfeBinaryVersion.match(versionRegex)[0];
   console.log("CFE version we're upgrading to: " + cfeVersion);
 
@@ -191,13 +207,13 @@ export async function upgradeNetworkPrebuilt(
     );
   }
 
-  if (compareSemVer(oldVersion, cfeVersion) === 'greater') {
+  if (compareSemVer(cleanOldVersion, cfeVersion) === 'greater') {
     throw new Error(
       "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
     );
   }
 
-  const isCompatible = isCompatibleWith(oldVersion, cfeVersion);
+  const isCompatible = isCompatibleWith(cleanOldVersion, cfeVersion);
 
   if (!isCompatible) {
     console.log('The versions are incompatible.');

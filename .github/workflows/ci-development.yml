@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      - 'release/*'
+      - "release/*"
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
@@ -13,6 +13,9 @@ jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
+  force-version-bump:
+      uses: ./.github/workflows/_05_force_version_bump.yml
+      secrets: inherit
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit

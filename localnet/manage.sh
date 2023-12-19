@@ -150,11 +150,13 @@ build-localnet() {
 
   wait
 
+  KEYS_DIR=./$LOCALNET_INIT_DIR/keys
+
   echo "🕺 Starting Broker API ..."
-  ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
+  KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARY_ROOT_PATH
 
   echo "🤑 Starting LP API ..."
-  ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
+  KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
 
   print_success
