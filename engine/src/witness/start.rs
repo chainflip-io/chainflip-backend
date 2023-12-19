@@ -78,10 +78,8 @@ where
 		scope,
 		eth_client,
 		witness_call.clone(),
-		prewitness_call.clone(),
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		unfinalised_state_chain_stream.clone(),
 		epoch_source.clone(),
 		db.clone(),
 	);
@@ -102,10 +100,8 @@ where
 		scope,
 		dot_client,
 		witness_call,
-		prewitness_call,
 		state_chain_client,
 		state_chain_stream,
-		unfinalised_state_chain_stream,
 		epoch_source,
 		db,
 	);
