@@ -3,9 +3,6 @@
   "id": "Chainflip-Berghain",
   "chainType": "Live",
   "bootNodes": [
-    "/ip4/3.121.50.217/tcp/30333/p2p/12D3KooWRRSiRNYWE963dtj7orpviteoP5BPzj7RmxB3J4nRCHYe",
-    "/ip4/18.157.172.220/tcp/30333/p2p/12D3KooWM7hGg3rqdE7BoChuAjE9hwV7PtxzJuYDr6RRc6v9gg7r",
-    "/ip4/3.69.84.64/tcp/30333/p2p/12D3KooWKxNjfACMEQBFmCofncVofeV565EQJoSA3cCgEUTvBvQ3",
     "/ip4/18.153.89.157/tcp/30333/p2p/12D3KooWSvb5GDgqggKdXfotiLpVTHsoYhoy9HpSgjKanmxv7JhG"
   ],
   "telemetryEndpoints": null,

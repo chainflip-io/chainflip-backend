@@ -4,7 +4,10 @@ use super::*;
 
 use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::benchmarks_instance_pallet;
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
+use frame_support::{
+	assert_ok,
+	traits::{EnsureOrigin, UnfilteredDispatchable},
+};
 
 benchmarks_instance_pallet! {
 	update_chain_state {

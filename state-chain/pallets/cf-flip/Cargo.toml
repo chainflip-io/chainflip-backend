@@ -26,18 +26,18 @@ scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
-pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
 
 [dev-dependencies]
 quickcheck = '1'
 quickcheck_macros = '1'
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2" }
 cf-test-utilities = { path = '../../test-utilities' }
 
 [features]

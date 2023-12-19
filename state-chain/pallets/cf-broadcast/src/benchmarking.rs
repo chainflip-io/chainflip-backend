@@ -5,10 +5,7 @@ use super::*;
 
 use cf_traits::ThresholdSigner;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, OnInitialize},
-};
+use frame_support::traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 use cf_primitives::AccountRole;

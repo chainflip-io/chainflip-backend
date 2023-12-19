@@ -1,8 +1,9 @@
 #![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::Decode;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, codec::Decode, sp_runtime::traits::Convert};
+use frame_support::{assert_ok, sp_runtime::traits::Convert};
 use frame_system::RawOrigin;
 use pallet_session::*;
 use rand::{RngCore, SeedableRng};

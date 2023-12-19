@@ -9,7 +9,7 @@ use cf_primitives::GENESIS_EPOCH;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_support::traits::{OnNewAccount, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 // Note: Currently we only have one chain (ETH) - as soon we've

@@ -9,7 +9,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, SwappingApi,
 };
-use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
+use frame_support::{pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{

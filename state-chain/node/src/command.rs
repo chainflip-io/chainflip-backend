@@ -191,6 +191,8 @@ pub fn run() -> sc_cli::Result<()> {
 				let info_provider = timestamp_with_aura_info(6000);
 
 				Ok((
+					// TODO: remove this command in favour try-runtime-cli
+					#[allow(deprecated)]
 					cmd.run::<Block, ExtendedHostFunctions<
 						sp_io::SubstrateHostFunctions,
 						<ExecutorDispatch as NativeExecutionDispatch>::ExtendHostFunctions,

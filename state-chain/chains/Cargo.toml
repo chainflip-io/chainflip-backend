@@ -44,12 +44,13 @@ codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = 
 scale-info = { version = '2.5.0', default-features = false, features = [
   'derive',
 ] }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2", default-features = false }
 
 [dev-dependencies]
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.1+2" }
 cf-test-utilities = { path = '../test-utilities' }
 rand = { version = '0.8.4' }
 
@@ -74,6 +75,7 @@ std = [
   'sp-std/std',
   'sp-core/std',
   'sp-core/full_crypto',
+  'sp-io/std',
   'dep:ss58-registry',
   'dep:anyhow',
 ]

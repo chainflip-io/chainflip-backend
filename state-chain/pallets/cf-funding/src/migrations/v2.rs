@@ -5,7 +5,7 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::DispatchError;
+use frame_support::pallet_prelude::DispatchError;
 
 /// Runtime Migration for migrating from V1 to V2: updating PendingRedemption to store a more
 /// readable value instead of null

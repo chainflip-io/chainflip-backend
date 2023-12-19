@@ -22,15 +22,16 @@ use cf_primitives::{
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	sp_io::hashing::sha2_256,
+	pallet_prelude::RuntimeDebug,
 	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
-	BoundedVec, RuntimeDebug,
+	BoundedVec,
 };
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_io::hashing::sha2_256;
 use sp_std::{vec, vec::Vec};
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.

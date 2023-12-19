@@ -5,7 +5,7 @@ use super::*;
 
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
+use frame_support::traits::{OnNewAccount, UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 const MAX_VALIDATOR_COUNT: u32 = 150;

@@ -8,7 +8,6 @@ use cf_traits::{
 	RewardsDistribution,
 };
 use codec::MaxEncodedLen;
-use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 

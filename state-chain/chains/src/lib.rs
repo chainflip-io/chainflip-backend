@@ -8,13 +8,12 @@ use address::{AddressDerivationApi, AddressDerivationError, ToHumanreadableAddre
 use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
-	StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
