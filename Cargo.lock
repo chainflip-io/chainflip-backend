@@ -1458,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1469,7 +1469,7 @@ dependencies = [
  "jsonrpsee 0.20.3",
  "serde",
  "sp-rpc",
- "substrate-build-script-utils",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1491,14 +1491,14 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "substrate-build-script-utils",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "tokio",
  "utilities",
 ]
 
 [[package]]
 name = "chainflip-engine"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "anyhow",
  "async-broadcast 0.5.1",
@@ -1571,7 +1571,7 @@ dependencies = [
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-version",
  "state-chain-runtime",
- "substrate-build-script-utils",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "substrate-frame-rpc-system",
  "subxt",
  "tempfile",
@@ -1609,7 +1609,7 @@ dependencies = [
  "serde",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "state-chain-runtime",
- "substrate-build-script-utils",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
  "tempfile",
  "tokio",
  "tracing",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -1635,7 +1635,7 @@ dependencies = [
  "serde_json",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-rpc",
- "substrate-build-script-utils",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
@@ -1644,7 +1644,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -1689,7 +1689,7 @@ dependencies = [
  "sp-runtime 24.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "sp-timestamp",
  "state-chain-runtime",
- "substrate-build-script-utils",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "substrate-frame-rpc-system",
  "try-runtime-cli",
  "utilities",
@@ -12051,7 +12051,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "cf-amm",
  "cf-chains",
@@ -12249,6 +12249,11 @@ dependencies = [
  "sha2 0.9.9",
  "zeroize",
 ]
+
+[[package]]
+name = "substrate-build-script-utils"
+version = "3.0.0"
+source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3#0b2e50d183786a284e5900aedefa87cdaad54678"
 
 [[package]]
 name = "substrate-build-script-utils"
