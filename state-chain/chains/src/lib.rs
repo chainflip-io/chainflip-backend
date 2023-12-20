@@ -344,6 +344,16 @@ pub enum AllBatchError {
 	Other,
 }
 
+#[derive(Debug)]
+pub enum ConsolidationError {
+	NotRequired,
+	Other,
+}
+
+pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
+}
+
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
@@ -500,6 +510,6 @@ impl RetryPolicy for DefaultRetryPolicy {
 
 	fn attempt_slowdown_threshold() -> Self::AttemptCount {
 		// This would never change the retry frequency.
-		50u32
+		0u32
 	}
 }

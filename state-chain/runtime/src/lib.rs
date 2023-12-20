@@ -842,7 +842,7 @@ pub type Executive = frame_executive::Executive<
 // for tuple migrations (like these).
 type PalletMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
-	pallet_cf_environment::migrations::PalletMigration,
+	pallet_cf_environment::migrations::PalletMigration<Runtime>,
 	pallet_cf_funding::migrations::PalletMigration<Runtime>,
 	// pallet_cf_validator::migrations::PalletMigration<Runtime>,
 	pallet_cf_governance::migrations::PalletMigration<Runtime>,

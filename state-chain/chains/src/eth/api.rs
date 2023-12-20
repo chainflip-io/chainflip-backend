@@ -195,6 +195,15 @@ where
 	}
 }
 
+impl<E> ConsolidateCall<Ethereum> for EthereumApi<E>
+where
+	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
+{
+	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
+		Err(ConsolidationError::NotRequired)
+	}
+}
+
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
 	E: EthEnvironmentProvider + ReplayProtectionProvider<Ethereum>,
