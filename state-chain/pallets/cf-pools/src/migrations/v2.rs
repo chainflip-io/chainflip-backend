@@ -1,4 +1,5 @@
 use crate::*;
+use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
 /// Resets the CollectedFees.
