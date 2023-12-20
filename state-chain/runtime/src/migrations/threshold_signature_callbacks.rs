@@ -1,7 +1,4 @@
-use crate::{
-	BitcoinBroadcaster, BitcoinInstance, Box, EthereumBroadcaster, EthereumInstance,
-	PolkadotBroadcaster, PolkadotInstance, Runtime, RuntimeCall,
-};
+use crate::{BitcoinInstance, Box, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
 use codec::{Decode, Encode};
 use pallet_cf_broadcast::Call;
 use scale_info::TypeInfo;
@@ -235,7 +232,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::EthereumBroadcaster(call) => call, v, DispatchError::Other(".."));
 				let broadcast_id = ensure_variant!(Call::on_signature_ready{broadcast_id, ..} => broadcast_id, call, DispatchError::Other(".."));
-				assert_eq!(EthereumBroadcaster::attempt_count(broadcast_id), 0);
+				assert_eq!(crate::EthereumBroadcaster::attempt_count(broadcast_id), 0);
 				Ok((k, broadcast_id))
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
@@ -244,7 +241,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::PolkadotBroadcaster(call) => call, v, DispatchError::Other(".."));
 				let broadcast_id = ensure_variant!(Call::on_signature_ready{broadcast_id, ..} => broadcast_id, call, DispatchError::Other(".."));
-				assert_eq!(PolkadotBroadcaster::attempt_count(broadcast_id), 0);
+				assert_eq!(crate::PolkadotBroadcaster::attempt_count(broadcast_id), 0);
 				Ok((k, broadcast_id))
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;
@@ -253,7 +250,7 @@ impl OnRuntimeUpgrade for ThresholdSignatureCallbacks {
 			.map(|(k, v)| {
 				let call = ensure_variant!(RuntimeCall::BitcoinBroadcaster(call) => call, v, DispatchError::Other(".."));
 				let broadcast_id = ensure_variant!(Call::on_signature_ready{broadcast_id, ..} => broadcast_id, call, DispatchError::Other(".."));
-				assert_eq!(BitcoinBroadcaster::attempt_count(broadcast_id), 0);
+				assert_eq!(crate::BitcoinBroadcaster::attempt_count(broadcast_id), 0);
 				Ok((k, broadcast_id))
 			})
 			.collect::<Result<Vec<(u32, u32)>, DispatchError>>()?;

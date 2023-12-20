@@ -2,21 +2,19 @@
 
 use crate::{
 	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastAttempt, BroadcastId,
-	BroadcastRetryQueue, Config, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestFailureCallbacks, RequestSuccessCallbacks, ThresholdSignatureData,
-	Timeouts, TransactionFeeDeficit, TransactionMetadata, TransactionOutIdToBroadcastId,
-	TransactionSigningAttempt, WeightInfo,
+	BroadcastRetryQueue, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
+	FailedBroadcasters, Instance1, PalletOffence, PendingBroadcasts, RequestFailureCallbacks,
+	RequestSuccessCallbacks, ThresholdSignatureData, Timeouts, TransactionFeeDeficit,
+	TransactionMetadata, TransactionOutIdToBroadcastId, TransactionSigningAttempt, WeightInfo,
 };
 use cf_chains::{
-	// btc::BitcoinRetryPolicy,
 	evm::SchnorrVerificationComponents,
 	mocks::{
 		ChainChoice, MockAggKey, MockApiCall, MockBroadcastBarriers, MockEthereum,
 		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
 		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto,
-	FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
@@ -118,6 +116,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(TransactionMetadata::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id))
 }
 
 fn start_mock_broadcast_tx_out_id(
@@ -1026,39 +1025,150 @@ fn aborted_broadcasts_can_still_succeed() {
 		});
 }
 
-// #[test]
-// fn bitcoin_retry_policy() {
-// 	new_test_ext().execute_with(|| {
-// 		let broadcast_attempt_id = start_mock_broadcast();
-// 		let auth_count = MockEpochInfo::current_authority_count();
+#[test]
+fn broadcast_retry_delay_works() {
+	let mut target = 0;
+	let mut broadcast_id = 0;
+	let mut tx_out_id = Default::default();
+	new_test_ext()
+		.execute_with(|| {
+			(broadcast_id, tx_out_id) = start_mock_broadcast();
 
-// 		MockRetryPolicy::set_slowdown(SlowDown::Bitcoin);
+			BroadcastDelay::set(None);
+			// With no delay, retries are added to the normal queue, and is retried in the next
+			// block.
+			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id);
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_id,
+					retry_block: System::block_number() + 1,
+				},
+			));
+		})
+		.then_execute_at_next_block(|_| {})
+		.then_execute_with(|_| {
+			BroadcastDelay::set(Some(10));
+			// Set delay - retries will be added to the Delayed queue.
+			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(1u64), broadcast_id));
+			target = System::block_number() + 10;
 
-// 		let expected_retry_blocks: Vec<u32> = (25..32)
-// 			.map(|attempt| {
-// 				BitcoinRetryPolicy::next_attempt_delay(attempt) +
-// 					BitcoinRetryPolicy::attempt_slowdown_threshold()
-// 			})
-// 			.collect();
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
+				broadcast_id
+			);
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_id,
+					retry_block: target,
+				},
+			));
+		})
+		.then_execute_at_block(target, |_| {})
+		.then_execute_with(|_| {
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
+			assert_eq!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_len(target), None);
 
-// 		let mut recorded_retry_blocks: Vec<u32> = vec![];
-// 		let mut last_attempt = 0;
+			assert_transaction_broadcast_request_event(broadcast_id, tx_out_id);
+		});
+}
 
-// 		for i in 0..auth_count {
-// 			let block_number = i + 1;
-// 			System::set_block_number(block_number.into());
-// 			Broadcaster::on_initialize(block_number.into());
-// 			Broadcaster::on_idle(block_number.into(), LARGE_EXCESS_WEIGHT);
-// 			let current_attempt =
-// 				BroadcastAttemptCount::<Test, _>::get(broadcast_attempt_id.broadcast_id);
-// 			if current_attempt >= MockRetryPolicy::attempt_slowdown_threshold() &&
-// 				last_attempt < current_attempt
-// 			{
-// 				last_attempt = current_attempt;
-// 				recorded_retry_blocks.push(block_number);
-// 			}
-// 			MockCfe::respond(Scenario::SigningFailure);
-// 		}
-// 		assert_eq!(recorded_retry_blocks, expected_retry_blocks);
-// 	});
-// }
+#[test]
+fn broadcast_timeout_delay_works() {
+	let mut target = 0;
+	let mut broadcast_id = 0;
+	new_test_ext()
+		.execute_with(|| {
+			(broadcast_id, _) = start_mock_broadcast();
+
+			BroadcastDelay::set(Some(10));
+			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+		})
+		.then_execute_at_block(target, |_| {})
+		.then_execute_with(|_| {
+			target = System::block_number() + 10;
+
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
+				broadcast_id
+			);
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_id,
+					retry_block: target,
+				},
+			));
+		});
+}
+
+#[test]
+fn aborted_broadcasts_will_not_retry() {
+	let mut target = 0;
+	let mut broadcast_id = 0;
+	new_test_ext()
+		.execute_with(|| {
+			(broadcast_id, _) = start_mock_broadcast();
+			BroadcastDelay::set(Some(100));
+			target = System::block_number() + 100;
+			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
+				broadcast_id
+			);
+
+			// Abort the broadcast
+			let nominee = ready_to_abort_broadcast(broadcast_id);
+			assert_ok!(Broadcaster::transaction_failed(
+				RuntimeOrigin::signed(nominee),
+				broadcast_id
+			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
+			));
+		})
+		.then_execute_at_block(target, |_| {})
+		.then_execute_with(|_| {
+			// assert no retry happened
+			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
+			assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id))
+		});
+}
+
+#[test]
+fn succeeded_broadcasts_will_not_retry() {
+	let mut target = 0;
+	new_test_ext()
+		.execute_with(|| {
+			let (broadcast_id, transaction_out_id) = start_mock_broadcast();
+			BroadcastDelay::set(Some(100));
+			target = System::block_number() + 100;
+			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
+				broadcast_id
+			);
+
+			// Report broadcast as Succeeded
+			assert_ok!(Broadcaster::transaction_succeeded(
+				RuntimeOrigin::root(),
+				transaction_out_id,
+				Default::default(),
+				ETH_TX_FEE,
+				MOCK_TX_METADATA,
+			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastSuccess {
+					broadcast_id,
+					transaction_out_id,
+				},
+			));
+			broadcast_id
+		})
+		.then_execute_at_block(target, |broadcast_id| broadcast_id)
+		.then_execute_with(|broadcast_id| {
+			// assert no retry happened
+			assert_broadcast_storage_cleaned_up(broadcast_id);
+		});
+}

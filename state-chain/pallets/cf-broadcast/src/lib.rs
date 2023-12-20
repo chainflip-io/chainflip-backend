@@ -415,10 +415,7 @@ pub mod pallet {
 				let retries_len = retries.len();
 
 				for retry in retries {
-					// Check if the broadcast is pending
-					if PendingBroadcasts::<T, I>::get().contains(&retry.broadcast_id) {
-						Self::start_next_broadcast_attempt(retry);
-					}
+					Self::start_next_broadcast_attempt(retry);
 				}
 				next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
 			} else {
@@ -731,6 +728,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_id;
+
+		// If the broadcast is not pending, we should not retry.
+		if !PendingBroadcasts::<T, I>::get().contains(&broadcast_id) {
+			log::warn!(
+				"Broadcast already succeeded or aborted, retry is ignored. broadcast_id: {}",
+				broadcast_id
+			);
+			return
+		}
 
 		if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			if T::TransactionBuilder::requires_signature_refresh(

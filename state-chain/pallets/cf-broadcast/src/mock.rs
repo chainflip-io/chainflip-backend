@@ -111,21 +111,10 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
-pub enum SlowDown {
-	// Default retry policy.
-	Default,
-	// Uses the bitcoin implementation for retry policies.
-	Bitcoin,
-}
-
-thread_local! {
-	pub static SLOWDOWN: std::cell::RefCell<SlowDown> = RefCell::new(SlowDown::Default);
-}
-
 pub struct MockRetryPolicy;
 
 parameter_types! {
-	pub const BroadcastDelay: Option<BlockNumberFor<Test>> = None;
+	pub static BroadcastDelay: Option<BlockNumberFor<Test>> = None;
 }
 
 impl RetryPolicy for MockRetryPolicy {
@@ -138,12 +127,6 @@ impl RetryPolicy for MockRetryPolicy {
 
 	fn attempt_slowdown_threshold() -> Self::AttemptCount {
 		unimplemented!()
-	}
-}
-
-impl MockRetryPolicy {
-	pub fn set_slowdown(mode: SlowDown) {
-		SLOWDOWN.with(|cell| *cell.borrow_mut() = mode);
 	}
 }
 

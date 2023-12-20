@@ -1042,7 +1042,9 @@ impl RetryPolicy for BitcoinRetryPolicy {
 	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
 		retry_attempts
 			.checked_sub(Self::attempt_slowdown_threshold())
-			.map(|above_threshold| sp_std::cmp::min(2u32.pow(above_threshold), MAX_BROADCAST_DELAY))
+			.map(|above_threshold| {
+				sp_std::cmp::min(2u32.saturating_pow(above_threshold), MAX_BROADCAST_DELAY)
+			})
 	}
 
 	fn attempt_slowdown_threshold() -> Self::AttemptCount {
