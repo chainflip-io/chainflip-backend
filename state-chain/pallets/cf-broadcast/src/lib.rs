@@ -11,10 +11,12 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 
-use cf_chains::{
-	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, TransactionBuilder, TransactionMetadata as _,
-};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+
+use cf_chains::{
+	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
+	TransactionMetadata as _,
+};
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, Chainflip, EpochInfo,
 	GetBlockHeight, SafeMode, ThresholdSigner,
@@ -23,11 +25,11 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::DispatchResult,
-	sp_runtime::traits::Saturating,
+	sp_runtime::traits::{One, Saturating},
 	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	RuntimeDebug, Twox64Concat,
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*, vec::Vec};
@@ -189,6 +191,12 @@ pub mod pallet {
 		/// The save mode block margin
 		type SafeModeBlockMargin: Get<BlockNumberFor<Self>>;
 
+		/// The policy on which decide when we slow down the retry of a broadcast.
+		type RetryPolicy: RetryPolicy<
+			BlockNumber = BlockNumberFor<Self>,
+			AttemptCount = AttemptCount,
+		>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -241,12 +249,17 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The list of failed broadcasts pending retry.
+	/// The list of failed broadcasts that will be retried in the next block.
 	#[pallet::storage]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
 
-	/// A mapping from block number to a list of signing or broadcasts that expire at that
+	/// The list of failed broadcasts that will be retried in some future block.
+	#[pallet::storage]
+	pub type DelayedBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
+
+	/// A mapping from block number to a list of signing or broadcast attempts that expire at that
 	/// block number.
 	#[pallet::storage]
 	pub type Timeouts<T: Config<I>, I: 'static = ()> =
@@ -300,7 +313,7 @@ pub mod pallet {
 			transaction_out_id: TransactionOutIdFor<T, I>,
 		},
 		/// A failed broadcast has been scheduled for retry.
-		BroadcastRetryScheduled { broadcast_id: BroadcastId },
+		BroadcastRetryScheduled { broadcast_id: BroadcastId, retry_block: BlockNumberFor<T> },
 		/// A broadcast has timed out.
 		BroadcastTimeout { broadcast_id: BroadcastId },
 		/// A broadcast has been aborted after all authorities have attempted to broadcast the
@@ -351,6 +364,7 @@ pub mod pallet {
 			let expiries = Timeouts::<T, I>::take(block_number);
 			let num_expiries = expiries.len() as u32;
 			let pending_broadcasts = PendingBroadcasts::<T, I>::get();
+			let delayed_retries = DelayedBroadcastRetryQueue::<T, I>::take(block_number);
 			if T::SafeMode::get().retry_enabled {
 				for broadcast_id in expiries.into_iter() {
 					if pending_broadcasts.contains(&broadcast_id) {
@@ -360,10 +374,17 @@ pub mod pallet {
 						}
 					}
 				}
+				for attempt in delayed_retries {
+					Self::start_next_broadcast_attempt(attempt);
+				}
 			} else {
 				Timeouts::<T, I>::insert(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
 					expiries.clone(),
+				);
+				DelayedBroadcastRetryQueue::<T, I>::insert(
+					block_number.saturating_add(T::SafeModeBlockMargin::get()),
+					delayed_retries,
 				);
 			}
 			T::WeightInfo::on_initialize(num_expiries)
@@ -811,10 +832,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>) {
-		BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
-		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
-			broadcast_id: broadcast_attempt.broadcast_id,
-		});
+		let broadcast_id = broadcast_attempt.broadcast_id;
+		let attempt_count = Self::attempt_count(broadcast_id);
+		let current_block = frame_system::Pallet::<T>::block_number();
+		let retry_block = match T::RetryPolicy::next_attempt_delay(attempt_count) {
+			Some(delay) => {
+				let retry = current_block.saturating_add(delay);
+				DelayedBroadcastRetryQueue::<T, I>::append(retry, broadcast_attempt);
+				retry
+			},
+			None => {
+				BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
+				current_block.saturating_add(One::one())
+			},
+		};
+
+		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled { broadcast_id, retry_block });
 	}
 
 	// Advance the broadcast ID in storage by 1 and return the result.

@@ -7,7 +7,7 @@ use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
 	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
-	Chain, ChainCrypto,
+	Chain, ChainCrypto, RetryPolicy,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -111,6 +111,42 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+pub enum SlowDown {
+	// Default retry policy.
+	Default,
+	// Uses the bitcoin implementation for retry policies.
+	Bitcoin,
+}
+
+thread_local! {
+	pub static SLOWDOWN: std::cell::RefCell<SlowDown> = RefCell::new(SlowDown::Default);
+}
+
+pub struct MockRetryPolicy;
+
+parameter_types! {
+	pub const BroadcastDelay: Option<BlockNumberFor<Test>> = None;
+}
+
+impl RetryPolicy for MockRetryPolicy {
+	type BlockNumber = u64;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		BroadcastDelay::get()
+	}
+
+	fn attempt_slowdown_threshold() -> Self::AttemptCount {
+		unimplemented!()
+	}
+}
+
+impl MockRetryPolicy {
+	pub fn set_slowdown(mode: SlowDown) {
+		SLOWDOWN.with(|cell| *cell.borrow_mut() = mode);
+	}
+}
+
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -132,6 +168,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type RetryPolicy = MockRetryPolicy;
 }
 
 impl_mock_chainflip!(Test);
@@ -139,7 +176,7 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
-		MockEpochInfo::next_epoch((0..4).collect());
+		MockEpochInfo::next_epoch((0..151).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		for id in &MockEpochInfo::current_authorities() {
 			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id).unwrap();

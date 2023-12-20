@@ -8,13 +8,15 @@ use crate::{
 	TransactionSigningAttempt, WeightInfo,
 };
 use cf_chains::{
+	// btc::BitcoinRetryPolicy,
 	evm::SchnorrVerificationComponents,
 	mocks::{
 		ChainChoice, MockAggKey, MockApiCall, MockBroadcastBarriers, MockEthereum,
 		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
 		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, FeeRefundCalculator,
+	ChainCrypto,
+	FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
@@ -732,6 +734,7 @@ fn broadcast_barrier_for_polkadot() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id: broadcast_id_3,
+					retry_block: System::block_number() + 1,
 				},
 			));
 
@@ -823,6 +826,7 @@ fn broadcast_barrier_for_ethereum() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id: broadcast_id_3,
+					retry_block: System::block_number() + 1,
 				},
 			));
 
@@ -831,6 +835,7 @@ fn broadcast_barrier_for_ethereum() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id: broadcast_id_4,
+					retry_block: System::block_number() + 1,
 				},
 			));
 
@@ -1020,3 +1025,40 @@ fn aborted_broadcasts_can_still_succeed() {
 			assert_broadcast_storage_cleaned_up(broadcast_id);
 		});
 }
+
+// #[test]
+// fn bitcoin_retry_policy() {
+// 	new_test_ext().execute_with(|| {
+// 		let broadcast_attempt_id = start_mock_broadcast();
+// 		let auth_count = MockEpochInfo::current_authority_count();
+
+// 		MockRetryPolicy::set_slowdown(SlowDown::Bitcoin);
+
+// 		let expected_retry_blocks: Vec<u32> = (25..32)
+// 			.map(|attempt| {
+// 				BitcoinRetryPolicy::next_attempt_delay(attempt) +
+// 					BitcoinRetryPolicy::attempt_slowdown_threshold()
+// 			})
+// 			.collect();
+
+// 		let mut recorded_retry_blocks: Vec<u32> = vec![];
+// 		let mut last_attempt = 0;
+
+// 		for i in 0..auth_count {
+// 			let block_number = i + 1;
+// 			System::set_block_number(block_number.into());
+// 			Broadcaster::on_initialize(block_number.into());
+// 			Broadcaster::on_idle(block_number.into(), LARGE_EXCESS_WEIGHT);
+// 			let current_attempt =
+// 				BroadcastAttemptCount::<Test, _>::get(broadcast_attempt_id.broadcast_id);
+// 			if current_attempt >= MockRetryPolicy::attempt_slowdown_threshold() &&
+// 				last_attempt < current_attempt
+// 			{
+// 				last_attempt = current_attempt;
+// 				recorded_retry_blocks.push(block_number);
+// 			}
+// 			MockCfe::respond(Scenario::SigningFailure);
+// 		}
+// 		assert_eq!(recorded_retry_blocks, expected_retry_blocks);
+// 	});
+// }
