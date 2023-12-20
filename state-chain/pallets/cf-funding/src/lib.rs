@@ -774,7 +774,6 @@ impl<T: Config> Pallet<T> {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
 		}
-
 		T::Flip::credit_funds(account_id, amount)
 	}
 

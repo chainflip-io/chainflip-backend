@@ -2,10 +2,10 @@
 
 use crate::{
 	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastAttempt, BroadcastId,
-	BroadcastRetryQueue, Config, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestFailureCallbacks, RequestSuccessCallbacks, ThresholdSignatureData,
-	Timeouts, TransactionFeeDeficit, TransactionMetadata, TransactionOutIdToBroadcastId,
-	TransactionSigningAttempt, WeightInfo,
+	BroadcastRetryQueue, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
+	FailedBroadcasters, Instance1, PalletOffence, RequestFailureCallbacks, RequestSuccessCallbacks,
+	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionMetadata,
+	TransactionOutIdToBroadcastId, TransactionSigningAttempt, WeightInfo,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -732,6 +732,7 @@ fn broadcast_barrier_for_polkadot() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id: broadcast_id_3,
+					retry_block: System::block_number() + 1u64,
 				},
 			));
 
@@ -823,6 +824,7 @@ fn broadcast_barrier_for_ethereum() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id: broadcast_id_3,
+					retry_block: System::block_number() + 1u64,
 				},
 			));
 
@@ -831,6 +833,7 @@ fn broadcast_barrier_for_ethereum() {
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id: broadcast_id_4,
+					retry_block: System::block_number() + 1u64,
 				},
 			));
 
@@ -1018,5 +1021,71 @@ fn aborted_broadcasts_can_still_succeed() {
 				},
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
+		});
+}
+
+#[test]
+fn broadcast_retry_can_be_delayed() {
+	let delay: u64 = 10u64;
+	let mut target = 0;
+	new_test_ext()
+		.then_execute_at_next_block(|_| {
+			let (broadcast_id, _) = start_mock_broadcast();
+			let current_block = System::block_number();
+			MockNextDelay::set(None);
+
+			assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(0).into(), broadcast_id,));
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_id,
+					retry_block: current_block + 1,
+				},
+			));
+
+			// Delay is set to None, so retry is queued normally.
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id);
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			let current_block = System::block_number();
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
+
+			MockNextDelay::set(Some(delay));
+			assert_ok!(Broadcaster::transaction_failed(RawOrigin::Signed(1).into(), broadcast_id,));
+
+			// Retry is queued 10 blocks from now.
+			target = current_block + delay;
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_id,
+					retry_block: target,
+				},
+			));
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
+				broadcast_id
+			);
+			broadcast_id
+		})
+		.then_execute_at_block(target, |broadcast_id| {
+			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+			broadcast_id
+		})
+		.then_execute_at_block(target, |broadcast_id| broadcast_id)
+		.then_execute_with(|broadcast_id| {
+			// Broadcast is expired - retry should be delayed.
+			target = System::block_number() + delay;
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
+					broadcast_id,
+					retry_block: target,
+				},
+			));
+			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
+				broadcast_id
+			);
 		});
 }

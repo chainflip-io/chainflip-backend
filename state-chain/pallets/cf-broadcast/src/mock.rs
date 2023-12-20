@@ -2,12 +2,12 @@
 
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMode};
+use crate::{self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence, PalletSafeMode};
 use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
 	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
-	Chain, ChainCrypto,
+	Chain, ChainCrypto, RetryPolicy,
 };
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -111,6 +111,23 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
+parameter_types! {
+	pub static MockNextDelay: Option<u64> = None;
+}
+pub struct MockRetryPolicy;
+impl RetryPolicy for MockRetryPolicy {
+	type BlockNumber = u64;
+	type AttemptCount = AttemptCount;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		MockNextDelay::get()
+	}
+
+	fn attempt_slowdown_threshold() -> Self::AttemptCount {
+		unimplemented!()
+	}
+}
+
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -132,6 +149,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type RetryPolicy = MockRetryPolicy;
 }
 
 impl_mock_chainflip!(Test);

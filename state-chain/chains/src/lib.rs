@@ -478,3 +478,30 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 		Default::default()
 	}
 }
+
+/// Defines an interface for a retry policy.
+pub trait RetryPolicy {
+	type BlockNumber;
+	type AttemptCount;
+	/// if the attempt count is above `Self::attempt_slowdown_threshold()`,
+	/// then returns `Some(delay)` for the given attempt count in BlockNumber.
+	/// `None` otherwise.
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber>;
+	/// Threshold for the number of attempts before we slow down the retry frequency.
+	fn attempt_slowdown_threshold() -> Self::AttemptCount;
+}
+
+pub struct DefaultRetryPolicy;
+
+impl RetryPolicy for DefaultRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		None
+	}
+
+	fn attempt_slowdown_threshold() -> Self::AttemptCount {
+		Default::default()
+	}
+}

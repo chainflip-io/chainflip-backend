@@ -50,7 +50,7 @@ where
 			}
 		}
 		// Looks up all available Utxos and selects and takes them for the transaction depending on
-		// the amount that needs to be output. If the output amount is 0,
+		// the amount that needs to be output. If the output amount is 0, return an error.
 		let (selected_input_utxos, change_amount) = E::lookup(UtxoSelectionType::Some {
 			output_amount: (total_output_amount > 0)
 				.then_some(total_output_amount)

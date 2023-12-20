@@ -1,6 +1,8 @@
 use crate::{
 	genesis::GENESIS_BALANCE,
-	network::{create_testnet_with_new_funder, NEW_FUNDING_AMOUNT},
+	network::{
+		create_testnet_with_new_funder, fund_authorities_and_join_auction, NEW_FUNDING_AMOUNT,
+	},
 };
 
 use super::{genesis, network, *};
@@ -150,8 +152,7 @@ fn backup_reward_is_calculated_linearly() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			let (mut network, _, _) = fund_authorities_and_join_auction(NUM_BACKUPS);
 			network.move_to_the_next_epoch();
 
 			// 3 backup will split the backup reward.
@@ -195,8 +196,7 @@ fn can_calculate_account_apy() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			let (mut network, _, _) = fund_authorities_and_join_auction(NUM_BACKUPS);
 			network.move_to_the_next_epoch();
 
 			let mut backup_earning_rewards = Validator::highest_funded_qualified_backup_node_bids();
@@ -248,8 +248,7 @@ fn apy_can_be_above_100_percent() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			let (mut network, _, _) =
-				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			let (mut network, _, _) = fund_authorities_and_join_auction(NUM_BACKUPS);
 			network.move_to_the_next_epoch();
 
 			let validator = Validator::current_authorities().into_iter().next().unwrap();
