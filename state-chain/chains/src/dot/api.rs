@@ -45,6 +45,15 @@ impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>>
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct VaultAccount;
 
+impl<E> ConsolidateCall<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	fn consolidate_utxos() -> Result<Self, ConsolidationError> {
+		Err(ConsolidationError::NotRequired)
+	}
+}
+
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,

@@ -7,10 +7,10 @@ jobs:
     runs-on: [digitalocean]
     steps:
       - name: Checkout backend
-        uses: actions/checkout@v2
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Configure NodeJS
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
           node-version: 18
           cache: "pnpm"
@@ -18,7 +18,7 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
       - name: Download latest release binaries
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
               workflow: release-perseverance.yml
               name: chainflip-backend-bin-ubuntu-22.04
@@ -45,4 +45,3 @@ jobs:
             set -x
             echo ${{ env.RELEASE_VERSION }}
             ./commands/read_workspace_tomls.ts ${{ github.workspace }} "${{ env.RELEASE_VERSION }}"
-

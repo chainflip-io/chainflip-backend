@@ -1,4 +1,7 @@
+mod consolidation_parameters;
+
 use crate::*;
+use cf_runtime_upgrade_utilities::VersionedMigration;
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{dispatch::DispatchError, sp_runtime};
@@ -27,4 +30,5 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration = ();
+pub type PalletMigration<T> =
+	(VersionedMigration<crate::Pallet<T>, consolidation_parameters::Migration<T>, 6, 7>,);

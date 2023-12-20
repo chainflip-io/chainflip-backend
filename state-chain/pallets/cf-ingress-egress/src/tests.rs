@@ -1375,3 +1375,17 @@ fn on_finalize_handles_failed_calls() {
 		assert_eq!(FailedForeignChainCalls::<Test>::get(epoch + 2), vec![]);
 	});
 }
+
+#[test]
+fn consolidation_tx_gets_broadcasted_on_finalize() {
+	new_test_ext().execute_with(|| {
+		// "Enable" consolidation for this test only to reduce noise in other tests
+		cf_traits::mocks::api_call::SHOULD_CONSOLIDATE.with(|cell| cell.set(true));
+
+		IngressEgress::on_finalize(1);
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			crate::Event::BatchBroadcastRequested { broadcast_id: 1, egress_ids: vec![] },
+		));
+	});
+}
