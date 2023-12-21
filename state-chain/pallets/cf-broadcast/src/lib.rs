@@ -426,26 +426,14 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Submitted by the nominated node when they cannot sign the transaction.
-		/// This triggers a retry of the signing of the transaction
-		///
-		/// ## Events
-		///
-		/// - N/A
-		///
-		/// ## Errors
-		///
-		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
+		/// DEPRECATED. This call is no longer used.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::transaction_failed())]
-		pub fn transaction_failed(
-			origin: OriginFor<T>,
-			broadcast_id: BroadcastId,
+		pub fn transaction_signing_failure(
+			_origin: OriginFor<T>,
+			_broadcast_attempt_id: (BroadcastId, AttemptCount),
 		) -> DispatchResultWithPostInfo {
-			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-
-			Self::handle_broadcast_failure(broadcast_id, Some(reporter.into()))?;
-			Ok(().into())
+			Err(DispatchError::Other("Deprecated").into())
 		}
 
 		/// A callback to be used when a threshold signature request completes. Retrieves the
@@ -640,6 +628,28 @@ pub mod pallet {
 			}
 
 			Ok(())
+		}
+
+		/// Submitted by the nominated node to signal that they were unable to broadcast the
+		/// transaction.
+		///
+		/// ## Events
+		///
+		/// - N/A
+		///
+		/// ## Errors
+		///
+		/// - [InvalidBroadcastId](Error::InvalidBroadcastId)
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::transaction_failed())]
+		pub fn transaction_failed(
+			origin: OriginFor<T>,
+			broadcast_id: BroadcastId,
+		) -> DispatchResultWithPostInfo {
+			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+
+			Self::handle_broadcast_failure(broadcast_id, Some(reporter.into()))?;
+			Ok(().into())
 		}
 	}
 }
