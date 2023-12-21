@@ -53,23 +53,24 @@ fn test_btc_utxo_selection() {
 		add_utxo_amount(dust_amount);
 
 		// select some utxos for a tx
+		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24770;
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
 				output_amount: 12000,
 				number_of_outputs: 2
 			})
 			.unwrap(),
-			(vec![utxo(5000), utxo(10000), utxo(25000), utxo(100000)], 120080)
+			(vec![utxo(5000), utxo(10000), utxo(25000)], EXPECTED_CHANGE_AMOUNT)
 		);
 
 		// add the change utxo back to the available utxo list
-		add_utxo_amount(120080);
+		add_utxo_amount(EXPECTED_CHANGE_AMOUNT);
 
 		// select all remaining utxos
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000000), utxo(120080),], 5116060)
+			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121970)
 		);
 
 		// add some more utxos to the list
@@ -87,7 +88,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000), utxo(15000),], 15980)
+			(vec![utxo(5000), utxo(15000),], 17950)
 		);
 	});
 }

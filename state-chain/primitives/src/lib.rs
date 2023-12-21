@@ -58,8 +58,8 @@ pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 pub const DEFAULT_FEE_SATS_PER_KILO_BYTE: u64 = 102400;
 
 // Approximate values calculated
-pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;
-pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
+pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 75;
+pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 43;
 pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
 
 /// This determines the average expected block time that we are targeting.
