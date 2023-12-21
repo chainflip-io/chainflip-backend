@@ -51,6 +51,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
+	const GAS_ASSET: Self::ChainAsset;
+
 	type ChainCrypto: ChainCrypto;
 
 	type ChainBlockNumber: FullCodec
@@ -89,7 +91,8 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ Unpin
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ FeeEstimationApi<Self>;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -341,6 +344,16 @@ pub enum AllBatchError {
 	Other,
 }
 
+#[derive(Debug)]
+pub enum ConsolidationError {
+	NotRequired,
+	Other,
+}
+
+pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
+}
+
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
@@ -458,4 +471,20 @@ pub struct CcmDepositMetadata {
 pub struct ChainState<C: Chain> {
 	pub block_height: C::ChainBlockNumber,
 	pub tracked_data: C::TrackedData,
+}
+
+pub trait FeeEstimationApi<C: Chain> {
+	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+}
+
+impl<C: Chain> FeeEstimationApi<C> for () {
+	fn estimate_ingress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
+		Default::default()
+	}
+
+	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
+		Default::default()
+	}
 }

@@ -9,6 +9,7 @@ import {
   sleep,
   observeBalanceIncrease,
   chainFromAsset,
+  isWithinOnePercent,
 } from './utils';
 import { jsonRpc } from './json_rpc';
 import { provideLiquidity } from './provide_liquidity';
@@ -31,8 +32,7 @@ const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function lpApiRpc(method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `start_lp_api.sh`
-  const port = 10589;
-  return jsonRpc(method, params, port);
+  return jsonRpc(method, params, 'http://127.0.0.1:10589');
 }
 
 async function provideLiquidityAndTestAssetBalances() {
@@ -107,7 +107,10 @@ async function testLiquidityDeposit() {
     chainflip,
     (event) =>
       event.data.asset.toUpperCase() === testAsset.toUpperCase() &&
-      Number(event.data.amountCredited.replace(/,/g, '')) === testAssetAmount,
+      isWithinOnePercent(
+        BigInt(event.data.amountCredited.replace(/,/g, '')),
+        BigInt(testAssetAmount),
+      ),
   );
   await sendEth(liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;

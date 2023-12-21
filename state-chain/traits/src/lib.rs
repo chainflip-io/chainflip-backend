@@ -790,6 +790,11 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
+
+pub trait GetTrackedData<C: Chain> {
+	fn get_tracked_data() -> C::TrackedData;
+}
+
 pub trait CompatibleCfeVersions {
 	fn current_release_version() -> SemVer;
 }
@@ -807,4 +812,15 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 	fn should_dispatch(&self, _call: &RuntimeCall) -> bool {
 		true
 	}
+}
+
+pub trait AssetConverter {
+	fn convert_asset_to_approximate_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		available_input_amount: Amount,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<(Amount, Amount)>;
 }

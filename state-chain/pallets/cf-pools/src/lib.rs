@@ -14,15 +14,15 @@ use cf_traits::{impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, Swappin
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable},
 	pallet_prelude::*,
-	sp_runtime::{Permill, Saturating},
-	storage::with_storage_layer,
-	traits::{OriginTrait, StorageVersion},
+	sp_runtime::{Permill, Saturating, TransactionOutcome},
+	storage::{with_storage_layer, with_transaction_unchecked},
+	traits::{Defensive, OriginTrait, StorageVersion},
 	transactional,
 };
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::Zero;
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -2013,6 +2013,78 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+	/// Try to convert the input asset to the output asset, subject to an available input amount and
+	/// desired output amount. The actual output amount is not guaranteed to be close to the desired
+	/// amount.
+	///
+	/// Returns the remaining input amount and the resultant output amount.
+	fn convert_asset_to_approximate_output<
+		Amount: Into<AssetAmount> + AtLeast32BitUnsigned + Copy,
+	>(
+		input_asset: impl Into<Asset>,
+		available_input_amount: Amount,
+		output_asset: impl Into<Asset>,
+		desired_output_amount: Amount,
+	) -> Option<(Amount, Amount)> {
+		use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
+
+		if desired_output_amount.is_zero() {
+			return Some((available_input_amount, Zero::zero()))
+		}
+		if available_input_amount.is_zero() {
+			return None
+		}
+
+		let input_asset = input_asset.into();
+		let output_asset = output_asset.into();
+		if input_asset == output_asset {
+			if desired_output_amount < available_input_amount {
+				return Some((
+					available_input_amount.saturating_sub(desired_output_amount),
+					desired_output_amount,
+				))
+			} else {
+				return Some((Zero::zero(), available_input_amount))
+			}
+		}
+
+		let available_output_amount = with_transaction_unchecked(|| {
+			TransactionOutcome::Rollback(
+				Self::swap_with_network_fee(
+					input_asset,
+					output_asset,
+					available_input_amount.into(),
+				)
+				.ok(),
+			)
+		})?
+		.output;
+
+		let input_amount_to_convert = multiply_by_rational_with_rounding(
+			desired_output_amount.into(),
+			available_input_amount.into(),
+			available_output_amount,
+			sp_arithmetic::Rounding::Down,
+		)
+		.defensive_proof(
+			"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
+		)?;
+
+		Some((
+			available_input_amount.saturating_sub(input_amount_to_convert.unique_saturated_into()),
+			Self::swap_with_network_fee(
+				input_asset,
+				output_asset,
+				sp_std::cmp::min(input_amount_to_convert, available_input_amount.into()),
+			)
+			.ok()?
+			.output
+			.unique_saturated_into(),
+		))
 	}
 }
 

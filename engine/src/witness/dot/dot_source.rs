@@ -40,7 +40,10 @@ macro_rules! polkadot_source {
 					{
 						if let Ok(header) = header {
 							let Some(events) = unwrap_events(
-								state.client.events(header.hash(), $retry_limit).await,
+								state
+									.client
+									.events(header.hash(), header.parent_hash, $retry_limit)
+									.await,
 							) else {
 								continue
 							};
@@ -104,7 +107,7 @@ where
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		// For the unfinalised source we limit to two retries, so we try the primary and backup. We
-		// stop here becauase for unfinalised it's possible the block simple doesn't exist, due to a
+		// stop here because for unfinalised it's possible the block simple doesn't exist, due to a
 		// reorg.
 		polkadot_source!(self, subscribe_best_heads, 2, |raw_events: Result<
 			Option<Events<PolkadotConfig>>,

@@ -172,5 +172,7 @@ decl_runtime_apis!(
 		fn cf_failed_call(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Ethereum as Chain>::Transaction>;
+		fn cf_ingress_fee(asset: Asset) -> AssetAmount;
+		fn cf_egress_fee(asset: Asset) -> AssetAmount;
 	}
 );

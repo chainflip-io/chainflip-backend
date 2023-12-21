@@ -132,6 +132,12 @@ macro_rules! chain_assets {
 				)+
 			}
 
+			pub const GAS_ASSET: Asset = [
+				$(
+					Asset::$asset,
+				)+
+			][0];
+
 			impl From<Asset> for any::Asset {
 				fn from(asset: Asset) -> Self {
 					match asset {

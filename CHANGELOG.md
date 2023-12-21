@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.3] - 2023-12-19
+
+### Fixes
+
+- Remove pre-witnessing functionality ([#4359](https://github.com/chainflip-io/chainflip-backend/issues/4359))
+
 ## [1.1.1] - 2023-12-13
 
 ### Features

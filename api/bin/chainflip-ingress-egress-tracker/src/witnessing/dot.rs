@@ -41,7 +41,7 @@ where
 {
 	let dot_client = DotRetryRpcClient::new(
 		scope,
-		NodeContainer { primary: settings.dot_node, backup: None },
+		NodeContainer { primary: settings.dot, backup: None },
 		env_params.dot_genesis_hash,
 	)?;
 

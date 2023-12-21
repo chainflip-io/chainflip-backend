@@ -5,6 +5,10 @@ on:
         type: string
         required: false
         default: ${{ github.ref_name }}
+      network:
+        type: string
+        required: false
+        default: perseverance
 
 env:
   FORCE_COLOR: 1
@@ -14,13 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        manifest: [state-chain/node/Cargo.toml, engine/Cargo.toml, api/bin/chainflip-cli/Cargo.toml, api/bin/chainflip-broker-api/Cargo.toml, api/bin/chainflip-lp-api/Cargo.toml]
+        manifest:
+          - state-chain/node/Cargo.toml
+          - engine/Cargo.toml
+          - api/bin/chainflip-cli/Cargo.toml
+          - api/bin/chainflip-broker-api/Cargo.toml
+          - api/bin/chainflip-lp-api/Cargo.toml
+          - state-chain/runtime/Cargo.toml
     steps:
       - name: Checkout 🏁
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Install Rust 🦀
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f
         with:
           toolchain: stable
           override: true
@@ -47,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 🏁
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check systemd files and debian package config 👀
         shell: bash
@@ -57,8 +67,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 🏁
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Check changelog 📝
         shell: bash
         run: ./ci/scripts/check_changelog.sh ${{ inputs.tag }}
+
+  check-runtime-spec-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check changelog 📝
+        shell: bash
+        run: ./ci/scripts/check_runtime_spec_version.sh ${{ inputs.network }}

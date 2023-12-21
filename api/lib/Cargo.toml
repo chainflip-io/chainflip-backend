@@ -1,6 +1,6 @@
 [package]
 name = "chainflip-api"
-version = "0.1.0"
+version = "1.1.0"
 edition = "2021"
 
 [dependencies]
@@ -20,6 +20,7 @@ tokio = "1.28"
 tracing = "0.1"
 zeroize = "1.5.4"
 libp2p-identity = { version = "0.2", features = ["ed25519", "peerid"] }
+lazy_static = "1.4"
 
 # Local
 chainflip-engine = { path = "../../engine/" }
@@ -45,9 +46,9 @@ state-chain-runtime = { path = "../../state-chain/runtime" }
 
 
 # Substrate
-frame-system = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+3' }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+3" }
-sp-consensus-aura = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+3' }
-sp-core = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+3' }
-sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+3' }
+frame-system = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+5' }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2023-08+5" }
+sp-consensus-aura = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+5' }
+sp-core = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+5' }
+sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2023-08+5' }
 codec = { package = "parity-scale-codec", version = "3.6.1" }

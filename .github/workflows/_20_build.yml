@@ -35,7 +35,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
@@ -46,7 +46,7 @@ jobs:
           sccache --show-stats
 
       - name: Upload binary artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
           name: ${{ inputs.upload-name }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
@@ -59,8 +59,8 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
 
       - name: Upload runtime artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392
         with:
-          name: chainflip-node-runtime-${{ inputs.profile }}
+          name: chainflip-node-runtime-${{ inputs.profile }}-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm

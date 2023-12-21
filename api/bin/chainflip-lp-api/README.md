@@ -33,6 +33,9 @@ OPTIONS:
 
         --state_chain.ws_endpoint <WS_ENDPOINT>
             The state chain nodes RPC endpoint. [default: ws://localhost:9944]
+
+    -v, --version 
+        Print the version of the API
 ```
 
 ## Working Example

@@ -44,7 +44,14 @@ export async function submitRuntimeUpgradeWithRestrictions(
   // TODO: Check if there were any errors in the submission, like `UpgradeConditionsNotMet` and `NotEnoughAuthoritiesCfesAtTargetVersion`.
   // and exit with error.
 
-  await observeEvent('system:CodeUpdated', chainflip);
+  const event = await Promise.race([
+    observeEvent('system:CodeUpdated', chainflip),
+    observeEvent('governance:FailedExecution', chainflip),
+  ]);
+
+  if (event.name === 'governance:FailedExecution') {
+    throw Error(`Runtime upgrade failed with error: ${event.data}`);
+  }
 
   console.log('Runtime upgrade completed.');
 }

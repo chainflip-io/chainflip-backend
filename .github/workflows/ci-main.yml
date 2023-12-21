@@ -33,7 +33,7 @@ jobs:
       profile: "try-runtime"
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
-      
+
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml

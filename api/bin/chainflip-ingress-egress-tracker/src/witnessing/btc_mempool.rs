@@ -123,20 +123,20 @@ async fn get_updated_cache<T: BtcRpcApi>(btc: &T, previous_cache: Cache) -> anyh
 		for confirmations in 1..SAFETY_MARGIN {
 			let block = btc.block(block_hash_to_query).await?;
 			for tx in block.txdata {
-				let tx_hash = tx.txid();
-				for txout in tx.output {
+				let tx_hash = tx.txid;
+				for txout in tx.vout {
 					new_transactions.insert(
 						txout.script_pubkey.clone(),
 						QueryResult {
 							destination: txout.script_pubkey,
 							confirmations,
-							value: Amount::from_sat(txout.value).to_btc(),
+							value: txout.value.to_btc(),
 							tx_hash,
 						},
 					);
 				}
 			}
-			block_hash_to_query = block.header.prev_blockhash;
+			block_hash_to_query = block.header.previous_block_hash.unwrap();
 		}
 	}
 	Ok(Cache {
@@ -224,14 +224,17 @@ mod tests {
 	use std::collections::BTreeMap;
 
 	use bitcoin::{
-		absolute::LockTime,
+		absolute::{Height, LockTime},
 		address::{self},
-		block::{Header, Version},
+		block::Version,
 		hash_types::TxMerkleNode,
 		hashes::Hash,
-		Block, TxOut,
+		secp256k1::rand::{self, Rng},
+		TxOut,
 	};
-	use chainflip_engine::btc::rpc::BlockHeader;
+	use chainflip_engine::btc::rpc::{
+		BlockHeader, Difficulty, VerboseBlock, VerboseTransaction, VerboseTxOut,
+	};
 
 	use super::*;
 
@@ -239,12 +242,12 @@ mod tests {
 	struct MockBtcRpc {
 		mempool: Vec<Transaction>,
 		latest_block_hash: BlockHash,
-		blocks: BTreeMap<BlockHash, Block>,
+		blocks: BTreeMap<BlockHash, VerboseBlock>,
 	}
 
 	#[async_trait::async_trait]
 	impl BtcRpcApi for MockBtcRpc {
-		async fn block(&self, block_hash: BlockHash) -> anyhow::Result<Block> {
+		async fn block(&self, block_hash: BlockHash) -> anyhow::Result<VerboseBlock> {
 			self.blocks.get(&block_hash).cloned().ok_or(anyhow!("Block missing"))
 		}
 		async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
@@ -300,45 +303,92 @@ mod tests {
 		BlockHash::from_byte_array([i; 32])
 	}
 
-	fn header_with_prev_hash(i: u8) -> Header {
-		Header {
+	fn header_with_prev_hash(i: u8) -> BlockHeader {
+		let hash = i_to_block_hash(i + 1);
+		BlockHeader {
 			version: Version::from_consensus(0),
-			prev_blockhash: i_to_block_hash(i),
+			previous_block_hash: Some(i_to_block_hash(i)),
 			merkle_root: TxMerkleNode::from_byte_array([0u8; 32]),
 			time: 0,
 			bits: Default::default(),
 			nonce: 0,
+			hash,
+			confirmations: 1,
+			height: 2000,
+			version_hex: Default::default(),
+			median_time: Default::default(),
+			difficulty: Difficulty::Number(1.0),
+			chainwork: Default::default(),
+			n_tx: Default::default(),
+			next_block_hash: None,
+			strippedsize: None,
+			size: None,
+			weight: None,
 		}
 	}
 
-	fn init_blocks() -> BTreeMap<BlockHash, Block> {
-		let mut blocks: BTreeMap<BlockHash, Block> = Default::default();
+	fn init_blocks() -> BTreeMap<BlockHash, VerboseBlock> {
+		let mut blocks: BTreeMap<BlockHash, VerboseBlock> = Default::default();
 		for i in 1..16 {
 			blocks.insert(
 				i_to_block_hash(i),
-				Block { header: header_with_prev_hash(i - 1), txdata: vec![] },
+				VerboseBlock { header: header_with_prev_hash(i - 1), txdata: vec![] },
 			);
 		}
 		blocks
 	}
 
+	pub fn verbose_transaction(
+		tx_outs: Vec<VerboseTxOut>,
+		fee: Option<Amount>,
+	) -> VerboseTransaction {
+		let random_number: u8 = rand::thread_rng().gen();
+		let txid = Txid::from_byte_array([random_number; 32]);
+		VerboseTransaction {
+			txid,
+			version: Version::from_consensus(2),
+			locktime: LockTime::Blocks(Height::from_consensus(0).unwrap()),
+			vin: vec![],
+			vout: tx_outs,
+			fee,
+			// not important, we just need to set it to a value.
+			hash: txid,
+			size: Default::default(),
+			vsize: Default::default(),
+			weight: Default::default(),
+			hex: Default::default(),
+		}
+	}
+
+	pub fn verbose_vouts(vals_and_scripts: Vec<(u64, ScriptBuf)>) -> Vec<VerboseTxOut> {
+		vals_and_scripts
+			.into_iter()
+			.enumerate()
+			.map(|(n, (value, script_pub_key))| VerboseTxOut {
+				value: Amount::from_sat(value),
+				n: n as u64,
+				script_pubkey: script_pub_key,
+			})
+			.collect()
+	}
+
 	// This creates one tx out in one transaction for each item in txdata
-	fn block_prev_hash_tx_outs(i: u8, txdata: Vec<(Amount, String)>) -> Block {
-		Block {
+	fn block_prev_hash_tx_outs(i: u8, txdata: Vec<(Amount, String)>) -> VerboseBlock {
+		VerboseBlock {
 			header: header_with_prev_hash(i),
 			txdata: txdata
 				.into_iter()
-				.map(|(value, destination)| bitcoin::Transaction {
-					output: vec![TxOut {
-						value: value.to_sat(),
-						script_pubkey: bitcoin::Address::from_str(&destination)
-							.unwrap()
-							.payload
-							.script_pubkey(),
-					}],
-					input: Default::default(),
-					version: 0,
-					lock_time: LockTime::from_consensus(0),
+				.map(|(value, destination)| {
+					verbose_transaction(
+						verbose_vouts(vec![(
+							value.to_sat(),
+							bitcoin::Address::from_str(&destination)
+								.unwrap()
+								.payload
+								.script_pubkey(),
+						)]),
+						None,
+					)
 				})
 				.collect(),
 		}
@@ -440,7 +490,7 @@ mod tests {
 
 		let mempool = vec![];
 
-		let mut blocks: BTreeMap<BlockHash, Block> = Default::default();
+		let mut blocks: BTreeMap<BlockHash, VerboseBlock> = Default::default();
 		for i in 1..19 {
 			blocks.insert(i_to_block_hash(i), block_prev_hash_tx_outs(i - 1, vec![]));
 		}

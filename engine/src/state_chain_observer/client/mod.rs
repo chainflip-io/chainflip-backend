@@ -260,6 +260,7 @@ async fn create_finalized_block_subscription<
 						let base_rpc_client = &base_rpc_client;
 						async move {
 							Ok::<_, anyhow::Error>((
+								block.number,
 								block.hash,
 								base_rpc_client
 									.storage_value::<pallet_cf_environment::CurrentReleaseVersion<
@@ -269,7 +270,7 @@ async fn create_finalized_block_subscription<
 							))
 						}
 					})
-					.try_take_while(|(_block_hash, current_release_version)| {
+					.try_take_while(|(_block_number, _block_hash, current_release_version)| {
 						futures::future::ready({
 							Ok::<_, anyhow::Error>(
 								!required_version.is_compatible_with(*current_release_version),
@@ -278,8 +279,8 @@ async fn create_finalized_block_subscription<
 					})
 					.boxed();
 
-			incompatible_blocks.try_for_each(move |(block_hash, current_release_version)| futures::future::ready({
-			info!("This version '{}' is incompatible with the current release '{}' at block: {}. WAITING for a compatible release version.", required_version, current_release_version, block_hash);
+			incompatible_blocks.try_for_each(move |(block_number, block_hash, current_release_version)| futures::future::ready({
+			info!("This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {block_number}: {block_hash:?}. WAITING for a compatible release version.");
 			Ok::<_, anyhow::Error>(())
 		})).await?;
 		} else {
@@ -290,9 +291,8 @@ async fn create_finalized_block_subscription<
 				.await?;
 			if !required_version.is_compatible_with(current_release_version) {
 				bail!(
-					"This version '{}' is incompatible with the current release '{}' at block: {}.",
-					required_version,
-					current_release_version,
+					"This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {}: {:?}.",
+					latest_block.number,
 					latest_block.hash,
 				);
 			}
@@ -321,9 +321,13 @@ async fn create_finalized_block_subscription<
 					let block = result_block?;
 					latest_block = block;
 					if let Some((required_version, _)) = required_version_and_wait {
-						let current_release_version = base_rpc_client.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(block.hash).await?;
+						let current_release_version = base_rpc_client
+							.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+								block.hash,
+							)
+							.await?;
 						if !required_version.is_compatible_with(current_release_version) {
-							break Err(anyhow!("This version '{}' is no longer compatible with the release version '{}' at block: {}", required_version, current_release_version, block.hash))
+							break Err(anyhow!("This version '{required_version}' is no longer compatible with the release version '{current_release_version}' at block {}: {:?}", block.number, block.hash))
 						}
 					}
 
