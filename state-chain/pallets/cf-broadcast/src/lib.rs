@@ -515,7 +515,7 @@ pub mod pallet {
 					.first()
 					.is_some_and(|broadcast_barrier_id| broadcast_id > *broadcast_barrier_id)
 				{
-					Self::schedule_for_retry(&broadcast_attempt);
+					Self::schedule_for_retry(&broadcast_attempt, Self::attempt_count(broadcast_id));
 				} else {
 					Self::start_broadcast_attempt(broadcast_attempt);
 				}
@@ -793,12 +793,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		// Pass in the attempt count in as part of the seed to achieve pseudo-randomness.
-		let seed = (
-			broadcast_id,
-			Self::attempt_count(broadcast_id),
-			broadcast_attempt.transaction_payload.clone(),
-		)
-			.encode();
+		let attempt_count = Self::attempt_count(broadcast_id);
+		let seed =
+			(broadcast_id, attempt_count, broadcast_attempt.transaction_payload.clone()).encode();
 		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
 			seed,
 			FailedBroadcasters::<T, I>::get(broadcast_id),
@@ -833,13 +830,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id
 			);
 			// Else schedule for re-try later, when more broadcasters becomes available.
-			Self::schedule_for_retry(&broadcast_attempt);
+			Self::schedule_for_retry(&broadcast_attempt, attempt_count);
 		}
 	}
 
-	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>) {
+	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>, attempt_count: AttemptCount) {
 		let broadcast_id = broadcast_attempt.broadcast_id;
-		let attempt_count = Self::attempt_count(broadcast_id);
 		let current_block = frame_system::Pallet::<T>::block_number();
 		let retry_block = match T::RetryPolicy::next_attempt_delay(attempt_count) {
 			Some(delay) => {
@@ -874,19 +870,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
 			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
-		let reporter = match maybe_reporter {
-			Some(reporter) => reporter,
-			None => signing_attempt.nominee,
-		};
+		let reporter = maybe_reporter.unwrap_or(signing_attempt.nominee);
 
-		if FailedBroadcasters::<T, I>::mutate(broadcast_id, |failed_broadcasters| {
-			failed_broadcasters.insert(reporter.clone())
-		}) {
+		if let Ok(attempt_count) = FailedBroadcasters::<T, I>::try_mutate(
+			broadcast_id,
+			|failed_broadcasters: &mut BTreeSet<_>| {
+				if failed_broadcasters.insert(reporter.clone()) {
+					Ok(failed_broadcasters.len())
+				} else {
+					Err(())
+				}
+			},
+		) {
 			// Abort the broadcast if all validators reported failure, Retry otherwise.
-			if Self::attempt_count(broadcast_id) >= T::EpochInfo::current_authority_count() {
+			if attempt_count >= T::EpochInfo::current_authority_count() as usize {
 				Self::abort_broadcast(broadcast_id);
 			} else {
-				Self::schedule_for_retry(&signing_attempt.broadcast_attempt);
+				Self::schedule_for_retry(&signing_attempt.broadcast_attempt, attempt_count as u32);
 			}
 		} else {
 			// Do nothing since this failure has already been reported.
