@@ -36,51 +36,51 @@ log = "0.4.16"
 clap = { version = "4.2.5", features = ["derive"] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
 
-sc-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-network = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-service = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-telemetry = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-keyring = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
+sc-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-network = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-service = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-telemetry = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-keyring = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 # These dependencies are used for the node template's RPCs
 jsonrpsee = { version = "0.16.2", features = ["full"] }
-sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-sc-basic-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
+sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+sc-basic-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 # These dependencies are used for runtime benchmarking
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
-frame-benchmarking-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
+frame-benchmarking-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 # CLI-specific dependencies
-try-runtime-cli = { optional = true, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
+try-runtime-cli = { optional = true, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
 
 [features]
 default = []

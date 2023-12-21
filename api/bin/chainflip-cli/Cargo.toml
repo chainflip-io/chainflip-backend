@@ -23,4 +23,4 @@ utilities = { path = "../../../utilities" }
 custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+2' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.1+3' }
