@@ -57,10 +57,11 @@ fn bitcoin_broadcast_delay_works() {
 				1u32, 2u32, 4u32, 8u32, 16u32, 32u32, 64u32, 128u32, 256u32, 512u32, 1024u32,
 				1200u32,
 			];
-			let threshold = BitcoinRetryPolicy::attempt_slowdown_threshold();
+			// Same as defined in BitcoinRetryPolicy.
+			const DELAY_THRESHOLD: u32 = 25u32;
 			// Before hitting the threshold, no slowdown happens and broadcasts are retried per
 			// normal.
-			for i in 1u32..threshold {
+			for i in 1u32..DELAY_THRESHOLD {
 				let account_id = AccountId::from([i as u8; 32]);
 				assert_ok!(BitcoinBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(account_id),
@@ -77,7 +78,7 @@ fn bitcoin_broadcast_delay_works() {
 			// Following failed broadcasts are delayed by a increasing sequence.
 			// Delay caps at 1200.
 			for (i, delay) in delay_sequence.into_iter().enumerate() {
-				let account_id = AccountId::from([(threshold + i as u32) as u8; 32]);
+				let account_id = AccountId::from([(DELAY_THRESHOLD + i as u32) as u8; 32]);
 				let target_retry_block = System::block_number() + delay;
 				assert_ok!(BitcoinBroadcaster::transaction_failed(
 					RuntimeOrigin::signed(account_id),

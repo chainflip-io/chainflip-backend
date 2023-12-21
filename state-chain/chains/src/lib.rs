@@ -495,8 +495,6 @@ pub trait RetryPolicy {
 	type AttemptCount;
 	/// Returns the delay for the given attempt count. If None, no delay is applied.
 	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber>;
-	/// Threshold for the number of attempts before we slow down the retry frequency.
-	fn attempt_slowdown_threshold() -> Self::AttemptCount;
 }
 
 pub struct DefaultRetryPolicy;
@@ -506,10 +504,5 @@ impl RetryPolicy for DefaultRetryPolicy {
 
 	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
 		Some(10u32)
-	}
-
-	fn attempt_slowdown_threshold() -> Self::AttemptCount {
-		// This would never change the retry frequency.
-		0u32
 	}
 }

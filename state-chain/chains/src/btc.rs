@@ -1048,26 +1048,20 @@ impl SerializeBtc for BitcoinOp {
 	}
 }
 
-// 1200 blocks are 2 hours - the maximum time we want to wait between retries.
-const MAX_BROADCAST_DELAY: u32 = 1200u32;
-// 25 * 6 = 150 seconds / 2.5 minutes
-const DELAY_THRESHOLD: u32 = 25u32;
-
 pub struct BitcoinRetryPolicy;
 impl RetryPolicy for BitcoinRetryPolicy {
 	type BlockNumber = u32;
 	type AttemptCount = u32;
 
 	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
-		retry_attempts
-			.checked_sub(Self::attempt_slowdown_threshold())
-			.map(|above_threshold| {
-				sp_std::cmp::min(2u32.saturating_pow(above_threshold), MAX_BROADCAST_DELAY)
-			})
-	}
+		// 1200 blocks are 2 hours - the maximum time we want to wait between retries.
+		const MAX_BROADCAST_DELAY: u32 = 1200u32;
+		// 25 * 6 = 150 seconds / 2.5 minutes
+		const DELAY_THRESHOLD: u32 = 25u32;
 
-	fn attempt_slowdown_threshold() -> Self::AttemptCount {
-		DELAY_THRESHOLD
+		retry_attempts.checked_sub(DELAY_THRESHOLD).map(|above_threshold| {
+			sp_std::cmp::min(2u32.saturating_pow(above_threshold), MAX_BROADCAST_DELAY)
+		})
 	}
 }
 

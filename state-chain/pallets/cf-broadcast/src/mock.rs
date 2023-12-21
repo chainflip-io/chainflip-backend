@@ -124,10 +124,6 @@ impl RetryPolicy for MockRetryPolicy {
 	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
 		BroadcastDelay::get()
 	}
-
-	fn attempt_slowdown_threshold() -> Self::AttemptCount {
-		unimplemented!()
-	}
 }
 
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
