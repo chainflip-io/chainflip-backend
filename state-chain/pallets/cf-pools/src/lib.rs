@@ -242,7 +242,7 @@ impl<T> From<AssetsMap<T>> for SideMap<T> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1559,8 +1559,12 @@ impl<T: Config> Pallet<T> {
 		input_amount: AssetAmount,
 	) -> Result<SwapOutput, DispatchError> {
 		Ok(match (from, to) {
-			(_, STABLE_ASSET) | (STABLE_ASSET, _) => {
+			(_, STABLE_ASSET) => {
 				let output = Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
+				SwapOutput { intermediary: None, output }
+			},
+			(STABLE_ASSET, _) => {
+				let output = Self::swap_single_leg(from, to, Self::take_network_fee(input_amount))?;
 				SwapOutput { intermediary: None, output }
 			},
 			_ => {
