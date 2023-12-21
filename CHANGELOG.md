@@ -2,6 +2,17 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.4] - 2023-12-21
+
+### Features
+
+- More accurate btc fees ([#4367](https://github.com/chainflip-io/chainflip-backend/issues/4367))
+
+### Fixes
+
+- Keep utxos even if swallowed (([PRO-1068](https://linear.app/chainflip/issue/PRO-1068))) ([#4360](https://github.com/chainflip-io/chainflip-backend/issues/4360))
+- Correct network fee ([#4364](https://github.com/chainflip-io/chainflip-backend/issues/4364))
+
 ## [1.1.3] - 2023-12-19
 
 ### Fixes
