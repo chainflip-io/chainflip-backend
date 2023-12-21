@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::{
-	btc::{deposit_address::DepositAddress, BitcoinRetryPolicy, ScriptPubkey},
-	AllBatch, Bitcoin, RetryPolicy, TransferAssetParams,
+	btc::{deposit_address::DepositAddress, ScriptPubkey},
+	AllBatch, Bitcoin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount};
 use cf_traits::{Broadcaster, EpochInfo};
