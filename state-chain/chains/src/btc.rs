@@ -121,8 +121,7 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		// Include the min fee so we over-estimate the cost.
-		self.btc_fee_info.min_fee_required_per_tx + self.btc_fee_info.fee_per_input_utxo
+		self.btc_fee_info.fee_per_input_utxo
 	}
 
 	fn estimate_egress_fee(
