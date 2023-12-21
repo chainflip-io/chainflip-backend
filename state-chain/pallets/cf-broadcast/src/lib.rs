@@ -362,11 +362,11 @@ pub mod pallet {
 			// current broadcaster is reported as Failed to broadcast, and a new broadcaster is
 			// nominated. If there are no more broadcaster available, then the broadcast is aborted.
 			let expiries = Timeouts::<T, I>::take(block_number);
-			let num_expiries = expiries.len() as u32;
 			let pending_broadcasts = PendingBroadcasts::<T, I>::get();
 			let delayed_retries = DelayedBroadcastRetryQueue::<T, I>::take(block_number);
+			let num_retries = expiries.len() + delayed_retries.len();
 			if T::SafeMode::get().retry_enabled {
-				for broadcast_id in expiries.into_iter() {
+				for broadcast_id in expiries {
 					if pending_broadcasts.contains(&broadcast_id) {
 						Self::deposit_event(Event::<T, I>::BroadcastTimeout { broadcast_id });
 						if let Err(e) = Self::handle_broadcast_failure(broadcast_id, None) {
@@ -387,7 +387,7 @@ pub mod pallet {
 					delayed_retries,
 				);
 			}
-			T::WeightInfo::on_initialize(num_expiries)
+			T::WeightInfo::on_initialize(num_retries as u32)
 		}
 
 		// We want to retry broadcasts when we have free block space.
