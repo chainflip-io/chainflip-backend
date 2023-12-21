@@ -21,6 +21,7 @@ use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	sp_io::hashing::sha2_256,
+	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
 	BoundedVec, RuntimeDebug,
 };
@@ -116,20 +117,30 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
+/// A constant multiplier applied to the fees.
+///
+/// TODO: Allow this value to adjust based on the current fee deficit/surplus.
+const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
+
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		self.btc_fee_info.fee_per_input_utxo
+		BTC_FEE_MULTIPLIER
+			.checked_mul_int(self.btc_fee_info.fee_per_input_utxo)
+			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		// Include the min fee so we over-estimate the cost.
-		self.btc_fee_info.min_fee_required_per_tx + self.btc_fee_info.fee_per_output_utxo
+		BTC_FEE_MULTIPLIER
+			.checked_mul_int(
+				self.btc_fee_info.min_fee_required_per_tx + self.btc_fee_info.fee_per_output_utxo,
+			)
+			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
 	}
 }
 
@@ -172,15 +183,18 @@ impl BitcoinFeeInfo {
 	/// We ensure that a minimum of 1 sat per vByte is set for each of the fees.
 	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
 		Self {
-			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc transaction
+			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+			// transaction
 			fee_per_input_utxo: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE)
 				.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
-			// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc transaction
+			// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+			// transaction
 			fee_per_output_utxo: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
 				.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
-			// Minimum size of tx that does not scale with input and output utxos is MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
+			// Minimum size of tx that does not scale with input and output utxos is
+			// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
 			min_fee_required_per_tx: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
 				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
