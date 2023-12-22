@@ -756,8 +756,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					recorded_version, this_version
 				);
 
-				tokio::time::timeout(
-					CFE_VERSION_SUBMIT_TIMEOUT,
+				// Submitting transaction with subxt sometimes gets stuck without returning any
+				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
+				// so we use a timeout to ensure we can recover:
+				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
 					subxt_client
 						.tx()
 						.sign_and_submit_then_watch_default(
@@ -776,8 +778,9 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 							&subxt_signer,
 						)
 						.await?
-						.wait_for_in_block(),
-				)
+						.wait_for_in_block()
+						.await
+				})
 				.await
 				.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))??;
 			}
