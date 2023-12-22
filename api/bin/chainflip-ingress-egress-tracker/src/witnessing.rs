@@ -20,7 +20,7 @@ use utilities::task_scope;
 use crate::DepositTrackerSettings;
 
 #[derive(Clone)]
-struct EnvironmentParameters {
+pub(super) struct EnvironmentParameters {
 	eth_chain_id: u64,
 	eth_vault_address: H160,
 	eth_address_checker_address: H160,
@@ -28,7 +28,7 @@ struct EnvironmentParameters {
 	usdc_contract_address: H160,
 	supported_erc20_tokens: HashMap<H160, cf_primitives::Asset>,
 	dot_genesis_hash: PolkadotHash,
-	btc_network: cf_chains::btc::BitcoinNetwork,
+	pub btc_network: cf_chains::btc::BitcoinNetwork,
 }
 
 async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> EnvironmentParameters {
@@ -104,7 +104,7 @@ pub(super) async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: DepositTrackerSettings,
 	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<EnvironmentParameters> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
 		state_chain_observer::client::StateChainClient::connect_without_account(
 			scope,
@@ -159,12 +159,12 @@ pub(super) async fn start(
 		scope,
 		witness_call,
 		settings,
-		env_params,
+		env_params.clone(),
 		state_chain_client,
 		unfinalized_chain_stream,
 		epoch_source,
 	)
 	.await?;
 
-	Ok(())
+	Ok(env_params)
 }

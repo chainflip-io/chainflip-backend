@@ -10,6 +10,7 @@ anyhow = "1.0.72"
 async-trait = "0.1.73"
 bitcoin = { version = "0.30.0", features = ["serde"] }
 futures = "0.3.28"
+hex = "0.4.3"
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 reqwest = { version = "0.11.18", features = ["json"] }
 serde = "1.0.183"
@@ -31,6 +32,8 @@ chainflip-engine = { path = "../../../engine/" }
 utilities = { path = "../../../utilities" }
 cf-primitives = { path = "../../../state-chain/primitives" }
 pallet-cf-environment = { path = "../../../state-chain/pallets/cf-environment" }
+pallet-cf-ingress-egress = { path = "../../../state-chain/pallets/cf-ingress-egress" }
+pallet-cf-broadcast = { path = "../../../state-chain/pallets/cf-broadcast" }
 state-chain-runtime = { path = "../../../state-chain/runtime" }
 cf-chains = { path = "../../../state-chain/chains" }
 

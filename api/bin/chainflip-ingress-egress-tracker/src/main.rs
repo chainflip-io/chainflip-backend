@@ -1,16 +1,106 @@
+use cf_chains::{btc::BitcoinNetwork, AnyChain, Bitcoin, Chain, Ethereum, Polkadot};
+use cf_primitives::{Asset, ForeignChain};
 use chainflip_engine::settings::{
 	insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints,
 };
 use clap::Parser;
+use codec::Encode;
 use config::{Config, ConfigBuilder, ConfigError, Environment, Map, Source, Value};
 use futures::FutureExt;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
-use serde::Deserialize;
+use pallet_cf_ingress_egress::DepositWitness;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, net::SocketAddr};
 use tracing::log;
-use utilities::task_scope;
+use utilities::{rpc::NumberOrHex, task_scope};
 
 mod witnessing;
+
+#[derive(Serialize)]
+struct WitnessAsset {
+	chain: ForeignChain,
+	asset: Asset,
+}
+
+impl From<cf_chains::assets::eth::Asset> for WitnessAsset {
+	fn from(asset: cf_chains::assets::eth::Asset) -> Self {
+		match asset {
+			cf_chains::assets::eth::Asset::Eth |
+			cf_chains::assets::eth::Asset::Flip |
+			cf_chains::assets::eth::Asset::Usdc =>
+				Self { chain: ForeignChain::Ethereum, asset: asset.into() },
+		}
+	}
+}
+
+impl From<cf_chains::assets::dot::Asset> for WitnessAsset {
+	fn from(asset: cf_chains::assets::dot::Asset) -> Self {
+		match asset {
+			cf_chains::assets::dot::Asset::Dot =>
+				Self { chain: ForeignChain::Polkadot, asset: asset.into() },
+		}
+	}
+}
+
+impl From<cf_chains::assets::btc::Asset> for WitnessAsset {
+	fn from(asset: cf_chains::assets::btc::Asset) -> Self {
+		match asset {
+			cf_chains::assets::btc::Asset::Btc =>
+				Self { chain: ForeignChain::Bitcoin, asset: asset.into() },
+		}
+	}
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum WitnessInformation {
+	Deposit {
+		src_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
+		deposit_address: String,
+		amount: NumberOrHex,
+		asset: WitnessAsset,
+	},
+}
+
+type EthereumDepositInfo = (DepositWitness<Ethereum>, <Ethereum as Chain>::ChainBlockNumber);
+
+impl From<EthereumDepositInfo> for WitnessInformation {
+	fn from((value, height): EthereumDepositInfo) -> Self {
+		Self::Deposit {
+			src_chain_block_height: height,
+			deposit_address: value.deposit_address.to_string(),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
+	}
+}
+
+type BitcoinDepositInfo =
+	(DepositWitness<Bitcoin>, <Bitcoin as Chain>::ChainBlockNumber, BitcoinNetwork);
+
+impl From<BitcoinDepositInfo> for WitnessInformation {
+	fn from((value, height, network): BitcoinDepositInfo) -> Self {
+		Self::Deposit {
+			src_chain_block_height: height,
+			deposit_address: value.deposit_address.to_address(&network),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
+	}
+}
+
+type PolkadotDepositInfo = (DepositWitness<Polkadot>, <Polkadot as Chain>::ChainBlockNumber);
+
+impl From<PolkadotDepositInfo> for WitnessInformation {
+	fn from((value, height): PolkadotDepositInfo) -> Self {
+		Self::Deposit {
+			src_chain_block_height: height as u64,
+			deposit_address: format!("0x{}", hex::encode(&value.deposit_address.encode())),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+		}
+	}
+}
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct DepositTrackerSettings {
@@ -134,7 +224,8 @@ async fn start(
 	let (witness_sender, _) =
 		tokio::sync::broadcast::channel::<state_chain_runtime::RuntimeCall>(EVENT_BUFFER_SIZE);
 
-	witnessing::start(scope, settings, witness_sender.clone()).await?;
+	let env_params = witnessing::start(scope, settings, witness_sender.clone()).await?;
+	let btc_network = env_params.btc_network;
 
 	module.register_subscription(
 		"subscribe_witnessing",
@@ -145,11 +236,88 @@ async fn start(
 
 			tokio::spawn(async move {
 				while let Ok(event) = witness_receiver.recv().await {
-					use codec::Encode;
-					if let Ok(false) = sink.send(&event.encode()) {
-						log::debug!("Subscription is closed");
-						break
+					use pallet_cf_broadcast::Call as BroadcastCall;
+					use pallet_cf_ingress_egress::Call as IngressEgressCall;
+					use state_chain_runtime::RuntimeCall::*;
+
+					macro_rules! send {
+						($value:expr) => {
+							if let Ok(false) = sink.send($value) {
+								log::debug!("Subscription is closed");
+								return
+							}
+						};
 					}
+
+					match event {
+						EthereumIngressEgress(IngressEgressCall::process_deposits {
+							deposit_witnesses,
+							block_height,
+						}) =>
+							for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
+								let info = WitnessInformation::from((witness, block_height));
+								send!(&info);
+							},
+						BitcoinIngressEgress(IngressEgressCall::process_deposits {
+							deposit_witnesses,
+							block_height,
+						}) =>
+							for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
+								let info =
+									WitnessInformation::from((witness, block_height, btc_network));
+								send!(&info);
+							},
+						PolkadotIngressEgress(IngressEgressCall::process_deposits {
+							deposit_witnesses,
+							block_height,
+						}) =>
+							for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
+								let info = WitnessInformation::from((witness, block_height));
+								send!(&info);
+							},
+						EthereumBroadcaster(BroadcastCall::transaction_succeeded { .. }) => {
+							log::info!("received EthereumBroadcaster transaction_succeeded call")
+						},
+						BitcoinBroadcaster(BroadcastCall::transaction_succeeded { .. }) => {
+							log::info!("received BitcoinBroadcaster transaction_succeeded call")
+						},
+						PolkadotBroadcaster(BroadcastCall::transaction_succeeded { .. }) => {
+							log::info!("received PolkadotBroadcaster transaction_succeeded call")
+						},
+
+						EthereumIngressEgress(_) |
+						BitcoinIngressEgress(_) |
+						PolkadotIngressEgress(_) |
+						System(_) |
+						Timestamp(_) |
+						Environment(_) |
+						Flip(_) |
+						Emissions(_) |
+						Funding(_) |
+						AccountRoles(_) |
+						Witnesser(_) |
+						Validator(_) |
+						Session(_) |
+						Grandpa(_) |
+						Governance(_) |
+						Reputation(_) |
+						TokenholderGovernance(_) |
+						EthereumChainTracking(_) |
+						BitcoinChainTracking(_) |
+						PolkadotChainTracking(_) |
+						EthereumVault(_) |
+						PolkadotVault(_) |
+						BitcoinVault(_) |
+						EthereumThresholdSigner(_) |
+						PolkadotThresholdSigner(_) |
+						BitcoinThresholdSigner(_) |
+						EthereumBroadcaster(_) |
+						PolkadotBroadcaster(_) |
+						BitcoinBroadcaster(_) |
+						Swapping(_) |
+						LiquidityProvider(_) |
+						LiquidityPools(_) => {},
+					};
 				}
 			});
 			Ok(())
