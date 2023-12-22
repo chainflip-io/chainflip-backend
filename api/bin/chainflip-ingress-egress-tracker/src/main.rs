@@ -95,7 +95,7 @@ impl From<PolkadotDepositInfo> for WitnessInformation {
 	fn from((value, height): PolkadotDepositInfo) -> Self {
 		Self::Deposit {
 			src_chain_block_height: height as u64,
-			deposit_address: format!("0x{}", hex::encode(&value.deposit_address.encode())),
+			deposit_address: format!("0x{}", hex::encode(value.deposit_address.aliased_ref())),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
 		}
