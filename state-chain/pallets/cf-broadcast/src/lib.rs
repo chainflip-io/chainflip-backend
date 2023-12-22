@@ -599,11 +599,11 @@ pub mod pallet {
 			}
 
 			// Report the people who failed to broadcast this tx during its whole lifetime.
-			let failed_signers = FailedBroadcasters::<T, I>::take(broadcast_id);
-			if !failed_signers.is_empty() {
+			let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
+			if !failed_broadcasters.is_empty() {
 				T::OffenceReporter::report_many(
 					PalletOffence::FailedToBroadcastTransaction,
-					failed_signers,
+					failed_broadcasters,
 				);
 			}
 
@@ -668,9 +668,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
 		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
 			if !pending_broadcasts.remove(broadcast_id) {
-				log::warn!(
-					"The broadcast_id already aborted, but is now reported as successful. broadcast_id: {}", broadcast_id
-				);
+				log::warn!("Expected broadcast with id {} to still be pending.", broadcast_id);
 			}
 			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
 				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
@@ -802,12 +800,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			),
 		);
 
-		// Pass in the attempt count in as part of the seed to achieve pseudo-randomness.
-		let attempt_count = Self::attempt_count(broadcast_id);
-		let seed =
-			(broadcast_id, attempt_count, broadcast_attempt.transaction_payload.clone()).encode();
+		// Pass in the current block number as part of the seed to achieve pseudo-randomness.
 		if let Some(nominated_signer) = T::BroadcastSignerNomination::nominate_broadcaster(
-			seed,
+			(broadcast_id, frame_system::Pallet::<T>::block_number()),
 			FailedBroadcasters::<T, I>::get(broadcast_id),
 		) {
 			// write, or overwrite the old entry if it exists (on a retry)
@@ -835,12 +830,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				transaction_out_id: broadcast_attempt.transaction_out_id,
 			});
 		} else {
-			log::info!(
+			log::debug!(
 				"Failed to nominate a broadcaster, but not all validators have reported failure. Broadcast is scheduled for retry. Broadcast Id: {}",
 				broadcast_id
 			);
-			// Else schedule for re-try later, when more broadcasters becomes available.
-			Self::schedule_for_retry(&broadcast_attempt, attempt_count);
+			// Schedule for retry later, when more broadcasters become available.
+			Self::schedule_for_retry(&broadcast_attempt, Self::attempt_count(broadcast_id));
 		}
 	}
 
@@ -882,6 +877,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let reporter = maybe_reporter.unwrap_or(signing_attempt.nominee);
 
+		// NOTE: We don't use `append` here because we want to make sure not to insert duplicates
+		// and `append` doesn't guarantee that.
 		if let Ok(attempt_count) = FailedBroadcasters::<T, I>::try_mutate(
 			broadcast_id,
 			|failed_broadcasters: &mut BTreeSet<_>| {
@@ -901,7 +898,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			// Do nothing since this failure has already been reported.
 			log::warn!(
-				"Broadcast failure by {:?} already recorded for Broadcast ID:{}",
+				"Broadcast failure by {:?} already recorded for Broadcast ID: {}",
 				reporter,
 				broadcast_id
 			);
@@ -929,7 +926,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id,
 				result: callback.dispatch_bypass_filter(OriginTrait::root()).map(|_| ()).map_err(
 					|e| {
-						log::warn!(
+						log::error!(
 							"Broadcast failure callback execution has failed for broadcast {}.",
 							broadcast_id
 						);
@@ -946,10 +943,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn attempt_count(broadcast_id: BroadcastId) -> AttemptCount {
-		FailedBroadcasters::<T, I>::decode_len(broadcast_id)
-			.unwrap_or_default()
-			.try_into()
-			.unwrap_or_default()
+		// NOTE: decode_len is correct here only as long as we *don't* use `append` to insert items.
+		FailedBroadcasters::<T, I>::decode_len(broadcast_id).unwrap_or_default() as u32
 	}
 }
 
