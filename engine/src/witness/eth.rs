@@ -34,21 +34,12 @@ use anyhow::{Context, Result};
 
 use chainflip_node::chain_spec::berghain::ETHEREUM_SAFETY_MARGIN;
 
-pub async fn start<
-	StateChainClient,
-	StateChainStream,
-	ProcessCall,
-	ProcessingFut,
-	PrewitnessCall,
-	PrewitnessFut,
->(
+pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EthRetryRpcClient<EthRpcSigningClient>,
 	process_call: ProcessCall,
-	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
-	unfinalized_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -61,12 +52,6 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
-	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let state_chain_gateway_address = state_chain_client
         .storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
@@ -125,63 +110,6 @@ where
 		.spawn(scope);
 
 	let vaults = epoch_source.vaults().await;
-
-	// ===== Prewitnessing stream =====
-	let prewitness_source = eth_source.clone().chunk_by_vault(vaults.clone(), scope);
-
-	let prewitness_source_deposit_addresses = prewitness_source
-		.clone()
-		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
-		.await;
-
-	prewitness_source_deposit_addresses
-		.clone()
-		.erc20_deposits::<_, _, _, UsdcEvents>(
-			prewitness_call.clone(),
-			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdc,
-			usdc_contract_address,
-		)
-		.await?
-		.logging("pre-witnessing USDCDeposits")
-		.spawn(scope);
-
-	prewitness_source_deposit_addresses
-		.clone()
-		.erc20_deposits::<_, _, _, FlipEvents>(
-			prewitness_call.clone(),
-			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Flip,
-			flip_contract_address,
-		)
-		.await?
-		.logging("pre-witnessing FlipDeposits")
-		.spawn(scope);
-
-	prewitness_source_deposit_addresses
-		.clone()
-		.ethereum_deposits(
-			prewitness_call.clone(),
-			eth_client.clone(),
-			eth::Asset::Eth,
-			address_checker_address,
-			vault_address,
-		)
-		.await
-		.logging("pre-witnessing EthereumDeposits")
-		.spawn(scope);
-
-	prewitness_source
-		.vault_witnessing(
-			prewitness_call,
-			eth_client.clone(),
-			vault_address,
-			cf_primitives::Asset::Eth,
-			cf_primitives::ForeignChain::Ethereum,
-			supported_erc20_tokens.clone(),
-		)
-		.logging("pre-witnessing Vault")
-		.spawn(scope);
 
 	// ===== Full witnessing stream =====
 
