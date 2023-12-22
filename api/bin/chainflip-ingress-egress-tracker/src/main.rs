@@ -4,7 +4,6 @@ use chainflip_engine::settings::{
 	insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints,
 };
 use clap::Parser;
-use codec::Encode;
 use config::{Config, ConfigBuilder, ConfigError, Environment, Map, Source, Value};
 use futures::FutureExt;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
