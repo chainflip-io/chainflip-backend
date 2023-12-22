@@ -3,7 +3,7 @@ pub mod btc_mempool;
 mod dot;
 mod eth;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::chains::assets::eth::Asset;
@@ -104,7 +104,7 @@ pub(super) async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: DepositTrackerSettings,
 	witness_sender: tokio::sync::broadcast::Sender<state_chain_runtime::RuntimeCall>,
-) -> anyhow::Result<EnvironmentParameters> {
+) -> anyhow::Result<(Arc<StateChainClient<()>>, EnvironmentParameters)> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
 		state_chain_observer::client::StateChainClient::connect_without_account(
 			scope,
@@ -160,11 +160,11 @@ pub(super) async fn start(
 		witness_call,
 		settings,
 		env_params.clone(),
-		state_chain_client,
+		state_chain_client.clone(),
 		unfinalized_chain_stream,
 		epoch_source,
 	)
 	.await?;
 
-	Ok(env_params)
+	Ok((state_chain_client, env_params))
 }

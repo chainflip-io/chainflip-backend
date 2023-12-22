@@ -1,12 +1,14 @@
-use std::sync::Arc;
-
+use anyhow::Context;
 use cf_primitives::chains::assets::eth::Asset;
+use std::sync::Arc;
 use utilities::task_scope;
 
 use chainflip_engine::{
 	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcClient},
 	settings::NodeContainer,
-	state_chain_observer::client::{StateChainClient, StateChainStreamApi},
+	state_chain_observer::client::{
+		chain_api::ChainApi, storage_api::StorageApi, StateChainClient, StateChainStreamApi,
+	},
 	witness::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		eth::{
@@ -101,6 +103,19 @@ where
 			env_params.supported_erc20_tokens.clone(),
 		)
 		.logging("witnessing Vault")
+		.spawn(scope);
+
+	let key_manager_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.context("Failed to get KeyManager address from SC")?;
+
+	eth_source
+		.clone()
+		.key_manager_witnessing(witness_call.clone(), eth_client.clone(), key_manager_address)
+		.logging("KeyManager")
 		.spawn(scope);
 
 	Ok(())

@@ -1,14 +1,23 @@
-use cf_chains::{btc::BitcoinNetwork, AnyChain, Bitcoin, Chain, Ethereum, Polkadot};
-use cf_primitives::{Asset, ForeignChain};
-use chainflip_engine::settings::{
-	insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints,
+use cf_chains::{
+	btc::BitcoinNetwork, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain, Ethereum,
+	Polkadot,
+};
+use cf_primitives::{Asset, BroadcastId, ForeignChain};
+use chainflip_engine::{
+	settings::{insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints},
+	state_chain_observer::client::{
+		chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
+	},
+	witness::common::STATE_CHAIN_CONNECTION,
 };
 use clap::Parser;
 use config::{Config, ConfigBuilder, ConfigError, Environment, Map, Source, Value};
 use futures::FutureExt;
 use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
+use pallet_cf_broadcast::TransactionOutIdFor;
 use pallet_cf_ingress_egress::DepositWitness;
 use serde::{Deserialize, Serialize};
+use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::HashMap, env, net::SocketAddr};
 use tracing::log;
 use utilities::{rpc::NumberOrHex, task_scope};
@@ -52,12 +61,24 @@ impl From<cf_chains::assets::btc::Asset> for WitnessAsset {
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+enum TransactionId {
+	Bitcoin { hash: String },
+	Ethereum { signature: SchnorrVerificationComponents },
+	Polkadot { signature: String },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 enum WitnessInformation {
 	Deposit {
 		src_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: WitnessAsset,
+	},
+	Broadcast {
+		broadcast_id: BroadcastId,
+		tx_out_id: TransactionId,
 	},
 }
 
@@ -99,6 +120,24 @@ impl From<PolkadotDepositInfo> for WitnessInformation {
 			asset: value.asset.into(),
 		}
 	}
+}
+
+async fn get_broadcast_id<I>(
+	state_chain_client: &StateChainClient<()>,
+	tx_out_id: &TransactionOutIdFor<state_chain_runtime::Runtime, I::Instance>,
+) -> Option<BroadcastId>
+where
+	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
+	I: PalletInstanceAlias + 'static,
+{
+	state_chain_client
+		.storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
+			state_chain_runtime::Runtime,
+			I::Instance,
+		>>(state_chain_client.latest_finalized_block().hash, tx_out_id)
+		.await
+		.expect(STATE_CHAIN_CONNECTION)
+		.map(|(broadcast_id, _)| broadcast_id)
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -223,7 +262,8 @@ async fn start(
 	let (witness_sender, _) =
 		tokio::sync::broadcast::channel::<state_chain_runtime::RuntimeCall>(EVENT_BUFFER_SIZE);
 
-	let env_params = witnessing::start(scope, settings, witness_sender.clone()).await?;
+	let (state_chain_client, env_params) =
+		witnessing::start(scope, settings, witness_sender.clone()).await?;
 	let btc_network = env_params.btc_network;
 
 	module.register_subscription(
@@ -232,6 +272,7 @@ async fn start(
 		"unsubscribe_witnessing",
 		move |_params, mut sink, _context| {
 			let mut witness_receiver = witness_sender.subscribe();
+			let state_chain_client = state_chain_client.clone();
 
 			tokio::spawn(async move {
 				while let Ok(event) = witness_receiver.recv().await {
@@ -274,14 +315,54 @@ async fn start(
 								let info = WitnessInformation::from((witness, block_height));
 								send!(&info);
 							},
-						EthereumBroadcaster(BroadcastCall::transaction_succeeded { .. }) => {
-							log::info!("received EthereumBroadcaster transaction_succeeded call")
+						EthereumBroadcaster(BroadcastCall::transaction_succeeded {
+							tx_out_id,
+							..
+						}) => {
+							let broadcast_id =
+								get_broadcast_id::<Ethereum>(&state_chain_client, &tx_out_id).await;
+
+							if let Some(broadcast_id) = broadcast_id {
+								send!(&WitnessInformation::Broadcast {
+									broadcast_id,
+									tx_out_id: TransactionId::Ethereum { signature: tx_out_id }
+								})
+							}
 						},
-						BitcoinBroadcaster(BroadcastCall::transaction_succeeded { .. }) => {
-							log::info!("received BitcoinBroadcaster transaction_succeeded call")
+						BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
+							tx_out_id,
+							..
+						}) => {
+							let broadcast_id =
+								get_broadcast_id::<Bitcoin>(&state_chain_client, &tx_out_id).await;
+
+							if let Some(broadcast_id) = broadcast_id {
+								send!(&WitnessInformation::Broadcast {
+									broadcast_id,
+									tx_out_id: TransactionId::Bitcoin {
+										hash: format!("0x{}", hex::encode(tx_out_id))
+									}
+								})
+							}
 						},
-						PolkadotBroadcaster(BroadcastCall::transaction_succeeded { .. }) => {
-							log::info!("received PolkadotBroadcaster transaction_succeeded call")
+						PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
+							tx_out_id,
+							..
+						}) => {
+							let broadcast_id =
+								get_broadcast_id::<Polkadot>(&state_chain_client, &tx_out_id).await;
+
+							if let Some(broadcast_id) = broadcast_id {
+								send!(&WitnessInformation::Broadcast {
+									broadcast_id,
+									tx_out_id: TransactionId::Polkadot {
+										signature: format!(
+											"0x{}",
+											hex::encode(tx_out_id.aliased_ref())
+										)
+									}
+								})
+							}
 						},
 
 						EthereumIngressEgress(_) |
