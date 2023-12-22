@@ -3,13 +3,12 @@ use std::sync::Arc;
 use cf_chains::ChainState;
 use state_chain_runtime::PalletInstanceAlias;
 
-use crate::witness::common::chain_source::Header;
-use utilities::metrics::CHAIN_TRACKING;
-use cf_chains::Chain;
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
+	witness::common::{chain_source::Header, RuntimeCallHasChain, RuntimeHasChain},
 };
+use cf_chains::Chain;
+use utilities::metrics::CHAIN_TRACKING;
 
 use super::{builder::ChunkedByTimeBuilder, ChunkedByTime};
 
@@ -21,7 +20,7 @@ pub trait GetTrackedData<C: cf_chains::Chain, Hash, Data>: Send + Sync + Clone {
 	) -> Result<C::TrackedData, anyhow::Error>;
 }
 
-impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> where i64: std::convert::From<<Inner as ChunkedByTime>::Index> {
+impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 	pub fn chain_tracking<StateChainClient, TrackedDataClient>(
 		self,
 		state_chain_client: Arc<StateChainClient>,
@@ -57,7 +56,7 @@ impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> where i64: std::convert::
 						epoch_index: epoch.index,
 					})
 					.await;
-				CHAIN_TRACKING.set(&[Inner::Chain::NAME], header.index);
+				CHAIN_TRACKING.set(&[Inner::Chain::NAME], Into::<u64>::into(header.index));
 				Ok::<_, anyhow::Error>(header.data)
 			}
 		})

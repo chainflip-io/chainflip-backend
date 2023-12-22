@@ -23,7 +23,7 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: core::fmt::Debug + Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Index: core::fmt::Debug + Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static + Into<u64>);
 	define_trait_alias!(pub trait Hash: core::fmt::Debug + PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
