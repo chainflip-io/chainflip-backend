@@ -404,7 +404,7 @@ impl<T: Config> Pallet<T> {
 		let fee_per_input_utxo = bitcoin_fee_info.fee_per_input_utxo();
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
-		
+
 		match utxo_selection_type {
 			UtxoSelectionType::SelectAllForRotation => {
 				let spendable_utxos: Vec<_> = BitcoinAvailableUtxos::<T>::take()

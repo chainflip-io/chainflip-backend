@@ -6,9 +6,7 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
-use cf_primitives::{
-	BroadcastId, SemVer, ThresholdSignatureRequestId,
-};
+use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,

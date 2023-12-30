@@ -25,11 +25,7 @@ fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
 }
 
 fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
-	select_median(
-		data.iter()
-			.map(BitcoinFeeInfo::sats_per_kilo_byte)
-			.collect()
-		)
+	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilo_byte).collect())
 		.map(BitcoinFeeInfo::new)
 }
 
