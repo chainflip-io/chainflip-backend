@@ -25,20 +25,12 @@ fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
 }
 
 fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
-	if data.is_empty() {
-		return None
-	}
-
-	Some(BitcoinFeeInfo {
-		fee_per_input_utxo: select_median(data.iter().map(|x| x.fee_per_input_utxo).collect())
-			.expect("non-empty list"),
-		fee_per_output_utxo: select_median(data.iter().map(|x| x.fee_per_output_utxo).collect())
-			.expect("non-empty list"),
-		min_fee_required_per_tx: select_median(
-			data.iter().map(|x| x.min_fee_required_per_tx).collect(),
+	select_median(
+		data.iter()
+			.map(BitcoinFeeInfo::sats_per_kilo_byte)
+			.collect()
 		)
-		.expect("non-empty list"),
-	})
+		.map(BitcoinFeeInfo::new)
 }
 
 impl WitnessDataExtraction for RuntimeCall {
@@ -283,36 +275,14 @@ mod tests {
 		assert_eq!(select_median::<u16>(vec![]), None);
 	}
 
+	#[test]
 	// For BTC, we witness multiple values, and median should be
 	// selected for each value independently:
-	#[test]
 	fn select_median_btc_info_test() {
-		let votes = vec![
-			BitcoinFeeInfo {
-				fee_per_input_utxo: 10,
-				fee_per_output_utxo: 55,
-				min_fee_required_per_tx: 100,
-			},
-			BitcoinFeeInfo {
-				fee_per_input_utxo: 45,
-				fee_per_output_utxo: 100,
-				min_fee_required_per_tx: 10,
-			},
-			BitcoinFeeInfo {
-				fee_per_input_utxo: 100,
-				fee_per_output_utxo: 10,
-				min_fee_required_per_tx: 50,
-			},
-		];
+		let mut votes: Vec<_> = (0..10).map(BitcoinFeeInfo::new).collect();
+		votes.sort_unstable_by_key(|info| info.blake2_128());
 
-		assert_eq!(
-			select_median_btc_info(votes),
-			Some(BitcoinFeeInfo {
-				fee_per_input_utxo: 45,
-				fee_per_output_utxo: 55,
-				min_fee_required_per_tx: 50
-			})
-		);
+		assert_eq!(select_median_btc_info(votes), Some(BitcoinFeeInfo::new(5)));
 	}
 
 	#[test]
