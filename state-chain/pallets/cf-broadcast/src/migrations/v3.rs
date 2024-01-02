@@ -57,23 +57,21 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// Awaiting broadcast: take the broadcast attempt with the highest attempt.
 		let mut latest_attempt = BTreeMap::new();
-		old::AwaitingBroadcast::<T, I>::iter_keys().for_each(
-			|old::BroadcastAttemptId { broadcast_id, attempt_count }| {
+		old::AwaitingBroadcast::<T, I>::drain().for_each(
+			|(old::BroadcastAttemptId { broadcast_id, attempt_count }, attempt)| {
 				if match latest_attempt.get(&broadcast_id) {
-					Some(attempt) => attempt_count > *attempt,
+					Some((latest_attempt, _attempt)) => attempt_count > *latest_attempt,
 					None => true,
 				} {
-					latest_attempt.insert(broadcast_id, attempt_count);
+					latest_attempt.insert(broadcast_id, (attempt_count, attempt));
 				}
 			},
 		);
 
 		// Migrate data from old storage into new storage.
-		latest_attempt.into_iter().for_each(|(broadcast_id, attempt_count)| {
-			if let Some(attempt) = old::AwaitingBroadcast::<T, I>::get(old::BroadcastAttemptId {
-				broadcast_id,
-				attempt_count,
-			}) {
+		latest_attempt
+			.into_iter()
+			.for_each(|(broadcast_id, (_attempt_count, attempt))| {
 				AwaitingBroadcast::<T, I>::insert(
 					broadcast_id,
 					TransactionSigningAttempt {
@@ -87,11 +85,10 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 						},
 						nominee: attempt.nominee,
 					},
-				);
-			}
-		});
+				)
+			});
 
-		// Failed broadcaster storage: Vec<ValidatorId> -> BTreeSet<ValidatorId>
+		//Failed broadcaster storage: Vec<ValidatorId> -> BTreeSet<ValidatorId> - dedup
 		FailedBroadcasters::<T, I>::translate(|_, failed_broadcasters: Vec<T::ValidatorId>| {
 			Some(BTreeSet::from_iter(failed_broadcasters))
 		});
@@ -137,22 +134,27 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		// Decode verification data.
 		let MigrationVerification::<T> {
 			broadcasts_with_failed_broadcasters,
 			broadcast_retry_queue,
 		} = MigrationVerification::<T>::decode(&mut &state[..]).unwrap();
 
+		// Ensure all failed broadcasters storage are migrated.
 		broadcasts_with_failed_broadcasters.into_iter().for_each(
 			|(broadcast_id, failed_broadcasters)| {
-				assert_eq!(FailedBroadcasters::<T, I>::get(broadcast_id), failed_broadcasters)
+				assert_eq!(FailedBroadcasters::<T, I>::get(broadcast_id), failed_broadcasters);
 			},
 		);
 
+		// Ensure old AwaitingBroadcast are cleared.
+		assert_eq!(old::AwaitingBroadcast::<T, I>::iter_keys().count(), 0);
+
+		// Ensure retry queues are migrated.
 		let new_retry_queue = BroadcastRetryQueue::<T, I>::get()
 			.into_iter()
 			.map(|attempt| attempt.broadcast_id)
 			.collect::<Vec<_>>();
-
 		broadcast_retry_queue
 			.into_iter()
 			.for_each(|broadcast_id| assert!(new_retry_queue.contains(&broadcast_id)));
@@ -168,7 +170,7 @@ mod migration_tests {
 	#[cfg(feature = "try-runtime")]
 	use frame_support::assert_ok;
 
-	// Perform runtime migration. Rune pre- and post- upgrade if "try-runtime"
+	// Perform runtime migration. Run pre- and post- upgrade if "try-runtime"
 	fn do_upgrade() {
 		#[cfg(feature = "try-runtime")]
 		let verification = crate::migrations::v3::Migration::<Test, Instance1>::pre_upgrade().unwrap();
@@ -242,6 +244,9 @@ mod migration_tests {
 			let failed_broadcasters = [1u64, 2u64, 3u64].into_iter().collect();
 			assert_eq!(failed_1, failed_broadcasters);
 			assert_eq!(failed_2, failed_broadcasters);
+
+			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(1), Some(3));
+			assert_eq!(FailedBroadcasters::<Test, Instance1>::decode_len(2), Some(3));
 		});
 	}
 

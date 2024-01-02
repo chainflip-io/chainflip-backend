@@ -64,10 +64,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
-	use frame_support::{
-		pallet_prelude::{OptionQuery, ValueQuery, *},
-		traits::EnsureOrigin,
-	};
+	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
