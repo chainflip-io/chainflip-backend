@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use jsonrpsee::core::RpcResult;
 
 use super::StateChainStreamApi;
 
@@ -9,4 +10,6 @@ pub trait ChainApi {
 
 	async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi>;
 	async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>>;
+
+	async fn block(&self, hash: state_chain_runtime::Hash) -> RpcResult<super::BlockInfo>;
 }
