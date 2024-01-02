@@ -134,6 +134,8 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	}
 }
 
+
+/// A record on the Bitcoin transaction fee.
 #[derive(
 	Copy,
 	Clone,
@@ -152,6 +154,12 @@ pub struct BitcoinFeeInfo {
 }
 
 impl BitcoinFeeInfo {
+	/// Construct an instance of [`BitcoinFeeInfo`].
+	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
+		Self { sats_per_kilo_byte: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE) }
+	}
+
+
 	pub fn sats_per_kilo_byte(&self) -> BtcAmount {
 		self.sats_per_kilo_byte
 	}
@@ -177,14 +185,6 @@ const BYTES_PER_KILOBYTE: BtcAmount = 1024;
 impl Default for BitcoinFeeInfo {
 	fn default() -> Self {
 		Self { sats_per_kilo_byte: DEFAULT_FEE_SATS_PER_KILO_BYTE }
-	}
-}
-
-impl BitcoinFeeInfo {
-	/// Calculate the fees necessary based on the provided fee rate.
-	/// We ensure that a minimum of 1 sat per vByte is set for each of the fees.
-	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
-		Self { sats_per_kilo_byte: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE) }
 	}
 }
 
