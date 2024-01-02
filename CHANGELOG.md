@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.5] - 2024-01-02
+
+### Fixes
+
+- Ensure all nodes consistently witness Bitcoin deposits ([#4374](https://github.com/chainflip-io/chainflip-backend/issues/4374))
+
 ## [1.1.4] - 2023-12-21
 
 ### Features
