@@ -267,13 +267,27 @@ mod tests {
 	}
 
 	#[test]
-	// For BTC, we witness multiple values, and median should be
-	// selected for each value independently:
+	// The median for a collection of BTC fee infos is selected based on the order of their
+	// `sats_per_kilo_byte` properties.
+	//
+	// Other properties (fee per input utxo, fee per output utxo,
+	// min fee required per tx) are assumed to have the same order.
 	fn select_median_btc_info_test() {
 		let mut votes: Vec<_> = (0..10).map(BitcoinFeeInfo::new).collect();
 		votes.sort_unstable_by_key(|info| info.blake2_128());
 
-		assert_eq!(select_median_btc_info(votes), Some(BitcoinFeeInfo::new(5)));
+		let actual =
+			select_median_btc_info(votes).expect("should not happen: the collection is not empty.");
+		let expected = BitcoinFeeInfo::new(5);
+
+		for f in [
+			BitcoinFeeInfo::sats_per_kilo_byte,
+			BitcoinFeeInfo::fee_per_input_utxo,
+			BitcoinFeeInfo::fee_per_output_utxo,
+			BitcoinFeeInfo::min_fee_required_per_tx,
+		] {
+			assert_eq!(f(&actual), f(&expected));
+		}
 	}
 
 	#[test]
