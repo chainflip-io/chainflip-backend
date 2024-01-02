@@ -6,8 +6,7 @@ use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
 
 fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
-	let len_sub_one = data.len().checked_sub(1)?;
-	let median_index = len_sub_one / 2;
+	let median_index = data.len().checked_sub(1)? / 2;
 	let (_, median_value, _) = data.select_nth_unstable(median_index);
 
 	Some(*median_value)
