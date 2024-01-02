@@ -41,6 +41,9 @@ const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
 
 const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
+/// Enough time for a state chain transaction to make it into a (unfinalised) block
+const CFE_VERSION_SUBMIT_TIMEOUT: Duration = Duration::from_secs(30);
+
 #[derive(Copy, Clone)]
 pub struct BlockInfo {
 	pub parent_hash: state_chain_runtime::Hash,
@@ -753,26 +756,33 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					recorded_version, this_version
 				);
 
-				subxt_client
-					.tx()
-					.sign_and_submit_then_watch_default(
-						&subxt::dynamic::tx(
-							"Validator",
-							"cfe_version",
-							vec![(
-								"new_version",
-								vec![
-									("major", this_version.major),
-									("minor", this_version.minor),
-									("patch", this_version.patch),
-								],
-							)],
-						),
-						&subxt_signer,
-					)
-					.await?
-					.wait_for_in_block()
-					.await?;
+				// Submitting transaction with subxt sometimes gets stuck without returning any
+				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
+				// so we use a timeout to ensure we can recover:
+				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
+					subxt_client
+						.tx()
+						.sign_and_submit_then_watch_default(
+							&subxt::dynamic::tx(
+								"Validator",
+								"cfe_version",
+								vec![(
+									"new_version",
+									vec![
+										("major", this_version.major),
+										("minor", this_version.minor),
+										("patch", this_version.patch),
+									],
+								)],
+							),
+							&subxt_signer,
+						)
+						.await?
+						.wait_for_in_block()
+						.await
+				})
+				.await
+				.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))??;
 			}
 		}
 

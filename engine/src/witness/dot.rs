@@ -173,14 +173,12 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	}
 }
 
-pub async fn start<StateChainClient, ProcessCall, ProcessingFut, PrewitnessCall, PrewitnessFut>(
+pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
 	process_call: ProcessCall,
-	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StateChainStreamApi + Clone,
-	unfinalized_state_chain_stream: impl StateChainStreamApi<false>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -192,12 +190,6 @@ where
 		+ Clone
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
-	PrewitnessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> PrewitnessFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	PrewitnessFut: Future<Output = ()> + Send + 'static,
 {
 	let unfinalised_source = DotUnfinalisedSource::new(dot_client.clone())
 		.strictly_monotonic()
@@ -226,15 +218,6 @@ where
 		.await;
 
 	let vaults = epoch_source.vaults().await;
-
-	// Pre-witnessing
-	unfinalised_source
-		.chunk_by_vault(vaults.clone(), scope)
-		.deposit_addresses(scope, unfinalized_state_chain_stream, state_chain_client.clone())
-		.await
-		.dot_deposits(prewitness_call)
-		.logging("pre-witnessing")
-		.spawn(scope);
 
 	// Full witnessing
 	DotFinalisedSource::new(dot_client.clone())
