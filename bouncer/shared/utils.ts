@@ -153,7 +153,7 @@ export function getBtcClient(): Client {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventQuery = (data: any) => boolean;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Event = { name: any; data: any; block: number; event_index: number };
+export type Event = { name: any; data: any; block: number; event_index: number };
 export async function observeEvent(
   eventName: string,
   api: ApiPromise,
@@ -338,7 +338,7 @@ export async function observeBadEvents(
   );
   if (event) {
     throw new Error(
-      `Unexpected event emited ${event.name.section}:${event.name.method} in block ${event.block}`,
+      `Unexpected event emitted ${event.name.section}:${event.name.method} in block ${event.block}`,
     );
   }
 }
