@@ -39,6 +39,7 @@ export async function requestNewSwap(
   destAddress: string,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
+  log = true,
 ): Promise<SwapParams> {
   const chainflipApi = await getChainflipApi();
 
@@ -79,8 +80,10 @@ export async function requestNewSwap(
   const channelDestAddress = res.destinationAddress[assetToChain(destAsset)];
   const channelId = Number(res.channelId);
 
-  console.log(`${tag} Swap address: ${depositAddress}`);
-  console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+  if (log) {
+    console.log(`${tag} Swap address: ${depositAddress}`);
+    console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+  }
 
   return {
     sourceAsset,
@@ -102,10 +105,11 @@ export async function doPerformSwap(
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
+  log = true,
 ) {
   const oldBalance = await getBalance(destAsset, destAddress);
 
-  console.log(`${tag} Old balance: ${oldBalance}`);
+  if (log) console.log(`${tag} Old balance: ${oldBalance}`);
 
   const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, channelId);
 
@@ -114,14 +118,14 @@ export async function doPerformSwap(
     : Promise.resolve();
 
   await (senderType === SenderType.Address
-    ? send(sourceAsset, depositAddress, amount)
+    ? send(sourceAsset, depositAddress, amount, log)
     : sendViaCfTester(sourceAsset, depositAddress));
 
-  console.log(`${tag} Funded the address`);
+  if (log) console.log(`${tag} Funded the address`);
 
   await swapScheduledHandle;
 
-  console.log(`${tag} Waiting for balance to update`);
+  if (log) console.log(`${tag} Waiting for balance to update`);
 
   try {
     const [newBalance] = await Promise.all([
@@ -129,7 +133,7 @@ export async function doPerformSwap(
       ccmEventEmitted,
     ]);
 
-    console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
   } catch (err) {
     throw new Error(`${tag} ${err}`);
   }
@@ -143,14 +147,16 @@ export async function performSwap(
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
   amount?: string,
+  log = true,
 ) {
   const tag = swapTag ?? '';
 
-  console.log(
-    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
-      messageMetadata ? `someMessage` : ''
-    }`,
-  );
+  if (log)
+    console.log(
+      `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
+        messageMetadata ? `someMessage` : ''
+      }`,
+    );
 
   const swapParams = await requestNewSwap(
     sourceAsset,
@@ -158,8 +164,9 @@ export async function performSwap(
     destAddress,
     tag,
     messageMetadata,
+    log,
   );
-  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount);
+  await doPerformSwap(swapParams, tag, messageMetadata, senderType, amount, log);
 
   return swapParams;
 }
