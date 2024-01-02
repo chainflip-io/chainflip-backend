@@ -61,7 +61,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				let script_addresses = script_addresses(addresses);
 
-				let deposit_witnesses = deposit_witnesses(&txs, script_addresses);
+				let deposit_witnesses = deposit_witnesses(&txs, &script_addresses);
 
 				// Submit all deposit witnesses for the block.
 				if !deposit_witnesses.is_empty() {
@@ -82,40 +82,40 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 }
 
 fn deposit_witnesses(
-	txs: &Vec<VerboseTransaction>,
-	script_addresses: HashMap<Vec<u8>, ScriptPubkey>,
+	txs: &[VerboseTransaction],
+	script_addresses: &HashMap<Vec<u8>, ScriptPubkey>,
 ) -> Vec<DepositWitness<Bitcoin>> {
-	let mut deposit_witnesses = Vec::new();
-	for tx in txs {
-		let tx_hash = tx.txid.as_raw_hash().to_byte_array();
-
-		let deposits_in_tx = (0..)
-			.zip(&tx.vout)
-			.filter(|(_vout, tx_out)| tx_out.value.to_sat() > 0)
-			.filter_map(|(vout, tx_out)| {
-				let tx_script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
-				script_addresses.get(&tx_script_pubkey_bytes).map(
-					|bitcoin_script| DepositWitness::<Bitcoin> {
-						deposit_address: bitcoin_script.clone(),
-						asset: btc::Asset::Btc,
-						amount: tx_out.value.to_sat(),
-						deposit_details: UtxoId { tx_id: tx_hash, vout },
-					},
-				)
-			})
-			// convert to bytes so it's Hashable
-			.into_grouping_map_by(|d| d.deposit_address.bytes())
-			// We only take the largest output of a tx as a deposit witness. This is to avoid
-			// attackers spamming us with many small outputs in a tx. Inputs are more expensive than
-			// outputs - thus, the attacker could send many outputs (cheap for them) which results
-			// in us needing to sign many *inputs*, expensive for us. sort by descending by amount
-			.max_by_key(|_address, d| d.amount);
-
-		for (_script_pubkey, deposit) in deposits_in_tx {
-			deposit_witnesses.push(deposit);
-		}
-	}
-	deposit_witnesses
+	txs.iter()
+		.flat_map(|tx| {
+			Iterator::zip(0.., &tx.vout)
+				.filter(|(_vout, tx_out)| tx_out.value.to_sat() > 0)
+				.filter_map(|(vout, tx_out)| {
+					script_addresses.get(tx_out.script_pubkey.as_bytes()).map(|bitcoin_script| {
+						DepositWitness::<Bitcoin> {
+							deposit_address: bitcoin_script.clone(),
+							asset: btc::Asset::Btc,
+							amount: tx_out.value.to_sat(),
+							deposit_details: UtxoId {
+								tx_id: tx.txid.as_raw_hash().to_byte_array(),
+								vout,
+							},
+						}
+					})
+				})
+				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address.clone())
+				.group_by(|deposit_witness| deposit_witness.deposit_address.clone())
+				.into_iter()
+				.map(|(_deposit_address, deposit_witnesses)| {
+					// We only take the largest output of a tx as a deposit witness. This is to
+					// avoid attackers spamming us with many small outputs in a tx. Inputs are more
+					// expensive than outputs - thus, the attacker could send many outputs (cheap
+					// for them) which results in us needing to sign many *inputs*, expensive for
+					// us. sort by descending by amount
+					deposit_witnesses.max_by_key(|deposit_witness| deposit_witness.amount).unwrap()
+				})
+				.collect::<Vec<_>>()
+		})
+		.collect()
 }
 
 fn script_addresses(
@@ -147,7 +147,7 @@ pub mod tests {
 		DepositChannel,
 	};
 	use pallet_cf_ingress_egress::ChannelAction;
-	use rand::Rng;
+	use rand::{seq::SliceRandom, Rng, SeedableRng};
 	use sp_runtime::AccountId32;
 
 	pub fn fake_transaction(tx_outs: Vec<VerboseTxOut>, fee: Option<Amount>) -> VerboseTransaction {
@@ -202,7 +202,7 @@ pub mod tests {
 	#[test]
 	fn deposit_witnesses_no_utxos_no_monitored() {
 		let txs = vec![fake_transaction(vec![], None), fake_transaction(vec![], None)];
-		let deposit_witnesses = deposit_witnesses(&txs, HashMap::new());
+		let deposit_witnesses = deposit_witnesses(&txs, &HashMap::new());
 		assert!(deposit_witnesses.is_empty());
 	}
 
@@ -220,7 +220,7 @@ pub mod tests {
 		)];
 
 		let deposit_witnesses =
-			deposit_witnesses(&txs, script_addresses(vec![(fake_details(btc_deposit_script))]));
+			deposit_witnesses(&txs, &script_addresses(vec![(fake_details(btc_deposit_script))]));
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 	}
@@ -247,7 +247,7 @@ pub mod tests {
 		];
 
 		let deposit_witnesses =
-			deposit_witnesses(&txs, script_addresses(vec![fake_details(btc_deposit_script)]));
+			deposit_witnesses(&txs, &script_addresses(vec![fake_details(btc_deposit_script)]));
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, LARGEST_UTXO_TO_DEPOSIT);
 	}
@@ -274,22 +274,90 @@ pub mod tests {
 			fake_transaction(vec![], None),
 		];
 
-		let mut deposit_witnesses = deposit_witnesses(
+		let deposit_witnesses = deposit_witnesses(
 			&txs,
 			// watching 2 addresses
-			script_addresses(vec![
+			&script_addresses(vec![
 				fake_details(btc_deposit_script_1.clone()),
 				fake_details(btc_deposit_script_2.clone()),
 			]),
 		);
 
-		deposit_witnesses.sort_by_key(|d| d.deposit_address.clone());
 		// We should have one deposit per address.
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_FOR_SECOND_DEPOSIT);
 		assert_eq!(deposit_witnesses[0].deposit_address, btc_deposit_script_2);
 		assert_eq!(deposit_witnesses[1].amount, LARGEST_UTXO_TO_DEPOSIT);
 		assert_eq!(deposit_witnesses[1].deposit_address, btc_deposit_script_1);
+	}
+
+	#[test]
+	fn deposit_witnesses_ordering_is_consistent() {
+		let btc_deposit_script_1: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
+		let btc_deposit_script_2: ScriptPubkey = DepositAddress::new([0; 32], 1232).script_pubkey();
+
+		let script_addresses = script_addresses(vec![
+			fake_details(btc_deposit_script_1.clone()),
+			fake_details(btc_deposit_script_2.clone()),
+		]);
+
+		let txs: Vec<VerboseTransaction> = vec![
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(3, btc_deposit_script_1.bytes()),
+					(5, vec![3]),
+					(7, btc_deposit_script_1.bytes()),
+					(11, btc_deposit_script_2.bytes()),
+				]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(13, btc_deposit_script_2.bytes()),
+					(17, btc_deposit_script_2.bytes()),
+					(19, vec![5]),
+					(23, btc_deposit_script_1.bytes()),
+				]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(13, btc_deposit_script_2.bytes()),
+					(19, vec![7]),
+					(23, btc_deposit_script_1.bytes()),
+				]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![
+					(29, btc_deposit_script_1.bytes()),
+					(31, btc_deposit_script_2.bytes()),
+					(37, vec![11]),
+				]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(41, btc_deposit_script_2.bytes()), (43, vec![17])]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(47, btc_deposit_script_1.bytes()), (53, vec![19])]),
+				None,
+			),
+			fake_transaction(
+				fake_verbose_vouts(vec![(61, vec![23]), (59, btc_deposit_script_2.bytes())]),
+				None,
+			),
+			fake_transaction(fake_verbose_vouts(vec![(67, vec![29])]), None),
+		];
+
+		let mut rng = rand::rngs::StdRng::from_seed([3; 32]);
+
+		for _i in 0..10 {
+			let n = rng.gen_range(0..txs.len());
+			let test_txs = txs.as_slice().choose_multiple(&mut rng, n).cloned().collect::<Vec<_>>();
+			assert!((0..10).map(|_| deposit_witnesses(&test_txs, &script_addresses)).all_equal());
+		}
 	}
 
 	#[test]
@@ -317,7 +385,7 @@ pub mod tests {
 		];
 
 		let deposit_witnesses =
-			deposit_witnesses(&txs, script_addresses(vec![fake_details(btc_deposit_script)]));
+			deposit_witnesses(&txs, &script_addresses(vec![fake_details(btc_deposit_script)]));
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
