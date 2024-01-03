@@ -6,9 +6,9 @@ use super::*;
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
-	tweaked_pubkey_bytes: [u8; 33],
-	pub tapleaf_hash: Hash,
-	unlock_script: BitcoinScript,
+	tweaked_pubkey_bytes: Option<[u8; 33]>,
+	pub tapleaf_hash: Option<Hash>,
+	unlock_script: Option<BitcoinScript>,
 }
 
 fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
@@ -22,6 +22,15 @@ fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
 
 impl DepositAddress {
 	pub fn new(pubkey_x: [u8; 32], salt: u32) -> Self {
+		if salt == 0 {
+			return Self {
+				pubkey_x,
+				salt,
+				tweaked_pubkey_bytes: None,
+				tapleaf_hash: None,
+				unlock_script: None,
+			}
+		}
 		let unlock_script = unlock_script(pubkey_x, salt);
 		let tapleaf_hash = {
 			// SHA256("TapLeaf")
@@ -46,25 +55,34 @@ impl DepositAddress {
 			let mut tweaked =
 				PublicKey::parse_compressed(INTERNAL_PUBKEY.try_into().unwrap()).unwrap();
 			let _result = tweaked.tweak_add_assign(&SecretKey::parse(&tweak_hash).unwrap());
-			tweaked.serialize_compressed()
+			Some(tweaked.serialize_compressed())
 		};
-		Self { pubkey_x, salt, tweaked_pubkey_bytes, tapleaf_hash, unlock_script }
+		Self {
+			pubkey_x,
+			salt,
+			tweaked_pubkey_bytes,
+			tapleaf_hash: Some(tapleaf_hash),
+			unlock_script: Some(unlock_script),
+		}
 	}
 
-	pub fn unlock_script_serialized(&self) -> Vec<u8> {
-		self.unlock_script.btc_serialize()
+	pub fn unlock_script_serialized(&self) -> Option<Vec<u8>> {
+		Some(self.unlock_script.clone()?.btc_serialize())
 	}
 
 	pub fn script_pubkey(&self) -> ScriptPubkey {
-		ScriptPubkey::Taproot(self.tweaked_pubkey_bytes[1..].as_array())
+		let pubkey = self
+			.tweaked_pubkey_bytes
+			.map_or(self.pubkey_x, |tweaked| tweaked[1..].as_array());
+		ScriptPubkey::Taproot(pubkey)
 	}
 
 	/// The leaf version depends on the evenness of the tweaked pubkey.
-	pub fn leaf_version(&self) -> u8 {
-		if self.tweaked_pubkey_bytes[0] == 2 {
-			0xC0
+	pub fn leaf_version(&self) -> Option<u8> {
+		if self.tweaked_pubkey_bytes?[0] == 2 {
+			Some(0xC0)
 		} else {
-			0xC1
+			Some(0xC1)
 		}
 	}
 }
@@ -82,7 +100,7 @@ fn test_btc_derive_deposit_address() {
 		)
 		.script_pubkey()
 		.to_address(&BitcoinNetwork::Mainnet),
-		"bc1p4syuuy97f96lfah764w33ru9v5u3uk8n8jk9xsq684xfl8sxu82sdcvdcx"
+		"bc1p96yhxaszqgtu3cu95v9hfd6c9yuxxpyl5e4rl5thuqftqas9jyzsdersag"
 	);
 	assert_eq!(
 		DepositAddress::new(
@@ -118,11 +136,11 @@ fn test_build_script() {
 	assert_eq!(
 		unlock_script(
 			hex_literal::hex!("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"),
-			CHANGE_ADDRESS_SALT
+			1
 		)
 		.btc_serialize(),
 		hex_literal::hex!(
-			"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
+			"245175202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
 		)
 	);
 }

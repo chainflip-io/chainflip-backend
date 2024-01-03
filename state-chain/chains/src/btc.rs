@@ -764,20 +764,28 @@ impl BitcoinTransaction {
 	}
 
 	pub fn finalize(self) -> Vec<u8> {
-		const NUM_WITNESSES: u8 = 3u8;
+		const NUM_WITNESSES_SCRIPT: u8 = 3u8;
+		const NUM_WITNESSES_KEY: u8 = 1u8;
 		const LEN_SIGNATURE: u8 = 64u8;
 
 		let mut transaction_bytes = self.transaction_bytes;
 
 		for i in 0..self.inputs.len() {
-			transaction_bytes.push(NUM_WITNESSES);
-			transaction_bytes.push(LEN_SIGNATURE);
-			transaction_bytes.extend(self.signatures[i]);
-			transaction_bytes.extend(self.inputs[i].deposit_address.unlock_script_serialized());
-			// Length of tweaked pubkey + leaf version
-			transaction_bytes.push(33u8);
-			transaction_bytes.push(self.inputs[i].deposit_address.leaf_version());
-			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
+			let unlock_script = self.inputs[i].deposit_address.unlock_script_serialized();
+			if let Some(unlock_script) = unlock_script {
+				transaction_bytes.push(NUM_WITNESSES_SCRIPT);
+				transaction_bytes.push(LEN_SIGNATURE);
+				transaction_bytes.extend(self.signatures[i]);
+				transaction_bytes.extend(unlock_script);
+				// Length of tweaked pubkey + leaf version
+				transaction_bytes.push(33u8);
+				transaction_bytes.push(self.inputs[i].deposit_address.leaf_version().unwrap());
+				transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
+			} else {
+				transaction_bytes.push(NUM_WITNESSES_KEY);
+				transaction_bytes.push(LEN_SIGNATURE);
+				transaction_bytes.extend(self.signatures[i]);
+			}
 		}
 		transaction_bytes.extend(LOCKTIME);
 		transaction_bytes
@@ -792,7 +800,8 @@ impl BitcoinTransaction {
 		const EPOCH: u8 = 0u8;
 		const HASHTYPE: u8 = 0u8;
 		const VERSION: [u8; 4] = 2u32.to_le_bytes();
-		const SPENDTYPE: u8 = 2u8;
+		const SPENDTYPE_KEY: u8 = 0u8;
+		const SPENDTYPE_SCRIPT: u8 = 2u8;
 		const KEYVERSION: u8 = 0u8;
 		const CODESEPARATOR: [u8; 4] = u32::MAX.to_le_bytes();
 
@@ -852,31 +861,55 @@ impl BitcoinTransaction {
 					} else {
 						PreviousOrCurrent::Current
 					},
-					sha2_256(
-						&[
-							// Tagged Hash according to BIP 340
-							TAPSIG_HASH,
-							TAPSIG_HASH,
-							// Epoch according to footnote 20 in BIP 341
-							&[EPOCH],
-							// "Common signature message" according to BIP 341
-							&[HASHTYPE],
-							&VERSION,
-							&LOCKTIME,
-							&prevouts,
-							&amounts,
-							&scriptpubkeys,
-							&sequences,
-							&outputs,
-							&[SPENDTYPE],
-							&input_index.to_le_bytes(),
-							// "Common signature message extension" according to BIP 342
-							&input.deposit_address.tapleaf_hash[..],
-							&[KEYVERSION],
-							&CODESEPARATOR,
-						]
-						.concat(),
-					),
+					if input.deposit_address.tapleaf_hash.is_some() {
+						sha2_256(
+							&[
+								// Tagged Hash according to BIP 340
+								TAPSIG_HASH,
+								TAPSIG_HASH,
+								// Epoch according to footnote 20 in BIP 341
+								&[EPOCH],
+								// "Common signature message" according to BIP 341
+								&[HASHTYPE],
+								&VERSION,
+								&LOCKTIME,
+								&prevouts,
+								&amounts,
+								&scriptpubkeys,
+								&sequences,
+								&outputs,
+								&[SPENDTYPE_SCRIPT],
+								&input_index.to_le_bytes(),
+								// "Common signature message extension" according to BIP 342
+								&input.deposit_address.tapleaf_hash.unwrap()[..],
+								&[KEYVERSION],
+								&CODESEPARATOR,
+							]
+							.concat(),
+						)
+					} else {
+						sha2_256(
+							&[
+								// Tagged Hash according to BIP 340
+								TAPSIG_HASH,
+								TAPSIG_HASH,
+								// Epoch according to footnote 20 in BIP 341
+								&[EPOCH],
+								// "Common signature message" according to BIP 341
+								&[HASHTYPE],
+								&VERSION,
+								&LOCKTIME,
+								&prevouts,
+								&amounts,
+								&scriptpubkeys,
+								&sequences,
+								&outputs,
+								&[SPENDTYPE_KEY],
+								&input_index.to_le_bytes(),
+							]
+							.concat(),
+						)
+					},
 				)
 			})
 			.collect()
