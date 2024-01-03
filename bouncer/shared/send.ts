@@ -10,25 +10,25 @@ import { getCFTesterAbi } from './eth_abis';
 
 const cfTesterAbi = await getCFTesterAbi();
 
-export async function send(asset: Asset, address: string, amount?: string) {
+export async function send(asset: Asset, address: string, amount?: string, log = true) {
   switch (asset) {
     case 'BTC':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'ETH':
-      await sendEth(address, amount ?? defaultAssetAmounts(asset));
+      await sendEth(address, amount ?? defaultAssetAmounts(asset), log);
       break;
     case 'DOT':
       await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'USDC': {
       const contractAddress = getEthContractAddress(asset);
-      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset));
+      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset), log);
       break;
     }
     case 'FLIP': {
       const contractAddress = getEthContractAddress(asset);
-      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset));
+      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset), log);
       break;
     }
     default:

@@ -1,6 +1,6 @@
 set -e
 ./tests/gaslimit_ccm.ts
-./tests/all_concurrent_tests.ts
+./tests/all_concurrent_tests.ts $1
 ./tests/rotates_through_btc_swap.ts
 
 if [[ $LOCALNET == false ]]; then

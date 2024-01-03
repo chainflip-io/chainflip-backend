@@ -257,7 +257,7 @@ bouncer() {
   (
     cd ./bouncer
     pnpm install > /dev/null 2>&1
-    ./run.sh
+    ./run.sh $NODE_COUNT
   )
 }
 

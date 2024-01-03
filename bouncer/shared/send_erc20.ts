@@ -9,6 +9,7 @@ export async function sendErc20(
   destinationAddress: string,
   contractAddress: string,
   amount: string,
+  log = true,
 ) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const web3 = new Web3(ethEndpoint);
@@ -22,7 +23,7 @@ export async function sendErc20(
 
   const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
 
-  console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);
+  if (log) console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);
 
-  await signAndSendTxEth(contractAddress, '0', txData);
+  await signAndSendTxEth(contractAddress, '0', txData, undefined, log);
 }

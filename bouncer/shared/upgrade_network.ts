@@ -95,7 +95,10 @@ async function incompatibleUpgrade(
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await bumpSpecVersionAgainstNetwork(nextVersionWorkspacePath);
+  await bumpSpecVersionAgainstNetwork(
+    `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
+    9944,
+  );
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
