@@ -504,7 +504,7 @@ where
 				>, HashMap<_, _>>(block.hash),
 				state_chain_client.storage_value::<frame_system::Events<
 					chainflip_api::primitives::state_chain_runtime::Runtime,
-				>>(block.hash,)
+				>>(block.hash)
 			)?;
 
 			let updated_range_orders = events.iter().filter_map(|event_record| {
