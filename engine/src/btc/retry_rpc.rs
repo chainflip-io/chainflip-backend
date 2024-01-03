@@ -18,7 +18,7 @@ pub struct BtcRetryRpcClient {
 	retry_client: RetrierClient<BtcRpcClient>,
 }
 
-const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
+const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(225);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
@@ -213,5 +213,78 @@ pub mod mocks {
 
 			async fn best_block_header(&self) -> BlockHeader;
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use utilities::testing::logging::init_test_logger;
+
+	use super::*;
+
+	#[tokio::test]
+	#[ignore = "requires local node, useful for manual testing"]
+	async fn test_btc_retrier() {
+		init_test_logger();
+
+		use futures::FutureExt;
+		use utilities::task_scope::task_scope;
+
+		task_scope(|scope| {
+			async move {
+				let retry_client = BtcRetryRpcClient::new(
+					scope,
+					NodeContainer::<HttpBasicAuthEndpoint> {
+						primary: HttpBasicAuthEndpoint {
+							http_endpoint: "https://btc-mainnet.euc1-rpc:443".into(),
+							basic_auth_user: "flip".to_string(),
+							basic_auth_password: "44c55233c95d59345059f2ce839042ef".to_string(),
+						},
+						backup: None,
+					},
+					BitcoinNetwork::Mainnet,
+				)
+				.await
+				.unwrap();
+
+				let rpc_client = BtcRpcClient::new(
+					HttpBasicAuthEndpoint {
+						http_endpoint: "https://btc-mainnet.euc1-rpc:443".into(),
+						basic_auth_user: "flip".to_string(),
+						basic_auth_password: "44c55233c95d59345059f2ce839042ef".to_string(),
+					},
+					None,
+				)
+				.unwrap()
+				.await;
+
+				for i in 822000..824150 {
+					// let best_header = retry_client.best_block_header().await;
+					let hash = retry_client.block_hash(i).await;
+					// let header = rpc_client.block_header(hash).await.unwrap();
+
+					match tokio::time::timeout(BITCOIN_RPC_TIMEOUT, rpc_client.block_header(hash))
+						.await
+					{
+						Ok(res_header) => match res_header {
+							Ok(header) => {
+								println!("Header: {:?}", header)
+							},
+							Err(e) => {
+								panic!("Error in response {}!", e);
+							},
+						},
+						Err(_) => {
+							panic!("Timed out!");
+						},
+					}
+				}
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
 	}
 }

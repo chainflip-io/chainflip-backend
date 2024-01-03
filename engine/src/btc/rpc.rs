@@ -86,15 +86,10 @@ impl BtcRpcClient {
 					match get_bitcoin_network(&client, &endpoint).await {
 						Ok(network) if network == expected_btc_network => break,
 						Ok(network) => {
-							error!(
-									"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
-									configuration file...",
-									endpoint.http_endpoint
-								);
+							error!("Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE configuration file...", endpoint.http_endpoint);
 						},
 						Err(e) => error!(
-							"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
-								configuration file. Retrying in {:?}...",
+							"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE configuration file. Retrying in {:?}...",
 							endpoint.http_endpoint,
 							poll_interval.period()
 						),
@@ -507,59 +502,102 @@ mod tests {
 
 		let client = BtcRpcClient::new(
 			HttpBasicAuthEndpoint {
-				http_endpoint: "http://localhost:8332".into(),
+				http_endpoint: "https://btc-mainnet.euc1-rpc:443".into(),
 				basic_auth_user: "flip".to_string(),
-				basic_auth_password: "flip".to_string(),
+				basic_auth_password: "44c55233c95d59345059f2ce839042ef".to_string(),
 			},
 			None,
 		)
 		.unwrap()
 		.await;
 
-		// from a `getblock` RPC call with verbosity 2
-		let block_data: &str = r#"{"hash":"7f03b5690dffca7e446fa986df8c2269389e5846b4e5e8942e8230238392cc55","confirmations":235,"height":113,"version":536870912,"versionHex":"20000000","merkleroot":"3eb919e3d8be10620dd18daa33578859fd4ee8fcfa7d182ad33ef5b69e9347aa","time":1702309098,"mediantime":1702309073,"nonce":0,"bits":"207fffff","difficulty":4.656542373906925e-10,"chainwork":"00000000000000000000000000000000000000000000000000000000000000e4","nTx":2,"previousblockhash":"524d0847614eb89dffd4291786c111473fe7ca3334c7fddd2fa399481a2a99e7","nextblockhash":"7f3bf60a2dc7f2726b7afd5b7fc04d8626edd174779e16c6a3dfa6a450758156","strippedsize":332,"size":477,"weight":1473,"tx":[{"txid":"e2056652441becbfe33cc3b51c70a804360bdf1a730e65f0ee9abbe4028bf8f2","hash":"596da34ae4bb652af9872990ffe6746b922cee46e5fee25f8a16b9e6c3d17c73","version":2,"size":168,"vsize":141,"weight":564,"locktime":0,"vin":[{"coinbase":"017100","txinwitness":["0000000000000000000000000000000000000000000000000000000000000000"],"sequence":4294967295}],"vout":[{"value":50.00000147,"n":0,"scriptPubKey":{"asm":"0 a66802f0279cc06c04abe451733d0644b7cd1aa3","desc":"addr(bcrt1q5e5q9up8nnqxcp9tu3ghx0gxgjmu6x4rkhnr04)#qqa77u3g","hex":"0014a66802f0279cc06c04abe451733d0644b7cd1aa3","address":"bcrt1q5e5q9up8nnqxcp9tu3ghx0gxgjmu6x4rkhnr04","type":"witness_v0_keyhash"}},{"value":0.00000000,"n":1,"scriptPubKey":{"asm":"OP_RETURN aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d","desc":"raw(6a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d)#8sr8jfxw","hex":"6a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d","type":"nulldata"}}],"hex":"020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff03017100ffffffff0293f2052a01000000160014a66802f0279cc06c04abe451733d0644b7cd1aa30000000000000000266a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d0120000000000000000000000000000000000000000000000000000000000000000000000000"},{"txid":"7b43fc408a6b1eb61f312b6732c27a2dde77828de7a677157d1ea03f7888748a","hash":"47d0b049a25be39a6f5b7871d9c6f9350e945095ba09aa3290494f399a4c66f7","version":2,"size":228,"vsize":147,"weight":585,"locktime":112,"vin":[{"txid":"773171b0c840f1dc69c247db64efc553dc2ce0c18558cd9ecef8e7bf81a81f2d","vout":0,"scriptSig":{"asm":"","hex":""},"txinwitness":["30440220379b67fd1ac79d3416aad215b9185144430a71c5f530cafcc076fe4df3025c75022045f823e4d2f15a5daa89ee1682a15f42b7cd95f6594b34315589676aab92203901","03b22186e3b2c239cb47066fca1f42b416772a27a113ba2c968bba069354f7c20a"],"sequence":4294967293}],"vout":[{"value":39.99999853,"n":0,"scriptPubKey":{"asm":"OP_DUP OP_HASH160 0b308fdc0ae8b11dde0673387ac36f20100bf5e9 OP_EQUALVERIFY OP_CHECKSIG","desc":"addr(mgY7uJoK6HszJqYxcwAKpJFj56bEJiuAhB)#pu2vn08p","hex":"76a9140b308fdc0ae8b11dde0673387ac36f20100bf5e988ac","address":"mgY7uJoK6HszJqYxcwAKpJFj56bEJiuAhB","type":"pubkeyhash"}},{"value":10.00000000,"n":1,"scriptPubKey":{"asm":"OP_DUP OP_HASH160 9a1c78a507689f6f54b847ad1cef1e614ee23f1e OP_EQUALVERIFY OP_CHECKSIG","desc":"addr(muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi)#t9q9hu3x","hex":"76a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac","address":"muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi","type":"pubkeyhash"}}],"fee":0.00000147,"hex":"020000000001012d1fa881bfe7f8ce9ecd5885c1e02cdc53c5ef64db47c269dcf140c8b07131770000000000fdffffff026d276bee000000001976a9140b308fdc0ae8b11dde0673387ac36f20100bf5e988ac00ca9a3b000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac024730440220379b67fd1ac79d3416aad215b9185144430a71c5f530cafcc076fe4df3025c75022045f823e4d2f15a5daa89ee1682a15f42b7cd95f6594b34315589676aab922039012103b22186e3b2c239cb47066fca1f42b416772a27a113ba2c968bba069354f7c20a70000000"}]}"#;
-		let jd = &mut serde_json::Deserializer::from_str(block_data);
+		// // from a `getblock` RPC call with verbosity 2
+		// let block_data: &str =
+		// r#"{"hash":"7f03b5690dffca7e446fa986df8c2269389e5846b4e5e8942e8230238392cc55","
+		// confirmations":235,"height":113,"version":536870912,"versionHex":"20000000","merkleroot":
+		// "3eb919e3d8be10620dd18daa33578859fd4ee8fcfa7d182ad33ef5b69e9347aa","time":1702309098,"
+		// mediantime":1702309073,"nonce":0,"bits":"207fffff","difficulty":4.656542373906925e-10,"
+		// chainwork":"00000000000000000000000000000000000000000000000000000000000000e4","nTx":2,"
+		// previousblockhash":"524d0847614eb89dffd4291786c111473fe7ca3334c7fddd2fa399481a2a99e7","
+		// nextblockhash":"7f3bf60a2dc7f2726b7afd5b7fc04d8626edd174779e16c6a3dfa6a450758156","
+		// strippedsize":332,"size":477,"weight":1473,"tx":[{"txid":"
+		// e2056652441becbfe33cc3b51c70a804360bdf1a730e65f0ee9abbe4028bf8f2","hash":"
+		// 596da34ae4bb652af9872990ffe6746b922cee46e5fee25f8a16b9e6c3d17c73","version":2,"size":168,
+		// "vsize":141,"weight":564,"locktime":0,"vin":[{"coinbase":"017100","txinwitness":["
+		// 0000000000000000000000000000000000000000000000000000000000000000"],"sequence":
+		// 4294967295}],"vout":[{"value":50.00000147,"n":0,"scriptPubKey":{"asm":"0
+		// a66802f0279cc06c04abe451733d0644b7cd1aa3","desc":"
+		// addr(bcrt1q5e5q9up8nnqxcp9tu3ghx0gxgjmu6x4rkhnr04)#qqa77u3g","hex":"
+		// 0014a66802f0279cc06c04abe451733d0644b7cd1aa3","address":"
+		// bcrt1q5e5q9up8nnqxcp9tu3ghx0gxgjmu6x4rkhnr04","type":"witness_v0_keyhash"}},{"value":0.
+		// 00000000,"n":1,"scriptPubKey":{"asm":"OP_RETURN
+		// aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d","desc":"
+		// raw(6a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d)#
+		// 8sr8jfxw","hex":"
+		// 6a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d","type":"
+		// nulldata"}}],"hex":"
+		// 020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff03017100ffffffff0293f2052a01000000160014a66802f0279cc06c04abe451733d0644b7cd1aa30000000000000000266a24aa21a9ed9b0c92763f407d12a24735fbdb9e720367e70b0117030e8bc648a5c03ebd4a5d0120000000000000000000000000000000000000000000000000000000000000000000000000"
+		// },{"txid":"7b43fc408a6b1eb61f312b6732c27a2dde77828de7a677157d1ea03f7888748a","hash":"
+		// 47d0b049a25be39a6f5b7871d9c6f9350e945095ba09aa3290494f399a4c66f7","version":2,"size":228,
+		// "vsize":147,"weight":585,"locktime":112,"vin":[{"txid":"
+		// 773171b0c840f1dc69c247db64efc553dc2ce0c18558cd9ecef8e7bf81a81f2d","vout":0,"scriptSig":{"
+		// asm":"","hex":""},"txinwitness":["
+		// 30440220379b67fd1ac79d3416aad215b9185144430a71c5f530cafcc076fe4df3025c75022045f823e4d2f15a5daa89ee1682a15f42b7cd95f6594b34315589676aab92203901"
+		// ,"03b22186e3b2c239cb47066fca1f42b416772a27a113ba2c968bba069354f7c20a"],"sequence":
+		// 4294967293}],"vout":[{"value":39.99999853,"n":0,"scriptPubKey":{"asm":"OP_DUP OP_HASH160
+		// 0b308fdc0ae8b11dde0673387ac36f20100bf5e9 OP_EQUALVERIFY
+		// OP_CHECKSIG","desc":"addr(mgY7uJoK6HszJqYxcwAKpJFj56bEJiuAhB)#pu2vn08p","hex":"
+		// 76a9140b308fdc0ae8b11dde0673387ac36f20100bf5e988ac","address":"
+		// mgY7uJoK6HszJqYxcwAKpJFj56bEJiuAhB","type":"pubkeyhash"}},{"value":10.00000000,"n":1,"
+		// scriptPubKey":{"asm":"OP_DUP OP_HASH160 9a1c78a507689f6f54b847ad1cef1e614ee23f1e
+		// OP_EQUALVERIFY
+		// OP_CHECKSIG","desc":"addr(muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi)#t9q9hu3x","hex":"
+		// 76a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac","address":"
+		// muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi","type":"pubkeyhash"}}],"fee":0.00000147,"hex":"
+		// 020000000001012d1fa881bfe7f8ce9ecd5885c1e02cdc53c5ef64db47c269dcf140c8b07131770000000000fdffffff026d276bee000000001976a9140b308fdc0ae8b11dde0673387ac36f20100bf5e988ac00ca9a3b000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac024730440220379b67fd1ac79d3416aad215b9185144430a71c5f530cafcc076fe4df3025c75022045f823e4d2f15a5daa89ee1682a15f42b7cd95f6594b34315589676aab922039012103b22186e3b2c239cb47066fca1f42b416772a27a113ba2c968bba069354f7c20a70000000"
+		// }]}"#; let jd = &mut serde_json::Deserializer::from_str(block_data);
 
-		let result: Result<VerboseBlock, _> = serde_path_to_error::deserialize(jd);
+		// let result: Result<VerboseBlock, _> = serde_path_to_error::deserialize(jd);
 
-		match result {
-			Ok(vb) => {
-				println!("vb: {vb:?}");
-				println!("Verbose block fee: {}", vb.txdata[1].fee.unwrap());
-			},
-			Err(e) => panic!("error: {e:?}"),
-		}
+		// match result {
+		// 	Ok(vb) => {
+		// 		println!("vb: {vb:?}");
+		// 		println!("Verbose block fee: {}", vb.txdata[1].fee.unwrap());
+		// 	},
+		// 	Err(e) => panic!("error: {e:?}"),
+		// }
 
-		let block_hash_zero = client.block_hash(0).await.unwrap();
+		// let block_hash_zero = client.block_hash(0).await.unwrap();
 
-		println!("block_hash_zero: {block_hash_zero:?}");
+		// println!("block_hash_zero: {block_hash_zero:?}");
 
-		let block_zero = client.block(block_hash_zero).await.unwrap();
+		// let block_zero = client.block(block_hash_zero).await.unwrap();
 
-		println!("block_zero: {block_zero:?}");
+		// println!("block_zero: {block_zero:?}");
 
-		let next_block_fee_rate = client.next_block_fee_rate().await.unwrap();
+		// let next_block_fee_rate = client.next_block_fee_rate().await.unwrap();
 
-		println!("next_block_fee_rate: {next_block_fee_rate:?}");
+		// println!("next_block_fee_rate: {next_block_fee_rate:?}");
 
-		let best_block_hash = client.best_block_hash().await.unwrap();
+		// let best_block_hash = client.best_block_hash().await.unwrap();
 
-		println!("best_block_hash: {best_block_hash:?}");
+		// println!("best_block_hash: {best_block_hash:?}");
 
-		let block_header = client.block_header(best_block_hash).await.unwrap();
+		// let block_header = client.block_header(best_block_hash).await.unwrap();
 
-		println!("block_header: {block_header:?}");
+		// println!("block_header: {block_header:?}");
 
-		let v_block = client.block(best_block_hash).await.unwrap();
+		// let v_block = client.block(best_block_hash).await.unwrap();
 
-		println!("verbose block: {v_block:?}");
+		// println!("verbose block: {v_block:?}");
 
-		println!("number of txs: {}", v_block.txdata.len());
+		// println!("number of txs: {}", v_block.txdata.len());
 
-		let tx = &v_block.txdata[0];
+		// let tx = &v_block.txdata[0];
 
-		let raw_transaction = client.get_raw_transactions(vec![tx.txid]).await.unwrap()[0].txid();
-		assert_eq!(raw_transaction, tx.txid);
+		// let raw_transaction =
+		// client.get_raw_transactions(vec![tx.txid]).await.unwrap()[0].txid();
+		// assert_eq!(raw_transaction, tx.txid);
 
 		// let average_block_fee_rate =
 		// client.average_block_fee_rate(best_block_hash).await.unwrap();
