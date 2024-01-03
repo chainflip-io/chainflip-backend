@@ -13,6 +13,7 @@ use futures::{StreamExt, TryStreamExt};
 
 use futures_core::Stream;
 use futures_util::FutureExt;
+use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{sync::Arc, time::Duration};
@@ -948,6 +949,10 @@ impl<
 			.expect(OR_CANCEL);
 		receiver.await.expect(OR_CANCEL)
 	}
+
+	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo> {
+		self.base_rpc_client.block_header(block_hash).await.map(|header| header.into())
+	}
 }
 
 #[cfg(test)]
@@ -1038,6 +1043,8 @@ pub mod mocks {
 
 			async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi>;
 			async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>>;
+
+			async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo>;
 		}
 		#[async_trait]
 		impl StorageApi for StateChainClient {
