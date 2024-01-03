@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = '1.1.5'
+version = '1.1.6'
 
 [package.metadata.deb]
 depends = "$auto, systemd"

@@ -8,7 +8,7 @@ license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '1.1.5'
+version = '1.1.6'
 
 [[bin]]
 name = 'chainflip-node'

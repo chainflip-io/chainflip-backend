@@ -1,6 +1,6 @@
 [package]
 name = 'state-chain-runtime'
-version = '1.1.5'
+version = '1.1.6'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 homepage = 'https://chainflip.io'
