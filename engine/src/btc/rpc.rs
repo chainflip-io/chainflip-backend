@@ -86,15 +86,10 @@ impl BtcRpcClient {
 					match get_bitcoin_network(&client, &endpoint).await {
 						Ok(network) if network == expected_btc_network => break,
 						Ok(network) => {
-							error!(
-									"Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE
-									configuration file...",
-									endpoint.http_endpoint
-								);
+							error!("Connected to Bitcoin node but with incorrect network name `{network}`, expected `{expected_btc_network}` on endpoint {}. Please check your CFE configuration file...", endpoint.http_endpoint);
 						},
 						Err(e) => error!(
-							"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE
-								configuration file. Retrying in {:?}...",
+							"Failure connecting to Bitcoin node at {} with error: {e}. Please check your CFE configuration file. Retrying in {:?}...",
 							endpoint.http_endpoint,
 							poll_interval.period()
 						),
