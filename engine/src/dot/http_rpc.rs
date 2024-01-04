@@ -115,9 +115,10 @@ impl DotHttpRpcClient {
 					},
 					Err(e) => {
 						error!(
-						"Failed to connect to Polkadot node at {url} with error: {e}. Please check your CFE configuration file. Retrying in {:?}...",
-						poll_interval.period()
-					);
+							"Failed to connect to Polkadot node at {url} with error: {e}. \
+						Please check your CFE configuration file. Retrying in {:?}...",
+							poll_interval.period()
+						);
 					},
 				}
 			};
