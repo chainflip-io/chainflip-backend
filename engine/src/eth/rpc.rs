@@ -43,15 +43,15 @@ impl EthRpcClient {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
 						tracing::error!(
-								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. Please check your CFE
-								configuration file...",
+								"Connected to Ethereum node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
+								Please check your CFE configuration file...",
 							);
 					},
 					Err(e) => tracing::error!(
-							"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. Please check your CFE
-							configuration file. Retrying in {:?}...",
-							poll_interval.period()
-						),
+						"Cannot connect to an Ethereum node at {http_endpoint} with error: {e}. \
+							Please check your CFE configuration file. Retrying in {:?}...",
+						poll_interval.period()
+					),
 				}
 			}
 		})
