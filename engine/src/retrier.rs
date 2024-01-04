@@ -407,7 +407,7 @@ where
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
 
 							let error_message = format!("Retrier {name}: Error for request `{request_log}` with id `{request_id}`, attempt `{attempt}`: {e}. Delaying for {}ms", sleep_duration.as_millis());
-							if attempt == 0 && matches!(retry_limit, RetryLimit::NoLimit) {
+							if attempt == 0 && !matches!(retry_limit, RetryLimit::Limit(1)) {
 								tracing::warn!(error_message);
 							} else {
 								tracing::error!(error_message);
