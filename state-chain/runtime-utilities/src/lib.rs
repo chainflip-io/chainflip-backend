@@ -63,16 +63,18 @@ where
 /// Logs if running in release, panics if running in test.
 #[macro_export]
 macro_rules! log_or_panic {
-	($($arg:tt)*) => {
-		#[cfg(not(debug_assertions))]
-		{
-			log::error!($($arg)*);
-		}
-		#[cfg(debug_assertions)]
-		{
-			panic!($($arg)*);
-		};
-	};
+    ($($arg:tt)*) => {
+        #[cfg(not(debug_assertions))]
+        {
+			use scale_info::prelude::format;
+            log::error!("{}", format!("log_or_panic: {}", format_args!($($arg)*)));
+        }
+        #[cfg(debug_assertions)]
+        {
+			use scale_info::prelude::format;
+            panic!("log_or_panic: {}", format_args!($($arg)*));
+        };
+    };
 }
 
 #[cfg(test)]
