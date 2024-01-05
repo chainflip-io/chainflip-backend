@@ -66,7 +66,6 @@ impl<C: Chain> FetchOrTransfer<C> {
 
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
 pub enum DepositIgnoredReason {
-	/// The deposit was ignored because the amount was below the minimum allowed.
 	BelowMinimumDeposit,
 
 	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
@@ -998,7 +997,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_amount,
 		);
 
-		// TODO: Consider updating the event with a reason explaining why the deposit was ignored.
 		if net_deposit_amount.is_zero() {
 			Self::deposit_event(Event::<T, I>::DepositIgnored {
 				deposit_address,
