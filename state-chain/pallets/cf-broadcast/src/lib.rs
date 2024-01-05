@@ -779,7 +779,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingBroadcasts::<T, I>::mutate(|pending_broadcasts| {
 			if !pending_broadcasts.remove(broadcast_id) {
 				cf_runtime_utilities::log_or_panic!(
-					"The broadcast_id should exist in the pending broadcasts list since we added it to the list when the broadcast was initated"
+					"The broadcast_id {broadcast_id} should exist in the pending broadcasts list since we added it to the list when the broadcast was initated"
 				);
 			}
 			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
