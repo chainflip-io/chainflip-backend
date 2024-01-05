@@ -36,6 +36,7 @@ const runtimeTomlVersion = await tomlVersion(`${projectRoot}/state-chain/runtime
 const nodeTomlVersion = await tomlVersion(`${projectRoot}/state-chain/node/Cargo.toml`);
 const cliTomlVersion = await tomlVersion(`${projectRoot}/api/bin/chainflip-cli/Cargo.toml`);
 const lpApiTomlVersion = await tomlVersion(`${projectRoot}/api/bin/chainflip-lp-api/Cargo.toml`);
+const apiLibTomlVersion = await tomlVersion(`${projectRoot}/api/lib/Cargo.toml`);
 const brokerTomlVersion = await tomlVersion(
   `${projectRoot}/api/bin/chainflip-broker-api/Cargo.toml`,
 );
@@ -46,7 +47,8 @@ if (
     runtimeTomlVersion === nodeTomlVersion &&
     nodeTomlVersion === cliTomlVersion &&
     cliTomlVersion === lpApiTomlVersion &&
-    lpApiTomlVersion === brokerTomlVersion
+    lpApiTomlVersion === brokerTomlVersion &&
+    apiLibTomlVersion === brokerTomlVersion
   )
 ) {
   throw Error('All versions should be the same');
