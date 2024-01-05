@@ -64,6 +64,16 @@ impl<C: Chain> FetchOrTransfer<C> {
 	}
 }
 
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+pub enum DepositIgnoredReason {
+	/// The deposit was ignored because the amount was below the minimum allowed.
+	BelowMinimumDeposit,
+
+	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
+	/// required to process the requisite transactions.
+	NotEnoughToPayFees,
+}
+
 /// Cross-chain messaging requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CrossChainMessage<C: Chain> {
@@ -423,6 +433,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			reason: DepositIgnoredReason,
 		},
 		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
@@ -968,6 +979,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				amount: deposit_amount,
 				deposit_details,
+				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			});
 			return Ok(())
 		}
@@ -993,6 +1005,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				amount: deposit_amount,
 				deposit_details,
+				reason: DepositIgnoredReason::NotEnoughToPayFees,
 			});
 			return Ok(())
 		}
