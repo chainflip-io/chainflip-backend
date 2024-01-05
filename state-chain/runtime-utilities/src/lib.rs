@@ -67,7 +67,7 @@ macro_rules! log_or_panic {
         #[cfg(not(debug_assertions))]
         {
 			use scale_info::prelude::format;
-            log::error!("{}", format!("log_or_panic: {}", format_args!($($arg)*)));
+            log::error!("log_or_panic: {}", format_args!($($arg)*));
         }
         #[cfg(debug_assertions)]
         {
