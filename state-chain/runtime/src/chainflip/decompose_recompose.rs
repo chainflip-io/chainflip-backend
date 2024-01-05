@@ -15,6 +15,13 @@ fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
 fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
 	data.iter_mut()
 		.map(|entry| T::decode(&mut entry.as_slice()))
+		.inspect(|r|
+			if let Err(e) = r {
+				log::error!(
+					"Error decoding {}: {}.\nThis is expected to happen right after the runtime-upgrade, but should only be observed within one single state-chain block (PRO-1073)",
+					e, core::any::type_name::<T>()
+				)
+			})
 		.filter_map(Result::ok)
 		.collect()
 }
