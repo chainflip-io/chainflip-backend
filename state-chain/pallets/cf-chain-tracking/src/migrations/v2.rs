@@ -109,7 +109,7 @@ mod v1 {
 				log::info!("upgrading {} @{:?}", core::any::type_name::<Self>(), block_height);
 
 				fn undo(derived_fee: u64, size: u64) -> BtcAmount {
-					let a = derived_fee * BYTES_PER_KILOBYTE;
+					let a = derived_fee.saturating_mul(BYTES_PER_KILOBYTE);
 					let q = a / size;
 					let r = a % size;
 
