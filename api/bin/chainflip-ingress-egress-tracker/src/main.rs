@@ -60,7 +60,7 @@ impl From<cf_chains::assets::btc::Asset> for WitnessAsset {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "deposit_chain", rename_all = "snake_case")]
 enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
