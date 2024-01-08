@@ -22,7 +22,7 @@ use tracing::{info, warn};
 
 use utilities::{
 	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
-	task_scope::{Scope, OR_CANCEL},
+	task_scope::{Scope, UnwrapOrCancel},
 	CachedStream, MakeCachedStream, MakeTryCachedStream, TryCachedStream,
 };
 
@@ -689,7 +689,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 						},
 				}
 
-				finalized_block_stream.next().await.expect(OR_CANCEL)?;
+				finalized_block_stream.next().unwrap_or_cancel().await?;
 			}
 
 			let block_hash = finalized_block_stream.cache().hash;
@@ -937,17 +937,17 @@ impl<
 
 	async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi> {
 		let (sender, receiver) = tokio::sync::oneshot::channel();
-		self.finalized_block_stream_request_sender.send(sender).await.expect(OR_CANCEL);
-		receiver.await.expect(OR_CANCEL)
+		self.finalized_block_stream_request_sender.send(sender).unwrap_or_cancel().await;
+		receiver.unwrap_or_cancel().await
 	}
 
 	async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>> {
 		let (sender, receiver) = tokio::sync::oneshot::channel();
 		self.unfinalized_block_stream_request_sender
 			.send(sender)
-			.await
-			.expect(OR_CANCEL);
-		receiver.await.expect(OR_CANCEL)
+			.unwrap_or_cancel()
+			.await;
+		receiver.unwrap_or_cancel().await
 	}
 
 	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo> {
