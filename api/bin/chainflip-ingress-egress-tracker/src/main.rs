@@ -71,7 +71,7 @@ enum TransactionId {
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WitnessInformation {
 	Deposit {
-		src_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
+		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: WitnessAsset,
@@ -82,12 +82,12 @@ enum WitnessInformation {
 	},
 }
 
-type EthereumDepositInfo = (DepositWitness<Ethereum>, <Ethereum as Chain>::ChainBlockNumber);
+type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber);
 
-impl From<EthereumDepositInfo> for WitnessInformation {
-	fn from((value, height): EthereumDepositInfo) -> Self {
+impl From<DepositInfo<Ethereum>> for WitnessInformation {
+	fn from((value, height): DepositInfo<Ethereum>) -> Self {
 		Self::Deposit {
-			src_chain_block_height: height,
+			deposit_chain_block_height: height,
 			deposit_address: value.deposit_address.to_string(),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
@@ -101,7 +101,7 @@ type BitcoinDepositInfo =
 impl From<BitcoinDepositInfo> for WitnessInformation {
 	fn from((value, height, network): BitcoinDepositInfo) -> Self {
 		Self::Deposit {
-			src_chain_block_height: height,
+			deposit_chain_block_height: height,
 			deposit_address: value.deposit_address.to_address(&network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
@@ -109,12 +109,10 @@ impl From<BitcoinDepositInfo> for WitnessInformation {
 	}
 }
 
-type PolkadotDepositInfo = (DepositWitness<Polkadot>, <Polkadot as Chain>::ChainBlockNumber);
-
-impl From<PolkadotDepositInfo> for WitnessInformation {
-	fn from((value, height): PolkadotDepositInfo) -> Self {
+impl From<DepositInfo<Polkadot>> for WitnessInformation {
+	fn from((value, height): DepositInfo<Polkadot>) -> Self {
 		Self::Deposit {
-			src_chain_block_height: height as u64,
+			deposit_chain_block_height: height as u64,
 			deposit_address: format!("0x{}", hex::encode(value.deposit_address.aliased_ref())),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
@@ -134,7 +132,7 @@ where
 		.storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 			state_chain_runtime::Runtime,
 			I::Instance,
-		>>(state_chain_client.latest_finalized_block().hash, tx_out_id)
+		>>(state_chain_client.latest_unfinalized_block().hash, tx_out_id)
 		.await
 		.expect(STATE_CHAIN_CONNECTION)
 		.map(|(broadcast_id, _)| broadcast_id)

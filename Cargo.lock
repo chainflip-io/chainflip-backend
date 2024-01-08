@@ -1612,7 +1612,7 @@ dependencies = [
  "serde",
  "sp-core 21.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "state-chain-runtime",
- "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+3)",
+ "substrate-build-script-utils 3.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2023-08+5)",
  "tempfile",
  "tokio",
  "tracing",

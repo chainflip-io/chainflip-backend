@@ -107,7 +107,7 @@ where
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
+			state_chain_client.latest_unfinalized_block().hash,
 		)
 		.await
 		.context("Failed to get KeyManager address from SC")?;
@@ -115,7 +115,7 @@ where
 	eth_source
 		.clone()
 		.key_manager_witnessing(witness_call.clone(), eth_client.clone(), key_manager_address)
-		.logging("KeyManager")
+		.logging("witnessing KeyManager")
 		.spawn(scope);
 
 	Ok(())
