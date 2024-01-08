@@ -145,7 +145,7 @@ fn test_btc_utxo_consolidation() {
 		// Should select two UTXOs, with all funds (minus fees) going back to us as change
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			Some((vec![utxo(10000), utxo(20000)], 25980))
+			Some((vec![utxo(10000), utxo(20000)], 27950))
 		);
 
 		// Any utxo that didn't get consolidated should still be available:
