@@ -156,7 +156,7 @@ pub mod tests {
 		VerboseTransaction {
 			txid,
 			version: Version::from_consensus(2),
-			locktime: LockTime::Blocks(Height::from_consensus(0).unwrap()),
+			locktime: LockTime::Blocks(Height::ZERO),
 			vin: vec![],
 			vout: tx_outs,
 			fee,

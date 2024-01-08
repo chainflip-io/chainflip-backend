@@ -21,6 +21,7 @@ use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	sp_io::hashing::sha2_256,
+	sp_runtime::{FixedPointNumber, FixedU128},
 	traits::{ConstBool, ConstU32},
 	BoundedVec, RuntimeDebug,
 };
@@ -116,21 +117,31 @@ impl Default for BitcoinTrackedData {
 	}
 }
 
+/// A constant multiplier applied to the fees.
+///
+/// TODO: Allow this value to adjust based on the current fee deficit/surplus.
+const BTC_FEE_MULTIPLIER: FixedU128 = FixedU128::from_rational(3, 2);
+
 impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		// Include the min fee so we over-estimate the cost.
-		self.btc_fee_info.min_fee_required_per_tx() + self.btc_fee_info.fee_per_input_utxo()
+		BTC_FEE_MULTIPLIER
+			.checked_mul_int(self.btc_fee_info.fee_per_input_utxo())
+			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		// Include the min fee so we over-estimate the cost.
-		self.btc_fee_info.min_fee_required_per_tx() + self.btc_fee_info.fee_per_output_utxo()
+		BTC_FEE_MULTIPLIER
+			.checked_mul_int(
+				self.btc_fee_info.min_fee_required_per_tx() +
+					self.btc_fee_info.fee_per_output_utxo(),
+			)
+			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
 	}
 }
 
@@ -170,17 +181,20 @@ impl BitcoinFeeInfo {
 	}
 
 	pub fn fee_per_input_utxo(&self) -> BtcAmount {
-		// Our input utxos are approximately 178 bytes each in the Btc transaction
+		// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+		// transaction
 		self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
 	}
 
 	pub fn fee_per_output_utxo(&self) -> BtcAmount {
-		// Our output utxos are approximately 34 bytes each in the Btc transaction
+		// Our output utxos are approximately OUTPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+		// transaction
 		self.sats_per_kilobyte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
 	}
 
 	pub fn min_fee_required_per_tx(&self) -> BtcAmount {
-		// Minimum size of tx that does not scale with input and output utxos is 12 bytes
+		// Minimum size of tx that does not scale with input and output utxos is
+		// MINIMUM_BTC_TX_SIZE_IN_BYTES bytes
 		self.sats_per_kilobyte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
 	}
 }
@@ -1370,5 +1384,11 @@ mod test {
 		assert!(!ConsolidationParameters::new(0, 0).are_valid());
 		assert!(!ConsolidationParameters::new(1, 1).are_valid());
 		assert!(!ConsolidationParameters::new(0, 10).are_valid());
+	}
+
+	#[test]
+	fn fee_is_a_u64_multiplier_is_1_5_so_this_should_never_overflow() {
+		let _: u64 =
+			BTC_FEE_MULTIPLIER.checked_mul_int(u64::MAX).expect("Martin says it'll be fine");
 	}
 }

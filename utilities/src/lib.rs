@@ -30,6 +30,15 @@ macro_rules! assert_err {
 	};
 }
 
+/// Forces compile evaluation of expression
+#[macro_export]
+macro_rules! const_eval {
+	($t:ty, $e:expr) => {{
+		static X: $t = $e;
+		X.clone()
+	}};
+}
+
 /// Note that the resulting `threshold` is the maximum number
 /// of parties *not* enough to generate a signature,
 /// i.e. at least `t+1` parties are required.

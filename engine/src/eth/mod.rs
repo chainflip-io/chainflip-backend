@@ -2,7 +2,7 @@ pub mod event;
 pub mod retry_rpc;
 pub mod rpc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use futures::FutureExt;
 
@@ -23,6 +23,19 @@ pub struct ConscientiousEthWebsocketBlockHeaderStream {
 	stream: Option<
 		web3::api::SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>,
 	>,
+}
+
+impl ConscientiousEthWebsocketBlockHeaderStream {
+	pub async fn new(web3: web3::Web3<web3::transports::WebSocket>) -> Result<Self> {
+		Ok(Self {
+			stream: Some(
+				web3.eth_subscribe()
+					.subscribe_new_heads()
+					.await
+					.context("Failed to subscribe to new heads with WS Client")?,
+			),
+		})
+	}
 }
 
 impl Drop for ConscientiousEthWebsocketBlockHeaderStream {

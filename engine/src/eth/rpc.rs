@@ -318,14 +318,7 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 			bail!("Expected chain id {}, eth ws client returned {client_chain_id}.", self.chain_id)
 		}
 
-		Ok(ConscientiousEthWebsocketBlockHeaderStream {
-			stream: Some(
-				web3.eth_subscribe()
-					.subscribe_new_heads()
-					.await
-					.context("Failed to subscribe to new heads with WS Client")?,
-			),
-		})
+		ConscientiousEthWebsocketBlockHeaderStream::new(web3).await
 	}
 }
 
