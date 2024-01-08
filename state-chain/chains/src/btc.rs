@@ -134,7 +134,7 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 	}
 }
 
-/// A record on the Bitcoin transaction fee.
+/// A record of the Bitcoin transaction fee.
 #[derive(
 	Copy,
 	Clone,
@@ -161,7 +161,6 @@ impl Default for BitcoinFeeInfo {
 }
 
 impl BitcoinFeeInfo {
-	/// Construct an instance of [`BitcoinFeeInfo`].
 	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
 		Self { sats_per_kilo_byte: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE) }
 	}
