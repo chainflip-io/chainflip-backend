@@ -284,6 +284,9 @@ async fn start(
 					use pallet_cf_ingress_egress::Call as IngressEgressCall;
 					use state_chain_runtime::RuntimeCall::*;
 
+					// rustfmt chokes when formatting this macro.
+					// See: https://github.com/rust-lang/rustfmt/issues/5404
+					#[rustfmt::skip]
 					macro_rules! send {
 						($value:expr) => {
 							if let Ok(false) = sink.send($value) {
