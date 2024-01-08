@@ -19,7 +19,6 @@ where
 			//     should be defined for every `Chain` we use this migration with.
 			let translated_opt =
 				CurrentChainState::<T, I>::translate(|old| old.map(v1::FromV1::from_v1))
-					// XXX: is it okay to panic here? How to signalise an error otherwise?
 					.expect("failed to decode v1-storage");
 			if let Some(translated) = translated_opt {
 				CurrentChainState::<T, I>::put(translated);
