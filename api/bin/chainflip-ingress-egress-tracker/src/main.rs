@@ -128,14 +128,20 @@ where
 	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
 	I: PalletInstanceAlias + 'static,
 {
-	state_chain_client
+	let id = state_chain_client
 		.storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 			state_chain_runtime::Runtime,
 			I::Instance,
 		>>(state_chain_client.latest_unfinalized_block().hash, tx_out_id)
 		.await
 		.expect(STATE_CHAIN_CONNECTION)
-		.map(|(broadcast_id, _)| broadcast_id)
+		.map(|(broadcast_id, _)| broadcast_id);
+
+	if id.is_none() {
+		log::warn!("Broadcast ID not found for {:?}", tx_out_id);
+	}
+
+	id
 }
 
 #[derive(Clone, Deserialize, Debug)]
