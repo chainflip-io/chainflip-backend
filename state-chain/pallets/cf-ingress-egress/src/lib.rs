@@ -64,6 +64,15 @@ impl<C: Chain> FetchOrTransfer<C> {
 	}
 }
 
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
+pub enum DepositIgnoredReason {
+	BelowMinimumDeposit,
+
+	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
+	/// required to process the requisite transactions.
+	NotEnoughToPayFees,
+}
+
 /// Cross-chain messaging requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CrossChainMessage<C: Chain> {
@@ -423,6 +432,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			reason: DepositIgnoredReason,
 		},
 		TransferFallbackRequested {
 			asset: TargetChainAsset<T, I>,
@@ -968,6 +978,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset,
 				amount: deposit_amount,
 				deposit_details,
+				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			});
 			return Ok(())
 		}
@@ -986,66 +997,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_amount,
 		);
 
-		// TODO: Consider updating the event with a reason explaining why the deposit was ignored.
-		if net_deposit_amount.is_zero() {
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address,
-				asset,
-				amount: deposit_amount,
-				deposit_details,
-			});
-			return Ok(())
-		}
-
-		match deposit_channel_details.action {
-			ChannelAction::LiquidityProvision { lp_account, .. } =>
-				T::LpBalance::try_credit_account(
-					&lp_account,
-					asset.into(),
-					net_deposit_amount.into(),
-				)?,
-			ChannelAction::Swap {
-				destination_address,
-				destination_asset,
-				broker_id,
-				broker_commission_bps,
-				..
-			} => T::SwapDepositHandler::schedule_swap_from_channel(
-				deposit_address.clone().into(),
-				block_height.into(),
-				asset.into(),
-				destination_asset,
-				net_deposit_amount.into(),
-				destination_address,
-				broker_id,
-				broker_commission_bps,
-				channel_id,
-			),
-			ChannelAction::CcmTransfer {
-				destination_asset,
-				destination_address,
-				channel_metadata,
-				..
-			} => T::CcmHandler::on_ccm_deposit(
-				asset.into(),
-				net_deposit_amount.into(),
-				destination_asset,
-				destination_address,
-				CcmDepositMetadata {
-					source_chain: asset.into(),
-					source_address: None,
-					channel_metadata,
-				},
-				SwapOrigin::DepositChannel {
-					deposit_address: T::AddressConverter::to_encoded_address(
-						deposit_address.clone().into(),
-					),
-					channel_id,
-					deposit_block_height: block_height.into(),
-				},
-			),
-		};
-
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(
 			deposit_details.clone(),
@@ -1053,15 +1004,75 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel_details.deposit_channel,
 		);
 		DepositBalances::<T, I>::mutate(asset, |deposits| {
-			deposits.register_deposit(deposit_amount)
+			deposits.register_deposit(net_deposit_amount)
 		});
 
-		Self::deposit_event(Event::DepositReceived {
-			deposit_address,
-			asset,
-			amount: deposit_amount,
-			deposit_details,
-		});
+		if net_deposit_amount.is_zero() {
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+				reason: DepositIgnoredReason::NotEnoughToPayFees,
+			});
+		} else {
+			match deposit_channel_details.action {
+				ChannelAction::LiquidityProvision { lp_account, .. } =>
+					T::LpBalance::try_credit_account(
+						&lp_account,
+						asset.into(),
+						net_deposit_amount.into(),
+					)?,
+				ChannelAction::Swap {
+					destination_address,
+					destination_asset,
+					broker_id,
+					broker_commission_bps,
+					..
+				} => T::SwapDepositHandler::schedule_swap_from_channel(
+					deposit_address.clone().into(),
+					block_height.into(),
+					asset.into(),
+					destination_asset,
+					net_deposit_amount.into(),
+					destination_address,
+					broker_id,
+					broker_commission_bps,
+					channel_id,
+				),
+				ChannelAction::CcmTransfer {
+					destination_asset,
+					destination_address,
+					channel_metadata,
+					..
+				} => T::CcmHandler::on_ccm_deposit(
+					asset.into(),
+					net_deposit_amount.into(),
+					destination_asset,
+					destination_address,
+					CcmDepositMetadata {
+						source_chain: asset.into(),
+						source_address: None,
+						channel_metadata,
+					},
+					SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(
+							deposit_address.clone().into(),
+						),
+						channel_id,
+						deposit_block_height: block_height.into(),
+					},
+				),
+			};
+
+			Self::deposit_event(Event::DepositReceived {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+			});
+		}
+
 		Ok(())
 	}
 
