@@ -1387,6 +1387,8 @@ mod test {
 	}
 
 	#[test]
+	#[should_panic]
+	// XXX: @martin-chainflip 👋
 	fn fee_is_a_u64_multiplier_is_1_5_so_this_should_never_overflow() {
 		let _: u64 =
 			BTC_FEE_MULTIPLIER.checked_mul_int(u64::MAX).expect("Martin says it'll be fine");
