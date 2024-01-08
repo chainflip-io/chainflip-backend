@@ -11,10 +11,11 @@ use chainflip_engine::{
 	state_chain_observer::{
 		self,
 		client::{
-			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+			chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi,
+			storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 		},
 	},
-	witness::{self, common::STATE_CHAIN_CONNECTION},
+	witness,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;

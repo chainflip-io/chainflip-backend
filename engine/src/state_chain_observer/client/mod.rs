@@ -26,8 +26,6 @@ use utilities::{
 	CachedStream, MakeCachedStream, MakeTryCachedStream, TryCachedStream,
 };
 
-use crate::witness::common::STATE_CHAIN_CONNECTION;
-
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
@@ -38,6 +36,10 @@ use self::{
 	finalized_stream::FinalizedCachedStream,
 	storage_api::StorageApi,
 };
+
+pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
+
+pub const STATE_CHAIN_BEHAVIOUR: &str = "State Chain client behavioural assumption not upheld";
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";

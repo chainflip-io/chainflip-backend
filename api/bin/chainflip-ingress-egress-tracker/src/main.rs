@@ -6,9 +6,8 @@ use cf_primitives::{Asset, BroadcastId, ForeignChain};
 use chainflip_engine::{
 	settings::{insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints},
 	state_chain_observer::client::{
-		chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
+		chain_api::ChainApi, storage_api::StorageApi, StateChainClient, STATE_CHAIN_CONNECTION,
 	},
-	witness::common::STATE_CHAIN_CONNECTION,
 };
 use clap::Parser;
 use config::{Config, ConfigBuilder, ConfigError, Environment, Map, Source, Value};
