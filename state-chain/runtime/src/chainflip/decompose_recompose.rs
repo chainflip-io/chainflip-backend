@@ -27,7 +27,7 @@ fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
 }
 
 fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
-	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilo_byte).collect())
+	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
 		.map(BitcoinFeeInfo::new)
 }
 
@@ -275,7 +275,7 @@ mod tests {
 
 	#[test]
 	// The median for a collection of BTC fee infos is selected based on the order of their
-	// `sats_per_kilo_byte` properties.
+	// `sats_per_kilobyte` properties.
 	//
 	// Other properties (fee per input utxo, fee per output utxo,
 	// min fee required per tx) are assumed to have the same order.
@@ -288,7 +288,7 @@ mod tests {
 		let expected = BitcoinFeeInfo::new(5);
 
 		for f in [
-			BitcoinFeeInfo::sats_per_kilo_byte,
+			BitcoinFeeInfo::sats_per_kilobyte,
 			BitcoinFeeInfo::fee_per_input_utxo,
 			BitcoinFeeInfo::fee_per_output_utxo,
 			BitcoinFeeInfo::min_fee_required_per_tx,
