@@ -7,7 +7,7 @@ use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
 	http_client::{HttpClient, HttpClientBuilder},
 };
-use reqwest::header::{HeaderMap, AUTHORIZATION};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde_json::value::RawValue;
 use sp_core::H256;
 use subxt::{
@@ -22,7 +22,7 @@ use subxt::{
 
 use anyhow::Result;
 use tracing::{error, warn};
-use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
+use utilities::{const_eval, make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 
@@ -32,12 +32,14 @@ pub struct PolkadotHttpClient(HttpClient);
 
 impl PolkadotHttpClient {
 	pub fn new(url: &SecretUrl) -> Result<Self> {
-		let token = format!("Bearer {}", "TOKEN");
-		let mut headers = HeaderMap::new();
-		headers.insert(AUTHORIZATION, token.parse().unwrap());
-		let client = HttpClientBuilder::default().set_headers(headers).build(url)?;
-
-		Ok(Self(client))
+		Ok(Self(
+			HttpClientBuilder::default()
+				.set_headers(HeaderMap::from_iter([(
+					AUTHORIZATION,
+					const_eval!(HeaderValue, HeaderValue::from_static("Bearer TOKEN")),
+				)]))
+				.build(url)?,
+		))
 	}
 }
 
