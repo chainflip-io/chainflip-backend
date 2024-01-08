@@ -26,6 +26,8 @@ use utilities::{
 	CachedStream, MakeCachedStream, MakeTryCachedStream, TryCachedStream,
 };
 
+use crate::witness::common::STATE_CHAIN_CONNECTION;
+
 use self::{
 	base_rpc_api::BaseRpcClient,
 	chain_api::ChainApi,
@@ -370,8 +372,17 @@ async fn create_unfinalized_block_subscription<
 		.map_err(Into::into)
 		.map_ok(|header| -> BlockInfo { header.into() })
 		.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-			"sparse_block_stream unexpectedly ended"
-		)))));
+			STATE_CHAIN_CONNECTION
+		)))))
+		// Keep a copy of the base_rpc_client with the stream, as the subscription will end if the
+		// client is dropped
+		.map({
+			let base_rpc_client = base_rpc_client.clone();
+			move |i| {
+				let _ = &base_rpc_client;
+				i
+			}
+		});
 
 	let first_block = sparse_block_stream.next().await.unwrap()?;
 
