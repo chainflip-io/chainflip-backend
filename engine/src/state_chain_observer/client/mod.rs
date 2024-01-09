@@ -17,6 +17,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{sync::Arc, time::Duration};
+use subxt::backend::rpc::RpcClient;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -25,6 +26,8 @@ use utilities::{
 	task_scope::{Scope, OR_CANCEL},
 	CachedStream, MakeCachedStream, MakeTryCachedStream, TryCachedStream,
 };
+
+use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
 
 use self::{
 	base_rpc_api::BaseRpcClient,
@@ -704,11 +707,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if let Some(this_version) = self.update_cfe_version {
-			use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
 			use subxt::{tx::Signer, PolkadotConfig};
 
 			let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
-				Arc::new(SubxtInterface(base_rpc_client.clone())),
+				RpcClient::new(SubxtInterface(base_rpc_client.clone())),
 			)
 			.await?;
 			let subxt_signer = {

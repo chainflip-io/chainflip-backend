@@ -7,8 +7,8 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use sp_core::H256;
 use std::sync::Arc;
 use subxt::{
+	backend::legacy::rpc_methods::{BlockDetails, Bytes},
 	events::Events,
-	rpc::types::{ChainBlockExtrinsic, ChainBlockResponse},
 	Config, OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
@@ -81,15 +81,10 @@ pub trait DotSubscribeApi: Send + Sync {
 pub trait DotRpcApi: Send + Sync {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;
 
-	async fn block(
-		&self,
-		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>>;
+	async fn block(&self, block_hash: PolkadotHash)
+		-> Result<Option<BlockDetails<PolkadotConfig>>>;
 
-	async fn extrinsics(
-		&self,
-		block_hash: PolkadotHash,
-	) -> Result<Option<Vec<ChainBlockExtrinsic>>>;
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Result<Option<Vec<Bytes>>>;
 
 	async fn events(
 		&self,
@@ -112,7 +107,7 @@ impl DotRpcApi for DotRpcClient {
 	async fn block(
 		&self,
 		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>> {
+	) -> Result<Option<BlockDetails<PolkadotConfig>>> {
 		self.http_client.block(block_hash).await
 	}
 
@@ -120,10 +115,7 @@ impl DotRpcApi for DotRpcClient {
 		self.http_client.runtime_version(at).await
 	}
 
-	async fn extrinsics(
-		&self,
-		block_hash: PolkadotHash,
-	) -> Result<Option<Vec<ChainBlockExtrinsic>>> {
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Result<Option<Vec<Bytes>>> {
 		self.http_client.extrinsics(block_hash).await
 	}
 

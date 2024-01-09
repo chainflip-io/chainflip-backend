@@ -10,6 +10,7 @@ use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
+	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
 	utils::AccountId32,
@@ -133,8 +134,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	// To guarantee witnessing egress, we are interested in all extrinsics that were successful
 	extrinsic_indices.extend(extrinsic_success_indices(&events));
 
-	let extrinsics: Vec<subxt::rpc::types::ChainBlockExtrinsic> =
-		dot_client.extrinsics(header.hash).await;
+	let extrinsics: Vec<Bytes> = dot_client.extrinsics(header.hash).await;
 
 	for (extrinsic_index, tx_fee) in transaction_fee_paids(&extrinsic_indices, &events) {
 		let xt = extrinsics.get(extrinsic_index as usize).expect(

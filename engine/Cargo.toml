@@ -69,7 +69,7 @@ secp256k1 = "0.27"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 sha2 = "0.10"
-subxt = { version = "0.31.0", features = ["substrate-compat"] }
+subxt = { version = "0.32.1", features = ["substrate-compat"] }
 thiserror = "1.0.26"
 tokio = { version = "1.22", features = ["full", "test-util"] }
 tokio-stream = { version = "0.1.5", features = ["sync"] }
