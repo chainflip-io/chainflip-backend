@@ -1,0 +1,598 @@
+use core::str::FromStr;
+
+use borsh::{BorshDeserialize, BorshSerialize};
+use generic_array::{typenum::U64, GenericArray};
+use serde::{Deserialize, Serialize};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+
+pub mod short_vec;
+//pub mod system_instructions;
+
+pub const SIGNATURE_BYTES: usize = 64;
+pub const HASH_BYTES: usize = 32;
+/// Maximum string length of a base58 encoded pubkey
+const MAX_BASE58_LEN: usize = 44;
+
+/// An atomically-commited sequence of instructions.
+///
+/// While [`Instruction`]s are the basic unit of computation in Solana,
+/// they are submitted by clients in [`Transaction`]s containing one or
+/// more instructions, and signed by one or more [`Signer`]s.
+///
+/// [`Signer`]: crate::signer::Signer
+///
+/// See the [module documentation] for more details about transactions.
+///
+/// [module documentation]: self
+///
+/// Some constructors accept an optional `payer`, the account responsible for
+/// paying the cost of executing a transaction. In most cases, callers should
+/// specify the payer explicitly in these constructors. In some cases though,
+/// the caller is not _required_ to specify the payer, but is still allowed to:
+/// in the [`Message`] structure, the first account is always the fee-payer, so
+/// if the caller has knowledge that the first account of the constructed
+/// transaction's `Message` is both a signer and the expected fee-payer, then
+/// redundantly specifying the fee-payer is not strictly required.
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+pub struct Transaction {
+	/// A set of signatures of a serialized [`Message`], signed by the first
+	/// keys of the `Message`'s [`account_keys`], where the number of signatures
+	/// is equal to [`num_required_signatures`] of the `Message`'s
+	/// [`MessageHeader`].
+	///
+	/// [`account_keys`]: Message::account_keys
+	/// [`MessageHeader`]: crate::message::MessageHeader
+	/// [`num_required_signatures`]: crate::message::MessageHeader::num_required_signatures
+	// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+	#[serde(with = "short_vec")]
+	pub signatures: Vec<Signature>,
+
+	/// The message to sign.
+	pub message: Message,
+}
+
+impl Transaction {
+	pub fn new_unsigned(message: Message) -> Self {
+		Self {
+			signatures: vec![Signature::default(); message.header.num_required_signatures as usize],
+			message,
+		}
+	}
+
+	pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+		let message = Message::new(instructions, payer);
+		Self::new_unsigned(message)
+	}
+}
+
+/// A directive for a single invocation of a Solana program.
+///
+/// An instruction specifies which program it is calling, which accounts it may
+/// read or modify, and additional data that serves as input to the program. One
+/// or more instructions are included in transactions submitted by Solana
+/// clients. Instructions are also used to describe [cross-program
+/// invocations][cpi].
+///
+/// [cpi]: https://docs.solana.com/developing/programming-model/calling-between-programs
+///
+/// During execution, a program will receive a list of account data as one of
+/// its arguments, in the same order as specified during `Instruction`
+/// construction.
+///
+/// While Solana is agnostic to the format of the instruction data, it has
+/// built-in support for serialization via [`borsh`] and [`bincode`].
+///
+/// [`borsh`]: https://docs.rs/borsh/latest/borsh/
+/// [`bincode`]: https://docs.rs/bincode/latest/bincode/
+///
+/// # Specifying account metadata
+///
+/// When constructing an [`Instruction`], a list of all accounts that may be
+/// read or written during the execution of that instruction must be supplied as
+/// [`AccountMeta`] values.
+///
+/// Any account whose data may be mutated by the program during execution must
+/// be specified as writable. During execution, writing to an account that was
+/// not specified as writable will cause the transaction to fail. Writing to an
+/// account that is not owned by the program will cause the transaction to fail.
+///
+/// Any account whose lamport balance may be mutated by the program during
+/// execution must be specified as writable. During execution, mutating the
+/// lamports of an account that was not specified as writable will cause the
+/// transaction to fail. While _subtracting_ lamports from an account not owned
+/// by the program will cause the transaction to fail, _adding_ lamports to any
+/// account is allowed, as long is it is mutable.
+///
+/// Accounts that are not read or written by the program may still be specified
+/// in an `Instruction`'s account list. These will affect scheduling of program
+/// execution by the runtime, but will otherwise be ignored.
+///
+/// When building a transaction, the Solana runtime coalesces all accounts used
+/// by all instructions in that transaction, along with accounts and permissions
+/// required by the runtime, into a single account list. Some accounts and
+/// account permissions required by the runtime to process a transaction are
+/// _not_ required to be included in an `Instruction`s account list. These
+/// include:
+///
+/// - The program ID &mdash; it is a separate field of `Instruction`
+/// - The transaction's fee-paying account &mdash; it is added during [`Message`] construction. A
+///   program may still require the fee payer as part of the account list if it directly references
+///   it.
+///
+/// [`Message`]: crate::message::Message
+///
+/// Programs may require signatures from some accounts, in which case they
+/// should be specified as signers during `Instruction` construction. The
+/// program must still validate during execution that the account is a signer.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct Instruction {
+	/// Pubkey of the program that executes this instruction.
+	pub program_id: Pubkey,
+	/// Metadata describing accounts that should be passed to the program.
+	pub accounts: Vec<AccountMeta>,
+	/// Opaque data passed to the program for its own interpretation.
+	pub data: Vec<u8>,
+}
+
+impl Instruction {
+	pub fn new_with_borsh<T: BorshSerialize>(
+		program_id: Pubkey,
+		data: &T,
+		accounts: Vec<AccountMeta>,
+	) -> Self {
+		let data = borsh::to_vec(data).unwrap();
+		Self { program_id, accounts, data }
+	}
+
+	// pub fn new_with_bincode<T: Serialize>(
+	// 	program_id: Pubkey,
+	// 	data: &T,
+	// 	accounts: Vec<AccountMeta>,
+	// ) -> Self {
+	// 	let data = bincode::serialize(data).unwrap();
+	// 	Self { program_id, accounts, data }
+	// }
+}
+
+/// Describes a single account read or written by a program during instruction
+/// execution.
+///
+/// When constructing an [`Instruction`], a list of all accounts that may be
+/// read or written during the execution of that instruction must be supplied.
+/// Any account that may be mutated by the program during execution, either its
+/// data or metadata such as held lamports, must be writable.
+///
+/// Note that because the Solana runtime schedules parallel transaction
+/// execution around which accounts are writable, care should be taken that only
+/// accounts which actually may be mutated are specified as writable. As the
+/// default [`AccountMeta::new`] constructor creates writable accounts, this is
+/// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
+/// is not writable.
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AccountMeta {
+	/// An account's public key.
+	pub pubkey: Pubkey,
+	/// True if an `Instruction` requires a `Transaction` signature matching `pubkey`.
+	pub is_signer: bool,
+	/// True if the account data or metadata may be mutated during program execution.
+	pub is_writable: bool,
+}
+
+impl AccountMeta {
+	pub fn new(pubkey: Pubkey, is_signer: bool) -> Self {
+		Self { pubkey, is_signer, is_writable: true }
+	}
+
+	pub fn new_readonly(pubkey: Pubkey, is_signer: bool) -> Self {
+		Self { pubkey, is_signer, is_writable: false }
+	}
+}
+
+/// Describes the organization of a `Message`'s account keys.
+///
+/// Every [`Instruction`] specifies which accounts it may reference, or
+/// otherwise requires specific permissions of. Those specifications are:
+/// whether the account is read-only, or read-write; and whether the account
+/// must have signed the transaction containing the instruction.
+///
+/// Whereas individual `Instruction`s contain a list of all accounts they may
+/// access, along with their required permissions, a `Message` contains a
+/// single shared flat list of _all_ accounts required by _all_ instructions in
+/// a transaction. When building a `Message`, this flat list is created and
+/// `Instruction`s are converted to [`CompiledInstruction`]s. Those
+/// `CompiledInstruction`s then reference by index the accounts they require in
+/// the single shared account list.
+///
+/// [`Instruction`]: crate::instruction::Instruction
+/// [`CompiledInstruction`]: crate::instruction::CompiledInstruction
+///
+/// The shared account list is ordered by the permissions required of the accounts:
+///
+/// - accounts that are writable and signers
+/// - accounts that are read-only and signers
+/// - accounts that are writable and not signers
+/// - accounts that are read-only and not signers
+///
+/// Given this ordering, the fields of `MessageHeader` describe which accounts
+/// in a transaction require which permissions.
+///
+/// When multiple transactions access the same read-only accounts, the runtime
+/// may process them in parallel, in a single [PoH] entry. Transactions that
+/// access the same read-write accounts are processed sequentially.
+///
+/// [PoH]: https://docs.solana.com/cluster/synchronization
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageHeader {
+	/// The number of signatures required for this message to be considered
+	/// valid. The signers of those signatures must match the first
+	/// `num_required_signatures` of [`Message::account_keys`].
+	// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+	pub num_required_signatures: u8,
+
+	/// The last `num_readonly_signed_accounts` of the signed keys are read-only
+	/// accounts.
+	pub num_readonly_signed_accounts: u8,
+
+	/// The last `num_readonly_unsigned_accounts` of the unsigned keys are
+	/// read-only accounts.
+	pub num_readonly_unsigned_accounts: u8,
+}
+
+/// A Solana transaction message (legacy).
+///
+/// See the [`message`] module documentation for further description.
+///
+/// [`message`]: crate::message
+///
+/// Some constructors accept an optional `payer`, the account responsible for
+/// paying the cost of executing a transaction. In most cases, callers should
+/// specify the payer explicitly in these constructors. In some cases though,
+/// the caller is not _required_ to specify the payer, but is still allowed to:
+/// in the `Message` structure, the first account is always the fee-payer, so if
+/// the caller has knowledge that the first account of the constructed
+/// transaction's `Message` is both a signer and the expected fee-payer, then
+/// redundantly specifying the fee-payer is not strictly required.
+// NOTE: Serialization-related changes must be paired with the custom serialization
+// for versioned messages in the `RemainingLegacyMessage` struct.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Message {
+	/// The message header, identifying signed and read-only `account_keys`.
+	// NOTE: Serialization-related changes must be paired with the direct read at sigverify.
+	pub header: MessageHeader,
+
+	/// All the account keys used by this transaction.
+	#[serde(with = "short_vec")]
+	pub account_keys: Vec<Pubkey>,
+
+	/// The id of a recent ledger entry.
+	pub recent_blockhash: Hash,
+
+	/// Programs that will be executed in sequence and committed in one atomic transaction if all
+	/// succeed.
+	#[serde(with = "short_vec")]
+	pub instructions: Vec<CompiledInstruction>,
+}
+
+impl Message {
+	pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+		Self::new_with_blockhash(instructions, payer, &Hash::default())
+	}
+
+	pub fn new_with_blockhash(
+		instructions: &[Instruction],
+		payer: Option<&Pubkey>,
+		blockhash: &Hash,
+	) -> Self {
+		let compiled_keys = CompiledKeys::compile(instructions, payer.cloned());
+		let (header, account_keys) = compiled_keys
+			.try_into_message_components()
+			.expect("overflow when compiling message keys");
+		let instructions = compile_instructions(instructions, &account_keys);
+		Self::new_with_compiled_instructions(
+			header.num_required_signatures,
+			header.num_readonly_signed_accounts,
+			header.num_readonly_unsigned_accounts,
+			account_keys,
+			*blockhash,
+			instructions,
+		)
+	}
+
+	pub fn new_with_nonce(
+		instructions: Vec<Instruction>,
+		payer: Option<&Pubkey>,
+		_nonce_account_pubkey: &Pubkey,
+		_nonce_authority_pubkey: &Pubkey,
+	) -> Self {
+		// let nonce_ix =
+		// 	system_instruction::advance_nonce_account(nonce_account_pubkey, nonce_authority_pubkey);
+		// instructions.insert(0, nonce_ix);
+		Self::new(&instructions, payer)
+	}
+
+	pub fn new_with_compiled_instructions(
+		num_required_signatures: u8,
+		num_readonly_signed_accounts: u8,
+		num_readonly_unsigned_accounts: u8,
+		account_keys: Vec<Pubkey>,
+		recent_blockhash: Hash,
+		instructions: Vec<CompiledInstruction>,
+	) -> Self {
+		Self {
+			header: MessageHeader {
+				num_required_signatures,
+				num_readonly_signed_accounts,
+				num_readonly_unsigned_accounts,
+			},
+			account_keys,
+			recent_blockhash,
+			instructions,
+		}
+	}
+}
+
+#[derive(PartialEq, Debug, Eq, Clone)]
+pub enum CompileError {
+	// account index overflowed during compilation
+	AccountIndexOverflow,
+	// address lookup table index overflowed during compilation
+	AddressTableLookupIndexOverflow,
+	// encountered unknown account key `{0}` during instruction compilation
+	UnknownInstructionKey(Pubkey),
+}
+
+/// A helper struct to collect pubkeys compiled for a set of instructions
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CompiledKeys {
+	payer: Option<Pubkey>,
+	key_meta_map: BTreeMap<Pubkey, CompiledKeyMeta>,
+}
+
+impl CompiledKeys {
+	/// Compiles the pubkeys referenced by a list of instructions and organizes by
+	/// signer/non-signer and writable/readonly.
+	pub(crate) fn compile(instructions: &[Instruction], payer: Option<Pubkey>) -> Self {
+		let mut key_meta_map = BTreeMap::<Pubkey, CompiledKeyMeta>::new();
+		for ix in instructions {
+			let meta = key_meta_map.entry(ix.program_id).or_default();
+			meta.is_invoked = true;
+			for account_meta in &ix.accounts {
+				let meta = key_meta_map.entry(account_meta.pubkey).or_default();
+				meta.is_signer |= account_meta.is_signer;
+				meta.is_writable |= account_meta.is_writable;
+			}
+		}
+		if let Some(payer) = &payer {
+			let meta = key_meta_map.entry(*payer).or_default();
+			meta.is_signer = true;
+			meta.is_writable = true;
+		}
+		Self { payer, key_meta_map }
+	}
+
+	pub(crate) fn try_into_message_components(
+		self,
+	) -> Result<(MessageHeader, Vec<Pubkey>), CompileError> {
+		let try_into_u8 = |num: usize| -> Result<u8, CompileError> {
+			u8::try_from(num).map_err(|_| CompileError::AccountIndexOverflow)
+		};
+
+		let Self { payer, mut key_meta_map } = self;
+
+		if let Some(payer) = &payer {
+			key_meta_map.remove_entry(payer);
+		}
+
+		let writable_signer_keys: Vec<Pubkey> = payer
+			.into_iter()
+			.chain(
+				key_meta_map
+					.iter()
+					.filter_map(|(key, meta)| (meta.is_signer && meta.is_writable).then_some(*key)),
+			)
+			.collect();
+		let readonly_signer_keys: Vec<Pubkey> = key_meta_map
+			.iter()
+			.filter_map(|(key, meta)| (meta.is_signer && !meta.is_writable).then_some(*key))
+			.collect();
+		let writable_non_signer_keys: Vec<Pubkey> = key_meta_map
+			.iter()
+			.filter_map(|(key, meta)| (!meta.is_signer && meta.is_writable).then_some(*key))
+			.collect();
+		let readonly_non_signer_keys: Vec<Pubkey> = key_meta_map
+			.iter()
+			.filter_map(|(key, meta)| (!meta.is_signer && !meta.is_writable).then_some(*key))
+			.collect();
+
+		let signers_len = writable_signer_keys.len().saturating_add(readonly_signer_keys.len());
+
+		let header = MessageHeader {
+			num_required_signatures: try_into_u8(signers_len)?,
+			num_readonly_signed_accounts: try_into_u8(readonly_signer_keys.len())?,
+			num_readonly_unsigned_accounts: try_into_u8(readonly_non_signer_keys.len())?,
+		};
+
+		let static_account_keys = sp_std::iter::empty()
+			.chain(writable_signer_keys)
+			.chain(readonly_signer_keys)
+			.chain(writable_non_signer_keys)
+			.chain(readonly_non_signer_keys)
+			.collect();
+
+		Ok((header, static_account_keys))
+	}
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+struct CompiledKeyMeta {
+	is_signer: bool,
+	is_writable: bool,
+	is_invoked: bool,
+}
+
+fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
+	keys.iter().position(|k| k == key).unwrap() as u8
+}
+
+fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction {
+	let accounts: Vec<_> = ix
+		.accounts
+		.iter()
+		.map(|account_meta| position(keys, &account_meta.pubkey))
+		.collect();
+
+	CompiledInstruction {
+		program_id_index: position(keys, &ix.program_id),
+		data: ix.data.clone(),
+		accounts,
+	}
+}
+
+fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
+	ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
+}
+
+/// A compact encoding of an instruction.
+///
+/// A `CompiledInstruction` is a component of a multi-instruction [`Message`],
+/// which is the core of a Solana transaction. It is created during the
+/// construction of `Message`. Most users will not interact with it directly.
+///
+/// [`Message`]: crate::message::Message
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CompiledInstruction {
+	/// Index into the transaction keys array indicating the program account that executes this
+	/// instruction.
+	pub program_id_index: u8,
+	/// Ordered indices into the transaction keys array indicating which accounts to pass to the
+	/// program.
+	#[serde(with = "short_vec")]
+	pub accounts: Vec<u8>,
+	/// The program input data.
+	#[serde(with = "short_vec")]
+	pub data: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Ord, PartialOrd, Copy)]
+pub struct Pubkey(pub [u8; 32]);
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub enum ParsePubkeyError {
+	// String is the wrong size
+	WrongSize,
+	// Invalid Base58 string
+	Invalid,
+}
+
+impl From<[u8; 32]> for Pubkey {
+	fn from(from: [u8; 32]) -> Self {
+		Self(from)
+	}
+}
+
+// impl FromStr for Pubkey {
+// 	type Err = ParsePubkeyError;
+
+// 	fn from_str(s: &str) -> Result<Self, Self::Err> {
+// 		if s.len() > MAX_BASE58_LEN {
+// 			return Err(ParsePubkeyError::WrongSize)
+// 		}
+// 		let pubkey_vec = bs58::decode(s).into_vec().map_err(|_| ParsePubkeyError::Invalid)?;
+// 		if pubkey_vec.len() != sp_std::mem::size_of::<Pubkey>() {
+// 			Err(ParsePubkeyError::WrongSize)
+// 		} else {
+// 			Pubkey::try_from(pubkey_vec).map_err(|_| ParsePubkeyError::Invalid)
+// 		}
+// 	}
+// }
+
+// impl TryFrom<Vec<u8>> for Pubkey {
+// 	type Error = Vec<u8>;
+// 	fn try_from(pubkey: Vec<u8>) -> Result<Self, Self::Error> {
+// 		<[u8; 32]>::try_from(pubkey).map(Self::from)
+// 	}
+// }
+
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+pub struct Signature(GenericArray<u8, U64>);
+
+// impl Signature {
+// 	pub(self) fn verify_verbose(
+// 		&self,
+// 		pubkey_bytes: &[u8],
+// 		message_bytes: &[u8],
+// 	) -> Result<(), ed25519_dalek::SignatureError> {
+// 		let publickey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes)?;
+// 		let signature = self.0.as_slice().try_into()?;
+// 		publickey.verify_strict(message_bytes, &signature)
+// 	}
+
+// 	pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
+// 		self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
+// 	}
+// }
+
+impl From<[u8; SIGNATURE_BYTES]> for Signature {
+	fn from(signature: [u8; SIGNATURE_BYTES]) -> Self {
+		Self(GenericArray::from(signature))
+	}
+}
+
+#[derive(
+	Serialize,
+	Deserialize,
+	BorshSerialize,
+	BorshDeserialize,
+	Debug,
+	Clone,
+	Copy,
+	Default,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Hash,
+)]
+pub struct Hash(pub [u8; HASH_BYTES]);
+
+mod tests {
+	use super::*;
+	#[test]
+	fn create_simple_tx() {
+		// A custom program instruction. This would typically be defined in
+		// another crate so it can be shared between the on-chain program and
+		// the client.
+		#[derive(BorshSerialize, BorshDeserialize)]
+		enum BankInstruction {
+			Initialize,
+			Deposit { lamports: u64 },
+			Withdraw { lamports: u64 },
+		}
+
+		fn send_initialize_tx(
+			client: &RpcClient,
+			program_id: Pubkey,
+			payer: &Keypair,
+		) -> Result<()> {
+			let bank_instruction = BankInstruction::Initialize;
+
+			let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
+
+			let mut tx = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
+			let blockhash = client.get_latest_blockhash()?;
+			tx.sign(&[payer], blockhash);
+
+			Ok(())
+		}
+
+		// let client = RpcClient::new(String::new());
+		let program_id = Pubkey::new_unique();
+		let payer = Keypair::new();
+		send_initialize_tx(&client, program_id, &payer)?;
+		Ok::<(), anyhow::Error>(())
+	}
+}

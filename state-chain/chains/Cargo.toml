@@ -24,6 +24,27 @@ rlp = { default-features = false, version = '0.5' }
 bech32 = { default-features = false, version = '0.9.1' }
 base58 = '0.2.0'
 
+# Solana
+#solana-sdk = { path = "../../../solana/sdk", optional = true }
+borsh = { version = "1.2.1", default_features = false, features = [
+  "derive",
+  "unstable__schema",
+  "hashbrown",
+] }
+#serde_derive = { default-features = false, version = "1.0.103" }
+serde_with = { version = "2.3.3", default-features = false, features = [
+  "macros",
+] }
+generic-array = { version = "0.14.7", default-features = false, features = [
+  "serde",
+  "more_lengths",
+] }
+# bs58 = { version = "0.4.0", default-features = false, features = ["alloc"] }
+# bincode = { version = "1.3.3", default-features = false }
+
+#curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
+# solana-sdk = { version = "1.17.15", optional = true }
+
 # Other
 anyhow = { version = '1.0', default-features = false, optional = true }
 hex = { default-features = false, version = '0.4', features = ['serde'] }
