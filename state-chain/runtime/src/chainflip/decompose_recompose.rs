@@ -87,13 +87,6 @@ fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
 		.map(BitcoinFeeInfo::new)
 }
 
-fn try_decode_all<T>(data: &mut [Vec<u8>]) -> Result<Vec<T>, codec::Error>
-where
-	T: Decode,
-{
-	data.iter_mut().map(|entry| T::decode(&mut entry.as_slice())).collect()
-}
-
 fn decode_and_select<T, F>(data: &mut [Vec<u8>], mut select: F) -> Option<T>
 where
 	T: Decode,
@@ -111,7 +104,11 @@ where
 	// We assume that in order to get into that collection,
 	// an entry should to be a valid data structure at the moment of witnessing.
 	// Therefore it wouldn't be possible to sabotage voting by submitting an invalid entry.
-	match try_decode_all(data) {
+
+	let decode_all_result: Result<Vec<_>, _> =
+		data.iter_mut().map(|entry| T::decode(&mut entry.as_slice())).collect();
+
+	match decode_all_result {
 		Ok(entries) => select(entries),
 		Err(decode_err) => {
 			log::warn!("Error decoding {}: {}", core::any::type_name::<T>(), decode_err);
