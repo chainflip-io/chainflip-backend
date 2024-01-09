@@ -48,7 +48,7 @@ fn test_btc_utxo_selection() {
 		// dust amount should be ignored in all cases
 		let dust_amount = {
 			use cf_traits::GetBitcoinFeeInfo;
-			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo()
 		};
 		add_utxo_amount(dust_amount);
 
@@ -127,7 +127,7 @@ fn test_btc_utxo_consolidation() {
 
 		let dust_amount = {
 			use cf_traits::GetBitcoinFeeInfo;
-			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo
+			<Test as crate::Config>::BitcoinFeeInfo::bitcoin_fee_info().fee_per_input_utxo()
 		};
 
 		add_utxo_amount(10000);

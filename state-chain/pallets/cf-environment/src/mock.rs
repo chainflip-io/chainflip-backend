@@ -6,10 +6,7 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth, ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
-use cf_primitives::{
-	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
-	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
-};
+use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
@@ -160,11 +157,7 @@ parameter_types! {
 pub struct MockBitcoinFeeInfo;
 impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
-		BitcoinFeeInfo {
-			fee_per_input_utxo: 10 * INPUT_UTXO_SIZE_IN_BYTES,
-			fee_per_output_utxo: 10 * OUTPUT_UTXO_SIZE_IN_BYTES,
-			min_fee_required_per_tx: 10 * MINIMUM_BTC_TX_SIZE_IN_BYTES,
-		}
+		BitcoinFeeInfo::new(10 * 1024)
 	}
 }
 
