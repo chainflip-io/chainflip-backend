@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub mod short_vec;
-//pub mod system_instructions;
+pub mod system_instructions;
 
 pub const SIGNATURE_BYTES: usize = 64;
 pub const HASH_BYTES: usize = 32;
@@ -144,14 +144,15 @@ impl Instruction {
 		Self { program_id, accounts, data }
 	}
 
-	// pub fn new_with_bincode<T: Serialize>(
-	// 	program_id: Pubkey,
-	// 	data: &T,
-	// 	accounts: Vec<AccountMeta>,
-	// ) -> Self {
-	// 	let data = bincode::serialize(data).unwrap();
-	// 	Self { program_id, accounts, data }
-	// }
+	pub fn new_with_bincode<T: bincode::Encode>(
+		program_id: Pubkey,
+		data: &T,
+		accounts: Vec<AccountMeta>,
+	) -> Self {
+		// the solana-sdk uses bincode version 1.3.3 which has a dependency on serde which depends on std and so it cannot be used with our runtime. Fortunately, the new version of bincode (bincode 2) has an optional dependency on serde and we can use the serializer without serde. However, bincode 2 is a complete rewrite of bincode 1 and so to mimic the exact bahaviour of serializaition that is used by the solana-sdk with bincode 1, we need to use the legacy config for serialization according to the migration guide provided by bincode here: https://github.com/bincode-org/bincode/blob/v2.0.0-rc.3/docs/migration_guide.md. Original serialization call in solana sdk: let data = bincode::serialize(data).unwrap();
+		let data = bincode::encode_to_vec(data, bincode::config::legacy()).unwrap();
+		Self { program_id, accounts, data }
+	}
 }
 
 /// Describes a single account read or written by a program during instruction
@@ -477,7 +478,20 @@ pub struct CompiledInstruction {
 	pub data: Vec<u8>,
 }
 
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Ord, PartialOrd, Copy)]
+#[derive(
+	Debug,
+	PartialEq,
+	Default,
+	Eq,
+	Clone,
+	Serialize,
+	Deserialize,
+	bincode::Encode,
+	bincode::Decode,
+	Ord,
+	PartialOrd,
+	Copy,
+)]
 pub struct Pubkey(pub [u8; 32]);
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
@@ -494,28 +508,28 @@ impl From<[u8; 32]> for Pubkey {
 	}
 }
 
-// impl FromStr for Pubkey {
-// 	type Err = ParsePubkeyError;
+impl FromStr for Pubkey {
+	type Err = ParsePubkeyError;
 
-// 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-// 		if s.len() > MAX_BASE58_LEN {
-// 			return Err(ParsePubkeyError::WrongSize)
-// 		}
-// 		let pubkey_vec = bs58::decode(s).into_vec().map_err(|_| ParsePubkeyError::Invalid)?;
-// 		if pubkey_vec.len() != sp_std::mem::size_of::<Pubkey>() {
-// 			Err(ParsePubkeyError::WrongSize)
-// 		} else {
-// 			Pubkey::try_from(pubkey_vec).map_err(|_| ParsePubkeyError::Invalid)
-// 		}
-// 	}
-// }
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		if s.len() > MAX_BASE58_LEN {
+			return Err(ParsePubkeyError::WrongSize)
+		}
+		let pubkey_vec = bs58::decode(s).into_vec().map_err(|_| ParsePubkeyError::Invalid)?;
+		if pubkey_vec.len() != sp_std::mem::size_of::<Pubkey>() {
+			Err(ParsePubkeyError::WrongSize)
+		} else {
+			Pubkey::try_from(pubkey_vec).map_err(|_| ParsePubkeyError::Invalid)
+		}
+	}
+}
 
-// impl TryFrom<Vec<u8>> for Pubkey {
-// 	type Error = Vec<u8>;
-// 	fn try_from(pubkey: Vec<u8>) -> Result<Self, Self::Error> {
-// 		<[u8; 32]>::try_from(pubkey).map(Self::from)
-// 	}
-// }
+impl TryFrom<Vec<u8>> for Pubkey {
+	type Error = Vec<u8>;
+	fn try_from(pubkey: Vec<u8>) -> Result<Self, Self::Error> {
+		<[u8; 32]>::try_from(pubkey).map(Self::from)
+	}
+}
 
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
 pub struct Signature(GenericArray<u8, U64>);

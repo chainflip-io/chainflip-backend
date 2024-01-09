@@ -1,6 +1,7 @@
-use super::{AccountMeta, Deserialize, FromStr, Instruction, Pubkey, Serialize};
+use super::{vec, AccountMeta, FromStr, Instruction, Pubkey};
+use scale_info::prelude::string::String;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(bincode::Encode, bincode::Decode, Debug, Clone, PartialEq, Eq)]
 pub enum SystemInstruction {
 	/// Create a new account
 	///
@@ -173,25 +174,25 @@ pub enum SystemInstruction {
 	UpgradeNonceAccount,
 }
 
-// pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
-// 	let account_metas = vec![
-// 		AccountMeta::new(*nonce_pubkey, false),
-// 		// the public key for RecentBlockhashes system variable.
-// 		//
-// 		// NOTE: According to the solana sdk, this system variable is deprecated and should not be
-// 		// used. However, within the sdk itself they are still using this variable in the
-// 		// advance_nonce_account function so we use it here aswell. This should be revisited to
-// 		// make sure it is ok to use it, or if there is another way to advance the nonce account.
-// 		AccountMeta::new_readonly(
-// 			Pubkey::from_str("SysvarRecentB1ockHashes11111111111111111111").unwrap(),
-// 			false,
-// 		),
-// 		AccountMeta::new_readonly(*authorized_pubkey, true),
-// 	];
-// 	Instruction::new_with_bincode(
-// 		// program id of the system program
-// 		Pubkey::from_str("11111111111111111111111111111111").unwrap(),
-// 		&SystemInstruction::AdvanceNonceAccount,
-// 		account_metas,
-// 	)
-// }
+pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
+	let account_metas = vec![
+		AccountMeta::new(*nonce_pubkey, false),
+		// the public key for RecentBlockhashes system variable.
+		//
+		// NOTE: According to the solana sdk, this system variable is deprecated and should not be
+		// used. However, within the sdk itself they are still using this variable in the
+		// advance_nonce_account function so we use it here aswell. This should be revisited to
+		// make sure it is ok to use it, or if there is another way to advance the nonce account.
+		AccountMeta::new_readonly(
+			Pubkey::from_str("SysvarRecentB1ockHashes11111111111111111111").unwrap(),
+			false,
+		),
+		AccountMeta::new_readonly(*authorized_pubkey, true),
+	];
+	Instruction::new_with_bincode(
+		// program id of the system program
+		Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+		&SystemInstruction::AdvanceNonceAccount,
+		account_metas,
+	)
+}
