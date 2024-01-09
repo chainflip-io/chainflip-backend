@@ -500,6 +500,13 @@ pub trait BlockEmissions {
 	fn calculate_block_emissions();
 }
 
+/// Emits an event when backup rewards are distributed that lives inside the Emissions pallet.
+pub trait BackupRewardsNotifier {
+	type Balance;
+	type AccountId;
+	fn emit_event(account_id: &Self::AccountId, amount: Self::Balance);
+}
+
 /// Checks if the caller can execute free transactions
 pub trait WaivedFees {
 	type AccountId;
