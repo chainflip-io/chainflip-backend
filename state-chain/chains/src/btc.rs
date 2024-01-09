@@ -127,21 +127,18 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER
-			.checked_mul_int(self.btc_fee_info.fee_per_input_utxo())
-			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
+		BTC_FEE_MULTIPLIER.saturating_mul_int(self.btc_fee_info.fee_per_input_utxo())
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) -> <Bitcoin as Chain>::ChainAmount {
-		BTC_FEE_MULTIPLIER
-			.checked_mul_int(
-				self.btc_fee_info.min_fee_required_per_tx() +
-					self.btc_fee_info.fee_per_output_utxo(),
-			)
-			.expect("fee is a u64, multiplier is 1.5, so this should never overflow")
+		BTC_FEE_MULTIPLIER.saturating_mul_int(
+			self.btc_fee_info
+				.min_fee_required_per_tx()
+				.saturating_add(self.btc_fee_info.fee_per_output_utxo()),
+		)
 	}
 }
 
@@ -1388,9 +1385,14 @@ mod test {
 
 	#[test]
 	#[should_panic]
-	// XXX: @martin-chainflip 👋
-	fn fee_is_a_u64_multiplier_is_1_5_so_this_should_never_overflow() {
-		let _: u64 =
-			BTC_FEE_MULTIPLIER.checked_mul_int(u64::MAX).expect("Martin says it'll be fine");
+	fn btc_fee_multiplier_arithmetics_negative() {
+		let _: u64 = BTC_FEE_MULTIPLIER
+			.checked_mul_int(u64::MAX)
+			.expect("fee is a u64, multiplier is 1.5, so this should never overflow");
+	}
+
+	#[test]
+	fn btc_fee_multiplier_arithmetics_positive() {
+		assert_eq!(u64::MAX, BTC_FEE_MULTIPLIER.saturating_mul_int(u64::MAX));
 	}
 }
