@@ -10,7 +10,7 @@ impl<T, I> OnRuntimeUpgrade for Migration<T, I>
 where
 	T: Config<I>,
 	I: 'static,
-	ChainState<T::TargetChain>: v1::FromV1,
+	ChainState<T::TargetChain>: old::FromV1,
 {
 	fn on_runtime_upgrade() -> Weight {
 		// Runtime-check: only migrate the Bitcoin TrackedData
@@ -18,7 +18,7 @@ where
 			// Compile-time: `impl v1::FromV1 for ChainState<Chain>`
 			//     should be defined for every `Chain` we use this migration with.
 			let translated_opt =
-				CurrentChainState::<T, I>::translate(|old| old.map(v1::FromV1::from_v1))
+				CurrentChainState::<T, I>::translate(|old| old.map(old::FromV1::from_v1))
 					.expect("failed to decode v1-storage");
 			if let Some(translated) = translated_opt {
 				CurrentChainState::<T, I>::put(translated);
@@ -41,7 +41,7 @@ where
 	}
 }
 
-mod v1 {
+mod old {
 	use crate::*;
 
 	pub trait FromV1 {
