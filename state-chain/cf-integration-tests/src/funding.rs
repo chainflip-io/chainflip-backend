@@ -5,7 +5,9 @@ use crate::{
 
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
+use cf_test_utilities::assert_has_event;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo};
+use frame_system::Config as SystemConfig;
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::{Backups, CurrentRotationPhase};
@@ -270,5 +272,54 @@ fn apy_can_be_above_100_percent() {
 				FixedU64::from_rational(reward, total).checked_mul_int(10_000u32).unwrap();
 			assert_eq!(apy_basis_point, 241_377_727u32);
 			assert_eq!(calculate_account_apy(&validator), Some(apy_basis_point));
+		});
+}
+
+#[test]
+fn can_notify_backup_validators_been_rewarded() {
+	const EPOCH_BLOCKS: u32 = 1_000;
+	const MAX_AUTHORITIES: u32 = 10;
+	const NUM_BACKUPS: u32 = 20;
+	super::genesis::default()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			// TODO: Figure out how to test this... Monitoring Events in integrations seem to be
+			// broken. let (mut network, _, _) =
+			// 	crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			// // network.move_to_the_next_epoch();
+
+			// let backup_earning_rewards = Validator::highest_funded_qualified_backup_node_bids();
+			// // let all_backups = Validator::backups();
+			// // let validator = Validator::current_authorities().into_iter().next().unwrap();
+			// // let Bid { bidder_id: backup, amount: backup_staked } =
+			// // 	backup_earning_rewards.next().unwrap();
+
+			// let events = frame_system::Pallet::<Runtime>::events()
+			// 	.into_iter()
+			// 	.map(|e| e.event)
+			// 	.collect::<Vec<_>>();
+
+			// for event in events {
+			// 	let bar = 0;
+			// }
+
+			// for backup in backup_earning_rewards {
+			// 	let current_event = state_chain_runtime::RuntimeEvent::Emissions(
+			// 		pallet_cf_emissions::Event::BackupRewardsDistributed {
+			// 			account_id: backup.bidder_id,
+			// 			amount: backup.amount,
+			// 		},
+			// 	);
+			// 	assert!(events.contains(&current_event));
+			// }
+
+			// assert_has_event::<Runtime>(state_chain_runtime::RuntimeEvent::Emissions(
+			// 	pallet_cf_emissions::Event::BackupRewardsDistributed {
+			// 		account_id: backup,
+			// 		amount: backup_staked,
+			// 	},
+			// ));
 		});
 }
