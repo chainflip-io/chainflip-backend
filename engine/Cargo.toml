@@ -142,7 +142,7 @@ default-features = false
 features = ["lz4"]
 
 [dev-dependencies]
-csv = "1.1.5"
+csv = "1.1.6"
 ethereum = "0.14"
 mockall = "0.11.0"
 multisig = { path = "multisig", features = ["test"] }
