@@ -105,17 +105,27 @@ mod old {
 				log::info!("upgrading {} @{:?}", core::any::type_name::<Self>(), block_height);
 
 				fn undo(derived_fee: u64, size: u64) -> BtcAmount {
-					let a = derived_fee.saturating_mul(BYTES_PER_KILOBYTE);
-					let q = a / size;
-					let r = a % size;
+					// the old version of this entry used to contain three values,
+					// all being a function of `sats_per_kilobyte`: `sats_per_kilobyte` *
+					// `SOME_SIZE_CONSTANT` / 1K .
+					//
+					// Here we are reversing that calculation, thus restoring the value of
+					// `sats_per_kilobyte`. The sought value below is — `quot`.
+					//
+					// If the `rem` appears to be non-zero, this would indicate
+					// that the saturating-multiplication was hit in the original calculation.
 
-					if !(r == 0 || a == BtcAmount::MAX) {
+					let a = derived_fee.saturating_mul(BYTES_PER_KILOBYTE);
+					let quot = a / size;
+					let rem = a % size;
+
+					if !(rem == 0 || a == BtcAmount::MAX) {
 						log::warn!(
 							"Fee estimation may be inaccurate. Invoked as `undo(derived_fee: {:?}, size: {:?})`", 
 							derived_fee, size);
 					}
 
-					q
+					quot
 				}
 
 				let via_in = undo(tracked_data.fee_per_input_utxo, INPUT_UTXO_SIZE_IN_BYTES);
