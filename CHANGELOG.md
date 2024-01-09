@@ -2,6 +2,16 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.1.6] - 2024-01-09
+
+### Fixes
+
+- Tune BTC fees to allow for larger salt values when generating deposit channels (([PRO-1082](https://linear.app/chainflip/issue/PRO-1082/bitcoin-fee-for-broadcast-was-set-below-minimum-resulting-in-broadcast))) ([#4394](https://github.com/chainflip-io/chainflip-backend/pull/4394))
+
+### Features
+
+- Order_fills rpc for LPs (([PRO-1044](https://linear.app/chainflip/issue/PRO-1044))) ([#4376](https://github.com/chainflip-io/chainflip-backend/issues/4376)) ([#4395](https://github.com/chainflip-io/chainflip-backend/issues/4395))
+
 ## [1.1.5] - 2024-01-02
 
 ### Fixes
