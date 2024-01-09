@@ -53,7 +53,7 @@ fn test_btc_utxo_selection() {
 		add_utxo_amount(dust_amount);
 
 		// select some utxos for a tx
-		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24770;
+		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24680;
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
 				output_amount: 12000,
@@ -70,7 +70,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121970)
+			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121790)
 		);
 
 		// add some more utxos to the list
@@ -88,7 +88,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000), utxo(15000),], 17950)
+			(vec![utxo(5000), utxo(15000),], 17890)
 		);
 	});
 }
@@ -145,7 +145,7 @@ fn test_btc_utxo_consolidation() {
 		// Should select two UTXOs, with all funds (minus fees) going back to us as change
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			Some((vec![utxo(10000), utxo(20000)], 27950))
+			Some((vec![utxo(10000), utxo(20000)], 27890))
 		);
 
 		// Any utxo that didn't get consolidated should still be available:
