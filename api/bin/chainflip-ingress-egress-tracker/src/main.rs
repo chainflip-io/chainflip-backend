@@ -1,3 +1,4 @@
+#![feature(async_fn_in_trait)]
 use cf_chains::{
 	btc::BitcoinNetwork, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain, Ethereum,
 	Polkadot,
@@ -12,16 +13,45 @@ use chainflip_engine::{
 use clap::Parser;
 use config::{Config, ConfigBuilder, ConfigError, Environment, Map, Source, Value};
 use futures::FutureExt;
-use jsonrpsee::{core::Error, server::ServerBuilder, RpcModule};
 use pallet_cf_broadcast::TransactionOutIdFor;
 use pallet_cf_ingress_egress::DepositWitness;
+use redis::{aio::MultiplexedConnection, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::PalletInstanceAlias;
-use std::{collections::HashMap, env, net::SocketAddr};
+use std::{collections::HashMap, env};
 use tracing::log;
 use utilities::{rpc::NumberOrHex, task_scope};
 
 mod witnessing;
+
+pub const REDIS_EXPIRY_IN_SECONDS: u64 = 3600;
+
+pub trait RedisStorable: Serialize {
+	fn get_redis_key(&self) -> Option<String>;
+
+	async fn save_to_array(&self, con: &mut MultiplexedConnection) -> redis::RedisResult<()> {
+		if let Some(key) = self.get_redis_key() {
+			con.rpush(&key, serde_json::to_string(self).expect("failed to serialize redis value"))
+				.await?;
+			con.expire(key, REDIS_EXPIRY_IN_SECONDS as i64).await?;
+		}
+
+		Ok(())
+	}
+
+	async fn save_singleton(&self, con: &mut MultiplexedConnection) -> redis::RedisResult<()> {
+		if let Some(key) = self.get_redis_key() {
+			con.set_ex(
+				&key,
+				serde_json::to_string(self).expect("failed to serialize redis value"),
+				REDIS_EXPIRY_IN_SECONDS,
+			)
+			.await?;
+		}
+
+		Ok(())
+	}
+}
 
 #[derive(Serialize)]
 struct WitnessAsset {
@@ -74,11 +104,35 @@ enum WitnessInformation {
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: WitnessAsset,
+		chain: ForeignChain,
 	},
 	Broadcast {
 		broadcast_id: BroadcastId,
 		tx_out_id: TransactionId,
 	},
+}
+
+impl RedisStorable for WitnessInformation {
+	fn get_redis_key(&self) -> Option<String> {
+		Some(match self {
+			Self::Deposit { deposit_address, chain, .. } => {
+				let chain = serde_json::to_string(chain)
+					.expect("failed to serialize string")
+					.to_lowercase();
+
+				format!("deposit:{chain}:{deposit_address}")
+			},
+			Self::Broadcast { broadcast_id, tx_out_id } => {
+				let chain = match tx_out_id {
+					TransactionId::Bitcoin { .. } => "bitcoin",
+					TransactionId::Ethereum { .. } => "ethereum",
+					TransactionId::Polkadot { .. } => "polkadot",
+				};
+
+				format!("broadcast:{chain}:{broadcast_id}")
+			},
+		})
+	}
 }
 
 type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber);
@@ -90,6 +144,7 @@ impl From<DepositInfo<Ethereum>> for WitnessInformation {
 			deposit_address: value.deposit_address.to_string(),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			chain: ForeignChain::Ethereum,
 		}
 	}
 }
@@ -104,6 +159,7 @@ impl From<BitcoinDepositInfo> for WitnessInformation {
 			deposit_address: value.deposit_address.to_address(&network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			chain: ForeignChain::Bitcoin,
 		}
 	}
 }
@@ -115,6 +171,7 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 			deposit_address: format!("0x{}", hex::encode(value.deposit_address.aliased_ref())),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			chain: ForeignChain::Polkadot,
 		}
 	}
 }
@@ -149,6 +206,7 @@ pub struct DepositTrackerSettings {
 	dot: WsHttpEndpoints,
 	state_chain_ws_endpoint: String,
 	btc: HttpBasicAuthEndpoint,
+	redis_url: String,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -170,6 +228,8 @@ pub struct TrackerOptions {
 	btc_username: Option<String>,
 	#[clap(long = "btc.rpc.basic_auth_password")]
 	btc_password: Option<String>,
+	#[clap(long = "redis_url")]
+	redis_url: Option<String>,
 }
 
 impl CfSettings for DepositTrackerSettings {
@@ -200,7 +260,8 @@ impl CfSettings for DepositTrackerSettings {
 			.set_default("state_chain_ws_endpoint", "ws://localhost:9944")?
 			.set_default("btc.http_endpoint", "http://127.0.0.1:8332")?
 			.set_default("btc.basic_auth_user", "flip")?
-			.set_default("btc.basic_auth_password", "flip")
+			.set_default("btc.basic_auth_password", "flip")?
+			.set_default("redis_url", "http://127.0.0.1:6379")
 	}
 
 	fn validate_settings(
@@ -231,6 +292,7 @@ impl Source for TrackerOptions {
 		insert_command_line_option(&mut map, "btc.http_endpoint", &self.btc_endpoint);
 		insert_command_line_option(&mut map, "btc.basic_auth_user", &self.btc_username);
 		insert_command_line_option(&mut map, "btc.basic_auth_password", &self.btc_password);
+		insert_command_line_option(&mut map, "redis_url", &self.redis_url);
 
 		Ok(map)
 	}
@@ -244,20 +306,9 @@ async fn start(
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
-	let mut module = RpcModule::new(());
 
-	let btc_tracker = witnessing::btc_mempool::start(scope, settings.btc.clone()).await;
-
-	module.register_async_method("status", move |arguments, _context| {
-		let btc_tracker = btc_tracker.clone();
-		async move {
-			arguments.parse::<Vec<String>>().map_err(Error::Call).and_then(|addresses| {
-				btc_tracker
-					.lookup_transactions(&addresses)
-					.map_err(|err| jsonrpsee::core::Error::Custom(err.to_string()))
-			})
-		}
-	})?;
+	let client = redis::Client::open(settings.redis_url.clone()).unwrap();
+	let mut con = client.get_multiplexed_tokio_connection().await?;
 
 	// Broadcast channel will drop old messages when the buffer is full to
 	// avoid "memory leaks" due to slow receivers.
@@ -266,159 +317,122 @@ async fn start(
 		tokio::sync::broadcast::channel::<state_chain_runtime::RuntimeCall>(EVENT_BUFFER_SIZE);
 
 	let (state_chain_client, env_params) =
-		witnessing::start(scope, settings, witness_sender.clone()).await?;
+		witnessing::start(scope, settings.clone(), witness_sender.clone()).await?;
 	let btc_network = env_params.btc_network;
+	witnessing::btc_mempool::start(scope, settings.btc, con.clone(), btc_network);
+	let mut witness_receiver = witness_sender.subscribe();
 
-	module.register_subscription(
-		"subscribe_witnessing",
-		"s_witnessing",
-		"unsubscribe_witnessing",
-		move |_params, mut sink, _context| {
-			let mut witness_receiver = witness_sender.subscribe();
-			let state_chain_client = state_chain_client.clone();
+	while let Ok(event) = witness_receiver.recv().await {
+		use pallet_cf_broadcast::Call as BroadcastCall;
+		use pallet_cf_ingress_egress::Call as IngressEgressCall;
+		use state_chain_runtime::RuntimeCall::*;
 
-			tokio::spawn(async move {
-				while let Ok(event) = witness_receiver.recv().await {
-					use pallet_cf_broadcast::Call as BroadcastCall;
-					use pallet_cf_ingress_egress::Call as IngressEgressCall;
-					use state_chain_runtime::RuntimeCall::*;
+		match event {
+			EthereumIngressEgress(IngressEgressCall::process_deposits {
+				deposit_witnesses,
+				block_height,
+			}) =>
+				for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
+					WitnessInformation::from((witness, block_height))
+						.save_to_array(&mut con)
+						.await?;
+				},
+			BitcoinIngressEgress(IngressEgressCall::process_deposits {
+				deposit_witnesses,
+				block_height,
+			}) =>
+				for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
+					WitnessInformation::from((witness, block_height, btc_network))
+						.save_to_array(&mut con)
+						.await?;
+				},
+			PolkadotIngressEgress(IngressEgressCall::process_deposits {
+				deposit_witnesses,
+				block_height,
+			}) =>
+				for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
+					WitnessInformation::from((witness, block_height))
+						.save_to_array(&mut con)
+						.await?;
+				},
+			EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+				let broadcast_id =
+					get_broadcast_id::<Ethereum>(&state_chain_client, &tx_out_id).await;
 
-					// rustfmt chokes when formatting this macro.
-					// See: https://github.com/rust-lang/rustfmt/issues/5404
-					#[rustfmt::skip]
-					macro_rules! send {
-						($value:expr) => {
-							if let Ok(false) = sink.send($value) {
-								log::debug!("Subscription is closed");
-								return
-							}
-						};
+				if let Some(broadcast_id) = broadcast_id {
+					WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
 					}
-
-					match event {
-						EthereumIngressEgress(IngressEgressCall::process_deposits {
-							deposit_witnesses,
-							block_height,
-						}) =>
-							for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-								let info = WitnessInformation::from((witness, block_height));
-								send!(&info);
-							},
-						BitcoinIngressEgress(IngressEgressCall::process_deposits {
-							deposit_witnesses,
-							block_height,
-						}) =>
-							for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-								let info =
-									WitnessInformation::from((witness, block_height, btc_network));
-								send!(&info);
-							},
-						PolkadotIngressEgress(IngressEgressCall::process_deposits {
-							deposit_witnesses,
-							block_height,
-						}) =>
-							for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-								let info = WitnessInformation::from((witness, block_height));
-								send!(&info);
-							},
-						EthereumBroadcaster(BroadcastCall::transaction_succeeded {
-							tx_out_id,
-							..
-						}) => {
-							let broadcast_id =
-								get_broadcast_id::<Ethereum>(&state_chain_client, &tx_out_id).await;
-
-							if let Some(broadcast_id) = broadcast_id {
-								send!(&WitnessInformation::Broadcast {
-									broadcast_id,
-									tx_out_id: TransactionId::Ethereum { signature: tx_out_id }
-								})
-							}
-						},
-						BitcoinBroadcaster(BroadcastCall::transaction_succeeded {
-							tx_out_id,
-							..
-						}) => {
-							let broadcast_id =
-								get_broadcast_id::<Bitcoin>(&state_chain_client, &tx_out_id).await;
-
-							if let Some(broadcast_id) = broadcast_id {
-								send!(&WitnessInformation::Broadcast {
-									broadcast_id,
-									tx_out_id: TransactionId::Bitcoin {
-										hash: format!("0x{}", hex::encode(tx_out_id))
-									}
-								})
-							}
-						},
-						PolkadotBroadcaster(BroadcastCall::transaction_succeeded {
-							tx_out_id,
-							..
-						}) => {
-							let broadcast_id =
-								get_broadcast_id::<Polkadot>(&state_chain_client, &tx_out_id).await;
-
-							if let Some(broadcast_id) = broadcast_id {
-								send!(&WitnessInformation::Broadcast {
-									broadcast_id,
-									tx_out_id: TransactionId::Polkadot {
-										signature: format!(
-											"0x{}",
-											hex::encode(tx_out_id.aliased_ref())
-										)
-									}
-								})
-							}
-						},
-
-						EthereumIngressEgress(_) |
-						BitcoinIngressEgress(_) |
-						PolkadotIngressEgress(_) |
-						System(_) |
-						Timestamp(_) |
-						Environment(_) |
-						Flip(_) |
-						Emissions(_) |
-						Funding(_) |
-						AccountRoles(_) |
-						Witnesser(_) |
-						Validator(_) |
-						Session(_) |
-						Grandpa(_) |
-						Governance(_) |
-						Reputation(_) |
-						TokenholderGovernance(_) |
-						EthereumChainTracking(_) |
-						BitcoinChainTracking(_) |
-						PolkadotChainTracking(_) |
-						EthereumVault(_) |
-						PolkadotVault(_) |
-						BitcoinVault(_) |
-						EthereumThresholdSigner(_) |
-						PolkadotThresholdSigner(_) |
-						BitcoinThresholdSigner(_) |
-						EthereumBroadcaster(_) |
-						PolkadotBroadcaster(_) |
-						BitcoinBroadcaster(_) |
-						Swapping(_) |
-						LiquidityProvider(_) |
-						LiquidityPools(_) => {},
-					};
+					.save_singleton(&mut con)
+					.await?;
 				}
-			});
-			Ok(())
-		},
-	)?;
+			},
+			BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+				let broadcast_id =
+					get_broadcast_id::<Bitcoin>(&state_chain_client, &tx_out_id).await;
 
-	scope.spawn(async {
-		let server = ServerBuilder::default().build("0.0.0.0:13337".parse::<SocketAddr>()?).await?;
-		let addr = server.local_addr()?;
-		log::info!("Listening on http://{}", addr);
-		server.start(module)?.stopped().await;
-		// If the server stops for some reason, we return
-		// error to terminate other tasks and the process.
-		Err(anyhow::anyhow!("RPC server stopped"))
-	});
+				if let Some(broadcast_id) = broadcast_id {
+					WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Bitcoin {
+							hash: format!("0x{}", hex::encode(tx_out_id)),
+						},
+					}
+					.save_singleton(&mut con)
+					.await?;
+				}
+			},
+			PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+				let broadcast_id =
+					get_broadcast_id::<Polkadot>(&state_chain_client, &tx_out_id).await;
+
+				if let Some(broadcast_id) = broadcast_id {
+					WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Polkadot {
+							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
+						},
+					}
+					.save_singleton(&mut con)
+					.await?;
+				}
+			},
+
+			EthereumIngressEgress(_) |
+			BitcoinIngressEgress(_) |
+			PolkadotIngressEgress(_) |
+			System(_) |
+			Timestamp(_) |
+			Environment(_) |
+			Flip(_) |
+			Emissions(_) |
+			Funding(_) |
+			AccountRoles(_) |
+			Witnesser(_) |
+			Validator(_) |
+			Session(_) |
+			Grandpa(_) |
+			Governance(_) |
+			Reputation(_) |
+			TokenholderGovernance(_) |
+			EthereumChainTracking(_) |
+			BitcoinChainTracking(_) |
+			PolkadotChainTracking(_) |
+			EthereumVault(_) |
+			PolkadotVault(_) |
+			BitcoinVault(_) |
+			EthereumThresholdSigner(_) |
+			PolkadotThresholdSigner(_) |
+			BitcoinThresholdSigner(_) |
+			EthereumBroadcaster(_) |
+			PolkadotBroadcaster(_) |
+			BitcoinBroadcaster(_) |
+			Swapping(_) |
+			LiquidityProvider(_) |
+			LiquidityPools(_) => {},
+		};
+	}
 
 	Ok(())
 }
