@@ -115,7 +115,7 @@ where
 		Ok(entries) => select(entries),
 		Err(decode_err) => {
 			log::warn!("Error decoding {}: {}", core::any::type_name::<T>(), decode_err);
-			return None
+			None
 		},
 	}
 }
