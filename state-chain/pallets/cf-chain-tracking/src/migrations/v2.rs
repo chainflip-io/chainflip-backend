@@ -17,9 +17,8 @@ where
 		if T::TargetChain::NAME == cf_chains::Bitcoin::NAME {
 			// Compile-time: `impl v1::FromV1 for ChainState<Chain>`
 			//     should be defined for every `Chain` we use this migration with.
-			let translated_opt =
-				CurrentChainState::<T, I>::translate(|old| old.map(old::FromV1::from_v1))
-					.expect("failed to decode v1-storage");
+			CurrentChainState::<T, I>::translate(|old| old.map(old::FromV1::from_v1))
+				.expect("failed to decode v1-storage");
 		}
 		// For the chains other than Bitcoin `v1::FromV1` should be defined as
 		//    something that explodes rather than silently corrupts the data.
