@@ -1,4 +1,5 @@
 #![feature(async_fn_in_trait)]
+use async_trait::async_trait;
 use cf_chains::{
 	btc::BitcoinNetwork, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain, Ethereum,
 	Polkadot,
@@ -24,32 +25,70 @@ use utilities::{rpc::NumberOrHex, task_scope};
 
 mod witnessing;
 
-pub const REDIS_EXPIRY_IN_SECONDS: u64 = 3600;
+#[async_trait]
+pub trait Store: Sync + Send + 'static {
+	type Output: Sync + Send + 'static;
 
-pub trait RedisStorable: Serialize {
-	fn get_redis_key(&self) -> Option<String>;
+	async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<Self::Output>;
+	async fn save_singleton<S: Storable>(&mut self, storable: &S) -> anyhow::Result<Self::Output>;
+}
 
-	async fn save_to_array(&self, con: &mut MultiplexedConnection) -> redis::RedisResult<()> {
-		if let Some(key) = self.get_redis_key() {
-			con.rpush(&key, serde_json::to_string(self).expect("failed to serialize redis value"))
+#[derive(Clone)]
+struct RedisStore {
+	con: MultiplexedConnection,
+}
+
+impl RedisStore {
+	const REDIS_EXPIRY_IN_SECONDS: u64 = 3600;
+
+	fn new(con: MultiplexedConnection) -> Self {
+		Self { con }
+	}
+}
+
+#[async_trait]
+impl Store for RedisStore {
+	type Output = ();
+
+	async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
+		if let Some(key) = storable.get_key() {
+			self.con
+				.rpush(
+					&key,
+					serde_json::to_string(storable).expect("failed to serialize redis value"),
+				)
 				.await?;
-			con.expire(key, REDIS_EXPIRY_IN_SECONDS as i64).await?;
+			self.con.expire(key, Self::REDIS_EXPIRY_IN_SECONDS as i64).await?;
 		}
 
 		Ok(())
 	}
 
-	async fn save_singleton(&self, con: &mut MultiplexedConnection) -> redis::RedisResult<()> {
-		if let Some(key) = self.get_redis_key() {
-			con.set_ex(
-				&key,
-				serde_json::to_string(self).expect("failed to serialize redis value"),
-				REDIS_EXPIRY_IN_SECONDS,
-			)
-			.await?;
+	async fn save_singleton<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
+		if let Some(key) = storable.get_key() {
+			self.con
+				.set_ex(
+					&key,
+					serde_json::to_string(storable).expect("failed to serialize redis value"),
+					Self::REDIS_EXPIRY_IN_SECONDS,
+				)
+				.await?;
 		}
 
 		Ok(())
+	}
+}
+
+#[async_trait]
+pub trait Storable: Serialize + Sized + Sync + 'static {
+	fn get_key(&self) -> Option<String>;
+
+	async fn save_to_array<S: Store>(&self, store: &mut S) -> anyhow::Result<S::Output> {
+		store.save_to_array(self).await
+	}
+
+	async fn save_singleton<S: Store>(&self, store: &mut S) -> anyhow::Result<S::Output> {
+		store.save_singleton(self).await
 	}
 }
 
@@ -112,8 +151,8 @@ enum WitnessInformation {
 	},
 }
 
-impl RedisStorable for WitnessInformation {
-	fn get_redis_key(&self) -> Option<String> {
+impl Storable for WitnessInformation {
+	fn get_key(&self) -> Option<String> {
 		Some(match self {
 			Self::Deposit { deposit_address, chain, .. } => {
 				let chain = serde_json::to_string(chain)
@@ -308,7 +347,7 @@ async fn start(
 		.expect("setting default subscriber failed");
 
 	let client = redis::Client::open(settings.redis_url.clone()).unwrap();
-	let mut con = client.get_multiplexed_tokio_connection().await?;
+	let mut con = RedisStore::new(client.get_multiplexed_tokio_connection().await?);
 
 	// Broadcast channel will drop old messages when the buffer is full to
 	// avoid "memory leaks" due to slow receivers.
@@ -322,12 +361,12 @@ async fn start(
 	witnessing::btc_mempool::start(scope, settings.btc, con.clone(), btc_network);
 	let mut witness_receiver = witness_sender.subscribe();
 
-	while let Ok(event) = witness_receiver.recv().await {
+	while let Ok(call) = witness_receiver.recv().await {
 		use pallet_cf_broadcast::Call as BroadcastCall;
 		use pallet_cf_ingress_egress::Call as IngressEgressCall;
 		use state_chain_runtime::RuntimeCall::*;
 
-		match event {
+		match call {
 			EthereumIngressEgress(IngressEgressCall::process_deposits {
 				deposit_witnesses,
 				block_height,
