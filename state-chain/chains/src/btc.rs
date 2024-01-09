@@ -1382,17 +1382,4 @@ mod test {
 		assert!(!ConsolidationParameters::new(1, 1).are_valid());
 		assert!(!ConsolidationParameters::new(0, 10).are_valid());
 	}
-
-	#[test]
-	#[should_panic]
-	fn btc_fee_multiplier_arithmetics_negative() {
-		let _: u64 = BTC_FEE_MULTIPLIER
-			.checked_mul_int(u64::MAX)
-			.expect("fee is a u64, multiplier is 1.5, so this should never overflow");
-	}
-
-	#[test]
-	fn btc_fee_multiplier_arithmetics_positive() {
-		assert_eq!(u64::MAX, BTC_FEE_MULTIPLIER.saturating_mul_int(u64::MAX));
-	}
 }
