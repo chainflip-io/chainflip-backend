@@ -1,35 +1,8 @@
 use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
-use cf_chains::{btc::BitcoinFeeInfo, dot::PolkadotBalance};
-use cf_primitives::EthAmount;
+use cf_chains::btc::BitcoinFeeInfo;
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
-
-fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
-	let median_index = data.len().checked_sub(1)? / 2;
-	let (_, median_value, _) = data.select_nth_unstable(median_index);
-
-	Some(*median_value)
-}
-
-fn decode_many<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Vec<T> {
-	data.iter_mut()
-		.map(|entry| T::decode(&mut entry.as_slice()))
-		.inspect(|r|
-			if let Err(e) = r {
-				log::error!(
-					"Error decoding {}: {}.\nThis is expected to happen right after the runtime-upgrade, but should only be observed until the end of the epoch (PRO-1073)",
-					e, core::any::type_name::<T>()
-				)
-			})
-		.filter_map(Result::ok)
-		.collect()
-}
-
-fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
-	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
-		.map(BitcoinFeeInfo::new)
-}
 
 impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
@@ -72,32 +45,26 @@ impl WitnessDataExtraction for RuntimeCall {
 				EthereumInstance,
 			>::update_chain_state {
 				new_chain_state,
-			}) => {
-				let fee_votes = decode_many::<EthAmount>(data);
-				if let Some(median) = select_median(fee_votes) {
+			}) =>
+				if let Some(median) = decode_and_select(data, select_median) {
 					new_chain_state.tracked_data.priority_fee = median;
-				}
-			},
+				},
 			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				BitcoinInstance,
 			>::update_chain_state {
 				new_chain_state,
-			}) => {
-				let fee_infos = decode_many::<BitcoinFeeInfo>(data);
-
-				if let Some(median) = select_median_btc_info(fee_infos) {
+			}) =>
+				if let Some(median) = decode_and_select(data, select_median_btc_info) {
 					new_chain_state.tracked_data.btc_fee_info = median;
-				}
-			},
+				},
 			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				PolkadotInstance,
 			>::update_chain_state {
 				new_chain_state,
 			}) => {
-				let tip_votes = decode_many::<PolkadotBalance>(data);
-				if let Some(median) = select_median(tip_votes) {
+				if let Some(median) = decode_and_select(data, select_median) {
 					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
@@ -105,6 +72,39 @@ impl WitnessDataExtraction for RuntimeCall {
 				log::warn!("No witness data injection for call {:?}", self);
 			},
 		}
+	}
+}
+
+fn select_median<T: Ord + Copy>(mut data: Vec<T>) -> Option<T> {
+	let median_index = data.len().checked_sub(1)? / 2;
+	let (_, median_value, _) = data.select_nth_unstable(median_index);
+
+	Some(*median_value)
+}
+
+fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
+	select_median(data.iter().map(BitcoinFeeInfo::sats_per_kilobyte).collect())
+		.map(BitcoinFeeInfo::new)
+}
+
+fn try_decode_all<T>(data: &mut [Vec<u8>]) -> Result<Vec<T>, codec::Error>
+where
+	T: Decode,
+{
+	data.iter_mut().map(|entry| T::decode(&mut entry.as_slice())).collect()
+}
+
+fn decode_and_select<T, F>(data: &mut [Vec<u8>], mut select: F) -> Option<T>
+where
+	T: Decode,
+	F: FnMut(Vec<T>) -> Option<T>,
+{
+	match try_decode_all(data) {
+		Ok(entries) => select(entries),
+		Err(decode_err) => {
+			log::warn!("Error decoding {}: {}", core::any::type_name::<T>(), decode_err);
+			return None
+		},
 	}
 }
 
