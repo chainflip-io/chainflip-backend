@@ -147,12 +147,19 @@ async function main(): Promise<void> {
                 }    
             }
             if(witnessNumber.length > 0) {
-                console.log(`${Math.min(...witnessNumber)}/${validators?.length} witnessed the chain tracking!`);
+                console.log(`${Math.min(...witnessNumber)}/${validators?.length} witnessed it!`);
                 const vanityNames = (await api.query.validator.vanityNames()).toHuman();
                 failingValidators.forEach(element => {
-                    console.log(element + ": " + vanityNames[element]);
-                    console.log(String.fromCodePoint(Number(vanityNames[element])));
-
+                    if(vanityNames[element] && vanityNames[element].substr(0,2) === "0x") {
+                        let vanity = vanityNames[element].substr(2);
+                        let bytes=[];
+                        for(let i=0; i<vanity.length; i+=2 ){
+                            bytes.push(parseInt(vanity.substr(i, 2), 16));
+                        }
+                        console.log(element+ ": " + String.fromCharCode(...bytes))
+                    }else {
+                        console.log(element + ": " + vanityNames[element]);
+                    }
                 });
             }
             process.exit(0);
