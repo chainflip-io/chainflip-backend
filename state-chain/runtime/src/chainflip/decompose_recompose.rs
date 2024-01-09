@@ -99,6 +99,18 @@ where
 	T: Decode,
 	F: FnMut(Vec<T>) -> Option<T>,
 {
+	// A failure to decode can be caused by a runtime-upgrade,
+	// when some entries are encoded using the old version, and some — using the new version.
+	//
+	// The older implementation would ignore the entries encoded by the old-runtime.
+	// Now we either decode all entries, or ignore them all.
+	//
+	// Thus we are trying to prevent a situation when the whole vote is swayed
+	// by those who happen to witness their observations after the runtime-update.
+	//
+	// We assume that in order to get into that collection,
+	// an entry should to be a valid data structure at the moment of witnessing.
+	// Therefore it wouldn't be possible to sabotage voting by submitting an invalid entry.
 	match try_decode_all(data) {
 		Ok(entries) => select(entries),
 		Err(decode_err) => {
