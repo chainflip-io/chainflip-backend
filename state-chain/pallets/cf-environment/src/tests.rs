@@ -53,7 +53,16 @@ fn test_btc_utxo_selection() {
 		add_utxo_amount(dust_amount);
 
 		// select some utxos for a tx
-		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24680;
+
+		// the default fee is 10 satoshi per byte. 
+		// inputs are 78 bytes
+		// outputs are 51 bytes
+		// transactions have a 12 byte base size
+		// the fee for 3 inputs and 2 outputs is thus:
+		// 10*(12 + 3*78 + 2*51) = 3480 satoshi
+		// the expected change is:
+		// 5000 + 10000 + 25000 - 12000 - 3480 = 24520 satoshi
+		const EXPECTED_CHANGE_AMOUNT: crate::BtcAmount = 24520;
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
 				output_amount: 12000,
@@ -70,7 +79,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121790)
+			(vec![utxo(5000000), utxo(100000), utxo(EXPECTED_CHANGE_AMOUNT),], 5121550)
 		);
 
 		// add some more utxos to the list
@@ -88,7 +97,7 @@ fn test_btc_utxo_selection() {
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
 				.unwrap(),
-			(vec![utxo(5000), utxo(15000),], 17890)
+			(vec![utxo(5000), utxo(15000),], 17810)
 		);
 	});
 }
@@ -145,7 +154,7 @@ fn test_btc_utxo_consolidation() {
 		// Should select two UTXOs, with all funds (minus fees) going back to us as change
 		assert_eq!(
 			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectForConsolidation),
-			Some((vec![utxo(10000), utxo(20000)], 27890))
+			Some((vec![utxo(10000), utxo(20000)], 27810))
 		);
 
 		// Any utxo that didn't get consolidated should still be available:
