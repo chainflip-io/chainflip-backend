@@ -10,9 +10,11 @@ use cf_primitives::chains::assets::eth::Asset;
 use chainflip_engine::{
 	state_chain_observer::{
 		self,
-		client::{chain_api::ChainApi, storage_api::StorageApi, StateChainClient},
+		client::{
+			chain_api::ChainApi, storage_api::StorageApi, StateChainClient, STATE_CHAIN_CONNECTION,
+		},
 	},
-	witness::common::{epoch_source::EpochSource, STATE_CHAIN_CONNECTION},
+	witness::common::epoch_source::EpochSource,
 };
 use sp_core::H160;
 use utilities::task_scope;

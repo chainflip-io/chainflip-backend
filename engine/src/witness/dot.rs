@@ -26,6 +26,7 @@ use crate::{
 	dot::retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
+		STATE_CHAIN_CONNECTION,
 	},
 	witness::common::chain_source::extension::ChainSourceExt,
 };
@@ -35,7 +36,6 @@ pub use dot_source::{DotFinalisedSource, DotUnfinalisedSource};
 use super::common::{
 	chain_source::Header,
 	epoch_source::{EpochSourceBuilder, Vault},
-	STATE_CHAIN_CONNECTION,
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):

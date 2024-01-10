@@ -37,6 +37,10 @@ use self::{
 	storage_api::StorageApi,
 };
 
+pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
+
+pub const STATE_CHAIN_BEHAVIOUR: &str = "State Chain client behavioural assumption not upheld";
+
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
 
@@ -370,8 +374,17 @@ async fn create_unfinalized_block_subscription<
 		.map_err(Into::into)
 		.map_ok(|header| -> BlockInfo { header.into() })
 		.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-			"sparse_block_stream unexpectedly ended"
-		)))));
+			STATE_CHAIN_CONNECTION
+		)))))
+		// Keep a copy of the base_rpc_client with the stream, as the subscription will end if the
+		// client is dropped
+		.map({
+			let base_rpc_client = base_rpc_client.clone();
+			move |i| {
+				let _ = &base_rpc_client;
+				i
+			}
+		});
 
 	let first_block = sparse_block_stream.next().await.unwrap()?;
 

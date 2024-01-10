@@ -19,15 +19,12 @@ use crate::{
 	eth::{retry_rpc::EthRetryRpcClient, rpc::EthRpcSigningClient},
 	state_chain_observer::client::{
 		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-		StateChainStreamApi,
+		StateChainStreamApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::eth::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents},
 };
 
-use super::common::{
-	chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-	STATE_CHAIN_CONNECTION,
-};
+use super::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder};
 pub use eth_source::EthSource;
 
 use anyhow::{Context, Result};

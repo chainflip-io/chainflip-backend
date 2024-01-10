@@ -5,10 +5,11 @@ use state_chain_runtime::PalletInstanceAlias;
 use utilities::task_scope::Scope;
 
 use crate::{
-	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
+	state_chain_observer::client::{
+		storage_api::StorageApi, StateChainStreamApi, STATE_CHAIN_CONNECTION,
+	},
 	witness::common::{
 		chunked_chain_source::chunked_by_vault::monitored_items::MonitoredSCItems, RuntimeHasChain,
-		STATE_CHAIN_CONNECTION,
 	},
 };
 
