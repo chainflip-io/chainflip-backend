@@ -1208,7 +1208,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
 			Timeouts::<Test, Instance1>::insert(
 				next_block,
-				BTreeSet::from_iter(vec![100, 101, 102]),
+				BTreeSet::from_iter(vec![100, 101, 102, 105, 106]),
 			);
 			assert_eq!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block)[0].broadcast_id,
@@ -1234,7 +1234,8 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			// Entries should be appended to the target block's storage, not replace it.
 			assert_eq!(
 				Timeouts::<Test, Instance1>::get(target),
-				BTreeSet::from_iter(vec![100, 101, 102, 103, 104])
+				// 105 and 106 are added from the next_block's storage.
+				BTreeSet::from_iter(vec![100, 101, 102, 103, 104, 105, 106])
 			);
 			assert_eq!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)
