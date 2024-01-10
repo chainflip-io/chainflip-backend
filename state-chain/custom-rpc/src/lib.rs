@@ -745,10 +745,11 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>> {
-		let api = self.client.runtime_api();
-		let hash = self.unwrap_or_best(at);
-		let result = api.cf_asset_balances(hash, account_id).map_err(to_rpc_error)?;
-		Ok(result)
+		Ok(self
+			.client
+			.runtime_api()
+			.cf_asset_balances(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)?)
 	}
 
 	fn cf_penalties(

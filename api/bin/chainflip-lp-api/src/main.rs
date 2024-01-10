@@ -39,7 +39,7 @@ use std::{
 };
 use tracing::log;
 
-use cf_primitives::chains::assets::AssetBalance as InternalAssetAmount;
+use cf_primitives::chains::assets::AssetBalance as InternalAssetBalance;
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -101,8 +101,8 @@ pub mod rpc_types {
 		pub balance: NumberOrHex,
 	}
 
-	impl From<InternalAssetAmount> for AssetBalance {
-		fn from(asset_balance: InternalAssetAmount) -> Self {
+	impl From<InternalAssetBalance> for AssetBalance {
+		fn from(asset_balance: InternalAssetBalance) -> Self {
 			Self { asset: asset_balance.asset, balance: asset_balance.balance.into() }
 		}
 	}
