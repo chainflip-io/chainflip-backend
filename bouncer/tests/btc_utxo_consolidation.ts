@@ -19,6 +19,7 @@ async function queryUtxos(): Promise<{ amount: number; count: number }> {
 }
 
 async function test() {
+  console.log('=== Testing BTC UTXO Consolidation ===');
   const initialUtxos = await queryUtxos();
 
   console.log(`Initial utxo count: ${initialUtxos.count}`);
@@ -108,6 +109,8 @@ async function test() {
       consolidationThreshold: 200,
     }),
   );
+
+  console.log('=== BTC UTXO Consolidation test completed ===');
 
   process.exit(0);
 }
