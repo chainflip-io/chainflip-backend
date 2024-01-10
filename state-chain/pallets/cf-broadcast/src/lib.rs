@@ -260,7 +260,7 @@ pub mod pallet {
 	/// block number.
 	#[pallet::storage]
 	pub type Timeouts<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, BTreeSet<BroadcastId>, ValueQuery>;
 
 	/// Stores all needed information to be able to re-request the signature
 	#[pallet::storage]
@@ -358,9 +358,9 @@ pub mod pallet {
 			// We treat a time out here as a Broadcast Failure. This is handled the same way - the
 			// current broadcaster is reported as Failed to broadcast, and a new broadcaster is
 			// nominated. If there are no more broadcaster available, then the broadcast is aborted.
-			let expiries = Timeouts::<T, I>::take(block_number);
+			let mut expiries = Timeouts::<T, I>::take(block_number);
 			let pending_broadcasts = PendingBroadcasts::<T, I>::get();
-			let delayed_retries = DelayedBroadcastRetryQueue::<T, I>::take(block_number);
+			let mut delayed_retries = DelayedBroadcastRetryQueue::<T, I>::take(block_number);
 			let num_retries = expiries.len() + delayed_retries.len();
 			if T::SafeMode::get().retry_enabled {
 				for broadcast_id in expiries {
@@ -375,13 +375,25 @@ pub mod pallet {
 					Self::start_next_broadcast_attempt(attempt);
 				}
 			} else {
-				Timeouts::<T, I>::insert(
+				Timeouts::<T, I>::mutate(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
-					expiries.clone(),
+					|current| current.append(&mut expiries),
 				);
-				DelayedBroadcastRetryQueue::<T, I>::insert(
+				DelayedBroadcastRetryQueue::<T, I>::mutate(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
-					delayed_retries,
+					|current| {
+						// Append the attempts, avoid any duplicates.
+						let mut broadcast_id_set = current
+							.iter()
+							.map(|attempt| attempt.broadcast_id)
+							.collect::<BTreeSet<_>>();
+						delayed_retries.drain(..).for_each(|attempt| {
+							if !broadcast_id_set.contains(&attempt.broadcast_id) {
+								broadcast_id_set.insert(attempt.broadcast_id);
+								current.push(attempt);
+							}
+						});
+					},
 				);
 			}
 			T::WeightInfo::on_initialize(num_retries as u32)
@@ -872,14 +884,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
 			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
-		let reporter = maybe_reporter.unwrap_or(signing_attempt.nominee);
+		let failed_broadcaster = maybe_reporter.unwrap_or(signing_attempt.nominee);
 
 		// NOTE: We don't use `append` here because we want to make sure not to insert duplicates
 		// and `append` doesn't guarantee that.
 		if let Ok(attempt_count) = FailedBroadcasters::<T, I>::try_mutate(
 			broadcast_id,
 			|failed_broadcasters: &mut BTreeSet<_>| {
-				if failed_broadcasters.insert(reporter.clone()) {
+				if failed_broadcasters.insert(failed_broadcaster.clone()) {
 					Ok(failed_broadcasters.len())
 				} else {
 					Err(())
@@ -896,7 +908,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// Do nothing since this failure has already been reported.
 			log::warn!(
 				"Broadcast failure by {:?} already recorded for Broadcast ID: {}",
-				reporter,
+				failed_broadcaster,
 				broadcast_id
 			);
 		}

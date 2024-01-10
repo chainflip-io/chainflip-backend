@@ -43,13 +43,18 @@ pub(crate) mod old {
 	#[frame_support::storage_alias]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static> =
 		StorageValue<Pallet<T, I>, Vec<BroadcastAttempt<T, I>>>;
+
+	#[frame_support::storage_alias]
+	pub type Timeouts<T: Config<I>, I: 'static> =
+		StorageMap<Pallet<T, I>, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttemptId>>;
 }
 
 #[derive(Clone, Encode, Decode)]
 pub struct MigrationVerification<T: Chainflip> {
 	broadcasts_with_failed_broadcasters:
 		Vec<(BroadcastId, BTreeSet<<T as Chainflip>::ValidatorId>)>,
-	broadcast_retry_queue: Vec<BroadcastId>,
+	broadcast_retry_queue: BTreeSet<BroadcastId>,
+	timeout_broadcasts: BTreeMap<BlockNumberFor<T>, BTreeSet<BroadcastId>>,
 }
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
@@ -88,27 +93,43 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				)
 			});
 
-		//Failed broadcaster storage: Vec<ValidatorId> -> BTreeSet<ValidatorId> - dedup
+		// Failed broadcaster storage: Vec<ValidatorId> -> BTreeSet<ValidatorId> - dedup
 		FailedBroadcasters::<T, I>::translate(|_, failed_broadcasters: Vec<T::ValidatorId>| {
 			Some(BTreeSet::from_iter(failed_broadcasters))
 		});
 
-		let _ = BroadcastRetryQueue::<T, I>::translate(
-			|attempts: Option<Vec<old::BroadcastAttempt<T, I>>>| {
-				Some(
-					attempts
-						.unwrap_or_default()
-						.into_iter()
-						.map(|attempt: old::BroadcastAttempt<T, I>| BroadcastAttempt::<T, I> {
-							broadcast_id: attempt.broadcast_attempt_id.broadcast_id,
-							transaction_payload: attempt.transaction_payload,
-							threshold_signature_payload: attempt.threshold_signature_payload,
-							transaction_out_id: attempt.transaction_out_id,
-						})
-						.collect::<Vec<_>>(),
-				)
-			},
-		);
+		// Latest Retry Queue: Dedup and translate to the new struct.
+		let mut added_retries = BTreeSet::new();
+		let retries = old::BroadcastRetryQueue::<T, I>::take()
+			.unwrap_or_default()
+			.into_iter()
+			.filter_map(|attempt| {
+				let broadcast_id = attempt.broadcast_attempt_id.broadcast_id;
+				if !added_retries.contains(&broadcast_id) {
+					added_retries.insert(broadcast_id);
+					Some(BroadcastAttempt::<T, I> {
+						broadcast_id: attempt.broadcast_attempt_id.broadcast_id,
+						transaction_payload: attempt.transaction_payload,
+						threshold_signature_payload: attempt.threshold_signature_payload,
+						transaction_out_id: attempt.transaction_out_id,
+					})
+				} else {
+					None
+				}
+			})
+			.collect::<Vec<_>>();
+		BroadcastRetryQueue::<T, I>::set(retries);
+
+		// Migrate Timeouts: Map<Block -> Vec<BroadcastAttemptId>> -> Map<Block -> Vec<BroadcastId>>
+
+		Timeouts::<T, I>::translate(|_, failed_broadcasters: Vec<old::BroadcastAttemptId>| {
+			Some(
+				failed_broadcasters
+					.into_iter()
+					.map(|attempt| attempt.broadcast_id)
+					.collect::<BTreeSet<_>>(),
+			)
+		});
 
 		Weight::zero()
 	}
@@ -124,10 +145,19 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			.unwrap_or_default()
 			.into_iter()
 			.map(|attempt| attempt.broadcast_attempt_id.broadcast_id)
-			.collect::<Vec<_>>();
+			.collect::<BTreeSet<_>>();
+		let timeout_broadcasts = old::Timeouts::<T, I>::iter()
+			.map(|(block_number, attempts)| {
+				(
+					block_number,
+					attempts.iter().map(|attempt| attempt.broadcast_id).collect::<BTreeSet<_>>(),
+				)
+			})
+			.collect::<BTreeMap<BlockNumberFor<T>, BTreeSet<BroadcastId>>>();
 		Ok(MigrationVerification::<T> {
 			broadcasts_with_failed_broadcasters,
 			broadcast_retry_queue,
+			timeout_broadcasts,
 		}
 		.encode())
 	}
@@ -138,6 +168,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		let MigrationVerification::<T> {
 			broadcasts_with_failed_broadcasters,
 			broadcast_retry_queue,
+			timeout_broadcasts,
 		} = MigrationVerification::<T>::decode(&mut &state[..]).unwrap();
 
 		// Ensure all failed broadcasters storage are migrated.
@@ -147,17 +178,17 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			},
 		);
 
-		// Ensure old AwaitingBroadcast are cleared.
-		assert_eq!(old::AwaitingBroadcast::<T, I>::iter_keys().count(), 0);
-
 		// Ensure retry queues are migrated.
 		let new_retry_queue = BroadcastRetryQueue::<T, I>::get()
 			.into_iter()
 			.map(|attempt| attempt.broadcast_id)
-			.collect::<Vec<_>>();
-		broadcast_retry_queue
-			.into_iter()
-			.for_each(|broadcast_id| assert!(new_retry_queue.contains(&broadcast_id)));
+			.collect::<BTreeSet<_>>();
+		assert!(broadcast_retry_queue.difference(&new_retry_queue).next().is_none());
+
+		// Ensure Timeouts data are migrated
+		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)|
+			// Assert the pre- and post- migrated data is identical.
+			assert!(attempts.difference(&Timeouts::<T, I>::get(block_number)).next().is_none()));
 
 		Ok(())
 	}
@@ -255,7 +286,8 @@ mod migration_tests {
 		new_test_ext().execute_with(|| {
 			// Insert mock data into old storage
 			old::BroadcastRetryQueue::<Test, Instance1>::put(
-				(0..3)
+				[0, 0, 1, 1, 2, 2]
+					.into_iter()
 					.map(|broadcast_id| old::BroadcastAttempt {
 						broadcast_attempt_id: old::BroadcastAttemptId {
 							broadcast_id,
@@ -283,6 +315,36 @@ mod migration_tests {
 					})
 					.collect::<Vec<_>>()
 			);
+		});
+	}
+
+	#[test]
+	fn migration_works_v2_to_v3_time_outs() {
+		new_test_ext().execute_with(|| {
+			// Insert mock data into old storage
+			old::Timeouts::<Test, Instance1>::insert(
+				100u64,
+				vec![
+					old::BroadcastAttemptId { broadcast_id: 1, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 2, attempt_count: 2 },
+				],
+			);
+			old::Timeouts::<Test, Instance1>::insert(
+				101u64,
+				vec![
+					old::BroadcastAttemptId { broadcast_id: 3, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 3, attempt_count: 2 },
+					old::BroadcastAttemptId { broadcast_id: 3, attempt_count: 3 },
+					old::BroadcastAttemptId { broadcast_id: 4, attempt_count: 1 },
+					old::BroadcastAttemptId { broadcast_id: 4, attempt_count: 2 },
+				],
+			);
+
+			// Perform runtime migration.
+			do_upgrade();
+
+			assert_eq!(Timeouts::<Test, Instance1>::get(100), BTreeSet::from_iter(vec![1, 2]));
+			assert_eq!(Timeouts::<Test, Instance1>::get(101), BTreeSet::from_iter(vec![3, 4]));
 		});
 	}
 }

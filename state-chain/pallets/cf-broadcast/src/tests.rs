@@ -22,9 +22,9 @@ use cf_traits::{
 	ThresholdSigner,
 };
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_err, assert_noop, assert_ok,
 	dispatch::Weight,
-	traits::{Hooks, OriginTrait},
+	traits::{Get, Hooks, OriginTrait},
 };
 use frame_system::RawOrigin;
 use sp_std::collections::btree_set::BTreeSet;
@@ -129,6 +129,15 @@ fn start_mock_broadcast_tx_out_id(
 
 fn start_mock_broadcast() -> (BroadcastId, crate::TransactionOutIdFor<Test, Instance1>) {
 	start_mock_broadcast_tx_out_id(Default::default())
+}
+
+fn new_mock_broadcast_attempt(broadcast_id: BroadcastId) -> BroadcastAttempt<Test, Instance1> {
+	BroadcastAttempt::<Test, Instance1> {
+		broadcast_id,
+		transaction_payload: Default::default(),
+		threshold_signature_payload: Default::default(),
+		transaction_out_id: Default::default(),
+	}
 }
 
 #[test]
@@ -565,12 +574,7 @@ fn callback_is_called_upon_broadcast_failure() {
 		AwaitingBroadcast::<Test, Instance1>::insert(
 			broadcast_id,
 			TransactionSigningAttempt {
-				broadcast_attempt: BroadcastAttempt {
-					broadcast_id,
-					transaction_payload: Default::default(),
-					threshold_signature_payload: Default::default(),
-					transaction_out_id: Default::default(),
-				},
+				broadcast_attempt: new_mock_broadcast_attempt(broadcast_id),
 				nominee: 0,
 			},
 		);
@@ -1030,6 +1034,7 @@ fn broadcast_retry_delay_works() {
 	let mut target = 0;
 	let mut broadcast_id = 0;
 	let mut tx_out_id = Default::default();
+	let delay = 10;
 	new_test_ext()
 		.execute_with(|| {
 			(broadcast_id, tx_out_id) = start_mock_broadcast();
@@ -1037,21 +1042,22 @@ fn broadcast_retry_delay_works() {
 			BroadcastDelay::set(None);
 			// With no delay, retries are added to the normal queue, and is retried in the next
 			// block.
+			let next_block = System::block_number() + 1;
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::get()[0].broadcast_id, broadcast_id);
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastRetryScheduled {
 					broadcast_id,
-					retry_block: System::block_number() + 1,
+					retry_block: next_block,
 				},
 			));
 		})
 		.then_execute_at_next_block(|_| {})
 		.then_execute_with(|_| {
-			BroadcastDelay::set(Some(10));
+			BroadcastDelay::set(Some(delay));
 			// Set delay - retries will be added to the Delayed queue.
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(1u64), broadcast_id));
-			target = System::block_number() + 10;
+			target = System::block_number() + delay;
 
 			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
 			assert_eq!(
@@ -1078,16 +1084,17 @@ fn broadcast_retry_delay_works() {
 fn broadcast_timeout_delay_works() {
 	let mut target = 0;
 	let mut broadcast_id = 0;
+	let delay = 10;
 	new_test_ext()
 		.execute_with(|| {
 			(broadcast_id, _) = start_mock_broadcast();
 
-			BroadcastDelay::set(Some(10));
+			BroadcastDelay::set(Some(delay));
 			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
 		})
 		.then_execute_at_block(target, |_| {})
 		.then_execute_with(|_| {
-			target = System::block_number() + 10;
+			target = System::block_number() + delay;
 
 			assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len(), Some(0));
 			assert_eq!(
@@ -1107,11 +1114,12 @@ fn broadcast_timeout_delay_works() {
 fn aborted_broadcasts_will_not_retry() {
 	let mut target = 0;
 	let mut broadcast_id = 0;
+	let delay = 100;
 	new_test_ext()
 		.execute_with(|| {
 			(broadcast_id, _) = start_mock_broadcast();
-			BroadcastDelay::set(Some(100));
-			target = System::block_number() + 100;
+			BroadcastDelay::set(Some(delay));
+			target = System::block_number() + delay;
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 			assert_eq!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
@@ -1139,11 +1147,12 @@ fn aborted_broadcasts_will_not_retry() {
 #[test]
 fn succeeded_broadcasts_will_not_retry() {
 	let mut target = 0;
+	let delay = 100;
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, transaction_out_id) = start_mock_broadcast();
-			BroadcastDelay::set(Some(100));
-			target = System::block_number() + 100;
+			BroadcastDelay::set(Some(delay));
+			target = System::block_number() + delay;
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 			assert_eq!(
 				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)[0].broadcast_id,
@@ -1170,5 +1179,69 @@ fn succeeded_broadcasts_will_not_retry() {
 		.then_execute_with(|broadcast_id| {
 			// assert no retry happened
 			assert_broadcast_storage_cleaned_up(broadcast_id);
+
+			// Further reports of failure will be ignored
+			assert_err!(
+				Broadcaster::transaction_failed(RawOrigin::Signed(1).into(), broadcast_id,),
+				Error::<Test, Instance1>::InvalidBroadcastId
+			);
+
+			assert_broadcast_storage_cleaned_up(broadcast_id);
+		});
+}
+
+#[test]
+fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
+	let mut target: u64 = 0u64;
+	let mut broadcast_id = 0;
+	new_test_ext()
+		.then_execute_at_block(1_000u64, |_| {
+			(broadcast_id, _) = start_mock_broadcast();
+			BroadcastDelay::set(Some(1));
+			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
+
+			// On safe mode next block, storage will be re-added to this target block.
+			let next_block = System::block_number() + 1u64;
+			target = next_block +
+				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
+
+			// Ensure next block's data is ready to be re-scheduled during safe mode.
+			Timeouts::<Test, Instance1>::insert(
+				next_block,
+				BTreeSet::from_iter(vec![100, 101, 102]),
+			);
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block)[0].broadcast_id,
+				broadcast_id
+			);
+
+			// add mock data to the target block storage.
+			Timeouts::<Test, Instance1>::insert(
+				target,
+				BTreeSet::from_iter(vec![100, 101, 102, 103, 104]),
+			);
+			DelayedBroadcastRetryQueue::<Test, Instance1>::insert(
+				target,
+				vec![new_mock_broadcast_attempt(100), new_mock_broadcast_attempt(101)],
+			);
+
+			// Activate safe mode code red.
+			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		})
+		.then_execute_at_next_block(|_| {})
+		.then_execute_with(|_| {
+			// Hook should re-schedule the `Timeouts` and Broadcast retries.
+			// Entries should be appended to the target block's storage, not replace it.
+			assert_eq!(
+				Timeouts::<Test, Instance1>::get(target),
+				BTreeSet::from_iter(vec![100, 101, 102, 103, 104])
+			);
+			assert_eq!(
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target)
+					.into_iter()
+					.map(|attempt| attempt.broadcast_id)
+					.collect::<Vec<_>>(),
+				vec![100, 101, broadcast_id]
+			);
 		});
 }

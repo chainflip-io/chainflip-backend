@@ -1067,7 +1067,7 @@ impl RetryPolicy for BitcoinRetryPolicy {
 	type AttemptCount = u32;
 
 	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
-		// 1200 blocks are 2 hours - the maximum time we want to wait between retries.
+		// 1200 State-chain blocks are 2 hours - the maximum time we want to wait between retries.
 		const MAX_BROADCAST_DELAY: u32 = 1200u32;
 		// 25 * 6 = 150 seconds / 2.5 minutes
 		const DELAY_THRESHOLD: u32 = 25u32;
