@@ -1,6 +1,7 @@
-use crate::{Storable, Store};
+use crate::{Storable, Store, ToChainStr};
 use bitcoin::{Amount, BlockHash, Network, ScriptBuf, Transaction, Txid};
 use cf_chains::btc::BitcoinNetwork;
+use cf_primitives::ForeignChain;
 use chainflip_engine::{
 	btc::rpc::{BtcRpcApi, BtcRpcClient},
 	settings::HttpBasicAuthEndpoint,
@@ -25,7 +26,8 @@ pub struct QueryResult {
 
 impl Storable for QueryResult {
 	fn get_key(&self) -> String {
-		format!("confirmations:bitcoin:{}", self.destination)
+		let chain = ForeignChain::Bitcoin.to_chain_str();
+		format!("confirmations:{chain}:{}", self.destination)
 	}
 }
 

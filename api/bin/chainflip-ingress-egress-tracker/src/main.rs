@@ -1,15 +1,14 @@
 #![feature(async_fn_in_trait)]
 use async_trait::async_trait;
 use cf_chains::{
-	btc::BitcoinNetwork, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain, Ethereum,
-	Polkadot,
+	address::ToHumanreadableAddress, evm::SchnorrVerificationComponents, AnyChain, Bitcoin, Chain,
+	Ethereum, Polkadot,
 };
-use cf_primitives::{Asset, BroadcastId, ForeignChain};
+use cf_primitives::{Asset, BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::{
 	settings::{insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints},
 	state_chain_observer::client::{
-		chain_api::ChainApi, extrinsic_api::unsigned::UnsignedExtrinsicApi,
-		storage_api::StorageApi, STATE_CHAIN_CONNECTION,
+		chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
 };
 use clap::Parser;
@@ -122,6 +121,24 @@ impl From<cf_chains::assets::btc::Asset> for WitnessAsset {
 	}
 }
 
+trait ToChainStr {
+	fn to_chain_str(&self) -> &'static str;
+}
+
+impl ToChainStr for ForeignChain {
+	fn to_chain_str(&self) -> &'static str {
+		match self {
+			ForeignChain::Ethereum => "ethereum",
+			ForeignChain::Polkadot => "polkadot",
+			ForeignChain::Bitcoin => "bitcoin",
+		}
+	}
+}
+
+trait ToForeignChain {
+	fn to_foreign_chain(&self) -> ForeignChain;
+}
+
 #[derive(Serialize)]
 #[serde(tag = "deposit_chain", rename_all = "snake_case")]
 enum TransactionId {
@@ -130,11 +147,22 @@ enum TransactionId {
 	Polkadot { signature: String },
 }
 
+impl ToForeignChain for TransactionId {
+	fn to_foreign_chain(&self) -> ForeignChain {
+		match self {
+			Self::Bitcoin { .. } => ForeignChain::Bitcoin,
+			Self::Ethereum { .. } => ForeignChain::Ethereum,
+			Self::Polkadot { .. } => ForeignChain::Polkadot,
+		}
+	}
+}
+
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WitnessInformation {
 	Deposit {
 		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
+		#[serde(skip_serializing)]
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: WitnessAsset,
@@ -146,36 +174,41 @@ enum WitnessInformation {
 	},
 }
 
+impl ToForeignChain for WitnessInformation {
+	fn to_foreign_chain(&self) -> ForeignChain {
+		match self {
+			Self::Deposit { chain, .. } => *chain,
+			Self::Broadcast { tx_out_id, .. } => tx_out_id.to_foreign_chain(),
+		}
+	}
+}
+
 impl Storable for WitnessInformation {
 	fn get_key(&self) -> String {
-		match self {
-			Self::Deposit { deposit_address, chain, .. } => {
-				let chain = serde_json::to_string(chain)
-					.expect("failed to serialize string")
-					.to_lowercase();
+		let chain = self.to_foreign_chain().to_chain_str();
 
+		match self {
+			Self::Deposit { deposit_address, .. } => {
 				format!("deposit:{chain}:{deposit_address}")
 			},
-			Self::Broadcast { broadcast_id, tx_out_id } => {
-				let chain = match tx_out_id {
-					TransactionId::Bitcoin { .. } => "bitcoin",
-					TransactionId::Ethereum { .. } => "ethereum",
-					TransactionId::Polkadot { .. } => "polkadot",
-				};
-
+			Self::Broadcast { broadcast_id, .. } => {
 				format!("broadcast:{chain}:{broadcast_id}")
 			},
 		}
 	}
 }
 
-type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber);
+fn hex_encode_bytes(bytes: &[u8]) -> String {
+	format!("0x{}", hex::encode(bytes))
+}
+
+type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber, NetworkEnvironment);
 
 impl From<DepositInfo<Ethereum>> for WitnessInformation {
-	fn from((value, height): DepositInfo<Ethereum>) -> Self {
+	fn from((value, height, _): DepositInfo<Ethereum>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height,
-			deposit_address: value.deposit_address.to_string(),
+			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
 			chain: ForeignChain::Ethereum,
@@ -183,14 +216,11 @@ impl From<DepositInfo<Ethereum>> for WitnessInformation {
 	}
 }
 
-type BitcoinDepositInfo =
-	(DepositWitness<Bitcoin>, <Bitcoin as Chain>::ChainBlockNumber, BitcoinNetwork);
-
-impl From<BitcoinDepositInfo> for WitnessInformation {
-	fn from((value, height, network): BitcoinDepositInfo) -> Self {
+impl From<DepositInfo<Bitcoin>> for WitnessInformation {
+	fn from((value, height, network): DepositInfo<Bitcoin>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height,
-			deposit_address: value.deposit_address.to_address(&network),
+			deposit_address: value.deposit_address.to_humanreadable(network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
 			chain: ForeignChain::Bitcoin,
@@ -199,10 +229,10 @@ impl From<BitcoinDepositInfo> for WitnessInformation {
 }
 
 impl From<DepositInfo<Polkadot>> for WitnessInformation {
-	fn from((value, height): DepositInfo<Polkadot>) -> Self {
+	fn from((value, height, _): DepositInfo<Polkadot>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height as u64,
-			deposit_address: format!("0x{}", hex::encode(value.deposit_address.aliased_ref())),
+			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
 			chain: ForeignChain::Polkadot,
@@ -217,7 +247,7 @@ async fn get_broadcast_id<I, StateChainClient>(
 where
 	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
 	I: PalletInstanceAlias + 'static,
-	StateChainClient: StorageApi + ChainApi + UnsignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
 {
 	let id = state_chain_client
 		.storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
@@ -335,13 +365,13 @@ impl Source for TrackerOptions {
 
 async fn handle_call<S, StateChainClient>(
 	call: state_chain_runtime::RuntimeCall,
-	con: &mut S,
-	btc_network: BitcoinNetwork,
+	store: &mut S,
+	chainflip_network: NetworkEnvironment,
 	state_chain_client: &StateChainClient,
 ) -> anyhow::Result<()>
 where
 	S: Store,
-	StateChainClient: StorageApi + ChainApi + UnsignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ChainApi + 'static + Send + Sync,
 {
 	use pallet_cf_broadcast::Call as BroadcastCall;
 	use pallet_cf_ingress_egress::Call as IngressEgressCall;
@@ -353,15 +383,17 @@ where
 			block_height,
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-				WitnessInformation::from((witness, block_height)).save_to_array(con).await?;
+				WitnessInformation::from((witness, block_height, chainflip_network))
+					.save_to_array(store)
+					.await?;
 			},
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-				WitnessInformation::from((witness, block_height, btc_network))
-					.save_to_array(con)
+				WitnessInformation::from((witness, block_height, chainflip_network))
+					.save_to_array(store)
 					.await?;
 			},
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
@@ -369,7 +401,9 @@ where
 			block_height,
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-				WitnessInformation::from((witness, block_height)).save_to_array(con).await?;
+				WitnessInformation::from((witness, block_height, chainflip_network))
+					.save_to_array(store)
+					.await?;
 			},
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
@@ -381,7 +415,7 @@ where
 					broadcast_id,
 					tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
 				}
-				.save_singleton(con)
+				.save_singleton(store)
 				.await?;
 			}
 		},
@@ -397,7 +431,7 @@ where
 						hash: format!("0x{}", hex::encode(tx_out_id)),
 					},
 				}
-				.save_singleton(con)
+				.save_singleton(store)
 				.await?;
 			}
 		},
@@ -413,7 +447,7 @@ where
 						signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
 					},
 				}
-				.save_singleton(con)
+				.save_singleton(store)
 				.await?;
 			}
 		},
@@ -475,12 +509,13 @@ async fn start(
 
 	let (state_chain_client, env_params) =
 		witnessing::start(scope, settings.clone(), witness_sender.clone()).await?;
-	let btc_network = env_params.btc_network;
+	let btc_network = env_params.chainflip_network.into();
 	witnessing::btc_mempool::start(scope, settings.btc, con.clone(), btc_network);
 	let mut witness_receiver = witness_sender.subscribe();
 
 	while let Ok(call) = witness_receiver.recv().await {
-		handle_call(call, &mut con, btc_network, state_chain_client.deref()).await?
+		handle_call(call, &mut con, env_params.chainflip_network, state_chain_client.deref())
+			.await?
 	}
 
 	Ok(())
@@ -496,4 +531,276 @@ async fn main() -> anyhow::Result<()> {
 	)?;
 
 	task_scope::task_scope(|scope| async move { start(scope, settings).await }.boxed()).await
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use anyhow::anyhow;
+	use async_trait::async_trait;
+	use cf_chains::dot::PolkadotAccountId;
+	use chainflip_engine::state_chain_observer::client::{
+		storage_api::{
+			StorageDoubleMapAssociatedTypes, StorageMapAssociatedTypes, StorageValueAssociatedTypes,
+		},
+		BlockInfo, StateChainStreamApi,
+	};
+	use frame_support::storage::types::QueryKindTrait;
+	use jsonrpsee::core::RpcResult;
+	use sp_core::{storage::StorageKey, H160};
+	use std::collections::HashMap;
+
+	#[derive(Default)]
+	struct MockStore {
+		storage: HashMap<String, serde_json::Value>,
+	}
+
+	#[async_trait]
+	impl Store for MockStore {
+		type Output = ();
+
+		async fn save_to_array<S: Storable>(
+			&mut self,
+			storable: &S,
+		) -> anyhow::Result<Self::Output> {
+			let key = storable.get_key();
+			let value = serde_json::to_value(storable)?;
+
+			let array = self.storage.entry(key).or_insert(serde_json::Value::Array(vec![]));
+
+			array.as_array_mut().ok_or(anyhow!("expect array"))?.push(value);
+
+			Ok(())
+		}
+
+		async fn save_singleton<S: Storable>(
+			&mut self,
+			storable: &S,
+		) -> anyhow::Result<Self::Output> {
+			let key = storable.get_key();
+
+			let value = serde_json::to_value(storable)?;
+
+			self.storage.insert(key, value);
+
+			Ok(())
+		}
+	}
+
+	struct MockStateChainClient;
+
+	#[async_trait]
+	impl ChainApi for MockStateChainClient {
+		fn latest_finalized_block(&self) -> BlockInfo {
+			unimplemented!()
+		}
+		fn latest_unfinalized_block(&self) -> BlockInfo {
+			unimplemented!()
+		}
+
+		async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi> {
+			unimplemented!()
+		}
+		async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>> {
+			unimplemented!()
+		}
+
+		async fn block(&self, _hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo> {
+			unimplemented!()
+		}
+	}
+
+	#[async_trait]
+	impl StorageApi for MockStateChainClient {
+		async fn storage_item<
+			Value: codec::FullCodec + 'static,
+			OnEmpty: 'static,
+			QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
+		>(
+			&self,
+			_storage_key: StorageKey,
+			_block_hash: state_chain_runtime::Hash,
+		) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
+			unimplemented!()
+		}
+
+		async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
+			&self,
+			_block_hash: state_chain_runtime::Hash,
+		) -> RpcResult<
+			<StorageValue::QueryKind as QueryKindTrait<
+				StorageValue::Value,
+				StorageValue::OnEmpty,
+			>>::Query,
+		> {
+			unimplemented!()
+		}
+
+	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
+		&self,
+		_block_hash: state_chain_runtime::Hash,
+		_key: &StorageMap::Key,
+	) -> RpcResult<
+		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+	>
+	where
+		StorageMap::Key: Sync{
+			unimplemented!()
+		}
+
+		async fn storage_double_map_entry<
+			StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+		>(
+			&self,
+			_block_hash: state_chain_runtime::Hash,
+			_key1: &StorageDoubleMap::Key1,
+			_key2: &StorageDoubleMap::Key2,
+		) -> RpcResult<
+			<StorageDoubleMap::QueryKind as QueryKindTrait<
+				StorageDoubleMap::Value,
+				StorageDoubleMap::OnEmpty,
+			>>::Query,
+		>
+		where
+			StorageDoubleMap::Key1: Sync,
+			StorageDoubleMap::Key2: Sync,
+		{
+			unimplemented!()
+		}
+
+		async fn storage_map<
+			StorageMap: StorageMapAssociatedTypes + 'static,
+			ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>
+				+ 'static,
+		>(
+			&self,
+			_block_hash: state_chain_runtime::Hash,
+		) -> RpcResult<ReturnedIter> {
+			unimplemented!()
+		}
+	}
+
+	fn parse_eth_address(address: &'static str) -> (H160, &'static str) {
+		let mut eth_address_bytes = [0; 20];
+
+		for (index, byte) in hex::decode(&address[2..]).unwrap().into_iter().enumerate() {
+			eth_address_bytes[index] = byte;
+		}
+
+		(H160::from(eth_address_bytes), address)
+	}
+
+	#[tokio::test]
+	async fn test_handle_deposit_calls() {
+		let polkadot_address = "14JWPRWMkEyLLdrN2k3teBd446sKKJuwU2DDKw4Ev4dYcHeF";
+		let polkadot_account_id = polkadot_address.parse::<PolkadotAccountId>().unwrap();
+
+		let (eth_address1, eth_address_str1) =
+			parse_eth_address("0x541f563237A309B3A61E33BDf07a8930Bdba8D99");
+
+		let (eth_address2, eth_address_str2) =
+			parse_eth_address("0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF");
+
+		let client = MockStateChainClient;
+		let mut store = MockStore::default();
+		handle_call(
+			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Call::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address: eth_address1,
+						amount: 100u128,
+						asset: cf_chains::assets::eth::Asset::Eth,
+						deposit_details: (),
+					}],
+					block_height: 1,
+				},
+			),
+			&mut store,
+			NetworkEnvironment::Testnet,
+			&client,
+		)
+		.await
+		.expect("failed to handle call");
+		handle_call(
+			state_chain_runtime::RuntimeCall::PolkadotIngressEgress(
+				pallet_cf_ingress_egress::Call::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address: polkadot_account_id,
+						amount: 100u128,
+						asset: cf_chains::assets::dot::Asset::Dot,
+						deposit_details: (),
+					}],
+					block_height: 1,
+				},
+			),
+			&mut store,
+			NetworkEnvironment::Testnet,
+			&client,
+		)
+		.await
+		.expect("failed to handle call");
+		handle_call(
+			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Call::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address: eth_address2,
+						amount: 100u128,
+						asset: cf_chains::assets::eth::Asset::Eth,
+						deposit_details: (),
+					}],
+					block_height: 1,
+				},
+			),
+			&mut store,
+			NetworkEnvironment::Testnet,
+			&client,
+		)
+		.await
+		.expect("failed to handle call");
+
+		assert_eq!(store.storage.len(), 3);
+		println!("{:?}", store.storage);
+		insta::assert_display_snapshot!(store
+			.storage
+			.get(format!("deposit:ethereum:{}", eth_address_str1.to_lowercase()).as_str())
+			.unwrap());
+		insta::assert_display_snapshot!(store
+			.storage
+			.get(
+				format!(
+					"deposit:polkadot:{}",
+					format!("0x{}", hex::encode(polkadot_account_id.aliased_ref()))
+				)
+				.as_str()
+			)
+			.unwrap());
+		insta::assert_display_snapshot!(store
+			.storage
+			.get(format!("deposit:ethereum:{}", eth_address_str2.to_lowercase()).as_str())
+			.unwrap());
+
+		handle_call(
+			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Call::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address: eth_address1,
+						amount: 2_000_000u128,
+						asset: cf_chains::assets::eth::Asset::Eth,
+						deposit_details: (),
+					}],
+					block_height: 1,
+				},
+			),
+			&mut store,
+			NetworkEnvironment::Testnet,
+			&client,
+		)
+		.await
+		.expect("failed to handle call");
+		assert_eq!(store.storage.len(), 3);
+		insta::assert_display_snapshot!(store
+			.storage
+			.get(format!("deposit:ethereum:{}", eth_address_str1.to_lowercase()).as_str())
+			.unwrap());
+	}
 }
