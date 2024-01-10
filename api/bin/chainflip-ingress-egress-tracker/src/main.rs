@@ -166,7 +166,6 @@ enum WitnessInformation {
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: WitnessAsset,
-		chain: ForeignChain,
 	},
 	Broadcast {
 		broadcast_id: BroadcastId,
@@ -177,7 +176,7 @@ enum WitnessInformation {
 impl ToForeignChain for WitnessInformation {
 	fn to_foreign_chain(&self) -> ForeignChain {
 		match self {
-			Self::Deposit { chain, .. } => *chain,
+			Self::Deposit { asset, .. } => asset.chain,
 			Self::Broadcast { tx_out_id, .. } => tx_out_id.to_foreign_chain(),
 		}
 	}
@@ -211,7 +210,6 @@ impl From<DepositInfo<Ethereum>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			chain: ForeignChain::Ethereum,
 		}
 	}
 }
@@ -223,7 +221,6 @@ impl From<DepositInfo<Bitcoin>> for WitnessInformation {
 			deposit_address: value.deposit_address.to_humanreadable(network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			chain: ForeignChain::Bitcoin,
 		}
 	}
 }
@@ -235,7 +232,6 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			chain: ForeignChain::Polkadot,
 		}
 	}
 }
