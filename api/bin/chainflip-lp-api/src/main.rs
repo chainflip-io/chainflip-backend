@@ -15,10 +15,11 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	BlockInfo, ChainApi, EthereumAddress, OperatorApi, StateChainApi, StorageApi, WaitFor,
+	BlockInfo, ChainApi, EthereumAddress, OperatorApi, SignedExtrinsicApi, StateChainApi,
+	StorageApi, WaitFor,
 };
 use clap::Parser;
-use custom_rpc::RpcAsset;
+use custom_rpc::{CustomApiClient, RpcAsset};
 use futures::{try_join, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
@@ -37,6 +38,8 @@ use std::{
 	sync::Arc,
 };
 use tracing::log;
+
+use cf_primitives::chains::assets::AssetBalance as InternalAssetAmount;
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -96,6 +99,12 @@ pub mod rpc_types {
 	pub struct AssetBalance {
 		pub asset: Asset,
 		pub balance: NumberOrHex,
+	}
+
+	impl From<InternalAssetAmount> for AssetBalance {
+		fn from(asset_balance: InternalAssetAmount) -> Self {
+			Self { asset: asset_balance.asset, balance: asset_balance.balance.into() }
+		}
 	}
 }
 
@@ -297,14 +306,22 @@ impl RpcServer for RpcServerImpl {
 
 	/// Returns a list of all assets and their free balance in json format
 	async fn asset_balances(&self) -> RpcResult<BTreeMap<ForeignChain, Vec<AssetBalance>>> {
-		let mut balances = BTreeMap::<_, Vec<_>>::new();
-		for (asset, balance) in self.api.query_api().get_balances(None).await? {
-			balances
-				.entry(ForeignChain::from(asset))
-				.or_default()
-				.push(AssetBalance { asset, balance: balance.into() });
-		}
-		Ok(balances)
+		let result = self
+			.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_asset_balances(
+				self.api.state_chain_client.account_id(),
+				Some(self.api.state_chain_client.latest_finalized_block().hash),
+			)
+			.await?;
+		Ok(result
+			.into_iter()
+			.map(|(chain, balances)| {
+				(chain, balances.into_iter().map(|asset_balance| asset_balance.into()).collect())
+			})
+			.collect())
 	}
 
 	async fn update_range_order(
