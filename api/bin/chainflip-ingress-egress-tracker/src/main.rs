@@ -403,7 +403,7 @@ where
 			},
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
-				get_broadcast_id::<Ethereum, StateChainClient>(&state_chain_client, &tx_out_id)
+				get_broadcast_id::<Ethereum, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
 
 			if let Some(broadcast_id) = broadcast_id {
@@ -417,8 +417,7 @@ where
 		},
 		BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
-				get_broadcast_id::<Bitcoin, StateChainClient>(&state_chain_client, &tx_out_id)
-					.await;
+				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
 
 			if let Some(broadcast_id) = broadcast_id {
 				WitnessInformation::Broadcast {
@@ -433,7 +432,7 @@ where
 		},
 		PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
 			let broadcast_id =
-				get_broadcast_id::<Polkadot, StateChainClient>(&state_chain_client, &tx_out_id)
+				get_broadcast_id::<Polkadot, StateChainClient>(state_chain_client, &tx_out_id)
 					.await;
 
 			if let Some(broadcast_id) = broadcast_id {
