@@ -81,7 +81,7 @@ jobs:
         if: inputs.full_bouncer
         working-directory: bouncer
         run: |
-          ./run_nightly.sh
+          ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
