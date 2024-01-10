@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use futures_core::Future;
@@ -10,13 +8,16 @@ use jsonrpsee::{
 use serde_json::value::RawValue;
 use sp_core::H256;
 use subxt::{
+	backend::{
+		legacy::{
+			rpc_methods::{BlockDetails, Bytes},
+			LegacyRpcMethods,
+		},
+		rpc::{RawRpcFuture, RawRpcSubscription, RpcClient, RpcClientT},
+	},
 	error::{BlockError, RpcError},
 	events::{Events, EventsClient},
-	rpc::{
-		types::{Bytes, ChainBlockExtrinsic, ChainBlockResponse},
-		RpcClientT, RpcFuture, RpcSubscription,
-	},
-	rpc_params, OnlineClient, PolkadotConfig,
+	OnlineClient, PolkadotConfig,
 };
 
 use anyhow::Result;
@@ -48,7 +49,7 @@ impl RpcClientT for PolkadotHttpClient {
 		&'a self,
 		method: &'a str,
 		params: Option<Box<RawValue>>,
-	) -> RpcFuture<'a, Box<RawValue>> {
+	) -> RawRpcFuture<'a, Box<RawValue>> {
 		Box::pin(async move {
 			let res = self
 				.0
@@ -64,7 +65,7 @@ impl RpcClientT for PolkadotHttpClient {
 		_sub: &'a str,
 		_params: Option<Box<RawValue>>,
 		_unsub: &'a str,
-	) -> RpcFuture<'a, RpcSubscription> {
+	) -> RawRpcFuture<'a, RawRpcSubscription> {
 		unimplemented!("HTTP Client does not support subscription");
 	}
 }
@@ -72,6 +73,7 @@ impl RpcClientT for PolkadotHttpClient {
 #[derive(Clone)]
 pub struct DotHttpRpcClient {
 	online_client: OnlineClient<PolkadotConfig>,
+	rpc_methods: LegacyRpcMethods<PolkadotConfig>,
 }
 
 impl DotHttpRpcClient {
@@ -79,7 +81,7 @@ impl DotHttpRpcClient {
 		url: SecretUrl,
 		expected_genesis_hash: Option<PolkadotHash>,
 	) -> Result<impl Future<Output = Self>> {
-		let polkadot_http_client = Arc::new(PolkadotHttpClient::new(&url)?);
+		let rpc_client = RpcClient::new(PolkadotHttpClient::new(&url)?);
 
 		Ok(async move {
 			// We don't want to return an error here. Returning an error means that we'll exit the
@@ -89,9 +91,7 @@ impl DotHttpRpcClient {
 			let online_client = loop {
 				poll_interval.tick().await;
 
-				match OnlineClient::<PolkadotConfig>::from_rpc_client(polkadot_http_client.clone())
-					.await
-				{
+				match OnlineClient::<PolkadotConfig>::from_rpc_client(rpc_client.clone()).await {
 					Ok(online_client) => {
 						if let Some(expected_genesis_hash) = expected_genesis_hash {
 							let genesis_hash = online_client.genesis_hash();
@@ -116,32 +116,29 @@ impl DotHttpRpcClient {
 					},
 				}
 			};
-			Self { online_client }
+			Self { online_client, rpc_methods: LegacyRpcMethods::new(rpc_client) }
 		})
 	}
 
 	pub async fn metadata(&self, block_hash: H256) -> Result<subxt::Metadata> {
-		Ok(self.online_client.rpc().metadata_legacy(Some(block_hash)).await?)
+		Ok(self.rpc_methods.state_get_metadata(Some(block_hash)).await?)
 	}
 }
 
 #[async_trait::async_trait]
 impl DotRpcApi for DotHttpRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
-		Ok(self.online_client.rpc().block_hash(Some(block_number.into())).await?)
+		Ok(self.rpc_methods.chain_get_block_hash(Some(block_number.into())).await?)
 	}
 
 	async fn block(
 		&self,
 		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>> {
-		Ok(self.online_client.rpc().block(Some(block_hash)).await?)
+	) -> Result<Option<BlockDetails<PolkadotConfig>>> {
+		Ok(self.rpc_methods.chain_get_block(Some(block_hash)).await?)
 	}
 
-	async fn extrinsics(
-		&self,
-		block_hash: PolkadotHash,
-	) -> Result<Option<Vec<ChainBlockExtrinsic>>> {
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Result<Option<Vec<Bytes>>> {
 		Ok(self.block(block_hash).await?.map(|block| block.block.extrinsics))
 	}
 
@@ -161,7 +158,7 @@ impl DotRpcApi for DotHttpRpcClient {
 		// RPC returning the value of the runtime at the end of the block, not the beginning.
 		let chain_runtime_version = self.runtime_version(Some(parent_hash)).await?;
 
-		let client_runtime_version = self.online_client.runtime_version();
+		let client_runtime_version = self.rpc_methods.state_get_runtime_version(None).await?;
 
 		// We set the metadata and runtime version we need to decode this block's events.
 		// The metadata from the OnlineClient is used within the EventsClient to decode the
@@ -172,10 +169,9 @@ impl DotRpcApi for DotHttpRpcClient {
 		{
 			let new_metadata = self.metadata(parent_hash).await?;
 
-			self.online_client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
+			self.online_client.set_runtime_version(subxt::backend::RuntimeVersion {
 				spec_version: chain_runtime_version.spec_version,
 				transaction_version: chain_runtime_version.transaction_version,
-				other: Default::default(),
 			});
 			self.online_client.set_metadata(new_metadata);
 		}
@@ -192,24 +188,16 @@ impl DotRpcApi for DotHttpRpcClient {
 	}
 
 	async fn runtime_version(&self, block_hash: Option<H256>) -> Result<RuntimeVersion> {
-		Ok(self
-			.online_client
-			.rpc()
-			.runtime_version(block_hash)
-			.await
-			.map(|v| RuntimeVersion {
+		Ok(self.rpc_methods.state_get_runtime_version(block_hash).await.map(|v| {
+			RuntimeVersion {
 				spec_version: v.spec_version,
 				transaction_version: v.transaction_version,
-			})?)
+			}
+		})?)
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
-		let encoded_bytes: Bytes = encoded_bytes.into();
-		Ok(self
-			.online_client
-			.rpc()
-			.request("author_submitExtrinsic", rpc_params![encoded_bytes.clone()])
-			.await?)
+		Ok(self.rpc_methods.author_submit_extrinsic(&encoded_bytes).await?)
 	}
 }
 
