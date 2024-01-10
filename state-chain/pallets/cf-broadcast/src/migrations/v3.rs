@@ -120,8 +120,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			.collect::<Vec<_>>();
 		BroadcastRetryQueue::<T, I>::set(retries);
 
-		// Migrate Timeouts: Map<Block -> Vec<BroadcastAttemptId>> -> Map<Block -> Vec<BroadcastId>>
-
+		// Migrate Timeouts: Map<Block -> Vec<BroadcastAttemptId>> -> Map<Block ->
+		// BTreeSet<BroadcastId>>
 		Timeouts::<T, I>::translate(|_, failed_broadcasters: Vec<old::BroadcastAttemptId>| {
 			Some(
 				failed_broadcasters
