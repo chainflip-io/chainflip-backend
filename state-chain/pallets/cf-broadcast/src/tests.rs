@@ -17,10 +17,15 @@ use cf_chains::{
 	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
-	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
+	mocks::{
+		cfe_event_emitter_mock::{MockCfeEvent, MockCfeEventEmitter},
+		signer_nomination::MockNominator,
+		threshold_signer::MockThresholdSigner,
+	},
 	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, SetSafeMode,
 	ThresholdSigner,
 };
+use cfe_events::TxBroadcastRequest;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::Weight,
@@ -29,7 +34,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use sp_std::collections::btree_set::BTreeSet;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Scenario {
 	HappyPath,
 	BroadcastFailure,
@@ -49,45 +54,64 @@ thread_local! {
 // When calling on_idle, we should broadcast everything with this excess weight.
 const LARGE_EXCESS_WEIGHT: Weight = Weight::from_parts(20_000_000_000, 0);
 
+type ValidatorId = <Test as Chainflip>::ValidatorId;
+
 struct MockCfe;
 
 impl MockCfe {
 	fn respond(scenario: Scenario) {
+		// Process non-cfe events (move this out of MockCfe?)
 		let events = System::events();
 		System::reset_events();
 		for event_record in events {
-			Self::process_event(event_record.event, scenario.clone());
+			Self::process_event(event_record.event);
+		}
+
+		// Process cfe events
+		let events = MockCfeEventEmitter::take_events();
+		for event in events {
+			Self::process_cfe_event(event, scenario);
 		}
 	}
 
-	fn process_event(event: RuntimeEvent, scenario: Scenario) {
+	fn process_cfe_event(event: MockCfeEvent<ValidatorId>, scenario: Scenario) {
+		match event {
+			MockCfeEvent::EthTxBroadcastRequest(TxBroadcastRequest {
+				broadcast_id,
+				nominee,
+				payload: _,
+			}) => {
+				match scenario {
+					Scenario::BroadcastFailure => {
+						assert_ok!(Broadcaster::transaction_failed(
+							RawOrigin::Signed(nominee).into(),
+							broadcast_id,
+						));
+					},
+					Scenario::Timeout => {
+						// Ignore the request.
+					},
+					_ => {
+						// only nominee can return the signed tx
+						assert_eq!(
+							nominee,
+							MockNominator::get_last_nominee().unwrap(),
+							"CFE using wrong nomination"
+						);
+					},
+				}
+			},
+			_ => {
+				// No other events used in these tests
+			},
+		}
+	}
+
+	fn process_event(event: RuntimeEvent) {
 		match event {
 			RuntimeEvent::Broadcaster(broadcast_event) => match broadcast_event {
-				BroadcastEvent::TransactionBroadcastRequest {
-					broadcast_id,
-					nominee,
-					transaction_payload: _,
-					transaction_out_id: _,
-				} => {
-					match scenario {
-						Scenario::BroadcastFailure => {
-							assert_ok!(Broadcaster::transaction_failed(
-								RawOrigin::Signed(nominee).into(),
-								broadcast_id,
-							));
-						},
-						Scenario::Timeout => {
-							// Ignore the request.
-						},
-						_ => {
-							// only nominee can return the signed tx
-							assert_eq!(
-								nominee,
-								MockNominator::get_last_nominee().unwrap(),
-								"CFE using wrong nomination"
-							);
-						},
-					}
+				BroadcastEvent::TransactionBroadcastRequest { .. } => {
+					// Legacy event (used to be consumed by the CFE)
 				},
 				BroadcastEvent::BroadcastSuccess { .. } => {
 					// Informational only. no action required by the CFE.

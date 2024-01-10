@@ -11,10 +11,14 @@ use cf_chains::{btc::BitcoinCrypto, evm::EvmCrypto, mocks::MockAggKey};
 use cf_primitives::{AuthorityCount, GENESIS_EPOCH};
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
-	mocks::threshold_signer::{MockThresholdSigner, VerificationParams},
+	mocks::{
+		cfe_event_emitter_mock::{MockCfeEvent, MockCfeEventEmitter},
+		threshold_signer::{MockThresholdSigner, VerificationParams},
+	},
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, KeyProvider, SafeMode, SetSafeMode,
 	VaultRotator, VaultStatus,
 };
+use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
 };
@@ -59,6 +63,15 @@ fn keygen_request_emitted() {
 		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new vault rotation process running
 		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+		let events = MockCfeEventEmitter::take_events::<ValidatorId>();
+		assert_eq!(
+			events[0],
+			MockCfeEvent::EthKeygenRequest(KeygenRequest {
+				ceremony_id: current_ceremony_id(),
+				participants: btree_candidates.clone(),
+				epoch_index: rotation_epoch,
+			})
+		);
 		assert_eq!(
 			last_event::<Test>(),
 			PalletEvent::<Test, _>::KeygenRequest {
@@ -92,6 +105,22 @@ fn keygen_handover_request_emitted() {
 		);
 
 		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+
+		let events = MockCfeEventEmitter::take_events::<ValidatorId>();
+		assert_eq!(
+			events[0],
+			MockCfeEvent::EthKeyHandoverRequest(KeyHandoverRequest {
+				// It should be incremented when the request is made.
+				ceremony_id: ceremony_id + 1,
+				from_epoch: current_epoch,
+				to_epoch: next_epoch,
+				key_to_share: VaultsPallet::active_epoch_key().unwrap().key,
+				sharing_participants: authorities.clone(),
+				receiving_participants: candidates.clone(),
+				new_key: Default::default()
+			})
+		);
+
 		assert_eq!(
 			last_event::<Test>(),
 			PalletEvent::<Test, _>::KeyHandoverRequest {

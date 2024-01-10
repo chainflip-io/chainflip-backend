@@ -12,8 +12,8 @@ use cf_chains::{
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		block_height_provider::BlockHeightProvider, signer_nomination::MockNominator,
-		threshold_signer::MockThresholdSigner,
+		block_height_provider::BlockHeightProvider, cfe_event_emitter_mock::MockCfeEventEmitter,
+		signer_nomination::MockNominator, threshold_signer::MockThresholdSigner,
 	},
 	AccountRoleRegistry, OnBroadcastReady,
 };
@@ -148,6 +148,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type RetryPolicy = MockRetryPolicy;
+	type CfeEventEmitter = MockCfeEventEmitter;
 }
 
 impl_mock_chainflip!(Test);

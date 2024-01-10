@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
@@ -30,7 +31,7 @@ impl ChainCrypto for EvmCrypto {
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
-	// We can't use the hash since we don't know it for the Evm, as we must select an individaul
+	// We can't use the hash since we don't know it for the Evm, as we must select an individual
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
