@@ -12,11 +12,11 @@ where
 	ValidatorId: Encode + Decode + Debug + Copy + Ord,
 	Offence: Encode + Decode + Copy,
 {
-	fn mock_report_many(offence: Offence, validators: &[ValidatorId]) {
+	fn mock_report_many(offence: Offence, validators: impl IntoIterator<Item = ValidatorId>) {
 		let mut reported = Self::get_reported_for(offence);
-		for id in validators {
-			reported.insert(*id);
-		}
+		validators.into_iter().for_each(|id| {
+			reported.insert(id);
+		});
 		Self::set_reported_for(offence, reported);
 	}
 
@@ -45,7 +45,10 @@ where
 	type ValidatorId = ValidatorId;
 	type Offence = Offence;
 
-	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
+	fn report_many(
+		offence: impl Into<Self::Offence>,
+		validators: impl IntoIterator<Item = ValidatorId>,
+	) {
 		Self::mock_report_many(offence.into(), validators);
 	}
 
@@ -72,8 +75,8 @@ mod test {
 	fn test_offence_reporter_mock() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			TestOffenceReporter::report(MockOffence::BeingNaughty, 1);
-			TestOffenceReporter::report_many(MockOffence::BeingNaughty, &[1, 2, 3]);
-			TestOffenceReporter::report_many(MockOffence::BeingSuperNaughty, &[2, 3, 4]);
+			TestOffenceReporter::report_many(MockOffence::BeingNaughty, [1, 2, 3]);
+			TestOffenceReporter::report_many(MockOffence::BeingSuperNaughty, [2, 3, 4]);
 
 			assert_eq!(
 				TestOffenceReporter::get_reported_for(MockOffence::BeingNaughty),

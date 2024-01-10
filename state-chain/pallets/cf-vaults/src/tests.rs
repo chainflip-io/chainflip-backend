@@ -211,30 +211,32 @@ fn handover_success_triggers_handover_verification() {
 	});
 }
 
-fn keygen_failure(bad_candidates: &[<Test as Chainflip>::ValidatorId]) {
+fn keygen_failure(
+	bad_candidates: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Clone,
+) {
 	VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), GENESIS_EPOCH);
 
 	let ceremony_id = current_ceremony_id();
 
-	VaultsPallet::terminate_rotation(bad_candidates, PalletEvent::KeygenFailure(ceremony_id));
+	VaultsPallet::terminate_rotation(
+		bad_candidates.clone(),
+		PalletEvent::KeygenFailure(ceremony_id),
+	);
 
 	assert_eq!(last_event::<Test>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
 	assert_eq!(
 		VaultsPallet::status(),
-		AsyncResult::Ready(VaultStatus::Failed(bad_candidates.iter().cloned().collect()))
+		AsyncResult::Ready(VaultStatus::Failed(bad_candidates.clone().into_iter().collect()))
 	);
 
-	MockOffenceReporter::assert_reported(
-		PalletOffence::FailedKeygen,
-		bad_candidates.iter().cloned(),
-	);
+	MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, bad_candidates);
 }
 
 #[test]
 fn test_keygen_failure() {
 	new_test_ext().execute_with(|| {
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 	});
 }
 
@@ -245,7 +247,7 @@ fn test_keygen_failure() {
 fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <Test as Chainflip>::EpochInfo::epoch_index() + 1;
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 		VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), rotation_epoch);
 
 		assert_eq!(VaultsPallet::status(), AsyncResult::Pending);
@@ -1047,14 +1049,14 @@ fn dont_slash_in_safe_mode() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			vault: crate::PalletSafeMode { slashing_enabled: false, _phantom: marker::PhantomData },
 		});
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 0);
 		assert!(MockSlasher::slash_count(CHARLIE) == 0);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			vault: crate::PalletSafeMode { slashing_enabled: true, _phantom: marker::PhantomData },
 		});
-		keygen_failure(&[BOB, CHARLIE]);
+		keygen_failure([BOB, CHARLIE]);
 		assert!(MockSlasher::slash_count(BOB) == 1);
 		assert!(MockSlasher::slash_count(CHARLIE) == 1);
 	});

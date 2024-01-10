@@ -7,7 +7,9 @@ extern crate alloc;
 use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator};
+use crate::{
+	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
+};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -1053,6 +1055,23 @@ impl SerializeBtc for BitcoinOp {
 	}
 }
 
+pub struct BitcoinRetryPolicy;
+impl RetryPolicy for BitcoinRetryPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		// 1200 State-chain blocks are 2 hours - the maximum time we want to wait between retries.
+		const MAX_BROADCAST_DELAY: u32 = 1200u32;
+		// 25 * 6 = 150 seconds / 2.5 minutes
+		const DELAY_THRESHOLD: u32 = 25u32;
+
+		retry_attempts.checked_sub(DELAY_THRESHOLD).map(|above_threshold| {
+			sp_std::cmp::min(2u32.saturating_pow(above_threshold), MAX_BROADCAST_DELAY)
+		})
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -1381,5 +1400,20 @@ mod test {
 		assert!(!ConsolidationParameters::new(0, 0).are_valid());
 		assert!(!ConsolidationParameters::new(1, 1).are_valid());
 		assert!(!ConsolidationParameters::new(0, 10).are_valid());
+	}
+
+	#[test]
+	fn retry_delay_ramps_up() {
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(0), None);
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(1), None);
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(24), None);
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(25), Some(1));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(26), Some(2));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(27), Some(4));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(28), Some(8));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(29), Some(16));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(30), Some(32));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(40), Some(1200));
+		assert_eq!(BitcoinRetryPolicy::next_attempt_delay(150), Some(1200));
 	}
 }
