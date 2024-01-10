@@ -109,9 +109,15 @@ pub mod any {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
 pub enum AssetError {
 	Unsupported,
+}
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
+pub struct AssetBalance {
+	pub asset: any::Asset,
+	pub balance: AssetAmount,
 }
 
 /// Defines the assets types for a chain and some useful conversion traits. See the module level

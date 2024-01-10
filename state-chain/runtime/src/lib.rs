@@ -20,6 +20,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
+	assets::AssetBalance,
 	btc::BitcoinCrypto,
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -72,6 +73,8 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
+
+use sp_std::collections::btree_map::BTreeMap;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -960,6 +963,16 @@ impl_runtime_apis! {
 					(account_id, vanity_name)
 				})
 				.collect()
+		}
+		fn cf_asset_balances(account_id: AccountId) -> BTreeMap<ForeignChain, Vec<AssetBalance>> {
+			let mut balances = BTreeMap::<_, Vec<_>>::new();
+			LiquidityPools::sweep(&account_id).unwrap();
+			let _ = Asset::all().iter().map(|&asset| {
+				balances.entry(ForeignChain::from(asset))
+				.or_default()
+				.push(AssetBalance { asset, balance: pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0) });
+			});
+			balances
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
