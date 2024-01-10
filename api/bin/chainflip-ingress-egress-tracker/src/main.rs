@@ -140,7 +140,7 @@ trait ToForeignChain {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "deposit_chain", rename_all = "snake_case")]
+#[serde(tag = "deposit_chain")]
 enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
@@ -538,15 +538,16 @@ mod tests {
 	use super::*;
 	use anyhow::anyhow;
 	use async_trait::async_trait;
-	use cf_chains::dot::PolkadotAccountId;
+	use cf_chains::{
+		dot::PolkadotAccountId,
+		evm::{EvmTransactionMetadata, TransactionFee},
+	};
 	use chainflip_engine::state_chain_observer::client::{
-		storage_api::{
-			StorageDoubleMapAssociatedTypes, StorageMapAssociatedTypes, StorageValueAssociatedTypes,
-		},
-		BlockInfo, StateChainStreamApi,
+		storage_api, BlockInfo, StateChainStreamApi,
 	};
 	use frame_support::storage::types::QueryKindTrait;
 	use jsonrpsee::core::RpcResult;
+	use mockall::mock;
 	use sp_core::{storage::StorageKey, H160};
 	use std::collections::HashMap;
 
@@ -587,97 +588,94 @@ mod tests {
 		}
 	}
 
-	struct MockStateChainClient;
+	mock! {
+		pub StateChainClient {}
+		#[async_trait]
+		impl ChainApi for StateChainClient {
+			fn latest_finalized_block(&self) -> BlockInfo;
+			fn latest_unfinalized_block(&self) -> BlockInfo;
 
-	#[async_trait]
-	impl ChainApi for MockStateChainClient {
-		fn latest_finalized_block(&self) -> BlockInfo {
-			unimplemented!()
-		}
-		fn latest_unfinalized_block(&self) -> BlockInfo {
-			unimplemented!()
-		}
+			async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi>;
+			async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>>;
 
-		async fn finalized_block_stream(&self) -> Box<dyn StateChainStreamApi> {
-			unimplemented!()
-		}
-		async fn unfinalized_block_stream(&self) -> Box<dyn StateChainStreamApi<false>> {
-			unimplemented!()
+			async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo>;
 		}
 
-		async fn block(&self, _hash: state_chain_runtime::Hash) -> RpcResult<BlockInfo> {
-			unimplemented!()
+		#[async_trait]
+		impl StorageApi for StateChainClient {
+			async fn storage_item<
+				Value: codec::FullCodec + 'static,
+				OnEmpty: 'static,
+				QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
+			>(
+				&self,
+				storage_key: StorageKey,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
+
+			async fn storage_value<StorageValue: storage_api::StorageValueAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
+
+			async fn storage_map_entry<StorageMap: storage_api::StorageMapAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+				key: &StorageMap::Key,
+			) -> RpcResult<
+				<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+			>
+			where
+				StorageMap::Key: Sync;
+
+			async fn storage_double_map_entry<StorageDoubleMap: storage_api::StorageDoubleMapAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+				key1: &StorageDoubleMap::Key1,
+				key2: &StorageDoubleMap::Key2,
+			) -> RpcResult<
+				<StorageDoubleMap::QueryKind as QueryKindTrait<
+					StorageDoubleMap::Value,
+					StorageDoubleMap::OnEmpty,
+				>>::Query,
+			>
+			where
+				StorageDoubleMap::Key1: Sync,
+				StorageDoubleMap::Key2: Sync;
+
+			async fn storage_map<StorageMap: storage_api::StorageMapAssociatedTypes + 'static, ReturnedIter: FromIterator<(<StorageMap as storage_api::StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<ReturnedIter>;
 		}
 	}
 
-	#[async_trait]
-	impl StorageApi for MockStateChainClient {
-		async fn storage_item<
-			Value: codec::FullCodec + 'static,
-			OnEmpty: 'static,
-			QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
-		>(
-			&self,
-			_storage_key: StorageKey,
-			_block_hash: state_chain_runtime::Hash,
-		) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
-			unimplemented!()
-		}
-
-		async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
-			&self,
-			_block_hash: state_chain_runtime::Hash,
-		) -> RpcResult<
-			<StorageValue::QueryKind as QueryKindTrait<
-				StorageValue::Value,
-				StorageValue::OnEmpty,
-			>>::Query,
-		> {
-			unimplemented!()
-		}
-
-	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
-		&self,
-		_block_hash: state_chain_runtime::Hash,
-		_key: &StorageMap::Key,
-	) -> RpcResult<
-		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
-	>
+	fn create_client<I>(
+		result: Option<(
+			BroadcastId,
+			<<state_chain_runtime::Runtime as pallet_cf_broadcast::Config<I::Instance>>::TargetChain as Chain>::ChainBlockNumber,
+		)>,
+	) -> MockStateChainClient
 	where
-		StorageMap::Key: Sync{
-			unimplemented!()
-		}
+		state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
+		I: PalletInstanceAlias + 'static,
+	{
+		let mut client = MockStateChainClient::new();
 
-		async fn storage_double_map_entry<
-			StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
-		>(
-			&self,
-			_block_hash: state_chain_runtime::Hash,
-			_key1: &StorageDoubleMap::Key1,
-			_key2: &StorageDoubleMap::Key2,
-		) -> RpcResult<
-			<StorageDoubleMap::QueryKind as QueryKindTrait<
-				StorageDoubleMap::Value,
-				StorageDoubleMap::OnEmpty,
-			>>::Query,
-		>
-		where
-			StorageDoubleMap::Key1: Sync,
-			StorageDoubleMap::Key2: Sync,
-		{
-			unimplemented!()
-		}
+		client
+			.expect_storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
+				state_chain_runtime::Runtime,
+				I::Instance,
+			>>()
+			.return_once(move |_, _| Ok(result));
 
-		async fn storage_map<
-			StorageMap: StorageMapAssociatedTypes + 'static,
-			ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>
-				+ 'static,
-		>(
-			&self,
-			_block_hash: state_chain_runtime::Hash,
-		) -> RpcResult<ReturnedIter> {
-			unimplemented!()
-		}
+		client.expect_latest_unfinalized_block().returning(|| BlockInfo {
+			parent_hash: state_chain_runtime::Hash::default(),
+			hash: state_chain_runtime::Hash::default(),
+			number: 1,
+		});
+
+		client
 	}
 
 	fn parse_eth_address(address: &'static str) -> (H160, &'static str) {
@@ -701,7 +699,7 @@ mod tests {
 		let (eth_address2, eth_address_str2) =
 			parse_eth_address("0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF");
 
-		let client = MockStateChainClient;
+		let client = MockStateChainClient::new();
 		let mut store = MockStore::default();
 		handle_call(
 			state_chain_runtime::RuntimeCall::EthereumIngressEgress(
@@ -802,5 +800,38 @@ mod tests {
 			.storage
 			.get(format!("deposit:ethereum:{}", eth_address_str1.to_lowercase()).as_str())
 			.unwrap());
+	}
+
+	#[tokio::test]
+	async fn test_handle_broadcast_calls() {
+		let (eth_address, _) = parse_eth_address("0x541f563237A309B3A61E33BDf07a8930Bdba8D99");
+
+		let tx_out_id = SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [0; 20] };
+
+		let client = create_client::<Ethereum>(Some((1, 2)));
+		let mut store = MockStore::default();
+		handle_call(
+			state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+				pallet_cf_broadcast::Call::transaction_succeeded {
+					tx_out_id,
+					signer_id: eth_address,
+					tx_fee: TransactionFee { gas_used: 0, effective_gas_price: 0 },
+					tx_metadata: EvmTransactionMetadata {
+						max_fee_per_gas: None,
+						max_priority_fee_per_gas: None,
+						contract: H160::from([0; 20]),
+						gas_limit: None,
+					},
+				},
+			),
+			&mut store,
+			NetworkEnvironment::Testnet,
+			&client,
+		)
+		.await
+		.expect("failed to handle call");
+
+		assert_eq!(store.storage.len(), 1);
+		insta::assert_display_snapshot!(store.storage.get("broadcast:ethereum:1").unwrap());
 	}
 }

@@ -1606,6 +1606,7 @@ dependencies = [
  "hex",
  "insta",
  "jsonrpsee 0.16.3",
+ "mockall",
  "pallet-cf-broadcast",
  "pallet-cf-environment",
  "pallet-cf-ingress-egress",
