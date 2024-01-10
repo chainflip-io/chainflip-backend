@@ -2,6 +2,7 @@ mod btc;
 pub mod btc_mempool;
 mod dot;
 mod eth;
+pub mod state_chain;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -19,7 +20,7 @@ use chainflip_engine::{
 use sp_core::H160;
 use utilities::task_scope;
 
-use crate::DepositTrackerSettings;
+use crate::settings::DepositTrackerSettings;
 
 #[derive(Clone)]
 pub(super) struct EnvironmentParameters {
