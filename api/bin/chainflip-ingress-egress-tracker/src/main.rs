@@ -52,9 +52,7 @@ impl Store for RedisStore {
 
 	async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
 		let key = storable.get_key();
-		self.con
-			.rpush(&key, serde_json::to_string(storable).expect("failed to serialize redis value"))
-			.await?;
+		self.con.rpush(&key, serde_json::to_string(storable)?).await?;
 		self.con.expire(key, Self::REDIS_EXPIRY_IN_SECONDS as i64).await?;
 
 		Ok(())
@@ -64,7 +62,7 @@ impl Store for RedisStore {
 		self.con
 			.set_ex(
 				storable.get_key(),
-				serde_json::to_string(storable).expect("failed to serialize redis value"),
+				serde_json::to_string(storable)?,
 				Self::REDIS_EXPIRY_IN_SECONDS,
 			)
 			.await?;
