@@ -183,12 +183,12 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			.into_iter()
 			.map(|attempt| attempt.broadcast_id)
 			.collect::<BTreeSet<_>>();
-		assert!(broadcast_retry_queue.difference(&new_retry_queue).next().is_none());
+		assert_eq!(broadcast_retry_queue, new_retry_queue);
 
 		// Ensure Timeouts data are migrated
 		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)|
 			// Assert the pre- and post- migrated data is identical.
-			assert!(attempts.difference(&Timeouts::<T, I>::get(block_number)).next().is_none()));
+			assert_eq!(attempts, Timeouts::<T, I>::get(block_number)));
 
 		Ok(())
 	}
