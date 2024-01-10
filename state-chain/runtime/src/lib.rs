@@ -21,11 +21,12 @@ use cf_amm::{
 };
 use cf_chains::{
 	assets::AssetBalance,
-	btc::BitcoinCrypto,
+	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	Bitcoin, CcmChannelMetadata, FeeEstimationApi, ForeignChain, Polkadot, TransactionBuilder,
+	Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, FeeEstimationApi, ForeignChain, Polkadot,
+	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, NetworkEnvironment};
 use cf_traits::GetTrackedData;
@@ -686,6 +687,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
 }
 
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
@@ -708,6 +710,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
 }
 
 impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
@@ -730,6 +733,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
+	type RetryPolicy = BitcoinRetryPolicy;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
@@ -852,9 +856,9 @@ type PalletMigrations = (
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, Instance3>,
-	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
-	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
-	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
+	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance1>,
+	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance2>,
+	// pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance1>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, Instance3>,
@@ -864,10 +868,6 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance2>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, Instance3>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
-	migrations::VersionedMigration<
-		migrations::threshold_signature_callbacks::ThresholdSignatureCallbacks,
-		110,
-	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

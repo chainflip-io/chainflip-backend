@@ -17,6 +17,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{sync::Arc, time::Duration};
+use subxt::backend::rpc::RpcClient;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -25,6 +26,8 @@ use utilities::{
 	task_scope::{Scope, OR_CANCEL},
 	CachedStream, MakeCachedStream, MakeTryCachedStream, TryCachedStream,
 };
+
+use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
 
 use self::{
 	base_rpc_api::BaseRpcClient,
@@ -36,6 +39,10 @@ use self::{
 	finalized_stream::FinalizedCachedStream,
 	storage_api::StorageApi,
 };
+
+pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
+
+pub const STATE_CHAIN_BEHAVIOUR: &str = "State Chain client behavioural assumption not upheld";
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
@@ -370,8 +377,17 @@ async fn create_unfinalized_block_subscription<
 		.map_err(Into::into)
 		.map_ok(|header| -> BlockInfo { header.into() })
 		.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-			"sparse_block_stream unexpectedly ended"
-		)))));
+			STATE_CHAIN_CONNECTION
+		)))))
+		// Keep a copy of the base_rpc_client with the stream, as the subscription will end if the
+		// client is dropped
+		.map({
+			let base_rpc_client = base_rpc_client.clone();
+			move |i| {
+				let _ = &base_rpc_client;
+				i
+			}
+		});
 
 	let first_block = sparse_block_stream.next().await.unwrap()?;
 
@@ -704,11 +720,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 		};
 
 		if let Some(this_version) = self.update_cfe_version {
-			use crate::state_chain_observer::client::base_rpc_api::SubxtInterface;
 			use subxt::{tx::Signer, PolkadotConfig};
 
 			let subxt_client = subxt::client::OnlineClient::<PolkadotConfig>::from_rpc_client(
-				Arc::new(SubxtInterface(base_rpc_client.clone())),
+				RpcClient::new(SubxtInterface(base_rpc_client.clone())),
 			)
 			.await?;
 			let subxt_signer = {

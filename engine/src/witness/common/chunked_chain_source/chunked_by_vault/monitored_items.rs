@@ -12,10 +12,12 @@ use utilities::{
 };
 
 use crate::{
-	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
+	state_chain_observer::client::{
+		storage_api::StorageApi, StateChainStreamApi, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
+	},
 	witness::common::{
 		chain_source::{ChainClient, ChainStream, Header},
-		RuntimeHasChain, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
+		RuntimeHasChain,
 	},
 };
 

@@ -5,13 +5,10 @@ use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	settings::NodeContainer,
 	state_chain_observer::client::{
-		storage_api::StorageApi, StateChainClient, StateChainStreamApi,
+		storage_api::StorageApi, StateChainClient, StateChainStreamApi, STATE_CHAIN_CONNECTION,
 	},
 	witness::{
-		common::{
-			chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder,
-			STATE_CHAIN_CONNECTION,
-		},
+		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		dot::{filter_map_events, process_egress, proxy_added_witnessing, DotUnfinalisedSource},
 	},
 };

@@ -4,8 +4,10 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
-	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
-	witness::common::{RuntimeHasChain, STATE_CHAIN_CONNECTION},
+	state_chain_observer::client::{
+		storage_api::StorageApi, StateChainStreamApi, STATE_CHAIN_CONNECTION,
+	},
+	witness::common::RuntimeHasChain,
 };
 
 use super::{builder::ChunkedByVaultBuilder, monitored_items::MonitoredSCItems, ChunkedByVault};

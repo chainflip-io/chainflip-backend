@@ -346,7 +346,7 @@ pub trait BroadcastNomination {
 	/// as a source of randomness. Returns None if no signers are live.
 	fn nominate_broadcaster<H: Hashable>(
 		seed: H,
-		exclude_ids: &[Self::BroadcasterId],
+		exclude_ids: impl IntoIterator<Item = Self::BroadcasterId>,
 	) -> Option<Self::BroadcasterId>;
 }
 
