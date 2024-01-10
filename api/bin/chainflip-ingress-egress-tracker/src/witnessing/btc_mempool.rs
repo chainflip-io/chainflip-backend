@@ -16,28 +16,29 @@ use utilities::task_scope;
 
 #[derive(Clone, Serialize)]
 pub struct QueryResult {
-	#[serde(skip_serializing)]
-	btc_network: Network,
 	confirmations: u32,
-	// we use ScriptBuf of the address since this is how it shows on the blockchain itself.
 	#[serde(skip_serializing)]
-	destination: ScriptBuf,
+	destination: String,
 	value: f64,
 	tx_hash: Txid,
 }
 
 impl Storable for QueryResult {
-	fn get_key(&self) -> Option<String> {
-		bitcoin::Address::from_script(&self.destination, self.btc_network)
-			.map(|addr| format!("confirmations:bitcoin:{addr}"))
-			.ok()
+	fn get_key(&self) -> String {
+		format!("confirmations:bitcoin:{}", self.destination)
 	}
+}
+
+fn script_to_address(script: &ScriptBuf, btc_network: Network) -> Option<String> {
+	bitcoin::Address::from_script(script, btc_network)
+		.map(|addr| addr.to_string())
+		.ok()
 }
 
 #[derive(Clone)]
 struct Cache {
 	best_block_hash: BlockHash,
-	transactions: HashMap<ScriptBuf, QueryResult>,
+	transactions: HashMap<String, QueryResult>,
 	known_tx_hashes: HashSet<Txid>,
 }
 
@@ -64,7 +65,7 @@ async fn update_cache<T: BtcRpcApi>(
 ) -> anyhow::Result<Cache> {
 	let all_mempool_transactions: Vec<Txid> = btc.get_raw_mempool().await?;
 
-	let mut new_transactions: HashMap<ScriptBuf, QueryResult> = Default::default();
+	let mut new_transactions: HashMap<String, QueryResult> = Default::default();
 	let mut new_known_tx_hashes: HashSet<Txid> = Default::default();
 	let previous_mempool: HashMap<Txid, QueryResult> = previous_cache
 		.clone()
@@ -102,16 +103,17 @@ async fn update_cache<T: BtcRpcApi>(
 		for txout in tx.output {
 			new_known_tx_hashes.insert(txid);
 
-			new_transactions.insert(
-				txout.script_pubkey.clone(),
-				QueryResult {
-					destination: txout.script_pubkey,
-					confirmations: 0,
-					value: Amount::from_sat(txout.value).to_btc(),
-					tx_hash: txid,
-					btc_network,
-				},
-			);
+			if let Some(addr) = script_to_address(&txout.script_pubkey, btc_network) {
+				new_transactions.insert(
+					addr.clone(),
+					QueryResult {
+						destination: addr,
+						confirmations: 0,
+						value: Amount::from_sat(txout.value).to_btc(),
+						tx_hash: txid,
+					},
+				);
+			}
 		}
 	}
 	let block_hash = btc.best_block_hash().await?;
@@ -130,16 +132,17 @@ async fn update_cache<T: BtcRpcApi>(
 			for tx in block.txdata {
 				let tx_hash = tx.txid;
 				for txout in tx.vout {
-					new_transactions.insert(
-						txout.script_pubkey.clone(),
-						QueryResult {
-							destination: txout.script_pubkey,
-							confirmations,
-							value: txout.value.to_btc(),
-							tx_hash,
-							btc_network,
-						},
-					);
+					if let Some(addr) = script_to_address(&txout.script_pubkey, btc_network) {
+						new_transactions.insert(
+							addr.clone(),
+							QueryResult {
+								destination: addr,
+								confirmations,
+								value: txout.value.to_btc(),
+								tx_hash,
+							},
+						);
+					}
 				}
 			}
 			block_hash_to_query = block.header.previous_block_hash.unwrap();
@@ -175,14 +178,14 @@ pub fn start<S: Store>(
 				match update_cache(&client, cache.clone(), btc_network).await {
 					Ok(updated_cache) => {
 						cache = updated_cache;
+
+						for query_result in cache.transactions.values() {
+							query_result.save_singleton(&mut con).await?;
+						}
 					},
 					Err(err) => {
 						error!("Error when querying Bitcoin chain: {}", err);
 					},
-				}
-
-				for query_result in cache.transactions.values() {
-					query_result.save_singleton(&mut con).await?;
 				}
 			}
 		}
@@ -398,8 +401,8 @@ mod tests {
 		// let mut store = MockStore::default();
 		let cache = update_cache(&btc, cache, Network::Bitcoin).await.unwrap();
 		assert_eq!(cache.transactions.len(), 2);
-		assert!(cache.transactions.contains_key(&a1_script));
-		assert!(cache.transactions.contains_key(&a2_script));
+		assert!(cache.transactions.contains_key(&address1));
+		assert!(cache.transactions.contains_key(&address2));
 	}
 
 	#[tokio::test]
@@ -428,8 +431,8 @@ mod tests {
 		let cache: Cache = Default::default();
 		let cache = update_cache(&rpc, cache.clone(), Network::Bitcoin).await.unwrap();
 		assert_eq!(cache.transactions.len(), 2);
-		assert!(cache.transactions.contains_key(&a1_script));
-		assert!(cache.transactions.contains_key(&a2_script));
+		assert!(cache.transactions.contains_key(&address1));
+		assert!(cache.transactions.contains_key(&address2));
 
 		rpc.mempool.append(&mut vec![tx_with_outs(vec![TxOut {
 			value: Amount::from_btc(0.8).unwrap().to_sat(),
@@ -438,21 +441,20 @@ mod tests {
 
 		let cache = update_cache(&rpc, cache.clone(), Network::Bitcoin).await.unwrap();
 		assert_eq!(cache.transactions.len(), 3);
-		assert!(cache.transactions.contains_key(&a1_script));
-		assert!(cache.transactions.contains_key(&a2_script));
-		assert!(cache.transactions.contains_key(&a3_script));
+		assert!(cache.transactions.contains_key(&address1));
+		assert!(cache.transactions.contains_key(&address2));
+		assert!(cache.transactions.contains_key(&address3));
 
 		rpc.mempool.remove(0);
 		let cache = update_cache(&rpc, cache.clone(), Network::Bitcoin).await.unwrap();
 		assert_eq!(cache.transactions.len(), 2);
-		assert!(cache.transactions.contains_key(&a2_script));
-		assert!(cache.transactions.contains_key(&a3_script));
+		assert!(cache.transactions.contains_key(&address2));
+		assert!(cache.transactions.contains_key(&address3));
 	}
 
 	#[tokio::test]
 	async fn blocks() {
 		let address1 = "bc1qrtwkf6jdda74ngjv6zgmxvx4jkckxkl2dafpm3".to_string();
-		let a1_script = address::Address::from_str(&address1).unwrap().payload.script_pubkey();
 
 		let mempool = vec![];
 
@@ -469,11 +471,11 @@ mod tests {
 			MockBtcRpc { mempool: mempool.clone(), latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
 		let cache = update_cache(&btc, cache.clone(), Network::Bitcoin).await.unwrap();
-		assert_eq!(cache.transactions.get(&a1_script).unwrap().confirmations, 1);
+		assert_eq!(cache.transactions.get(&address1).unwrap().confirmations, 1);
 
 		btc.latest_block_hash = i_to_block_hash(16);
 		let cache = update_cache(&btc, cache.clone(), Network::Bitcoin).await.unwrap();
-		assert_eq!(cache.transactions.get(&a1_script).unwrap().confirmations, 2);
+		assert_eq!(cache.transactions.get(&address1).unwrap().confirmations, 2);
 	}
 
 	#[tokio::test]
@@ -499,7 +501,7 @@ mod tests {
 			MockBtcRpc { mempool: mempool.clone(), latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
 		let cache = update_cache(&btc, cache.clone(), Network::Bitcoin).await.unwrap();
-		assert_eq!(cache.transactions.get(&a1_script).unwrap().confirmations, 3);
-		assert_eq!(cache.transactions.get(&a1_script).unwrap().value, tx_value.to_btc());
+		assert_eq!(cache.transactions.get(&address1).unwrap().confirmations, 3);
+		assert_eq!(cache.transactions.get(&address1).unwrap().value, tx_value.to_btc());
 	}
 }

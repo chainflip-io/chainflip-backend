@@ -8,7 +8,8 @@ use cf_primitives::{Asset, BroadcastId, ForeignChain};
 use chainflip_engine::{
 	settings::{insert_command_line_option, CfSettings, HttpBasicAuthEndpoint, WsHttpEndpoints},
 	state_chain_observer::client::{
-		chain_api::ChainApi, storage_api::StorageApi, StateChainClient, STATE_CHAIN_CONNECTION,
+		chain_api::ChainApi, extrinsic_api::unsigned::UnsignedExtrinsicApi,
+		storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
 };
 use clap::Parser;
@@ -19,7 +20,7 @@ use pallet_cf_ingress_egress::DepositWitness;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::PalletInstanceAlias;
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, ops::Deref};
 use tracing::log;
 use utilities::{rpc::NumberOrHex, task_scope};
 
@@ -51,29 +52,23 @@ impl Store for RedisStore {
 	type Output = ();
 
 	async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
-		if let Some(key) = storable.get_key() {
-			self.con
-				.rpush(
-					&key,
-					serde_json::to_string(storable).expect("failed to serialize redis value"),
-				)
-				.await?;
-			self.con.expire(key, Self::REDIS_EXPIRY_IN_SECONDS as i64).await?;
-		}
+		let key = storable.get_key();
+		self.con
+			.rpush(&key, serde_json::to_string(storable).expect("failed to serialize redis value"))
+			.await?;
+		self.con.expire(key, Self::REDIS_EXPIRY_IN_SECONDS as i64).await?;
 
 		Ok(())
 	}
 
 	async fn save_singleton<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
-		if let Some(key) = storable.get_key() {
-			self.con
-				.set_ex(
-					&key,
-					serde_json::to_string(storable).expect("failed to serialize redis value"),
-					Self::REDIS_EXPIRY_IN_SECONDS,
-				)
-				.await?;
-		}
+		self.con
+			.set_ex(
+				storable.get_key(),
+				serde_json::to_string(storable).expect("failed to serialize redis value"),
+				Self::REDIS_EXPIRY_IN_SECONDS,
+			)
+			.await?;
 
 		Ok(())
 	}
@@ -81,7 +76,7 @@ impl Store for RedisStore {
 
 #[async_trait]
 pub trait Storable: Serialize + Sized + Sync + 'static {
-	fn get_key(&self) -> Option<String>;
+	fn get_key(&self) -> String;
 
 	async fn save_to_array<S: Store>(&self, store: &mut S) -> anyhow::Result<S::Output> {
 		store.save_to_array(self).await
@@ -152,8 +147,8 @@ enum WitnessInformation {
 }
 
 impl Storable for WitnessInformation {
-	fn get_key(&self) -> Option<String> {
-		Some(match self {
+	fn get_key(&self) -> String {
+		match self {
 			Self::Deposit { deposit_address, chain, .. } => {
 				let chain = serde_json::to_string(chain)
 					.expect("failed to serialize string")
@@ -170,7 +165,7 @@ impl Storable for WitnessInformation {
 
 				format!("broadcast:{chain}:{broadcast_id}")
 			},
-		})
+		}
 	}
 }
 
@@ -215,13 +210,14 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 	}
 }
 
-async fn get_broadcast_id<I>(
-	state_chain_client: &StateChainClient<()>,
+async fn get_broadcast_id<I, StateChainClient>(
+	state_chain_client: &StateChainClient,
 	tx_out_id: &TransactionOutIdFor<state_chain_runtime::Runtime, I::Instance>,
 ) -> Option<BroadcastId>
 where
 	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<I::Instance>,
 	I: PalletInstanceAlias + 'static,
+	StateChainClient: StorageApi + ChainApi + UnsignedExtrinsicApi + 'static + Send + Sync,
 {
 	let id = state_chain_client
 		.storage_map_entry::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
@@ -337,6 +333,128 @@ impl Source for TrackerOptions {
 	}
 }
 
+async fn handle_call<S, StateChainClient>(
+	call: state_chain_runtime::RuntimeCall,
+	con: &mut S,
+	btc_network: BitcoinNetwork,
+	state_chain_client: &StateChainClient,
+) -> anyhow::Result<()>
+where
+	S: Store,
+	StateChainClient: StorageApi + ChainApi + UnsignedExtrinsicApi + 'static + Send + Sync,
+{
+	use pallet_cf_broadcast::Call as BroadcastCall;
+	use pallet_cf_ingress_egress::Call as IngressEgressCall;
+	use state_chain_runtime::RuntimeCall::*;
+
+	match call {
+		EthereumIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
+				WitnessInformation::from((witness, block_height)).save_to_array(con).await?;
+			},
+		BitcoinIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
+				WitnessInformation::from((witness, block_height, btc_network))
+					.save_to_array(con)
+					.await?;
+			},
+		PolkadotIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
+				WitnessInformation::from((witness, block_height)).save_to_array(con).await?;
+			},
+		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let broadcast_id =
+				get_broadcast_id::<Ethereum, StateChainClient>(&state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				WitnessInformation::Broadcast {
+					broadcast_id,
+					tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
+				}
+				.save_singleton(con)
+				.await?;
+			}
+		},
+		BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let broadcast_id =
+				get_broadcast_id::<Bitcoin, StateChainClient>(&state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				WitnessInformation::Broadcast {
+					broadcast_id,
+					tx_out_id: TransactionId::Bitcoin {
+						hash: format!("0x{}", hex::encode(tx_out_id)),
+					},
+				}
+				.save_singleton(con)
+				.await?;
+			}
+		},
+		PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
+			let broadcast_id =
+				get_broadcast_id::<Polkadot, StateChainClient>(&state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				WitnessInformation::Broadcast {
+					broadcast_id,
+					tx_out_id: TransactionId::Polkadot {
+						signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
+					},
+				}
+				.save_singleton(con)
+				.await?;
+			}
+		},
+
+		EthereumIngressEgress(_) |
+		BitcoinIngressEgress(_) |
+		PolkadotIngressEgress(_) |
+		System(_) |
+		Timestamp(_) |
+		Environment(_) |
+		Flip(_) |
+		Emissions(_) |
+		Funding(_) |
+		AccountRoles(_) |
+		Witnesser(_) |
+		Validator(_) |
+		Session(_) |
+		Grandpa(_) |
+		Governance(_) |
+		Reputation(_) |
+		TokenholderGovernance(_) |
+		EthereumChainTracking(_) |
+		BitcoinChainTracking(_) |
+		PolkadotChainTracking(_) |
+		EthereumVault(_) |
+		PolkadotVault(_) |
+		BitcoinVault(_) |
+		EthereumThresholdSigner(_) |
+		PolkadotThresholdSigner(_) |
+		BitcoinThresholdSigner(_) |
+		EthereumBroadcaster(_) |
+		PolkadotBroadcaster(_) |
+		BitcoinBroadcaster(_) |
+		Swapping(_) |
+		LiquidityProvider(_) |
+		LiquidityPools(_) => {},
+	};
+
+	Ok(())
+}
+
 async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: DepositTrackerSettings,
@@ -362,115 +480,7 @@ async fn start(
 	let mut witness_receiver = witness_sender.subscribe();
 
 	while let Ok(call) = witness_receiver.recv().await {
-		use pallet_cf_broadcast::Call as BroadcastCall;
-		use pallet_cf_ingress_egress::Call as IngressEgressCall;
-		use state_chain_runtime::RuntimeCall::*;
-
-		match call {
-			EthereumIngressEgress(IngressEgressCall::process_deposits {
-				deposit_witnesses,
-				block_height,
-			}) =>
-				for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-					WitnessInformation::from((witness, block_height))
-						.save_to_array(&mut con)
-						.await?;
-				},
-			BitcoinIngressEgress(IngressEgressCall::process_deposits {
-				deposit_witnesses,
-				block_height,
-			}) =>
-				for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-					WitnessInformation::from((witness, block_height, btc_network))
-						.save_to_array(&mut con)
-						.await?;
-				},
-			PolkadotIngressEgress(IngressEgressCall::process_deposits {
-				deposit_witnesses,
-				block_height,
-			}) =>
-				for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-					WitnessInformation::from((witness, block_height))
-						.save_to_array(&mut con)
-						.await?;
-				},
-			EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
-				let broadcast_id =
-					get_broadcast_id::<Ethereum>(&state_chain_client, &tx_out_id).await;
-
-				if let Some(broadcast_id) = broadcast_id {
-					WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
-					}
-					.save_singleton(&mut con)
-					.await?;
-				}
-			},
-			BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
-				let broadcast_id =
-					get_broadcast_id::<Bitcoin>(&state_chain_client, &tx_out_id).await;
-
-				if let Some(broadcast_id) = broadcast_id {
-					WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Bitcoin {
-							hash: format!("0x{}", hex::encode(tx_out_id)),
-						},
-					}
-					.save_singleton(&mut con)
-					.await?;
-				}
-			},
-			PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
-				let broadcast_id =
-					get_broadcast_id::<Polkadot>(&state_chain_client, &tx_out_id).await;
-
-				if let Some(broadcast_id) = broadcast_id {
-					WitnessInformation::Broadcast {
-						broadcast_id,
-						tx_out_id: TransactionId::Polkadot {
-							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
-						},
-					}
-					.save_singleton(&mut con)
-					.await?;
-				}
-			},
-
-			EthereumIngressEgress(_) |
-			BitcoinIngressEgress(_) |
-			PolkadotIngressEgress(_) |
-			System(_) |
-			Timestamp(_) |
-			Environment(_) |
-			Flip(_) |
-			Emissions(_) |
-			Funding(_) |
-			AccountRoles(_) |
-			Witnesser(_) |
-			Validator(_) |
-			Session(_) |
-			Grandpa(_) |
-			Governance(_) |
-			Reputation(_) |
-			TokenholderGovernance(_) |
-			EthereumChainTracking(_) |
-			BitcoinChainTracking(_) |
-			PolkadotChainTracking(_) |
-			EthereumVault(_) |
-			PolkadotVault(_) |
-			BitcoinVault(_) |
-			EthereumThresholdSigner(_) |
-			PolkadotThresholdSigner(_) |
-			BitcoinThresholdSigner(_) |
-			EthereumBroadcaster(_) |
-			PolkadotBroadcaster(_) |
-			BitcoinBroadcaster(_) |
-			Swapping(_) |
-			LiquidityProvider(_) |
-			LiquidityPools(_) => {},
-		};
+		handle_call(call, &mut con, btc_network, state_chain_client.deref()).await?
 	}
 
 	Ok(())
