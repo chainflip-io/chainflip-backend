@@ -49,4 +49,4 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      nightly_bouncer: true
+      full_bouncer: true
