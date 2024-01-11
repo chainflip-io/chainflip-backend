@@ -10,7 +10,7 @@
 // Go to PolkaJS > Developer > Extrinsic
 
 // For example: ./commands/check_witnesses.ts ETH
-// will wait for the next chainStateUpdate extrinsic for ethereum and after some blocks it will check how many validator witnessed it
+// will wait for the next chainStateUpdate extrinsic for ethereum and after some blocks (2) it will check how many validator witnessed it
 
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 import { blake2AsHex } from '@polkadot/util-crypto';
@@ -42,6 +42,7 @@ async function main(): Promise<void> {
         const signedBlock = await api.rpc.chain.getBlock();
         if(signedBlock.block){
             currentBlockNumber = Number(signedBlock.block.header.number)
+            console.log(currentBlockNumber)
         }
         
         signedBlock.block.extrinsics.forEach((ex: any, index: any) => {
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
                         /,/g,
                         '',
                     );
-                    // parse the data and removed useless comas (damn polkadot api)
+                    // parse the data and removed useless comas
                     finalData.new_chain_state.trackedData.baseFee = baseFee;
                     finalData.new_chain_state.blockHeight = blockHeight;
                     // create the extrinsic we need to witness (ETH chain tracking in this case)
@@ -72,7 +73,7 @@ async function main(): Promise<void> {
                     const finalData = callData.args;
                     // set medianTip to 0, it is not kept into account for the chaintracking
                     finalData.new_chain_state.trackedData.medianTip = '0';
-                    // parse the data and removed useless comas (damn polkadot api)
+                    // parse the data and removed useless comas
                     const blockHeight = finalData.new_chain_state.blockHeight.replace(/,/g, '');
                     const runtimeVersion =
                         finalData.new_chain_state.trackedData.runtimeVersion.specVersion.replace(
@@ -94,17 +95,18 @@ async function main(): Promise<void> {
                 if (callData && callData.section === 'bitcoinChainTracking' && chain === "BTC") {
                     const finalData = callData.args;
 
-                    // parse the data and removed useless comas (damn polkadot api)
+                    // parse the data and removed useless comas
                     const blockHeight = finalData.new_chain_state.blockHeight.replace(/,/g, '');
                     
                     finalData.new_chain_state.blockHeight = blockHeight;
+                    // These are the default values we use on the state chain for the btc chain tracking 
                     finalData.new_chain_state.trackedData.btcFeeInfo = {
                         feePerInputUtxo: 7500,
                         feePerOutputUtxo: 4300,
                         minFeeRequiredPerTx: 1200,
                     };
                     // create the extrinsic we need to witness (DOT chain tracking in this case)
-                    const extrinsic = api.tx.polkadotChainTracking.updateChainState(
+                    const extrinsic = api.tx.bitcoinChainTracking.updateChainState(
                         finalData.new_chain_state,
                     );
                     // obtain the hash of the extrinsic call
@@ -117,14 +119,15 @@ async function main(): Promise<void> {
     }
 
     const epoch = Number(await api.query.validator.currentEpoch());
+    const vanityNames = (await api.query.validator.vanityNames()).toHuman();
     const unsubscribe = await api.rpc.chain.subscribeNewHeads(async (header) => {
 
         //waiting at least 2 blocks to be sure that we give all validator enough time to witness something
         if (Number(header.number) - currentBlockNumber > 2) {
             unsubscribe();
-            let witnessNumber = [];
-            let failingValidators = [];
+
             for (const elem of witnessHash) {
+                let failingValidators = [];
                 let votes;
                 try{
                     votes = (
@@ -135,39 +138,34 @@ async function main(): Promise<void> {
                 }
                 if (votes) {
                     let binary = hex2bin(votes.toString());
-                    const number = binary.match(/1/g)?.length;
-                    witnessNumber.push(number || 0);    
+                    const witnessNumber = binary.match(/1/g)?.length;
                     // hashes are stored as 152 bits, the last 2 bits are always 0
                     while((binary.match(/0/g)?.length || 0)  >  2) {
                         let index = binary.indexOf("0");
                         binary = binary.substring(index + 1);
                         failingValidators.push(validators[index]);
                     }
-
-                }    
-            }
-            if(witnessNumber.length > 0) {
-                console.log(`${Math.min(...witnessNumber)}/${validators?.length} witnessed it!`);
-                const vanityNames = (await api.query.validator.vanityNames()).toHuman();
-                failingValidators.forEach(element => {
-                    if(vanityNames[element] && vanityNames[element].substr(0,2) === "0x") {
-                        let vanity = vanityNames[element].substr(2);
-                        let bytes=[];
-                        for(let i=0; i<vanity.length; i+=2 ){
-                            bytes.push(parseInt(vanity.substr(i, 2), 16));
+                    console.log(`${witnessNumber}/${validators?.length} witnessed ${elem} hash!\nThe extrinsic was in block ${currentBlockNumber}`);
+                    failingValidators.forEach(element => {
+                        if(vanityNames[element] && vanityNames[element].substr(0,2) === "0x") {
+                            let vanity = vanityNames[element].substr(2);
+                            let bytes=[];
+                            for(let i=0; i<vanity.length; i+=2 ){
+                                bytes.push(parseInt(vanity.substr(i, 2), 16));
+                            }
+                            console.log(element+ " - " + String.fromCharCode(...bytes))
+                        }else {
+                            console.log(element + " - " + vanityNames[element]);
                         }
-                        console.log(element+ ": " + String.fromCharCode(...bytes))
-                    }else {
-                        console.log(element + ": " + vanityNames[element]);
-                    }
-                });
+                    });
+                }    
             }
             process.exit(0);
         }
     });
 }
 
-runWithTimeout(main(), 60000).catch(() => {
+runWithTimeout(main(), 3600000).catch(() => {
   console.log('Failed to check amount of witnesses for ' + process.argv[2]);
   process.exit(-1);
 });
