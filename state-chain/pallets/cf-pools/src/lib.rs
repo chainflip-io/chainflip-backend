@@ -1337,7 +1337,7 @@ impl<T: Config> Pallet<T> {
 							) => Error::<T>::MaximumGrossLiquidity,
 							limit_orders::PositionError::Other(
 								limit_orders::MintError::MaximumPoolInstances,
-							) => Error::<T>::AssetRatioUnachieveable,
+							) => Error::<T>::MaximumPoolInstances,
 						}),
 					}?;
 
