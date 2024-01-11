@@ -1,7 +1,8 @@
 use super::{vec, AccountMeta, FromStr, Instruction, Pubkey};
 use scale_info::prelude::string::String;
+use serde::{Deserialize, Serialize};
 
-#[derive(bincode::Encode, bincode::Decode, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum SystemInstruction {
 	/// Create a new account
 	///
@@ -193,6 +194,16 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
 		// program id of the system program
 		Pubkey::from_str("11111111111111111111111111111111").unwrap(),
 		&SystemInstruction::AdvanceNonceAccount,
+		account_metas,
+	)
+}
+
+pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
+	let account_metas =
+		vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
+	Instruction::new_with_bincode(
+		Pubkey::from_str("11111111111111111111111111111111").unwrap(),
+		&SystemInstruction::Transfer { lamports },
 		account_metas,
 	)
 }

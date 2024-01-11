@@ -5,6 +5,16 @@ use generic_array::{typenum::U64, GenericArray};
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
+#[cfg(test)]
+use extra_types_for_testing::{SignerError, Signers, TransactionError};
+
+#[cfg(test)]
+pub mod atomic_u64;
+#[cfg(test)]
+pub mod extra_types_for_testing;
+#[cfg(test)]
+use thiserror::Error;
+
 pub mod short_vec;
 pub mod system_instructions;
 
@@ -62,6 +72,98 @@ impl Transaction {
 	pub fn new_with_payer(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
 		let message = Message::new(instructions, payer);
 		Self::new_unsigned(message)
+	}
+
+	#[cfg(test)]
+	pub fn sign<T: Signers + ?Sized>(&mut self, keypairs: &T, recent_blockhash: Hash) {
+		if let Err(e) = self.try_sign(keypairs, recent_blockhash) {
+			panic!("Transaction::sign failed with error {e:?}");
+		}
+	}
+
+	#[cfg(test)]
+	pub fn try_sign<T: Signers + ?Sized>(
+		&mut self,
+		keypairs: &T,
+		recent_blockhash: Hash,
+	) -> Result<(), SignerError> {
+		self.try_partial_sign(keypairs, recent_blockhash)?;
+
+		if !self.is_signed() {
+			Err(SignerError::NotEnoughSigners)
+		} else {
+			Ok(())
+		}
+	}
+
+	#[cfg(test)]
+	pub fn try_partial_sign<T: Signers + ?Sized>(
+		&mut self,
+		keypairs: &T,
+		recent_blockhash: Hash,
+	) -> Result<(), SignerError> {
+		let positions = self.get_signing_keypair_positions(&keypairs.pubkeys())?;
+		if positions.iter().any(|pos| pos.is_none()) {
+			return Err(SignerError::KeypairPubkeyMismatch)
+		}
+		let positions: Vec<usize> = positions.iter().map(|pos| pos.unwrap()).collect();
+		self.try_partial_sign_unchecked(keypairs, positions, recent_blockhash)
+	}
+
+	#[cfg(test)]
+	pub fn try_partial_sign_unchecked<T: Signers + ?Sized>(
+		&mut self,
+		keypairs: &T,
+		positions: Vec<usize>,
+		recent_blockhash: Hash,
+	) -> Result<(), SignerError> {
+		// if you change the blockhash, you're re-signing...
+		if recent_blockhash != self.message.recent_blockhash {
+			self.message.recent_blockhash = recent_blockhash;
+			self.signatures
+				.iter_mut()
+				.for_each(|signature| *signature = Signature::default());
+		}
+
+		let signatures = keypairs.try_sign_message(&self.message_data())?;
+		for i in 0..positions.len() {
+			self.signatures[positions[i]] = signatures[i];
+		}
+		Ok(())
+	}
+
+	#[cfg(test)]
+	pub fn get_signing_keypair_positions(
+		&self,
+		pubkeys: &[Pubkey],
+	) -> Result<Vec<Option<usize>>, TransactionError> {
+		if self.message.account_keys.len() < self.message.header.num_required_signatures as usize {
+			return Err(TransactionError::InvalidAccountIndex)
+		}
+		let signed_keys =
+			&self.message.account_keys[0..self.message.header.num_required_signatures as usize];
+
+		Ok(pubkeys
+			.iter()
+			.map(|pubkey| signed_keys.iter().position(|x| x == pubkey))
+			.collect())
+	}
+
+	#[cfg(test)]
+	pub fn is_signed(&self) -> bool {
+		self.signatures.iter().all(|signature| *signature != Signature::default())
+	}
+
+	/// Return the message containing all data that should be signed.
+	#[cfg(test)]
+	pub fn message(&self) -> &Message {
+		&self.message
+	}
+
+	/// Return the serialized message data to sign.
+	#[cfg(test)]
+	pub fn message_data(&self) -> Vec<u8> {
+		self.message().serialize()
 	}
 }
 
@@ -144,13 +246,13 @@ impl Instruction {
 		Self { program_id, accounts, data }
 	}
 
-	pub fn new_with_bincode<T: bincode::Encode>(
+	pub fn new_with_bincode<T: Serialize>(
 		program_id: Pubkey,
 		data: &T,
 		accounts: Vec<AccountMeta>,
 	) -> Self {
 		// the solana-sdk uses bincode version 1.3.3 which has a dependency on serde which depends on std and so it cannot be used with our runtime. Fortunately, the new version of bincode (bincode 2) has an optional dependency on serde and we can use the serializer without serde. However, bincode 2 is a complete rewrite of bincode 1 and so to mimic the exact bahaviour of serializaition that is used by the solana-sdk with bincode 1, we need to use the legacy config for serialization according to the migration guide provided by bincode here: https://github.com/bincode-org/bincode/blob/v2.0.0-rc.3/docs/migration_guide.md. Original serialization call in solana sdk: let data = bincode::serialize(data).unwrap();
-		let data = bincode::encode_to_vec(data, bincode::config::legacy()).unwrap();
+		let data = bincode::serde::encode_to_vec(data, bincode::config::legacy()).unwrap();
 		Self { program_id, accounts, data }
 	}
 }
@@ -303,14 +405,16 @@ impl Message {
 	}
 
 	pub fn new_with_nonce(
-		instructions: Vec<Instruction>,
+		mut instructions: Vec<Instruction>,
 		payer: Option<&Pubkey>,
-		_nonce_account_pubkey: &Pubkey,
-		_nonce_authority_pubkey: &Pubkey,
+		nonce_account_pubkey: &Pubkey,
+		nonce_authority_pubkey: &Pubkey,
 	) -> Self {
-		// let nonce_ix =
-		// 	system_instruction::advance_nonce_account(nonce_account_pubkey, nonce_authority_pubkey);
-		// instructions.insert(0, nonce_ix);
+		let nonce_ix = system_instructions::advance_nonce_account(
+			nonce_account_pubkey,
+			nonce_authority_pubkey,
+		);
+		instructions.insert(0, nonce_ix);
 		Self::new(&instructions, payer)
 	}
 
@@ -332,6 +436,11 @@ impl Message {
 			recent_blockhash,
 			instructions,
 		}
+	}
+
+	#[cfg(test)]
+	pub fn serialize(&self) -> Vec<u8> {
+		bincode::serde::encode_to_vec(self, bincode::config::legacy()).unwrap()
 	}
 }
 
@@ -478,21 +587,23 @@ pub struct CompiledInstruction {
 	pub data: Vec<u8>,
 }
 
-#[derive(
-	Debug,
-	PartialEq,
-	Default,
-	Eq,
-	Clone,
-	Serialize,
-	Deserialize,
-	bincode::Encode,
-	bincode::Decode,
-	Ord,
-	PartialOrd,
-	Copy,
-)]
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Ord, PartialOrd, Copy)]
 pub struct Pubkey(pub [u8; 32]);
+#[cfg(test)]
+impl Pubkey {
+	/// unique Pubkey for tests and benchmarks.
+	pub fn new_unique() -> Self {
+		use crate::sol::atomic_u64::AtomicU64;
+		static I: AtomicU64 = AtomicU64::new(1);
+
+		let mut b = [0u8; 32];
+		let i = I.fetch_add(1);
+		// use big endian representation to ensure that recent unique pubkeys
+		// are always greater than less recent unique pubkeys
+		b[0..8].copy_from_slice(&i.to_be_bytes());
+		Self::from(b)
+	}
+}
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
@@ -531,7 +642,7 @@ impl TryFrom<Vec<u8>> for Pubkey {
 	}
 }
 
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Copy)]
 pub struct Signature(GenericArray<u8, U64>);
 
 // impl Signature {
@@ -572,41 +683,105 @@ impl From<[u8; SIGNATURE_BYTES]> for Signature {
 	Hash,
 )]
 pub struct Hash(pub [u8; HASH_BYTES]);
+impl Hash {
+	pub fn new(hash_slice: &[u8]) -> Self {
+		Hash(<[u8; HASH_BYTES]>::try_from(hash_slice).unwrap())
+	}
+}
 
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ParseHashError {
+	#[error("string decoded to wrong size for hash")]
+	WrongSize,
+	#[error("failed to decoded string to hash")]
+	Invalid,
+}
+
+#[cfg(test)]
+impl FromStr for Hash {
+	type Err = ParseHashError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		if s.len() > MAX_BASE58_LEN {
+			return Err(ParseHashError::WrongSize)
+		}
+		let bytes = bs58::decode(s).into_vec().map_err(|_| ParseHashError::Invalid)?;
+		if bytes.len() != std::mem::size_of::<Hash>() {
+			Err(ParseHashError::WrongSize)
+		} else {
+			Ok(Hash::new(&bytes))
+		}
+	}
+}
+
+#[cfg(test)]
 mod tests {
-	use super::*;
+
+	use core::str::FromStr;
+
+	use super::{
+		extra_types_for_testing::{Keypair, Signer},
+		system_instructions, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
+		Transaction,
+	};
+
+	// A custom program instruction. This would typically be defined in
+	// another crate so it can be shared between the on-chain program and
+	// the client.
+	#[derive(BorshSerialize, BorshDeserialize)]
+	enum BankInstruction {
+		Initialize,
+		Deposit { lamports: u64 },
+		Withdraw { lamports: u64 },
+	}
+
 	#[test]
 	fn create_simple_tx() {
-		// A custom program instruction. This would typically be defined in
-		// another crate so it can be shared between the on-chain program and
-		// the client.
-		#[derive(BorshSerialize, BorshDeserialize)]
-		enum BankInstruction {
-			Initialize,
-			Deposit { lamports: u64 },
-			Withdraw { lamports: u64 },
-		}
-
-		fn send_initialize_tx(
-			client: &RpcClient,
-			program_id: Pubkey,
-			payer: &Keypair,
-		) -> Result<()> {
+		fn send_initialize_tx(program_id: Pubkey, payer: &Keypair) -> Result<(), ()> {
 			let bank_instruction = BankInstruction::Initialize;
 
 			let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
 
 			let mut tx = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
-			let blockhash = client.get_latest_blockhash()?;
-			tx.sign(&[payer], blockhash);
-
+			//let blockhash = client.get_latest_blockhash()?;
+			tx.sign(&[payer], Default::default());
+			println!("tx:{:?}", tx);
 			Ok(())
 		}
 
 		// let client = RpcClient::new(String::new());
 		let program_id = Pubkey::new_unique();
 		let payer = Keypair::new();
-		send_initialize_tx(&client, program_id, &payer)?;
-		Ok::<(), anyhow::Error>(())
+		let _ = send_initialize_tx(program_id, &payer);
+	}
+
+	#[test]
+	fn create_nonced_transfer() {
+		let raw_keypair: [u8; 64] = [
+			6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81,
+			213, 117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18,
+			237, 198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115,
+			231, 67, 243, 229, 179, 134, 251,
+		];
+		let durable_nonce = Hash::from_str("F5HaggF8o2jESnoFi7sSdgy2qhz4amp3miev144Cfp49").unwrap();
+		let from_keypair = Keypair::from_bytes(&raw_keypair).unwrap();
+		let from_pubkey = from_keypair.pubkey();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
+		let instructions = [
+			system_instructions::advance_nonce_account(&nonce_account_pubkey, &from_pubkey),
+			system_instructions::transfer(&from_pubkey, &to_pubkey, 1000000000),
+		];
+		let message = Message::new(&instructions, Some(&from_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&from_keypair], durable_nonce);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01b0c5753a71484e74a73f01e8a373cd2170285afa09ecf83174de8701a469d150e195cc24ad915024614932248d1f036823d814545d6475df814dfaa7f85bd20301000205f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd4000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000d11cb0294f1fde6725b37bc3f341f5083378cb8f543019218dba6f9d53e12a920203030104000404000000030200020c0200000000ca9a3b00000000").to_vec();
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+		println!("tx:{:?}", hex::encode(serialized_tx));
 	}
 }
