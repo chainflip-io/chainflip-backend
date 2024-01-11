@@ -100,6 +100,12 @@ jobs:
           name: chainflip-node-runtime-try-runtime-ubuntu-22.04
           path: main-runtime
 
+      - name: Version of latest main
+        run: |
+          set -x
+          MAIN_VERSION=$(./main-bins/chainflip-node --version)
+          echo $MAIN_VERSION
+
       - name: Install node dependencies
         working-directory: bouncer
         run: pnpm install
