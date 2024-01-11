@@ -34,10 +34,16 @@ export async function submitRuntimeUpgradeWithRestrictions(
     versionPercentRestriction = undefined;
   }
 
+  let currentReleaseVersion = await chainflip.query.environment.currentReleaseVersion();
+  console.log("Current release version before is: " + currentReleaseVersion)
+
   console.log('Submitting runtime upgrade.');
   await submitGovernanceExtrinsic(
     chainflip.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
+
+  currentReleaseVersion = await chainflip.query.environment.currentReleaseVersion();
+  console.log("Current release version after is: " + currentReleaseVersion);
 
   console.log('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
 
