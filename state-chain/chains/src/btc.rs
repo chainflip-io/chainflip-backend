@@ -17,7 +17,7 @@ use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
-	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -177,6 +177,17 @@ impl BitcoinFeeInfo {
 
 	pub fn sats_per_kilobyte(&self) -> BtcAmount {
 		self.sats_per_kilobyte
+	}
+
+	pub fn fee_per_utxo(&self, utxo: &Utxo) -> BtcAmount {
+		if utxo.deposit_address.salt == 0 {
+			// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
+			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		} else {
+			// Our input utxos are approximately INPUT_UTXO_SIZE_IN_BYTES vbytes each in the Btc
+			// transaction
+			self.sats_per_kilobyte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
+		}
 	}
 
 	pub fn fee_per_input_utxo(&self) -> BtcAmount {
@@ -381,15 +392,6 @@ pub struct Utxo {
 	pub id: UtxoId,
 	pub amount: u64,
 	pub deposit_address: DepositAddress,
-}
-
-pub trait GetUtxoAmount {
-	fn amount(&self) -> u64;
-}
-impl GetUtxoAmount for Utxo {
-	fn amount(&self) -> u64 {
-		self.amount
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]

@@ -78,6 +78,13 @@ pub const DEFAULT_FEE_SATS_PER_KILOBYTE: u64 = 102400;
 // so we are rounding up to be on the safe side and set the UTXO size to 78 bytes
 pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 78;
 
+// We can spend vault UTOXs (utxos with salt=0) directly via the internal key
+// as opposed to using the script path. This saves some transaction costs, because
+// the witness data only consists of
+// 1 byte for the number of witness elements
+// 65 bytes for the signature
+pub const VAULT_UTXO_SIZE_IN_BYTES: u64 = 58;
+
 // An output contains:
 // 8 bytes for the amount
 // between 1 and 9 bytes for the length of the scriptPubKey
