@@ -5,6 +5,8 @@ import { ApiPromise } from '@polkadot/api';
 import { execSync } from 'child_process';
 import { compileBinaries } from './utils/compile_binaries';
 
+
+// TOOD: Fix: this is catching errors then printing success below - so even with errors here. the test can succeed.
 function tryRuntimeCommand(runtimePath: string, blockParam: string, networkUrl: string) {
   try {
     execSync(

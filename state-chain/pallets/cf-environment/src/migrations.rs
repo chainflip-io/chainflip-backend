@@ -15,8 +15,11 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		log::info!(
+			"Updating current release version to: {:?}",
+			<T as Config>::CurrentReleaseVersion::get()
+		);
 		Pallet::<T>::update_current_release_version();
-		panic!("checking this is run.");
 		frame_support::weights::Weight::zero()
 	}
 
@@ -25,6 +28,11 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 		frame_support::ensure!(
 			crate::CurrentReleaseVersion::<T>::get() == <T as Config>::CurrentReleaseVersion::get(),
 			"Expect storage to be the new version after upgrade."
+		);
+
+		log::info!(
+			"Successfully upgraded to version {:?}",
+			crate::CurrentReleaseVersion::<T>::get()
 		);
 
 		Ok(())

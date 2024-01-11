@@ -14,7 +14,7 @@
 // Optional args:
 // --last-n <number>: If block is lastN, this is the number of blocks to run the migration on. Default is 50.
 // --compile: If set, it will compile the runtime to do the upgrade. If false it will use the pre-compiled runtime. Defaults to false.
-// --runtimePath: Path to the runtime wasm file. Defaults to ./target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm
+// --runtime: Path to the runtime wasm file. Defaults to ./target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm
 
 import path from 'path';
 import yargs from 'yargs';
