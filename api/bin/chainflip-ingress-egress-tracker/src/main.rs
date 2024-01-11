@@ -119,6 +119,7 @@ enum WitnessInformation {
 		asset: WitnessAsset,
 	},
 	Broadcast {
+		#[serde(skip_serializing)]
 		broadcast_id: BroadcastId,
 		tx_out_id: TransactionId,
 	},

@@ -2,4 +2,4 @@
 source: api/bin/chainflip-ingress-egress-tracker/src/main.rs
 expression: "store.storage.get(\"broadcast:Ethereum:1\").unwrap()"
 ---
-{"broadcast_id":1,"tx_out_id":{"deposit_chain":"Ethereum","signature":{"k_times_g_address":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"s":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"type":"broadcast"}
+{"tx_out_id":{"deposit_chain":"Ethereum","signature":{"k_times_g_address":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"s":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"type":"broadcast"}
