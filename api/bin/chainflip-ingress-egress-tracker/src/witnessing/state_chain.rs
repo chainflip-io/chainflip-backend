@@ -89,6 +89,13 @@ impl Storable for WitnessInformation {
 			},
 		}
 	}
+
+	fn get_expiry_duration(&self) -> std::time::Duration {
+		match self.to_foreign_chain() {
+			ForeignChain::Bitcoin => std::time::Duration::from_secs(3600 * 6),
+			_ => Self::DEFAULT_EXPIRY_DURATION,
+		}
+	}
 }
 
 type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber, NetworkEnvironment);
