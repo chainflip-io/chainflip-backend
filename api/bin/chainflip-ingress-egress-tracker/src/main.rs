@@ -19,7 +19,7 @@ use pallet_cf_ingress_egress::DepositWitness;
 use redis::{aio::MultiplexedConnection, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::PalletInstanceAlias;
-use std::{collections::HashMap, env, ops::Deref};
+use std::{collections::HashMap, env, ops::Deref, time::Duration};
 use tracing::log;
 use utilities::{rpc::NumberOrHex, task_scope};
 
@@ -39,7 +39,7 @@ struct RedisStore {
 }
 
 impl RedisStore {
-	const REDIS_EXPIRY_IN_SECONDS: u64 = 3600;
+	const EXPIRY_TIME: Duration = Duration::from_secs(3600);
 
 	fn new(con: MultiplexedConnection) -> Self {
 		Self { con }
@@ -53,7 +53,7 @@ impl Store for RedisStore {
 	async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
 		let key = storable.get_key();
 		self.con.rpush(&key, serde_json::to_string(storable)?).await?;
-		self.con.expire(key, Self::REDIS_EXPIRY_IN_SECONDS as i64).await?;
+		self.con.expire(key, Self::EXPIRY_TIME.as_secs() as i64).await?;
 
 		Ok(())
 	}
@@ -63,7 +63,7 @@ impl Store for RedisStore {
 			.set_ex(
 				storable.get_key(),
 				serde_json::to_string(storable)?,
-				Self::REDIS_EXPIRY_IN_SECONDS,
+				Self::EXPIRY_TIME.as_secs(),
 			)
 			.await?;
 
@@ -74,14 +74,6 @@ impl Store for RedisStore {
 #[async_trait]
 pub trait Storable: Serialize + Sized + Sync + 'static {
 	fn get_key(&self) -> String;
-
-	async fn save_to_array<S: Store>(&self, store: &mut S) -> anyhow::Result<S::Output> {
-		store.save_to_array(self).await
-	}
-
-	async fn save_singleton<S: Store>(&self, store: &mut S) -> anyhow::Result<S::Output> {
-		store.save_singleton(self).await
-	}
 }
 
 #[derive(Serialize)]
@@ -92,49 +84,20 @@ struct WitnessAsset {
 
 impl From<cf_chains::assets::eth::Asset> for WitnessAsset {
 	fn from(asset: cf_chains::assets::eth::Asset) -> Self {
-		match asset {
-			cf_chains::assets::eth::Asset::Eth |
-			cf_chains::assets::eth::Asset::Flip |
-			cf_chains::assets::eth::Asset::Usdc =>
-				Self { chain: ForeignChain::Ethereum, asset: asset.into() },
-		}
+		Self { chain: ForeignChain::Ethereum, asset: asset.into() }
 	}
 }
 
 impl From<cf_chains::assets::dot::Asset> for WitnessAsset {
 	fn from(asset: cf_chains::assets::dot::Asset) -> Self {
-		match asset {
-			cf_chains::assets::dot::Asset::Dot =>
-				Self { chain: ForeignChain::Polkadot, asset: asset.into() },
-		}
+		Self { chain: ForeignChain::Polkadot, asset: asset.into() }
 	}
 }
 
 impl From<cf_chains::assets::btc::Asset> for WitnessAsset {
 	fn from(asset: cf_chains::assets::btc::Asset) -> Self {
-		match asset {
-			cf_chains::assets::btc::Asset::Btc =>
-				Self { chain: ForeignChain::Bitcoin, asset: asset.into() },
-		}
+		Self { chain: ForeignChain::Bitcoin, asset: asset.into() }
 	}
-}
-
-trait ToChainStr {
-	fn to_chain_str(&self) -> &'static str;
-}
-
-impl ToChainStr for ForeignChain {
-	fn to_chain_str(&self) -> &'static str {
-		match self {
-			ForeignChain::Ethereum => "ethereum",
-			ForeignChain::Polkadot => "polkadot",
-			ForeignChain::Bitcoin => "bitcoin",
-		}
-	}
-}
-
-trait ToForeignChain {
-	fn to_foreign_chain(&self) -> ForeignChain;
 }
 
 #[derive(Serialize)]
@@ -143,16 +106,6 @@ enum TransactionId {
 	Bitcoin { hash: String },
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: String },
-}
-
-impl ToForeignChain for TransactionId {
-	fn to_foreign_chain(&self) -> ForeignChain {
-		match self {
-			Self::Bitcoin { .. } => ForeignChain::Bitcoin,
-			Self::Ethereum { .. } => ForeignChain::Ethereum,
-			Self::Polkadot { .. } => ForeignChain::Polkadot,
-		}
-	}
 }
 
 #[derive(Serialize)]
@@ -171,18 +124,22 @@ enum WitnessInformation {
 	},
 }
 
-impl ToForeignChain for WitnessInformation {
+impl WitnessInformation {
 	fn to_foreign_chain(&self) -> ForeignChain {
 		match self {
 			Self::Deposit { asset, .. } => asset.chain,
-			Self::Broadcast { tx_out_id, .. } => tx_out_id.to_foreign_chain(),
+			Self::Broadcast { tx_out_id, .. } => match tx_out_id {
+				TransactionId::Bitcoin { .. } => ForeignChain::Bitcoin,
+				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
+				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
+			},
 		}
 	}
 }
 
 impl Storable for WitnessInformation {
 	fn get_key(&self) -> String {
-		let chain = self.to_foreign_chain().to_chain_str();
+		let chain = self.to_foreign_chain().to_string();
 
 		match self {
 			Self::Deposit { deposit_address, .. } => {
@@ -377,8 +334,12 @@ where
 			block_height,
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Ethereum>> {
-				WitnessInformation::from((witness, block_height, chainflip_network))
-					.save_to_array(store)
+				store
+					.save_to_array(&WitnessInformation::from((
+						witness,
+						block_height,
+						chainflip_network,
+					)))
 					.await?;
 			},
 		BitcoinIngressEgress(IngressEgressCall::process_deposits {
@@ -386,8 +347,12 @@ where
 			block_height,
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Bitcoin>> {
-				WitnessInformation::from((witness, block_height, chainflip_network))
-					.save_to_array(store)
+				store
+					.save_to_array(&WitnessInformation::from((
+						witness,
+						block_height,
+						chainflip_network,
+					)))
 					.await?;
 			},
 		PolkadotIngressEgress(IngressEgressCall::process_deposits {
@@ -395,8 +360,12 @@ where
 			block_height,
 		}) =>
 			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-				WitnessInformation::from((witness, block_height, chainflip_network))
-					.save_to_array(store)
+				store
+					.save_to_array(&WitnessInformation::from((
+						witness,
+						block_height,
+						chainflip_network,
+					)))
 					.await?;
 			},
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
@@ -405,12 +374,12 @@ where
 					.await;
 
 			if let Some(broadcast_id) = broadcast_id {
-				WitnessInformation::Broadcast {
-					broadcast_id,
-					tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
-				}
-				.save_singleton(store)
-				.await?;
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
+					})
+					.await?;
 			}
 		},
 		BitcoinBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
@@ -418,14 +387,14 @@ where
 				get_broadcast_id::<Bitcoin, StateChainClient>(state_chain_client, &tx_out_id).await;
 
 			if let Some(broadcast_id) = broadcast_id {
-				WitnessInformation::Broadcast {
-					broadcast_id,
-					tx_out_id: TransactionId::Bitcoin {
-						hash: format!("0x{}", hex::encode(tx_out_id)),
-					},
-				}
-				.save_singleton(store)
-				.await?;
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Bitcoin {
+							hash: format!("0x{}", hex::encode(tx_out_id)),
+						},
+					})
+					.await?;
 			}
 		},
 		PolkadotBroadcaster(BroadcastCall::transaction_succeeded { tx_out_id, .. }) => {
@@ -434,14 +403,14 @@ where
 					.await;
 
 			if let Some(broadcast_id) = broadcast_id {
-				WitnessInformation::Broadcast {
-					broadcast_id,
-					tx_out_id: TransactionId::Polkadot {
-						signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
-					},
-				}
-				.save_singleton(store)
-				.await?;
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Polkadot {
+							signature: format!("0x{}", hex::encode(tx_out_id.aliased_ref())),
+						},
+					})
+					.await?;
 			}
 		},
 
@@ -492,7 +461,7 @@ async fn start(
 		.expect("setting default subscriber failed");
 
 	let client = redis::Client::open(settings.redis_url.clone()).unwrap();
-	let mut con = RedisStore::new(client.get_multiplexed_tokio_connection().await?);
+	let mut store = RedisStore::new(client.get_multiplexed_tokio_connection().await?);
 
 	// Broadcast channel will drop old messages when the buffer is full to
 	// avoid "memory leaks" due to slow receivers.
@@ -503,11 +472,11 @@ async fn start(
 	let (state_chain_client, env_params) =
 		witnessing::start(scope, settings.clone(), witness_sender.clone()).await?;
 	let btc_network = env_params.chainflip_network.into();
-	witnessing::btc_mempool::start(scope, settings.btc, con.clone(), btc_network);
+	witnessing::btc_mempool::start(scope, settings.btc, store.clone(), btc_network);
 	let mut witness_receiver = witness_sender.subscribe();
 
 	while let Ok(call) = witness_receiver.recv().await {
-		handle_call(call, &mut con, env_params.chainflip_network, state_chain_client.deref())
+		handle_call(call, &mut store, env_params.chainflip_network, state_chain_client.deref())
 			.await?
 	}
 
@@ -753,13 +722,13 @@ mod tests {
 		println!("{:?}", store.storage);
 		insta::assert_display_snapshot!(store
 			.storage
-			.get(format!("deposit:ethereum:{}", eth_address_str1.to_lowercase()).as_str())
+			.get(format!("deposit:Ethereum:{}", eth_address_str1.to_lowercase()).as_str())
 			.unwrap());
 		insta::assert_display_snapshot!(store
 			.storage
 			.get(
 				format!(
-					"deposit:polkadot:{}",
+					"deposit:Polkadot:{}",
 					format!("0x{}", hex::encode(polkadot_account_id.aliased_ref()))
 				)
 				.as_str()
@@ -767,7 +736,7 @@ mod tests {
 			.unwrap());
 		insta::assert_display_snapshot!(store
 			.storage
-			.get(format!("deposit:ethereum:{}", eth_address_str2.to_lowercase()).as_str())
+			.get(format!("deposit:Ethereum:{}", eth_address_str2.to_lowercase()).as_str())
 			.unwrap());
 
 		handle_call(
@@ -791,7 +760,7 @@ mod tests {
 		assert_eq!(store.storage.len(), 3);
 		insta::assert_display_snapshot!(store
 			.storage
-			.get(format!("deposit:ethereum:{}", eth_address_str1.to_lowercase()).as_str())
+			.get(format!("deposit:Ethereum:{}", eth_address_str1.to_lowercase()).as_str())
 			.unwrap());
 	}
 
@@ -825,6 +794,6 @@ mod tests {
 		.expect("failed to handle call");
 
 		assert_eq!(store.storage.len(), 1);
-		insta::assert_display_snapshot!(store.storage.get("broadcast:ethereum:1").unwrap());
+		insta::assert_display_snapshot!(store.storage.get("broadcast:Ethereum:1").unwrap());
 	}
 }

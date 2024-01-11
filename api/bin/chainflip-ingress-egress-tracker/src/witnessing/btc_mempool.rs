@@ -1,4 +1,4 @@
-use crate::{Storable, Store, ToChainStr};
+use crate::{Storable, Store};
 use bitcoin::{Amount, BlockHash, Network, ScriptBuf, Transaction, Txid};
 use cf_chains::btc::BitcoinNetwork;
 use cf_primitives::ForeignChain;
@@ -26,7 +26,7 @@ pub struct QueryResult {
 
 impl Storable for QueryResult {
 	fn get_key(&self) -> String {
-		let chain = ForeignChain::Bitcoin.to_chain_str();
+		let chain = ForeignChain::Bitcoin.to_string();
 		format!("confirmations:{chain}:{}", self.destination)
 	}
 }
@@ -160,7 +160,7 @@ async fn update_cache<T: BtcRpcApi>(
 pub fn start<S: Store>(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	endpoint: HttpBasicAuthEndpoint,
-	mut con: S,
+	mut store: S,
 	btc_network: BitcoinNetwork,
 ) {
 	scope.spawn({
@@ -182,7 +182,7 @@ pub fn start<S: Store>(
 						cache = updated_cache;
 
 						for query_result in cache.transactions.values() {
-							query_result.save_singleton(&mut con).await?;
+							store.save_singleton(query_result).await?;
 						}
 					},
 					Err(err) => {
@@ -400,7 +400,6 @@ mod tests {
 		let blocks = init_blocks();
 		let btc = MockBtcRpc { mempool, latest_block_hash: i_to_block_hash(15), blocks };
 		let cache: Cache = Default::default();
-		// let mut store = MockStore::default();
 		let cache = update_cache(&btc, cache, Network::Bitcoin).await.unwrap();
 		assert_eq!(cache.transactions.len(), 2);
 		assert!(cache.transactions.contains_key(&address1));
