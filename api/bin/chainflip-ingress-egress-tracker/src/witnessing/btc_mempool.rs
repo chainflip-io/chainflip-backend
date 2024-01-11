@@ -29,6 +29,10 @@ impl Storable for QueryResult {
 		let chain = ForeignChain::Bitcoin.to_string();
 		format!("confirmations:{chain}:{}", self.destination)
 	}
+
+	fn get_expiry_duration(&self) -> Duration {
+		Duration::from_secs(60)
+	}
 }
 
 fn script_to_address(script: &ScriptBuf, btc_network: Network) -> Option<String> {

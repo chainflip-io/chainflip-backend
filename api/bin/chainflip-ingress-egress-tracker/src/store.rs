@@ -17,8 +17,6 @@ pub struct RedisStore {
 }
 
 impl RedisStore {
-	const EXPIRY_TIME: Duration = Duration::from_secs(3600);
-
 	pub fn new(con: MultiplexedConnection) -> Self {
 		Self { con }
 	}
@@ -31,7 +29,7 @@ impl Store for RedisStore {
 	async fn save_to_array<S: Storable>(&mut self, storable: &S) -> anyhow::Result<()> {
 		let key = storable.get_key();
 		self.con.rpush(&key, serde_json::to_string(storable)?).await?;
-		self.con.expire(key, Self::EXPIRY_TIME.as_secs() as i64).await?;
+		self.con.expire(key, storable.get_expiry_duration().as_secs() as i64).await?;
 
 		Ok(())
 	}
@@ -41,7 +39,7 @@ impl Store for RedisStore {
 			.set_ex(
 				storable.get_key(),
 				serde_json::to_string(storable)?,
-				Self::EXPIRY_TIME.as_secs(),
+				storable.get_expiry_duration().as_secs(),
 			)
 			.await?;
 
@@ -51,5 +49,11 @@ impl Store for RedisStore {
 
 #[async_trait]
 pub trait Storable: Serialize + Sized + Sync + 'static {
+	const DEFAULT_EXPIRY_DURATION: Duration = Duration::from_secs(3600);
+
 	fn get_key(&self) -> String;
+
+	fn get_expiry_duration(&self) -> Duration {
+		Self::DEFAULT_EXPIRY_DURATION
+	}
 }
