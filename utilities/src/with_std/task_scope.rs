@@ -791,49 +791,49 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_unwrap_or_cancel() {
-		crate::assert_future_panics!(async { Option::<()>::None }.unwrap_or_cancel());
-		crate::assert_future_panics!(async { Result::<(), ()>::Err(()) }.unwrap_or_cancel());
+		async fn inner<T: Unwrappable + Clone>(some: T, none: T)
+		where
+			T::Item: Debug,
+		{
+			crate::assert_future_panics!(async { none.clone() }.unwrap_or_cancel());
 
-		let shorter_than_timeout: std::time::Duration = UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(0.5f64);
+			let shorter_than_timeout: std::time::Duration =
+				UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(0.5f64);
 
-		crate::assert_err!(
-			tokio::time::timeout(
-				shorter_than_timeout,
-				async { Option::<()>::None }.unwrap_or_cancel()
-			)
-			.await
-		);
-		crate::assert_err!(
-			tokio::time::timeout(
-				shorter_than_timeout,
-				async { Result::<(), ()>::Err(()) }.unwrap_or_cancel()
-			)
-			.await
-		);
+			crate::assert_err!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { none.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
 
-		let longer_than_timeout: std::time::Duration = UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(2.0f64);
+			let longer_than_timeout: std::time::Duration = UNWRAP_OR_CANCEL_TIMEOUT.mul_f64(2.0f64);
 
-		crate::assert_future_panics!(tokio::time::timeout(
-			longer_than_timeout,
-			async { Option::<()>::None }.unwrap_or_cancel()
-		));
-		crate::assert_future_panics!(tokio::time::timeout(
-			longer_than_timeout,
-			async { Result::<(), ()>::Err(()) }.unwrap_or_cancel()
-		));
+			crate::assert_future_panics!(tokio::time::timeout(
+				longer_than_timeout,
+				async { none.clone() }.unwrap_or_cancel()
+			));
 
-		async { Some(()) }.unwrap_or_cancel().await;
-		async { Result::<(), ()>::Ok(()) }.unwrap_or_cancel().await;
+			async { some.clone() }.unwrap_or_cancel().await;
 
-		crate::assert_ok!(
-			tokio::time::timeout(shorter_than_timeout, async { Some(()) }.unwrap_or_cancel()).await
-		);
-		crate::assert_ok!(
-			tokio::time::timeout(
-				shorter_than_timeout,
-				async { Result::<(), ()>::Ok(()) }.unwrap_or_cancel()
-			)
-			.await
-		);
+			crate::assert_ok!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { some.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+			crate::assert_ok!(
+				tokio::time::timeout(
+					shorter_than_timeout,
+					async { some.clone() }.unwrap_or_cancel()
+				)
+				.await
+			);
+		}
+
+		inner(Some(()), None).await;
+		inner(Ok(()), Err(())).await;
 	}
 }
