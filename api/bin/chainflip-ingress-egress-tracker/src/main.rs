@@ -612,6 +612,7 @@ mod tests {
 		}
 	}
 
+	#[allow(clippy::type_complexity)]
 	fn create_client<I>(
 		result: Option<(
 			BroadcastId,
