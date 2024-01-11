@@ -1196,7 +1196,7 @@ dependencies = [
  "frame-support",
  "hex",
  "hex-literal",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
