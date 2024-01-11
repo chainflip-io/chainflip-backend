@@ -134,7 +134,7 @@ jobs:
         id: post-upgrade-bouncer
         working-directory: bouncer
         run: |
-          ./run-no-setup.sh
+          ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs
         if: failure()
