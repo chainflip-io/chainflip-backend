@@ -8,6 +8,7 @@
 // print the validator IDs and vanity of the one not witnessing it.
 // In order to obtain the hash you can use PolkaJS to construct the transaction that was supposed to be witnessed. You might need some external data to do so.
 // Go to PolkaJS > Developer > Extrinsic
+// from there, once you built the extrinsic you need the encoded call hash
 
 // For example: ./commands/check_witnesses.ts ETH
 // will wait for the next chainStateUpdate extrinsic for ethereum and after some blocks (2) it will check how many validator witnessed it
