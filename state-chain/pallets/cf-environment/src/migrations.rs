@@ -16,6 +16,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		Pallet::<T>::update_current_release_version();
+		panic!("checking this is run.");
 		frame_support::weights::Weight::zero()
 	}
 
