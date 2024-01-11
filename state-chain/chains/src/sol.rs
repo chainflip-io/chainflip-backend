@@ -7,9 +7,6 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 #[cfg(test)]
 use extra_types_for_testing::{SignerError, Signers, TransactionError};
-
-#[cfg(test)]
-pub mod atomic_u64;
 #[cfg(test)]
 pub mod extra_types_for_testing;
 #[cfg(test)]
@@ -589,21 +586,6 @@ pub struct CompiledInstruction {
 
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Ord, PartialOrd, Copy)]
 pub struct Pubkey(pub [u8; 32]);
-#[cfg(test)]
-impl Pubkey {
-	/// unique Pubkey for tests and benchmarks.
-	pub fn new_unique() -> Self {
-		use crate::sol::atomic_u64::AtomicU64;
-		static I: AtomicU64 = AtomicU64::new(1);
-
-		let mut b = [0u8; 32];
-		let i = I.fetch_add(1);
-		// use big endian representation to ensure that recent unique pubkeys
-		// are always greater than less recent unique pubkeys
-		b[0..8].copy_from_slice(&i.to_be_bytes());
-		Self::from(b)
-	}
-}
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
@@ -751,7 +733,7 @@ mod tests {
 		}
 
 		// let client = RpcClient::new(String::new());
-		let program_id = Pubkey::new_unique();
+		let program_id = Pubkey([0u8; 32]);
 		let payer = Keypair::new();
 		let _ = send_initialize_tx(program_id, &payer);
 	}
