@@ -141,6 +141,7 @@ where
 			if let Some(output) = Unwrappable::__internal_to_option(ready!(f.poll(cx))) {
 				return Poll::Ready(output)
 			} else {
+				// Avoids possible deadlocks during sleep (And avoids polling again after ready)
 				this.f.set(None);
 			}
 		}
@@ -149,6 +150,7 @@ where
 			this.timeout.set(Some(tokio::time::sleep(UNWRAP_OR_CANCEL_TIMEOUT)));
 		}
 		ready!(this.timeout.as_pin_mut().unwrap().poll(cx));
+		// We only reach this panic if the sleep is ready/ended
 		panic!("Expected task to be cancelled due to another task's failure, but it was not cancelled within {UNWRAP_OR_CANCEL_TIMEOUT:?}");
 	}
 }
