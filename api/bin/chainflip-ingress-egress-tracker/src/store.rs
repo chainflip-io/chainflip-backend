@@ -47,7 +47,6 @@ impl Store for RedisStore {
 	}
 }
 
-#[async_trait]
 pub trait Storable: Serialize + Sized + Sync + 'static {
 	const DEFAULT_EXPIRY_DURATION: Duration = Duration::from_secs(3600);
 
