@@ -386,9 +386,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			// for (asset, min) in &self.minimum_swap_amounts {
-			// 	MinimumSwapAmount::<T>::insert(asset, min);
-			// }
+			for (asset, min) in &self.minimum_swap_amounts {
+				MinimumSwapAmount::<T>::insert(asset, min);
+			}
 		}
 	}
 
