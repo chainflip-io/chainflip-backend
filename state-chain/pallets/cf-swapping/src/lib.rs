@@ -450,6 +450,8 @@ pub mod pallet {
 										asset: swap.to,
 										amount: egress_amount,
 									});
+								} else {
+									log::warn!("EgressSwallowed [id: {:?}; {:?} => {:?}; deposit-amt: {:?}]", swap.swap_id, swap.from, swap.to, swap.amount);
 								},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(
