@@ -1,9 +1,13 @@
-use super::{vec, AccountMeta, FromStr, Instruction, Pubkey};
+use super::{
+	vec, vec::Vec, AccountMeta, FromStr, Instruction, Pubkey, SYSTEM_PROGRRAM_ID, VAULT_PROGRAM,
+};
+use borsh::{BorshDeserialize, BorshSerialize};
+use frame_support::sp_io::hashing::sha2_256;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum SystemInstruction {
+pub enum SystemProgramInstruction {
 	/// Create a new account
 	///
 	/// # Account references
@@ -175,35 +179,63 @@ pub enum SystemInstruction {
 	UpgradeNonceAccount,
 }
 
-pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
-	let account_metas = vec![
-		AccountMeta::new(*nonce_pubkey, false),
-		// the public key for RecentBlockhashes system variable.
-		//
-		// NOTE: According to the solana sdk, this system variable is deprecated and should not be
-		// used. However, within the sdk itself they are still using this variable in the
-		// advance_nonce_account function so we use it here aswell. This should be revisited to
-		// make sure it is ok to use it, or if there is another way to advance the nonce account.
-		AccountMeta::new_readonly(
-			Pubkey::from_str("SysvarRecentB1ockHashes11111111111111111111").unwrap(),
-			false,
-		),
-		AccountMeta::new_readonly(*authorized_pubkey, true),
-	];
-	Instruction::new_with_bincode(
-		// program id of the system program
-		Pubkey::from_str("11111111111111111111111111111111").unwrap(),
-		&SystemInstruction::AdvanceNonceAccount,
-		account_metas,
-	)
+impl SystemProgramInstruction {
+	pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) -> Instruction {
+		let account_metas = vec![
+			AccountMeta::new(*nonce_pubkey, false),
+			// the public key for RecentBlockhashes system variable.
+			//
+			// NOTE: According to the solana sdk, this system variable is deprecated and should not
+			// be used. However, within the sdk itself they are still using this variable in the
+			// advance_nonce_account function so we use it here aswell. This should be revisited to
+			// make sure it is ok to use it, or if there is another way to advance the nonce
+			// account.
+			AccountMeta::new_readonly(
+				Pubkey::from_str("SysvarRecentB1ockHashes11111111111111111111").unwrap(),
+				false,
+			),
+			AccountMeta::new_readonly(*authorized_pubkey, true),
+		];
+		Instruction::new_with_bincode(
+			// program id of the system program
+			Pubkey::from_str(SYSTEM_PROGRRAM_ID).unwrap(),
+			&Self::AdvanceNonceAccount,
+			account_metas,
+		)
+	}
+
+	pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
+		let account_metas =
+			vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
+		Instruction::new_with_bincode(
+			Pubkey::from_str(SYSTEM_PROGRRAM_ID).unwrap(),
+			&Self::Transfer { lamports },
+			account_metas,
+		)
+	}
 }
 
-pub fn transfer(from_pubkey: &Pubkey, to_pubkey: &Pubkey, lamports: u64) -> Instruction {
-	let account_metas =
-		vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
-	Instruction::new_with_bincode(
-		Pubkey::from_str("11111111111111111111111111111111").unwrap(),
-		&SystemInstruction::Transfer { lamports },
-		account_metas,
-	)
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
+pub enum VaultProgram {
+	FetchSol { seed: Vec<u8>, bump: u8 },
+}
+
+impl VaultProgram {
+	pub fn get_instruction(self, accounts: Vec<AccountMeta>) -> Instruction {
+		let mut instruction =
+			Instruction::new_with_borsh(Pubkey::from_str(VAULT_PROGRAM).unwrap(), &self, accounts);
+		instruction.data.remove(0);
+		let mut data =
+			sha2_256((String::from_str("global:").unwrap() + self.call_name()).as_bytes())[..8]
+				.to_vec();
+		data.append(&mut instruction.data);
+		instruction.data = data;
+		instruction
+	}
+
+	pub fn call_name(&self) -> &str {
+		match self {
+			Self::FetchSol { seed: _, bump: _ } => "fetch_sol",
+		}
+	}
 }

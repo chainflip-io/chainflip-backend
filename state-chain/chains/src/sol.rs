@@ -12,13 +12,18 @@ pub mod extra_types_for_testing;
 #[cfg(test)]
 use thiserror::Error;
 
+use self::program_instructions::SystemProgramInstruction;
+
+pub mod program_instructions;
 pub mod short_vec;
-pub mod system_instructions;
 
 pub const SIGNATURE_BYTES: usize = 64;
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded pubkey
 const MAX_BASE58_LEN: usize = 44;
+pub const SYSTEM_PROGRRAM_ID: &str = "11111111111111111111111111111111";
+pub const VAULT_PROGRAM: &str = "632bJHVLPj6XPLVgrabFwxogtAQQ5zb8hwm9zqZuCcHo";
+pub const SYS_VAR_RECENT_BLOCKHASHES: &str = "SysvarRecentB1ockHashes11111111111111111111";
 
 /// An atomically-commited sequence of instructions.
 ///
@@ -407,7 +412,7 @@ impl Message {
 		nonce_account_pubkey: &Pubkey,
 		nonce_authority_pubkey: &Pubkey,
 	) -> Self {
-		let nonce_ix = system_instructions::advance_nonce_account(
+		let nonce_ix = SystemProgramInstruction::advance_nonce_account(
 			nonce_account_pubkey,
 			nonce_authority_pubkey,
 		);
@@ -702,21 +707,29 @@ mod tests {
 
 	use core::str::FromStr;
 
-	use super::{
-		extra_types_for_testing::{Keypair, Signer},
-		system_instructions, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
-		Transaction,
+	use crate::sol::{
+		program_instructions::{SystemProgramInstruction, VaultProgram},
+		BorshDeserialize, BorshSerialize, SYSTEM_PROGRRAM_ID,
 	};
 
-	// A custom program instruction. This would typically be defined in
-	// another crate so it can be shared between the on-chain program and
-	// the client.
+	use super::{
+		extra_types_for_testing::{Keypair, Signer},
+		AccountMeta, Hash, Instruction, Message, Pubkey, Transaction,
+	};
+
 	#[derive(BorshSerialize, BorshDeserialize)]
 	enum BankInstruction {
 		Initialize,
 		Deposit { lamports: u64 },
 		Withdraw { lamports: u64 },
 	}
+
+	const RAW_KEYPAIR: [u8; 64] = [
+		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,
+		117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18, 237,
+		198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115, 231, 67,
+		243, 229, 179, 134, 251,
+	];
 
 	#[test]
 	fn create_simple_tx() {
@@ -740,21 +753,15 @@ mod tests {
 
 	#[test]
 	fn create_nonced_transfer() {
-		let raw_keypair: [u8; 64] = [
-			6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81,
-			213, 117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140, 247, 157, 94, 2, 111, 18,
-			237, 198, 68, 58, 83, 75, 44, 221, 80, 114, 35, 57, 137, 180, 21, 215, 89, 101, 115,
-			231, 67, 243, 229, 179, 134, 251,
-		];
 		let durable_nonce = Hash::from_str("F5HaggF8o2jESnoFi7sSdgy2qhz4amp3miev144Cfp49").unwrap();
-		let from_keypair = Keypair::from_bytes(&raw_keypair).unwrap();
+		let from_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let from_pubkey = from_keypair.pubkey();
 		let nonce_account_pubkey =
 			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
 		let to_pubkey = Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
 		let instructions = [
-			system_instructions::advance_nonce_account(&nonce_account_pubkey, &from_pubkey),
-			system_instructions::transfer(&from_pubkey, &to_pubkey, 1000000000),
+			SystemProgramInstruction::advance_nonce_account(&nonce_account_pubkey, &from_pubkey),
+			SystemProgramInstruction::transfer(&from_pubkey, &to_pubkey, 1000000000),
 		];
 		let message = Message::new(&instructions, Some(&from_pubkey));
 		let mut tx = Transaction::new_unsigned(message);
@@ -765,5 +772,61 @@ mod tests {
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		println!("tx:{:?}", hex::encode(serialized_tx));
+	}
+
+	#[ignore]
+	#[test]
+	fn create_nonced_fetch() {
+		let durable_nonce = Hash::from_str("7EWjChCjKeX1izPeCfaXfmrhPETBrgjwfJ7JJTU6rvxv").unwrap();
+		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let vault_account_pubkey = vault_account.pubkey();
+		let nonce_account_pubkey =
+			Pubkey::from_str("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw").unwrap();
+		let data_account_pubkey =
+			Pubkey::from_str("5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC").unwrap();
+		let pda = Pubkey::from_str("FezduHnFMTMTiZuWLgGwrbGmzeeRZytzDPQA2kF8Atqx").unwrap();
+		//let to_pubkey =
+		// Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
+
+		let instructions = [
+			SystemProgramInstruction::advance_nonce_account(
+				&nonce_account_pubkey,
+				&vault_account_pubkey,
+			),
+			VaultProgram::get_instruction(
+				VaultProgram::FetchSol { seed: vec![1u8, 2u8, 3u8], bump: 255 },
+				vec![
+					AccountMeta::new_readonly(data_account_pubkey, false),
+					AccountMeta::new_readonly(vault_account_pubkey, true),
+					AccountMeta::new(pda, false),
+					AccountMeta::new(vault_account_pubkey, false),
+					AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRRAM_ID).unwrap(), false),
+				],
+			),
+		];
+		let message = Message::new(&instructions, Some(&vault_account_pubkey));
+		let mut tx = Transaction::new_unsigned(message);
+		tx.sign(&[&vault_account], durable_nonce);
+		println!("{:?}", tx);
+
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01efefce39e387a38ab83a7c21fbd75da4b836be6acbc15ec62f3b5b4d1070ca4e49498332dbe0fbec8a806cdb28f610c40a80c9ef97e83af0a95bb46f8c1e0c0201000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192d9bf46c241ddb58f1c4141c19dee9a8b3cf064c11d6ba6524886e82a4e6a3d1b000000000000000000000000000000000000000000000000000000000000000049f4e96507a68c8d673696ffd7e551091e62a0a603c6585b79d8707f807238654acf654557d0c27ec71e80b3ed7d0a6f7baa05717b5bf6060e6b9e6f5d3a553206a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000e97d67891def127bca1afa970660f49e245ad069226ffae44a5ccc7001bec73502030301060004040000000505040002000310bd9939fa08c006ec03000000010203ff").to_vec();
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
+	#[test]
+	fn playground() {
+		println!(
+			"{:?}",
+			hex::encode(
+				VaultProgram::get_instruction(
+					VaultProgram::FetchSol { seed: vec![1u8, 2u8, 3u8], bump: 255 },
+					vec![],
+				)
+				.data
+			)
+		)
 	}
 }
