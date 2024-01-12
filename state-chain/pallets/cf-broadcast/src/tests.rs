@@ -110,20 +110,8 @@ impl MockCfe {
 	fn process_event(event: RuntimeEvent) {
 		match event {
 			RuntimeEvent::Broadcaster(broadcast_event) => match broadcast_event {
-				BroadcastEvent::TransactionBroadcastRequest { .. } => {
-					// Legacy event (used to be consumed by the CFE)
-				},
-				BroadcastEvent::BroadcastSuccess { .. } => {
-					// Informational only. no action required by the CFE.
-				},
-				BroadcastEvent::BroadcastRetryScheduled { .. } => {
-					// Informational only. No action required by the CFE.
-				},
 				BroadcastEvent::BroadcastTimeout { broadcast_id } =>
 					TIMEDOUT_ATTEMPTS.with(|cell| cell.borrow_mut().push(broadcast_id)),
-				BroadcastEvent::BroadcastAborted { .. } => {
-					// Informational only. No action required by the CFE.
-				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 				_ => {},
 			},
