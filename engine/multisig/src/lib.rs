@@ -14,12 +14,9 @@ pub mod client;
 mod crypto;
 
 /// Maximum number of payloads in a single bitcoin signing ceremony
-// We choose 5000 because the maximum size of a Bitcoin block is 1MB.
-// The average size of a transaction is around 500 bytes, however, historically
-// this was 250 bytes. See this thread: https://bitcoin.stackexchange.com/q/31974/109777.
-// Given we only accept a single UTXO in each of these transactions, the maximum number of signing
-// payloads we'd ever have to do in a single block is approximately 4000.
-pub const MAX_BTC_SIGNING_PAYLOADS: usize = 4000;
+// We choose 20,000 because this is approaching the theoretical maximum number of UTXOs in a single
+// Bitcoin block.
+pub const MAX_BTC_SIGNING_PAYLOADS: usize = 20_000;
 
 pub mod p2p {
 	use cf_primitives::AccountId;
