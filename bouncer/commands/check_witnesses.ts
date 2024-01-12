@@ -16,6 +16,8 @@
 import { blake2AsHex } from '@polkadot/util-crypto';
 import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
+// this function is required because passing through integer and then converting to binary is not feasible since the integer obtained is too large
+// to fit into js integer
 function hex2bin(hex0x: string) {
   const hex = hex0x.replace('0x', '').toLowerCase();
   let out = '';
@@ -79,7 +81,10 @@ function hex2bin(hex0x: string) {
 }
 
 const witnessHash = new Set<any>();
-
+function hashCall(extrinsic: SubmittableExtrinsic<'promise', ISubmittableResult>) {
+  const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
+  witnessHash.add(blakeHash);
+}
 async function main(): Promise<void> {
   const api = await getChainflipApi();
   // we need the epoch number to query the correct storage item
@@ -125,8 +130,7 @@ async function main(): Promise<void> {
             finalData.new_chain_state,
           );
           // obtain the hash of the extrinsic call
-          const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
-          witnessHash.add(blakeHash);
+          hashCall(extrinsic);
         }
 
         if (callData && callData.section === 'polkadotChainTracking' && chain === 'DOT') {
@@ -144,8 +148,7 @@ async function main(): Promise<void> {
             finalData.new_chain_state,
           );
           // obtain the hash of the extrinsic call
-          const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
-          witnessHash.add(blakeHash);
+          hashCall(extrinsic);
         }
 
         if (callData && callData.section === 'bitcoinChainTracking' && chain === 'BTC') {
@@ -164,8 +167,7 @@ async function main(): Promise<void> {
           // create the extrinsic we need to witness (DOT chain tracking in this case)
           const extrinsic = api.tx.bitcoinChainTracking.updateChainState(finalData.new_chain_state);
           // obtain the hash of the extrinsic call
-          const blakeHash = blake2AsHex(extrinsic.method.toU8a(), 256);
-          witnessHash.add(blakeHash);
+          hashCall(extrinsic);
         }
       }
     });
