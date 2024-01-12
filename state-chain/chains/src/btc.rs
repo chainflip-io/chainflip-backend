@@ -180,7 +180,7 @@ impl BitcoinFeeInfo {
 	}
 
 	pub fn fee_per_utxo(&self, utxo: &Utxo) -> BtcAmount {
-		if utxo.deposit_address.salt == 0 {
+		if utxo.deposit_address.tapleaf_hash.is_none() {
 			// Our vault utxos (salt = 0) use VAULT_UTXO_SIZE_IN_BYTES vbytes in a Btc transaction
 			self.sats_per_kilobyte.saturating_mul(VAULT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE
 		} else {
