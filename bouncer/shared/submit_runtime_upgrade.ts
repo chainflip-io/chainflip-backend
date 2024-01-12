@@ -45,7 +45,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
   // and exit with error.
 
   const event = await Promise.race([
-    observeEvent('system:CodeUpdated', chainflip),
+    observeEvent('system:CodeUpdated', chainflip, undefined, undefined, true),
     observeEvent('governance:FailedExecution', chainflip),
   ]);
 
