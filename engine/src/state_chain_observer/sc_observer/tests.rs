@@ -81,11 +81,11 @@ async fn only_encodes_and_signs_when_specified() {
 	use state_chain_runtime::Runtime;
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_cfe_event_emitter::CfeEvents<Runtime>>()
-		.with(eq(block.hash), eq(block.number))
+		.expect_storage_value::<pallet_cf_cfe_event_emitter::CfeEvents<Runtime>>()
+		.with(eq(block.hash))
 		.once()
-		.return_once(move |_, _| {
-			Ok(Some(vec![
+		.return_once(move |_| {
+			Ok(vec![
 				CfeEvent::<Runtime>::EthTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> {
 					broadcast_id: Default::default(),
 					nominee: account_id,
@@ -96,7 +96,7 @@ async fn only_encodes_and_signs_when_specified() {
 					nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
 					payload: Transaction::default(),
 				}),
-			]))
+			])
 		});
 
 	let mut eth_rpc_mock_broadcast = MockEthRetryRpcClient::new();

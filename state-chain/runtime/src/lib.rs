@@ -770,6 +770,7 @@ construct_runtime!(
 	{
 		System: frame_system,
 		Timestamp: pallet_timestamp,
+		CfeEventEmitter: pallet_cf_cfe_event_emitter,
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
@@ -812,8 +813,6 @@ construct_runtime!(
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
 
 		LiquidityPools: pallet_cf_pools,
-
-		CfeEventEmitter: pallet_cf_cfe_event_emitter,
 	}
 );
 

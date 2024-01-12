@@ -298,15 +298,12 @@ where
                     debug!("Processing SC block {} with block hash: {:#x}", current_block.number, current_block.hash);
 
                     match state_chain_client
-                        .storage_map_entry::<pallet_cf_cfe_event_emitter::CfeEvents<state_chain_runtime::Runtime>>(
+                        .storage_value::<pallet_cf_cfe_event_emitter::CfeEvents<state_chain_runtime::Runtime>>(
                             current_block.hash,
-                            &current_block.number,
                         )
                         .await {
 
                         Ok(events) => {
-                            let events = events.unwrap_or_default();
-
                             for event in events {
                                 match_event! {event, {
                                     CfeEvent::EthThresholdSignatureRequest(req) => {

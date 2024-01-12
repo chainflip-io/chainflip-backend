@@ -12,16 +12,15 @@ use cf_chains::{
 use cf_primitives::{Ed25519PublicKey, Ipv6Addr, Port};
 use cf_traits::{CfeEventEmitterForChain, CfeEventEmitterForCrypto, CfeEventEmitterT, Chainflip};
 use frame_support::{
-	pallet_prelude::Hooks, storage::types::StorageMap, traits::StorageVersion, Twox64Concat,
+	pallet_prelude::Hooks,
+	storage::types::{StorageValue, ValueQuery},
+	traits::StorageVersion,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
-
-/// How long to keep cfe events for (in SC blocks)
-const EVENT_LIFETIME: u32 = 20;
 
 pub type EventId = u64;
 
@@ -54,79 +53,67 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn get_cfe_events)]
 	#[pallet::unbounded]
-	pub type CfeEvents<T: Config> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<CfeEvent<T>>>;
+	pub type CfeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			use frame_support::sp_runtime::Saturating;
-
-			CfeEvents::<T>::remove(block_number.saturating_sub(EVENT_LIFETIME.into()));
+		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			CfeEvents::<T>::kill();
 
 			T::WeightInfo::remove_events_for_block()
 		}
 	}
 }
 
-fn add_event<T: Config>(event: CfeEvent<T>) {
-	let number = frame_system::Pallet::<T>::block_number();
-
-	CfeEvents::<T>::mutate(number, |events| {
-		let events = events.get_or_insert(Vec::new());
-		events.push(event);
-	})
-}
-
 impl<T: Config> CfeEventEmitterForCrypto<T, EvmCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
-		add_event::<T>(CfeEvent::<T>::EthKeygenRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::EthKeygenRequest(req))
 	}
 
 	fn signature_request(req: ThresholdSignatureRequest<T, EvmCrypto>) {
-		add_event::<T>(CfeEvent::<T>::EthThresholdSignatureRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::EthThresholdSignatureRequest(req))
 	}
 }
 
 impl<T: Config> CfeEventEmitterForCrypto<T, BitcoinCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
-		add_event::<T>(CfeEvent::<T>::BtcKeygenRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::BtcKeygenRequest(req))
 	}
 
 	fn signature_request(req: ThresholdSignatureRequest<T, BitcoinCrypto>) {
-		add_event::<T>(CfeEvent::<T>::BtcThresholdSignatureRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::BtcThresholdSignatureRequest(req))
 	}
 
 	fn key_handover_request(req: KeyHandoverRequest<T, BitcoinCrypto>) {
-		add_event::<T>(CfeEvent::<T>::BtcKeyHandoverRequest(req))
+		CfeEvents::<T>::append(CfeEvent::<T>::BtcKeyHandoverRequest(req))
 	}
 }
 
 impl<T: Config> CfeEventEmitterForCrypto<T, PolkadotCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
-		add_event::<T>(CfeEvent::<T>::DotKeygenRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::DotKeygenRequest(req))
 	}
 
 	fn signature_request(req: ThresholdSignatureRequest<T, PolkadotCrypto>) {
-		add_event::<T>(CfeEvent::<T>::DotThresholdSignatureRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::DotThresholdSignatureRequest(req))
 	}
 }
 
 impl<T: Config> CfeEventEmitterForChain<T, Polkadot> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Polkadot>) {
-		add_event::<T>(CfeEvent::<T>::DotTxBroadcastRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::DotTxBroadcastRequest(req))
 	}
 }
 
 impl<T: Config> CfeEventEmitterForChain<T, Bitcoin> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Bitcoin>) {
-		add_event::<T>(CfeEvent::<T>::BtcTxBroadcastRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::BtcTxBroadcastRequest(req))
 	}
 }
 
 impl<T: Config> CfeEventEmitterForChain<T, Ethereum> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Ethereum>) {
-		add_event::<T>(CfeEvent::<T>::EthTxBroadcastRequest(req));
+		CfeEvents::<T>::append(CfeEvent::<T>::EthTxBroadcastRequest(req))
 	}
 }
 
@@ -137,10 +124,10 @@ impl<T: Config> CfeEventEmitterT<T> for Pallet<T> {
 		port: Port,
 		ip: Ipv6Addr,
 	) {
-		add_event::<T>(CfeEvent::<T>::PeerIdRegistered { account_id, pubkey, port, ip })
+		CfeEvents::<T>::append(CfeEvent::<T>::PeerIdRegistered { account_id, pubkey, port, ip })
 	}
 
 	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey) {
-		add_event::<T>(CfeEvent::<T>::PeerIdDeregistered { account_id, pubkey })
+		CfeEvents::<T>::append(CfeEvent::<T>::PeerIdDeregistered { account_id, pubkey })
 	}
 }
