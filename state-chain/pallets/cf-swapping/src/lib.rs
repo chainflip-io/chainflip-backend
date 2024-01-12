@@ -242,6 +242,7 @@ pub mod pallet {
 	/// Minimum swap amount for each asset.
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_swap_amount)]
+	#[deprecated()]
 	pub type MinimumSwapAmount<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
