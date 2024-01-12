@@ -192,4 +192,4 @@ jobs:
         with:
           args: |
             ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, The Upgrade Test has not passed ❗️❗️❗️❗️
-            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
