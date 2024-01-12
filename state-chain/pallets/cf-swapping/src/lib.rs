@@ -347,6 +347,9 @@ pub mod pallet {
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
 		},
+		EgressAmountZero {
+			swap_id: u64,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -383,9 +386,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			for (asset, min) in &self.minimum_swap_amounts {
-				MinimumSwapAmount::<T>::insert(asset, min);
-			}
+			// for (asset, min) in &self.minimum_swap_amounts {
+			// 	MinimumSwapAmount::<T>::insert(asset, min);
+			// }
 		}
 	}
 
@@ -451,7 +454,9 @@ pub mod pallet {
 										amount: egress_amount,
 									});
 								} else {
-									log::warn!("EgressSwallowed [id: {:?}; {:?} => {:?}; deposit-amt: {:?}]", swap.swap_id, swap.from, swap.to, swap.amount);
+									Self::deposit_event(Event::<T>::EgressAmountZero {
+										swap_id: swap.swap_id,
+									})
 								},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(

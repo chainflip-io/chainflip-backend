@@ -970,9 +970,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Error::<T, I>::AssetMismatch
 		);
 
-		log::warn!("PRO-1075| deposit_amount:      {:?}", deposit_amount);
-		log::warn!("PRO-1075| minimum_deposit:     {:?}", MinimumDeposit::<T, I>::get(asset));
-
 		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			// TODO: track these funds somewhere, for example add them to the withheld fees.
@@ -999,8 +996,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel_details.deposit_channel.asset,
 			deposit_amount,
 		);
-
-		log::warn!("PRO-1075| net_deposit_amount: {:?}", net_deposit_amount);
 
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(
