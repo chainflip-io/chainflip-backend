@@ -5,7 +5,7 @@ use crate::{
 
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_test_utilities::assert_has_event;
+use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, Bid, EpochInfo};
 use frame_system::Config as SystemConfig;
 use mock_runtime::MIN_FUNDING;
@@ -15,6 +15,8 @@ use sp_runtime::{FixedPointNumber, FixedU64};
 use state_chain_runtime::chainflip::{
 	backup_node_rewards::calculate_backup_rewards, calculate_account_apy, Offence,
 };
+
+use state_chain_runtime::RuntimeEvent;
 
 #[test]
 // Nodes cannot redeem when we are out of the redeeming period (50% of the epoch)
@@ -237,6 +239,15 @@ fn can_calculate_account_apy() {
 				.unwrap();
 			assert_eq!(apy_basis_point, 35u32);
 			assert_eq!(calculate_account_apy(&backup), Some(apy_basis_point));
+
+			network.move_to_the_next_epoch();
+			assert_events_eq!(
+				Runtime,
+				RuntimeEvent::Emissions(pallet_cf_emissions::Event::BackupRewardsDistributed {
+					account_id: backup.clone(),
+					amount: calculate_account_apy(&backup).unwrap().into(),
+				},)
+			);
 		});
 }
 
@@ -285,41 +296,32 @@ fn can_notify_backup_validators_been_rewarded() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			// TODO: Figure out how to test this... Monitoring Events in integrations seem to be
-			// broken. let (mut network, _, _) =
-			// 	crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
-			// // network.move_to_the_next_epoch();
+			let (mut network, _, _) =
+				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
+			network.move_to_the_next_epoch();
 
-			// let backup_earning_rewards = Validator::highest_funded_qualified_backup_node_bids();
-			// // let all_backups = Validator::backups();
-			// // let validator = Validator::current_authorities().into_iter().next().unwrap();
-			// // let Bid { bidder_id: backup, amount: backup_staked } =
-			// // 	backup_earning_rewards.next().unwrap();
+			let backup_earning_rewards = Validator::highest_funded_qualified_backup_node_bids();
+
+			let current_backup_nodes = Validator::backups();
 
 			// let events = frame_system::Pallet::<Runtime>::events()
 			// 	.into_iter()
 			// 	.map(|e| e.event)
 			// 	.collect::<Vec<_>>();
-
-			// for event in events {
-			// 	let bar = 0;
-			// }
-
-			// for backup in backup_earning_rewards {
-			// 	let current_event = state_chain_runtime::RuntimeEvent::Emissions(
-			// 		pallet_cf_emissions::Event::BackupRewardsDistributed {
-			// 			account_id: backup.bidder_id,
-			// 			amount: backup.amount,
-			// 		},
+			System::reset_events();
+			// let current_block = System::block_number();
+			// let next_heartbeat_block = current_block + HEARTBEAT_BLOCK_INTERVAL;
+			Reputation::on_initialize(HEARTBEAT_BLOCK_INTERVAL);
+			// for backup in current_backup_nodes {
+			// 	let foo = 0;
+			// 	assert_events_eq!(
+			// 		Runtime,
+			// 		RuntimeEvent::Emissions(pallet_cf_emissions::Event::BackupRewardsDistributed {
+			// 			account_id: _,
+			// 			amount: _,
+			// 		},)
 			// 	);
-			// 	assert!(events.contains(&current_event));
 			// }
-
-			// assert_has_event::<Runtime>(state_chain_runtime::RuntimeEvent::Emissions(
-			// 	pallet_cf_emissions::Event::BackupRewardsDistributed {
-			// 		account_id: backup,
-			// 		amount: backup_staked,
-			// 	},
-			// ));
+			System::reset_events();
 		});
 }
