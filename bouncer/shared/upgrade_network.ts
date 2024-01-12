@@ -83,6 +83,8 @@ async function incompatibleUpgradeNoBuild(
   await sleep(6000);
   console.log('Stopped old broker and lp-api. Starting the new ones.');
 
+  await sleep(24000);
+
   const KEYS_DIR = `${localnetInitPath}/keys`;
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-lp-api.sh ${binaryPath}`);
