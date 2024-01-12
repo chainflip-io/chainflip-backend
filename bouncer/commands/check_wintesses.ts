@@ -190,11 +190,13 @@ async function main(): Promise<void> {
         if (votes) {
           let binary = hex2bin(votes.toString());
           const witnessNumber = binary.match(/1/g)?.length;
+          let offset = 0;
           // hashes are stored as 152 bits, the last 2 bits are always 0
           while ((binary.match(/0/g)?.length || 0) > 2) {
             const index = binary.indexOf('0');
             binary = binary.substring(index + 1);
-            failingValidators.push(validators[index]);
+            failingValidators.push(validators[index + offset]);
+            offset = offset + index + 1;
           }
           console.log(
             `${witnessNumber}/${validators?.length} witnessed ${elem} hash!\nThe extrinsic was in block ${currentBlockNumber}`,
