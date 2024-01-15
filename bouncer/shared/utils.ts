@@ -199,7 +199,8 @@ export async function observeEvent(
     });
   });
   while (!eventFound && !stopObserve()) {
-    await sleep(1000);
+    console.log("Waiting for event '" + eventName + "'...");
+    await sleep(2000);
   }
   return result as Event;
 }
@@ -245,15 +246,15 @@ export async function observeSwapEvents(
             if ('DepositChannel' in expectedEvent.data.origin) {
               if (
                 Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
-                sourceAsset === (expectedEvent.data.sourceAsset.toUpperCase() as Asset) &&
-                destAsset === (expectedEvent.data.destinationAsset.toUpperCase() as Asset) &&
-                swapType
+                  sourceAsset === (expectedEvent.data.sourceAsset.toUpperCase() as Asset) &&
+                  destAsset === (expectedEvent.data.destinationAsset.toUpperCase() as Asset) &&
+                  swapType
                   ? expectedEvent.data.swapType[swapType] !== undefined
                   : true &&
-                    depositAddress ===
-                      (Object.values(
-                        expectedEvent.data.origin.DepositChannel.depositAddress,
-                      )[0] as string)
+                  depositAddress ===
+                  (Object.values(
+                    expectedEvent.data.origin.DepositChannel.depositAddress,
+                  )[0] as string)
               ) {
                 expectedMethod = swapExecutedEvent;
                 swapId = expectedEvent.data.swapId;
