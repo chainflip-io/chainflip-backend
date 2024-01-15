@@ -253,7 +253,15 @@ impl Instruction {
 		data: &T,
 		accounts: Vec<AccountMeta>,
 	) -> Self {
-		// the solana-sdk uses bincode version 1.3.3 which has a dependency on serde which depends on std and so it cannot be used with our runtime. Fortunately, the new version of bincode (bincode 2) has an optional dependency on serde and we can use the serializer without serde. However, bincode 2 is a complete rewrite of bincode 1 and so to mimic the exact bahaviour of serializaition that is used by the solana-sdk with bincode 1, we need to use the legacy config for serialization according to the migration guide provided by bincode here: https://github.com/bincode-org/bincode/blob/v2.0.0-rc.3/docs/migration_guide.md. Original serialization call in solana sdk: let data = bincode::serialize(data).unwrap();
+		// NOTE: the solana-sdk uses bincode version 1.3.3 which has a dependency on serde which
+		// depends on std and so it cannot be used with our runtime. Fortunately, the new version of
+		// bincode (bincode 2) has an optional dependency on serde and we can use the serializer
+		// without serde. However, bincode 2 is a complete rewrite of bincode 1 and so to mimic the
+		// exact bahaviour of serializaition that is used by the solana-sdk with bincode 1, we need
+		// to use the legacy config for serialization according to the migration guide provided by
+		// bincode here: https://github.com/bincode-org/bincode/blob/v2.0.0-rc.3/docs/migration_guide.md.
+		// Original serialization call in solana sdk:
+		// let data = bincode::serialize(data).unwrap();
 		let data = bincode::serde::encode_to_vec(data, bincode::config::legacy()).unwrap();
 		Self { program_id, accounts, data }
 	}
@@ -830,56 +838,52 @@ mod tests {
 	// Test taken from https://docs.rs/solana-sdk/latest/src/solana_sdk/transaction/mod.rs.html#1354
 	// using current serialization (bincode::serde::encode_to_vec) and ensure that it's correct
 	fn create_sample_transaction() -> Transaction {
-        let keypair = Keypair::from_bytes(&[
-            255, 101, 36, 24, 124, 23, 167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116,
-            193, 215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218, 36, 100, 158, 252, 33, 161,
-            97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
-            62, 157, 5, 142, 27, 210, 117,
-        ])
-        .unwrap();
-        let to = Pubkey::from([
-            1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4,
-            1, 1, 1,
-        ]);
+		let keypair = Keypair::from_bytes(&[
+			255, 101, 36, 24, 124, 23, 167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116,
+			193, 215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218, 36, 100, 158, 252, 33, 161,
+			97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+			62, 157, 5, 142, 27, 210, 117,
+		])
+		.unwrap();
+		let to = Pubkey::from([
+			1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4,
+			1, 1, 1,
+		]);
 
-        let program_id = Pubkey::from([
-            2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
-            2, 2, 2,
-        ]);
-        let account_metas = vec![
-            AccountMeta::new(keypair.pubkey(), true),
-            AccountMeta::new(to, false),
-        ];
-        let instruction =
-            Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
-        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
-        let mut tx: Transaction = Transaction::new_unsigned(message);
+		let program_id = Pubkey::from([
+			2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
+			2, 2, 2,
+		]);
+		let account_metas =
+			vec![AccountMeta::new(keypair.pubkey(), true), AccountMeta::new(to, false)];
+		let instruction =
+			Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
+		let message = Message::new(&[instruction], Some(&keypair.pubkey()));
+		let mut tx: Transaction = Transaction::new_unsigned(message);
 		tx.sign(&[&keypair], Hash::default());
-        tx
-    }
+		tx
+	}
 
 	#[test]
-    fn test_sdk_serialize() {
-
+	fn test_sdk_serialize() {
 		let tx = create_sample_transaction();
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
 		// SDK uses serde::serialize instead, but looks like this works.
 
-        assert_eq!(
-            serialized_tx,
-            vec![
-                1, 120, 138, 162, 185, 59, 209, 241, 157, 71, 157, 74, 131, 4, 87, 54, 28, 38, 180,
-                222, 82, 64, 62, 61, 62, 22, 46, 17, 203, 187, 136, 62, 43, 11, 38, 235, 17, 239,
-                82, 240, 139, 130, 217, 227, 214, 9, 242, 141, 223, 94, 29, 184, 110, 62, 32, 87,
-                137, 63, 139, 100, 221, 20, 137, 4, 5, 1, 0, 1, 3, 36, 100, 158, 252, 33, 161, 97,
-                185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
-                62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1,
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 1,
-                3, 1, 2, 3
-            ]
-        );
-    }
+		assert_eq!(
+			serialized_tx,
+			vec![
+				1, 120, 138, 162, 185, 59, 209, 241, 157, 71, 157, 74, 131, 4, 87, 54, 28, 38, 180,
+				222, 82, 64, 62, 61, 62, 22, 46, 17, 203, 187, 136, 62, 43, 11, 38, 235, 17, 239,
+				82, 240, 139, 130, 217, 227, 214, 9, 242, 141, 223, 94, 29, 184, 110, 62, 32, 87,
+				137, 63, 139, 100, 221, 20, 137, 4, 5, 1, 0, 1, 3, 36, 100, 158, 252, 33, 161, 97,
+				185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+				62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+				9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1,
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 1,
+				3, 1, 2, 3
+			]
+		);
+	}
 }
-
