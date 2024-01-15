@@ -347,6 +347,7 @@ pub mod pallet {
 			total_amount: AssetAmount,
 			confiscated_amount: AssetAmount,
 		},
+		/// The swap has been executed, but has led to a zero egress amount.
 		EgressAmountZero {
 			swap_id: u64,
 		},
