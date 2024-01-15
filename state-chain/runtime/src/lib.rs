@@ -1112,10 +1112,6 @@ impl_runtime_apis! {
 			Environment::network_environment()
 		}
 
-		fn cf_min_swap_amount(asset: Asset) -> AssetAmount {
-			Swapping::minimum_swap_amount(asset)
-		}
-
 		fn cf_max_swap_amount(asset: Asset) -> Option<AssetAmount> {
 			Swapping::maximum_swap_amount(asset)
 		}

@@ -164,7 +164,8 @@ pub struct CcmSwapAmounts {
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
 	InsufficientDepositAmount,
-	PrincipalSwapAmountTooLow,
+	// #[deprecated()]
+	// PrincipalSwapAmountTooLow,
 }
 
 impl_pallet_safe_mode! {
@@ -239,12 +240,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type CcmOutputs<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwapOutput>;
 
-	/// Minimum swap amount for each asset.
-	#[pallet::storage]
-	#[pallet::getter(fn minimum_swap_amount)]
-	#[deprecated()]
-	pub type MinimumSwapAmount<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+	// /// Minimum swap amount for each asset.
+	// #[pallet::storage]
+	// #[pallet::getter(fn minimum_swap_amount)]
+	// #[deprecated()]
+	// pub type MinimumSwapAmount<T: Config> =
+	// 	StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
@@ -322,17 +323,18 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
 		},
-		#[deprecated()]
-		MinimumSwapAmountSet {
-			asset: Asset,
-			amount: AssetAmount,
-		},
-		SwapAmountTooLow {
-			asset: Asset,
-			amount: AssetAmount,
-			destination_address: EncodedAddress,
-			origin: SwapOrigin,
-		},
+		// #[deprecated()]
+		// MinimumSwapAmountSet {
+		// 	asset: Asset,
+		// 	amount: AssetAmount,
+		// },
+		// #[deprecated()]
+		// SwapAmountTooLow {
+		// 	asset: Asset,
+		// 	amount: AssetAmount,
+		// 	destination_address: EncodedAddress,
+		// 	origin: SwapOrigin,
+		// },
 		CcmFailed {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
@@ -364,8 +366,10 @@ pub mod pallet {
 		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
-		/// The swap amount is below the minimum required.
-		SwapAmountTooLow,
+
+		// /// The swap amount is below the minimum required.
+		// #[deprecated()]
+		// SwapAmountTooLow,
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 		/// Swap deposits are disabled due to Safe Mode.
@@ -378,23 +382,23 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		#[deprecated()]
-		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
+		// #[deprecated()]
+		// pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
 		pub _phantom: PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			for (asset, min) in &self.minimum_swap_amounts {
-				MinimumSwapAmount::<T>::insert(asset, min);
-			}
+			// 	for (asset, min) in &self.minimum_swap_amounts {
+			// 		MinimumSwapAmount::<T>::insert(asset, min);
+			// 	}
 		}
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { minimum_swap_amounts: vec![], _phantom: PhantomData }
+			Self { /* minimum_swap_amounts: vec![], */ _phantom: PhantomData }
 		}
 	}
 
@@ -605,25 +609,24 @@ pub mod pallet {
 				Self::validate_destination_address(&destination_address, to)?;
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			if let Some(swap_id) = Self::schedule_swap_with_check(
+			let swap_id = Self::schedule_swap_internal(
 				from,
 				to,
 				deposit_amount,
+				SwapType::Swap(destination_address_internal.clone()),
+			);
+
+			Self::deposit_event(Event::<T>::SwapScheduled {
+				swap_id,
+				source_asset: from,
 				deposit_amount,
-				destination_address_internal.clone(),
-				&swap_origin,
-			) {
-				Self::deposit_event(Event::<T>::SwapScheduled {
-					swap_id,
-					source_asset: from,
-					deposit_amount,
-					destination_asset: to,
-					destination_address,
-					origin: swap_origin,
-					swap_type: SwapType::Swap(destination_address_internal),
-					broker_commission: None,
-				});
-			}
+				destination_asset: to,
+				destination_address,
+				origin: swap_origin,
+				swap_type: SwapType::Swap(destination_address_internal),
+				broker_commission: None,
+			});
+
 			Ok(())
 		}
 
@@ -674,26 +677,27 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the Minimum swap amount allowed for an asset.
-		///
-		/// Requires Governance.
-		///
-		/// ## Events
-		///
-		/// - [On update](Event::MinimumSwapAmountSet)
-		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::set_minimum_swap_amount())]
-		pub fn set_minimum_swap_amount(
-			origin: OriginFor<T>,
-			asset: Asset,
-			amount: AssetAmount,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			MinimumSwapAmount::<T>::insert(asset, amount);
+		// /// Sets the Minimum swap amount allowed for an asset.
+		// ///
+		// /// Requires Governance.
+		// ///
+		// /// ## Events
+		// ///
+		// /// - [On update](Event::MinimumSwapAmountSet)
+		// #[pallet::call_index(6)]
+		// #[pallet::weight(T::WeightInfo::set_minimum_swap_amount())]
+		// #[deprecated()]
+		// pub fn set_minimum_swap_amount(
+		// 	origin: OriginFor<T>,
+		// 	asset: Asset,
+		// 	amount: AssetAmount,
+		// ) -> DispatchResult {
+		// 	T::EnsureGovernance::ensure_origin(origin)?;
+		// 	MinimumSwapAmount::<T>::insert(asset, amount);
 
-			Self::deposit_event(Event::<T>::MinimumSwapAmountSet { asset, amount });
-			Ok(())
-		}
+		// 	Self::deposit_event(Event::<T>::MinimumSwapAmountSet { asset, amount });
+		// 	Ok(())
+		// }
 
 		/// Sets the Maximum amount allowed in a single swap for an asset.
 		///
@@ -735,14 +739,15 @@ pub mod pallet {
 				return Err(CcmFailReason::UnsupportedForTargetChain)
 			} else if deposit_amount < gas_budget {
 				return Err(CcmFailReason::InsufficientDepositAmount)
-			} else if source_asset != destination_asset &&
-				!principal_swap_amount.is_zero() &&
-				principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
-			{
-				// If the CCM's principal requires a swap and is non-zero,
-				// then the principal swap amount must be above minimum swap amount required.
-				return Err(CcmFailReason::PrincipalSwapAmountTooLow)
 			}
+			// else if source_asset != destination_asset &&
+			// 	!principal_swap_amount.is_zero() &&
+			// 	principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
+			// {
+			// 	// If the CCM's principal requires a swap and is non-zero,
+			// 	// then the principal swap amount must be above minimum swap amount required.
+			// 	return Err(CcmFailReason::PrincipalSwapAmountTooLow)
+			// }
 
 			// if the gas asset is different.
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
@@ -953,43 +958,6 @@ pub mod pallet {
 
 			swap_id
 		}
-
-		/// Schedule and returns the swap id if the swap is valid.
-		fn schedule_swap_with_check(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			net_amount: AssetAmount,
-			destination_address: ForeignChainAddress,
-			swap_origin: &SwapOrigin,
-		) -> Option<u64> {
-			// We want to check the amount before the fees are taken to avoid decreasing the minimum
-			// swap amount.
-			if amount < MinimumSwapAmount::<T>::get(from) {
-				// If the swap amount is less than the minimum required,
-				// confiscate the fund and emit an event
-				CollectedRejectedFunds::<T>::mutate(from, |fund| {
-					*fund = fund.saturating_add(net_amount)
-				});
-				Self::deposit_event(Event::<T>::SwapAmountTooLow {
-					asset: from,
-					amount,
-					destination_address: T::AddressConverter::to_encoded_address(
-						destination_address,
-					),
-					origin: swap_origin.clone(),
-				});
-				None
-			} else {
-				// Otherwise schedule the swap.
-				Some(Self::schedule_swap_internal(
-					from,
-					to,
-					net_amount,
-					SwapType::Swap(destination_address),
-				))
-			}
-		}
 	}
 
 	impl<T: Config> SwapDepositHandler for Pallet<T> {
@@ -1022,28 +990,25 @@ pub mod pallet {
 				deposit_block_height,
 			};
 
-			if let Some(swap_id) = Self::schedule_swap_with_check(
+			let swap_id = Self::schedule_swap_internal(
 				from,
 				to,
-				amount,
 				net_amount,
-				destination_address.clone(),
-				&swap_origin,
-			) {
-				EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
-					earned_fees.saturating_accrue(fee)
-				});
-				Self::deposit_event(Event::<T>::SwapScheduled {
-					swap_id,
-					source_asset: from,
-					deposit_amount: amount,
-					destination_asset: to,
-					destination_address: encoded_destination_address,
-					origin: swap_origin,
-					swap_type: SwapType::Swap(destination_address),
-					broker_commission: Some(fee),
-				});
-			}
+				SwapType::Swap(destination_address.clone()),
+			);
+			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
+				earned_fees.saturating_accrue(fee)
+			});
+			Self::deposit_event(Event::<T>::SwapScheduled {
+				swap_id,
+				source_asset: from,
+				deposit_amount: amount,
+				destination_asset: to,
+				destination_address: encoded_destination_address,
+				origin: swap_origin,
+				swap_type: SwapType::Swap(destination_address),
+				broker_commission: Some(fee),
+			});
 		}
 	}
 

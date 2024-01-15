@@ -266,9 +266,11 @@ pub struct FundingEnvironment {
 	pub minimum_funding_amount: NumberOrHex,
 }
 
+// XXX: This struct having just one field does not seem to make much sense.
+// XXX: On the other hand this may "rhyme" well with the return results of the whole family of `cf_*_environment` calls.
+// XXX: should [that](https://github.com/chainflip-io/chainflip-sdk-monorepo/blob/04e1f372f89164f42f84fccf4cfe3601d5c843f9/packages/shared/src/rpc/index.ts#L118) be patched?
 #[derive(Serialize, Deserialize)]
 pub struct SwappingEnvironment {
-	minimum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, NumberOrHex>>,
 	maximum_swap_amounts: HashMap<ForeignChain, HashMap<Asset, Option<NumberOrHex>>>,
 }
 
@@ -461,8 +463,8 @@ pub trait CustomApi {
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
 	#[method(name = "current_compatibility_version")]
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer>;
-	#[method(name = "min_swap_amount")]
-	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount>;
+
+	/// XXX: the removed `min_swap_amount` is referenced 
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: RpcAsset) -> RpcResult<Option<AssetAmount>>;
 	#[subscription(name = "subscribe_pool_price", item = PoolPrice)]
@@ -992,23 +994,18 @@ where
 	) -> RpcResult<SwappingEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-		let mut minimum_swap_amounts = HashMap::new();
+
 		let mut maximum_swap_amounts = HashMap::new();
 
 		for asset in Asset::all() {
-			let min_amount = runtime_api.cf_min_swap_amount(hash, asset).map_err(to_rpc_error)?;
 			let max_amount = runtime_api.cf_max_swap_amount(hash, asset).map_err(to_rpc_error)?;
-			minimum_swap_amounts
-				.entry(asset.into())
-				.or_insert_with(HashMap::new)
-				.insert(asset, min_amount.into());
 			maximum_swap_amounts
 				.entry(asset.into())
 				.or_insert_with(HashMap::new)
 				.insert(asset, max_amount.map(|amt| amt.into()));
 		}
 
-		Ok(SwappingEnvironment { minimum_swap_amounts, maximum_swap_amounts })
+		Ok(SwappingEnvironment { maximum_swap_amounts })
 	}
 
 	fn cf_funding_environment(
@@ -1057,13 +1054,6 @@ where
 		self.client
 			.runtime_api()
 			.cf_current_compatibility_version(self.unwrap_or_best(None))
-			.map_err(to_rpc_error)
-	}
-
-	fn cf_min_swap_amount(&self, asset: RpcAsset) -> RpcResult<AssetAmount> {
-		self.client
-			.runtime_api()
-			.cf_min_swap_amount(self.unwrap_or_best(None), asset.try_into()?)
 			.map_err(to_rpc_error)
 	}
 
