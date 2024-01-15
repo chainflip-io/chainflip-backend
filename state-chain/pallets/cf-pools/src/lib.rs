@@ -1820,24 +1820,24 @@ impl<T: Config> Pallet<T> {
 		Ok(PoolOrders {
 			limit_orders: AskBidMap::from_sell_map(
 				pool.limit_orders_cache.as_ref().map_with_asset(|asset, limit_orders_cache| {
-					if let Some(lp) = option_lp {
-						itertools::Either::Left(
+					cf_utilities::conditional::conditional(
+						option_lp,
+						|lp| {
 							limit_orders_cache
 								.get(lp)
 								.into_iter()
 								.flatten()
-								.map(|(id, tick)| (lp.clone(), *id, *tick)),
-						)
-					} else {
-						itertools::Either::Right(limit_orders_cache.iter().flat_map(
-							move |(lp, orders)| {
+								.map(|(id, tick)| (lp.clone(), *id, *tick))
+						},
+						|()| {
+							limit_orders_cache.iter().flat_map(move |(lp, orders)| {
 								orders.iter().map({
 									let lp = lp.clone();
 									move |(id, tick)| (lp.clone(), *id, *tick)
 								})
-							},
-						))
-					}
+							})
+						},
+					)
 					.filter_map(|(lp, id, tick)| {
 						let (collected, position_info) = pool
 							.pool_state
@@ -1859,24 +1859,24 @@ impl<T: Config> Pallet<T> {
 					.collect()
 				}),
 			),
-			range_orders: if let Some(lp) = option_lp {
-				itertools::Either::Left(
+			range_orders: cf_utilities::conditional::conditional(
+				option_lp,
+				|lp| {
 					pool.range_orders_cache
 						.get(lp)
 						.into_iter()
 						.flatten()
-						.map(|(id, range)| (lp.clone(), *id, range.clone())),
-				)
-			} else {
-				itertools::Either::Right(pool.range_orders_cache.iter().flat_map(
-					move |(lp, orders)| {
+						.map(|(id, range)| (lp.clone(), *id, range.clone()))
+				},
+				|()| {
+					pool.range_orders_cache.iter().flat_map(move |(lp, orders)| {
 						orders.iter().map({
 							let lp = lp.clone();
 							move |(id, range)| (lp.clone(), *id, range.clone())
 						})
-					},
-				))
-			}
+					})
+				},
+			)
 			.map(|(lp, id, tick_range)| {
 				let (collected, position_info) =
 					pool.pool_state.range_order(&(lp.clone(), id), tick_range.clone()).unwrap();
