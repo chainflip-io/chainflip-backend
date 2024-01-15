@@ -67,7 +67,7 @@ impl CfSettings for DepositTrackerSettings {
 			.set_default("btc.http_endpoint", "http://127.0.0.1:8332")?
 			.set_default("btc.basic_auth_user", "flip")?
 			.set_default("btc.basic_auth_password", "flip")?
-			.set_default("redis_url", "http://127.0.0.1:6379")
+			.set_default("redis_url", "http://127.0.0.1:6380")
 	}
 
 	fn validate_settings(
