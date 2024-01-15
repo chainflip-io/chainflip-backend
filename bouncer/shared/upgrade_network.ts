@@ -79,8 +79,10 @@ async function incompatibleUpgradeNoBuild(
 
   execSync(`kill $(lsof -t -i:10997)`);
   execSync(`kill $(lsof -t -i:10589)`);
-  await sleep(6000);
   console.log('Stopped old broker and lp-api. Starting the new ones.');
+
+  // Wait for the old broker and lp-api to shut down, and ensure the runtime upgrade is finalised.
+  await sleep(22000);
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
   execSync(`KEYS_DIR=${KEYS_DIR} ${localnetInitPath}/scripts/start-broker-api.sh ${binaryPath}`);
