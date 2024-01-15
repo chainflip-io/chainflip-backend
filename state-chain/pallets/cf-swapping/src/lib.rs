@@ -322,6 +322,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
 		},
+		#[deprecated()]
 		MinimumSwapAmountSet {
 			asset: Asset,
 			amount: AssetAmount,
@@ -377,6 +378,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		#[deprecated()]
 		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
 		pub _phantom: PhantomData<T>,
 	}
