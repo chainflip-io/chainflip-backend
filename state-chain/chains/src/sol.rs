@@ -774,10 +774,9 @@ mod tests {
 		println!("tx:{:?}", hex::encode(serialized_tx));
 	}
 
-	#[ignore]
 	#[test]
 	fn create_nonced_fetch() {
-		let durable_nonce = Hash::from_str("7EWjChCjKeX1izPeCfaXfmrhPETBrgjwfJ7JJTU6rvxv").unwrap();
+		let durable_nonce = Hash::from_str("GzgDQ7iaz34Atkc1Ziq6GPCgMaWNbHb8rMJe8QswhPqq").unwrap();
 		let vault_account = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let vault_account_pubkey = vault_account.pubkey();
 		let nonce_account_pubkey =
@@ -785,8 +784,6 @@ mod tests {
 		let data_account_pubkey =
 			Pubkey::from_str("5yhN4QzBFg9jKhLfVHcS5apMB7e3ftofCkzkNH6dZctC").unwrap();
 		let pda = Pubkey::from_str("FezduHnFMTMTiZuWLgGwrbGmzeeRZytzDPQA2kF8Atqx").unwrap();
-		//let to_pubkey =
-		// Pubkey::from_str("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V").unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -810,7 +807,7 @@ mod tests {
 		println!("{:?}", tx);
 
 		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01efefce39e387a38ab83a7c21fbd75da4b836be6acbc15ec62f3b5b4d1070ca4e49498332dbe0fbec8a806cdb28f610c40a80c9ef97e83af0a95bb46f8c1e0c0201000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192d9bf46c241ddb58f1c4141c19dee9a8b3cf064c11d6ba6524886e82a4e6a3d1b000000000000000000000000000000000000000000000000000000000000000049f4e96507a68c8d673696ffd7e551091e62a0a603c6585b79d8707f807238654acf654557d0c27ec71e80b3ed7d0a6f7baa05717b5bf6060e6b9e6f5d3a553206a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000e97d67891def127bca1afa970660f49e245ad069226ffae44a5ccc7001bec73502030301060004040000000505040002000310bd9939fa08c006ec03000000010203ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0132f44cdc2295a63c3f5bdb46eafef39d12f405f102b79fb453107a90f58ed57a7c2e805e25ad26bf4e8bf74afb1b1442ef5ecb445d44b7f62fb2c53f11984a0401000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192d9bf46c241ddb58f1c4141c19dee9a8b3cf064c11d6ba6524886e82a4e6a3d1b000000000000000000000000000000000000000000000000000000000000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000049f4e96507a68c8d673696ffd7e551091e62a0a603c6585b79d8707f807238654acf654557d0c27ec71e80b3ed7d0a6f7baa05717b5bf6060e6b9e6f5d3a5532eda5bfc90c0490edbe517064d3976dfb32d433e6162772be2127e11e2dfcdd4802030301040004040000000605050002000310bd9939fa08c006ec03000000010203ff").to_vec();
 		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
@@ -829,4 +826,60 @@ mod tests {
 			)
 		)
 	}
+
+	// Test taken from https://docs.rs/solana-sdk/latest/src/solana_sdk/transaction/mod.rs.html#1354
+	// using current serialization (bincode::serde::encode_to_vec) and ensure that it's correct
+	fn create_sample_transaction() -> Transaction {
+        let keypair = Keypair::from_bytes(&[
+            255, 101, 36, 24, 124, 23, 167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116,
+            193, 215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218, 36, 100, 158, 252, 33, 161,
+            97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+            62, 157, 5, 142, 27, 210, 117,
+        ])
+        .unwrap();
+        let to = Pubkey::from([
+            1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4,
+            1, 1, 1,
+        ]);
+
+        let program_id = Pubkey::from([
+            2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
+            2, 2, 2,
+        ]);
+        let account_metas = vec![
+            AccountMeta::new(keypair.pubkey(), true),
+            AccountMeta::new(to, false),
+        ];
+        let instruction =
+            Instruction::new_with_bincode(program_id, &(1u8, 2u8, 3u8), account_metas);
+        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
+        let mut tx: Transaction = Transaction::new_unsigned(message);
+		tx.sign(&[&keypair], Hash::default());
+        tx
+    }
+
+	#[test]
+    fn test_sdk_serialize() {
+
+		let tx = create_sample_transaction();
+		let serialized_tx = bincode::serde::encode_to_vec(tx, bincode::config::legacy()).unwrap();
+		// SDK uses serde::serialize instead, but looks like this works.
+
+        assert_eq!(
+            serialized_tx,
+            vec![
+                1, 120, 138, 162, 185, 59, 209, 241, 157, 71, 157, 74, 131, 4, 87, 54, 28, 38, 180,
+                222, 82, 64, 62, 61, 62, 22, 46, 17, 203, 187, 136, 62, 43, 11, 38, 235, 17, 239,
+                82, 240, 139, 130, 217, 227, 214, 9, 242, 141, 223, 94, 29, 184, 110, 62, 32, 87,
+                137, 63, 139, 100, 221, 20, 137, 4, 5, 1, 0, 1, 3, 36, 100, 158, 252, 33, 161, 97,
+                185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+                62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 1,
+                3, 1, 2, 3
+            ]
+        );
+    }
 }
+
