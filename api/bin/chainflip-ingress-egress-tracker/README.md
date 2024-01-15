@@ -9,6 +9,8 @@ transactions into Redis.
 
 To start a Redis database locally, run `docker-compose up -d redis`.
 
+This exposes redis at `redis://localhost:6380`.
+
 When working with a "localnet" (e.g. for development purposes), no extra
 configuration is necessary: `./chainflip-ingress-egress-tracker`.
 
@@ -23,7 +25,7 @@ The default configuration can be overwritten with the following env variables:
 - BTC_ENDPOINT: Bitcoin node http endpoint. (Default: http://127.0.0.1:8332)
 - BTC_USERNAME: Bitcoin node username. (Default: flip)
 - BTC_PASSWORD: Bitcoin node password. (Default: flip)
-- REDIS_URL: Redis url. (Default: redis://localhost:6379)
+- REDIS_URL: Redis url. (Default: redis://localhost:6380)
 ```
 
 # Usage

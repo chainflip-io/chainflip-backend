@@ -2,4 +2,4 @@ services:
   redis:
     image: 'redislabs/redismod'
     ports:
-      - '6379:6379'
+      - '6380:6379'
