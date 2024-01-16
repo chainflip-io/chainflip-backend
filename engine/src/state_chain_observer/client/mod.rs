@@ -173,68 +173,75 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	}
 }
 
-async fn create_finalized_block_subscription<
-	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-	SignedExtrinsicClientBuilder: SignedExtrinsicClientBuilderTrait,
->(
-	scope: &Scope<'_, anyhow::Error>,
-	base_rpc_client: Arc<BaseRpcClient>,
-	signed_extrinsic_client_builder: &mut SignedExtrinsicClientBuilder,
-	required_version_and_wait: Option<(SemVer, bool)>,
-) -> Result<(
-	watch::Receiver<BlockInfo>,
-	impl StreamApi + Clone,
-	tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>,
-)> {
-	let mut finalized_block_stream = {
-		// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
-		// https://arxiv.org/abs/2007.01560
-		let sparse_finalized_block_stream = base_rpc_client
-			.subscribe_finalized_block_headers()
-			.await?
-			.map_err(Into::into)
-			.map_ok(|header| -> BlockInfo { header.into() })
-			.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-				STATE_CHAIN_CONNECTION
-			)))));
+impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
+	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
+{
+	async fn create_finalized_block_subscription<
+		SignedExtrinsicClientBuilder: SignedExtrinsicClientBuilderTrait<Client = SignedExtrinsicClient>,
+	>(
+		scope: &Scope<'_, anyhow::Error>,
+		base_rpc_client: Arc<BaseRpcClient>,
+		signed_extrinsic_client_builder: &mut SignedExtrinsicClientBuilder,
+		required_version_and_wait: Option<(SemVer, bool)>,
+	) -> Result<(
+		watch::Receiver<BlockInfo>,
+		impl StreamApi + Clone,
+		tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>,
+	)> {
+		let mut finalized_block_stream = {
+			// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
+			// https://arxiv.org/abs/2007.01560
+			let sparse_finalized_block_stream = base_rpc_client
+				.subscribe_finalized_block_headers()
+				.await?
+				.map_err(Into::into)
+				.map_ok(|header| -> BlockInfo { header.into() })
+				.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
+					STATE_CHAIN_CONNECTION
+				)))));
 
-		let mut finalized_block_stream = Box::pin(
-			inject_intervening_headers(sparse_finalized_block_stream, base_rpc_client.clone())
+			let mut finalized_block_stream = Box::pin(
+				Self::inject_intervening_headers(
+					sparse_finalized_block_stream,
+					base_rpc_client.clone(),
+				)
 				.await?,
-		);
+			);
 
-		let latest_finalized_block: BlockInfo = finalized_block_stream.next().await.unwrap()?;
+			let latest_finalized_block: BlockInfo = finalized_block_stream.next().await.unwrap()?;
 
-		finalized_block_stream.make_try_cached(latest_finalized_block)
-	};
+			finalized_block_stream.make_try_cached(latest_finalized_block)
+		};
 
-	// Often `finalized_header` returns a significantly newer latest block than the stream
-	// returns so we move the stream forward to this block
-	{
-		let finalised_header_hash = base_rpc_client.latest_finalized_block_hash().await?;
-		let finalised_header = base_rpc_client.block_header(finalised_header_hash).await?;
-		if finalized_block_stream.cache().number < finalised_header.number {
-			let blocks_to_skip =
-				finalized_block_stream.cache().number + 1..=finalised_header.number;
-			for block_number in blocks_to_skip {
-				assert_eq!(
-					finalized_block_stream.next().await.unwrap()?.number,
-					block_number,
-					"{SUBSTRATE_BEHAVIOUR}"
-				);
+		// Often `finalized_header` returns a significantly newer latest block than the stream
+		// returns so we move the stream forward to this block
+		{
+			let finalised_header_hash = base_rpc_client.latest_finalized_block_hash().await?;
+			let finalised_header = base_rpc_client.block_header(finalised_header_hash).await?;
+			if finalized_block_stream.cache().number < finalised_header.number {
+				let blocks_to_skip =
+					finalized_block_stream.cache().number + 1..=finalised_header.number;
+				for block_number in blocks_to_skip {
+					assert_eq!(
+						finalized_block_stream.next().await.unwrap()?.number,
+						block_number,
+						"{SUBSTRATE_BEHAVIOUR}"
+					);
+				}
 			}
 		}
-	}
 
-	signed_extrinsic_client_builder
-		.pre_compatibility(base_rpc_client.clone(), &mut finalized_block_stream)
-		.await?;
+		signed_extrinsic_client_builder
+			.pre_compatibility(base_rpc_client.clone(), &mut finalized_block_stream)
+			.await?;
 
-	if let Some((required_version, wait_for_required_version)) = required_version_and_wait {
-		let latest_block = *finalized_block_stream.cache();
-		if wait_for_required_version {
-			let incompatible_blocks =
-				futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(latest_block)))
+		if let Some((required_version, wait_for_required_version)) = required_version_and_wait {
+			let latest_block = *finalized_block_stream.cache();
+			if wait_for_required_version {
+				let incompatible_blocks =
+					futures::stream::once(futures::future::ready(Ok::<_, anyhow::Error>(
+						latest_block,
+					)))
 					.chain(finalized_block_stream.by_ref())
 					.and_then(|block| {
 						let base_rpc_client = &base_rpc_client;
@@ -259,205 +266,215 @@ async fn create_finalized_block_subscription<
 					})
 					.boxed();
 
-			incompatible_blocks.try_for_each(move |(block_number, block_hash, current_release_version)| futures::future::ready({
-			info!("This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {block_number}: {block_hash:?}. WAITING for a compatible release version.");
-			Ok::<_, anyhow::Error>(())
-		})).await?;
-		} else {
-			let current_release_version = base_rpc_client
-				.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
-					latest_block.hash,
-				)
-				.await?;
-			if !required_version.is_compatible_with(current_release_version) {
-				bail!(
-					"This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {}: {:?}.",
-					latest_block.number,
-					latest_block.hash,
-				);
+				incompatible_blocks.try_for_each(move |(block_number, block_hash, current_release_version)| futures::future::ready({
+				info!("This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {block_number}: {block_hash:?}. WAITING for a compatible release version.");
+				Ok::<_, anyhow::Error>(())
+			})).await?;
+			} else {
+				let current_release_version = base_rpc_client
+					.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+						latest_block.hash,
+					)
+					.await?;
+				if !required_version.is_compatible_with(current_release_version) {
+					bail!(
+						"This version '{required_version}' is incompatible with the current release '{current_release_version}' at block {}: {:?}.",
+						latest_block.number,
+						latest_block.hash,
+					);
+				}
 			}
 		}
-	}
 
-	const BLOCK_CAPACITY: usize = 10;
-	let (mut block_sender, block_receiver) = spmc::channel::<BlockInfo>(BLOCK_CAPACITY);
+		const BLOCK_CAPACITY: usize = 10;
+		let (mut block_sender, block_receiver) = spmc::channel::<BlockInfo>(BLOCK_CAPACITY);
 
-	let latest_block = *finalized_block_stream.cache();
-	let (latest_block_sender, latest_block_watcher) =
-		tokio::sync::watch::channel::<BlockInfo>(latest_block);
+		let latest_block = *finalized_block_stream.cache();
+		let (latest_block_sender, latest_block_watcher) =
+			tokio::sync::watch::channel::<BlockInfo>(latest_block);
 
-	let (block_stream_request_sender, block_stream_request_receiver) =
-		tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>(1);
+		let (block_stream_request_sender, block_stream_request_receiver) =
+			tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StreamApi>>>(1);
 
-	scope.spawn({
-		let base_rpc_client = base_rpc_client.clone();
-		let mut finalized_block_stream = finalized_block_stream.into_inner();
-		let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
-			tokio_stream::wrappers::ReceiverStream::new(block_stream_request_receiver);
-		let mut latest_block = latest_block;
-		async move {
-			loop_select!(
-				let result_block = finalized_block_stream.next().map(|option| option.unwrap()) => {
-					let block = result_block?;
-					latest_block = block;
-					if let Some((required_version, _)) = required_version_and_wait {
-						let current_release_version = base_rpc_client
-							.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
-								block.hash,
-							)
-							.await?;
-						if !required_version.is_compatible_with(current_release_version) {
-							break Err(anyhow!("This version '{required_version}' is no longer compatible with the release version '{current_release_version}' at block {}: {:?}", block.number, block.hash))
-						}
-					}
-
-					block_sender.send(block).await;
-					let _result = latest_block_sender.send(block);
-				},
-				if let Some(block_stream_request) = block_stream_request_receiver.next() => {
-					let _result = block_stream_request.send(Box::new(StateChainStream::new(block_sender.receiver().make_cached(latest_block))));
-				} else break Ok(()),
-			)
-		}
-	});
-
-	Ok((
-		latest_block_watcher,
-		StateChainStream::new(block_receiver.make_cached(latest_block)),
-		block_stream_request_sender,
-	))
-}
-
-async fn create_unfinalized_block_subscription<
-	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
->(
-	scope: &Scope<'_, anyhow::Error>,
-	base_rpc_client: Arc<BaseRpcClient>,
-) -> Result<(
-	watch::Receiver<BlockInfo>,
-	impl StreamApi<false> + Clone,
-	tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>,
-)> {
-	let mut sparse_block_stream = base_rpc_client
-		.subscribe_unfinalized_block_headers()
-		.await?
-		.map_err(Into::into)
-		.map_ok(|header| -> BlockInfo { header.into() })
-		.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-			STATE_CHAIN_CONNECTION
-		)))))
-		// Keep a copy of the base_rpc_client with the stream, as the subscription will end if the
-		// client is dropped
-		.map({
+		scope.spawn({
 			let base_rpc_client = base_rpc_client.clone();
-			move |i| {
-				let _ = &base_rpc_client;
-				i
+			let mut finalized_block_stream = finalized_block_stream.into_inner();
+			let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
+				tokio_stream::wrappers::ReceiverStream::new(block_stream_request_receiver);
+			let mut latest_block = latest_block;
+			async move {
+				loop_select!(
+					let result_block = finalized_block_stream.next().map(|option| option.unwrap()) => {
+						let block = result_block?;
+						latest_block = block;
+						if let Some((required_version, _)) = required_version_and_wait {
+							let current_release_version = base_rpc_client
+								.storage_value::<pallet_cf_environment::CurrentReleaseVersion<state_chain_runtime::Runtime>>(
+									block.hash,
+								)
+								.await?;
+							if !required_version.is_compatible_with(current_release_version) {
+								break Err(anyhow!("This version '{required_version}' is no longer compatible with the release version '{current_release_version}' at block {}: {:?}", block.number, block.hash))
+							}
+						}
+
+						block_sender.send(block).await;
+						let _result = latest_block_sender.send(block);
+					},
+					if let Some(block_stream_request) = block_stream_request_receiver.next() => {
+						let _result = block_stream_request.send(Box::new(StateChainStream::new(block_sender.receiver().make_cached(latest_block))));
+					} else break Ok(()),
+				)
 			}
 		});
 
-	let first_block = sparse_block_stream.next().await.unwrap()?;
-
-	const BLOCK_CAPACITY: usize = 10;
-	let (mut block_sender, block_receiver) = spmc::channel::<BlockInfo>(BLOCK_CAPACITY);
-
-	let (latest_block_sender, latest_block_watcher) =
-		tokio::sync::watch::channel::<BlockInfo>(first_block);
-
-	let (block_stream_request_sender, block_stream_request_receiver) =
-		tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>(1);
-
-	scope.spawn({
-		let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
-			tokio_stream::wrappers::ReceiverStream::new(block_stream_request_receiver);
-		let mut latest_block = first_block;
-		async move {
-			loop_select!(
-				let result_block = sparse_block_stream.next().map(|option| option.unwrap()) => {
-					let block = result_block?;
-					latest_block = block;
-
-					block_sender.send(block).await;
-					let _result = latest_block_sender.send(block);
-				},
-				if let Some(block_stream_request) = block_stream_request_receiver.next() => {
-					let _result = block_stream_request.send(Box::new(StateChainStream::new(block_sender.receiver().make_cached(latest_block))));
-				} else break Ok(()),
-			)
-		}
-	});
-
-	Ok((
-		latest_block_watcher,
-		StateChainStream::new(block_receiver.make_cached(first_block)),
-		block_stream_request_sender,
-	))
+		Ok((
+			latest_block_watcher,
+			StateChainStream::new(block_receiver.make_cached(latest_block)),
+			block_stream_request_sender,
+		))
+	}
 }
 
-async fn inject_intervening_headers<
-	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
->(
-	sparse_block_stream: impl Stream<Item = Result<BlockInfo>> + Send + 'static,
-	base_rpc_client: Arc<BaseRpcClient>,
-) -> Result<impl Stream<Item = Result<BlockInfo>>> {
-	let mut sparse_block_stream = Box::pin(sparse_block_stream);
-
-	let latest_finalized_block: BlockInfo =
-		sparse_block_stream.next().await.ok_or(anyhow!("initial header missing"))??;
-
-	let stream_rest = utilities::assert_stream_send(
-		sparse_block_stream
-			.and_then({
-				let mut latest_finalized_block = latest_finalized_block;
-				move |next_finalized_block| {
-					assert!(
-						latest_finalized_block.number < next_finalized_block.number,
-						"{SUBSTRATE_BEHAVIOUR}",
-					);
-
-					let prev_finalized_block =
-						std::mem::replace(&mut latest_finalized_block, next_finalized_block);
-
-					let base_rpc_client = base_rpc_client.clone();
-					async move {
-						let base_rpc_client = &base_rpc_client;
-						let intervening_blocks: Vec<_> = futures::stream::iter(
-							prev_finalized_block.number + 1..next_finalized_block.number,
-						)
-						.then(|block_number| async move {
-							let block_hash = base_rpc_client
-								.block_hash(block_number)
-								.await?
-								.expect(SUBSTRATE_BEHAVIOUR);
-							let block: BlockInfo =
-								base_rpc_client.block_header(block_hash).await?.into();
-							assert_eq!(block.hash, block_hash, "{SUBSTRATE_BEHAVIOUR}");
-							assert_eq!(block.number, block_number, "{SUBSTRATE_BEHAVIOUR}",);
-							Result::<_, anyhow::Error>::Ok(block)
-						})
-						.try_collect()
-						.await?;
-
-						for (previous_block, next_block) in Iterator::zip(
-							std::iter::once(&prev_finalized_block).chain(intervening_blocks.iter()),
-							intervening_blocks.iter().chain(std::iter::once(&next_finalized_block)),
-						) {
-							assert_eq!(previous_block.hash, next_block.parent_hash);
-						}
-
-						Result::<_, anyhow::Error>::Ok(futures::stream::iter(
-							intervening_blocks
-								.into_iter()
-								.chain(std::iter::once(next_finalized_block))
-								.map(Result::<_, anyhow::Error>::Ok),
-						))
-					}
+impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
+	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
+{
+	async fn create_unfinalized_block_subscription(
+		scope: &Scope<'_, anyhow::Error>,
+		base_rpc_client: Arc<BaseRpcClient>,
+	) -> Result<(
+		watch::Receiver<BlockInfo>,
+		impl StreamApi<false> + Clone,
+		tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>,
+	)> {
+		let mut sparse_block_stream = base_rpc_client
+			.subscribe_unfinalized_block_headers()
+			.await?
+			.map_err(Into::into)
+			.map_ok(|header| -> BlockInfo { header.into() })
+			.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
+				STATE_CHAIN_CONNECTION
+			)))))
+			// Keep a copy of the base_rpc_client with the stream, as the subscription will end if
+			// the client is dropped
+			.map({
+				let base_rpc_client = base_rpc_client.clone();
+				move |i| {
+					let _ = &base_rpc_client;
+					i
 				}
-			})
-			.try_flatten(),
-	);
+			});
 
-	Ok(futures::stream::once(async move { Ok(latest_finalized_block) }).chain(stream_rest))
+		let first_block = sparse_block_stream.next().await.unwrap()?;
+
+		const BLOCK_CAPACITY: usize = 10;
+		let (mut block_sender, block_receiver) = spmc::channel::<BlockInfo>(BLOCK_CAPACITY);
+
+		let (latest_block_sender, latest_block_watcher) =
+			tokio::sync::watch::channel::<BlockInfo>(first_block);
+
+		let (block_stream_request_sender, block_stream_request_receiver) =
+			tokio::sync::mpsc::channel::<tokio::sync::oneshot::Sender<Box<dyn StreamApi<false>>>>(
+				1,
+			);
+
+		scope.spawn({
+			let mut block_stream_request_receiver: tokio_stream::wrappers::ReceiverStream<_> =
+				tokio_stream::wrappers::ReceiverStream::new(block_stream_request_receiver);
+			let mut latest_block = first_block;
+			async move {
+				loop_select!(
+					let result_block = sparse_block_stream.next().map(|option| option.unwrap()) => {
+						let block = result_block?;
+						latest_block = block;
+
+						block_sender.send(block).await;
+						let _result = latest_block_sender.send(block);
+					},
+					if let Some(block_stream_request) = block_stream_request_receiver.next() => {
+						let _result = block_stream_request.send(Box::new(StateChainStream::new(block_sender.receiver().make_cached(latest_block))));
+					} else break Ok(()),
+				)
+			}
+		});
+
+		Ok((
+			latest_block_watcher,
+			StateChainStream::new(block_receiver.make_cached(first_block)),
+			block_stream_request_sender,
+		))
+	}
+}
+
+impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
+	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
+{
+	async fn inject_intervening_headers(
+		sparse_block_stream: impl Stream<Item = Result<BlockInfo>> + Send + 'static,
+		base_rpc_client: Arc<BaseRpcClient>,
+	) -> Result<impl Stream<Item = Result<BlockInfo>> + Send + 'static> {
+		let mut sparse_block_stream = Box::pin(sparse_block_stream);
+
+		let latest_finalized_block: BlockInfo =
+			sparse_block_stream.next().await.ok_or(anyhow!("initial header missing"))??;
+
+		let stream_rest = utilities::assert_stream_send(
+			sparse_block_stream
+				.and_then({
+					let mut latest_finalized_block = latest_finalized_block;
+					move |next_finalized_block| {
+						assert!(
+							latest_finalized_block.number < next_finalized_block.number,
+							"{SUBSTRATE_BEHAVIOUR}",
+						);
+
+						let prev_finalized_block =
+							std::mem::replace(&mut latest_finalized_block, next_finalized_block);
+
+						let base_rpc_client = base_rpc_client.clone();
+						async move {
+							let base_rpc_client = &base_rpc_client;
+							let intervening_blocks: Vec<_> = futures::stream::iter(
+								prev_finalized_block.number + 1..next_finalized_block.number,
+							)
+							.then(|block_number| async move {
+								let block_hash = base_rpc_client
+									.block_hash(block_number)
+									.await?
+									.expect(SUBSTRATE_BEHAVIOUR);
+								let block: BlockInfo =
+									base_rpc_client.block_header(block_hash).await?.into();
+								assert_eq!(block.hash, block_hash, "{SUBSTRATE_BEHAVIOUR}");
+								assert_eq!(block.number, block_number, "{SUBSTRATE_BEHAVIOUR}",);
+								Result::<_, anyhow::Error>::Ok(block)
+							})
+							.try_collect()
+							.await?;
+
+							for (previous_block, next_block) in Iterator::zip(
+								std::iter::once(&prev_finalized_block)
+									.chain(intervening_blocks.iter()),
+								intervening_blocks
+									.iter()
+									.chain(std::iter::once(&next_finalized_block)),
+							) {
+								assert_eq!(previous_block.hash, next_block.parent_hash);
+							}
+
+							Result::<_, anyhow::Error>::Ok(futures::stream::iter(
+								intervening_blocks
+									.into_iter()
+									.chain(std::iter::once(next_finalized_block))
+									.map(Result::<_, anyhow::Error>::Ok),
+							))
+						}
+					}
+				})
+				.try_flatten(),
+		);
+
+		Ok(futures::stream::once(async move { Ok(latest_finalized_block) }).chain(stream_rest))
+	}
 }
 
 impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtrinsicClient>
@@ -489,7 +506,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			latest_finalized_block_watcher,
 			mut finalized_state_chain_stream,
 			finalized_block_stream_request_sender,
-		) = create_finalized_block_subscription(
+		) = Self::create_finalized_block_subscription(
 			scope,
 			base_rpc_client.clone(),
 			&mut signed_extrinsic_client_builder,
@@ -501,7 +518,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			latest_unfinalized_block_watcher,
 			unfinalized_state_chain_stream,
 			unfinalized_block_stream_request_sender,
-		) = create_unfinalized_block_subscription(scope, base_rpc_client.clone()).await?;
+		) = Self::create_unfinalized_block_subscription(scope, base_rpc_client.clone()).await?;
 
 		let state_chain_client = Arc::new(StateChainClient {
 			genesis_hash,
@@ -1146,7 +1163,9 @@ mod tests {
 			Ok(chain.headers[hash].clone().into())
 		});
 
-		let stream = inject_intervening_headers(sparse_stream, rpc).await?;
+		let stream =
+			StateChainClient::<(), MockBaseRpcApi>::inject_intervening_headers(sparse_stream, rpc)
+				.await?;
 
 		let headers = stream.collect::<Vec<_>>().await;
 
