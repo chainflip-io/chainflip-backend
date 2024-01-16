@@ -16,11 +16,11 @@ export async function getNetworkRuntimeVersion(endpoint?: string): Promise<Runti
   return (await jsonRpc('state_getRuntimeVersion', [], endpoint)) as unknown as RuntimeVersion;
 }
 
-// If `onlyReadCurrent` is true, it will only read the current spec version and return it.
-// If `onlyReadCurrent` is false, it will increment the spec version and write it to the file. Returning the newly written version.
 export function specVersion(
   filePath: string,
   readOrWrite: 'read' | 'write',
+  // Will only write this version if the current version is less than this.
+  // If this is not provided it will simply bump the version in the file by 1.
   writeSpecVersion?: number,
 ): number {
   try {
@@ -44,13 +44,24 @@ export function specVersion(
 
           if (readOrWrite === 'read') {
             return currentSpecVersion;
+          } else {
+            // write
+
+            if (writeSpecVersion) {
+              if (currentSpecVersion >= writeSpecVersion) {
+                console.log("Current spec version is greater than the one you're trying to write. Returning currentSpecVersion.");
+                return currentSpecVersion;
+              } else {
+                // if the version we provided is greater than the current one, then we can bump it to this new version.
+                incrementedVersion = writeSpecVersion;
+              }
+            } else {
+              // If we want to write, but didn't provide a version, we simply increment the current version.
+              incrementedVersion = currentSpecVersion + 1;
+            }
           }
 
-          if (writeSpecVersion) {
-            incrementedVersion = writeSpecVersion;
-          } else {
-            incrementedVersion = currentSpecVersion + 1;
-          }
+          console.assert(incrementedVersion !== -1, 'incrementedVersion should not be -1. It should be set above.');
           lines[i] = `	spec_version: ${incrementedVersion},`;
           break;
         }
