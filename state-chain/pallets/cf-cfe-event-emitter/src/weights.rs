@@ -32,7 +32,7 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_cfe_event_emitter.
 pub trait WeightInfo {
-	fn remove_events_for_block() -> Weight;
+	fn clear_events() -> Weight;
 }
 
 /// Weights for pallet_cf_cfe_event_emitter using the Substrate node and recommended hardware.
@@ -40,7 +40,7 @@ pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Storage: `CfeEventEmitter::CfeEvents` (r:0 w:1)
 	/// Proof: `CfeEventEmitter::CfeEvents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn remove_events_for_block() -> Weight {
+	fn clear_events() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
@@ -54,7 +54,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 impl WeightInfo for () {
 	/// Storage: `CfeEventEmitter::CfeEvents` (r:0 w:1)
 	/// Proof: `CfeEventEmitter::CfeEvents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn remove_events_for_block() -> Weight {
+	fn clear_events() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
