@@ -18,7 +18,7 @@ use cf_chains::{
 	TransactionMetadata as _,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeEventEmitterForChain,
+	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
 	Chainflip, EpochInfo, GetBlockHeight, SafeMode, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
@@ -195,7 +195,7 @@ pub mod pallet {
 			AttemptCount = AttemptCount,
 		>;
 
-		type CfeEventEmitter: CfeEventEmitterForChain<Self, Self::TargetChain>;
+		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -835,7 +835,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id,
 			);
 
-			T::CfeEventEmitter::tx_broadcast_request(TxBroadcastRequest {
+			T::CfeBroadcastRequest::tx_broadcast_request(TxBroadcastRequest {
 				broadcast_id,
 				nominee: nominated_signer.clone(),
 				payload: broadcast_attempt.transaction_payload.clone(),

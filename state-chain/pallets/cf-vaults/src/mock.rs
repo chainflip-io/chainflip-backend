@@ -241,7 +241,7 @@ impl pallet_cf_vaults::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
-	type CfeEventEmitter = MockCfeEventEmitter;
+	type CfeMultisigRequest = MockCfeEventEmitter;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

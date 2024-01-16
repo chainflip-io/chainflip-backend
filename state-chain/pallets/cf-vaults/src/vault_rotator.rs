@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{CeremonyIdProvider, CfeEventEmitterForCrypto, GetBlockHeight};
+use cf_traits::{CeremonyIdProvider, CfeMultisigRequest, GetBlockHeight};
 use cfe_events::{KeyHandoverRequest, KeygenRequest};
 use frame_support::sp_runtime::traits::BlockNumberProvider;
 
@@ -29,7 +29,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		// block
 		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
 
-		T::CfeEventEmitter::keygen_request(KeygenRequest {
+		T::CfeMultisigRequest::keygen_request(KeygenRequest {
 			ceremony_id,
 			epoch_index: new_epoch_index,
 			participants: candidates.clone(),
@@ -82,7 +82,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 							frame_system::Pallet::<T>::current_block_number(),
 						);
 
-						T::CfeEventEmitter::key_handover_request(KeyHandoverRequest {
+						T::CfeMultisigRequest::key_handover_request(KeyHandoverRequest {
 							ceremony_id,
 							from_epoch: epoch_key.epoch_index,
 							to_epoch: new_epoch_index,

@@ -146,7 +146,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
-	type CfeEventEmitter = MockCfeEventEmitter;
+	type CfeMultisigRequest = MockCfeEventEmitter;
 	type Weights = ();
 }
 

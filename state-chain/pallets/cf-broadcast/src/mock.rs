@@ -148,7 +148,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type RetryPolicy = MockRetryPolicy;
-	type CfeEventEmitter = MockCfeEventEmitter;
+	type CfeBroadcastRequest = MockCfeEventEmitter;
 }
 
 impl_mock_chainflip!(Test);

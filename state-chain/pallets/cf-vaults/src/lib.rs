@@ -9,7 +9,7 @@ use cf_primitives::{
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster,
-	CfeEventEmitterForCrypto, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider,
+	CfeMultisigRequest, Chainflip, CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider,
 	SafeMode, SetSafeMode, Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
 	VaultStatus,
 };
@@ -210,7 +210,7 @@ pub mod pallet {
 
 		type ChainTracking: GetBlockHeight<Self::Chain>;
 
-		type CfeEventEmitter: CfeEventEmitterForCrypto<Self, <Self::Chain as Chain>::ChainCrypto>;
+		type CfeMultisigRequest: CfeMultisigRequest<Self, <Self::Chain as Chain>::ChainCrypto>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;

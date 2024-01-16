@@ -201,7 +201,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type ReputationResetter = Reputation;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfePeerRegistration = CfeEventEmitter;
 }
 
 parameter_types! {
@@ -247,7 +247,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ChainTracking = EthereumChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeMultisigRequest = CfeEventEmitter;
 }
 
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
@@ -265,7 +265,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type ChainTracking = PolkadotChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeMultisigRequest = CfeEventEmitter;
 }
 
 impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
@@ -283,7 +283,7 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type ChainTracking = BitcoinChainTracking;
 	type SafeMode = RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeMultisigRequest = CfeEventEmitter;
 }
 
 use chainflip::address_derivation::AddressDerivation;
@@ -641,7 +641,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = EthereumVault;
 	type CeremonyRetryDelay = ConstU32<1>;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeMultisigRequest = CfeEventEmitter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -656,7 +656,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = PolkadotVault;
 	type CeremonyRetryDelay = ConstU32<1>;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeMultisigRequest = CfeEventEmitter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -671,7 +671,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = BitcoinVault;
 	type CeremonyRetryDelay = ConstU32<1>;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeMultisigRequest = CfeEventEmitter;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
@@ -696,7 +696,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeBroadcastRequest = CfeEventEmitter;
 }
 
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
@@ -720,7 +720,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeBroadcastRequest = CfeEventEmitter;
 }
 
 impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
@@ -744,7 +744,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
-	type CfeEventEmitter = CfeEventEmitter;
+	type CfeBroadcastRequest = CfeEventEmitter;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {

@@ -196,7 +196,7 @@ impl Config for Test {
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
-	type CfeEventEmitter = MockCfeEventEmitter;
+	type CfePeerRegistration = MockCfeEventEmitter;
 }
 
 /// Session pallet requires a set of validators at genesis.

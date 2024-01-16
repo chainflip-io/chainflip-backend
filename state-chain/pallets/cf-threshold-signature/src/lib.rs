@@ -19,7 +19,7 @@ use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, CfeEventEmitterForCrypto,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, CfeMultisigRequest,
 	Chainflip, EpochInfo, EpochKey, KeyProvider, ThresholdSignerNomination,
 };
 use cfe_events::ThresholdSignatureRequest;
@@ -80,7 +80,7 @@ const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 pub mod pallet {
 	use super::*;
 	use cf_traits::{
-		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, CfeEventEmitterForCrypto,
+		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, CfeMultisigRequest,
 		ThresholdSignerNomination,
 	};
 	use frame_support::{
@@ -240,7 +240,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type CeremonyRetryDelay: Get<BlockNumberFor<Self>>;
 
-		type CfeEventEmitter: CfeEventEmitterForCrypto<Self, Self::TargetChainCrypto>;
+		type CfeMultisigRequest: CfeMultisigRequest<Self, Self::TargetChainCrypto>;
 
 		/// Pallet weights
 		type Weights: WeightInfo;
@@ -712,7 +712,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					attempt_count
 				);
 
-				T::CfeEventEmitter::signature_request(ThresholdSignatureRequest {
+				T::CfeMultisigRequest::signature_request(ThresholdSignatureRequest {
 					ceremony_id,
 					epoch_index: epoch,
 					key,

@@ -22,9 +22,10 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuthoritiesCfeVersions,
-	Bid, BidderProvider, Bonding, CfeEventEmitterT, Chainflip, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded,
-	QualifyNode, ReputationResetter, SetSafeMode, VaultRotator,
+	Bid, BidderProvider, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
+	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SetSafeMode,
+	VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -148,7 +149,7 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
-		type CfeEventEmitter: CfeEventEmitterT<Self>;
+		type CfePeerRegistration: CfePeerRegistration<Self>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -668,7 +669,12 @@ pub mod pallet {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
-			T::CfeEventEmitter::peer_registered(validator_id.clone(), peer_id, port, ip_address);
+			T::CfePeerRegistration::peer_registered(
+				validator_id.clone(),
+				peer_id,
+				port,
+				ip_address,
+			);
 
 			// TODO: Consider removing this
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
@@ -1335,7 +1341,7 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(account_id);
 
-			T::CfeEventEmitter::peer_deregistered(validator_id.clone(), peer_id);
+			T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
 
 			// TODO: consider removing this
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));

@@ -4,7 +4,7 @@ use cf_chains::mocks::{MockEthereum, MockEthereumChainCrypto};
 use codec::{Decode, Encode};
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
-use crate::{CfeEventEmitterForChain, CfeEventEmitterForCrypto, CfeEventEmitterT, Chainflip};
+use crate::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
 
 pub struct MockCfeEventEmitter {}
 
@@ -21,7 +21,7 @@ pub enum MockCfeEvent<ValidatorId> {
 
 const STORAGE_KEY: &[u8] = b"MockCfeEventEmitter::Events";
 
-impl<T: Chainflip> CfeEventEmitterForCrypto<T, MockEthereumChainCrypto> for MockCfeEventEmitter {
+impl<T: Chainflip> CfeMultisigRequest<T, MockEthereumChainCrypto> for MockCfeEventEmitter {
 	fn keygen_request(req: cfe_events::KeygenRequest<T::ValidatorId>) {
 		Self::append_event(MockCfeEvent::EthKeygenRequest(req));
 	}
@@ -39,13 +39,13 @@ impl<T: Chainflip> CfeEventEmitterForCrypto<T, MockEthereumChainCrypto> for Mock
 	}
 }
 
-impl<T: Chainflip> CfeEventEmitterForChain<T, MockEthereum> for MockCfeEventEmitter {
+impl<T: Chainflip> CfeBroadcastRequest<T, MockEthereum> for MockCfeEventEmitter {
 	fn tx_broadcast_request(req: cfe_events::TxBroadcastRequest<T::ValidatorId, MockEthereum>) {
 		Self::append_event(MockCfeEvent::EthTxBroadcastRequest(req));
 	}
 }
 
-impl<T: Chainflip> CfeEventEmitterT<T> for MockCfeEventEmitter {
+impl<T: Chainflip> CfePeerRegistration<T> for MockCfeEventEmitter {
 	fn peer_registered(
 		_account_id: <T as Chainflip>::ValidatorId,
 		_pubkey: cf_primitives::Ed25519PublicKey,

@@ -447,7 +447,7 @@ where
 	}
 }
 
-pub trait CfeEventEmitterForCrypto<T: Chainflip, C: ChainCrypto> {
+pub trait CfeMultisigRequest<T: Chainflip, C: ChainCrypto> {
 	fn keygen_request(req: KeygenRequest<T::ValidatorId>);
 
 	fn signature_request(req: cfe_events::ThresholdSignatureRequest<T::ValidatorId, C>);
@@ -457,7 +457,7 @@ pub trait CfeEventEmitterForCrypto<T: Chainflip, C: ChainCrypto> {
 	}
 }
 
-pub trait CfeEventEmitterT<T: Chainflip> {
+pub trait CfePeerRegistration<T: Chainflip> {
 	fn peer_registered(
 		account_id: T::ValidatorId,
 		pubkey: Ed25519PublicKey,
@@ -468,7 +468,7 @@ pub trait CfeEventEmitterT<T: Chainflip> {
 	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
 }
 
-pub trait CfeEventEmitterForChain<T: Chainflip, C: Chain> {
+pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T::ValidatorId, C>);
 }
 

@@ -10,7 +10,7 @@ use cf_chains::{
 	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, Bitcoin, Ethereum, Polkadot,
 };
 use cf_primitives::{Ed25519PublicKey, Ipv6Addr, Port};
-use cf_traits::{CfeEventEmitterForChain, CfeEventEmitterForCrypto, CfeEventEmitterT, Chainflip};
+use cf_traits::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
 use frame_support::{
 	pallet_prelude::Hooks,
 	storage::types::{StorageValue, ValueQuery},
@@ -60,12 +60,12 @@ pub mod pallet {
 		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			CfeEvents::<T>::kill();
 
-			T::WeightInfo::remove_events_for_block()
+			T::WeightInfo::clear_events()
 		}
 	}
 }
 
-impl<T: Config> CfeEventEmitterForCrypto<T, EvmCrypto> for Pallet<T> {
+impl<T: Config> CfeMultisigRequest<T, EvmCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::EthKeygenRequest(req))
 	}
@@ -75,7 +75,7 @@ impl<T: Config> CfeEventEmitterForCrypto<T, EvmCrypto> for Pallet<T> {
 	}
 }
 
-impl<T: Config> CfeEventEmitterForCrypto<T, BitcoinCrypto> for Pallet<T> {
+impl<T: Config> CfeMultisigRequest<T, BitcoinCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::BtcKeygenRequest(req))
 	}
@@ -89,7 +89,7 @@ impl<T: Config> CfeEventEmitterForCrypto<T, BitcoinCrypto> for Pallet<T> {
 	}
 }
 
-impl<T: Config> CfeEventEmitterForCrypto<T, PolkadotCrypto> for Pallet<T> {
+impl<T: Config> CfeMultisigRequest<T, PolkadotCrypto> for Pallet<T> {
 	fn keygen_request(req: KeygenRequest<T>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::DotKeygenRequest(req))
 	}
@@ -99,25 +99,25 @@ impl<T: Config> CfeEventEmitterForCrypto<T, PolkadotCrypto> for Pallet<T> {
 	}
 }
 
-impl<T: Config> CfeEventEmitterForChain<T, Polkadot> for Pallet<T> {
+impl<T: Config> CfeBroadcastRequest<T, Polkadot> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Polkadot>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::DotTxBroadcastRequest(req))
 	}
 }
 
-impl<T: Config> CfeEventEmitterForChain<T, Bitcoin> for Pallet<T> {
+impl<T: Config> CfeBroadcastRequest<T, Bitcoin> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Bitcoin>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::BtcTxBroadcastRequest(req))
 	}
 }
 
-impl<T: Config> CfeEventEmitterForChain<T, Ethereum> for Pallet<T> {
+impl<T: Config> CfeBroadcastRequest<T, Ethereum> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Ethereum>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::EthTxBroadcastRequest(req))
 	}
 }
 
-impl<T: Config> CfeEventEmitterT<T> for Pallet<T> {
+impl<T: Config> CfePeerRegistration<T> for Pallet<T> {
 	fn peer_registered(
 		account_id: T::ValidatorId,
 		pubkey: Ed25519PublicKey,
