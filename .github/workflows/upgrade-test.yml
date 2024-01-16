@@ -2,6 +2,11 @@ name: Test upgrade from latest release to main
 
 on:
   workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Commit to run the upgrade test against'
+        required: false
+        default: 'HEAD'
 
 env:
   FORCE_COLOR: 1
@@ -84,6 +89,7 @@ jobs:
           workflow: ci-main.yml
           name: chainflip-backend-bin-try-runtime-ubuntu-22.04
           path: main-bins
+          commit: ${{ github.event.inputs.commit }}
 
       - name: Permissions for latest binaries
         run: |
@@ -95,6 +101,7 @@ jobs:
           workflow: ci-main.yml
           name: chainflip-node-runtime-try-runtime-ubuntu-22.04
           path: main-runtime
+          commit: ${{ github.event.inputs.commit }}
 
       - name: Version of latest main
         run: |
