@@ -102,21 +102,33 @@ pub mod pallet {
 	/// Type alias for the instance's configured ApiCall.
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	/// All data contained in a Broadcast
+	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
-	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
+	pub struct BroadcastData<T: Config<I>, I: 'static> {
 		pub broadcast_id: BroadcastId,
 		pub transaction_payload: TransactionFor<T, I>,
 		pub threshold_signature_payload: PayloadFor<T, I>,
 		pub transaction_out_id: TransactionOutIdFor<T, I>,
 	}
 
-	/// The first step in the process - a transaction signing attempt.
+	impl<T: Config<I>, I: 'static> Clone for BroadcastData<T, I> {
+		fn clone(&self) -> Self {
+			BroadcastData {
+				broadcast_id: self.broadcast_id,
+				transaction_payload: self.transaction_payload.clone(),
+				threshold_signature_payload: self.threshold_signature_payload.clone(),
+				transaction_out_id: self.transaction_out_id.clone(),
+			}
+		}
+	}
+
+	/// Broadcast data with a nominated broadcaster
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
-	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
-		pub broadcast_attempt: BroadcastAttempt<T, I>,
-		pub nominee: T::ValidatorId,
+	pub struct BroadcastWithNominee<T: Config<I>, I: 'static> {
+		pub broadcast_data: BroadcastData<T, I>,
+		pub nominee: Option<T::ValidatorId>,
 	}
 
 	#[pallet::config]
@@ -232,7 +244,7 @@ pub mod pallet {
 	/// Live transaction broadcast requests.
 	#[pallet::storage]
 	pub type AwaitingBroadcast<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, TransactionSigningAttempt<T, I>, OptionQuery>;
+		StorageMap<_, Twox64Concat, BroadcastId, BroadcastWithNominee<T, I>, OptionQuery>;
 
 	/// Lookup table between TransactionOutId -> Broadcast.
 	/// This storage item is used by the CFE to track which broadcasts/egresses it needs to
@@ -246,15 +258,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The list of failed broadcasts that will be retried in the next block.
-	#[pallet::storage]
-	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
-
 	/// The list of failed broadcasts that will be retried in some future block.
 	#[pallet::storage]
 	pub type DelayedBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<BroadcastAttempt<T, I>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, BTreeSet<BroadcastId>, ValueQuery>;
 
 	/// A mapping from block number to a list of signing or broadcast attempts that expire at that
 	/// block number.
@@ -371,8 +378,29 @@ pub mod pallet {
 						}
 					}
 				}
-				for attempt in delayed_retries {
-					Self::start_next_broadcast_attempt(attempt);
+
+				// Retry broadcast (allowed by broadcast barrier)
+				let next_block = block_number.saturating_add(One::one());
+				let id_limit = BroadcastBarriers::<T, I>::get()
+					.first()
+					.copied()
+					.unwrap_or(BroadcastId::max_value());
+				let mut remaining_retries = delayed_retries
+					.into_iter()
+					.filter(|broadcast_id| {
+						if *broadcast_id <= id_limit {
+							// If retry is allowed by the barrier - start the retry.
+							Self::start_next_broadcast_attempt(*broadcast_id);
+							false
+						} else {
+							true
+						}
+					})
+					.collect::<BTreeSet<_>>();
+				if !remaining_retries.is_empty() {
+					DelayedBroadcastRetryQueue::<T, I>::mutate(next_block, |current| {
+						current.append(&mut remaining_retries)
+					});
 				}
 			} else {
 				Timeouts::<T, I>::mutate(
@@ -381,55 +409,10 @@ pub mod pallet {
 				);
 				DelayedBroadcastRetryQueue::<T, I>::mutate(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
-					|current| {
-						// Append the attempts, avoid any duplicates.
-						let mut broadcast_id_set = current
-							.iter()
-							.map(|attempt| attempt.broadcast_id)
-							.collect::<BTreeSet<_>>();
-						delayed_retries.drain(..).for_each(|attempt| {
-							if !broadcast_id_set.contains(&attempt.broadcast_id) {
-								broadcast_id_set.insert(attempt.broadcast_id);
-								current.push(attempt);
-							}
-						});
-					},
+					|current| current.append(&mut delayed_retries),
 				);
 			}
 			T::WeightInfo::on_initialize(num_retries as u32)
-		}
-
-		// We want to retry broadcasts when we have free block space.
-		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			if T::SafeMode::get().retry_enabled {
-				let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
-
-				let num_retries_that_fit = remaining_weight
-					.ref_time()
-					.checked_div(next_broadcast_weight.ref_time())
-					.expect("start_next_broadcast_attempt weight should not be 0")
-					as usize;
-
-				let retries = BroadcastRetryQueue::<T, I>::mutate(|retry_queue| {
-					let id_limit = BroadcastBarriers::<T, I>::get()
-						.first()
-						.copied()
-						.unwrap_or(BroadcastId::max_value());
-					retry_queue
-						.extract_if(|broadcast| broadcast.broadcast_id <= id_limit)
-						.take(num_retries_that_fit)
-						.collect::<Vec<_>>()
-				});
-
-				let retries_len = retries.len();
-
-				for retry in retries {
-					Self::start_next_broadcast_attempt(retry);
-				}
-				next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
-			} else {
-				Weight::zero()
-			}
 		}
 	}
 
@@ -501,20 +484,26 @@ pub mod pallet {
 					(broadcast_id, initiated_at),
 				);
 
-				let broadcast_attempt = BroadcastAttempt::<T, I> {
+				// Store the new broadcast data so it is ready to be broadcasted.
+				let broadcast_data = BroadcastData::<T, I> {
 					broadcast_id,
 					transaction_payload: T::TransactionBuilder::build_transaction(&signed_api_call),
 					threshold_signature_payload,
 					transaction_out_id,
 				};
+				// This write is required in-case if no nominee can be selected in the first try.
+				AwaitingBroadcast::<T, I>::insert(
+					broadcast_id,
+					BroadcastWithNominee { broadcast_data: broadcast_data.clone(), nominee: None },
+				);
 
 				if BroadcastBarriers::<T, I>::get()
 					.first()
 					.is_some_and(|broadcast_barrier_id| broadcast_id > *broadcast_barrier_id)
 				{
-					Self::schedule_for_retry(&broadcast_attempt, Self::attempt_count(broadcast_id));
+					Self::schedule_for_retry(broadcast_id);
 				} else {
-					Self::start_broadcast_attempt(broadcast_attempt);
+					Self::start_broadcast_attempt(broadcast_data);
 				}
 			} else {
 				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
@@ -558,7 +547,7 @@ pub mod pallet {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
 					if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 						let to_refund = signing_attempt
-							.broadcast_attempt
+							.broadcast_data
 							.transaction_payload
 							.return_fee_refund(tx_fee);
 
@@ -743,10 +732,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)
 	}
 
-	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
-		let broadcast_id = broadcast_attempt.broadcast_id;
-
-		// If the broadcast is not pending, we should not retry.
+	fn start_next_broadcast_attempt(broadcast_id: BroadcastId) {
 		if !PendingBroadcasts::<T, I>::get().contains(&broadcast_id) {
 			log::warn!(
 				"Broadcast already succeeded or aborted, retry is ignored. broadcast_id: {}",
@@ -755,57 +741,64 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return
 		}
 
-		if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			if T::TransactionBuilder::requires_signature_refresh(
-				&api_call,
-				&broadcast_attempt.threshold_signature_payload,
-			) {
-				// We update the initiated_at here since as the tx is resigned and broadcast, it is
-				// not possible for it to be successfully broadcasted before this point.
-				// This `initiated_at` block will be associated with the new transaction_out_id
-				// so should not interfere with witnessing the previous one.
-				let initiated_at = T::ChainTracking::get_block_height();
+		if let Some(broadcast_signing_attempt) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+			// If the broadcast is not pending, we should not retry.
+			if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id)
+			{
+				if T::TransactionBuilder::requires_signature_refresh(
+					&api_call,
+					&broadcast_signing_attempt.broadcast_data.threshold_signature_payload,
+				) {
+					// We update the initiated_at here since as the tx is resigned and broadcast, it
+					// is not possible for it to be successfully broadcasted before this point.
+					// This `initiated_at` block will be associated with the new transaction_out_id
+					// so should not interfere with witnessing the previous one.
+					let initiated_at = T::ChainTracking::get_block_height();
 
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
 
-				let threshold_signature_payload = api_call.threshold_signature_payload();
-				T::ThresholdSigner::request_signature_with_callback(
-					threshold_signature_payload.clone(),
-					|threshold_request_id| {
-						Call::on_signature_ready {
-							threshold_request_id,
-							threshold_signature_payload,
-							api_call: Box::new(api_call),
-							broadcast_id,
-							initiated_at,
-							should_broadcast: true,
-						}
-						.into()
-					},
-				);
+					let threshold_signature_payload = api_call.threshold_signature_payload();
+					T::ThresholdSigner::request_signature_with_callback(
+						threshold_signature_payload.clone(),
+						|threshold_request_id| {
+							Call::on_signature_ready {
+								threshold_request_id,
+								threshold_signature_payload,
+								api_call: Box::new(api_call),
+								broadcast_id,
+								initiated_at,
+								should_broadcast: true,
+							}
+							.into()
+						},
+					);
 
-				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
-					broadcast_id
-				);
+					log::info!(
+						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+						broadcast_id
+					);
+				} else {
+					Self::start_broadcast_attempt(broadcast_signing_attempt.broadcast_data);
+				}
 			} else {
-				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-					broadcast_id,
-					..broadcast_attempt
-				});
-			}
+				log::error!("No threshold signature data are available for broadcast: {:?}. Retry is aborted.", broadcast_id);
+			};
 		} else {
-			log::error!("No threshold signature data is available.");
-		};
+			log::error!(
+				"Broadcast data not found for broadcast: {:?}. Retry is aborted.",
+				broadcast_id
+			);
+		}
 	}
 
-	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
-		let broadcast_id = broadcast_attempt.broadcast_id;
-		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_attempt.transaction_payload);
+	/// Start a broadcast attempt by try to select a nominee.
+	fn start_broadcast_attempt(mut broadcast_data: BroadcastData<T, I>) {
+		let broadcast_id = broadcast_data.broadcast_id;
+		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_data.transaction_payload);
 		TransactionMetadata::<T, I>::insert(
 			broadcast_id,
 			<<T::TargetChain as Chain>::TransactionMetadata>::extract_metadata(
-				&broadcast_attempt.transaction_payload,
+				&broadcast_data.transaction_payload,
 			),
 		);
 
@@ -817,13 +810,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingBroadcast::<T, I>::insert(
 				broadcast_id,
-				TransactionSigningAttempt {
-					broadcast_attempt: BroadcastAttempt::<T, I> {
-						transaction_payload: broadcast_attempt.transaction_payload.clone(),
-						transaction_out_id: broadcast_attempt.transaction_out_id.clone(),
-						..broadcast_attempt
-					},
-					nominee: nominated_signer.clone(),
+				BroadcastWithNominee {
+					broadcast_data: broadcast_data.clone(),
+					nominee: Some(nominated_signer.clone()),
 				},
 			);
 
@@ -835,8 +824,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::deposit_event(Event::<T, I>::TransactionBroadcastRequest {
 				broadcast_id,
 				nominee: nominated_signer,
-				transaction_payload: broadcast_attempt.transaction_payload,
-				transaction_out_id: broadcast_attempt.transaction_out_id,
+				transaction_payload: broadcast_data.transaction_payload,
+				transaction_out_id: broadcast_data.transaction_out_id,
 			});
 		} else {
 			log::debug!(
@@ -844,24 +833,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id
 			);
 			// Schedule for retry later, when more broadcasters become available.
-			Self::schedule_for_retry(&broadcast_attempt, Self::attempt_count(broadcast_id));
+			Self::schedule_for_retry(broadcast_id);
 		}
 	}
 
-	fn schedule_for_retry(broadcast_attempt: &BroadcastAttempt<T, I>, attempt_count: AttemptCount) {
-		let broadcast_id = broadcast_attempt.broadcast_id;
+	fn schedule_for_retry(broadcast_id: BroadcastId) {
 		let current_block = frame_system::Pallet::<T>::block_number();
-		let retry_block = match T::RetryPolicy::next_attempt_delay(attempt_count) {
-			Some(delay) => {
-				let retry = current_block.saturating_add(delay);
-				DelayedBroadcastRetryQueue::<T, I>::append(retry, broadcast_attempt);
-				retry
-			},
-			None => {
-				BroadcastRetryQueue::<T, I>::append(broadcast_attempt);
-				current_block.saturating_add(One::one())
-			},
-		};
+		let attempt_count = Self::attempt_count(broadcast_id);
+		let _failed = FailedBroadcasters::<T, I>::iter_keys()
+			.map(|key| {
+				(key, FailedBroadcasters::<T, I>::get(key).clone().into_iter().collect::<Vec<_>>())
+			})
+			.collect::<Vec<_>>();
+		// If no delay, retry in the next block.
+		let delay = T::RetryPolicy::next_attempt_delay(attempt_count).unwrap_or(One::one());
+		let retry_block = current_block.saturating_add(delay);
+
+		DelayedBroadcastRetryQueue::<T, I>::append(retry_block, broadcast_id);
 
 		Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled { broadcast_id, retry_block });
 	}
@@ -879,46 +867,57 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// The broadcast will then be retried.
 	fn handle_broadcast_failure(
 		broadcast_id: BroadcastId,
-		maybe_reporter: Option<T::ValidatorId>,
+		mut maybe_reporter: Option<T::ValidatorId>,
 	) -> DispatchResult {
 		let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_id)
 			.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
-		let failed_broadcaster = maybe_reporter.unwrap_or(signing_attempt.nominee);
+		if maybe_reporter.is_none() {
+			maybe_reporter = signing_attempt.nominee;
+		}
 
-		// NOTE: We don't use `append` here because we want to make sure not to insert duplicates
-		// and `append` doesn't guarantee that.
-		if let Ok(attempt_count) = FailedBroadcasters::<T, I>::try_mutate(
-			broadcast_id,
-			|failed_broadcasters: &mut BTreeSet<_>| {
-				if failed_broadcasters.insert(failed_broadcaster.clone()) {
-					Ok(failed_broadcasters.len())
+		if let Some(failed_broadcaster) = maybe_reporter {
+			if let Ok(attempt_count) =
+				FailedBroadcasters::<T, I>::try_mutate(broadcast_id, |failed_broadcasters| {
+					if broadcast_id == 11 {
+						let _a = failed_broadcaster.clone();
+					}
+					if failed_broadcasters.insert(failed_broadcaster.clone()) {
+						Ok(failed_broadcasters.len())
+					} else {
+						Err(())
+					}
+				}) {
+				// Abort the broadcast if all validators reported failure, Retry otherwise.
+				if attempt_count >= T::EpochInfo::current_authority_count() as usize {
+					Self::abort_broadcast(broadcast_id);
 				} else {
-					Err(())
+					Self::schedule_for_retry(broadcast_id);
 				}
-			},
-		) {
-			// Abort the broadcast if all validators reported failure, Retry otherwise.
-			if attempt_count >= T::EpochInfo::current_authority_count() as usize {
-				Self::abort_broadcast(broadcast_id);
 			} else {
-				Self::schedule_for_retry(&signing_attempt.broadcast_attempt, attempt_count as u32);
+				// Do nothing since this failure has already been reported.
+				log::warn!(
+					"Broadcast failure by {:?} already recorded for Broadcast ID: {}",
+					failed_broadcaster,
+					broadcast_id
+				);
 			}
 		} else {
-			// Do nothing since this failure has already been reported.
+			// This only happens is when no broadcaster is available when a broadcast is signed,
+			// but someone reported this as failed anyways, which should never happen.
 			log::warn!(
-				"Broadcast failure by {:?} already recorded for Broadcast ID: {}",
-				failed_broadcaster,
+				"Broadcast reported as failed with no reporter and no nominee. Broadcast ID: {}",
 				broadcast_id
 			);
+			Self::schedule_for_retry(broadcast_id);
 		}
+
 		Ok(())
 	}
 
-	/// Called when we cannot select a broadcaster, because all validators have failed to broadcast
-	/// this call. We abort to prevent infinite retries.
-	/// The failed callback is dispatched (if any), and data is kept in storage for potential future
-	/// governance functions.
+	/// Called when all validators have failed to broadcast this call. We abort to prevent infinite
+	/// retries. The failed callback is dispatched (if any), and data is kept in storage for
+	/// potential future governance functions.
 	fn abort_broadcast(broadcast_id: BroadcastId) {
 		log::warn!(
 			"All authorities failed to broadcast, broadcast is aborted. Broadcast_id {:?}.",

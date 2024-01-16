@@ -28,8 +28,8 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData, TransactionSigningAttempt,
+	AwaitingBroadcast, BroadcastIdCounter, BroadcastWithNominee, RequestFailureCallbacks,
+	RequestSuccessCallbacks, ThresholdSignatureData,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_pools::{OrderId, RangeOrderSize};
@@ -748,7 +748,7 @@ fn can_resign_failed_ccm() {
 			testnet.move_to_the_next_epoch();
 			let tx_out_id = AwaitingBroadcast::<Runtime, Instance1>::get(1)
 				.unwrap()
-				.broadcast_attempt
+				.broadcast_data
 				.transaction_out_id;
 
 			for node in Validator::current_authorities() {
@@ -799,7 +799,7 @@ fn can_resign_failed_ccm() {
 
 			// Fail the broadcast
 			for _ in Validator::current_authorities() {
-				let TransactionSigningAttempt { broadcast_attempt: _attempt, nominee } =
+				let BroadcastWithNominee { broadcast_data: _attempt, nominee } =
 					AwaitingBroadcast::<Runtime, Instance1>::get(broadcast_id).unwrap_or_else(
 						|| {
 							panic!(
@@ -810,7 +810,7 @@ fn can_resign_failed_ccm() {
 					);
 
 				assert_ok!(EthereumBroadcaster::transaction_failed(
-					RuntimeOrigin::signed(nominee),
+					RuntimeOrigin::signed(nominee.unwrap()),
 					broadcast_id,
 				));
 				testnet.move_forward_blocks(

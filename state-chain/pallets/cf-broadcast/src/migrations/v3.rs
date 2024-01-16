@@ -27,14 +27,14 @@ pub(crate) mod old {
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct TransactionSigningAttempt<T: Config<I>, I: 'static> {
+	pub struct BroadcastWithNominee<T: Config<I>, I: 'static> {
 		pub broadcast_attempt: BroadcastAttempt<T, I>,
 		pub nominee: T::ValidatorId,
 	}
 
 	#[frame_support::storage_alias]
 	pub type AwaitingBroadcast<T: Config<I>, I: 'static> =
-		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastAttemptId, TransactionSigningAttempt<T, I>>;
+		StorageMap<Pallet<T, I>, Twox64Concat, BroadcastAttemptId, BroadcastWithNominee<T, I>>;
 
 	#[frame_support::storage_alias]
 	pub type FailedBroadcasters<T: Config<I>, I: 'static> =
@@ -60,6 +60,8 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		let next_block = frame_system::Pallet::<T>::block_number().saturating_add(One::one());
+
 		// Awaiting broadcast: take the broadcast attempt with the highest attempt.
 		let mut latest_attempt = BTreeMap::new();
 		old::AwaitingBroadcast::<T, I>::drain().for_each(
@@ -79,8 +81,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			.for_each(|(broadcast_id, (_attempt_count, attempt))| {
 				AwaitingBroadcast::<T, I>::insert(
 					broadcast_id,
-					TransactionSigningAttempt {
-						broadcast_attempt: BroadcastAttempt {
+					BroadcastWithNominee {
+						broadcast_data: BroadcastData {
 							broadcast_id,
 							transaction_payload: attempt.broadcast_attempt.transaction_payload,
 							threshold_signature_payload: attempt
@@ -88,7 +90,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 								.threshold_signature_payload,
 							transaction_out_id: attempt.broadcast_attempt.transaction_out_id,
 						},
-						nominee: attempt.nominee,
+						nominee: Some(attempt.nominee),
 					},
 				)
 			});
@@ -98,27 +100,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			Some(BTreeSet::from_iter(failed_broadcasters))
 		});
 
-		// Latest Retry Queue: Dedup and translate to the new struct.
-		let mut added_retries = BTreeSet::new();
-		let retries = old::BroadcastRetryQueue::<T, I>::take()
+		// Move all retries to the Delayed Retry Queue
+		let mut retries = old::BroadcastRetryQueue::<T, I>::take()
 			.unwrap_or_default()
 			.into_iter()
-			.filter_map(|attempt| {
-				let broadcast_id = attempt.broadcast_attempt_id.broadcast_id;
-				if !added_retries.contains(&broadcast_id) {
-					added_retries.insert(broadcast_id);
-					Some(BroadcastAttempt::<T, I> {
-						broadcast_id: attempt.broadcast_attempt_id.broadcast_id,
-						transaction_payload: attempt.transaction_payload,
-						threshold_signature_payload: attempt.threshold_signature_payload,
-						transaction_out_id: attempt.transaction_out_id,
-					})
-				} else {
-					None
-				}
-			})
-			.collect::<Vec<_>>();
-		BroadcastRetryQueue::<T, I>::set(retries);
+			.map(|attempt| attempt.broadcast_attempt_id.broadcast_id)
+			.collect::<BTreeSet<_>>();
+
+		DelayedBroadcastRetryQueue::<T, I>::mutate(next_block, |current| {
+			current.append(&mut retries)
+		});
 
 		// Migrate Timeouts: Map<Block -> Vec<BroadcastAttemptId>> -> Map<Block ->
 		// BTreeSet<BroadcastId>>
@@ -164,6 +155,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let next_block = frame_system::Pallet::<T>::block_number().saturating_add(One::one());
+
 		// Decode verification data.
 		let MigrationVerification::<T> {
 			broadcasts_with_failed_broadcasters,
@@ -178,12 +171,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			},
 		);
 
-		// Ensure retry queues are migrated.
-		let new_retry_queue = BroadcastRetryQueue::<T, I>::get()
-			.into_iter()
-			.map(|attempt| attempt.broadcast_id)
-			.collect::<BTreeSet<_>>();
-		assert_eq!(broadcast_retry_queue, new_retry_queue);
+		// Ensure retry queues are migrated to be retried next block.
+		assert_eq!(broadcast_retry_queue, DelayedBroadcastRetryQueue::<T, I>::get(next_block));
 
 		// Ensure Timeouts data are migrated
 		timeout_broadcasts.into_iter().for_each(|(block_number, attempts)|
@@ -218,7 +207,7 @@ mod migration_tests {
 				for attempt_id in 0..=broadcast_id {
 					let broadcast_attempt_id =
 						old::BroadcastAttemptId { broadcast_id, attempt_count: attempt_id };
-					let singing_attempt = old::TransactionSigningAttempt {
+					let singing_attempt = old::BroadcastWithNominee {
 						broadcast_attempt: old::BroadcastAttempt {
 							broadcast_attempt_id,
 							transaction_payload: Default::default(),
@@ -242,14 +231,14 @@ mod migration_tests {
 			for broadcast_id in 1..10 {
 				assert_eq!(
 					AwaitingBroadcast::<Test, Instance1>::get(broadcast_id),
-					Some(TransactionSigningAttempt {
-						broadcast_attempt: BroadcastAttempt {
+					Some(BroadcastWithNominee {
+						broadcast_data: BroadcastData {
 							broadcast_id,
 							transaction_payload: Default::default(),
 							threshold_signature_payload: Default::default(),
 							transaction_out_id: Default::default(),
 						},
-						nominee: broadcast_id as u64,
+						nominee: Some(broadcast_id as u64),
 					})
 				);
 			}
@@ -284,6 +273,8 @@ mod migration_tests {
 	#[test]
 	fn migration_works_v2_to_v3_retry_queue() {
 		new_test_ext().execute_with(|| {
+			let next_block =
+				frame_system::Pallet::<Test>::block_number().saturating_add(One::one());
 			// Insert mock data into old storage
 			old::BroadcastRetryQueue::<Test, Instance1>::put(
 				[0, 0, 1, 1, 2, 2]
@@ -305,15 +296,8 @@ mod migration_tests {
 
 			// Verify data is correctly migrated into new storage.
 			assert_eq!(
-				BroadcastRetryQueue::<Test, Instance1>::get(),
-				(0..3)
-					.map(|broadcast_id| BroadcastAttempt {
-						broadcast_id,
-						transaction_payload: Default::default(),
-						threshold_signature_payload: Default::default(),
-						transaction_out_id: Default::default(),
-					})
-					.collect::<Vec<_>>()
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block),
+				BTreeSet::from_iter([0, 1, 2])
 			);
 		});
 	}
