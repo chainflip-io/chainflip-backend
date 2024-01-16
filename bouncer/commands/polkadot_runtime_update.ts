@@ -10,7 +10,7 @@ import {
   pushPolkadotRuntimeUpdate,
 } from '../shared/polkadot_runtime_update';
 import { runWithTimeout } from '../shared/utils';
-import { getNetworkRuntimeVersion } from '../shared/utils/bump_spec_version';
+import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
 
 async function main(): Promise<void> {
   // Bump the spec version

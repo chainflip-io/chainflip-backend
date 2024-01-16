@@ -12,7 +12,7 @@ import {
   sleep,
   observeBadEvents,
 } from '../shared/utils';
-import { bumpSpecVersion, getNetworkRuntimeVersion } from '../shared/utils/bump_spec_version';
+import { specVersion, getNetworkRuntimeVersion } from './utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from './swapping';
 
@@ -170,7 +170,7 @@ export async function bumpAndBuildPolkadotRuntime(): Promise<[string, number]> {
   console.log('Updating polkadot source');
   execSync(`git pull`, { cwd: workspacePath });
 
-  await bumpSpecVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, false, nextSpecVersion);
+  await specVersion(`${workspacePath}/runtime/polkadot/src/lib.rs`, false, nextSpecVersion);
 
   // Compile polkadot runtime
   console.log('Compiling polkadot...');

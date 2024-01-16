@@ -1,5 +1,5 @@
 import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
-import { bumpSpecVersionAgainstNetwork, getNetworkRuntimeVersion } from './utils/bump_spec_version';
+import { bumpSpecVersionAgainstNetwork, getNetworkRuntimeVersion } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 
 // Do a runtime upgrade using the code in the projectRoot directory.
