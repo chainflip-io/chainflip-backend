@@ -75,8 +75,7 @@ async fn only_encodes_and_signs_when_specified() {
 	});
 
 	let block = test_header(21, None);
-	let sc_block_stream =
-		tokio_stream::iter([block]).make_cached(test_header(20, None), |block| *block);
+	let sc_block_stream = tokio_stream::iter([block]).make_cached(test_header(20, None));
 
 	use state_chain_runtime::Runtime;
 

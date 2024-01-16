@@ -30,9 +30,7 @@ impl<S> CachedStream for FinalizedCachedStream<S>
 where
 	S: Stream + CachedStream,
 {
-	type Cache = S::Cache;
-
-	fn cache(&self) -> &Self::Cache {
+	fn cache(&self) -> &Self::Item {
 		self.0.cache()
 	}
 }

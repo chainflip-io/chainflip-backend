@@ -65,14 +65,12 @@ impl From<state_chain_runtime::Header> for BlockInfo {
 }
 
 pub trait StateChainStreamApi<const FINALIZED: bool = true>:
-	CachedStream<Cache = BlockInfo, Item = BlockInfo> + Send + Sync + Unpin + 'static
+	CachedStream<Item = BlockInfo> + Send + Sync + Unpin + 'static
 {
 }
 
-impl<S, F> StateChainStreamApi<false> for utilities::InnerCachedStream<S, BlockInfo, F>
-where
-	S: Stream<Item = BlockInfo> + Send + Sync + Unpin + 'static,
-	F: FnMut(&S::Item) -> BlockInfo + Send + Sync + Unpin + 'static,
+impl<S> StateChainStreamApi<false> for utilities::InnerCachedStream<S> where
+	S: Stream<Item = BlockInfo> + Send + Sync + Unpin + 'static
 {
 }
 
@@ -236,7 +234,7 @@ async fn create_finalized_block_subscription<
 
 		let latest_finalized_block: BlockInfo = finalized_block_stream.next().await.unwrap()?;
 
-		finalized_block_stream.make_try_cached(latest_finalized_block, |header| *header)
+		finalized_block_stream.make_try_cached(latest_finalized_block)
 	};
 
 	// Often `finalized_header` returns a significantly newer latest block than the stream
@@ -346,7 +344,7 @@ async fn create_finalized_block_subscription<
 					let _result = latest_block_sender.send(block);
 				},
 				if let Some(block_stream_request) = block_stream_request_receiver.next() => {
-					let _result = block_stream_request.send(Box::new(FinalizedCachedStream::new(block_sender.receiver().make_cached(latest_block, |block: &BlockInfo| *block))));
+					let _result = block_stream_request.send(Box::new(FinalizedCachedStream::new(block_sender.receiver().make_cached(latest_block))));
 				} else break Ok(()),
 			)
 		}
@@ -354,9 +352,7 @@ async fn create_finalized_block_subscription<
 
 	Ok((
 		latest_block_watcher,
-		FinalizedCachedStream::new(
-			block_receiver.make_cached(latest_block, |block: &BlockInfo| *block),
-		),
+		FinalizedCachedStream::new(block_receiver.make_cached(latest_block)),
 		block_stream_request_sender,
 	))
 }
@@ -415,17 +411,13 @@ async fn create_unfinalized_block_subscription<
 					let _result = latest_block_sender.send(block);
 				},
 				if let Some(block_stream_request) = block_stream_request_receiver.next() => {
-					let _result = block_stream_request.send(Box::new(block_sender.receiver().make_cached(latest_block, |block: &BlockInfo| *block)));
+					let _result = block_stream_request.send(Box::new(block_sender.receiver().make_cached(latest_block)));
 				} else break Ok(()),
 			)
 		}
 	});
 
-	Ok((
-		latest_block_watcher,
-		block_receiver.make_cached(first_block, |block: &BlockInfo| *block),
-		block_stream_request_sender,
-	))
+	Ok((latest_block_watcher, block_receiver.make_cached(first_block), block_stream_request_sender))
 }
 
 async fn inject_intervening_headers<
@@ -582,7 +574,7 @@ trait SignedExtrinsicClientBuilderTrait {
 
 	async fn pre_compatibility<
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		FinalizedBlockStream: TryCachedStream<Cache = BlockInfo, Item = Result<BlockInfo, anyhow::Error>> + Send + Unpin,
+		FinalizedBlockStream: TryCachedStream<Ok = BlockInfo, Error = anyhow::Error> + Send + Unpin,
 	>(
 		&mut self,
 		base_rpc_client: Arc<BaseRpcClient>,
@@ -608,7 +600,7 @@ impl SignedExtrinsicClientBuilderTrait for () {
 
 	async fn pre_compatibility<
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		FinalizedBlockStream: TryCachedStream<Cache = BlockInfo, Item = Result<BlockInfo, anyhow::Error>> + Send + Unpin,
+		FinalizedBlockStream: TryCachedStream<Ok = BlockInfo, Error = anyhow::Error> + Send + Unpin,
 	>(
 		&mut self,
 		_base_rpc_client: Arc<BaseRpcClient>,
@@ -647,7 +639,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 
 	async fn pre_compatibility<
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-		FinalizedBlockStream: TryCachedStream<Cache = BlockInfo, Item = Result<BlockInfo, anyhow::Error>> + Send + Unpin,
+		FinalizedBlockStream: TryCachedStream<Ok = BlockInfo, Error = anyhow::Error> + Send + Unpin,
 	>(
 		&mut self,
 		base_rpc_client: Arc<BaseRpcClient>,
