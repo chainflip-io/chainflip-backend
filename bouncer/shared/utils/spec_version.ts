@@ -20,8 +20,8 @@ export async function getNetworkRuntimeVersion(endpoint?: string): Promise<Runti
 // If `onlyReadCurrent` is false, it will increment the spec version and write it to the file. Returning the newly written version.
 export function specVersion(
   filePath: string,
-  onlyReadCurrent?: boolean,
-  nextSpecVersion?: number,
+  readOrWrite: 'read' | 'write',
+  writeSpecVersion?: number,
 ): number {
   try {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
@@ -42,12 +42,12 @@ export function specVersion(
         if (specVersionLine) {
           const currentSpecVersion = parseInt(specVersionLine[2]);
 
-          if (onlyReadCurrent) {
+          if (readOrWrite === 'read') {
             return currentSpecVersion;
           }
 
-          if (nextSpecVersion) {
-            incrementedVersion = nextSpecVersion;
+          if (writeSpecVersion) {
+            incrementedVersion = writeSpecVersion;
           } else {
             incrementedVersion = currentSpecVersion + 1;
           }
@@ -82,6 +82,6 @@ export async function bumpSpecVersionAgainstNetwork(
   console.log('Current spec_version: ' + networkSpecVersion);
   const nextSpecVersion = networkSpecVersion + 1;
   console.log('Bumping the spec version to: ' + nextSpecVersion);
-  specVersion(runtimeLibPath, false, nextSpecVersion);
+  specVersion(runtimeLibPath, 'write', nextSpecVersion);
   return nextSpecVersion;
 }
