@@ -1,5 +1,5 @@
 import { submitRuntimeUpgrade } from './submit_runtime_upgrade';
-import { bumpSpecVersionAgainstNetwork, getCurrentRuntimeVersion } from './utils/bump_spec_version';
+import { bumpSpecVersionAgainstNetwork, getNetworkRuntimeVersion } from './utils/bump_spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 
 // Do a runtime upgrade using the code in the projectRoot directory.
@@ -12,15 +12,15 @@ export async function simpleRuntimeUpgrade(projectRoot: string, tryRuntime = fal
 
   await submitRuntimeUpgrade(projectRoot, tryRuntime);
 
-  const newSpecVersion = (await getCurrentRuntimeVersion()).specVersion;
+  const newSpecVersion = (await getNetworkRuntimeVersion()).specVersion;
   console.log('New spec_version: ' + newSpecVersion);
 
   if (newSpecVersion !== nextSpecVersion) {
     console.error(
       'After submitting the runtime upgrade, the new spec_version is not what we expected. Expected: ' +
-        nextSpecVersion +
-        ' Got: ' +
-        newSpecVersion,
+      nextSpecVersion +
+      ' Got: ' +
+      newSpecVersion,
     );
   }
 

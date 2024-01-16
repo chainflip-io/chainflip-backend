@@ -12,7 +12,7 @@ type RuntimeVersion = {
   stateVersion: number;
 };
 
-export async function getCurrentRuntimeVersion(endpoint?: string): Promise<RuntimeVersion> {
+export async function getNetworkRuntimeVersion(endpoint?: string): Promise<RuntimeVersion> {
   return (await jsonRpc('state_getRuntimeVersion', [], endpoint)) as unknown as RuntimeVersion;
 }
 
@@ -78,9 +78,9 @@ export async function bumpSpecVersionAgainstNetwork(
   runtimeLibPath: string,
   endpoint?: string,
 ): Promise<number> {
-  const currentSpecVersion = (await getCurrentRuntimeVersion(endpoint)).specVersion;
-  console.log('Current spec_version: ' + currentSpecVersion);
-  const nextSpecVersion = currentSpecVersion + 1;
+  const networkSpecVersion = (await getNetworkRuntimeVersion(endpoint)).specVersion;
+  console.log('Current spec_version: ' + networkSpecVersion);
+  const nextSpecVersion = networkSpecVersion + 1;
   console.log('Bumping the spec version to: ' + nextSpecVersion);
   bumpSpecVersion(runtimeLibPath, false, nextSpecVersion);
   return nextSpecVersion;
