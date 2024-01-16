@@ -517,7 +517,7 @@ impl Network {
 		let mut backup_nodes = BTreeSet::new();
 		for _ in 0..number_of_backup_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.insert(node_id.clone());
+			backup_nodes.insert(node_id);
 		}
 
 		(network, backup_nodes)
@@ -648,41 +648,4 @@ impl Network {
 			}
 		}
 	}
-}
-
-// Helper function that creates a network, funds backup nodes, and have them join the auction.
-pub fn fund_authorities_and_join_auction(
-	max_authorities: AuthorityCount,
-) -> (network::Network, BTreeSet<NodeId>, BTreeSet<NodeId>) {
-	// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
-	// authorities The result will be our newly created nodes will be authorities
-	// and the genesis authorities will become backup nodes
-	let genesis_authorities: BTreeSet<AccountId32> = Validator::current_authorities();
-	let (mut testnet, init_backup_nodes) =
-		network::Network::create(max_authorities as u8, &genesis_authorities);
-
-	pallet_cf_flip::OffchainFunds::<Runtime>::set(u128::MAX);
-
-	// An initial balance which is greater than the genesis balances
-	// We intend for these initially backup nodes to win the auction
-	const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
-	for node in &init_backup_nodes {
-		testnet.state_chain_gateway_contract.fund_account(
-			node.clone(),
-			INITIAL_FUNDING,
-			GENESIS_EPOCH,
-		);
-	}
-
-	// Allow the funds to be registered, initialise the account keys and peer
-	// ids, register as a validator, then start bidding.
-	testnet.move_forward_blocks(2);
-
-	for node in &init_backup_nodes {
-		network::Cli::register_as_validator(node);
-		network::setup_account_and_peer_mapping(node);
-		network::Cli::start_bidding(node);
-	}
-
-	(testnet, genesis_authorities, init_backup_nodes)
 }

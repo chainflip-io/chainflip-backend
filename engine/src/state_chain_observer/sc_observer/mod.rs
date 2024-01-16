@@ -496,7 +496,7 @@ where
 
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_id,
+                                            broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
                                             // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
@@ -508,16 +508,16 @@ where
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
                                                 match eth_rpc.broadcast_transaction(transaction_payload).await {
-                                                    Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
                                                         // Note: this error can indicate that we failed to estimate gas, or that there is
                                                         // a problem with the ethereum rpc node, or with the configured account. For example
                                                         // if the account balance is too low to pay for required gas.
-                                                        error!("Error on Ethereum TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        error!("Error on Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             state_chain_runtime::RuntimeCall::EthereumBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_failed {
-                                                                    broadcast_id,
+                                                                pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                    broadcast_attempt_id,
                                                                 },
                                                             ),
                                                         )
@@ -530,7 +530,7 @@ where
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_id,
+                                            broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
                                             transaction_out_id: _,
@@ -541,13 +541,13 @@ where
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
                                                 match dot_rpc.submit_raw_encoded_extrinsic(transaction_payload.encoded_extrinsic).await {
-                                                    Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
-                                                        error!("Error on Polkadot TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             state_chain_runtime::RuntimeCall::PolkadotBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_failed {
-                                                                    broadcast_id,
+                                                                pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                    broadcast_attempt_id,
                                                                 },
                                                             ),
                                                         )
@@ -560,7 +560,7 @@ where
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_id,
+                                            broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
                                             transaction_out_id: _,
@@ -571,13 +571,13 @@ where
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
                                                 match btc_rpc.send_raw_transaction(transaction_payload.encoded_transaction).await {
-                                                    Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                     Err(error) => {
-                                                        error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_failed {
-                                                                    broadcast_id,
+                                                                pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                    broadcast_attempt_id,
                                                                 },
                                                             ),
                                                         )

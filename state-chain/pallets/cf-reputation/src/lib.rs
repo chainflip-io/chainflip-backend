@@ -388,10 +388,7 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Offence = T::Offence;
 
-	fn report_many(
-		offence: impl Into<Self::Offence>,
-		validators: impl IntoIterator<Item = T::ValidatorId> + Clone,
-	) {
+	fn report_many(offence: impl Into<Self::Offence>, validators: &[Self::ValidatorId]) {
 		if !T::SafeMode::get().reporting_enabled {
 			return
 		}
@@ -399,16 +396,16 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 		let penalty = Self::resolve_penalty_for(offence);
 
 		if penalty.reputation > 0 {
-			validators.clone().into_iter().for_each(|validator_id| {
-				Reputations::<T>::mutate(&validator_id, |rep| {
+			for validator_id in validators {
+				Reputations::<T>::mutate(validator_id, |rep| {
 					rep.deduct_reputation(penalty.reputation);
 				});
 				Self::deposit_event(Event::OffencePenalty {
-					offender: validator_id,
+					offender: validator_id.clone(),
 					offence,
 					penalty: penalty.reputation,
 				});
-			});
+			}
 		}
 
 		if penalty.suspension > Zero::zero() {
@@ -448,7 +445,7 @@ impl<T: Config> Pallet<T> {
 	pub fn penalise_offline_authorities(offline_authorities: Vec<T::ValidatorId>) {
 		<Self as OffenceReporter>::report_many(
 			PalletOffence::MissedHeartbeat,
-			offline_authorities.clone(),
+			offline_authorities.as_slice(),
 		);
 		for validator_id in offline_authorities {
 			let reputation_points = Reputations::<T>::mutate(&validator_id, |rep| {
@@ -462,15 +459,15 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn suspend_all(
-		validators: impl IntoIterator<Item = T::ValidatorId>,
+	pub fn suspend_all<'a>(
+		validators: impl IntoIterator<Item = &'a T::ValidatorId>,
 		offence: &T::Offence,
 		suspension: BlockNumberFor<T>,
 	) {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let mut suspensions = Suspensions::<T>::get(offence);
 		let suspend_until = current_block.saturating_add(suspension);
-		suspensions.extend(iter::repeat(suspend_until).zip(validators));
+		suspensions.extend(iter::repeat(suspend_until).zip(validators.into_iter().cloned()));
 		suspensions.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
 		while matches!(suspensions.front(), Some((block, _)) if *block < current_block) {
 			suspensions.pop_front();

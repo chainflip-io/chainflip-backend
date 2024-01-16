@@ -33,7 +33,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_broadcast.
 pub trait WeightInfo {
 	fn on_initialize(x: u32, ) -> Weight;
-	fn transaction_failed() -> Weight;
+	fn transaction_signing_failure() -> Weight;
 	fn on_signature_ready() -> Weight;
 	fn start_next_broadcast_attempt() -> Weight;
 	fn transaction_succeeded() -> Weight;
@@ -72,7 +72,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `Validator::CurrentAuthorities` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumBroadcaster::BroadcastRetryQueue` (r:1 w:1)
 	/// Proof: `EthereumBroadcaster::BroadcastRetryQueue` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn transaction_failed() -> Weight {
+	fn transaction_signing_failure() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1295`
 		//  Estimated: `4760`
@@ -202,7 +202,7 @@ impl WeightInfo for () {
 	/// Proof: `Validator::CurrentAuthorities` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `EthereumBroadcaster::BroadcastRetryQueue` (r:1 w:1)
 	/// Proof: `EthereumBroadcaster::BroadcastRetryQueue` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn transaction_failed() -> Weight {
+	fn transaction_signing_failure() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `1295`
 		//  Estimated: `4760`

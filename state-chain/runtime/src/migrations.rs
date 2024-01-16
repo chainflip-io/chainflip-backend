@@ -5,6 +5,7 @@ use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
 use sp_std::{vec, vec::Vec};
+pub mod threshold_signature_callbacks;
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;

@@ -18,6 +18,7 @@ use frame_system::Phase;
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
+use pallet_cf_broadcast::BroadcastAttemptId;
 use sp_runtime::AccountId32;
 
 use sp_core::H256;
@@ -95,7 +96,7 @@ async fn only_encodes_and_signs_when_specified() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: RuntimeEvent::EthereumBroadcaster(
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_id: Default::default(),
+							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: account_id,
 							transaction_payload: Transaction::default(),
 							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,
@@ -107,7 +108,7 @@ async fn only_encodes_and_signs_when_specified() {
 					phase: Phase::ApplyExtrinsic(1),
 					event: RuntimeEvent::EthereumBroadcaster(
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-							broadcast_id: Default::default(),
+							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
 							transaction_payload: Transaction::default(),
 							transaction_out_id: MOCK_ETH_TRANSACTION_OUT_ID,

@@ -131,7 +131,7 @@ benchmarks_instance_pallet! {
 	}: {
 		<T as Config<I>>::OffenceReporter::report_many(
 			PalletOffence::ParticipateSigningFailed,
-			offenders,
+			offenders.as_slice(),
 		);
 	}
 }

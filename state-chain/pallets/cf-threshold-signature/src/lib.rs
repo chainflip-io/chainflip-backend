@@ -9,6 +9,8 @@ pub mod mock;
 mod tests;
 
 mod benchmarking;
+pub mod migrations;
+
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -405,7 +407,7 @@ pub mod pallet {
 						ThresholdCeremonyType::Standard => {
 							T::OffenceReporter::report_many(
 								PalletOffence::ParticipateSigningFailed,
-								offenders,
+								&offenders[..],
 							);
 
 							Self::new_ceremony_attempt(RequestInstruction::new(

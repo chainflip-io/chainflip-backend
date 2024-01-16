@@ -488,21 +488,3 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 		Default::default()
 	}
 }
-
-/// Defines an interface for a retry policy.
-pub trait RetryPolicy {
-	type BlockNumber;
-	type AttemptCount;
-	/// Returns the delay for the given attempt count. If None, no delay is applied.
-	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber>;
-}
-
-pub struct DefaultRetryPolicy;
-impl RetryPolicy for DefaultRetryPolicy {
-	type BlockNumber = u32;
-	type AttemptCount = u32;
-
-	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
-		Some(10u32)
-	}
-}
