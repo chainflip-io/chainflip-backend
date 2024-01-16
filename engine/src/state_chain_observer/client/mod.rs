@@ -195,7 +195,7 @@ async fn create_finalized_block_subscription<
 			.map_err(Into::into)
 			.map_ok(|header| -> BlockInfo { header.into() })
 			.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-				"sparse_finalized_block_header_stream unexpectedly ended"
+				STATE_CHAIN_CONNECTION
 			)))));
 
 		let mut finalized_block_stream = Box::pin(
